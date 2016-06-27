@@ -129,13 +129,13 @@ extern "C" {
 // Open the file for reading only.
 //
 
-#define O_RDONLY 0x0001
+#define O_RDONLY 0x00000001
 
 //
 // Open the flag for writing only.
 //
 
-#define O_WRONLY 0x0002
+#define O_WRONLY 0x00000002
 
 //
 // Open the flag for reading and writing.
@@ -153,13 +153,13 @@ extern "C" {
 // Set this flag to have all writes append to the end of the file.
 //
 
-#define O_APPEND 0x0008
+#define O_APPEND 0x00000008
 
 //
 // Set this flag to open the file with execute permissions.
 //
 
-#define O_EXEC 0x0010
+#define O_EXEC 0x00000010
 
 //
 // Set this flag to open a directory for search only (meaning no reads, but
@@ -173,14 +173,14 @@ extern "C" {
 // a directory, then an open attempt fails.
 //
 
-#define O_DIRECTORY 0x0020
+#define O_DIRECTORY 0x00000020
 
 //
 // Set this flag to fail if the path names a symbolic link. Symbolic links in
 // earlier components of the path will still be followed.
 //
 
-#define O_NOFOLLOW 0x0040
+#define O_NOFOLLOW 0x00000040
 
 //
 // Set this flag to cause all I/O to cause writes to be sent down to the
@@ -188,62 +188,69 @@ extern "C" {
 // will be in the hands of the hardware.
 //
 
-#define O_SYNC 0x0080
-#define O_DSYNC 0x0080
-#define O_RSYNC 0x0080
+#define O_SYNC 0x00000080
+#define O_DSYNC 0x00000080
+#define O_RSYNC 0x00000080
 
 //
 // Set this flag to create the file if it doesn't exist.
 //
 
-#define O_CREAT 0x0100
+#define O_CREAT 0x00000100
 
 //
 // Set this flag if the file should be truncated to a zero size when opened.
 //
 
-#define O_TRUNC 0x0200
+#define O_TRUNC 0x00000200
 
 //
 // Set this flag to create the file exclusively (fail if the file exists).
 //
 
-#define O_EXCL 0x0400
+#define O_EXCL 0x00000400
 
 //
 // Set this flag if when opening a terminal device, the terminal should not
 // become the processes controlling terminal.
 //
 
-#define O_NOCTTY 0x0800
+#define O_NOCTTY 0x00000800
 
 //
 // Set this flag to use non-blocking mode, meaning I/O operations return
 // immediately if no I/O can be performed at the time of the call.
 //
 
-#define O_NONBLOCK 0x1000
+#define O_NONBLOCK 0x00001000
 #define O_NDELAY O_NONBLOCK
 
 //
 // Set this flag to avoid updating the access time of the file when it is read.
 //
 
-#define O_NOATIME 0x2000
+#define O_NOATIME 0x00002000
 
 //
 // Set this flag to have the handle be automatically closed when an exec
 // function is called.
 //
 
-#define O_CLOEXEC 0x4000
+#define O_CLOEXEC 0x00004000
 
 //
 // Set this flag to open the handle only for path traversal, and with no
 // read or write access.
 //
 
-#define O_PATH 0x8000
+#define O_PATH 0x00008000
+
+//
+// Set this flag to open the file with asynchronous mode. Note that
+// fcntl(F_SETOWN) still needs to be called to fully enable asynchronous mode.
+//
+
+#define O_ASYNC 0x00010000
 
 //
 // The binary and text flags don't mean anything on this OS, but define them

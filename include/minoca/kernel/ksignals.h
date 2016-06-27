@@ -356,6 +356,7 @@ Author:
 #define SIGNAL_CODE_USER (-1)
 #define SIGNAL_CODE_QUEUE (-2)
 #define SIGNAL_CODE_TIMER (-3)
+#define SIGNAL_CODE_IO (-4)
 
 //
 // ------------------------------------------------------ Data Type Definitions

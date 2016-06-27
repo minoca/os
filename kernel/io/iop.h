@@ -547,6 +547,8 @@ Members:
 
     CurrentOffset - Stores the current file pointer.
 
+    Async - Stores an optional pointer to the asynchronous receiver state.
+
 --*/
 
 struct _IO_HANDLE {
@@ -557,6 +559,7 @@ struct _IO_HANDLE {
     PVOID DeviceContext;
     PATH_POINT PathPoint;
     IO_OFFSET CurrentOffset;
+    PASYNC_IO_RECEIVER Async;
 };
 
 /*++
@@ -2967,6 +2970,31 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+PIO_ASYNC_STATE
+IopGetAsyncState (
+    PIO_OBJECT_STATE State
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns or attempts to create the asynchronous state for an
+    I/O object state.
+
+Arguments:
+
+    State - Supplies a pointer to the I/O object state.
+
+Return Value:
+
+    Returns a pointer to the async state on success. This may have just been
+    created.
+
+    NULL if no async state exists and none could be created.
 
 --*/
 

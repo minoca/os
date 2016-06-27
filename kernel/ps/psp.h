@@ -741,6 +741,34 @@ Return Value:
 
 --*/
 
+KSTATUS
+PspGetProcessIdentity (
+    PKPROCESS Process,
+    PTHREAD_IDENTITY Identity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the identity of the process, which is simply that of
+    an arbitrary thread in the process.
+
+Arguments:
+
+    Process - Supplies a pointer to the process to get an identity for.
+
+    Identity - Supplies a pointer where the process identity will be returned.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NO_SUCH_PROCESS if the given process ID does not correspond to any
+    known process.
+
+--*/
+
 VOID
 PspInitializeProcessStartData (
     PPROCESS_START_DATA StartData,

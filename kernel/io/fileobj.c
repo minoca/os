@@ -61,6 +61,17 @@ IopLookupFileObjectByProperties (
     PFILE_PROPERTIES Properties
     );
 
+VOID
+IopDestroyAsyncState (
+    PIO_ASYNC_STATE Async
+    );
+
+VOID
+IopSendIoSignal (
+    PIO_ASYNC_STATE Async,
+    ULONG Event
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -137,6 +148,8 @@ Return Value:
 
 {
 
+    ULONG PreviousEvents;
+    ULONG RisingEdge;
     SIGNAL_OPTION SignalOption;
 
     //
@@ -146,11 +159,11 @@ Return Value:
 
     if (Set != FALSE) {
         SignalOption = SignalOptionSignalAll;
-        RtlAtomicOr32(&(IoState->Events), Events);
+        PreviousEvents = RtlAtomicOr32(&(IoState->Events), Events);
 
     } else {
         SignalOption = SignalOptionUnsignal;
-        RtlAtomicAnd32(&(IoState->Events), ~Events);
+        PreviousEvents = RtlAtomicAnd32(&(IoState->Events), ~Events);
     }
 
     if ((Events & POLL_EVENT_IN) != 0) {
@@ -175,6 +188,19 @@ Return Value:
 
     if ((Events & POLL_ERROR_EVENTS) != 0) {
         KeSignalEvent(IoState->ErrorEvent, SignalOption);
+    }
+
+    //
+    // If read or write just went high, potentially signal the owner.
+    //
+
+    if ((Set != FALSE) && (IoState->Async != NULL) &&
+        (IoState->Async->Owner != 0)) {
+
+        RisingEdge = (PreviousEvents ^ Events) & Events;
+        if ((RisingEdge & (POLL_EVENT_IN | POLL_EVENT_OUT)) != 0) {
+            IopSendIoSignal(IoState->Async, PreviousEvents | Events);
+        }
     }
 
     return;
@@ -435,6 +461,10 @@ Return Value:
 
 {
 
+    if (State->Async != NULL) {
+        IopDestroyAsyncState(State->Async);
+    }
+
     if (State->ReadEvent != NULL) {
         KeDestroyEvent(State->ReadEvent);
     }
@@ -525,6 +555,98 @@ Return Value:
     ASSERT(KSUCCESS(Status));
 
     return;
+}
+
+KSTATUS
+IoSetHandleAsynchronous (
+    PIO_HANDLE IoHandle,
+    HANDLE Descriptor,
+    BOOL Asynchronous
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enables or disables asynchronous mode for the given I/O
+    handle.
+
+Arguments:
+
+    IoHandle - Supplies a pointer to the I/O handle.
+
+    Descriptor - Supplies the descriptor to associate with the asynchronous
+        receiver state. This descriptor is passed to the signal information
+        when an I/O signal occurs. Note that this descriptor may become stale
+        if the handle is duped and the original closed, so the kernel should
+        never access it.
+
+    Asynchronous - Supplies a boolean indicating whether to set asynchronous
+        mode (TRUE) or clear it (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PIO_ASYNC_STATE AsyncState;
+    PIO_OBJECT_STATE IoState;
+    PKPROCESS Process;
+    KSTATUS Status;
+
+    IoState = IoHandle->PathPoint.PathEntry->FileObject->IoState;
+    AsyncState = IopGetAsyncState(IoState);
+    if (AsyncState == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    KeAcquireQueuedLock(AsyncState->Lock);
+    if (Asynchronous == FALSE) {
+        if (IoHandle->Async != NULL) {
+            if (IoHandle->Async->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(IoHandle->Async->ListEntry));
+                IoHandle->Async->ListEntry.Next = NULL;
+            }
+        }
+
+        IoHandle->OpenFlags &= ~OPEN_FLAG_ASYNCHRONOUS;
+
+    //
+    // Enable asynchronous mode.
+    //
+
+    } else {
+        if (IoHandle->Async == NULL) {
+            IoHandle->Async = MmAllocatePagedPool(sizeof(ASYNC_IO_RECEIVER),
+                                                  FILE_OBJECT_ALLOCATION_TAG);
+
+            if (IoHandle->Async == NULL) {
+                Status = STATUS_INSUFFICIENT_RESOURCES;
+                goto SetHandleAsynchronousEnd;
+            }
+
+            RtlZeroMemory(IoHandle->Async, sizeof(ASYNC_IO_RECEIVER));
+        }
+
+        IoHandle->Async->Descriptor = Descriptor;
+        if (IoHandle->Async->ListEntry.Next == NULL) {
+            INSERT_BEFORE(&(IoHandle->Async->ListEntry),
+                          &(AsyncState->ReceiverList));
+        }
+
+        Process = PsGetCurrentProcess();
+        IoHandle->Async->ProcessId = Process->Identifiers.ProcessId;
+        IoHandle->OpenFlags |= OPEN_FLAG_ASYNCHRONOUS;
+    }
+
+    Status = STATUS_SUCCESS;
+
+SetHandleAsynchronousEnd:
+    KeReleaseQueuedLock(AsyncState->Lock);
+    return Status;;
 }
 
 KSTATUS
@@ -2327,6 +2449,75 @@ Return Value:
     return;
 }
 
+PIO_ASYNC_STATE
+IopGetAsyncState (
+    PIO_OBJECT_STATE State
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns or attempts to create the asynchronous state for an
+    I/O object state.
+
+Arguments:
+
+    State - Supplies a pointer to the I/O object state.
+
+Return Value:
+
+    Returns a pointer to the async state on success. This may have just been
+    created.
+
+    NULL if no async state exists and none could be created.
+
+--*/
+
+{
+
+    PIO_ASYNC_STATE Async;
+    PIO_ASYNC_STATE OldValue;
+
+    if (State->Async != NULL) {
+        return State->Async;
+    }
+
+    Async = MmAllocatePagedPool(sizeof(IO_ASYNC_STATE),
+                                FILE_OBJECT_ALLOCATION_TAG);
+
+    if (Async == NULL) {
+        return NULL;
+    }
+
+    RtlZeroMemory(Async, sizeof(IO_ASYNC_STATE));
+    INITIALIZE_LIST_HEAD(&(Async->ReceiverList));
+    Async->Lock = KeCreateQueuedLock();
+    if (Async->Lock == NULL) {
+        goto GetAsyncStateEnd;
+    }
+
+    //
+    // Try to atomically set the async state. Someone else may race and win.
+    //
+
+    OldValue = (PIO_ASYNC_STATE)RtlAtomicCompareExchange(
+                                                       (PUINTN)&(State->Async),
+                                                       (UINTN)Async,
+                                                       (UINTN)NULL);
+
+    if (OldValue == NULL) {
+        Async = NULL;
+    }
+
+GetAsyncStateEnd:
+    if (Async != NULL) {
+        IopDestroyAsyncState(Async);
+    }
+
+    return State->Async;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -2531,5 +2722,153 @@ Return Value:
     }
 
     return Object;
+}
+
+VOID
+IopDestroyAsyncState (
+    PIO_ASYNC_STATE Async
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys the given asynchronous state.
+
+Arguments:
+
+    Async - Supplies a pointer to the state to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ASSERT(LIST_EMPTY(&(Async->ReceiverList)));
+
+    if (Async->Lock != NULL) {
+        KeDestroyQueuedLock(Async->Lock);
+    }
+
+    MmFreePagedPool(Async);
+    return;
+}
+
+VOID
+IopSendIoSignal (
+    PIO_ASYNC_STATE Async,
+    ULONG Event
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends an IO signal to the given process or process group.
+
+Arguments:
+
+    Async - Supplies a pointer to the async state.
+
+    Event - Supplies the event code to include.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    THREAD_IDENTITY Destination;
+    PROCESS_ID ProcessId;
+    PSIGNAL_QUEUE_ENTRY QueueEntry;
+    PASYNC_IO_RECEIVER Receiver;
+    ULONG Signal;
+    KSTATUS Status;
+
+    //
+    // Currently, the signal can only be sent to a single process. To support
+    // process groups, the appropriate permission checking would need to be
+    // done for each process in the group.
+    //
+
+    ProcessId = Async->Owner;
+    if (ProcessId <= 0) {
+        return;
+    }
+
+    KeAcquireQueuedLock(Async->Lock);
+
+    //
+    // Ensure that whoever set the owner has permission to send a signal to
+    // the owner.
+    //
+
+    Status = PsGetProcessIdentity(ProcessId, &Destination);
+    if (!KSUCCESS(Status)) {
+        goto SendIoSignalEnd;
+    }
+
+    if ((!PERMISSION_CHECK(Async->SetterPermissions, PERMISSION_KILL)) &&
+        (Async->SetterUserId != Destination.RealUserId) &&
+        (Async->SetterUserId != Destination.SavedUserId) &&
+        (Async->SetterEffectiveUserId != Destination.RealUserId) &&
+        (Async->SetterEffectiveUserId != Destination.SavedUserId)) {
+
+        goto SendIoSignalEnd;
+    }
+
+    //
+    // Find the receiver to ensure the caller has in fact signed up for
+    // asynchronous I/O signals.
+    //
+
+    CurrentEntry = Async->ReceiverList.Next;
+    while (CurrentEntry != &(Async->ReceiverList)) {
+        Receiver = LIST_VALUE(CurrentEntry, ASYNC_IO_RECEIVER, ListEntry);
+        if (Receiver->ProcessId == ProcessId) {
+            break;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    if (CurrentEntry == &(Async->ReceiverList)) {
+        goto SendIoSignalEnd;
+    }
+
+    if (Async->Signal == 0) {
+        Signal = SIGNAL_ASYNCHRONOUS_IO_COMPLETE;
+
+    } else {
+        Signal = Async->Signal;
+    }
+
+    QueueEntry = MmAllocatePagedPool(sizeof(SIGNAL_QUEUE_ENTRY),
+                                     FILE_OBJECT_ALLOCATION_TAG);
+
+    if (QueueEntry != NULL) {
+        RtlZeroMemory(QueueEntry, sizeof(SIGNAL_QUEUE_ENTRY));
+        QueueEntry->Parameters.SignalNumber = Signal;
+        QueueEntry->Parameters.SignalCode = Event;
+        QueueEntry->CompletionRoutine = PsDefaultSignalCompletionRoutine;
+    }
+
+    Status = PsSignalProcessId(ProcessId, Signal, QueueEntry);
+    if (!KSUCCESS(Status)) {
+        MmFreePagedPool(QueueEntry);
+        goto SendIoSignalEnd;
+    }
+
+    QueueEntry = NULL;
+
+SendIoSignalEnd:
+    KeReleaseQueuedLock(Async->Lock);
+    return;
 }
 

@@ -278,6 +278,14 @@ extern "C" {
 #define TIOCGSID 0x7429
 
 //
+// This ioctl sets the async mode on the given descriptor. It is the same as
+// using fcntl to enable asynchronous mode. The argument is an int, which if
+// zero disables asynchronous mode, or otherwise enables it.
+//
+
+#define FIOASYNC 0x7452
+
+//
 // Define the possible bits for the control byte in packet mode.
 //
 

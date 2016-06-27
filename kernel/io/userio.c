@@ -44,7 +44,8 @@ Environment:
            (SYS_OPEN_FLAG_SYNCHRONIZED == OPEN_FLAG_SYNCHRONIZED) && \
            (SYS_OPEN_FLAG_NO_CONTROLLING_TERMINAL == \
             OPEN_FLAG_NO_CONTROLLING_TERMINAL) && \
-           (SYS_OPEN_FLAG_NO_ACCESS_TIME == OPEN_FLAG_NO_ACCESS_TIME))
+           (SYS_OPEN_FLAG_NO_ACCESS_TIME == OPEN_FLAG_NO_ACCESS_TIME)  && \
+           (SYS_OPEN_FLAG_ASYNCHRONOUS == OPEN_FLAG_ASYNCHRONOUS))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -149,6 +150,16 @@ IopGetUserFilePath (
     PPATH_POINT Root,
     PSTR UserBuffer,
     PUINTN UserBufferSize
+    );
+
+KSTATUS
+IopHandleCommonUserControl (
+    PIO_HANDLE Handle,
+    HANDLE Descriptor,
+    ULONG MinorCode,
+    BOOL FromKernelMode,
+    PVOID ContextBuffer,
+    UINTN ContextBufferSize
     );
 
 //
@@ -1901,17 +1912,22 @@ Return Value:
 
 {
 
+    BOOL Asynchronous;
+    PIO_ASYNC_STATE AsyncState;
     BOOL Blocking;
     UINTN CopyOutSize;
     PSYSTEM_CALL_FILE_CONTROL FileControl;
     PFILE_OBJECT FileObject;
     ULONG Flags;
     PIO_HANDLE IoHandle;
+    PIO_OBJECT_STATE IoState;
     FILE_CONTROL_PARAMETERS_UNION LocalParameters;
+    ULONG Mask;
     PKPROCESS Process;
     PATH_POINT RootPathPoint;
     ULONG SetFlags;
     KSTATUS Status;
+    PKTHREAD Thread;
 
     ASSERT(SystemCallNumber == SystemCallFileControl);
 
@@ -2048,54 +2064,92 @@ Return Value:
             goto SysFileControlEnd;
         }
 
-        Flags = LocalParameters.Flags & SYS_FILE_CONTROL_EDITABLE_STATUS_FLAGS;
-
         //
-        // Only a few flags can actually be modified, and those flags don't
-        // require privilege checking.
+        // Set the new flags except for the asynchronous flag, which is handled
+        // by another function.
         //
 
-        if ((Flags & SYS_OPEN_FLAG_APPEND) != 0) {
-            IoHandle->OpenFlags |= OPEN_FLAG_APPEND;
+        ASSERT_SYS_OPEN_FLAGS_EQUIVALENT();
 
-        } else {
-            IoHandle->OpenFlags &= ~OPEN_FLAG_APPEND;
+        Mask = SYS_FILE_CONTROL_EDITABLE_STATUS_FLAGS & ~OPEN_FLAG_ASYNCHRONOUS;
+        Flags = LocalParameters.Flags & Mask;
+        IoHandle->OpenFlags = (IoHandle->OpenFlags & ~Mask) | Flags;
+        Status = STATUS_SUCCESS;
+
+        //
+        // If the asynchronous flag changed, make adjustments.
+        //
+
+        Flags = LocalParameters.Flags;
+        if (((Flags ^ IoHandle->OpenFlags) & OPEN_FLAG_ASYNCHRONOUS) != 0) {
+            Asynchronous = FALSE;
+            if ((Flags & OPEN_FLAG_ASYNCHRONOUS) != 0) {
+                Asynchronous = TRUE;
+            }
+
+            Status = IoSetHandleAsynchronous(IoHandle,
+                                             FileControl->File,
+                                             Asynchronous);
         }
 
-        if ((Flags & SYS_OPEN_FLAG_NON_BLOCKING) != 0) {
-            IoHandle->OpenFlags |= OPEN_FLAG_NON_BLOCKING;
+        break;
 
-        } else {
-            IoHandle->OpenFlags &= ~OPEN_FLAG_NON_BLOCKING;
+    //
+    // Return the process ID that gets async IO signals.
+    //
+
+    case FileControlCommandGetSignalOwner:
+        LocalParameters.Owner = 0;
+        IoState = IoHandle->PathPoint.PathEntry->FileObject->IoState;
+        if (IoState->Async != NULL) {
+            LocalParameters.Owner = IoState->Async->Owner;
         }
 
-        if ((Flags & SYS_OPEN_FLAG_SYNCHRONIZED) != 0) {
-            IoHandle->OpenFlags |= OPEN_FLAG_SYNCHRONIZED;
-
-        } else {
-            IoHandle->OpenFlags &= ~OPEN_FLAG_SYNCHRONIZED;
-        }
-
-        if ((Flags & SYS_OPEN_FLAG_NO_ACCESS_TIME) != 0) {
-            IoHandle->OpenFlags |= OPEN_FLAG_NO_ACCESS_TIME;
-
-        } else {
-            IoHandle->OpenFlags &= ~OPEN_FLAG_NO_ACCESS_TIME;
-        }
-
+        CopyOutSize = sizeof(PROCESS_ID);
         Status = STATUS_SUCCESS;
         break;
 
     //
-    // TODO: Implement the other file control operations.
+    // Set the process ID that gets async IO signals. Also record the user
+    // identity and permissions to ensure that IO signals are not sent to
+    // processes this process would not ordinarily have been able to send
+    // signals to.
     //
 
-    case FileControlCommandGetUrgentSignalOwner:
-    case FileControlCommandSetUrgentSignalOwner:
+    case FileControlCommandSetSignalOwner:
+        Status = MmCopyFromUserMode(&LocalParameters,
+                                    FileControl->Parameters,
+                                    sizeof(PROCESS_ID));
 
-        ASSERT(FALSE);
+        if (!KSUCCESS(Status)) {
+            goto SysFileControlEnd;
+        }
 
-        Status = STATUS_NOT_IMPLEMENTED;
+        IoState = IoHandle->PathPoint.PathEntry->FileObject->IoState;
+
+        //
+        // Signaling process groups is currently not supported.
+        //
+
+        if (LocalParameters.Owner <= 0) {
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        AsyncState = IopGetAsyncState(IoState);
+        if (AsyncState == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            break;
+        }
+
+        Thread = KeGetCurrentThread();
+        KeAcquireQueuedLock(AsyncState->Lock);
+        AsyncState->Owner = LocalParameters.Owner;
+        AsyncState->SetterUserId = Thread->Identity.RealUserId;
+        AsyncState->SetterEffectiveUserId = Thread->Identity.EffectiveUserId;
+        AsyncState->SetterPermissions = Thread->Permissions.Effective;
+        KeReleaseQueuedLock(AsyncState->Lock);
+        Status = STATUS_SUCCESS;
         break;
 
     case FileControlCommandGetLock:
@@ -3027,11 +3081,20 @@ Return Value:
         goto SysUserControlEnd;
     }
 
-    Status = IoUserControl(IoHandle,
-                           Request->RequestCode,
-                           FALSE,
-                           Request->Context,
-                           Request->ContextSize);
+    Status = IopHandleCommonUserControl(IoHandle,
+                                        Request->Handle,
+                                        Request->RequestCode,
+                                        FALSE,
+                                        Request->Context,
+                                        Request->ContextSize);
+
+    if (Status == STATUS_NOT_SUPPORTED) {
+        Status = IoUserControl(IoHandle,
+                               Request->RequestCode,
+                               FALSE,
+                               Request->Context,
+                               Request->ContextSize);
+    }
 
     if (!KSUCCESS(Status)) {
         goto SysUserControlEnd;
@@ -4059,6 +4122,86 @@ GetUserFilePathEnd:
     }
 
     *UserBufferSize = PathSize;
+    return Status;
+}
+
+KSTATUS
+IopHandleCommonUserControl (
+    PIO_HANDLE Handle,
+    HANDLE Descriptor,
+    ULONG MinorCode,
+    BOOL FromKernelMode,
+    PVOID ContextBuffer,
+    UINTN ContextBufferSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs user control operations common to many types of
+    devices.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    Descriptor - Supplies the descriptor corresponding to the handle.
+
+    MinorCode - Supplies the minor code of the request.
+
+    FromKernelMode - Supplies a boolean indicating whether or not this request
+        (and the buffer associated with it) originates from user mode (FALSE)
+        or kernel mode (TRUE).
+
+    ContextBuffer - Supplies a pointer to the context buffer allocated by the
+        caller for the request.
+
+    ContextBufferSize - Supplies the size of the supplied context buffer.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    INT Argument;
+    BOOL Asynchronous;
+    KSTATUS Status;
+
+    switch (MinorCode) {
+    case TerminalControlAsync:
+        if (ContextBufferSize < sizeof(INT)) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (FromKernelMode != FALSE) {
+            Argument = *((PULONG)ContextBuffer);
+
+        } else {
+            Argument = 0;
+            Status = MmCopyFromUserMode(&Argument, ContextBuffer, sizeof(INT));
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        Asynchronous = FALSE;
+        if (Argument != 0) {
+            Asynchronous = TRUE;
+        }
+
+        Status = IoSetHandleAsynchronous(Handle, Descriptor, Asynchronous);
+        break;
+
+    default:
+        Status = STATUS_NOT_SUPPORTED;
+        break;
+    }
+
     return Status;
 }
 

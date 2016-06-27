@@ -48,6 +48,7 @@ Author:
 #define SYS_OPEN_FLAG_SYNCHRONIZED            0x00000100
 #define SYS_OPEN_FLAG_NO_CONTROLLING_TERMINAL 0x00000200
 #define SYS_OPEN_FLAG_NO_ACCESS_TIME          0x00000400
+#define SYS_OPEN_FLAG_ASYNCHRONOUS            0x00000800
 
 #define SYS_OPEN_ACCESS_SHIFT 29
 #define SYS_OPEN_FLAG_READ    (IO_ACCESS_READ << SYS_OPEN_ACCESS_SHIFT)
@@ -72,13 +73,15 @@ Author:
      SYS_OPEN_FLAG_NO_SYMBOLIC_LINK |           \
      SYS_OPEN_FLAG_SYNCHRONIZED |               \
      SYS_OPEN_FLAG_NO_CONTROLLING_TERMINAL |    \
-     SYS_OPEN_FLAG_NO_ACCESS_TIME)
+     SYS_OPEN_FLAG_NO_ACCESS_TIME |             \
+     SYS_OPEN_FLAG_ASYNCHRONOUS)
 
 #define SYS_FILE_CONTROL_EDITABLE_STATUS_FLAGS \
     (SYS_OPEN_FLAG_APPEND |                    \
      SYS_OPEN_FLAG_NON_BLOCKING |              \
      SYS_OPEN_FLAG_SYNCHRONIZED |              \
-     SYS_OPEN_FLAG_NO_ACCESS_TIME)
+     SYS_OPEN_FLAG_NO_ACCESS_TIME |            \
+     SYS_OPEN_FLAG_ASYNCHRONOUS)
 
 //
 // Define delete flags.
@@ -347,8 +350,8 @@ typedef enum _FILE_CONTROL_COMMAND {
     FileControlCommandSetFlags,
     FileControlCommandGetStatusAndAccess,
     FileControlCommandSetStatus,
-    FileControlCommandGetUrgentSignalOwner,
-    FileControlCommandSetUrgentSignalOwner,
+    FileControlCommandGetSignalOwner,
+    FileControlCommandSetSignalOwner,
     FileControlCommandGetLock,
     FileControlCommandSetLock,
     FileControlCommandBlockingSetLock,
@@ -1290,6 +1293,9 @@ Members:
 
     FilePath - Stores the path of the file.
 
+    Owner - Stores the ID of the process to receive signals on asynchronous
+        I/O events.
+
 --*/
 
 typedef union _FILE_CONTROL_PARAMETERS_UNION {
@@ -1298,6 +1304,7 @@ typedef union _FILE_CONTROL_PARAMETERS_UNION {
     FILE_LOCK FileLock;
     ULONG Flags;
     FILE_PATH FilePath;
+    PROCESS_ID Owner;
 } FILE_CONTROL_PARAMETERS_UNION, *PFILE_CONTROL_PARAMETERS_UNION;
 
 /*++

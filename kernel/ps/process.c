@@ -316,6 +316,49 @@ Return Value:
     return Status;
 }
 
+KSTATUS
+PsGetProcessIdentity (
+    PROCESS_ID ProcessId,
+    PTHREAD_IDENTITY Identity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the identity of the process, which is simply that of
+    an arbitrary thread in the process.
+
+Arguments:
+
+    ProcessId - Supplies the ID of the process to get the information for.
+
+    Identity - Supplies a pointer where the process identity will be returned.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NO_SUCH_PROCESS if the given process ID does not correspond to any
+    known process.
+
+--*/
+
+{
+
+    PKPROCESS Process;
+    KSTATUS Status;
+
+    Process = PspGetProcessById(ProcessId);
+    if (Process == NULL) {
+        return STATUS_NO_SUCH_PROCESS;
+    }
+
+    Status = PspGetProcessIdentity(Process, Identity);
+    ObReleaseReference(Process);
+    return Status;
+}
+
 PVOID
 PsSetControllingTerminal (
     PKPROCESS Process,
@@ -2991,6 +3034,56 @@ Return Value:
     }
 
     return;
+}
+
+KSTATUS
+PspGetProcessIdentity (
+    PKPROCESS Process,
+    PTHREAD_IDENTITY Identity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the identity of the process, which is simply that of
+    an arbitrary thread in the process.
+
+Arguments:
+
+    Process - Supplies a pointer to the process to get an identity for.
+
+    Identity - Supplies a pointer where the process identity will be returned.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NO_SUCH_PROCESS if the given process ID does not correspond to any
+    known process.
+
+--*/
+
+{
+
+    KSTATUS Status;
+    PKTHREAD Thread;
+
+    KeAcquireQueuedLock(Process->QueuedLock);
+    if (Process->ThreadCount != 0) {
+        Thread = LIST_VALUE(Process->ThreadListHead.Next,
+                            KTHREAD,
+                            ProcessEntry);
+
+        RtlCopyMemory(Identity, &(Thread->Identity), sizeof(THREAD_IDENTITY));
+        Status = STATUS_SUCCESS;
+
+    } else {
+        Status = STATUS_NO_SUCH_PROCESS;
+    }
+
+    KeReleaseQueuedLock(Process->QueuedLock);
+    return Status;
 }
 
 //

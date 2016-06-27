@@ -232,6 +232,14 @@ Author:
 #define OPEN_FLAG_NO_ACCESS_TIME 0x00000400
 
 //
+// Set this flag to receive signals whenever the descriptor is ready for read
+// or write. This does not take effect immediately, as the signal owner still
+// needs to be set.
+//
+
+#define OPEN_FLAG_ASYNCHRONOUS 0x00000800
+
+//
 // Set this flag if a file should be atomically unlinked after creation so that
 // it never appears in the namespace. The call will fail if the file already
 // exists or fails to be unlinked.
@@ -976,7 +984,8 @@ typedef enum _TERMINAL_USER_CONTROL_CODE {
     TerminalControlSendBreakPosix            = 0x7425,
     TerminalControlStartBreak                = 0x7427,
     TerminalControlStopBreak                 = 0x7428,
-    TerminalControlGetCurrentSessionId       = 0x7429
+    TerminalControlGetCurrentSessionId       = 0x7429,
+    TerminalControlAsync                     = 0x7452,
 } TERMINAL_USER_CONTROL_CODE, *PTERMINAL_USER_CONTROL_CODE;
 
 typedef enum _CRASH_DRIVER_ERROR_CODE {
@@ -1570,6 +1579,71 @@ typedef struct _SET_FILE_INFORMATION {
 
 Structure Description:
 
+    This structure defines a link between an I/O object state and a particular
+    file descriptor that has signed up for asynchronous signals.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous receivers in the I/O
+        state list.
+
+    Descriptor - Stores the descriptor number that signed up for notifications.
+
+    ProcessId - Stores the identifier of the process that signed up for
+        asynchronous I/O.
+
+--*/
+
+typedef struct _ASYNC_IO_RECEIVER {
+    LIST_ENTRY ListEntry;
+    HANDLE Descriptor;
+    PROCESS_ID ProcessId;
+} ASYNC_IO_RECEIVER, *PASYNC_IO_RECEIVER;
+
+/*++
+
+Structure Description:
+
+    This structure defines the asynchronous state associated with an I/O
+    object.
+
+Members:
+
+    Owner - Stores the owning process of this IO object state. This is the
+        process that receives signals when the IO object state changes.
+
+    SetterUserId - Stores the real user ID of the user that set the owner.
+
+    SetterEffectiveUserId - Stores the effective user ID of the user that set
+        the owner.
+
+    SetterPermissions - Stores the permission set of the process that set the
+        owner.
+
+    Signal - Stores the signal to send to the owner. If zero, then asynchronous
+        signaling is not enabled.
+
+    ReceiverList - Stores the head of the list of I/O handles that have agreed
+        to get asynchronous signals.
+
+    Lock - Stores a pointer to the lock protecting the list.
+
+--*/
+
+typedef struct _IO_ASYNC_STATE {
+    PROCESS_ID Owner;
+    USER_ID SetterUserId;
+    USER_ID SetterEffectiveUserId;
+    PERMISSION_SET SetterPermissions;
+    ULONG Signal;
+    LIST_ENTRY ReceiverList;
+    PQUEUED_LOCK Lock;
+} IO_ASYNC_STATE, *PIO_ASYNC_STATE;
+
+/*++
+
+Structure Description:
+
     This structure defines generic state associated with an I/O object.
 
 Members:
@@ -1592,6 +1666,8 @@ Members:
     Events - Stores a bitmask of events that have occurred for the I/O handle.
         See POLL_EVENT_* for definitions.
 
+    Async - Stores an optional pointer to the asynchronous object state.
+
 --*/
 
 typedef struct _IO_OBJECT_STATE {
@@ -1601,6 +1677,7 @@ typedef struct _IO_OBJECT_STATE {
     PKEVENT WriteHighPriorityEvent;
     PKEVENT ErrorEvent;
     volatile ULONG Events;
+    PIO_ASYNC_STATE Async;
 } IO_OBJECT_STATE, *PIO_OBJECT_STATE;
 
 typedef enum _IRP_MAJOR_CODE {
@@ -7926,6 +8003,39 @@ Return Value:
 
     None. The caller should not count on this pointer remaining unique after
     this call returns.
+
+--*/
+
+KSTATUS
+IoSetHandleAsynchronous (
+    PIO_HANDLE IoHandle,
+    HANDLE Descriptor,
+    BOOL Asynchronous
+    );
+
+/*++
+
+Routine Description:
+
+    This routine enables or disables asynchronous mode for the given I/O
+    handle.
+
+Arguments:
+
+    IoHandle - Supplies a pointer to the I/O handle.
+
+    Descriptor - Supplies the descriptor to associate with the asynchronous
+        receiver state. This descriptor is passed to the signal information
+        when an I/O signal occurs. Note that this descriptor may become stale
+        if the handle is duped and the original closed, so the kernel should
+        never access it.
+
+    Asynchronous - Supplies a boolean indicating whether to set asynchronous
+        mode (TRUE) or clear it (FALSE).
+
+Return Value:
+
+    Status code.
 
 --*/
 

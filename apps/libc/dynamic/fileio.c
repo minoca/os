@@ -284,16 +284,20 @@ Return Value:
             Parameters.Flags |= SYS_OPEN_FLAG_NO_ACCESS_TIME;
         }
 
+        if ((SetFlags & O_ASYNC) != 0) {
+            Parameters.Flags |= SYS_OPEN_FLAG_ASYNCHRONOUS;
+        }
+
         break;
 
-    //
-    // TODO: Implement F_GETOWN and F_SETOWN.
-    //
-
     case F_GETOWN:
+        FileControlCommand = FileControlCommandGetSignalOwner;
+        Parameters.Owner = 0;
         break;
 
     case F_SETOWN:
+        FileControlCommand = FileControlCommandSetSignalOwner;
+        Parameters.Owner = va_arg(ArgumentList, pid_t);
         break;
 
     case F_GETLK:
@@ -492,6 +496,10 @@ Return Value:
             ReturnValue |= O_NOATIME;
         }
 
+        if ((Flags & SYS_OPEN_FLAG_ASYNCHRONOUS) != 0) {
+            ReturnValue |= O_ASYNC;
+        }
+
         break;
 
     case F_GETLK:
@@ -538,6 +546,14 @@ Return Value:
         FileLock->l_len = Parameters.FileLock.Size;
         FileLock->l_pid = Parameters.FileLock.ProcessId;
         FileLock->l_whence = SEEK_SET;
+        ReturnValue = 0;
+        break;
+
+    case F_GETOWN:
+        ReturnValue = Parameters.Owner;
+        break;
+
+    case F_SETOWN:
         ReturnValue = 0;
         break;
 
@@ -3278,6 +3294,10 @@ Return Value:
     if ((OpenFlags & O_PATH) != 0) {
         OsOpenFlags &= ~(SYS_OPEN_FLAG_READ | SYS_OPEN_FLAG_WRITE |
                          SYS_OPEN_FLAG_EXECUTE);
+    }
+
+    if ((OpenFlags & O_ASYNC) != 0) {
+        OsOpenFlags |= SYS_OPEN_FLAG_ASYNCHRONOUS;
     }
 
     //

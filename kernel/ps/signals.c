@@ -135,6 +135,13 @@ PspRequeueBlockedSignals (
     PKPROCESS Process
     );
 
+KSTATUS
+PspCheckSendSignalPermission (
+    PKTHREAD CurrentThread,
+    PKPROCESS Process,
+    ULONG Signal
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -385,6 +392,7 @@ Return Value:
 {
 
     PKPROCESS CurrentProcess;
+    PKTHREAD CurrentThread;
     PKPROCESS KernelProcess;
     PKPROCESS Process;
     ULONG ProcessCount;
@@ -399,7 +407,8 @@ Return Value:
 
     ASSERT(SystemCallNumber == SystemCallSendSignal);
 
-    CurrentProcess = PsGetCurrentProcess();
+    CurrentThread = KeGetCurrentThread();
+    CurrentProcess = CurrentThread->OwningProcess;
     Request = (PSYSTEM_CALL_SEND_SIGNAL)SystemCallParameter;
     if (Request->SignalNumber >= SIGNAL_COUNT) {
         Status = STATUS_INVALID_PARAMETER;
@@ -413,11 +422,6 @@ Return Value:
     if (Request->SignalCode > 0) {
         Request->SignalCode = SIGNAL_CODE_USER;
     }
-
-    //
-    // TODO: Set the sending user ID to the caller's real user ID.
-    // TODO: Ensure the caller has permission to signal the target.
-    //
 
     TargetId = Request->TargetId;
     switch (Request->TargetType) {
@@ -436,7 +440,15 @@ Return Value:
             goto SendSignalEnd;
         }
 
-        Status = STATUS_SUCCESS;
+        Status = PspCheckSendSignalPermission(CurrentThread,
+                                              Process,
+                                              Request->SignalNumber);
+
+        if (!KSUCCESS(Status)) {
+            ObReleaseReference(Thread);
+            break;
+        }
+
         if (Request->SignalNumber < STANDARD_SIGNAL_COUNT) {
             if (Request->SignalNumber != 0) {
                 PsSignalThread(Thread, Request->SignalNumber, NULL);
@@ -462,6 +474,9 @@ Return Value:
                                                 Process->Identifiers.ProcessId;
 
             SignalQueueEntry->Parameters.Parameter = Request->SignalParameter;
+            SignalQueueEntry->Parameters.SendingUserId =
+                                            CurrentThread->Identity.RealUserId;
+
             SignalQueueEntry->CompletionRoutine =
                                               PsDefaultSignalCompletionRoutine;
 
@@ -471,6 +486,7 @@ Return Value:
         }
 
         ObReleaseReference(Thread);
+        Status = STATUS_SUCCESS;
         break;
 
     //
@@ -525,13 +541,19 @@ Return Value:
                 }
             }
 
-            SignalStatus = PspSignalProcess(Process,
-                                            Request->SignalNumber,
-                                            Request->SignalCode,
-                                            Request->SignalParameter);
+            Status = PspCheckSendSignalPermission(CurrentThread,
+                                                  Process,
+                                                  Request->SignalNumber);
 
-            if (!KSUCCESS(SignalStatus)) {
-                Status = SignalStatus;
+            if (KSUCCESS(Status)) {
+                SignalStatus = PspSignalProcess(Process,
+                                                Request->SignalNumber,
+                                                Request->SignalCode,
+                                                Request->SignalParameter);
+
+                if (!KSUCCESS(SignalStatus)) {
+                    Status = SignalStatus;
+                }
             }
         }
 
@@ -563,10 +585,16 @@ Return Value:
             }
         }
 
-        Status = PspSignalProcess(Process,
-                                  Request->SignalNumber,
-                                  Request->SignalCode,
-                                  Request->SignalParameter);
+        Status = PspCheckSendSignalPermission(CurrentThread,
+                                              Process,
+                                              Request->SignalNumber);
+
+        if (KSUCCESS(Status)) {
+            Status = PspSignalProcess(Process,
+                                      Request->SignalNumber,
+                                      Request->SignalCode,
+                                      Request->SignalParameter);
+        }
 
         if (Process != CurrentProcess) {
             ObReleaseReference(Process);
@@ -1207,6 +1235,48 @@ SignalProcessEnd:
     }
 
     return;
+}
+
+KSTATUS
+PsSignalProcessId (
+    PROCESS_ID ProcessId,
+    ULONG SignalNumber,
+    PSIGNAL_QUEUE_ENTRY SignalQueueEntry
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a signal to the given process.
+
+Arguments:
+
+    ProcessId - Supplies the identifier of the process to send the signal to.
+
+    SignalNumber - Supplies the signal number to send.
+
+    SignalQueueEntry - Supplies an optional pointer to a queue entry to place
+        on the process' queue.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PKPROCESS Process;
+
+    Process = PspGetProcessById(ProcessId);
+    if (Process == NULL) {
+        return STATUS_NO_SUCH_PROCESS;
+    }
+
+    PsSignalProcess(Process, SignalNumber, SignalQueueEntry);
+    ObReleaseReference(Process);
+    return STATUS_SUCCESS;
 }
 
 KSTATUS
@@ -3692,5 +3762,77 @@ Return Value:
 
     Thread->SignalPending = ThreadSignalPendingStateUnknown;
     return;
+}
+
+KSTATUS
+PspCheckSendSignalPermission (
+    PKTHREAD CurrentThread,
+    PKPROCESS Process,
+    ULONG Signal
+    )
+
+/*++
+
+Routine Description:
+
+    This routine ensures the current process has permission to send a signal to
+    the given process.
+
+Arguments:
+
+    CurrentThread - Supplies a pointer to the current thread.
+
+    Process - Supplies a pointer to the potential recipient of a signal.
+
+    Signal - Supplies the proposed signal to send.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NO_SUCH_PROCESS if the process is a zombie.
+
+    STATUS_PERMISSION_DENIED on failure.
+
+--*/
+
+{
+
+    PKPROCESS CurrentProcess;
+    THREAD_IDENTITY Identity;
+    KSTATUS Status;
+
+    CurrentProcess = CurrentThread->OwningProcess;
+    Status = PspGetProcessIdentity(Process, &Identity);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    if ((CurrentThread->Identity.EffectiveUserId == Identity.RealUserId) ||
+        (CurrentThread->Identity.RealUserId == Identity.RealUserId) ||
+        (CurrentThread->Identity.EffectiveUserId == Identity.SavedUserId) ||
+        (CurrentThread->Identity.RealUserId == Identity.SavedUserId)) {
+
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Continue can be sent to any process in this process' session.
+    //
+
+    if (Signal == SIGNAL_CONTINUE) {
+        if (CurrentProcess->Identifiers.SessionId ==
+            Process->Identifiers.SessionId) {
+
+            return STATUS_SUCCESS;
+        }
+    }
+
+    //
+    // Check for the overriding permission of the superuser.
+    //
+
+    Status = PsCheckPermission(PERMISSION_KILL);
+    return Status;
 }
 

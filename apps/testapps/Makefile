@@ -21,7 +21,8 @@
 #
 ################################################################################
 
-DIRS = dbgtest  \
+DIRS = aiotest  \
+       dbgtest  \
        filetest \
        ktest    \
        mmaptest \

@@ -2699,6 +2699,34 @@ Return Value:
 --*/
 
 KSTATUS
+PsSignalProcessId (
+    PROCESS_ID ProcessId,
+    ULONG SignalNumber,
+    PSIGNAL_QUEUE_ENTRY SignalQueueEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends a signal to the given process.
+
+Arguments:
+
+    ProcessId - Supplies the identifier of the process to send the signal to.
+
+    SignalNumber - Supplies the signal number to send.
+
+    SignalQueueEntry - Supplies an optional pointer to a queue entry to place
+        on the process' queue.
+
+Return Value:
+
+    None.
+
+--*/
+
+KSTATUS
 PsSignalAllProcesses (
     ULONG SignalNumber
     );
@@ -3039,6 +3067,34 @@ Return Value:
 
     STATUS_BUFFER_TOO_SMALL if a buffer was supplied but was not big enough to
     contain all the information.
+
+--*/
+
+KSTATUS
+PsGetProcessIdentity (
+    PROCESS_ID ProcessId,
+    PTHREAD_IDENTITY Identity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the identity of the process, which is simply that of
+    an arbitrary thread in the process.
+
+Arguments:
+
+    ProcessId - Supplies the ID of the process to get the information for.
+
+    Identity - Supplies a pointer where the process identity will be returned.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NO_SUCH_PROCESS if the given process ID does not correspond to any
+    known process.
 
 --*/
 

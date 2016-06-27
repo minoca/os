@@ -376,8 +376,9 @@ extern "C" {
 #define SI_USER (-1)
 #define SI_QUEUE (-2)
 #define SI_TIMER (-3)
-#define SI_TKILL (-4)
-#define SI_KERNEL (-5)
+#define SI_SIGIO (-4)
+#define SI_TKILL (-5)
+#define SI_KERNEL (-6)
 
 //
 // Define the minimum and default signal stack size.
