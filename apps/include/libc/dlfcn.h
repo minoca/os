@@ -29,6 +29,12 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
 //
 // Define flags that can be passed to the dlopen function.
 //
@@ -191,5 +197,10 @@ Return Value:
 
 --*/
 
+#ifdef __cplusplus
+
+}
+
+#endif
 #endif
 
