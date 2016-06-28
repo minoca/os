@@ -429,6 +429,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/cmake-3.5.2"
         },
         {
+            "name": "Make lua",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/lua-5.3.3"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"

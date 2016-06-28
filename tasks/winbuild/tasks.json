@@ -410,6 +410,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/cmake-3.5.2"
         },
         {
+            "name": "Make lua",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/lua-5.3.3"
+        },
+        {
             "name": "Make OS",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os test"
