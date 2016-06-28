@@ -23,9 +23,14 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+//
+// Set the wint_t macro so that the compiler's stddef.h will define the type.
+//
+
+#define __need_wint_t
+#include <stddef.h>
 #include <libcbase.h>
 #include <stdarg.h>
-#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <wctype.h>

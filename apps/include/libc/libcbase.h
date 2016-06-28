@@ -34,16 +34,6 @@ extern "C" {
 #endif
 
 //
-// Some versions of the compiler's stddef.h require macros to be set for the
-// types to be defined.
-//
-
-#define __need_wint_t
-#define __need_ptrdiff_t
-#define __need_size_t
-#define __need_wchar_t
-
-//
 // This library is mostly POSIX compliant.
 //
 
