@@ -37,6 +37,9 @@ extern "C" {
 
 #endif
 
+#define setjmp _setjmp
+#define longjmp _longjmp
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -59,7 +62,7 @@ typedef long sigjmp_buf[16];
 
 LIBC_API
 int
-setjmp (
+_setjmp (
     jmp_buf Environment
     );
 
@@ -115,7 +118,7 @@ Return Value:
 
 LIBC_API
 void
-longjmp (
+_longjmp (
     jmp_buf Environment,
     int Value
     );

@@ -57,7 +57,7 @@ ClpLongJump (
 
 LIBC_API
 void
-longjmp (
+_longjmp (
     jmp_buf Environment,
     int Value
     )
