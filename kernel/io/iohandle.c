@@ -115,6 +115,17 @@ Return Value:
     ASSERT((OldValue != 0) && (OldValue < IO_HANDLE_MAX_REFERENCE_COUNT));
 
     if (OldValue == 1) {
+
+        //
+        // Clear the asynchronous receiver information from this handle.
+        //
+
+        if (IoHandle->Async != NULL) {
+            IoSetHandleAsynchronous(IoHandle, 0, FALSE);
+            MmFreePagedPool(IoHandle->Async);
+            IoHandle->Async = NULL;
+        }
+
         Status = IopClose(IoHandle);
         if (!KSUCCESS(Status)) {
 
