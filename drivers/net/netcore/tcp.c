@@ -987,20 +987,23 @@ Return Value:
 
     ASSERT(TcpSocket->NetSocket.BindingType != SocketBindingInvalid);
 
-    if (TcpSocket->State != TcpStateInitialized) {
-        Status = STATUS_INVALID_PARAMETER;
-        goto TcpListenEnd;
-    }
+    Status = STATUS_SUCCESS;
+    if (TcpSocket->State != TcpStateListening) {
+        if (TcpSocket->State != TcpStateInitialized) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto TcpListenEnd;
+        }
 
-    NetpTcpSetState(TcpSocket, TcpStateListening);
+        NetpTcpSetState(TcpSocket, TcpStateListening);
 
-    //
-    // Begin listening for incoming connection requests.
-    //
+        //
+        // Begin listening for incoming connection requests.
+        //
 
-    Status = Socket->Network->Interface.Listen(Socket);
-    if (!KSUCCESS(Status)) {
-        goto TcpListenEnd;
+        Status = Socket->Network->Interface.Listen(Socket);
+        if (!KSUCCESS(Status)) {
+            goto TcpListenEnd;
+        }
     }
 
 TcpListenEnd:

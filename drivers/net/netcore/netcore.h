@@ -43,7 +43,7 @@ Author:
 // allowed to accumulate in a socket.
 //
 
-#define NET_MAX_INCOMING_CONNECTIONS 32
+#define NET_MAX_INCOMING_CONNECTIONS 512
 
 #define NET_PRINT_ADDRESS_STRING_LENGTH 200
 
