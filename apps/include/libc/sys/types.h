@@ -42,7 +42,7 @@ extern "C" {
 // Define a type used for file block counts.
 //
 
-typedef unsigned long long blkcnt_t;
+typedef long long blkcnt_t;
 
 //
 // Define a type used for block sizes.
