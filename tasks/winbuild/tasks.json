@@ -150,6 +150,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/autotools/libtool tools"
         },
         {
+            "name": "Make cmake (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/cmake-3.5.2 tools"
+        },
+        {
             "name": "Make awk",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/awk"
@@ -398,6 +403,11 @@
             "name": "Make apache",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/httpd-2.4.20"
+        },
+        {
+            "name": "Make cmake",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/cmake-3.5.2"
         },
         {
             "name": "Make OS",
