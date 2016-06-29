@@ -661,7 +661,7 @@ Return Value:
     //
 
     BackingImage = SharedMemoryObject->BackingImage;
-    BackingImageObject = BackingImage->PathPoint.PathEntry->FileObject;
+    BackingImageObject = BackingImage->FileObject;
     READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
     READ_INT64_SYNC(&(BackingImageObject->Properties.FileSize),
                     &BackingImageSize);

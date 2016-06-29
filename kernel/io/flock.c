@@ -133,7 +133,7 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     FoundEntry = NULL;
     KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
     CurrentEntry = FileObject->FileLockList.Next;
@@ -215,7 +215,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     INITIALIZE_LIST_HEAD(&FreeList);
     NewEntry = NULL;
     SplitEntry = NULL;
@@ -419,7 +419,7 @@ Return Value:
     // Exit quickly if there are no file locks.
     //
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     if (LIST_EMPTY(&(FileObject->FileLockList)) != FALSE) {
         return;
     }

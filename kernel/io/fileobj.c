@@ -518,7 +518,7 @@ Return Value:
 
     PFILE_OBJECT FileObject;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     IopFileObjectAddReference(FileObject);
     return FileObject;
 }
@@ -597,7 +597,7 @@ Return Value:
     PKPROCESS Process;
     KSTATUS Status;
 
-    IoState = IoHandle->PathPoint.PathEntry->FileObject->IoState;
+    IoState = IoHandle->FileObject->IoState;
     AsyncState = IopGetAsyncState(IoState);
     if (AsyncState == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;

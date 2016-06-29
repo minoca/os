@@ -505,7 +505,7 @@ Return Value:
     KSTATUS Status;
 
     PipeOpened = FALSE;
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
 
     ASSERT(FileObject->Properties.Type == IoObjectPipe);
 
@@ -664,7 +664,7 @@ Return Value:
     BOOL LockHeld;
     PPIPE Pipe;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     FileProperties = &(FileObject->Properties);
 
     ASSERT(FileProperties->Type == IoObjectPipe);
@@ -765,7 +765,7 @@ Return Value:
     UINTN PipeBytesCompleted;
     KSTATUS Status;
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(FileObject->Properties.Type == IoObjectPipe);

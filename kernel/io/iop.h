@@ -545,6 +545,9 @@ Members:
     PathPoint - Stores the path context (path entry and mount point) for the
         file or object.
 
+    FileObject - Stores a pointer to the file object to interact with for I/O
+        purposes.
+
     CurrentOffset - Stores the current file pointer.
 
     Async - Stores an optional pointer to the asynchronous receiver state.
@@ -558,6 +561,7 @@ struct _IO_HANDLE {
     volatile ULONG ReferenceCount;
     PVOID DeviceContext;
     PATH_POINT PathPoint;
+    PFILE_OBJECT FileObject;
     IO_OFFSET CurrentOffset;
     PASYNC_IO_RECEIVER Async;
 };

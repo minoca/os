@@ -583,7 +583,7 @@ Return Value:
     PathCopy = NULL;
     IO_INITIALIZE_PATH_POINT(&PathPoint);
     UnixSocket = NULL;
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     Status = IoGetSocketFromHandle(Handle, &Socket);
     if (!KSUCCESS(Status)) {
         return Status;

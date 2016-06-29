@@ -203,7 +203,7 @@ Return Value:
     FILE_OBJECT_TIME_TYPE TimeType;
     BOOL TimidTrim;
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT((IoContext->Flags & IO_FLAG_NO_ALLOCATE) == 0);

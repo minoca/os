@@ -288,13 +288,11 @@ Return Value:
             goto OpenDeviceEnd;
         }
 
-        ASSERT(Device == IoHandle->PathPoint.PathEntry->FileObject->Device);
-
         //
         // Return the requested data.
         //
 
-        FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+        FileObject = IoHandle->FileObject;
         READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
         if (IoOffsetAlignment != NULL) {
             *IoOffsetAlignment = FileObject->Properties.BlockSize;
@@ -897,7 +895,7 @@ Return Value:
     // handle is not in the cache because it's not cacheable, exit successfully.
     //
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     if ((FileObject->Properties.Type == IoObjectTerminalMaster) ||
         (FileObject->Properties.Type == IoObjectTerminalSlave)) {
 
@@ -980,7 +978,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     switch (FileObject->Properties.Type) {
     case IoObjectRegularFile:
     case IoObjectRegularDirectory:
@@ -1084,11 +1082,9 @@ Return Value:
 
     PFILE_OBJECT FileObject;
     ULONGLONG LocalFileSize;
-    PPATH_POINT PathPoint;
     KSTATUS Status;
 
-    PathPoint = IoGetPathPoint(Handle);
-    FileObject = PathPoint->PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
     *FileSize = LocalFileSize;
     Status = STATUS_SUCCESS;
@@ -1196,6 +1192,12 @@ Return Value:
 
     Updated = FALSE;
     StatusChanged = FALSE;
+
+    //
+    // Operate on the file object that was actually opened, not the file object
+    // doing all the I/O.
+    //
+
     FileObject = Handle->PathPoint.PathEntry->FileObject;
     if (FromKernelMode == FALSE) {
         FileOwner = FALSE;
@@ -1631,6 +1633,9 @@ Return Value:
             Status = STATUS_NOT_A_DIRECTORY;
             goto RenameEnd;
         }
+
+        ASSERT(SourceStartDirectory->FileObject ==
+               SourceStartPathPoint->PathEntry->FileObject);
     }
 
     if (DestinationStartDirectory != NULL) {
@@ -1641,6 +1646,9 @@ Return Value:
             Status = STATUS_NOT_A_DIRECTORY;
             goto RenameEnd;
         }
+
+        ASSERT(DestinationStartDirectory->FileObject ==
+               DestinationStartPathPoint->PathEntry->FileObject);
     }
 
     //
@@ -2553,7 +2561,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     KSTATUS Status;
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     switch (FileObject->Properties.Type) {
     case IoObjectBlockDevice:
     case IoObjectCharacterDevice:
@@ -2645,7 +2653,7 @@ Return Value:
         return STATUS_INVALID_CONFIGURATION;
     }
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     FileDevice = FileObject->Device;
     if (IS_DEVICE_OR_VOLUME(FileDevice)) {
         *Device = FileDevice;
@@ -2832,7 +2840,7 @@ Return Value:
     // return failure.
     //
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     Device = FileObject->Device;
     if (!IS_DEVICE_OR_VOLUME(Device)) {
         Status = STATUS_NOT_SUPPORTED;
@@ -2931,7 +2939,6 @@ Return Value:
 
 {
 
-    PPATH_ENTRY DirectoryEntry;
     PFILE_OBJECT DirectoryFileObject;
     PPATH_POINT DirectoryPathPoint;
     PFILE_OBJECT FileObject;
@@ -2959,13 +2966,15 @@ Return Value:
     //
 
     if (Directory != NULL) {
+        DirectoryFileObject = Directory->FileObject;
         DirectoryPathPoint = &(Directory->PathPoint);
-        DirectoryEntry = DirectoryPathPoint->PathEntry;
-        DirectoryFileObject = DirectoryEntry->FileObject;
         if (DirectoryFileObject->Properties.Type != IoObjectRegularDirectory) {
             Status = STATUS_NOT_A_DIRECTORY;
             goto OpenEnd;
         }
+
+        ASSERT(DirectoryFileObject ==
+               DirectoryPathPoint->PathEntry->FileObject);
     }
 
     //
@@ -3193,6 +3202,7 @@ Return Value:
     NewHandle->OpenFlags = Flags;
     NewHandle->Access = Access;
     FileObject = PathPoint->PathEntry->FileObject;
+    NewHandle->FileObject = FileObject;
     switch (FileObject->Properties.Type) {
     case IoObjectRegularFile:
     case IoObjectSymbolicLink:
@@ -3583,12 +3593,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     KSTATUS Status;
 
-    if (IoHandle->PathPoint.PathEntry == NULL) {
-        Status = STATUS_SUCCESS;
-        goto CloseEnd;
-    }
-
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     switch (FileObject->Properties.Type) {
     case IoObjectRegularFile:
     case IoObjectRegularDirectory:
@@ -3647,13 +3652,34 @@ Return Value:
     }
 
     //
+    // Clear the asynchronous receiver information from this handle.
+    //
+
+    if (IoHandle->Async != NULL) {
+        IoSetHandleAsynchronous(IoHandle, 0, FALSE);
+        MmFreePagedPool(IoHandle->Async);
+        IoHandle->Async = NULL;
+    }
+
+    //
+    // If the file object in the handle is not the same as the one in the
+    // path entry, release the reference on the one in the handle.
+    //
+
+    if (FileObject != IoHandle->PathPoint.PathEntry->FileObject) {
+        IopFileObjectReleaseReference(FileObject);
+    }
+
+    //
     // Let go of the path point, and slide gently into the night. Be careful,
     // as anonymous objects do not have a mount point.
     //
 
-    IoPathEntryReleaseReference(IoHandle->PathPoint.PathEntry);
-    if (IoHandle->PathPoint.MountPoint != NULL) {
-        IoMountPointReleaseReference(IoHandle->PathPoint.MountPoint);
+    if (IoHandle->PathPoint.PathEntry != NULL) {
+        IoPathEntryReleaseReference(IoHandle->PathPoint.PathEntry);
+        if (IoHandle->PathPoint.MountPoint != NULL) {
+            IoMountPointReleaseReference(IoHandle->PathPoint.MountPoint);
+        }
     }
 
 CloseEnd:
@@ -3729,6 +3755,8 @@ Return Value:
             Status = STATUS_NOT_A_DIRECTORY;
             goto DeleteEnd;
         }
+
+        ASSERT(Directory->FileObject == DirectoryFileObject);
     }
 
     Status = IopPathWalk(FromKernelMode,
@@ -4426,7 +4454,6 @@ Return Value:
     PDEVICE Device;
     PFILE_OBJECT FileObject;
     PIRP Irp;
-    PPATH_POINT PathPoint;
     KSTATUS Status;
 
     Irp = NULL;
@@ -4435,8 +4462,7 @@ Return Value:
         goto GetBlockInformationEnd;
     }
 
-    PathPoint = IoGetPathPoint(Handle);
-    FileObject = PathPoint->PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     Irp = IoCreateIrp(Device, IrpMajorSystemControl, 0);
     if (Irp == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -5012,16 +5038,14 @@ Return Value:
         goto OpenPagingDeviceEnd;
     }
 
-    ASSERT(Device == IoHandle->PathPoint.PathEntry->FileObject->Device);
-
     //
     // Grab some needed parameters from the paged file object structure.
     //
 
+    FileObject = IoHandle->FileObject;
     PagingHandle->IoHandle = IoHandle;
-    PagingHandle->Device = Device;
+    PagingHandle->Device = FileObject->Device;
     PagingHandle->DeviceContext = IoHandle->DeviceContext;
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
     READ_INT64_SYNC(&(FileObject->Properties.FileSize),
                     &(PagingHandle->Capacity));
 
@@ -5219,7 +5243,7 @@ Return Value:
     ASSERT(Context->BytesCompleted == 0);
     ASSERT(Context->IoBuffer != NULL);
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     if (FileObject == NULL) {
         Status = STATUS_NO_SUCH_DEVICE;
         goto PerformIoOperationEnd;
@@ -5445,7 +5469,7 @@ Return Value:
 
     ASSERT(Context->IoBuffer != NULL);
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
 
     ASSERT(FileObject->Properties.Type == IoObjectCharacterDevice);
 
@@ -5524,7 +5548,7 @@ Return Value:
 
     Context->BytesCompleted = 0;
     Parameters.IoBytesCompleted = Context->BytesCompleted;
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
 
     ASSERT(FileObject != NULL);
 
@@ -5702,7 +5726,10 @@ Return Value:
             Entry->Size = EntrySize;
             Entry->Type = IoObjectRegularDirectory;
             Entry->NextOffset = DIRECTORY_OFFSET_DOT_DOT;
-            FileObject = Handle->PathPoint.PathEntry->FileObject;
+            FileObject = Handle->FileObject;
+
+            ASSERT(FileObject == Handle->PathPoint.PathEntry->FileObject);
+
             Entry->FileId = FileObject->Properties.FileId;
             RtlCopyMemory(Entry + 1, ".", sizeof("."));
             Status = MmCopyIoBufferData(IoBuffer,

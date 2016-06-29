@@ -992,7 +992,7 @@ Return Value:
 
     PFILE_OBJECT FileObject;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     if (FileObject->Properties.Type != IoObjectSocket) {
         return STATUS_NOT_A_SOCKET;
     }
@@ -2348,7 +2348,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     PSOCKET Socket;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
 
     ASSERT(FileObject->Properties.Type == IoObjectSocket);
 
@@ -2391,7 +2391,7 @@ Return Value:
     PSOCKET Socket;
     KSTATUS Status;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     if (FileObject->Properties.Type != IoObjectSocket) {
         Status = STATUS_NOT_A_SOCKET;
         goto CloseSocketEnd;

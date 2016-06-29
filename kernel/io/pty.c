@@ -633,7 +633,7 @@ Return Value:
     // Get a pointer to the actual terminal structure.
     //
 
-    FileObject = TerminalHandle->PathPoint.PathEntry->FileObject;
+    FileObject = TerminalHandle->FileObject;
     if (FileObject->Properties.Type == IoObjectTerminalMaster) {
         Terminal = FileObject->SpecialIo;
 
@@ -741,7 +741,7 @@ Return Value:
     KSTATUS Status;
     PTERMINAL Terminal;
 
-    FileObject = TerminalMaster->PathPoint.PathEntry->FileObject;
+    FileObject = TerminalMaster->FileObject;
     if (FileObject->Properties.Type != IoObjectTerminalMaster) {
         Status = STATUS_NOT_A_TERMINAL;
         goto TerminalSetDeviceEnd;
@@ -945,7 +945,7 @@ Return Value:
     KSTATUS Status;
     PTERMINAL Terminal;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
 
     ASSERT(FileObject->Properties.Type == IoObjectTerminalMaster);
 
@@ -1019,7 +1019,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     PTERMINAL Terminal;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
 
     ASSERT(FileObject->Properties.Type == IoObjectTerminalMaster);
 
@@ -1134,7 +1134,7 @@ Return Value:
     PTERMINAL Terminal;
     BOOL TerminalLocksHeld;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
 
     ASSERT(FileObject->Properties.Type == IoObjectTerminalSlave);
 
@@ -1286,7 +1286,7 @@ Return Value:
     PTERMINAL_SLAVE Slave;
     PTERMINAL Terminal;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
 
     ASSERT(FileObject->Properties.Type == IoObjectTerminalSlave);
 
@@ -1386,7 +1386,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     KSTATUS Status;
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(FileObject->Properties.Type == IoObjectTerminalMaster);
@@ -1432,7 +1432,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     KSTATUS Status;
 
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(FileObject->Properties.Type == IoObjectTerminalSlave);
@@ -1876,7 +1876,7 @@ Return Value:
     TERMINAL_WINDOW_SIZE WindowSize;
 
     TerminalSlave = NULL;
-    FileObject = Handle->PathPoint.PathEntry->FileObject;
+    FileObject = Handle->FileObject;
     if (FileObject->Properties.Type == IoObjectTerminalMaster) {
         Terminal = FileObject->SpecialIo;
 

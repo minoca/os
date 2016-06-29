@@ -119,7 +119,7 @@ Return Value:
     BytesRead = 0;
     Child = NULL;
     ChildFileObject = NULL;
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     NameBuffer = NULL;
     Object = (POBJECT_HEADER)(UINTN)(FileObject->Properties.FileId);
 

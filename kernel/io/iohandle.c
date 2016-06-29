@@ -115,17 +115,6 @@ Return Value:
     ASSERT((OldValue != 0) && (OldValue < IO_HANDLE_MAX_REFERENCE_COUNT));
 
     if (OldValue == 1) {
-
-        //
-        // Clear the asynchronous receiver information from this handle.
-        //
-
-        if (IoHandle->Async != NULL) {
-            IoSetHandleAsynchronous(IoHandle, 0, FALSE);
-            MmFreePagedPool(IoHandle->Async);
-            IoHandle->Async = NULL;
-        }
-
         Status = IopClose(IoHandle);
         if (!KSUCCESS(Status)) {
 
@@ -227,7 +216,7 @@ Return Value:
 
     PFILE_OBJECT FileObject;
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     return IopGetImageSectionListFromFileObject(FileObject);
 }
 
@@ -316,7 +305,7 @@ Return Value:
     // The I/O handle is deemed cacheable if the file object is cacheable.
     //
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
         return TRUE;
     }

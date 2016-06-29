@@ -1288,6 +1288,8 @@ Return Value:
             goto SysChangeDirectoryEnd;
         }
 
+        ASSERT(FileObject == ExistingHandle->FileObject);
+
     //
     // More commonly a path was supplied, so open the path.
     //
@@ -1428,7 +1430,6 @@ Return Value:
     ULONGLONG Microseconds;
     ULONGLONG ObjectIndex;
     SIGNAL_SET OldSignalSet;
-    PPATH_ENTRY PathEntry;
     PSYSTEM_CALL_POLL PollInformation;
     PKPROCESS Process;
     BOOL RestoreSignalMask;
@@ -1556,8 +1557,7 @@ Return Value:
             continue;
         }
 
-        PathEntry = IoHandle->PathPoint.PathEntry;
-        FileObject = PathEntry->FileObject;
+        FileObject = IoHandle->FileObject;
 
         //
         // Regular files and directories always poll TRUE for reading and
@@ -1654,8 +1654,7 @@ Return Value:
         // selected descriptors.
         //
 
-        PathEntry = IoHandle->PathPoint.PathEntry;
-        FileObject = PathEntry->FileObject;
+        FileObject = IoHandle->FileObject;
         if ((FileObject->Properties.Type == IoObjectRegularFile) ||
             (FileObject->Properties.Type == IoObjectRegularDirectory) ||
             (FileObject->Properties.Type == IoObjectObjectDirectory) ||
@@ -2100,7 +2099,7 @@ Return Value:
 
     case FileControlCommandGetSignalOwner:
         LocalParameters.Owner = 0;
-        IoState = IoHandle->PathPoint.PathEntry->FileObject->IoState;
+        IoState = IoHandle->FileObject->IoState;
         if (IoState->Async != NULL) {
             LocalParameters.Owner = IoState->Async->Owner;
         }
@@ -2125,7 +2124,7 @@ Return Value:
             goto SysFileControlEnd;
         }
 
-        IoState = IoHandle->PathPoint.PathEntry->FileObject->IoState;
+        IoState = IoHandle->FileObject->IoState;
 
         //
         // Signaling process groups is currently not supported.
@@ -2230,7 +2229,7 @@ Return Value:
 
     case FileControlCommandSetDirectoryFlag:
         Status = STATUS_NOT_A_DIRECTORY;
-        FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+        FileObject = IoHandle->FileObject;
         if ((FileObject->Properties.Type == IoObjectRegularDirectory) ||
             (FileObject->Properties.Type == IoObjectObjectDirectory)) {
 
@@ -4024,7 +4023,7 @@ Return Value:
 
     Parameters = Context;
     IoHandle = HandleValue;
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+    FileObject = IoHandle->FileObject;
     if ((Descriptor != Parameters->Handle) &&
         ((FileObject->Properties.Type == IoObjectRegularDirectory) ||
          (FileObject->Properties.Type == IoObjectObjectDirectory))) {
