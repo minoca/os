@@ -27,7 +27,7 @@ Author:
 #include <stddef.h>
 
 //
-// ---------------------------------------------------------------- Definitions
+// --------------------------------------------------------------------- Macros
 //
 
 #ifdef __cplusplus
@@ -35,6 +35,98 @@ Author:
 extern "C" {
 
 #endif
+
+//
+// This macro classifies the given real-floating value into one of five
+// categories: NaN, infinite, normal, subnormal, and zero.
+//
+
+#define fpclassify(_Value)             \
+    __builtin_fpclassify(FP_NAN,       \
+                         FP_INFINITE,  \
+                         FP_NORMAL,    \
+                         FP_SUBNORMAL, \
+                         FP_ZERO,      \
+                         _Value)
+
+//
+// This macro determines whether or not the given real-floating value is finite.
+//
+
+#define isfinite(_Value) __builtin_isfinite(_Value)
+
+//
+// This macro determines whether or not Value1 is greater than Value2.
+//
+
+#define isgreater(_Value1, _Value2) __builtin_isgreater(_Value1, _Value2)
+
+//
+// This macro determines whether or not Value1 is greater than or equal to
+// Value2.
+//
+
+#define isgreaterequal(_Value1, _Value2) \
+    __builtin_isgreaterequal(_Value1, _Value2)
+
+//
+// This macro determines whether or not the given real-floating value is
+// positive or negative infinity.
+//
+
+#define isinf(_Value) __builtin_isinf(_Value)
+
+//
+// This macro determines whether or not Value1 is less than Value2.
+//
+
+#define isless(_Value1, _Value2) __builtin_isless(_Value1, _Value2)
+
+//
+// This macro determines whether or not Value1 is less than or equal to Value2.
+//
+
+#define islessequal(_Value1, _Value2) __builtin_islessequal(_Value1, _Value2)
+
+//
+// This macro determines whether or not Value1 is less than or greater than
+// Value2.
+//
+
+#define islessgreater(_Value1, _Value2) \
+    __builtin_islessgreater(_Value1, _Value2)
+
+//
+// This macro determines whether or not the given real-floating value is NaN.
+//
+
+#define isnan(_Value) __builtin_isnan(_Value)
+
+//
+// This macro determines whether or not the given real-floating value is normal.
+// That is, it is not NaN, zero, or infinite and it is not too small to be
+// represented in normalized format.
+//
+
+#define isnormal(_Value) __builtin_isnormal(_Value)
+
+//
+// This macro determines whether or not at least one value is NaN and thus they
+// cannot be compared with each other.
+//
+
+#define isunordered(_Value1, _Value2) __builtin_isunordered(_Value1, _Value2)
+
+//
+// This macro determines whether or not the given real-floating value is
+// negative.
+//
+
+#define signbit(_Value) __builtin_signbit(_Value)
+
+//
+// ---------------------------------------------------------------- Definitions
+//
 
 //
 // Define positive infinity as a double.
@@ -84,6 +176,16 @@ extern "C" {
 #define M_2_SQRTPI 1.12837916709551257389615890312154517
 #define M_SQRT2    1.41421356237309504880168872420969808
 #define M_SQRT1_2  0.707106781186547524400844362104849039
+
+//
+// Define the floating point number categories.
+//
+
+#define FP_NAN 0
+#define FP_INFINITE 1
+#define FP_NORMAL 2
+#define FP_SUBNORMAL 3
+#define FP_ZERO 4
 
 //
 // ------------------------------------------------------ Data Type Definitions
