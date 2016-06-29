@@ -251,6 +251,7 @@ extern "C" {
 //
 
 #define O_ASYNC 0x00010000
+#define FASYNC O_ASYNC
 
 //
 // The binary and text flags don't mean anything on this OS, but define them
