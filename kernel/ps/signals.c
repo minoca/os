@@ -52,6 +52,16 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef struct _SEND_SIGNAL_ITERATOR_CONTEXT {
+    PKTHREAD CurrentThread;
+    PKPROCESS SkipProcess;
+    ULONG Signal;
+    PSIGNAL_QUEUE_ENTRY QueueEntry;
+    BOOL CheckPermissions;
+    ULONG SentSignals;
+    KSTATUS Status;
+} SEND_SIGNAL_ITERATOR_CONTEXT, *PSEND_SIGNAL_ITERATOR_CONTEXT;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -132,6 +142,12 @@ PspSignalProcess (
 
 VOID
 PspRequeueBlockedSignals (
+    PKPROCESS Process
+    );
+
+BOOL
+PspSendSignalIterator (
+    PVOID Context,
     PKPROCESS Process
     );
 
@@ -393,14 +409,12 @@ Return Value:
 
     PKPROCESS CurrentProcess;
     PKTHREAD CurrentThread;
+    SEND_SIGNAL_ITERATOR_CONTEXT Iterator;
     PKPROCESS KernelProcess;
+    PROCESS_ID_TYPE MatchType;
     PKPROCESS Process;
-    ULONG ProcessCount;
-    PKPROCESS *Processes;
-    ULONG ProcessIndex;
     PSYSTEM_CALL_SEND_SIGNAL Request;
     PSIGNAL_QUEUE_ENTRY SignalQueueEntry;
-    KSTATUS SignalStatus;
     KSTATUS Status;
     ULONG TargetId;
     PKTHREAD Thread;
@@ -489,76 +503,29 @@ Return Value:
         Status = STATUS_SUCCESS;
         break;
 
-    //
-    // Send signals to an entire group of processes, potentially all processes.
-    // Note that if the current process group is the target, then it falls
-    // through once the group ID has been found. Exclude the kernel process.
-    //
-
     case SignalTargetCurrentProcessGroup:
-        Process = CurrentProcess;
-        TargetId = Process->Identifiers.ProcessGroupId;
-
-        //
-        // Fall through.
-        //
-
     case SignalTargetProcessGroup:
     case SignalTargetAllProcesses:
-        Status = PspGetProcessList(&Processes, &ProcessCount);
-        if (!KSUCCESS(Status)) {
-            goto SendSignalEnd;
+        RtlZeroMemory(&Iterator, sizeof(SEND_SIGNAL_ITERATOR_CONTEXT));
+        Iterator.CheckPermissions = TRUE;
+        Iterator.Status = STATUS_SUCCESS;
+        Iterator.Signal = Request->SignalNumber;
+        MatchType = ProcessIdProcessGroup;
+        if (Request->TargetType == SignalTargetAllProcesses) {
+            TargetId = -1;
+            MatchType = ProcessIdProcess;
+            Iterator.SkipProcess = CurrentProcess;
+
+        } else if (Request->TargetType == SignalTargetCurrentProcessGroup) {
+            TargetId = CurrentProcess->Identifiers.ProcessGroupId;
         }
 
-        KernelProcess = PsGetKernelProcess();
-        for (ProcessIndex = 0; ProcessIndex < ProcessCount; ProcessIndex += 1) {
-            if (Processes[ProcessIndex] == KernelProcess) {
-                continue;
-            }
-
-            //
-            // Skip the process group ID filtering if all processes are being
-            // targeted.
-            //
-
-            Process = Processes[ProcessIndex];
-            if (Request->TargetType != SignalTargetAllProcesses) {
-                if ((Process->ProcessGroup == NULL) ||
-                    (Process->Identifiers.ProcessGroupId != TargetId)) {
-
-                    continue;
-                }
-
-            //
-            // If sending KILL to all processes, exempt the current process.
-            //
-
-            } else {
-                if ((Request->SignalNumber == SIGNAL_KILL) &&
-                    (Process == CurrentProcess)) {
-
-                    continue;
-                }
-            }
-
-            Status = PspCheckSendSignalPermission(CurrentThread,
-                                                  Process,
-                                                  Request->SignalNumber);
-
-            if (KSUCCESS(Status)) {
-                SignalStatus = PspSignalProcess(Process,
-                                                Request->SignalNumber,
-                                                Request->SignalCode,
-                                                Request->SignalParameter);
-
-                if (!KSUCCESS(SignalStatus)) {
-                    Status = SignalStatus;
-                }
-            }
+        PsIterateProcess(MatchType, TargetId, PspSendSignalIterator, &Iterator);
+        Status = Iterator.Status;
+        if ((KSUCCESS(Status)) && (Iterator.SentSignals == 0)) {
+            Status = STATUS_NO_SUCH_PROCESS;
         }
 
-        Process = NULL;
-        PspDestroyProcessList(Processes, ProcessCount);
         break;
 
     //
@@ -1281,7 +1248,9 @@ Return Value:
 
 KSTATUS
 PsSignalAllProcesses (
-    ULONG SignalNumber
+    BOOL FromKernel,
+    ULONG SignalNumber,
+    PSIGNAL_QUEUE_ENTRY QueueEntry
     )
 
 /*++
@@ -1295,11 +1264,22 @@ Routine Description:
 
 Arguments:
 
+    FromKernel - Supplies a boolean indicating whether the origin of the signal
+        is the the kernel or not. Permissions are not checked if the origin
+        is the kernel.
+
     SignalNumber - Supplies the signal number to send.
+
+    QueueEntry - Supplies an optional pointer to the queue structure to send.
+        A copy of this memory will be made in paged pool for each process a
+        signal is sent to.
 
 Return Value:
 
     STATUS_SUCCESS if some processes were signaled.
+
+    STATUS_PERMISSION_DENIED if the caller did not have permission to signal
+        some of the processes.
 
     STATUS_INSUFFICIENT_RESOURCES if there was not enough memory to enumerate
     all the processes in the system.
@@ -1308,30 +1288,19 @@ Return Value:
 
 {
 
-    PKPROCESS KernelProcess;
-    ULONG ProcessCount;
-    PKPROCESS *Processes;
-    ULONG ProcessIndex;
-    KSTATUS Status;
+    SEND_SIGNAL_ITERATOR_CONTEXT Iterator;
 
-    Processes = NULL;
-    ProcessCount = 0;
-    Status = PspGetProcessList(&Processes, &ProcessCount);
-    if (!KSUCCESS(Status)) {
-        return Status;
+    RtlZeroMemory(&Iterator, sizeof(SEND_SIGNAL_ITERATOR_CONTEXT));
+    Iterator.Signal = SignalNumber;
+    Iterator.QueueEntry = QueueEntry;
+    if (FromKernel == FALSE) {
+        Iterator.CheckPermissions = TRUE;
+        Iterator.SkipProcess = PsGetCurrentProcess();
     }
 
-    KernelProcess = PsGetKernelProcess();
-    for (ProcessIndex = 0; ProcessIndex < ProcessCount; ProcessIndex += 1) {
-        if (Processes[ProcessIndex] == KernelProcess) {
-            continue;
-        }
-
-        PsSignalProcess(Processes[ProcessIndex], SignalNumber, NULL);
-    }
-
-    PspDestroyProcessList(Processes, ProcessCount);
-    return STATUS_SUCCESS;
+    Iterator.Status = STATUS_SUCCESS;
+    PsIterateProcess(ProcessIdProcess, -1, PspSendSignalIterator, &Iterator);
+    return Iterator.Status;
 }
 
 BOOL
@@ -3762,6 +3731,80 @@ Return Value:
 
     Thread->SignalPending = ThreadSignalPendingStateUnknown;
     return;
+}
+
+BOOL
+PspSendSignalIterator (
+    PVOID Context,
+    PKPROCESS Process
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the iterator callback which sends a signal to
+    each process it's called on.
+
+Arguments:
+
+    Context - Supplies a pointer's worth of context passed into the iterate
+        routine. This is a send signal iterator context.
+
+    Process - Supplies the process to examine.
+
+Return Value:
+
+    FALSE always to indicate the iteration should continue.
+
+--*/
+
+{
+
+    PSEND_SIGNAL_ITERATOR_CONTEXT Iterator;
+    PSIGNAL_QUEUE_ENTRY QueueEntry;
+    KSTATUS Status;
+
+    Iterator = Context;
+    if (Iterator->CurrentThread == NULL) {
+        Iterator->CurrentThread = KeGetCurrentThread();
+    }
+
+    if ((Process == Iterator->SkipProcess) ||
+        (Process == PsGetKernelProcess())) {
+
+        return FALSE;
+    }
+
+    if (Iterator->CheckPermissions != FALSE) {
+        Status = PspCheckSendSignalPermission(Iterator->CurrentThread,
+                                              Process,
+                                              Iterator->Signal);
+
+        if (!KSUCCESS(Status)) {
+            Iterator->Status = Status;
+            return FALSE;
+        }
+    }
+
+    QueueEntry = NULL;
+    if (Iterator->QueueEntry != NULL) {
+        QueueEntry = MmAllocatePagedPool(sizeof(SIGNAL_QUEUE_ENTRY),
+                                         PS_ALLOCATION_TAG);
+
+        if (QueueEntry == NULL) {
+            Iterator->Status = STATUS_INSUFFICIENT_RESOURCES;
+
+        } else {
+            RtlCopyMemory(QueueEntry,
+                          Iterator->QueueEntry,
+                          sizeof(SIGNAL_QUEUE_ENTRY));
+        }
+    }
+
+    PsSignalProcess(Process, Iterator->Signal, QueueEntry);
+    Iterator->SentSignals += 1;
+    return FALSE;
 }
 
 KSTATUS

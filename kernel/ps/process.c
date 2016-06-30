@@ -1618,6 +1618,105 @@ Return Value:
 }
 
 VOID
+PsIterateProcess (
+    PROCESS_ID_TYPE Type,
+    PROCESS_ID Match,
+    PPROCESS_ITERATOR_ROUTINE IteratorFunction,
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine iterates over all processes in the process ID list.
+
+Arguments:
+
+    Type - Supplies the type of identifier to match on. Valid values are
+        process ID, process group, or session.
+
+    Match - Supplies the process, process group, or session ID to match on.
+        Supply -1 to iterate over all processes.
+
+    IteratorFunction - Supplies a pointer to the function to call for each
+        matching process.
+
+    Context - Supplies an opaque pointer that will be passed into the iterator
+        function on each iteration.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PKPROCESS Process;
+    BOOL Stop;
+
+    Stop = FALSE;
+    KeAcquireQueuedLock(PsProcessListLock);
+    CurrentEntry = PsProcessListHead.Next;
+    if (Match == -1) {
+        while ((Stop == FALSE) && (CurrentEntry != &PsProcessListHead)) {
+            Process = LIST_VALUE(CurrentEntry, KPROCESS, ListEntry);
+            CurrentEntry = CurrentEntry->Next;
+            Stop = IteratorFunction(Context, Process);
+        }
+
+    } else {
+        while ((Stop == FALSE) && (CurrentEntry != &PsProcessListHead)) {
+            Process = LIST_VALUE(CurrentEntry, KPROCESS, ListEntry);
+            CurrentEntry = CurrentEntry->Next;
+            switch (Type) {
+            case ProcessIdProcess:
+                if (Process->Identifiers.ProcessId != Match) {
+                    continue;
+                }
+
+                //
+                // Found the one process with this ID, so call the iterator and
+                // break.
+                //
+
+                IteratorFunction(Context, Process);
+                goto IterateProcessEnd;
+
+            case ProcessIdProcessGroup:
+                if (Process->Identifiers.ProcessGroupId != Match) {
+                    continue;
+                }
+
+                break;
+
+            case ProcessIdSession:
+                if (Process->Identifiers.SessionId != Match) {
+                    continue;
+                }
+
+                break;
+
+            default:
+
+                ASSERT(FALSE);
+
+                break;
+            }
+
+            Stop = IteratorFunction(Context, Process);
+        }
+
+    }
+
+IterateProcessEnd:
+    KeReleaseQueuedLock(PsProcessListLock);
+    return;
+}
+
+VOID
 PsHandleUserModeFault (
     PVOID VirtualAddress,
     ULONG FaultFlags,

@@ -137,7 +137,7 @@ Return Value:
                   "Sending all processes a termination signal...\n",
                   Description);
 
-    Status = PsSignalAllProcesses(SIGNAL_REQUEST_TERMINATION);
+    Status = PsSignalAllProcesses(TRUE, SIGNAL_REQUEST_TERMINATION, NULL);
     if (KSUCCESS(Status)) {
         Timeout = KeGetRecentTimeCounter() +
                   (Frequency * RESET_SYSTEM_PROCESS_SIGNAL_TIMEOUT);
@@ -163,7 +163,7 @@ Return Value:
         RtlDebugPrint("Still %d processes alive. Sending kill signal...\n",
                       ProcessCount - 1);
 
-        PsSignalAllProcesses(SIGNAL_KILL);
+        PsSignalAllProcesses(TRUE, SIGNAL_KILL, NULL);
         Timeout = KeGetRecentTimeCounter() +
                   (Frequency * RESET_SYSTEM_PROCESS_SIGNAL_TIMEOUT);
 

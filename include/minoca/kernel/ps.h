@@ -543,6 +543,15 @@ typedef enum _PS_INFORMATION_TYPE {
     PsInformationProcessIdList,
 } PS_INFORMATION_TYPE, *PPS_INFORMATION_TYPE;
 
+typedef enum _PROCESS_ID_TYPE {
+    ProcessIdInvalid,
+    ProcessIdProcess,
+    ProcessIdThread,
+    ProcessIdParentProcess,
+    ProcessIdProcessGroup,
+    ProcessIdSession,
+} PROCESS_ID_TYPE, *PPROCESS_ID_TYPE;
+
 typedef enum _SCHEDULER_ENTRY_TYPE {
     SchedulerEntryInvalid,
     SchedulerEntryThread,
@@ -801,6 +810,35 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+typedef
+BOOL
+(*PPROCESS_ITERATOR_ROUTINE) (
+    PVOID Context,
+    PKPROCESS Process
+    );
+
+/*++
+
+Routine Description:
+
+    This routine describes the prototype for the process list iterator. This
+    routine is called with the process list lock held.
+
+Arguments:
+
+    Context - Supplies a pointer's worth of context passed into the iterate
+        routine.
+
+    Process - Supplies the process to examine.
+
+Return Value:
+
+    TRUE if the iteration should stop.
+
+    FALSE if the iteration should continue.
 
 --*/
 
@@ -2728,7 +2766,9 @@ Return Value:
 
 KSTATUS
 PsSignalAllProcesses (
-    ULONG SignalNumber
+    BOOL FromKernel,
+    ULONG SignalNumber,
+    PSIGNAL_QUEUE_ENTRY QueueEntry
     );
 
 /*++
@@ -2742,11 +2782,22 @@ Routine Description:
 
 Arguments:
 
+    FromKernel - Supplies a boolean indicating whether the origin of the signal
+        is the the kernel or not. Permissions are not checked if the origin
+        is the kernel.
+
     SignalNumber - Supplies the signal number to send.
+
+    QueueEntry - Supplies an optional pointer to the queue structure to send.
+        A copy of this memory will be made in paged pool for each process a
+        signal is sent to.
 
 Return Value:
 
     STATUS_SUCCESS if some processes were signaled.
+
+    STATUS_PERMISSION_DENIED if the caller did not have permission to signal
+        some of the processes.
 
     STATUS_INSUFFICIENT_RESOURCES if there was not enough memory to enumerate
     all the processes in the system.
@@ -3485,6 +3536,40 @@ Arguments:
 Return Value:
 
     Returns the number of active processes in the system.
+
+--*/
+
+VOID
+PsIterateProcess (
+    PROCESS_ID_TYPE Type,
+    PROCESS_ID Match,
+    PPROCESS_ITERATOR_ROUTINE IteratorFunction,
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine iterates over all processes in the process ID list.
+
+Arguments:
+
+    Type - Supplies the type of identifier to match on. Valid values are
+        process ID, process group, or session.
+
+    Match - Supplies the process, process group, or session ID to match on.
+        Supply -1 to iterate over all processes.
+
+    IteratorFunction - Supplies a pointer to the function to call for each
+        matching process.
+
+    Context - Supplies an opaque pointer that will be passed into the iterator
+        function on each iteration.
+
+Return Value:
+
+    None.
 
 --*/
 

@@ -326,15 +326,6 @@ typedef enum _SIGNAL_TARGET_TYPE {
     SignalTargetCurrentProcessGroup,
 } SIGNAL_TARGET_TYPE, *PSIGNAL_TARGET_TYPE;
 
-typedef enum _PROCESS_ID_TYPE {
-    ProcessIdInvalid,
-    ProcessIdProcess,
-    ProcessIdThread,
-    ProcessIdParentProcess,
-    ProcessIdProcessGroup,
-    ProcessIdSession,
-} PROCESS_ID_TYPE, *PPROCESS_ID_TYPE;
-
 typedef enum _FILE_LOCK_TYPE {
     FileLockInvalid,
     FileLockRead,
