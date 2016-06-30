@@ -181,6 +181,80 @@ Return Value:
 }
 
 //
+// TODO: Remove this after one build iteration goes through.
+//
+
+#undef setjmp
+#undef longjmp
+
+LIBC_API
+int
+setjmp (
+    jmp_buf Environment
+    )
+
+/*++
+
+Routine Description:
+
+    This routine saves the calling environment into the given buffer for
+    later use by longjmp.
+
+Arguments:
+
+    Environment - Supplies the pointer to the environment to save the
+        application context in.
+
+Return Value:
+
+    0 if this was the direct call to setjmp.
+
+    Non-zero if this was a call from longjmp.
+
+--*/
+
+{
+
+    return _setjmp(Environment);
+}
+
+LIBC_API
+void
+longjmp (
+    jmp_buf Environment,
+    int Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine restores the environment saved by the most recent invocation
+    of setjmp with the given environment buffer. If there is no such invocation,
+    or if the function containing the invocation of setjmp has terminated in
+    the interim, the behavior is undefined. Most likely, the app will crash
+    spectacularly.
+
+Arguments:
+
+    Environment - Supplies the pointer to the previously saved environment to
+        restore.
+
+    Value - Supplies the value to set as the return value from the setjmp
+        function. If this value is 0, it will be set to 1.
+
+Return Value:
+
+    None, this routine does not return.
+
+--*/
+
+{
+
+    return _longjmp(Environment, Value);
+}
+
+//
 // --------------------------------------------------------- Internal Functions
 //
 
