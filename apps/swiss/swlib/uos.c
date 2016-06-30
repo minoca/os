@@ -2981,6 +2981,54 @@ Return Value:
 }
 
 int
+SwRequestReset (
+    SWISS_REBOOT_TYPE RebootType
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initiates a reboot of the running system.
+
+Arguments:
+
+    RebootType - Supplies the type of reboot to perform.
+
+Return Value:
+
+    0 if the reboot was successfully requested.
+
+    Non-zero on error.
+
+--*/
+
+{
+
+    INT Signal;
+
+    switch (RebootType) {
+    case RebootTypeCold:
+    case RebootTypeWarm:
+        Signal = SIGTERM;
+        break;
+
+    case RebootTypeHalt:
+        Signal = SIGUSR2;
+        break;
+
+    default:
+        return EINVAL;
+    }
+
+    //
+    // Send a signal to init.
+    //
+
+    return kill(1, Signal);
+}
+
+int
 SwGetHostName (
     char *Name,
     size_t NameLength

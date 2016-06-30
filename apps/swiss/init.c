@@ -163,6 +163,14 @@ typedef enum _INIT_ACTION_TYPE {
     InitActionCount
 } INIT_ACTION_TYPE, *PINIT_ACTION_TYPE;
 
+typedef enum _INIT_REBOOT_PHASE {
+    InitNotRebooting,
+    InitRebootRunningActions,
+    InitRebootTerm,
+    InitRebootKill,
+    InitRebootComplete
+} INIT_REBOOT_PHASE, *PINIT_REBOOT_PHASE;
+
 /*++
 
 Structure Description:
@@ -218,6 +226,12 @@ Members:
     PreviousRunLevel - Stores the previous runlevel (mask). Only one bit should
         be set.
 
+    RebootPhase - Stores the phase of system reboot init is currently working
+        towards.
+
+    RebootSignal - Stores the signal that initiated the reboot action, which
+        also dictates the type.
+
 --*/
 
 typedef struct _INIT_CONTEXT {
@@ -227,6 +241,8 @@ typedef struct _INIT_CONTEXT {
     ULONG DefaultRunLevel;
     ULONG CurrentRunLevel;
     ULONG PreviousRunLevel;
+    INIT_REBOOT_PHASE RebootPhase;
+    ULONG RebootSignal;
 } INIT_CONTEXT, *PINIT_CONTEXT;
 
 //
@@ -587,6 +603,7 @@ Return Value:
     sigaction(SIGUSR2, &SignalAction, NULL);
     sigaction(SIGTERM, &SignalAction, NULL);
     sigaction(SIGHUP, &SignalAction, NULL);
+    sigaction(SIGALRM, &SignalAction, NULL);
 
     //
     // Perform the actions.
@@ -612,12 +629,24 @@ Return Value:
             NoHang = WNOHANG;
         }
 
-        InitRunActions(&Context, InitActionRespawn, Context.CurrentRunLevel);
+        //
+        // Respawn processes unless a reboot is in progress.
+        //
+
+        if (Context.RebootPhase == InitNotRebooting) {
+            InitRunActions(&Context,
+                           InitActionRespawn,
+                           Context.CurrentRunLevel);
+        }
+
         if (InitCheckSignals(&Context) != FALSE) {
             NoHang = WNOHANG;
         }
 
-        sleep(1);
+        if (Context.RebootPhase == InitNotRebooting) {
+            sleep(1);
+        }
+
         if (InitCheckSignals(&Context) != FALSE) {
             NoHang = WNOHANG;
         }
@@ -632,6 +661,19 @@ Return Value:
         while (TRUE) {
             ProcessId = waitpid(-1, &Status, NoHang);
             if (ProcessId <= 0) {
+
+                //
+                // If there are no more children left and a reboot is requested,
+                // go do it now.
+                //
+
+                if ((Context.RebootPhase > InitRebootRunningActions) &&
+                    (errno == ECHILD) && (NoHang == 0)) {
+
+                    Context.RebootPhase = InitRebootComplete;
+                    InitRunResetSystem(&Context, 0);
+                }
+
                 break;
             }
 
@@ -830,8 +872,24 @@ Return Value:
                 } else if (Signal == SIGHUP) {
                     InitReloadInittab(Context);
 
+                } else if (Signal == SIGALRM) {
+                    if (Context->RebootPhase == InitRebootTerm) {
+                        Context->RebootPhase = InitRebootKill;
+                        InitRunResetSystem(Context, Signal);
+
+                    } else if (Context->RebootPhase == InitRebootKill) {
+                        Context->RebootPhase = InitRebootComplete;
+                        InitRunResetSystem(Context, Signal);
+                    }
+
+                //
+                // Other signals initiate a reboot.
+                //
+
                 } else {
-                    InitRunResetSystem(Context, Signal);
+                    if (Context->RebootPhase == InitNotRebooting) {
+                        InitRunResetSystem(Context, Signal);
+                    }
                 }
             }
         }
@@ -1047,24 +1105,53 @@ Return Value:
     PSTR Message;
     SWISS_REBOOT_TYPE RebootType;
 
-    InitResetSignalHandlers();
-    InitShutdownAndKillProcesses(Context);
-    Message = "halt";
-    RebootType = RebootTypeHalt;
-    if (Signal == SIGTERM) {
-        Message = "reboot";
-        RebootType = RebootTypeWarm;
+    switch (Context->RebootPhase) {
+    case InitNotRebooting:
+        Context->RebootPhase = InitRebootRunningActions;
+        Context->RebootSignal = Signal;
+        InitResetSignalHandlers();
 
-    } else if (Signal == SIGUSR2) {
-        Message = "poweroff";
+    case InitRebootRunningActions:
+        InitShutdownAndKillProcesses(Context);
+        Context->RebootPhase = InitRebootTerm;
+
+    //
+    // Fall through.
+    //
+
+    case InitRebootTerm:
+    case InitRebootKill:
+        InitShutdownAndKillProcesses(Context);
+        alarm(10);
+        break;
+
+    case InitRebootComplete:
+        Signal = Context->RebootSignal;
+        Message = "halt";
+        RebootType = RebootTypeHalt;
+        if (Signal == SIGTERM) {
+            Message = "reboot";
+            RebootType = RebootTypeWarm;
+
+        } else if (Signal == SIGUSR2) {
+            Message = "poweroff";
+        }
+
+        InitLog(Context,
+                INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
+                "Requesting system %s.",
+                Message);
+
+        InitReboot(Context, RebootType);
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        break;
     }
 
-    InitLog(Context,
-            INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
-            "Requesting system %s.",
-            Message);
-
-    InitReboot(Context, RebootType);
     return;
 }
 
@@ -1091,27 +1178,38 @@ Return Value:
 
 {
 
-    InitRunActions(Context, InitActionShutdown, 0);
-    InitLog(Context,
-            INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
-            "The system is going down.");
+    if (Context->RebootPhase == InitNotRebooting) {
+        InitRunActions(Context, InitActionShutdown, 0);
+        InitLog(Context,
+                INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
+                "The system is going down.");
 
-    sync();
-    kill(-1, SIGTERM);
-    InitLog(Context,
-            INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
-            "Sent SIG%s to all processes.",
-            "TERM");
+        kill(-1, SIGTERM);
+        sleep(1);
+        kill(-1, SIGKILL);
+        sync();
 
-    sync();
-    sleep(1);
-    kill(-1, SIGKILL);
-    InitLog(Context,
-            INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
-            "Sent SIG%s to all processes.",
-            "KILL");
+    } else if (Context->RebootPhase == InitRebootRunningActions) {
+        InitRunActions(Context, InitActionShutdown, 0);
+        InitLog(Context,
+                INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
+                "The system is going down.");
 
-    sync();
+    } else if (Context->RebootPhase == InitRebootTerm) {
+        kill(-1, SIGTERM);
+        InitLog(Context,
+                INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
+                "Sent SIG%s to all processes.",
+                "TERM");
+
+    } else if (Context->RebootPhase == InitRebootKill) {
+        kill(-1, SIGKILL);
+        InitLog(Context,
+                INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
+                "Sent SIG%s to all processes.",
+                "KILL");
+    }
+
     return;
 }
 
@@ -1156,10 +1254,7 @@ Return Value:
         _exit(0);
     }
 
-    while (TRUE) {
-        sleep(1);
-    }
-
+    _exit(0);
     return;
 }
 

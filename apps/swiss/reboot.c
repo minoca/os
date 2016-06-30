@@ -220,7 +220,7 @@ Return Value:
     }
 
     fflush(NULL);
-    Status = SwResetSystem(RebootType);
+    Status = SwRequestReset(RebootType);
 
 MainEnd:
     if (Status != 0) {

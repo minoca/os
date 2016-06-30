@@ -173,32 +173,7 @@ Return Value:
 
 {
 
-    pid_t Child;
-    const char *Command;
-    int Status;
-
-    Command = "/sbin/reboot";
-    if (RebootType == RebootTypeHalt) {
-        Command = "/sbin/shutdown";
-    }
-
-    Child = fork();
-    if (Child == 0) {
-        execlp(Command, Command, NULL);
-        exit(1);
-
-    } else if (Child == -1) {
-        fprintf(stderr, "Failed to fork.\n");
-        return errno;
-
-    } else {
-        waitpid(Child, &Status, 0);
-        if (!WIFEXITED(Status)) {
-            fprintf(stderr, "Failed to execute %s.\n", Command);
-        }
-    }
-
-    return errno;
+    return ENOSYS;
 }
 
 int

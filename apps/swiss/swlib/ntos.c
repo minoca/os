@@ -3529,6 +3529,34 @@ Return Value:
 }
 
 int
+SwRequestReset (
+    SWISS_REBOOT_TYPE RebootType
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initiates a reboot of the running system.
+
+Arguments:
+
+    RebootType - Supplies the type of reboot to perform.
+
+Return Value:
+
+    0 if the reboot was successfully requested.
+
+    Non-zero on error.
+
+--*/
+
+{
+
+    return SwResetSystem(RebootType);
+}
+
+int
 SwGetHostName (
     char *Name,
     size_t NameLength
