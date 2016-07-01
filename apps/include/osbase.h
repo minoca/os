@@ -3180,6 +3180,7 @@ KSTATUS
 OsCreateTimer (
     ULONG SignalNumber,
     PUINTN SignalValue,
+    PTHREAD_ID ThreadId,
     PLONG TimerHandle
     );
 
@@ -3196,6 +3197,9 @@ Arguments:
     SignalValue - Supplies an optional pointer to the signal value to put in
         the signal information structure when the signal is raised. If this is
          NULL, the timer number will be returned as the signal value.
+
+    ThreadId - Supplies an optional ID of the thread to signal when the timer
+        expires. If not supplied, the process will be signaled.
 
     TimerHandle - Supplies a pointer where the timer handle will be returned on
         success.

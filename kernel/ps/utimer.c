@@ -52,6 +52,9 @@ Members:
 
     Process - Stores a pointer to the process that owns this timer.
 
+    Thread - Stores an optional pointer to the thread that is to be signaled
+        when the timer expires. If NULL, then the process is signaled.
+
     TimerNumber - Stores the timer's identifying number.
 
     DueTime - Stores the due time of the timer.
@@ -80,6 +83,7 @@ typedef struct _PROCESS_TIMER {
     LIST_ENTRY ListEntry;
     ULONG ReferenceCount;
     PKPROCESS Process;
+    PKTHREAD Thread;
     LONG TimerNumber;
     ULONGLONG DueTime;
     ULONGLONG Interval;
@@ -98,6 +102,7 @@ typedef struct _PROCESS_TIMER {
 KSTATUS
 PspCreateTimer (
     PKPROCESS Process,
+    PKTHREAD Thread,
     PPROCESS_TIMER *Timer
     );
 
@@ -112,6 +117,7 @@ PspSetTimer (
 KSTATUS
 PspCreateProcessTimer (
     PKPROCESS Process,
+    PKTHREAD Thread,
     PPROCESS_TIMER *Timer
     );
 
@@ -257,6 +263,7 @@ Return Value:
     PSYSTEM_CALL_TIMER_CONTROL Parameters;
     PKPROCESS Process;
     KSTATUS Status;
+    PKTHREAD Thread;
     PPROCESS_TIMER Timer;
 
     ASSERT(SystemCallNumber == SystemCallTimerControl);
@@ -268,6 +275,7 @@ Return Value:
     ASSERT(Process != PsGetKernelProcess());
 
     Timer = NULL;
+    Thread = NULL;
 
     //
     // If it's not a create operation, find the timer being referenced.
@@ -301,7 +309,21 @@ Return Value:
     //
 
     case TimerOperationCreateTimer:
-        Status = PspCreateTimer(Process, &Timer);
+
+        //
+        // If a thread is to be signaled, validate that the thread belongs to
+        // the current process.
+        //
+
+        if ((Parameters->Flags & TIMER_CONTROL_FLAG_SIGNAL_THREAD) != 0) {
+            Thread = PspGetThreadById(Process, Parameters->ThreadId);
+            if (Thread == NULL) {
+                Status = STATUS_INVALID_PARAMETER;
+                goto SysTimerControlEnd;
+            }
+        }
+
+        Status = PspCreateTimer(Process, Thread, &Timer);
         if (!KSUCCESS(Status)) {
             goto SysTimerControlEnd;
         }
@@ -309,7 +331,7 @@ Return Value:
         Timer->SignalQueueEntry.Parameters.SignalNumber =
                                                       Parameters->SignalNumber;
 
-        if (Parameters->UseTimerNumber != FALSE) {
+        if ((Parameters->Flags & TIMER_CONTROL_FLAG_USE_TIMER_NUMBER) != 0) {
             Timer->SignalQueueEntry.Parameters.Parameter = Timer->TimerNumber;
 
         } else {
@@ -370,6 +392,10 @@ Return Value:
 SysTimerControlEnd:
     if (LockHeld != FALSE) {
         KeReleaseQueuedLock(Process->QueuedLock);
+    }
+
+    if (Thread != NULL) {
+        ObReleaseReference(Thread);
     }
 
     Parameters->Status = Status;
@@ -497,7 +523,7 @@ Return Value:
     switch (Request->Type) {
     case ITimerReal:
         if (Thread->RealTimer == NULL) {
-            Status = PspCreateTimer(Process, &RealTimer);
+            Status = PspCreateTimer(Process, NULL, &RealTimer);
             if (!KSUCCESS(Status)) {
                 goto SysSetITimerEnd;
             }
@@ -708,6 +734,7 @@ Return Value:
 KSTATUS
 PspCreateTimer (
     PKPROCESS Process,
+    PKTHREAD Thread,
     PPROCESS_TIMER *Timer
     )
 
@@ -720,6 +747,9 @@ Routine Description:
 Arguments:
 
     Process - Supplies a pointer to the process that owns the timer.
+
+    Thread - Supplies an optional pointer to the thread to be signaled when the
+        timer expires.
 
     Timer - Supplies a pointer where a pointer to the new timer is returned on
         success.
@@ -736,19 +766,12 @@ Return Value:
     PPROCESS_TIMER ProcessTimer;
     KSTATUS Status;
 
-    Status = PspCreateProcessTimer(Process, &ProcessTimer);
+    Status = PspCreateProcessTimer(Process, Thread, &ProcessTimer);
     if (!KSUCCESS(Status)) {
         goto CreateTimerEnd;
     }
 
     ProcessTimer->SignalQueueEntry.Parameters.SignalCode = SIGNAL_CODE_TIMER;
-
-    //
-    // Take a reference on the process to avoid a situation where the
-    // process is destroyed before the work item gets around to running.
-    //
-
-    ObAddReference(Process);
 
     //
     // Insert this timer in the process. Assign the timer the ID of the
@@ -849,6 +872,7 @@ SetTimerEnd:
 KSTATUS
 PspCreateProcessTimer (
     PKPROCESS Process,
+    PKTHREAD Thread,
     PPROCESS_TIMER *Timer
     )
 
@@ -861,6 +885,9 @@ Routine Description:
 Arguments:
 
     Process - Supplies a pointer to the process that owns the timer.
+
+    Thread - Supplies an optional pointer to the thread to be signaled when the
+        timer expires.
 
     Timer - Supplies a pointer where a pointer to the new timer is returned on
         success.
@@ -888,6 +915,7 @@ Return Value:
 
     RtlZeroMemory(NewTimer, sizeof(PROCESS_TIMER));
     NewTimer->Process = Process;
+    NewTimer->Thread = Thread;
     NewTimer->ReferenceCount = 1;
     NewTimer->Timer = KeCreateTimer(PROCESS_TIMER_ALLOCATION_TAG);
     if (NewTimer->Timer == NULL) {
@@ -911,6 +939,17 @@ Return Value:
 
     NewTimer->SignalQueueEntry.CompletionRoutine =
                                                PspProcessTimerSignalCompletion;
+
+    //
+    // Take a reference on the process to avoid a situation where the
+    // process is destroyed before the work item gets around to running. Do the
+    // same for the thread if it is present.
+    //
+
+    ObAddReference(Process);
+    if (Thread != NULL) {
+        ObAddReference(Thread);
+    }
 
     Status = STATUS_SUCCESS;
 
@@ -1022,6 +1061,10 @@ Return Value:
     KeDestroyDpc(Timer->Dpc);
     KeDestroyWorkItem(Timer->WorkItem);
     ObReleaseReference(Timer->Process);
+    if (Timer->Thread != NULL) {
+        ObReleaseReference(Timer->Thread);
+    }
+
     MmFreeNonPagedPool(Timer);
     return;
 }
@@ -1177,9 +1220,16 @@ Return Value:
     Timer->SignalQueueEntry.Parameters.FromU.OverflowCount =
                                                           Timer->OverflowCount;
 
-    PsSignalProcess(Timer->Process,
-                    Timer->SignalQueueEntry.Parameters.SignalNumber,
-                    &(Timer->SignalQueueEntry));
+    if (Timer->Thread != NULL) {
+        PsSignalThread(Timer->Thread,
+                       Timer->SignalQueueEntry.Parameters.SignalNumber,
+                       &(Timer->SignalQueueEntry));
+
+    } else {
+        PsSignalProcess(Timer->Process,
+                        Timer->SignalQueueEntry.Parameters.SignalNumber,
+                        &(Timer->SignalQueueEntry));
+    }
 
     return;
 }

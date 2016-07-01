@@ -224,6 +224,13 @@ Author:
 #define EFFECTIVE_ACCESS_READ        0x00000004
 
 //
+// Define the timer control flags.
+//
+
+#define TIMER_CONTROL_FLAG_USE_TIMER_NUMBER 0x00000001
+#define TIMER_CONTROL_FLAG_SIGNAL_THREAD    0x00000002
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -1705,6 +1712,9 @@ Members:
 
     Operation - Stores the operation to perform.
 
+    Flags - Stores a bitmask of time control flags. See TIMER_CONTROL_FLAG_*
+        for definitions.
+
     TimerNumber - Stores either the timer number to operate on, or returns
         the new timer number for create operations.
 
@@ -1714,8 +1724,8 @@ Members:
     SignalValue - Stores the signal value to send along with the raised signal
         when the timer expires. This is only used for create timer requests.
 
-    UseTimerNumber - Stores a boolean indicating if the timer number should be
-        used as the signal value. This is only used for create timer requests.
+    ThreadId - Stores an optional ID of the thread to signal when the timer
+        expires. This is only used for create timer requests.
 
     TimerInformation - Stores the timer information, either presented to the
         kernel or returned by the kernel.
@@ -1726,10 +1736,11 @@ Members:
 
 typedef struct _SYSTEM_CALL_TIMER_CONTROL {
     TIMER_OPERATION Operation;
+    ULONG Flags;
     LONG TimerNumber;
     ULONG SignalNumber;
     UINTN SignalValue;
-    BOOL UseTimerNumber;
+    THREAD_ID ThreadId;
     TIMER_INFORMATION TimerInformation;
     KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_TIMER_CONTROL, *PSYSTEM_CALL_TIMER_CONTROL;

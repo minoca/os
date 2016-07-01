@@ -340,21 +340,28 @@ extern "C" {
 // type.
 //
 
-#define SIGEV_SIGNAL 1
+#define SIGEV_SIGNAL 0x00000000
 
 //
 // This value specifies that no signal nor thread should occur when the event
 // happens.
 //
 
-#define SIGEV_NONE 2
+#define SIGEV_NONE 0x00000001
 
 //
 // This value specifies that a new thread should be created when the event
 // occurs.
 //
 
-#define SIGEV_THREAD 3
+#define SIGEV_THREAD 0x00000002
+
+//
+// This value specifies that a signal should be delivered to the thread
+// indicated by the thread ID stored in the sigevent.
+//
+
+#define SIGEV_THREAD_ID 0x00000004
 
 //
 // Define macros that reach through the sigaction union. Applications don't
@@ -496,11 +503,16 @@ Members:
 
     sigev_signo - Stores the signal number.
 
+    sigev_value - Stores the signal value.
+
     sigev_notify_function - Stores a pointer to the function to call (and act
         as the thread entry point) for types of SIGEV_THREAD.
 
     sigev_notify_attributes - Stores the attributes associated with the notify
         function.
+
+    sigev_notify_thread_id - Stores the kernel thread ID of the thread to
+        signal for types of SIGEV_THREAD_ID.
 
 --*/
 
@@ -510,6 +522,7 @@ typedef struct sigevent {
     union sigval sigev_value;
     void (*sigev_notify_function)(union sigval);
     void *sigev_notify_attributes;
+    pid_t sigev_notify_thread_id;
 } sigevent_t;
 
 //

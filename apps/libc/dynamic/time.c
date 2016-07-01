@@ -1825,6 +1825,8 @@ Return Value:
     ULONG Signal;
     UINTN SignalValue;
     KSTATUS Status;
+    THREAD_ID ThreadId;
+    PTHREAD_ID ThreadIdPointer;
     PTIMER Timer;
 
     Timer = NULL;
@@ -1853,14 +1855,22 @@ Return Value:
         goto TimerCreateEnd;
     }
 
+    ThreadIdPointer = NULL;
     if (Event != NULL) {
+        if (Event->sigev_notify == SIGEV_THREAD_ID) {
+            ThreadId = (THREAD_ID)Event->sigev_notify_thread_id;
+            ThreadIdPointer = &ThreadId;
 
-        //
-        // Currently threads aren't supported. Add this support if it comes up
-        // and is deemed necessary.
-        //
+        } else {
 
-        assert(Event->sigev_notify == SIGEV_SIGNAL);
+            //
+            // Currently creating a new thread to signal isn't supported. Add
+            // this support if it comes up and is deemed necessary.
+            //
+
+            assert(Event->sigev_notify == SIGEV_SIGNAL);
+
+        }
 
         Signal = Event->sigev_signo;
         SignalValue = Event->sigev_value.sival_int;
@@ -1870,7 +1880,11 @@ Return Value:
         SignalValue = (UINTN)Timer;
     }
 
-    Status = OsCreateTimer(Signal, &SignalValue, &(Timer->Handle));
+    Status = OsCreateTimer(Signal,
+                           &SignalValue,
+                           ThreadIdPointer,
+                           &(Timer->Handle));
+
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
         Result = -1;
