@@ -113,6 +113,25 @@ typedef struct _CUSTOM_TIME_ZONE {
     CHAR Strings[32];
 } PACKED CUSTOM_TIME_ZONE, *PCUSTOM_TIME_ZONE;
 
+/*++
+
+Structure Description:
+
+    This structure defines a per-process timer.
+
+Members:
+
+    Handle - Stores the OS API layer's timer handle.
+
+    ClockId - Stores the ID of the clock used to back the timer.
+
+--*/
+
+typedef struct _TIMER {
+    LONG Handle;
+    clockid_t ClockId;
+} TIMER, *PTIMER;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -1767,9 +1786,9 @@ Return Value:
 LIBC_API
 int
 timer_create (
-    clockid_t ClockType,
+    clockid_t ClockId,
     struct sigevent *Event,
-    timer_t *Timer
+    timer_t *TimerId
     )
 
 /*++
@@ -1780,7 +1799,7 @@ Routine Description:
 
 Arguments:
 
-    ClockType - Supplies the clock type. See CLOCK_* definitions. The most
+    ClockId - Supplies the clock type ID. See CLOCK_* definitions. The most
         common value here is CLOCK_REALTIME.
 
     Event - Supplies a pointer to an event structure describing what should
@@ -1789,7 +1808,7 @@ Arguments:
         SIGALRM signal should be generated with the timer ID number set as the
         signal value.
 
-    Timer - Supplies a pointer where the timer ID number will be returned on
+    TimerId - Supplies a pointer where the timer ID number will be returned on
         success.
 
 Return Value:
@@ -1802,12 +1821,38 @@ Return Value:
 
 {
 
+    INT Result;
     ULONG Signal;
     UINTN SignalValue;
     KSTATUS Status;
-    PUINTN ValuePointer;
+    PTIMER Timer;
 
-    ValuePointer = NULL;
+    Timer = NULL;
+    if ((ClockId != CLOCK_REALTIME) &&
+        (ClockId != CLOCK_MONOTONIC) &&
+        (ClockId != CLOCK_PROCESS_CPUTIME_ID) &&
+        (ClockId != CLOCK_THREAD_CPUTIME_ID)) {
+
+        errno = EINVAL;
+        Result = -1;
+        goto TimerCreateEnd;
+    }
+
+    if ((ClockId == CLOCK_PROCESS_CPUTIME_ID) ||
+        (ClockId == CLOCK_THREAD_CPUTIME_ID)) {
+
+        errno = ENOTSUP;
+        Result = -1;
+        goto TimerCreateEnd;
+    }
+
+    Timer = malloc(sizeof(TIMER));
+    if (Timer == NULL) {
+        errno = ENOMEM;
+        Result = -1;
+        goto TimerCreateEnd;
+    }
+
     if (Event != NULL) {
 
         //
@@ -1819,19 +1864,32 @@ Return Value:
 
         Signal = Event->sigev_signo;
         SignalValue = Event->sigev_value.sival_int;
-        ValuePointer = &SignalValue;
 
     } else {
         Signal = SIGALRM;
+        SignalValue = (UINTN)Timer;
     }
 
-    Status = OsCreateTimer(Signal, ValuePointer, Timer);
+    Status = OsCreateTimer(Signal, &SignalValue, &(Timer->Handle));
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
-        return -1;
+        Result = -1;
+        goto TimerCreateEnd;
     }
 
-    return 0;
+    Timer->ClockId = ClockId;
+    Result = 0;
+
+TimerCreateEnd:
+    if (Result == -1) {
+        if (Timer != NULL) {
+            free(Timer);
+            Timer = NULL;
+        }
+    }
+
+    *TimerId = (timer_t)Timer;
+    return Result;
 }
 
 LIBC_API
@@ -1862,13 +1920,21 @@ Return Value:
 {
 
     KSTATUS Status;
+    PTIMER Timer;
 
-    Status = OsDeleteTimer(TimerId);
+    Timer = (PTIMER)TimerId;
+    if (Timer == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    Status = OsDeleteTimer(Timer->Handle);
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
         return -1;
     }
 
+    free(Timer);
     return 0;
 }
 
@@ -1907,8 +1973,15 @@ Return Value:
     ULONGLONG Frequency;
     TIMER_INFORMATION Information;
     KSTATUS Status;
+    PTIMER Timer;
 
-    Status = OsGetTimerInformation(TimerId, &Information);
+    Timer = (PTIMER)TimerId;
+    if (Timer == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    Status = OsGetTimerInformation(Timer->Handle, &Information);
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
         return -1;
@@ -1979,6 +2052,13 @@ Return Value:
     KSTATUS Status;
     SYSTEM_TIME SystemTime;
     ULONGLONG Time;
+    PTIMER Timer;
+
+    Timer = (PTIMER)TimerId;
+    if (Timer == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
 
     CurrentTime = 0;
     CurrentTimeValid = FALSE;
@@ -1986,16 +2066,18 @@ Return Value:
     Frequency = OsGetTimeCounterFrequency();
 
     //
-    // If the absolute time is set, then convert the value into an absolute due
-    // time in time counter ticks.
+    // If the absolute time is supplied for the real-time clock, then convert
+    // the value into an absolute due time in time counter ticks.
     //
 
-    if ((Flags & TIMER_ABSTIME) != 0) {
+    if ((Timer->ClockId == CLOCK_REALTIME) && ((Flags & TIMER_ABSTIME) != 0)) {
         ClpConvertSpecificTimeToSystemTime(&SystemTime, &(Value->it_value));
         OsConvertSystemTimeToTimeCounter(&SystemTime, &(Information.DueTime));
 
     //
-    // Convert the relative time to an absolute time counter value.
+    // Otherwise convert the requested time into a timer counter value. The
+    // conversion is the same for relative times and absolute monotonic clock
+    // values.
     //
 
     } else {
@@ -2003,9 +2085,11 @@ Return Value:
                                         Frequency,
                                         &(Value->it_value));
 
-        CurrentTime = OsQueryTimeCounter();
-        CurrentTimeValid = TRUE;
-        Information.DueTime += CurrentTime;
+        if ((Flags & TIMER_ABSTIME) == 0) {
+            CurrentTime = OsQueryTimeCounter();
+            CurrentTimeValid = TRUE;
+            Information.DueTime += CurrentTime;
+        }
     }
 
     //
@@ -2016,7 +2100,7 @@ Return Value:
                                     Frequency,
                                     &(Value->it_interval));
 
-    Status = OsSetTimerInformation(TimerId, &Information);
+    Status = OsSetTimerInformation(Timer->Handle, &Information);
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
         return -1;
@@ -2090,8 +2174,10 @@ Return Value:
 
     TIMER_INFORMATION Information;
     KSTATUS Status;
+    PTIMER Timer;
 
-    Status = OsGetTimerInformation(TimerId, &Information);
+    Timer = (PTIMER)TimerId;
+    Status = OsGetTimerInformation(Timer->Handle, &Information);
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
         return -1;

@@ -147,7 +147,7 @@ typedef long ssize_t;
 // Define the type used for timer handles.
 //
 
-typedef int timer_t;
+typedef long timer_t;
 
 //
 // Define a user identifier type.

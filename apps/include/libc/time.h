@@ -871,9 +871,9 @@ Return Value:
 LIBC_API
 int
 timer_create (
-    clockid_t ClockType,
+    clockid_t ClockId,
     struct sigevent *Event,
-    timer_t *Timer
+    timer_t *TimerId
     );
 
 /*++
@@ -884,7 +884,7 @@ Routine Description:
 
 Arguments:
 
-    ClockType - Supplies the clock type. See CLOCK_* definitions. The most
+    ClockId - Supplies the clock type ID. See CLOCK_* definitions. The most
         common value here is CLOCK_REALTIME.
 
     Event - Supplies a pointer to an event structure describing what should
@@ -893,7 +893,7 @@ Arguments:
         SIGALRM signal should be generated with the timer ID number set as the
         signal value.
 
-    Timer - Supplies a pointer where the timer ID number will be returned on
+    TimerId - Supplies a pointer where the timer ID number will be returned on
         success.
 
 Return Value:
