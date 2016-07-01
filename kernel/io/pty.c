@@ -183,9 +183,6 @@ Members:
 
     SessionId - Stores the owning session ID of the terminal.
 
-    SessionProcess - Stores a pointer to the session leader process for the
-        owning session.
-
     ConnectionLock - Stores a spin lock that synchronizes the connection
         between the master and the slave, ensuring they both shut down in an
         orderly fashion.
@@ -233,7 +230,6 @@ typedef struct _TERMINAL {
     UINTN SlaveHandles;
     PROCESS_GROUP_ID ProcessGroupId;
     SESSION_ID SessionId;
-    PKPROCESS SessionProcess;
     ULONG MasterReferenceCount;
     PTERMINAL_SLAVE Slave;
     PFILE_OBJECT SlaveFileObject;
@@ -378,14 +374,15 @@ IopTerminalFlushOutputToDevice (
     PTERMINAL Terminal
     );
 
-PTERMINAL
-IopLookupTerminal (
-    SESSION_ID SessionId
+VOID
+IopTerminalDisassociate (
+    PTERMINAL Terminal
     );
 
-VOID
-IopRelinquishTerminal (
-    PTERMINAL Terminal
+BOOL
+IopTerminalDisassociateIterator (
+    PVOID Context,
+    PKPROCESS Process
     );
 
 //
@@ -782,64 +779,6 @@ TerminalSetDeviceEnd:
     return Status;
 }
 
-VOID
-IoRelinquishTerminal (
-    PVOID Terminal,
-    SESSION_ID SessionId,
-    BOOL TerminalLocked
-    )
-
-/*++
-
-Routine Description:
-
-    This routine clears the controlling session and process group ID from
-    the given terminal. It should only be called by process termination as
-    a session leader is dying.
-
-Arguments:
-
-    Terminal - Supplies a pointer to the controlling terminal.
-
-    SessionId - Supplies the session ID of the session leader that's dying.
-
-    TerminalLocked - Supplies a boolean indicating if the appropriate
-        internal terminal locks are already held or not.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PTERMINAL TypedTerminal;
-
-    TypedTerminal = Terminal;
-    if (TerminalLocked == FALSE) {
-        KeAcquireQueuedLock(TypedTerminal->OutputLock);
-        KeAcquireQueuedLock(TypedTerminal->InputLock);
-    }
-
-    if (TypedTerminal->SessionId == SessionId) {
-        IopRelinquishTerminal(TypedTerminal);
-    }
-
-    if (TerminalLocked == FALSE) {
-        KeReleaseQueuedLock(TypedTerminal->OutputLock);
-        KeReleaseQueuedLock(TypedTerminal->InputLock);
-    }
-
-    //
-    // Release the reference acquired when the slave was opened and became
-    // the process' controlling terminal.
-    //
-
-    ObReleaseReference(TypedTerminal);
-    return;
-}
-
 KSTATUS
 IopInitializeTerminalSupport (
     VOID
@@ -1127,8 +1066,6 @@ Return Value:
     PFILE_OBJECT FileObject;
     PIO_OBJECT_STATE MasterIoState;
     PKPROCESS Process;
-    PROCESS_GROUP_ID ProcessGroup;
-    SESSION_ID Session;
     PTERMINAL_SLAVE Slave;
     KSTATUS Status;
     PTERMINAL Terminal;
@@ -1222,28 +1159,21 @@ Return Value:
     }
 
     //
-    // Make the terminal's owning session this one if it is a session leader
-    // and doesn't already have a controlling terminal.
+    // Make this terminal the controlling terminal for the process if
+    // 1) The no controlling terminal flag is not set.
+    // 2) The terminal is not already assigned to another session.
+    // 3) This process is a session leader.
+    // 4) This process does not already have a controlling terminal.
     //
 
-    if ((IoHandle->OpenFlags & OPEN_FLAG_NO_CONTROLLING_TERMINAL) == 0) {
-        if (Terminal->SessionId == TERMINAL_INVALID_SESSION) {
-            PsGetProcessGroup(Process, &ProcessGroup, &Session);
-            if (Process->Identifiers.ProcessId == Session) {
-                if (PsSetControllingTerminal(Process, Terminal) == NULL) {
-                    Terminal->ProcessGroupId = ProcessGroup;
-                    Terminal->SessionId = Session;
-                    Terminal->SessionProcess = Process;
+    if (((IoHandle->OpenFlags & OPEN_FLAG_NO_CONTROLLING_TERMINAL) == 0) &&
+        (Terminal->SessionId == TERMINAL_INVALID_SESSION) &&
+        (PsIsSessionLeader(Process) != FALSE) &&
+        (Process->ControllingTerminal == NULL)) {
 
-                    //
-                    // Add a reference that is released when the terminal is
-                    // relinquished.
-                    //
-
-                    ObAddReference(Terminal);
-                }
-            }
-        }
+        Process->ControllingTerminal = IoHandle;
+        Terminal->ProcessGroupId = Process->Identifiers.ProcessGroupId;
+        Terminal->SessionId = Process->Identifiers.SessionId;
     }
 
     Status = STATUS_SUCCESS;
@@ -1282,7 +1212,7 @@ Return Value:
 {
 
     PFILE_OBJECT FileObject;
-    PTERMINAL PreviousTerminal;
+    PKPROCESS Process;
     PTERMINAL_SLAVE Slave;
     PTERMINAL Terminal;
 
@@ -1303,7 +1233,12 @@ Return Value:
 
     ASSERT(Slave->Header.Type == ObjectTerminalSlave);
 
+    Process = PsGetCurrentProcess();
     Terminal = Slave->Master;
+    if (PsIsSessionLeader(Process) != FALSE) {
+        KeAcquireQueuedLock(IoTerminalListLock);
+    }
+
     KeAcquireQueuedLock(Terminal->OutputLock);
     KeAcquireQueuedLock(Terminal->InputLock);
 
@@ -1319,31 +1254,36 @@ Return Value:
         IoSetIoObjectState(Terminal->MasterFileObject->IoState,
                            POLL_EVENT_IN | POLL_EVENT_DISCONNECTED,
                            TRUE);
+    }
+
+    //
+    // If this is a session leader closing its controlling terminal, then
+    // disassociate the controlling terminal for the entire session.
+    //
+
+    if ((PsIsSessionLeader(Process) != FALSE) &&
+        (IoHandle == Process->ControllingTerminal)) {
 
         //
-        // Also clear the controlling terminal. This may race with the process
-        // dying. If this thread wins, it needs to release the reference.
-        // Otherwise, it does not.
+        // If the session leader is dying, send a hangup signal to the
+        // foreground process group.
         //
 
-        if (Terminal->SessionId != TERMINAL_INVALID_SESSION) {
-            PreviousTerminal =
-                      PsSetControllingTerminal(Terminal->SessionProcess, NULL);
-
-            if (PreviousTerminal != NULL) {
-
-                ASSERT(PreviousTerminal == Terminal);
-
-                IoRelinquishTerminal(Terminal, Terminal->SessionId, TRUE);
-
-            } else {
-                IopRelinquishTerminal(Terminal);
-            }
+        if (Process->ThreadCount == 0) {
+            PsSignalProcessGroup(Terminal->ProcessGroupId,
+                                 SIGNAL_CONTROLLING_TERMINAL_CLOSED);
         }
+
+        IopTerminalDisassociate(Terminal);
+
+        ASSERT(Process->ControllingTerminal == NULL);
     }
 
     KeReleaseQueuedLock(Terminal->OutputLock);
     KeReleaseQueuedLock(Terminal->InputLock);
+    if (PsIsSessionLeader(Process) != FALSE) {
+        KeReleaseQueuedLock(IoTerminalListLock);
+    }
 
     //
     // Release the reference on the master taken during opening, which may
@@ -1852,7 +1792,6 @@ Return Value:
     BOOL AcceptingSignal;
     INT Argument;
     IO_CONTEXT Context;
-    PTERMINAL ControllingTerminal;
     PROCESS_GROUP_ID CurrentProcessGroupId;
     SESSION_ID CurrentSessionId;
     PFILE_OBJECT FileObject;
@@ -1863,7 +1802,6 @@ Return Value:
     ULONG IoBufferFlags;
     INT ModemStatus;
     TERMINAL_SETTINGS_OLD OldSettings;
-    PTERMINAL PreviousTerminal;
     PKPROCESS Process;
     PROCESS_GROUP_ID ProcessGroupId;
     INT QueueSize;
@@ -2347,17 +2285,29 @@ Return Value:
 
     case TerminalControlSetControllingTerminal:
         Argument = (UINTN)ContextBuffer;
-
-        //
-        // The calling process must be a session leader to set a controlling
-        // terminal, and must not have a controlling terminal already.
-        //
-
         Process = PsGetCurrentProcess();
-        PsGetProcessGroup(Process, &CurrentProcessGroupId, &CurrentSessionId);
-        if (CurrentProcessGroupId != CurrentSessionId) {
+
+        //
+        // If this process is not a session leader or it has a controlling
+        // terminal already, fail.
+        //
+
+        if ((PsIsSessionLeader(Process) == FALSE) ||
+            (Process->ControllingTerminal != NULL)) {
+
             Status = STATUS_PERMISSION_DENIED;
-            break;
+        }
+
+        //
+        // If this handle is only open for write and the caller isn't an
+        // administrator, fail.
+        //
+
+        if ((Handle->Access & IO_ACCESS_READ) == 0) {
+            Status = PsCheckPermission(PERMISSION_SYSTEM_ADMINISTRATOR);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
         }
 
         //
@@ -2366,8 +2316,10 @@ Return Value:
         // the caller is root and the argument is 1.
         //
 
-        if (Terminal->SessionId != TERMINAL_INVALID_SESSION) {
-            if (Terminal->SessionId == CurrentSessionId) {
+        SessionId = Terminal->SessionId;
+        CurrentSessionId = Process->Identifiers.SessionId;
+        if (SessionId != TERMINAL_INVALID_SESSION) {
+            if (SessionId == CurrentSessionId) {
                 Status = STATUS_SUCCESS;
                 break;
             }
@@ -2384,92 +2336,54 @@ Return Value:
             }
         }
 
+        KeAcquireQueuedLock(IoTerminalListLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
+        KeAcquireQueuedLock(Terminal->InputLock);
+
         //
-        // The calling process is also not allowed to already have a
-        // controlling terminal. Check the terminal list for a terminal with
-        // the current session.
+        // Double check the controlling terminal now that the terminal list
+        // lock protecting it is held.
         //
 
-        KeAcquireQueuedLock(IoTerminalListLock);
-        ControllingTerminal = IopLookupTerminal(CurrentSessionId);
-        if (ControllingTerminal != NULL) {
+        if (Process->ControllingTerminal != NULL) {
             Status = STATUS_PERMISSION_DENIED;
 
         //
-        // If there is no controlling terminal for the session, then proceed to
-        // set the current terminal as the controlling terminal.
+        // If the session changed between the unlocked check and now, fail.
+        //
+
+        } else if (Terminal->SessionId != SessionId) {
+            Status = STATUS_TRY_AGAIN;
+
+        //
+        // Everyone that had the terminal as their controlling terminal no
+        // longer does.
         //
 
         } else {
-            Status = STATUS_SUCCESS;
-            KeAcquireQueuedLock(Terminal->OutputLock);
-            KeAcquireQueuedLock(Terminal->InputLock);
-            if (Terminal->SessionId != TERMINAL_INVALID_SESSION) {
-                if (Terminal->SessionId != CurrentSessionId) {
-                    Status = PsCheckPermission(PERMISSION_SYSTEM_ADMINISTRATOR);
-                }
-            }
-
-            if (KSUCCESS(Status)) {
-                if (Terminal->SessionId != TERMINAL_INVALID_SESSION) {
-
-                    //
-                    // Clear the controlling terminal in the process. If the
-                    // race was won, this thread needs to release the reference
-                    // on the terminal.
-                    //
-
-                    PreviousTerminal = PsSetControllingTerminal(
-                                                      Terminal->SessionProcess,
-                                                      NULL);
-
-                    if (PreviousTerminal != NULL) {
-
-                        ASSERT(PreviousTerminal == Terminal);
-
-                        IoRelinquishTerminal(Terminal,
-                                             Terminal->SessionId,
-                                             TRUE);
-
-                    } else {
-                        IopRelinquishTerminal(Terminal);
-                    }
-                }
-
-                //
-                // Try to set the controlling terminal in the new process. Add
-                // a reference that will be released when the controlling
-                // terminal is relinquished by the process.
-                //
-
-                if (PsSetControllingTerminal(Process, Terminal) == NULL) {
-                    Terminal->SessionId = CurrentSessionId;
-                    Terminal->ProcessGroupId = Terminal->SessionId;
-                    Terminal->SessionProcess = Process;
-                    ObAddReference(Terminal);
-                }
-            }
-
-            KeReleaseQueuedLock(Terminal->InputLock);
-            KeReleaseQueuedLock(Terminal->OutputLock);
+            IopTerminalDisassociate(Terminal);
+            Process->ControllingTerminal = Handle;
+            Terminal->SessionId = CurrentSessionId;
+            Terminal->ProcessGroupId = Process->Identifiers.ProcessGroupId;
         }
 
+        KeReleaseQueuedLock(Terminal->InputLock);
+        KeReleaseQueuedLock(Terminal->OutputLock);
         KeReleaseQueuedLock(IoTerminalListLock);
         break;
 
     case TerminalControlGetCurrentSessionId:
-
-        //
-        // TODO: Fail TIOCGSID if the terminal is not a master pseudoterminal.
-        //
+        if (FileObject->Properties.Type != IoObjectTerminalMaster) {
+            Status = STATUS_NOT_A_TERMINAL;
+            break;
+        }
 
         //
         // The given terminal must be the controlling terminal of the calling
         // process.
         //
 
-        PsGetProcessGroup(NULL, &CurrentProcessGroupId, &CurrentSessionId);
-        Status = STATUS_SUCCESS;
+        Process = PsGetCurrentProcess();
         KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
         if (Terminal->SessionId != CurrentSessionId) {
@@ -2477,6 +2391,7 @@ Return Value:
 
         } else {
             SessionId = Terminal->SessionId;
+            Status = STATUS_SUCCESS;
         }
 
         KeReleaseQueuedLock(Terminal->InputLock);
@@ -2494,14 +2409,34 @@ Return Value:
         break;
 
     case TerminalControlGiveUpControllingTerminal:
-        Status = STATUS_SUCCESS;
         Process = PsGetCurrentProcess();
-        PreviousTerminal = PsSetControllingTerminal(Process, NULL);
-        if (PreviousTerminal != NULL) {
-            PsGetProcessGroup(Process, NULL, &CurrentSessionId);
-            IoRelinquishTerminal(PreviousTerminal, CurrentSessionId, FALSE);
+
+        //
+        // The controlling terminal is protected by the terminal list lock.
+        //
+
+        KeAcquireQueuedLock(IoTerminalListLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
+        KeAcquireQueuedLock(Terminal->InputLock);
+        if (Process->ControllingTerminal != Handle) {
+            Status = STATUS_NOT_A_TERMINAL;
+
+        } else {
+            Status = STATUS_SUCCESS;
+            if (PsIsSessionLeader(Process) != FALSE) {
+                PsSignalProcessGroup(Terminal->ProcessGroupId,
+                                     SIGNAL_CONTROLLING_TERMINAL_CLOSED);
+
+                PsSignalProcessGroup(Terminal->ProcessGroupId,
+                                     SIGNAL_CONTINUE);
+
+                IopTerminalDisassociate(Terminal);
+            }
         }
 
+        KeReleaseQueuedLock(Terminal->InputLock);
+        KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(IoTerminalListLock);
         break;
 
     case TerminalControlRedirectLocalConsole:
@@ -5124,54 +5059,8 @@ Return Value:
     return Status;
 }
 
-PTERMINAL
-IopLookupTerminal (
-    SESSION_ID SessionId
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to find the controlling terminal of the given
-    session. This routine assumes that the terminal list lock is held and does
-    not take a reference on the terminal.
-
-Arguments:
-
-    SessionId - Supplies the ID of the session whose controlling terminal is to
-        be looked up.
-
-Return Value:
-
-    Returns a pointer to a terminal if found, or NULL otherwise.
-
---*/
-
-{
-
-    PLIST_ENTRY CurrentEntry;
-    PTERMINAL FoundTerminal;
-    PTERMINAL Terminal;
-
-    ASSERT(KeIsQueuedLockHeld(IoTerminalListLock) != FALSE);
-
-    FoundTerminal = NULL;
-    CurrentEntry = IoTerminalList.Next;
-    while (CurrentEntry != &IoTerminalList) {
-        Terminal = LIST_VALUE(CurrentEntry, TERMINAL, ListEntry);
-        if (Terminal->SessionId == SessionId) {
-            FoundTerminal = Terminal;
-        }
-
-        CurrentEntry = CurrentEntry->Next;
-    }
-
-    return FoundTerminal;
-}
-
 VOID
-IopRelinquishTerminal (
+IopTerminalDisassociate (
     PTERMINAL Terminal
     )
 
@@ -5179,8 +5068,9 @@ IopRelinquishTerminal (
 
 Routine Description:
 
-    This routine clears the controlling session and process group ID from
-    the given terminal, and signals everyone in the old process group.
+    This routine clears the controlling terminal from every process in the
+    terminal's session. This routine assumes the terminal list lock and
+    terminal locks are already held.
 
 Arguments:
 
@@ -5194,19 +5084,50 @@ Return Value:
 
 {
 
-    PROCESS_GROUP_ID ProcessGroupId;
+    SESSION_ID SessionId;
 
-    ProcessGroupId = Terminal->ProcessGroupId;
+    SessionId = Terminal->SessionId;
+    if (SessionId != TERMINAL_INVALID_SESSION) {
+        PsIterateProcess(ProcessIdSession,
+                         SessionId,
+                         IopTerminalDisassociateIterator,
+                         NULL);
+    }
+
     Terminal->SessionId = TERMINAL_INVALID_SESSION;
     Terminal->ProcessGroupId = TERMINAL_INVALID_PROCESS_GROUP;
-    Terminal->SessionProcess = NULL;
-
-    ASSERT(ProcessGroupId != TERMINAL_INVALID_PROCESS_GROUP);
-
-    PsSignalProcessGroup(ProcessGroupId,
-                         SIGNAL_CONTROLLING_TERMINAL_CLOSED);
-
-    PsSignalProcessGroup(ProcessGroupId, SIGNAL_CONTINUE);
     return;
+}
+
+BOOL
+IopTerminalDisassociateIterator (
+    PVOID Context,
+    PKPROCESS Process
+    )
+
+/*++
+
+Routine Description:
+
+    This routine describes the prototype for the process list iterator. This
+    routine is called with the process list lock held.
+
+Arguments:
+
+    Context - Supplies a pointer's worth of context passed into the iterate
+        routine.
+
+    Process - Supplies the process to examine.
+
+Return Value:
+
+    FALSE always to indicate continuing to iterate.
+
+--*/
+
+{
+
+    Process->ControllingTerminal = NULL;
+    return FALSE;
 }
 

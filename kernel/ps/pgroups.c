@@ -31,9 +31,6 @@ Environment:
 // --------------------------------------------------------------------- Macros
 //
 
-#define IS_SESSION_LEADER(_Process) \
-    ((_Process)->Identifiers.SessionId == (_Process)->Identifiers.ProcessId)
-
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -423,7 +420,7 @@ Return Value:
     // join a new process group.
     //
 
-    if (IS_SESSION_LEADER(Process)) {
+    if (PsIsSessionLeader(Process)) {
         Status = STATUS_PERMISSION_DENIED;
         goto JoinProcessGroupEnd;
     }
@@ -679,7 +676,9 @@ Return Value:
     KeAcquireQueuedLock(PsProcessGroupListLock);
     ProcessGroup = Process->Parent->ProcessGroup;
 
-    ASSERT(ProcessGroup != NULL);
+    ASSERT((ProcessGroup != NULL) &&
+           (Process->Identifiers.ProcessGroupId == ProcessGroup->Identifier) &&
+           (Process->Identifiers.SessionId == ProcessGroup->SessionId));
 
     INSERT_BEFORE(&(Process->ProcessGroupListEntry),
                   &(ProcessGroup->ProcessListHead));

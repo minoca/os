@@ -191,6 +191,8 @@ Return Value:
                                              KernelBinaryNameSize,
                                              NULL,
                                              NULL,
+                                             NULL,
+                                             NULL,
                                              NULL);
 
             if (KernelProcess == NULL) {

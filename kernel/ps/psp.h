@@ -415,6 +415,8 @@ PspCreateProcess (
     PSTR CommandLine,
     ULONG CommandLineSize,
     PPROCESS_ENVIRONMENT SourceEnvironment,
+    PPROCESS_IDENTIFIERS Identifiers,
+    PVOID ControllingTerminal,
     PPATH_POINT RootDirectory,
     PPATH_POINT WorkingDirectory
     );
@@ -436,6 +438,12 @@ Arguments:
     SourceEnvironment - Supplies an optional pointer to the initial environment.
         The image name and arguments will be replaced with those given on the
         command line.
+
+    Identifiers - Supplies an optional pointer to the parent process
+        identifiers.
+
+    ControllingTerminal - Supplies a pointer to the controlling terminal to set
+        for this process.
 
     RootDirectory - Supplies a pointer to the root directory path point for
         this process. Processes cannot go farther up in the directory hierarchy

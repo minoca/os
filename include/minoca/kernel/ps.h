@@ -111,6 +111,13 @@ Author:
     KeReleaseQueuedLock((_Process)->QueuedLock)
 
 //
+// This macro evaluates to non-zero if the given process is a session leader.
+//
+
+#define PsIsSessionLeader(_Process) \
+    ((_Process)->Identifiers.SessionId == (_Process)->Identifiers.ProcessId)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -1302,7 +1309,9 @@ Members:
     Umask - Stores the user file creation permission bit mask for the process.
 
     ControllingTerminal - Stores an opaque pointer to the process' controlling
-        terminal if this process is a session leader and has one.
+        terminal. This is an I/O handle, but it's an I/O handle that this
+        process doesn't necessarily have a reference to. This pointer should
+        not be touched without the terminal list lock held.
 
 --*/
 
@@ -3146,37 +3155,6 @@ Return Value:
 
     STATUS_NO_SUCH_PROCESS if the given process ID does not correspond to any
     known process.
-
---*/
-
-PVOID
-PsSetControllingTerminal (
-    PKPROCESS Process,
-    PVOID ControllingTerminal
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sets or clears the process' controlling terminal.
-
-Arguments:
-
-    Process - Supplies a pointer to the process to set.
-
-    ControllingTerminal - Supplies a pointer to attempt to set in the
-        process. If this is NULL, then it will be unconditionally exchanged in
-        and the old value will be returned. If this is non-NULL, then the
-        controlling terminal will be compare exchanged in if the process'
-        controlling terminal was previously NULL. If the previous controlling
-        terminal is not NULL, then it will be returned and the value will be
-        unchanged.
-
-Return Value:
-
-    Returns the previous value of the controlling terminal, no matter if the
-    value was changed or not.
 
 --*/
 

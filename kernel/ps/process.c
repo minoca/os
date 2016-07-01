@@ -359,66 +359,6 @@ Return Value:
     return Status;
 }
 
-PVOID
-PsSetControllingTerminal (
-    PKPROCESS Process,
-    PVOID ControllingTerminal
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets or clears the process' controlling terminal.
-
-Arguments:
-
-    Process - Supplies a pointer to the process to set.
-
-    ControllingTerminal - Supplies a pointer to attempt to set in the
-        process. If this is NULL, then it will be unconditionally exchanged in
-        and the old value will be returned. If this is non-NULL, then the
-        controlling terminal will be compare exchanged in if the process'
-        controlling terminal was previously NULL. If the previous controlling
-        terminal is not NULL, then it will be returned and the value will be
-        unchanged.
-
-Return Value:
-
-    Returns the previous value of the controlling terminal, no matter if the
-    value was changed or not.
-
---*/
-
-{
-
-    PVOID OldTerminal;
-
-    if (ControllingTerminal == NULL) {
-
-        //
-        // Do a fast non-atomic check for the most common case, process exit
-        // of a non session leader.
-        //
-
-        if (Process->ControllingTerminal == NULL) {
-            return NULL;
-        }
-
-        OldTerminal = (PVOID)RtlAtomicExchange(
-                                       (PUINTN)&(Process->ControllingTerminal),
-                                       (UINTN)NULL);
-
-    } else {
-        OldTerminal = (PVOID)RtlAtomicCompareExchange(
-                                       (PUINTN)&(Process->ControllingTerminal),
-                                       (UINTN)ControllingTerminal,
-                                       (UINTN)NULL);
-    }
-
-    return OldTerminal;
-}
-
 VOID
 PsSysForkProcess (
     ULONG SystemCallNumber,
@@ -1469,6 +1409,8 @@ Return Value:
     NewProcess = PspCreateProcess(CommandLine,
                                   CommandLineSize,
                                   Environment,
+                                  NULL,
+                                  NULL,
                                   RootDirectoryPathPoint,
                                   WorkingDirectoryPathPoint);
 
@@ -1905,6 +1847,8 @@ Return Value:
     NewProcess = PspCreateProcess(Process->BinaryName,
                                   Process->BinaryNameSize,
                                   Process->Environment,
+                                  &(Process->Identifiers),
+                                  Process->ControllingTerminal,
                                   RootDirectory,
                                   CurrentDirectory);
 
@@ -1931,7 +1875,6 @@ Return Value:
     //
 
     NewProcess->Parent = Process;
-    NewProcess->Identifiers.ParentProcessId = Process->Identifiers.ProcessId;
     KeAcquireQueuedLock(Process->QueuedLock);
     NewProcess->SignalHandlerRoutine = Process->SignalHandlerRoutine;
     NewProcess->HandledSignals = Process->HandledSignals;
@@ -1940,6 +1883,16 @@ Return Value:
     INSERT_BEFORE(&(NewProcess->SiblingListEntry), &(Process->ChildListHead));
     KeReleaseQueuedLock(Process->QueuedLock);
     PspAddProcessToParentProcessGroup(NewProcess);
+
+    //
+    // If this process' controlling terminal was cleared during the process
+    // creation, clear out the new child as well, as the clearing may have
+    // happened before the new child was added to the global list.
+    //
+
+    if (Process->ControllingTerminal == NULL) {
+        NewProcess->ControllingTerminal = NULL;
+    }
 
     //
     // Add the tracing process if needed.
@@ -2020,6 +1973,8 @@ PspCreateProcess (
     PSTR CommandLine,
     ULONG CommandLineSize,
     PPROCESS_ENVIRONMENT SourceEnvironment,
+    PPROCESS_IDENTIFIERS Identifiers,
+    PVOID ControllingTerminal,
     PPATH_POINT RootDirectory,
     PPATH_POINT WorkingDirectory
     )
@@ -2041,6 +1996,12 @@ Arguments:
     SourceEnvironment - Supplies an optional pointer to the initial environment.
         The image name and arguments will be replaced with those given on the
         command line.
+
+    Identifiers - Supplies an optional pointer to the parent process
+        identifiers.
+
+    ControllingTerminal - Supplies a pointer to the controlling terminal to set
+        for this process.
 
     RootDirectory - Supplies a pointer to the root directory path point for
         this process. Processes cannot go farther up in the directory hierarchy
@@ -2146,6 +2107,12 @@ Return Value:
     INITIALIZE_LIST_HEAD(&(NewProcess->BlockedSignalListHead));
     INITIALIZE_LIST_HEAD(&(NewProcess->TimerList));
     KeInitializeSpinLock(&(NewProcess->ChildSignalLock));
+    if (Identifiers != NULL) {
+        NewProcess->Identifiers.ParentProcessId = Identifiers->ProcessId;
+        NewProcess->Identifiers.ProcessGroupId = Identifiers->ProcessGroupId;
+        NewProcess->Identifiers.SessionId = Identifiers->SessionId;
+    }
+
     NewProcess->QueuedLock = KeCreateQueuedLock();
     if (NewProcess->QueuedLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2231,6 +2198,16 @@ Return Value:
 
         IO_PATH_POINT_ADD_REFERENCE(WorkingDirectory);
     }
+
+    //
+    // Set the controlling terminal before adding the process to the list.
+    // The session leader needs to acquire the process list lock in order to
+    // iterate over every process in the session. The controlling terminal of
+    // the parent process will need to be double checked to ensure it didn't
+    // get cleared (and this process was missed in the clearing).
+    //
+
+    NewProcess->ControllingTerminal = ControllingTerminal;
 
     //
     // Insert the process into the global list.
@@ -2912,8 +2889,6 @@ Return Value:
 
 {
 
-    PVOID ControllingTerminal;
-
     //
     // Proceed to destroy the process structures.
     //
@@ -2922,21 +2897,6 @@ Return Value:
     PspImUnloadAllImages(Process);
     IoCloseProcessHandles(Process, 0);
     MmCleanUpProcessMemory(Process);
-
-    //
-    // Relinquish the controlling terminal if this is a dying session leader.
-    //
-
-    ControllingTerminal = PsSetControllingTerminal(Process, NULL);
-    if (ControllingTerminal != NULL) {
-
-        ASSERT(Process->Identifiers.SessionId ==
-               Process->Identifiers.ProcessId);
-
-        IoRelinquishTerminal(ControllingTerminal,
-                             Process->Identifiers.SessionId,
-                             FALSE);
-    }
 
     //
     // Remove the process from its process group and then notify its children
@@ -3242,7 +3202,6 @@ Return Value:
     ASSERT(Process->Parent == NULL);
     ASSERT(Process->SiblingListEntry.Next == NULL);
     ASSERT(Process->ListEntry.Next == NULL);
-    ASSERT(Process->ControllingTerminal == NULL);
 
     //
     // There should be at most one remaining page mapped: the shared user data
