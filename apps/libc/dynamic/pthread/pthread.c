@@ -932,6 +932,33 @@ Return Value:
 }
 
 PTHREAD_API
+pid_t
+pthread_getthreadid_np (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the kernel thread ID for the current thread.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the kernel thread ID.
+
+--*/
+
+{
+
+    return pthread_gettid_np(pthread_self());
+}
+
+PTHREAD_API
 void
 __pthread_cleanup_push (
     __pthread_cleanup_t *CleanupItem,
