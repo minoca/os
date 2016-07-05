@@ -35,6 +35,7 @@ Environment:
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -83,6 +84,18 @@ Environment:
 #define TEST_TIMER_UPDATE_INTERVAL 5
 
 //
+// Define the number of timers and threads to fire up.
+//
+
+#define TEST_THREAD_TIMER_COUNT 50
+
+//
+// Define the number of time ticks all the thread timers should get up to.
+//
+
+#define TEST_THREAD_TIMER_GOAL 50
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -105,6 +118,11 @@ RunITimerTest (
     VOID
     );
 
+ULONG
+RunThreadTimerTest (
+    VOID
+    );
+
 VOID
 ITimerTestSignalHandler (
     INT SignalNumber
@@ -112,6 +130,18 @@ ITimerTestSignalHandler (
 
 VOID
 TimerTestAlarmSignalHandler (
+    INT SignalNumber,
+    siginfo_t *Information,
+    void *SomethingElse
+    );
+
+void *
+TimerThreadTestStartRoutine (
+    void *Parameter
+    );
+
+VOID
+TimerThreadTestAlarmSignalHandler (
     INT SignalNumber,
     siginfo_t *Information,
     void *SomethingElse
@@ -146,6 +176,14 @@ int TestITimerTypeSignals[3] = {
     SIGVTALRM,
     SIGPROF
 };
+
+//
+// Store the timer thread test timers and threads.
+//
+
+pthread_t TestThreads[TEST_THREAD_TIMER_COUNT];
+timer_t TestThreadTimers[TEST_THREAD_TIMER_COUNT];
+volatile int TestThreadTimerCount[TEST_THREAD_TIMER_COUNT];
 
 //
 // ------------------------------------------------------------------ Functions
@@ -228,6 +266,11 @@ Return Value:
     Failures += RunITimerTest();
     if (Failures != 0) {
         PRINT_ERROR("*** %d failures in itimer test. ***\n", Failures);
+    }
+
+    Failures += RunThreadTimerTest();
+    if (Failures != 0) {
+        PRINT_ERROR("*** %d failures in thread timer test. ***\n", Failures);
     }
 
     if (Failures == 0) {
@@ -644,6 +687,230 @@ Return Value:
     return Failures;
 }
 
+ULONG
+RunThreadTimerTest (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tests user mode timers using SIGEV_THREAD_ID .
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the number of failures in the test.
+
+--*/
+
+{
+
+    struct sigaction Action;
+    pthread_barrier_t Barrier;
+    ULONGLONG CurrentTime;
+    ULONGLONG EndTime;
+    struct sigevent Event;
+    ULONG Failures;
+    ULONGLONG Frequency;
+    ULONG Index;
+    ULONGLONG LastUpdate;
+    int MaxCount;
+    ULONG MaxTimer;
+    int MinCount;
+    ULONG MinTimer;
+    struct sigaction OriginalAction;
+    struct itimerspec Rate;
+    int Result;
+    BOOL Stop;
+    pthread_t Thread;
+
+    Failures = 0;
+    Stop = TRUE;
+
+    //
+    // Set up the signal handler.
+    //
+
+    Action.sa_sigaction = TimerThreadTestAlarmSignalHandler;
+    sigemptyset(&(Action.sa_mask));
+    Action.sa_flags = SA_SIGINFO;
+    Result = sigaction(SIGALRM, &Action, &OriginalAction);
+    if (Result != 0) {
+        PRINT_ERROR("ThreadTimerTest: sigaction failed: %s\n", strerror(errno));
+        return 1;
+    }
+
+    //
+    // Use a barrier to make the signal threads wait to exit.
+    //
+
+    pthread_barrier_init(&Barrier, NULL, TEST_THREAD_TIMER_COUNT + 1);
+
+    //
+    // Initialize the portions of the signal event common to each timer.
+    //
+
+    memset(&Event, 0, sizeof(struct sigevent));
+    Event.sigev_notify = SIGEV_SIGNAL | SIGEV_THREAD_ID;
+    Event.sigev_signo = SIGALRM;
+
+    //
+    // Create a bunch of timers and a thread to receive the signal for each.
+    //
+
+    for (Index = 0; Index < TEST_THREAD_TIMER_COUNT; Index += 1) {
+        TestThreads[Index] = -1;
+        TestThreadTimers[Index] = -1;
+        Result = pthread_create(&Thread,
+                                NULL,
+                                TimerThreadTestStartRoutine,
+                                &Barrier);
+
+        if (Result != 0) {
+            PRINT_ERROR("ThreadTimerTest: pthread_create failed: %s.\n",
+                        strerror(errno));
+
+            return Failures;
+        }
+
+        Event.sigev_value.sival_int = Index;
+        Event.sigev_notify_thread_id = pthread_gettid_np(Thread);
+        TestThreads[Index] = Thread;
+        Result = timer_create(CLOCK_REALTIME,
+                              &Event,
+                              &(TestThreadTimers[Index]));
+
+        if (Result != 0) {
+            PRINT_ERROR("ThreadTimerTest: Failed to create timer: %s.\n",
+                        strerror(errno));
+
+            Failures += 1;
+        }
+    }
+
+    //
+    // Arm the timers.
+    //
+
+    Rate.it_value.tv_sec = TEST_TIMER_PERIOD_SECONDS;
+    Rate.it_value.tv_nsec = TEST_TIMER_PERIOD_NANOSECONDS;
+    Rate.it_interval.tv_sec = TEST_TIMER_PERIOD_SECONDS;
+    Rate.it_interval.tv_nsec = TEST_TIMER_PERIOD_NANOSECONDS;
+    for (Index = 0; Index < TEST_THREAD_TIMER_COUNT; Index += 1) {
+        Result = timer_settime(TestThreadTimers[Index], 0, &Rate, NULL);
+        if (Result != 0) {
+            PRINT_ERROR("ThreadTimerTest: Failed to create timer: %s.\n",
+                        strerror(errno));
+
+            Failures += 1;
+        }
+    }
+
+    //
+    // Compute the timeout time.
+    //
+
+    Frequency = OsGetTimeCounterFrequency();
+    EndTime = OsGetRecentTimeCounter() + (TEST_TIMER_TIMEOUT * Frequency);
+    LastUpdate = OsGetRecentTimeCounter() / Frequency;
+    while (OsGetRecentTimeCounter() < EndTime) {
+        Stop = TRUE;
+        MinTimer = -1;
+        MinCount = MAX_LONG;
+        MaxTimer = -1;
+        MaxCount = 0;
+        for (Index = 0; Index < TEST_THREAD_TIMER_COUNT; Index += 1) {
+            if (TestThreadTimerCount[Index] < TEST_THREAD_TIMER_GOAL) {
+                Stop = FALSE;
+            }
+
+            if ((MinTimer == -1) || (TestThreadTimerCount[Index] < MinCount)) {
+                MinTimer = Index;
+                MinCount = TestThreadTimerCount[Index];
+            }
+
+            if ((MaxTimer == -1) || (TestThreadTimerCount[Index] > MaxCount)) {
+                MaxTimer = Index;
+                MaxCount = TestThreadTimerCount[Index];
+            }
+        }
+
+        if (Stop != FALSE) {
+            DEBUG_PRINT("All timer threads reached threshold.\n");
+            break;
+        }
+
+        CurrentTime = OsGetRecentTimeCounter() / Frequency;
+        if (CurrentTime - LastUpdate >= TEST_TIMER_UPDATE_INTERVAL) {
+            DEBUG_PRINT("%I64d: Min count %d, timer %d. "
+                        "Max count %d, timer %d.\n",
+                        CurrentTime,
+                        MinCount,
+                        MinTimer,
+                        MaxCount,
+                        MaxTimer);
+
+            fflush(NULL);
+            LastUpdate = CurrentTime;
+        }
+    }
+
+    if (Stop == FALSE) {
+        PRINT_ERROR("ThreadTimerTest: Some timers did not count!\n");
+    }
+
+    //
+    // Delete all the timers so they stop firing.
+    //
+
+    for (Index = 0; Index < TEST_THREAD_TIMER_COUNT; Index += 1) {
+        Result = timer_delete(TestThreadTimers[Index]);
+        if (Result != 0) {
+            PRINT_ERROR("ThreadTimerTest: Failed to delete timer: %s.\n",
+                        strerror(errno));
+
+            Failures += 1;
+        }
+    }
+
+    //
+    // With the timers destroyed, the threads are free to exit. Wait on the
+    // barrier to make sure all threads get released. Then wait for each
+    // thread's exit status.
+    //
+
+    pthread_barrier_wait(&Barrier);
+    pthread_barrier_destroy(&Barrier);
+    for (Index = 0; Index < TEST_THREAD_TIMER_COUNT; Index += 1) {
+        Result = pthread_join(TestThreads[Index], NULL);
+        if (Result != 0) {
+            PRINT_ERROR("ThreadTimerTest: Failed to join thread: %s.\n",
+                        strerror(errno));
+
+            Failures += 1;
+        }
+    }
+
+    //
+    // Restore the signal handler.
+    //
+
+    Result = sigaction(SIGALRM, &OriginalAction, NULL);
+    if (Result != 0) {
+        PRINT_ERROR("ThreadTimerTest: Failed to restore SIGALRM: %s.\n",
+                    strerror(errno));
+
+        Failures += 1;
+    }
+
+    return Failures;
+}
+
 VOID
 ITimerTestSignalHandler (
     INT SignalNumber
@@ -713,6 +980,75 @@ Return Value:
 
     assert(TimerIndex != TEST_TIMER_COUNT);
 
+    return;
+}
+
+void *
+TimerThreadTestStartRoutine (
+    void *Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the start routine for a timer thread test.
+
+Arguments:
+
+    Parameter - Supplies a pointer to a POSIX thread barrier to wait on.
+
+Return Value:
+
+    Returns NULL.
+
+--*/
+
+{
+
+    pthread_barrier_t *Barrier;
+
+    //
+    // Wait on the barrier.
+    //
+
+    Barrier = (pthread_barrier_t *)Parameter;
+    pthread_barrier_wait(Barrier);
+    return NULL;
+}
+
+VOID
+TimerThreadTestAlarmSignalHandler (
+    INT SignalNumber,
+    siginfo_t *Information,
+    void *SomethingElse
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the alarm signal handler for the timer thread test.
+
+Arguments:
+
+    SignalNumber - Supplies the incoming signal, always SIGALRM in this case.
+
+    Information - Supplies a pointer to the signal information structure.
+
+    SomethingElse - Supplies an unused context pointer.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    assert(SignalNumber == SIGALRM);
+
+    TestThreadTimerCount[Information->si_value.sival_int] += 1;
     return;
 }
 
