@@ -643,20 +643,6 @@ Return Value:
     //
 
     OldState = Condition->State;
-    if (AbsoluteTimeout != NULL) {
-        Clock = CLOCK_REALTIME;
-        if ((OldState & PTHREAD_CONDITION_CLOCK_MONOTONIC) != 0) {
-            Clock = CLOCK_MONOTONIC;
-        }
-
-        TimeoutInMilliseconds =
-                        ClpConvertAbsoluteTimespecToRelativeMilliseconds(
-                                                               AbsoluteTimeout,
-                                                               Clock);
-
-    } else {
-        TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
-    }
 
     //
     // Unlock the mutex and perform the wait.
@@ -668,10 +654,35 @@ Return Value:
         Operation |= USER_LOCK_PRIVATE;
     }
 
-    KernelStatus = OsUserLock(&(Condition->State),
-                              Operation,
-                              &OldState,
-                              TimeoutInMilliseconds);
+    //
+    // If a signal is delivered, the thread is to continue waiting on the
+    // condition after the signal handler completes. Do not take another snap
+    // of the counter, as this should still be waiting on the original
+    // condition.
+    //
+
+    do {
+        if (AbsoluteTimeout != NULL) {
+            Clock = CLOCK_REALTIME;
+            if ((OldState & PTHREAD_CONDITION_CLOCK_MONOTONIC) != 0) {
+                Clock = CLOCK_MONOTONIC;
+            }
+
+            TimeoutInMilliseconds =
+                            ClpConvertAbsoluteTimespecToRelativeMilliseconds(
+                                                               AbsoluteTimeout,
+                                                               Clock);
+
+        } else {
+            TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
+        }
+
+        KernelStatus = OsUserLock(&(Condition->State),
+                                  Operation,
+                                  &OldState,
+                                  TimeoutInMilliseconds);
+
+    } while (KernelStatus == STATUS_INTERRUPTED);
 
     pthread_mutex_lock(Mutex);
     if (KernelStatus == STATUS_TIMEOUT) {
