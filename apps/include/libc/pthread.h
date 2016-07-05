@@ -220,6 +220,14 @@ extern "C" {
 #define PTHREAD_ONCE_INIT 0
 
 //
+// Define the value returned to one arbitrary thread after a pthread barrier
+// wait is satisfied. This value must be distinct from all error numbers and
+// cannot be 0.
+//
+
+#define PTHREAD_BARRIER_SERIAL_THREAD -1
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -302,6 +310,16 @@ typedef union {
     char Data[64];
     long int AlignMember;
 } pthread_attr_t;
+
+typedef union {
+    char Data[32];
+    long int AlignMember;
+} pthread_barrier_t;
+
+typedef union {
+    char Data[16];
+    long int AlignMember;
+} pthread_barrierattr_t;
 
 /*++
 
@@ -2425,6 +2443,197 @@ Arguments:
     DynamicObjectHandle - Supplies an identifier unique to the dynamic object
         registering the handlers. This can be used to unregister the handles if
         the dynamic object is unloaded.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PTHREAD_API
+int
+pthread_barrier_init (
+    pthread_barrier_t *Barrier,
+    const pthread_barrierattr_t *Attribute,
+    unsigned Count
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the given POSIX thread barrier with the given
+    attributes and thread count.
+
+Arguments:
+
+    Barrier - Supplies a pointer to the POSIX thread barrier to be initialized.
+
+    Attribute - Supplies an optional pointer to the attribute to use for
+        initializing the barrier.
+
+    Count - Supplies the number of threads that must wait on the barrier for it
+        to be satisfied.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PTHREAD_API
+int
+pthread_barrier_destroy (
+    pthread_barrier_t *Barrier
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys the given POSIX thread barrier.
+
+Arguments:
+
+    Barrier - Supplies a pointer to the POSIX thread barrier to destroy.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PTHREAD_API
+int
+pthread_barrier_wait (
+    pthread_barrier_t *Barrier
+    );
+
+/*++
+
+Routine Description:
+
+    This routine blocks untils the required number of threads have waited on
+    the barrier. Upon success, an arbitrary thread will receive
+    PTHREAD_BARRIER_SERIAL_THREAD as a return value; the rest will receive 0.
+    This routine does not get interrupted by signals and will continue to block
+    after a signal is handled.
+
+Arguments:
+
+    Barrier - Supplies a pointer to the POSIX thread barrier.
+
+Return Value:
+
+    0 or PTHREAD_BARRIER_SERIAL_THREAD on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PTHREAD_API
+int
+pthread_barrierattr_init (
+    pthread_barrierattr_t *Attribute
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes a barrier attribute structure.
+
+Arguments:
+
+    Attribute - Supplies a pointer to the barrier attribute structure to
+        initialize.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PTHREAD_API
+int
+pthread_barrierattr_destroy (
+    pthread_barrierattr_t *Attribute
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys the given barrier attribute structure.
+
+Arguments:
+
+    Attribute - Supplies a pointer to the barrier attribute to destroy.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PTHREAD_API
+int
+pthread_barrierattr_getpshared (
+    const pthread_barrierattr_t *Attribute,
+    int *Shared
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines the shared state in a barrier attribute.
+
+Arguments:
+
+    Attribute - Supplies a pointer to the barrier attribute structure.
+
+    Shared - Supplies a pointer where the shared attribute will be returned,
+        indicating whether the condition variable is visible across processes.
+        See PTHREAD_PROCESS_* definitions.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PTHREAD_API
+int
+pthread_barrierattr_setpshared (
+    const pthread_barrierattr_t *Attribute,
+    int Shared
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the shared state in a barrier attribute.
+
+Arguments:
+
+    Attribute - Supplies a pointer to the barrier attribute structure.
+
+    Shared - Supplies the value indicating whether this barrier should be
+        visible across processes. See PTHREAD_PROCESS_* definitions.
 
 Return Value:
 

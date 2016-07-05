@@ -77,6 +77,7 @@ function build() {
         "path.c",
         "pid.c",
         "pthread/atfork.c",
+        "pthread/barrier.c",
         "pthread/cond.c",
         "pthread/key.c",
         "pthread/mutex.c",

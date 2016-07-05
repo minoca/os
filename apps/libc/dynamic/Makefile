@@ -96,6 +96,7 @@ OBJS = assert.o             \
        path.o               \
        pid.o                \
        pthread/atfork.o     \
+       pthread/barrier.o    \
        pthread/cond.o       \
        pthread/key.o        \
        pthread/mutex.o      \

@@ -277,6 +277,51 @@ typedef struct _PTHREAD_KEY_DATA {
 
 Structure Description:
 
+    This structure stores the internal structure of a POSIX thread barrier.
+
+Members:
+
+    State - Stores the current state of the barrier.
+
+    ThreadCount - Stores the thread count that must be reached before waits on
+        this barrier are satisified. This is set when the barrier is
+        initialized.
+
+    WaitingThreadCount - Stores the number of threads that are currently
+        waiting on the barrier. This is reset once a wait is satisfied.
+
+    Mutex - Stores the mutex that synchronizes access to the waiting thread
+        count and the state.
+
+--*/
+
+typedef struct _PTHREAD_BARRIER {
+    ULONG State;
+    ULONG ThreadCount;
+    ULONG WaitingThreadCount;
+    pthread_mutex_t Mutex;
+} PTHREAD_BARRIER, *PPTHREAD_BARRIER;
+
+/*++
+
+Structure Description:
+
+    This structure stores the internal structure of a barrier attribute.
+
+Members:
+
+    Flags - Stores the flags for the barrier.
+
+--*/
+
+typedef struct _PTHREAD_BARRIER_ATTRIBUTE {
+    ULONG Flags;
+} PTHREAD_BARRIER_ATTRIBUTE, *PPTHREAD_BARRIER_ATTRIBUTE;
+
+/*++
+
+Structure Description:
+
     This structure stores the internal structure of a thread.
 
 Members:
