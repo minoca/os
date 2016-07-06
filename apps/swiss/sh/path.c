@@ -1681,7 +1681,7 @@ Return Value:
                 // pattern, then combine those results with the answer.
                 //
 
-                if (NextComponent != FALSE) {
+                if ((NextComponent != NULL) && (*NextComponent != '\0')) {
                     Result = ShExpandPath(Shell,
                                           CompletePath,
                                           CompletePathSize,
