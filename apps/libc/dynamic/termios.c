@@ -128,6 +128,43 @@ Environment:
 
 LIBC_API
 int
+isatty (
+    int FileDescriptor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given file descriptor is backed by an
+    interactive terminal device or not.
+
+Arguments:
+
+    FileDescriptor - Supplies the file descriptor to query.
+
+Return Value:
+
+    1 if the given file descriptor is backed by a terminal device.
+
+    0 on error or if the file descriptor is not a terminal device. On error,
+    the errno variable will be set to give more details.
+
+--*/
+
+{
+
+    struct termios Settings;
+
+    if (tcgetattr(FileDescriptor, &Settings) == 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+LIBC_API
+int
 tcgetattr (
     int FileDescriptor,
     struct termios *Settings
@@ -156,11 +193,6 @@ Return Value:
 --*/
 
 {
-
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return -1;
-    }
 
     return ioctl(FileDescriptor, TCGETS, Settings);
 }
@@ -200,11 +232,6 @@ Return Value:
 {
 
     int Result;
-
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return -1;
-    }
 
     if (When == TCSANOW) {
         Result = ioctl(FileDescriptor, TCSETS, NewSettings);
@@ -391,11 +418,6 @@ Return Value:
            (TCOFLUSH == SYS_FLUSH_FLAG_WRITE) &&
            (TCIOFLUSH == (SYS_FLUSH_FLAG_READ | SYS_FLUSH_FLAG_WRITE)));
 
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return -1;
-    }
-
     return ioctl(FileDescriptor, TCFLSH, Selector);
 }
 
@@ -436,11 +458,6 @@ Return Value:
     // TCSBRK with a non-zero value is undefined, but in this implementation
     // implements tcdrain behavior.
     //
-
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return -1;
-    }
 
     return ioctl(FileDescriptor, TCSBRK, 1);
 }
@@ -492,11 +509,6 @@ Return Value:
 
 {
 
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return -1;
-    }
-
     return ioctl(FileDescriptor, TCXONC, Action);
 }
 
@@ -540,11 +552,6 @@ Return Value:
 
 {
 
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return -1;
-    }
-
     return ioctl(FileDescriptor, TCSBRK, Duration);
 }
 
@@ -579,11 +586,6 @@ Return Value:
     int Status;
 
     ProcessGroup = -1;
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return (pid_t)-1;
-    }
-
     Status = ioctl(FileDescriptor, TIOCGSID, &ProcessGroup);
     if (Status != 0) {
         return (pid_t)-1;
@@ -629,11 +631,6 @@ Return Value:
 
     PROCESS_GROUP_ID Identifier;
 
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return -1;
-    }
-
     Identifier = ProcessGroupId;
     return ioctl(FileDescriptor, TIOCSPGRP, &Identifier);
 }
@@ -676,11 +673,6 @@ Return Value:
 
     PROCESS_GROUP_ID Identifier;
     int Result;
-
-    if (isatty(FileDescriptor) == 0) {
-        errno = ENOTTY;
-        return -1;
-    }
 
     Result = ioctl(FileDescriptor, TIOCGPGRP, &Identifier);
     if (Result < 0) {

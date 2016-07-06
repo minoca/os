@@ -2131,57 +2131,6 @@ Return Value:
 
 LIBC_API
 int
-isatty (
-    int FileDescriptor
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines if the given file descriptor is backed by an
-    interactive terminal device or not.
-
-Arguments:
-
-    FileDescriptor - Supplies the file descriptor to query.
-
-Return Value:
-
-    1 if the given file descriptor is backed by a terminal device.
-
-    0 on error or if the file descriptor is not a terminal device. On error,
-    the errno variable will be set to give more details.
-
---*/
-
-{
-
-    PFILE_PROPERTIES FileProperties;
-    FILE_CONTROL_PARAMETERS_UNION Parameters;
-    KSTATUS Status;
-
-    Status = OsFileControl((HANDLE)(UINTN)FileDescriptor,
-                           FileControlCommandGetFileInformation,
-                           &Parameters);
-
-    if (!KSUCCESS(Status)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        return 0;
-    }
-
-    FileProperties = &(Parameters.SetFileInformation.FileProperties);
-    if ((FileProperties->Type == IoObjectTerminalSlave) ||
-        (FileProperties->Type == IoObjectTerminalMaster)) {
-
-        return 1;
-    }
-
-    return 0;
-}
-
-LIBC_API
-int
 sprintf (
     char *OutputString,
     const char *Format,
@@ -3087,15 +3036,11 @@ Return Value:
 
 {
 
-    //
-    // TODO: Implement ctermid_r.
-    //
-
     if (Buffer == NULL) {
         return NULL;
     }
 
-    snprintf(Buffer, L_ctermid, "/dev/mytty");
+    snprintf(Buffer, L_ctermid, "/dev/tty");
     return Buffer;
 }
 
