@@ -86,6 +86,8 @@ Return Value:
 --*/
 
 EXPORTED_FUNCTION(_setjmp)
+END_FUNCTION(_setjmp)
+EXPORTED_FUNCTION(setjmp)
     movl    (%esp), %ecx        # Load the return address.
     leal    4(%esp), %edx       # Get the caller's stack pointer.
     movl    (%edx), %eax        # Get the jump buffer.
@@ -115,7 +117,7 @@ EXPORTED_FUNCTION(_setjmp)
     movl    $0, %eax
     ret
 
-END_FUNCTION(_setjmp)
+END_FUNCTION(setjmp)
 
 ##
 ## int

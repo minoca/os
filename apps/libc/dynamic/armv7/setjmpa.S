@@ -78,6 +78,8 @@ Return Value:
 --*/
 
 EXPORTED_FUNCTION _setjmp
+END_FUNCTION _setjmp
+EXPORTED_FUNCTION setjmp
 
     ##
     ## Clear out the boolean indicating whether or not the mask was saved.
@@ -102,7 +104,7 @@ EXPORTED_FUNCTION _setjmp
     mov     %r0, #0
     bx      %lr
 
-END_FUNCTION _setjmp
+END_FUNCTION setjmp
 
 ##
 ## int

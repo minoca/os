@@ -83,6 +83,8 @@ Return Value:
 --*/
 
 EXPORTED_FUNCTION(_setjmp)
+END_FUNCTION(_setjmp)
+EXPORTED_FUNCTION(setjmp)
     movq    (%rsp), %rcx        # Load the return address.
 
     ##
@@ -114,7 +116,7 @@ EXPORTED_FUNCTION(_setjmp)
     xorq    %rax, %rax          # Return 0 to indicate return from setjmp.
     ret
 
-END_FUNCTION(_setjmp)
+END_FUNCTION(setjmp)
 
 ##
 ## int
