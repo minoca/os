@@ -510,11 +510,12 @@ Return Value:
         Process->Identifiers.SessionId = ProcessId;
 
         //
-        // This process cannot have already been a session leader and therefore
-        // cannot have a controlling terminal.
+        // Clear the controlling terminal. The child process' controlling
+        // terminals would only need to be cleared if this process was a
+        // session leader. It is not, otherwise it could not become one now.
         //
 
-        ASSERT(Process->ControllingTerminal == NULL);
+        Process->ControllingTerminal = NULL;
 
     } else {
 
