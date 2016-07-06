@@ -586,6 +586,72 @@ Return Value:
 
 KERNEL_API
 KSTATUS
+IoOpenControllingTerminal (
+    PIO_HANDLE *IoHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to open the current process' controlling terminal.
+
+Arguments:
+
+    IoHandle - Supplies a pointer where the open I/O handle will be returned on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PIO_HANDLE Handle;
+    ULONG PreviousValue;
+    PKPROCESS Process;
+    KSTATUS Status;
+
+    *IoHandle = NULL;
+    Process = PsGetCurrentProcess();
+    KeAcquireQueuedLock(IoTerminalListLock);
+    if (Process->ControllingTerminal == NULL) {
+        Status = STATUS_NO_SUCH_DEVICE;
+
+    } else {
+
+        //
+        // This part is a little fishy. Manually attempt to increment the
+        // reference count on the handle. If the handle reference count was
+        // zero, quietly back out. Because closing the slave acquires the
+        // terminal list lock held here, the handle cannot disappear entirely.
+        // But it can be in the process of closing. This concept was not
+        // generalized into the I/O handle code because the idea of not
+        // having a reference on the handle but somehow ensuring that it
+        // couldn't disappear did not seem like a legit contract to create a
+        // generic I/O handle function around.
+        //
+
+        Handle = Process->ControllingTerminal;
+        PreviousValue = RtlAtomicAdd32(&(Handle->ReferenceCount), 1);
+        if (PreviousValue == 0) {
+            RtlAtomicAdd32(&(Handle->ReferenceCount), -1);
+            Status = STATUS_NO_SUCH_DEVICE;
+
+        } else {
+            *IoHandle = Handle;
+            Status = STATUS_SUCCESS;
+        }
+    }
+
+    KeReleaseQueuedLock(IoTerminalListLock);
+    return Status;
+}
+
+KERNEL_API
+KSTATUS
 IoSetTerminalSettings (
     PIO_HANDLE TerminalHandle,
     PTERMINAL_SETTINGS NewSettings,

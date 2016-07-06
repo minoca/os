@@ -8,3 +8,4 @@ null:
 zero:
 full:
 urandom:
+tty:

@@ -3230,6 +3230,12 @@ Return Value:
             }
 
             //
+            // If someone wants to replace a cacheable file, think about this.
+            //
+
+            ASSERT(OpenIrp.Replacement == NULL);
+
+            //
             // Now try to insert the device context into the file object. First
             // exchange the device context pointer. It is not safe to mark it
             // open until the context is set.
@@ -3286,6 +3292,8 @@ Return Value:
                 goto OpenPathEntryEnd;
             }
 
+            ASSERT(OpenIrp.Replacement == NULL);
+
             OpenIrpSent = TRUE;
             NewHandle->DeviceContext = OpenIrp.DeviceContext;
         }
@@ -3328,6 +3336,21 @@ Return Value:
 
         OpenIrpSent = TRUE;
         NewHandle->DeviceContext = OpenIrp.DeviceContext;
+
+        //
+        // If the caller actually wanted to replace this object with something
+        // else, overwrite the handle. Directories cannot be replaced,
+        // since they are too heavily involved with their path entries, which
+        // do not get overwritten.
+        //
+
+        if (OpenIrp.Replacement != NULL) {
+
+            ASSERT(FileObject->Properties.Type != IoObjectRegularDirectory);
+
+            IopOverwriteIoHandle(NewHandle, OpenIrp.Replacement);
+        }
+
         break;
 
     case IoObjectPipe:
@@ -3593,7 +3616,12 @@ Return Value:
     PFILE_OBJECT FileObject;
     KSTATUS Status;
 
-    FileObject = IoHandle->FileObject;
+    //
+    // Use the file object in the path entry rather than the I/O handle so that
+    // opens and closes are balanced.
+    //
+
+    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
     switch (FileObject->Properties.Type) {
     case IoObjectRegularFile:
     case IoObjectRegularDirectory:
@@ -3666,8 +3694,8 @@ Return Value:
     // path entry, release the reference on the one in the handle.
     //
 
-    if (FileObject != IoHandle->PathPoint.PathEntry->FileObject) {
-        IopFileObjectReleaseReference(FileObject);
+    if (FileObject != IoHandle->FileObject) {
+        IopFileObjectReleaseReference(IoHandle->FileObject);
     }
 
     //

@@ -39,6 +39,7 @@ Environment:
 #define SPECIAL_DEVICE_FULL_NAME "full"
 #define SPECIAL_DEVICE_RANDOM_NAME "random"
 #define SPECIAL_DEVICE_URANDOM_NAME "urandom"
+#define SPECIAL_DEVICE_CURRENT_TERMINAL_NAME "tty"
 
 #define SPECIAL_URANDOM_BUFFER_SIZE 2048
 
@@ -51,8 +52,52 @@ typedef enum _SPECIAL_DEVICE_TYPE {
     SpecialDeviceNull,
     SpecialDeviceZero,
     SpecialDeviceFull,
-    SpecialDevicePseudoRandom
+    SpecialDevicePseudoRandom,
+    SpecialDeviceCurrentTerminal,
 } SPECIAL_DEVICE_TYPE, *PSPECIAL_DEVICE_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the context for a pseudo-random device.
+
+Members:
+
+    FortunaContext - Stores a pointer to the fortuna context.
+
+    Lock - Stores the lock protecting the Fortuna context.
+
+    Interface - Stores a pointer to the pseudo-random source interface.
+
+    InterfaceRegistered - Stores a pointer indicating whether or not the
+        interface has been registered.
+
+--*/
+
+typedef struct _SPECIAL_PSEUDO_RANDOM_DEVICE {
+    FORTUNA_CONTEXT FortunaContext;
+    KSPIN_LOCK Lock;
+    INTERFACE_PSEUDO_RANDOM_SOURCE Interface;
+    BOOL InterfaceRegistered;
+} SPECIAL_PSEUDO_RANDOM_DEVICE, *PSPECIAL_PSEUDO_RANDOM_DEVICE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the context for the current terminal device.
+
+Members:
+
+    SourceHandle - Stores the open handle to the current terminal. This must
+        stay open as long as the special device is open.
+
+--*/
+
+typedef struct _SPECIAL_CURRENT_TERMINAL_HANDLE {
+    PIO_HANDLE SourceHandle;
+} SPECIAL_CURRENT_TERMINAL_HANDLE, *PSPECIAL_CURRENT_TERMINAL_HANDLE;
 
 /*++
 
@@ -68,14 +113,7 @@ Members:
 
     ReferenceCount - Stores the number of references held on the device.
 
-    FortunaContext - Stores a pointer to the fortuna context.
-
-    Lock - Stores the lock protecting the Fortuna context.
-
-    Interface - Stores a pointer to the pseudo-random source interface.
-
-    InterfaceRegistered - Stores a pointer indicating whether or not the
-        interface has been registered.
+    U - Stores the union of pointers to more specific special device contexts.
 
 --*/
 
@@ -83,10 +121,10 @@ typedef struct _SPECIAL_DEVICE {
     SPECIAL_DEVICE_TYPE Type;
     SYSTEM_TIME CreationTime;
     volatile ULONG ReferenceCount;
-    PFORTUNA_CONTEXT FortunaContext;
-    KSPIN_LOCK Lock;
-    PINTERFACE_PSEUDO_RANDOM_SOURCE Interface;
-    BOOL InterfaceRegistered;
+    union {
+        PSPECIAL_PSEUDO_RANDOM_DEVICE PseudoRandom;
+    } U;
+
 } SPECIAL_DEVICE, *PSPECIAL_DEVICE;
 
 //
@@ -307,6 +345,7 @@ Return Value:
     UINTN AllocationSize;
     PSPECIAL_DEVICE Context;
     SPECIAL_DEVICE_TYPE DeviceType;
+    PSPECIAL_PSEUDO_RANDOM_DEVICE PseudoRandom;
     KSTATUS Status;
 
     Context = NULL;
@@ -339,6 +378,12 @@ Return Value:
 
         DeviceType = SpecialDevicePseudoRandom;
 
+    } else if (IoAreDeviceIdsEqual(DeviceId,
+                                   SPECIAL_DEVICE_CURRENT_TERMINAL_NAME) !=
+               FALSE) {
+
+        DeviceType = SpecialDeviceCurrentTerminal;
+
     } else {
         RtlDebugPrint("Special device %s not recognized.\n", DeviceId);
         Status = STATUS_NOT_SUPPORTED;
@@ -351,8 +396,8 @@ Return Value:
     //
 
     if (DeviceType == SpecialDevicePseudoRandom) {
-        AllocationSize = sizeof(SPECIAL_DEVICE) + sizeof(FORTUNA_CONTEXT) +
-                         sizeof(INTERFACE_PSEUDO_RANDOM_SOURCE);
+        AllocationSize = sizeof(SPECIAL_DEVICE) +
+                         sizeof(SPECIAL_PSEUDO_RANDOM_DEVICE);
 
         Context = MmAllocateNonPagedPool(AllocationSize,
                                          SPECIAL_DEVICE_ALLOCATION_TAG);
@@ -363,20 +408,18 @@ Return Value:
         }
 
         RtlZeroMemory(Context, AllocationSize);
-        Context->FortunaContext = (PFORTUNA_CONTEXT)(Context + 1);
-        CyFortunaInitialize(Context->FortunaContext,
+        PseudoRandom = (PSPECIAL_PSEUDO_RANDOM_DEVICE)(Context + 1);
+        Context->U.PseudoRandom = PseudoRandom;
+        CyFortunaInitialize(&(PseudoRandom->FortunaContext),
                             HlQueryTimeCounter,
                             HlQueryTimeCounterFrequency());
 
-        KeInitializeSpinLock(&(Context->Lock));
-        Context->Interface =
-                (PINTERFACE_PSEUDO_RANDOM_SOURCE)(Context->FortunaContext + 1);
-
-        RtlCopyMemory(Context->Interface,
+        KeInitializeSpinLock(&(PseudoRandom->Lock));
+        RtlCopyMemory(&(PseudoRandom->Interface),
                       &SpecialPseudoRandomInterfaceTemplate,
                       sizeof(INTERFACE_PSEUDO_RANDOM_SOURCE));
 
-        Context->Interface->DeviceToken = Context;
+        PseudoRandom->Interface.DeviceToken = Context;
 
     //
     // Create a regular special device.
@@ -539,21 +582,63 @@ Return Value:
 {
 
     PSPECIAL_DEVICE Device;
+    PSPECIAL_CURRENT_TERMINAL_HANDLE HandleContext;
+    KSTATUS Status;
 
     Device = (PSPECIAL_DEVICE)DeviceContext;
-    SpecialDeviceAddReference(Device);
-
-    ASSERT(Irp->U.Open.IoState != NULL);
 
     //
-    // The data sink devices are always ready for I/O.
+    // For the current terminal, open the actual controlling terminal, save
+    // that handle in some context, and set it as the I/O replacement.
     //
 
-    IoSetIoObjectState(Irp->U.Open.IoState,
-                       POLL_EVENT_IN | POLL_EVENT_OUT,
-                       TRUE);
+    if (Device->Type == SpecialDeviceCurrentTerminal) {
+        HandleContext = MmAllocateNonPagedPool(
+                                       sizeof(SPECIAL_CURRENT_TERMINAL_HANDLE),
+                                       SPECIAL_DEVICE_ALLOCATION_TAG);
 
-    IoCompleteIrp(SpecialDriver, Irp, STATUS_SUCCESS);
+        if (HandleContext == NULL) {
+            IoCompleteIrp(SpecialDriver, Irp, STATUS_INSUFFICIENT_RESOURCES);
+            return;
+        }
+
+        RtlZeroMemory(HandleContext, sizeof(SPECIAL_CURRENT_TERMINAL_HANDLE));
+        Status = IoOpenControllingTerminal(&(HandleContext->SourceHandle));
+        Irp->U.Open.Replacement = HandleContext->SourceHandle;
+        if (!KSUCCESS(Status)) {
+            MmFreeNonPagedPool(HandleContext);
+            HandleContext = NULL;
+
+        } else {
+
+            ASSERT(HandleContext->SourceHandle != NULL);
+
+            SpecialDeviceAddReference(Device);
+        }
+
+        Irp->U.Open.DeviceContext = HandleContext;
+        IoCompleteIrp(SpecialDriver, Irp, Status);
+
+    //
+    // Open a data sink device.
+    //
+
+    } else {
+        SpecialDeviceAddReference(Device);
+
+        ASSERT(Irp->U.Open.IoState != NULL);
+
+        //
+        // The data sink devices are always ready for I/O.
+        //
+
+        IoSetIoObjectState(Irp->U.Open.IoState,
+                           POLL_EVENT_IN | POLL_EVENT_OUT,
+                           TRUE);
+
+        IoCompleteIrp(SpecialDriver, Irp, STATUS_SUCCESS);
+    }
+
     return;
 }
 
@@ -590,10 +675,24 @@ Return Value:
 {
 
     PSPECIAL_DEVICE Device;
+    PSPECIAL_CURRENT_TERMINAL_HANDLE HandleContext;
+    KSTATUS Status;
 
     Device = (PSPECIAL_DEVICE)DeviceContext;
-    SpecialDeviceReleaseReference(Device);
-    IoCompleteIrp(SpecialDriver, Irp, STATUS_SUCCESS);
+    if (Device->Type == SpecialDeviceCurrentTerminal) {
+        HandleContext = Irp->U.Close.DeviceContext;
+        Status = IoClose(HandleContext->SourceHandle);
+        MmFreeNonPagedPool(HandleContext);
+
+    } else {
+        Status = STATUS_SUCCESS;
+    }
+
+    if (KSUCCESS(Status)) {
+        SpecialDeviceReleaseReference(Device);
+    }
+
+    IoCompleteIrp(SpecialDriver, Irp, Status);
     return;
 }
 
@@ -707,6 +806,7 @@ Return Value:
         ASSERT(FALSE);
 
         Status = STATUS_FILE_CORRUPT;
+        break;
     }
 
     IoCompleteIrp(SpecialDriver, Irp, Status);
@@ -905,28 +1005,30 @@ Return Value:
 
 {
 
+    PSPECIAL_PSEUDO_RANDOM_DEVICE PseudoRandom;
     KSTATUS Status;
 
     ASSERT(Device->Type == SpecialDevicePseudoRandom);
 
-    if (Device->InterfaceRegistered != FALSE) {
+    PseudoRandom = Device->U.PseudoRandom;
+    if (PseudoRandom->InterfaceRegistered != FALSE) {
         return STATUS_SUCCESS;
     }
 
     Status = IoCreateInterface(&SpecialPseudoRandomInterfaceUuid,
                                Irp->Device,
-                               Device->Interface,
+                               &(PseudoRandom->Interface),
                                sizeof(INTERFACE_PSEUDO_RANDOM_SOURCE));
 
     if (KSUCCESS(Status)) {
-        Device->InterfaceRegistered = TRUE;
+        PseudoRandom->InterfaceRegistered = TRUE;
     }
 
     //
     // Seed the generator with at least this somewhat random point in time.
     //
 
-    SpecialPseudoRandomAddTimePointEntropy(Device->Interface);
+    SpecialPseudoRandomAddTimePointEntropy(&(PseudoRandom->Interface));
     return Status;
 }
 
@@ -956,20 +1058,22 @@ Return Value:
 
 {
 
+    PSPECIAL_PSEUDO_RANDOM_DEVICE PseudoRandom;
     KSTATUS Status;
 
     ASSERT(Device->Type == SpecialDevicePseudoRandom);
 
-    if (Device->InterfaceRegistered == FALSE) {
+    PseudoRandom = Device->U.PseudoRandom;
+    if (PseudoRandom->InterfaceRegistered == FALSE) {
         return STATUS_SUCCESS;
     }
 
     Status = IoDestroyInterface(&SpecialPseudoRandomInterfaceUuid,
                                 Irp->Device,
-                                Device->Interface);
+                                &(PseudoRandom->Interface));
 
     if (KSUCCESS(Status)) {
-        Device->InterfaceRegistered = FALSE;
+        PseudoRandom->InterfaceRegistered = FALSE;
     }
 
     return Status;
@@ -1007,6 +1111,7 @@ Return Value:
     PIO_BUFFER IoBuffer;
     UINTN IoBufferOffset;
     RUNLEVEL OldRunLevel;
+    PSPECIAL_PSEUDO_RANDOM_DEVICE PseudoRandom;
     UINTN Size;
     KSTATUS Status;
 
@@ -1029,7 +1134,8 @@ Return Value:
         goto PerformPseudoRandomIoEnd;
     }
 
-    Fortuna = Device->FortunaContext;
+    PseudoRandom = Device->U.PseudoRandom;
+    Fortuna = &(PseudoRandom->FortunaContext);
     while (BytesRemaining != 0) {
         Size = SPECIAL_URANDOM_BUFFER_SIZE;
         if (Size > BytesRemaining) {
@@ -1048,16 +1154,16 @@ Return Value:
             }
 
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-            KeAcquireSpinLock(&(Device->Lock));
+            KeAcquireSpinLock(&(PseudoRandom->Lock));
             CyFortunaAddEntropy(Fortuna, Buffer, Size);
-            KeReleaseSpinLock(&(Device->Lock));
+            KeReleaseSpinLock(&(PseudoRandom->Lock));
             KeLowerRunLevel(OldRunLevel);
 
         } else {
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-            KeAcquireSpinLock(&(Device->Lock));
+            KeAcquireSpinLock(&(PseudoRandom->Lock));
             CyFortunaGetRandomBytes(Fortuna, Buffer, Size);
-            KeReleaseSpinLock(&(Device->Lock));
+            KeReleaseSpinLock(&(PseudoRandom->Lock));
             KeLowerRunLevel(OldRunLevel);
             Status = MmCopyIoBufferData(IoBuffer,
                                         Buffer,
@@ -1120,15 +1226,17 @@ Return Value:
 
     PSPECIAL_DEVICE Device;
     RUNLEVEL OldRunLevel;
+    PSPECIAL_PSEUDO_RANDOM_DEVICE PseudoRandom;
 
     Device = Interface->DeviceToken;
 
     ASSERT(Device->Type == SpecialDevicePseudoRandom);
 
+    PseudoRandom = Device->U.PseudoRandom;
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-    KeAcquireSpinLock(&(Device->Lock));
-    CyFortunaAddEntropy(Device->FortunaContext, Data, Length);
-    KeReleaseSpinLock(&(Device->Lock));
+    KeAcquireSpinLock(&(PseudoRandom->Lock));
+    CyFortunaAddEntropy(&(PseudoRandom->FortunaContext), Data, Length);
+    KeReleaseSpinLock(&(PseudoRandom->Lock));
     KeLowerRunLevel(OldRunLevel);
     return;
 }
@@ -1163,16 +1271,21 @@ Return Value:
     ULONGLONG Counter;
     PSPECIAL_DEVICE Device;
     RUNLEVEL OldRunLevel;
+    PSPECIAL_PSEUDO_RANDOM_DEVICE PseudoRandom;
 
     Device = Interface->DeviceToken;
 
     ASSERT(Device->Type == SpecialDevicePseudoRandom);
 
+    PseudoRandom = Device->U.PseudoRandom;
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     Counter = HlQueryProcessorCounter();
-    KeAcquireSpinLock(&(Device->Lock));
-    CyFortunaAddEntropy(Device->FortunaContext, &Counter, sizeof(ULONGLONG));
-    KeReleaseSpinLock(&(Device->Lock));
+    KeAcquireSpinLock(&(PseudoRandom->Lock));
+    CyFortunaAddEntropy(&(PseudoRandom->FortunaContext),
+                        &Counter,
+                        sizeof(ULONGLONG));
+
+    KeReleaseSpinLock(&(PseudoRandom->Lock));
     KeLowerRunLevel(OldRunLevel);
     return;
 }
@@ -1210,15 +1323,17 @@ Return Value:
 
     PSPECIAL_DEVICE Device;
     RUNLEVEL OldRunLevel;
+    PSPECIAL_PSEUDO_RANDOM_DEVICE PseudoRandom;
 
     Device = Interface->DeviceToken;
 
     ASSERT(Device->Type == SpecialDevicePseudoRandom);
 
+    PseudoRandom = Device->U.PseudoRandom;
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-    KeAcquireSpinLock(&(Device->Lock));
-    CyFortunaGetRandomBytes(Device->FortunaContext, Data, Length);
-    KeReleaseSpinLock(&(Device->Lock));
+    KeAcquireSpinLock(&(PseudoRandom->Lock));
+    CyFortunaGetRandomBytes(&(PseudoRandom->FortunaContext), Data, Length);
+    KeReleaseSpinLock(&(PseudoRandom->Lock));
     KeLowerRunLevel(OldRunLevel);
     return;
 }
@@ -1314,7 +1429,7 @@ Return Value:
 
 {
 
-    ASSERT(Device->InterfaceRegistered == FALSE);
+    ASSERT(Device->U.PseudoRandom->InterfaceRegistered == FALSE);
 
     if (Device->Type == SpecialDevicePseudoRandom) {
         MmFreeNonPagedPool(Device);

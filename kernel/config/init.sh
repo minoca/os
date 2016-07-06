@@ -57,15 +57,17 @@ if ! test -c "$WORLD/dev/null"; then
     touch "$WORLD/dev/zero"
     touch "$WORLD/dev/urandom"
     touch "$WORLD/dev/console"
+    touch "$WORLD/dev/tty"
     mkdir -p "$WORLD/dev/Volume"
-    mkdir -p "$WORLD/dev/tty"
+    mkdir -p "$WORLD/dev/Terminal"
     mount --bind "/Device/null" "$WORLD/dev/null"
     mount --bind "/Device/full" "$WORLD/dev/full"
     mount --bind "/Device/zero" "$WORLD/dev/zero"
     mount --bind "/Device/urandom" "$WORLD/dev/urandom"
+    mount --bind "/Device/tty" "$WORLD/dev/tty"
     mount --bind "/Terminal/Slave0" "$WORLD/dev/console"
     mount --bind "/Volume" "$WORLD/dev/Volume"
-    mount --bind "/Terminal" "$WORLD/dev/tty"
+    mount --bind "/Terminal" "$WORLD/dev/Terminal"
 fi
 
 ##

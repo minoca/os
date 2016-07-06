@@ -50,6 +50,61 @@ Environment:
 // ------------------------------------------------------------------ Functions
 //
 
+KERNEL_API
+ULONG
+IoGetIoHandleAccessPermissions (
+    PIO_HANDLE IoHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the access permissions for the given I/O handle.
+
+Arguments:
+
+    IoHandle - Supplies a pointer to an I/O handle.
+
+Return Value:
+
+    Returns the access permissions for the given I/O handle.
+
+--*/
+
+{
+
+    return IoHandle->Access;
+}
+
+KERNEL_API
+ULONG
+IoGetIoHandleOpenFlags (
+    PIO_HANDLE IoHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current open flags for a given I/O handle. Some
+    of these flags can change.
+
+Arguments:
+
+    IoHandle - Supplies a pointer to an I/O handle.
+
+Return Value:
+
+    Returns the current open flags for the I/O handle.
+
+--*/
+
+{
+
+    return IoHandle->OpenFlags;
+}
+
 VOID
 IoIoHandleAddReference (
     PIO_HANDLE IoHandle
@@ -132,6 +187,73 @@ Return Value:
     return Status;
 }
 
+PIMAGE_SECTION_LIST
+IoGetImageSectionListFromIoHandle (
+    PIO_HANDLE IoHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the image section list for the given I/O handle.
+
+Arguments:
+
+    IoHandle - Supplies a pointer to an I/O handle.
+
+Return Value:
+
+    Returns a pointer to the I/O handles image section list or NULL on failure.
+
+--*/
+
+{
+
+    PFILE_OBJECT FileObject;
+
+    FileObject = IoHandle->FileObject;
+    return IopGetImageSectionListFromFileObject(FileObject);
+}
+
+BOOL
+IoIoHandleIsCacheable (
+    PIO_HANDLE IoHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not data for the I/O object specified by
+    the given handle is cached in the page cache.
+
+Arguments:
+
+    IoHandle - Supplies a pointer to an I/O handle.
+
+Return Value:
+
+    Returns TRUE if the I/O handle's object is cached or FALSE otherwise.
+
+--*/
+
+{
+
+    PFILE_OBJECT FileObject;
+
+    //
+    // The I/O handle is deemed cacheable if the file object is cacheable.
+    //
+
+    FileObject = IoHandle->FileObject;
+    if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
 KSTATUS
 IopCreateIoHandle (
     PIO_HANDLE *Handle
@@ -191,126 +313,56 @@ CreateIoHandleEnd:
     return Status;
 }
 
-PIMAGE_SECTION_LIST
-IoGetImageSectionListFromIoHandle (
-    PIO_HANDLE IoHandle
+VOID
+IopOverwriteIoHandle (
+    PIO_HANDLE Destination,
+    PIO_HANDLE IoSource
     )
 
 /*++
 
 Routine Description:
 
-    This routine gets the image section list for the given I/O handle.
+    This routine takes the contents of the given source handle and overwrites
+    the destination handle with it. I/O actions performed on the destination
+    handle appear as if they were done to the I/O object of the source handle.
+    This replacement does not replace any information about the original path
+    opened in the destination. It also does not modify the access and open
+    flags in the destination. This routine is not thread safe.
 
 Arguments:
 
-    IoHandle - Supplies a pointer to an I/O handle.
+    Destination - Supplies a pointer to the I/O handle that should magically
+        redirect elsewhere.
+
+    IoSource - Supplies a pointer to the I/O handle that contains the
+        underlying I/O object the destination should interact with.
 
 Return Value:
 
-    Returns a pointer to the I/O handles image section list or NULL on failure.
+    None.
 
 --*/
 
 {
 
-    PFILE_OBJECT FileObject;
-
-    FileObject = IoHandle->FileObject;
-    return IopGetImageSectionListFromFileObject(FileObject);
-}
-
-KERNEL_API
-ULONG
-IoGetIoHandleAccessPermissions (
-    PIO_HANDLE IoHandle
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the access permissions for the given I/O handle.
-
-Arguments:
-
-    IoHandle - Supplies a pointer to an I/O handle.
-
-Return Value:
-
-    Returns the access permissions for the given I/O handle.
-
---*/
-
-{
-
-    return IoHandle->Access;
-}
-
-KERNEL_API
-ULONG
-IoGetIoHandleOpenFlags (
-    PIO_HANDLE IoHandle
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the current open flags for a given I/O handle. Some
-    of these flags can change.
-
-Arguments:
-
-    IoHandle - Supplies a pointer to an I/O handle.
-
-Return Value:
-
-    Returns the current open flags for the I/O handle.
-
---*/
-
-{
-
-    return IoHandle->OpenFlags;
-}
-
-BOOL
-IoIoHandleIsCacheable (
-    PIO_HANDLE IoHandle
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines whether or not data for the I/O object specified by
-    the given handle is cached in the page cache.
-
-Arguments:
-
-    IoHandle - Supplies a pointer to an I/O handle.
-
-Return Value:
-
-    Returns TRUE if the I/O handle's object is cached or FALSE otherwise.
-
---*/
-
-{
-
-    PFILE_OBJECT FileObject;
+    PFILE_OBJECT OldFileObject;
 
     //
-    // The I/O handle is deemed cacheable if the file object is cacheable.
+    // The destination I/O handle really shouldn't be handed to anyone yet,
+    // since I/O might get wonky during the switch.
     //
 
-    FileObject = IoHandle->FileObject;
-    if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
-        return TRUE;
+    ASSERT(Destination->ReferenceCount == 1);
+
+    OldFileObject = Destination->FileObject;
+    Destination->FileObject = IoSource->FileObject;
+    if (OldFileObject != Destination->PathPoint.PathEntry->FileObject) {
+        IopFileObjectReleaseReference(OldFileObject);
     }
 
-    return FALSE;
+    IopFileObjectAddReference(IoSource->FileObject);
+    return;
 }
 
 //

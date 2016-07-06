@@ -1863,6 +1863,13 @@ Members:
         pointer will be passed to the device to uniquely identify it for
         reads, writes, closes, and other operations.
 
+    Replacement - Stores an optional pointer to an open handle whose underlying
+        object should actually be responsible for performing the I/O. This is
+        generally only used when opening "special" objects that magically
+        redirect elsewhere. The system will not close this handle, as it is
+        expected that this replacement handle remain open as long as the new
+        handle created remains open.
+
 --*/
 
 typedef struct _IRP_OPEN {
@@ -1871,6 +1878,7 @@ typedef struct _IRP_OPEN {
     ULONG DesiredAccess;
     ULONG OpenFlags;
     PVOID DeviceContext;
+    PIO_HANDLE Replacement;
 } IRP_OPEN, *PIRP_OPEN;
 
 /*++
@@ -5094,6 +5102,29 @@ Arguments:
 
     TerminalMaster - Supplies a pointer where the I/O handle representing the
         master side of the local console terminal will be returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KERNEL_API
+KSTATUS
+IoOpenControllingTerminal (
+    PIO_HANDLE *IoHandle
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to open the current process' controlling terminal.
+
+Arguments:
+
+    IoHandle - Supplies a pointer where the open I/O handle will be returned on
+        success.
 
 Return Value:
 

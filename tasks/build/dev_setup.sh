@@ -75,6 +75,7 @@ libiconv
 libncurses
 libreadline
 libopenssl
+libpcre
 ca-certificates"
 
 if ! [ -d $PKGROOT ]; then

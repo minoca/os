@@ -33,10 +33,8 @@ DBCM0001=bc27gpio.drv
 DDEVREMCHLD=devrem.drv
 DDEVREMROOT=devrem.drv
 DDWC0000=dwhci.drv
-Dfull=special.drv
 DGOO0001=goec.drv
 DKTestDevice=ktestdrv.drv
-Dnull=special.drv
 
 # PNP device IDs
 DPNP0000=null.drv
@@ -93,6 +91,9 @@ DVID_8619&PID_0650=onering.drv
 DVID_8619&PID_0651=onering.drv
 DVID_8619&PID_0652=onering.drv
 
+Dfull=special.drv
+Dnull=special.drv
+Dtty=special.drv
 Durandom=special.drv
 Dzero=special.drv
 
