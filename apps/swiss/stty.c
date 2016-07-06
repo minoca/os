@@ -443,7 +443,7 @@ Return Value:
     struct winsize WindowSize;
 
     Options = 0;
-    Terminal = STDIN_FILENO;
+    Terminal = -1;
 
     //
     // Don't print error message for unknown options (as getopt would see
@@ -526,6 +526,17 @@ Return Value:
         SwPrintError(0, NULL, "Options cannot be specified when printing");
         Status = 1;
         goto MainEnd;
+    }
+
+    //
+    // If the terminal was not explicitly set, try to open it.
+    //
+
+    if (Terminal < 0) {
+        Terminal = open("/dev/tty", O_RDWR);
+        if (Terminal < 0) {
+            Terminal = STDIN_FILENO;
+        }
     }
 
     Status = tcgetattr(Terminal, &Termios);
