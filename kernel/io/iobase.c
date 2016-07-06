@@ -1082,7 +1082,13 @@ Return Value:
 
     PFILE_OBJECT FileObject;
     ULONGLONG LocalFileSize;
+    PPAGING_IO_HANDLE PagingHandle;
     KSTATUS Status;
+
+    if (Handle->HandleType == IoHandleTypePaging) {
+        PagingHandle = (PPAGING_IO_HANDLE)Handle;
+        Handle = PagingHandle->IoHandle;
+    }
 
     FileObject = Handle->FileObject;
     READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
@@ -4482,12 +4488,18 @@ Return Value:
     PDEVICE Device;
     PFILE_OBJECT FileObject;
     PIRP Irp;
+    PPAGING_IO_HANDLE PagingHandle;
     KSTATUS Status;
 
     Irp = NULL;
     Status = IoGetDevice(Handle, &Device);
     if (!KSUCCESS(Status)) {
         goto GetBlockInformationEnd;
+    }
+
+    if (Handle->HandleType == IoHandleTypePaging) {
+        PagingHandle = (PPAGING_IO_HANDLE)Handle;
+        Handle = PagingHandle->IoHandle;
     }
 
     FileObject = Handle->FileObject;
