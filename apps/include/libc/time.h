@@ -71,25 +71,6 @@ extern "C" {
 
 Structure Description:
 
-    This structure stores time in a form more accurate than one second.
-
-Members:
-
-    tv_sec - Stores the count of seconds.
-
-    tv_nsec - Stores the count of nanoseconds.
-
---*/
-
-struct timespec {
-    time_t tv_sec;
-    long tv_nsec;
-};
-
-/*++
-
-Structure Description:
-
     This structure stores information about an interval timer.
 
 Members:

@@ -80,7 +80,8 @@ ULONGLONG PsInitialThreadPointer = X86_INITIAL_THREAD_POINTER;
 //
 
 ULONG
-PsDispatchPendingSignalsOnCurrentThread (
+PsDequeuePendingSignal (
+    PSIGNAL_PARAMETERS SignalParameters,
     PTRAP_FRAME TrapFrame
     )
 
@@ -88,10 +89,13 @@ PsDispatchPendingSignalsOnCurrentThread (
 
 Routine Description:
 
-    This routine dispatches any pending signals that should be run on the
-    current thread.
+    This routine dequeues the first signal in the thread or process signal mask
+    of the current thread that is not handled by any default processing.
 
 Arguments:
+
+    SignalParameters - Supplies a pointer to a caller-allocated structure where
+        the signal parameter information might get returned.
 
     TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
         is not destined for user mode, this function exits immediately.
@@ -108,7 +112,6 @@ Return Value:
 
     BOOL SignalHandled;
     ULONG SignalNumber;
-    SIGNAL_PARAMETERS SignalParameters;
 
     //
     // If the trap frame is not destined for user mode, then forget it.
@@ -119,16 +122,15 @@ Return Value:
     }
 
     do {
-        SignalNumber = PspDequeuePendingSignal(&SignalParameters, TrapFrame);
+        SignalNumber = PspDequeuePendingSignal(SignalParameters, TrapFrame);
         if (SignalNumber == -1) {
-            return -1;
+            break;
         }
 
         SignalHandled = PspSignalAttemptDefaultProcessing(SignalNumber);
 
     } while (SignalHandled != FALSE);
 
-    PsApplySynchronousSignal(TrapFrame, &SignalParameters);
     return SignalNumber;
 }
 

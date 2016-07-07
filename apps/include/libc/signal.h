@@ -406,6 +406,25 @@ typedef int sig_atomic_t;
 
 typedef unsigned long long sigset_t;
 
+/*++
+
+Structure Description:
+
+    This structure stores time in a form more accurate than one second.
+
+Members:
+
+    tv_sec - Stores the count of seconds.
+
+    tv_nsec - Stores the count of nanoseconds.
+
+--*/
+
+struct timespec {
+    time_t tv_sec;
+    long tv_nsec;
+};
+
 //
 // Define the type that is sent as a parameter with real time signals. It's
 // always at least as big as the larger of an integer and a pointer.
@@ -947,7 +966,7 @@ Return Value:
 LIBC_API
 int
 sigsuspend (
-    sigset_t *SignalMask
+    const sigset_t *SignalMask
     );
 
 /*++
@@ -966,6 +985,106 @@ Return Value:
 
     -1 always. A return rather negatively is thought of as a failure of the
     function. The errno variable will be set to indicate the "error".
+
+--*/
+
+LIBC_API
+int
+sigwait (
+    const sigset_t *SignalSet,
+    int *SignalNumber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine waits for a signal from the given set and returns the number
+    of the recieved signal.
+
+Arguments:
+
+    SignalSet - Supplies a pointer to a set of signals on which to wait. This
+        set of signals shall have been blocked prior to calling this routine.
+
+    SignalNumber - Supplies a pointer that receives the signal number of the
+        received signal.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+LIBC_API
+int
+sigwaitinfo (
+    const sigset_t *SignalSet,
+    siginfo_t *SignalInformation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine waits for a signal from the given set and returns the signal
+    information for the received signal. If an unblocked signal outside the
+    given set arrives, this routine will return EINTR.
+
+Arguments:
+
+    SignalSet - Supplies a pointer to a set of signals on which to wait. This
+        set of signals shall have been blocked prior to calling this routine.
+
+    SignalInformation - Supplies an optional pointer that receives the signal
+        information for the selected singal.
+
+Return Value:
+
+    The selected signal number on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+LIBC_API
+int
+sigtimedwait (
+    const sigset_t *SignalSet,
+    siginfo_t *SignalInformation,
+    const struct timespec *Timeout
+    );
+
+/*++
+
+Routine Description:
+
+    This routine waits for a signal from the given set and returns the signal
+    information for the received signal. If the timeout is reached without a
+    signal, then the routine will fail with EAGAIN set in errno. If an
+    unblocked signal outside the given set arrives, this routine will return
+    EINTR.
+
+Arguments:
+
+    SignalSet - Supplies a pointer to a set of signals on which to wait. This
+        set of signals shall have been blocked prior to calling this routine.
+
+    SignalInformation - Supplies an optional pointer that receives the signal
+        information for the selected singal.
+
+    Timeout - Supplies an optional timeout interval to wait for one of the set
+        of signals to become pending. If no signal becomes set within the
+        timeout interval EAGAIN will be returned. If NULL is supplied, the
+        routine will wait indefinitely for a signal to arrive.
+
+Return Value:
+
+    The selected signal number on success.
+
+    -1 on failure, and errno will be set to contain more information.
 
 --*/
 

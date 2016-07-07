@@ -960,11 +960,20 @@ Return Value:
 
 {
 
+    BOOL ApplySignal;
+    ULONGLONG CurrentTime;
+    ULONGLONG Frequency;
     SIGNAL_SET OriginalMask;
     PSYSTEM_CALL_SUSPEND_EXECUTION Parameters;
+    ULONGLONG PreviousDelayStart;
     PKPROCESS Process;
+    BOOL RestoreOriginalMask;
     ULONG SignalNumber;
+    SIGNAL_PARAMETERS SignalParameters;
+    KSTATUS Status;
     PKTHREAD Thread;
+    ULONGLONG TimeoutInMicroseconds;
+    ULONGLONG TimeoutInMilliseconds;
 
     ASSERT(SystemCallNumber == SystemCallSuspendExecution);
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -973,33 +982,81 @@ Return Value:
     Parameters = (PSYSTEM_CALL_SUSPEND_EXECUTION)SystemCallParameter;
     Thread = KeGetCurrentThread();
     Process = Thread->OwningProcess;
+    RestoreOriginalMask = FALSE;
+    SignalNumber = -1;
+    Status = STATUS_SUCCESS;
 
     //
-    // If specified, install the temporary signal mask for this call and move
-    // the blocked signals to the regular signal list. Synchronize this with
-    // the queueing of signals on this thread. Those operations acquire the
-    // process lock and will read the blocked signal set under that lock. While
-    // the lock is held, replay any blocked signals.
+    // If requested, temporarily modify the signal mask for this call.
     //
 
-    if (Parameters->SetMask != FALSE) {
-        REMOVE_SIGNAL(Parameters->SignalMask, SIGNAL_STOP);
-        REMOVE_SIGNAL(Parameters->SignalMask, SIGNAL_CONTINUE);
-        REMOVE_SIGNAL(Parameters->SignalMask, SIGNAL_KILL);
+    if (Parameters->SignalOperation != SignalMaskOperationNone) {
+
+        //
+        // Stop, kill and continue signals can never be blocked.
+        //
+
+        REMOVE_SIGNAL(Parameters->SignalSet, SIGNAL_STOP);
+        REMOVE_SIGNAL(Parameters->SignalSet, SIGNAL_CONTINUE);
+        REMOVE_SIGNAL(Parameters->SignalSet, SIGNAL_KILL);
+
+        //
+        // Updates must be synchronized with the queueing of signals on this
+        // thread. The operations acquire the process lock and will read and
+        // modify the blocked signal set under that lock. And while the lock is
+        // held, replay any blocked signals.
+        //
+
         KeAcquireQueuedLock(Process->QueuedLock);
         OriginalMask = Thread->BlockedSignals;
-        Thread->BlockedSignals = Parameters->SignalMask;
-        PspRequeueBlockedSignals(Process);
+        switch (Parameters->SignalOperation) {
+        case SignalMaskOperationOverwrite:
+            Thread->BlockedSignals = Parameters->SignalSet;
+            break;
+
+        case SignalMaskOperationClear:
+            REMOVE_SIGNALS_FROM_SET(Thread->BlockedSignals,
+                                    Parameters->SignalSet);
+
+            break;
+
+        case SignalMaskOperationSet:
+            OR_SIGNAL_SETS(Thread->BlockedSignals,
+                           Thread->BlockedSignals,
+                           Parameters->SignalSet);
+
+            break;
+
+        default:
+            Status = STATUS_NOT_IMPLEMENTED;
+            break;
+        }
+
+        //
+        // If something changed, requeue the blocked signals.
+        //
+
+        if (OriginalMask != Thread->BlockedSignals) {
+            PspRequeueBlockedSignals(Process);
+            RestoreOriginalMask = TRUE;
+        }
+
         KeReleaseQueuedLock(Process->QueuedLock);
+        if (!KSUCCESS(Status)) {
+            goto SysSuspendExecutionEnd;
+        }
     }
 
     //
     // Loop until a signal comes in.
     //
 
+    PreviousDelayStart = 0;
+    Frequency = HlQueryTimeCounterFrequency();
+    TimeoutInMilliseconds = Parameters->TimeoutInMilliseconds;
     while (TRUE) {
         PsCheckRuntimeTimers(Thread);
-        SignalNumber = PsDispatchPendingSignals(Thread, TrapFrame);
+        SignalNumber = PsDequeuePendingSignal(&SignalParameters, TrapFrame);
         if (SignalNumber != -1) {
             break;
         }
@@ -1008,20 +1065,92 @@ Return Value:
         // Wake back up when something has changed.
         //
 
-        KeSuspendExecution();
+        if (TimeoutInMilliseconds != SYS_WAIT_TIME_INDEFINITE) {
+
+            //
+            // Adjust the timeout if this is the second time around.
+            //
+
+            CurrentTime = KeGetRecentTimeCounter();
+            if (PreviousDelayStart != 0) {
+                TimeoutInMilliseconds = ((CurrentTime - PreviousDelayStart) *
+                                         MILLISECONDS_PER_SECOND) /
+                                        Frequency;
+            }
+
+            PreviousDelayStart = CurrentTime;
+            TimeoutInMicroseconds = TimeoutInMilliseconds *
+                                    MICROSECONDS_PER_MILLISECOND;
+
+            //
+            // Success on the interruptible wait is actually a timeout.
+            //
+
+            Status = KeDelayExecution(TRUE, FALSE, TimeoutInMicroseconds);
+            if (KSUCCESS(Status)) {
+                Status = STATUS_TIMEOUT;
+                break;
+            }
+
+            if (Status != STATUS_INTERRUPTED) {
+                break;
+            }
+
+        } else {
+            KeSuspendExecution();
+        }
     }
+
+    //
+    // If a signal was dequeued, then decide whether or not to apply it. In the
+    // case where a signal set is temporarily cleared from the blocked list,
+    // only apply signals that are not in the supplied signal set (i.e. signals
+    // that were originally unblocked). In those instances, return an
+    // interrupted status to indicate that it was not one of the signals in the
+    // given set that terminated the suspend.
+    //
+
+    if (SignalNumber != -1) {
+        ApplySignal = TRUE;
+        Status = STATUS_SUCCESS;
+        if (Parameters->SignalOperation == SignalMaskOperationClear) {
+            if (IS_SIGNAL_SET(Parameters->SignalSet, SignalNumber) != FALSE) {
+                ApplySignal = FALSE;
+
+            } else {
+                Status = STATUS_INTERRUPTED;
+            }
+        }
+
+        if (ApplySignal != FALSE) {
+            PsApplySynchronousSignal(TrapFrame, &SignalParameters);
+        }
+
+        if (Parameters->SignalParameters != NULL) {
+            Status = MmCopyToUserMode(Parameters->SignalParameters,
+                                      &SignalParameters,
+                                      sizeof(SIGNAL_PARAMETERS));
+
+            if (!KSUCCESS(Status)) {
+                goto SysSuspendExecutionEnd;
+            }
+        }
+    }
+
+SysSuspendExecutionEnd:
 
     //
     // Potentially restore the original signal mask.
     //
 
-    if (Parameters->SetMask != FALSE) {
+    if (RestoreOriginalMask != FALSE) {
         KeAcquireQueuedLock(Process->QueuedLock);
         Thread->BlockedSignals = OriginalMask;
         PspRequeueBlockedSignals(Process);
         KeReleaseQueuedLock(Process->QueuedLock);
     }
 
+    Parameters->Status = Status;
     return;
 }
 
@@ -1439,6 +1568,45 @@ Return Value:
     }
 
     return Status;
+}
+
+ULONG
+PsDispatchPendingSignalsOnCurrentThread (
+    PTRAP_FRAME TrapFrame
+    )
+
+/*++
+
+Routine Description:
+
+    This routine dispatches any pending signals that should be run on the
+    current thread.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
+        is not destined for user mode, this function exits immediately.
+
+Return Value:
+
+    Returns a signal number if a signal was queued.
+
+    -1 if no signal was dispatched.
+
+--*/
+
+{
+
+    ULONG SignalNumber;
+    SIGNAL_PARAMETERS SignalParameters;
+
+    SignalNumber = PsDequeuePendingSignal(&SignalParameters, TrapFrame);
+    if (SignalNumber == -1) {
+        return -1;
+    }
+
+    PsApplySynchronousSignal(TrapFrame, &SignalParameters);
+    return SignalNumber;
 }
 
 ULONG

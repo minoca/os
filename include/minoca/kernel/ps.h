@@ -2892,6 +2892,35 @@ Return Value:
 
 --*/
 
+ULONG
+PsDequeuePendingSignal (
+    PSIGNAL_PARAMETERS SignalParameters,
+    PTRAP_FRAME TrapFrame
+    );
+
+/*++
+
+Routine Description:
+
+    This routine dequeues the first signal in the thread or process signal mask
+    of the current thread that is not handled by any default processing.
+
+Arguments:
+
+    SignalParameters - Supplies a pointer to a caller-allocated structure where
+        the signal parameter information might get returned.
+
+    TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
+        is not destined for user mode, this function exits immediately.
+
+Return Value:
+
+    Returns a signal number if a signal was queued.
+
+    -1 if no signal was dispatched.
+
+--*/
+
 VOID
 PsApplySynchronousSignal (
     PTRAP_FRAME TrapFrame,

@@ -910,16 +910,28 @@ Structure Description:
 
 Members:
 
-    SetMask - Stores a boolean set by user mode indicating if the kernel should
-        install a temporary signal mask for the duration of this call.
+    SignalOperation - Stores the operation to perform with the signal set: set,
+        clear, overwrite, or none.
 
-    SignalMask - Stores the signal mask to set for the duration of this call.
+    SignalSet - Stores the signal set to apply for the duration of this call as
+        dictated by the signal operation.
+
+    TimeoutInMilliseconds - Stores the timeout in milliseconds the caller
+        should wait. Set to SYS_WAIT_TIME_INDEFINITE to wait forever.
+
+    Status - Stores the status returned by the kernel.
+
+    SignalParameters - Stores an optional pointer where the signal information
+        for the signal that occurred will be returned.
 
 --*/
 
 typedef struct _SYSTEM_CALL_SUSPEND_EXECUTION {
-    BOOL SetMask;
-    SIGNAL_SET SignalMask;
+    SIGNAL_MASK_OPERATION SignalOperation;
+    SIGNAL_SET SignalSet;
+    ULONG TimeoutInMilliseconds;
+    KSTATUS Status;
+    PSIGNAL_PARAMETERS SignalParameters;
 } SYSCALL_STRUCT SYSTEM_CALL_SUSPEND_EXECUTION, *PSYSTEM_CALL_SUSPEND_EXECUTION;
 
 /*++

@@ -994,9 +994,10 @@ Return Value:
 --*/
 
 OS_API
-VOID
+KSTATUS
 OsSuspendExecution (
-    PSIGNAL_SET SignalMask,
+    SIGNAL_MASK_OPERATION SignalOperation,
+    PSIGNAL_SET SignalSet,
     PSIGNAL_PARAMETERS SignalParameters,
     ULONG TimeoutInMilliseconds
     );
@@ -1006,12 +1007,16 @@ OsSuspendExecution (
 Routine Description:
 
     This routine suspends execution of the current thread until a signal comes
-    in.
+    in. The current thread's blocked signal mask can be changed for the
+    duration of the call by providing an operation and a signal set.
 
 Arguments:
 
-    SignalMask - Supplies an optional pointer to a signal mask to set for the
-        duration of this system call.
+    SignalOperation - Supplies the operation to perform with the signal set for
+        the duration of the call: set, clear, overwrite or none.
+
+    SignalSet - Supplies a pointer to the signal set to apply for the duration
+        of this system call as dictated by the signal operation.
 
     SignalParameters - Supplies an optional pointer where the signal
         information for the signal that occurred will be returned.
@@ -1021,7 +1026,15 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS if a signal arrived.
+
+    STATUS_INTERRUPTED on a clear signal operation if a signal that is not in
+    the given set arrived.
+
+    STATUS_TIMEOUT if no signal arrived before the given timeout expires.
+
+    STATUS_INVALID_PARAMETER if no signal set is supplied for an operation
+    other than SignalMaskOperationNone.
 
 --*/
 

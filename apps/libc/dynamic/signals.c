@@ -795,7 +795,11 @@ Return Value:
 
 {
 
-    OsSuspendExecution(NULL, NULL, SYS_WAIT_TIME_INDEFINITE);
+    OsSuspendExecution(SignalMaskOperationNone,
+                       NULL,
+                       NULL,
+                       SYS_WAIT_TIME_INDEFINITE);
+
     errno = EINTR;
     return -1;
 }
@@ -840,7 +844,7 @@ Return Value:
 LIBC_API
 int
 sigsuspend (
-    sigset_t *SignalMask
+    const sigset_t *SignalMask
     )
 
 /*++
@@ -864,7 +868,10 @@ Return Value:
 
 {
 
-    OsSuspendExecution(SignalMask, NULL, SYS_WAIT_TIME_INDEFINITE);
+    OsSuspendExecution(SignalMaskOperationOverwrite,
+                       (PSIGNAL_SET)SignalMask,
+                       NULL,
+                       SYS_WAIT_TIME_INDEFINITE);
 
     //
     // Obviously if execution is back, a signal must have occurred that was
@@ -873,6 +880,194 @@ Return Value:
 
     errno = EINTR;
     return -1;
+}
+
+LIBC_API
+int
+sigwait (
+    const sigset_t *SignalSet,
+    int *SignalNumber
+    )
+
+/*++
+
+Routine Description:
+
+    This routine waits for a signal from the given set and returns the number
+    of the recieved signal.
+
+Arguments:
+
+    SignalSet - Supplies a pointer to a set of signals on which to wait. This
+        set of signals shall have been blocked prior to calling this routine.
+
+    SignalNumber - Supplies a pointer that receives the signal number of the
+        received signal.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    KSTATUS KernelStatus;
+    SIGNAL_PARAMETERS SignalParameters;
+
+    if (SignalNumber == NULL) {
+        return EINVAL;
+    }
+
+    do {
+        KernelStatus = OsSuspendExecution(SignalMaskOperationClear,
+                                          (PSIGNAL_SET)SignalSet,
+                                          &SignalParameters,
+                                          SYS_WAIT_TIME_INDEFINITE);
+
+    } while (KernelStatus == STATUS_INTERRUPTED);
+
+    if (KSUCCESS(KernelStatus)) {
+        *SignalNumber = SignalParameters.SignalNumber;
+    }
+
+    return ClConvertKstatusToErrorNumber(KernelStatus);
+}
+
+LIBC_API
+int
+sigwaitinfo (
+    const sigset_t *SignalSet,
+    siginfo_t *SignalInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine waits for a signal from the given set and returns the signal
+    information for the received signal. If an unblocked signal outside the
+    given set arrives, this routine will return EINTR.
+
+Arguments:
+
+    SignalSet - Supplies a pointer to a set of signals on which to wait. This
+        set of signals shall have been blocked prior to calling this routine.
+
+    SignalInformation - Supplies an optional pointer that receives the signal
+        information for the selected singal.
+
+Return Value:
+
+    The selected signal number on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    return sigtimedwait(SignalSet, SignalInformation, NULL);
+}
+
+LIBC_API
+int
+sigtimedwait (
+    const sigset_t *SignalSet,
+    siginfo_t *SignalInformation,
+    const struct timespec *Timeout
+    )
+
+/*++
+
+Routine Description:
+
+    This routine waits for a signal from the given set and returns the signal
+    information for the received signal. If the timeout is reached without a
+    signal, then the routine will fail with EAGAIN set in errno. If an
+    unblocked signal outside the given set arrives, this routine will return
+    EINTR.
+
+Arguments:
+
+    SignalSet - Supplies a pointer to a set of signals on which to wait. This
+        set of signals shall have been blocked prior to calling this routine.
+
+    SignalInformation - Supplies an optional pointer that receives the signal
+        information for the selected singal.
+
+    Timeout - Supplies an optional timeout interval to wait for one of the set
+        of signals to become pending. If no signal becomes set within the
+        timeout interval EAGAIN will be returned. If NULL is supplied, the
+        routine will wait indefinitely for a signal to arrive.
+
+Return Value:
+
+    The selected signal number on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    KSTATUS KernelStatus;
+    INT SignalNumber;
+    SIGNAL_PARAMETERS SignalParameters;
+    ULONG TimeoutInMilliseconds;
+
+    TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
+    if (Timeout != NULL) {
+        if ((Timeout->tv_sec < 0) ||
+            (Timeout->tv_nsec < 0) ||
+            (Timeout->tv_nsec >= NANOSECONDS_PER_SECOND)){
+
+            errno = EINVAL;
+            return -1;
+        }
+
+        if (Timeout->tv_sec <=
+            ((MAX_ULONG - MILLISECONDS_PER_SECOND) / MILLISECONDS_PER_SECOND)) {
+
+            TimeoutInMilliseconds =
+                              (Timeout->tv_sec * MILLISECONDS_PER_SECOND) +
+                              (Timeout->tv_nsec / NANOSECONDS_PER_MILLISECOND);
+        }
+    }
+
+    KernelStatus = OsSuspendExecution(SignalMaskOperationClear,
+                                      (PSIGNAL_SET)SignalSet,
+                                      &SignalParameters,
+                                      TimeoutInMilliseconds);
+
+    if (KSUCCESS(KernelStatus)) {
+        SignalNumber = SignalParameters.SignalNumber;
+        if (SignalInformation != NULL) {
+            RtlZeroMemory(SignalInformation, sizeof(siginfo_t));
+            SignalInformation->si_signo = SignalNumber;
+            SignalInformation->si_code = SignalParameters.SignalCode;
+            SignalInformation->si_errno = SignalParameters.ErrorNumber;
+            SignalInformation->si_pid = SignalParameters.FromU.SendingProcess;
+            SignalInformation->si_uid = SignalParameters.SendingUserId;
+            SignalInformation->si_addr = SignalParameters.FromU.FaultingAddress;
+            SignalInformation->si_status = SignalParameters.Parameter;
+            SignalInformation->si_band = SignalParameters.FromU.BandEvent;
+            SignalInformation->si_value.sival_int = SignalParameters.Parameter;
+        }
+
+    } else {
+        SignalNumber = -1;
+        if (KernelStatus == STATUS_TIMEOUT) {
+            errno = EAGAIN;
+
+        } else {
+            errno = ClConvertKstatusToErrorNumber(KernelStatus);
+        }
+    }
+
+    return SignalNumber;
 }
 
 LIBC_API
