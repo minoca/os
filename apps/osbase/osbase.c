@@ -3004,6 +3004,65 @@ Return Value:
 
 OS_API
 KSTATUS
+OsSetResourceLimit (
+    RESOURCE_LIMIT_TYPE Type,
+    PRESOURCE_LIMIT NewValue,
+    PRESOURCE_LIMIT OldValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the current resource limit value for a given type.
+
+Arguments:
+
+    Type - Supplies the resource limit type to get the limit for.
+
+    NewValue - Supplies an optional pointer to the new limit to set. If this is
+        NULL, then a new value is not set.
+
+    OldValue - Supplies an optional pointer where the previous limit will be
+        returned.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if the resource type is not valid or the current
+    value was greater than the max.
+
+    STATUS_PERMISSION_DENIED if the caller is trying to raise the max/hard
+    limit and does not have the resources permission.
+
+--*/
+
+{
+
+    SYSTEM_CALL_SET_RESOURCE_LIMIT Parameters;
+
+    Parameters.Type = Type;
+    if (NewValue != NULL) {
+        Parameters.Set = TRUE;
+        Parameters.Value.Current = NewValue->Current;
+        Parameters.Value.Max = NewValue->Max;
+
+    } else {
+        Parameters.Set = FALSE;
+    }
+
+    OsSystemCall(SystemCallSetResourceLimit, &Parameters);
+    if (OldValue != NULL) {
+        OldValue->Current = Parameters.Value.Current;
+        OldValue->Max = Parameters.Value.Max;
+    }
+
+    return Parameters.Status;
+}
+
+OS_API
+KSTATUS
 OsCreateTerminal (
     HANDLE MasterDirectory,
     HANDLE SlaveDirectory,

@@ -306,6 +306,7 @@ typedef enum _SYSTEM_CALL_NUMBER {
     SystemCallDuplicateHandle,
     SystemCallPerformVectoredIo,
     SystemCallSetITimer,
+    SystemCallSetResourceLimit,
     SystemCallCount
 } SYSTEM_CALL_NUMBER, *PSYSTEM_CALL_NUMBER;
 
@@ -2737,6 +2738,35 @@ typedef struct _SYSTEM_CALL_SET_ITIMER {
 
 Structure Description:
 
+    This structure defines the system call parameters for getting or setting
+    the current thread's resource limits.
+
+Members:
+
+    Type - Stores the type of resource limit to get or set.
+
+    Set - Stores a boolean indicating whether to get the resource limit (FALSE)
+        or set it (TRUE).
+
+    Value - Stores the new value to set for set operations on input. Returns
+        the previous value that was set for the limit.
+
+    Status - Stores the resulting status code returned by the kernel.
+
+--*/
+
+typedef struct _SYSTEM_CALL_SET_RESOURCE_LIMIT {
+    RESOURCE_LIMIT_TYPE Type;
+    BOOL Set;
+    RESOURCE_LIMIT Value;
+    KSTATUS Status;
+} SYSCALL_STRUCT SYSTEM_CALL_SET_RESOURCE_LIMIT,
+    *PSYSTEM_CALL_SET_RESOURCE_LIMIT;
+
+/*++
+
+Structure Description:
+
     This structure defines a union of all possible system call parameter
     structures. The size of this structure acts as an upper bound for the
     required space neede to make a stack local copy of the user mode parameters.
@@ -2816,6 +2846,7 @@ typedef union _SYSTEM_CALL_PARAMETER_UNION {
     SYSTEM_CALL_SET_UMASK SetUmask;
     SYSTEM_CALL_DUPLICATE_HANDLE DuplicateHandle;
     SYSTEM_CALL_SET_ITIMER SetITimer;
+    SYSTEM_CALL_SET_RESOURCE_LIMIT SetResourceLimit;
 } SYSCALL_STRUCT SYSTEM_CALL_PARAMETER_UNION, *PSYSTEM_CALL_PARAMETER_UNION;
 
 typedef

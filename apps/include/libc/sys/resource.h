@@ -61,7 +61,7 @@ extern "C" {
 // Define the highest possible limit value.
 //
 
-#define RLIM_INFINITY 0xFFFFFFFFFFFFFFFFULL
+#define RLIM_INFINITY (-1)
 #define RLIM64_INFINITY RLIM_INFINITY
 
 //
@@ -103,14 +103,14 @@ extern "C" {
 // files.
 //
 
-#define RLIMIT_CORE 1
+#define RLIMIT_CORE 0
 
 //
 // Limit the CPU time per process. If this time is exceeded, a SIGXCPU signal
 // is sent to the process once a second until the hard limit is reached.
 //
 
-#define RLIMIT_CPU 2
+#define RLIMIT_CPU 1
 
 //
 // Limit the data segment size (all memory used by the process). If this limit
@@ -118,7 +118,7 @@ extern "C" {
 // errno set to ENOMEM.
 //
 
-#define RLIMIT_DATA 3
+#define RLIMIT_DATA 2
 
 //
 // Limit the maximum file size. If a write or truncate operation would cause
@@ -126,7 +126,7 @@ extern "C" {
 // attempts to increase the file size beyond the limit will fail with EFBIG.
 //
 
-#define RLIMIT_FSIZE 4
+#define RLIMIT_FSIZE 3
 
 //
 // Limit the number of open files. This is one greater than the maximum value
@@ -135,7 +135,7 @@ extern "C" {
 // set to EMFILE.
 //
 
-#define RLIMIT_NOFILE 5
+#define RLIMIT_NOFILE 4
 
 //
 // Limit the stack size. If this limit is exceeded, SIGSEGV is generated for
@@ -145,39 +145,39 @@ extern "C" {
 // generated.
 //
 
-#define RLIMIT_STACK 6
+#define RLIMIT_STACK 5
 
 //
 // Limit the address space size.
 //
 
-#define RLIMIT_AS 7
+#define RLIMIT_AS 6
 
 //
 // Limit the number of processes that can be created. Attempts to fork beyond
 // this limit fail with errno set to EAGAIN.
 //
 
-#define RLIMIT_NPROC 8
+#define RLIMIT_NPROC 7
 
 //
 // Limit the number of pending signals.
 //
 
-#define RLIMIT_SIGPENDING 9
+#define RLIMIT_SIGPENDING 8
 
 //
 // Limit the nice value.
 //
 
-#define RLIMIT_NICE 10
+#define RLIMIT_NICE 9
 
 //
 // Define the number of different resource limits. Any valid RLIMIT_* value
 // must be less than this value.
 //
 
-#define RLIM_NLIMITS 11
+#define RLIM_NLIMITS 10
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -187,7 +187,7 @@ extern "C" {
 // Type used for describing resource limit values.
 //
 
-typedef unsigned long long rlim_t, rlim64_t;
+typedef long rlim_t, rlim64_t;
 
 /*++
 

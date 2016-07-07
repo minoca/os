@@ -100,7 +100,7 @@ Author:
 // be possible to raise this so long as it doesn't collide with INVALID_HANDLE.
 //
 
-#define OB_MAX_HANDLES 0x100000
+#define OB_MAX_HANDLES 0x1000
 
 typedef enum _OBJECT_TYPE {
     ObjectInvalid,

@@ -267,7 +267,8 @@ Return Value:
         if (Parameters->UserStack == NULL) {
             NewThread->Flags |= THREAD_FLAG_FREE_USER_STACK;
             if (Parameters->StackSize == 0) {
-                Parameters->StackSize = DEFAULT_USER_STACK_SIZE;
+                Parameters->StackSize =
+                                 NewThread->Limits[ResourceLimitStack].Current;
             }
 
             Status = PspSetThreadUserStackSize(NewThread,
@@ -900,6 +901,15 @@ Return Value:
         ASSERT(Thread->UserStackSize == 0);
         ASSERT(Thread->UserStack == NULL);
 
+        //
+        // Check against the current resource limit.
+        //
+
+        if (NewStackSize > Thread->Limits[ResourceLimitStack].Current) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto SetThreadUserStackSizeEnd;
+        }
+
         NewBase = NULL;
         Flags = IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE;
         Status = MmMapFileSection(INVALID_HANDLE,
@@ -1164,7 +1174,10 @@ Return Value:
     ASSERT((Thread->Flags & THREAD_FLAG_USER_MODE) != 0);
 
     Thread->ThreadIdPointer = NULL;
-    Status = PspSetThreadUserStackSize(Thread, DEFAULT_USER_STACK_SIZE);
+    Status = PspSetThreadUserStackSize(
+                                   Thread,
+                                   Thread->Limits[ResourceLimitStack].Current);
+
     if (!KSUCCESS(Status)) {
         goto CreateThreadEnd;
     }

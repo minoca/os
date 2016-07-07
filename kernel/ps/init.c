@@ -50,6 +50,12 @@ Environment:
 #define SYSTEM_OS_BASE_LIBRARY_PATH "system/" OS_BASE_LIBRARY
 
 //
+// Define the initially enforced maximum number of files.
+//
+
+#define INITIAL_MAX_FILE_COUNT 1024
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
@@ -78,6 +84,23 @@ PROCESS_GROUP PsKernelProcessGroup;
 //
 
 PSTR PsSystemDirectoryPath = "minoca";
+
+//
+// Store the initial resource limits to set.
+//
+
+RESOURCE_LIMIT PsInitialResourceLimits[ResourceLimitCount] = {
+    {0, RESOURCE_LIMIT_INFINITE}, // ResourceLimitCore
+    {RESOURCE_LIMIT_INFINITE, RESOURCE_LIMIT_INFINITE}, // ResourceLimitCpuTime
+    {RESOURCE_LIMIT_INFINITE, RESOURCE_LIMIT_INFINITE}, // ResourceLimitData
+    {RESOURCE_LIMIT_INFINITE, RESOURCE_LIMIT_INFINITE}, // ResourceLimitFileSize
+    {INITIAL_MAX_FILE_COUNT, OB_MAX_HANDLES}, // ResourceLimitFileCount
+    {DEFAULT_USER_STACK_SIZE, RESOURCE_LIMIT_INFINITE}, // ResourceLimitStack
+    {RESOURCE_LIMIT_INFINITE, RESOURCE_LIMIT_INFINITE}, // AddressSpace
+    {RESOURCE_LIMIT_INFINITE, RESOURCE_LIMIT_INFINITE}, // ProcessCount
+    {RESOURCE_LIMIT_INFINITE, RESOURCE_LIMIT_INFINITE}, // ResourceLimitSignals
+    {0, 0} // ResourceLimitNice
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -620,6 +643,9 @@ Return Value:
     CurrentThread->Permissions.Permitted = PERMISSION_SET_FULL;
     CurrentThread->Permissions.Inheritable = PERMISSION_SET_FULL;
     CurrentThread->Permissions.Effective = PERMISSION_SET_FULL;
+    RtlCopyMemory(&(CurrentThread->Limits),
+                  PsInitialResourceLimits,
+                  sizeof(CurrentThread->Limits));
 
     //
     // Again, it's okay not to raise the run-level because preemption is not
