@@ -318,6 +318,7 @@ Return Value:
     // Get the iterations and add this one to the count.
     //
 
+    errno = 0;
     Iterations = strtoull(Arguments[EXEC_LOOP_ITERATIONS_INDEX],
                           &AfterScan,
                           10);
