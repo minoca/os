@@ -1008,7 +1008,7 @@ typedef struct _SYSTEM_CALL_POLL {
     PSIGNAL_SET SignalMask;
     PPOLL_DESCRIPTOR Descriptors;
     ULONG DescriptorCount;
-    ULONGLONG TimeoutInMilliseconds;
+    ULONG TimeoutInMilliseconds;
     KSTATUS Status;
     ULONG DescriptorsSelected;
 } SYSCALL_STRUCT SYSTEM_CALL_POLL, *PSYSTEM_CALL_POLL;

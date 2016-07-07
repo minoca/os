@@ -1616,9 +1616,6 @@ Return Value:
     // Wait on this list of objects.
     //
 
-    ASSERT((ULONG)(PollInformation->TimeoutInMilliseconds) ==
-           PollInformation->TimeoutInMilliseconds);
-
     ASSERT((ULONG)ObjectIndex == ObjectIndex);
 
     if ((ErrorEventsOccurred == FALSE) && (HaveRegularFiles == FALSE)) {
@@ -1626,7 +1623,7 @@ Return Value:
                                WaitObjects,
                                ObjectIndex,
                                WAIT_FLAG_INTERRUPTIBLE,
-                               (ULONG)(PollInformation->TimeoutInMilliseconds),
+                               PollInformation->TimeoutInMilliseconds,
                                NULL,
                                NULL);
 
