@@ -625,6 +625,37 @@ Return Value:
 
 --*/
 
+INT
+ClpConvertSpecificTimeoutToSystemTimeout (
+    const struct timespec *SpecificTimeout,
+    PULONG TimeoutInMilliseconds
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given specific timeout into a system timeout in
+    milliseconds. The specific timeout's seconds and nanoseconds must not be
+    negative and the nanoseconds must not be greater than 1 billion (the number
+    of nanoseconds in a second). If the specific timeout is NULL, then the
+    timeout in milliseconds will be set to an indefinite timeout.
+
+Arguments:
+
+    SpecificTimeout - Supplies an optional pointer to the specific timeout.
+
+    TimeoutInMilliseconds - Supplies a pointer that receives the system timeout
+        in milliseconds.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
 VOID
 ClpConvertResourceUsage (
     PRESOURCE_USAGE KernelUsage,

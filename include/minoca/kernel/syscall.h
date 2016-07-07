@@ -32,6 +32,7 @@ Author:
 #define SYSCALL_STRUCT ALIGNED64
 
 #define SYS_WAIT_TIME_INDEFINITE MAX_ULONG
+#define SYS_WAIT_TIME_MAX (MAX_ULONG - 1)
 
 //
 // Define open flags.

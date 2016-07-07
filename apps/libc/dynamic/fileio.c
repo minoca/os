@@ -2423,8 +2423,17 @@ Return Value:
     PPOLL_DESCRIPTOR Descriptors;
     ULONG DescriptorsSelected;
     struct pollfd *PollDescriptor;
+    INT Result;
     KSTATUS Status;
-    ULONGLONG TimeoutMilliseconds;
+    ULONG TimeoutMilliseconds;
+
+    Result = ClpConvertSpecificTimeoutToSystemTimeout(Timeout,
+                                                      &TimeoutMilliseconds);
+
+    if (Result != 0) {
+        errno = Result;
+        return -1;
+    }
 
     //
     // Allocate the real descriptor structure array.
@@ -2473,12 +2482,6 @@ Return Value:
 
         Descriptor += 1;
         PollDescriptor += 1;
-    }
-
-    TimeoutMilliseconds = WAIT_TIME_INDEFINITE;
-    if (Timeout != NULL) {
-        TimeoutMilliseconds = (Timeout->tv_sec * MILLISECONDS_PER_SECOND) +
-                              (Timeout->tv_nsec / NANOSECONDS_PER_MILLISECOND);
     }
 
     //
@@ -2694,8 +2697,17 @@ Return Value:
     ULONG DescriptorIndex;
     PPOLL_DESCRIPTOR Descriptors;
     ULONG DescriptorsSelected;
+    INT Result;
     KSTATUS Status;
-    ULONGLONG TimeoutInMilliseconds;
+    ULONG TimeoutInMilliseconds;
+
+    Result = ClpConvertSpecificTimeoutToSystemTimeout(Timeout,
+                                                      &TimeoutInMilliseconds);
+
+    if (Result != 0) {
+        errno = Result;
+        return -1;
+    }
 
     DescriptorCount = MaxDescriptorCount;
     Descriptors = NULL;
@@ -2748,15 +2760,6 @@ Return Value:
         }
 
         Descriptor += 1;
-    }
-
-    if (Timeout == NULL) {
-        TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
-
-    } else {
-        TimeoutInMilliseconds = (Timeout->tv_sec * MILLISECONDS_PER_SECOND) +
-                                (Timeout->tv_nsec /
-                                 NANOSECONDS_PER_MILLISECOND);
     }
 
     //

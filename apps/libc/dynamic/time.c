@@ -2725,8 +2725,8 @@ Return Value:
     ClpConvertUnixTimeToSystemTime(SystemTime, SpecificTime->tv_sec);
 
     //
-    // Now handle the microseconds. Don't trust that the microseconds are
-    // properly bound between 0 and 1 million.
+    // Now handle the nanoseconds. Don't trust that the nanoseconds are
+    // properly bound between 0 and 1 billion.
     //
 
     Nanoseconds = (LONGLONG)SpecificTime->tv_nsec;
@@ -2922,6 +2922,86 @@ Return Value:
 
     *Counter = LocalCounter;
     return;
+}
+
+INT
+ClpConvertSpecificTimeoutToSystemTimeout (
+    const struct timespec *SpecificTimeout,
+    PULONG TimeoutInMilliseconds
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given specific timeout into a system timeout in
+    milliseconds. The specific timeout's seconds and nanoseconds must not be
+    negative and the nanoseconds must not be greater than 1 billion (the number
+    of nanoseconds in a second). If the specific timeout is NULL, then the
+    timeout in milliseconds will be set to an indefinite timeout.
+
+Arguments:
+
+    SpecificTimeout - Supplies an optional pointer to the specific timeout.
+
+    TimeoutInMilliseconds - Supplies a pointer that receives the system timeout
+        in milliseconds.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    time_t MaxSeconds;
+
+    if (SpecificTimeout == NULL) {
+        *TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
+        return 0;
+    }
+
+    //
+    // The specific timeout must be positive and the nanoseconds must be
+    // between 0 and 1 billion.
+    //
+
+    if ((SpecificTimeout->tv_sec < 0) ||
+        (SpecificTimeout->tv_nsec < 0) ||
+        (SpecificTimeout->tv_nsec >= NANOSECONDS_PER_SECOND)){
+
+        return EINVAL;
+    }
+
+    //
+    // Accounting for the nanoseconds field adding at most 999 milliseconds, if
+    // the seconds field is too large, truncate the value to the maximum system
+    // timeout. This may inaccurately round up as the max wait time is not
+    // evenly divisible by 1000, but that's just splitting hairs when the
+    // timeout is around 49 days.
+    //
+
+    MaxSeconds = (SYS_WAIT_TIME_MAX - MILLISECONDS_PER_SECOND) /
+                 MILLISECONDS_PER_SECOND;
+
+    if (SpecificTimeout->tv_sec > MaxSeconds) {
+        *TimeoutInMilliseconds = SYS_WAIT_TIME_MAX;
+
+    //
+    // Otherwise, calculate the milliseconds. This should be safe from overflow
+    // as the nanoseconds and seconds were bound above.
+    //
+
+    } else {
+        *TimeoutInMilliseconds =
+                      (SpecificTimeout->tv_sec * MILLISECONDS_PER_SECOND) +
+                      (SpecificTimeout->tv_nsec / NANOSECONDS_PER_MILLISECOND);
+    }
+
+    return 0;
 }
 
 //

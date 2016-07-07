@@ -744,6 +744,7 @@ Return Value:
 
     struct timespec Delta;
     ULONG Result;
+    time_t Seconds;
     int Status;
 
     Status = clock_gettime(Clock, &Delta);
@@ -762,14 +763,16 @@ Return Value:
         return 0;
     }
 
-    if (Delta.tv_sec >
-        ((MAX_ULONG - MILLISECONDS_PER_SECOND) / MILLISECONDS_PER_SECOND)) {
-
-        return SYS_WAIT_TIME_INDEFINITE;
+    if (Delta.tv_nsec >= NANOSECONDS_PER_SECOND) {
+          Seconds = Delta.tv_nsec / NANOSECONDS_PER_SECOND;
+          Delta.tv_sec += Seconds;
+          Delta.tv_nsec -= (Seconds * NANOSECONDS_PER_SECOND);
     }
 
-    Result = (Delta.tv_sec * MILLISECONDS_PER_SECOND) +
-             (Delta.tv_nsec / NANOSECONDS_PER_MILLISECOND);
+    Status = ClpConvertSpecificTimeoutToSystemTimeout(&Delta, &Result);
+    if (Status != 0) {
+        return 0;
+    }
 
     return Result;
 }

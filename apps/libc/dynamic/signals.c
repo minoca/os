@@ -1014,27 +1014,17 @@ Return Value:
 {
 
     KSTATUS KernelStatus;
+    INT Result;
     INT SignalNumber;
     SIGNAL_PARAMETERS SignalParameters;
     ULONG TimeoutInMilliseconds;
 
-    TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
-    if (Timeout != NULL) {
-        if ((Timeout->tv_sec < 0) ||
-            (Timeout->tv_nsec < 0) ||
-            (Timeout->tv_nsec >= NANOSECONDS_PER_SECOND)){
+    Result = ClpConvertSpecificTimeoutToSystemTimeout(Timeout,
+                                                      &TimeoutInMilliseconds);
 
-            errno = EINVAL;
-            return -1;
-        }
-
-        if (Timeout->tv_sec <=
-            ((MAX_ULONG - MILLISECONDS_PER_SECOND) / MILLISECONDS_PER_SECOND)) {
-
-            TimeoutInMilliseconds =
-                              (Timeout->tv_sec * MILLISECONDS_PER_SECOND) +
-                              (Timeout->tv_nsec / NANOSECONDS_PER_MILLISECOND);
-        }
+    if (Result != 0) {
+        errno = Result;
+        return -1;
     }
 
     KernelStatus = OsSuspendExecution(SignalMaskOperationClear,
