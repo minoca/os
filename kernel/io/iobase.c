@@ -3432,6 +3432,8 @@ OpenPathEntryEnd:
         }
     }
 
+    ASSERT((NewHandle == NULL) || (NewHandle->PathPoint.PathEntry != NULL));
+
     *Handle = NewHandle;
     return Status;
 }
@@ -3627,62 +3629,65 @@ Return Value:
     // opens and closes are balanced.
     //
 
-    FileObject = IoHandle->PathPoint.PathEntry->FileObject;
-    switch (FileObject->Properties.Type) {
-    case IoObjectRegularFile:
-    case IoObjectRegularDirectory:
-    case IoObjectSymbolicLink:
-    case IoObjectBlockDevice:
-    case IoObjectCharacterDevice:
+    FileObject = NULL;
+    if (IoHandle->PathPoint.PathEntry != NULL) {
+        FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+        switch (FileObject->Properties.Type) {
+        case IoObjectRegularFile:
+        case IoObjectRegularDirectory:
+        case IoObjectSymbolicLink:
+        case IoObjectBlockDevice:
+        case IoObjectCharacterDevice:
 
-        //
-        // If the handle received a device context on open, close it.
-        //
+            //
+            // If the handle received a device context on open, close it.
+            //
 
-        if ((IO_IS_FILE_OBJECT_CACHEABLE(FileObject) == FALSE) ||
-            ((IoHandle->OpenFlags & OPEN_FLAG_PAGE_FILE) != 0) ||
-            ((IoHandle->OpenFlags & OPEN_FLAG_PAGING_DEVICE) != 0)) {
+            if ((IO_IS_FILE_OBJECT_CACHEABLE(FileObject) == FALSE) ||
+                ((IoHandle->OpenFlags & OPEN_FLAG_PAGE_FILE) != 0) ||
+                ((IoHandle->OpenFlags & OPEN_FLAG_PAGING_DEVICE) != 0)) {
 
-            CloseIrp.DeviceContext = IoHandle->DeviceContext;
-            Device = FileObject->Device;
+                CloseIrp.DeviceContext = IoHandle->DeviceContext;
+                Device = FileObject->Device;
 
-            ASSERT(IS_DEVICE_OR_VOLUME(Device));
+                ASSERT(IS_DEVICE_OR_VOLUME(Device));
 
-            Status = IopSendCloseIrp(Device, &CloseIrp);
+                Status = IopSendCloseIrp(Device, &CloseIrp);
 
-        //
-        // Otherwise, just report success.
-        //
+            //
+            // Otherwise, just report success.
+            //
 
-        } else {
+            } else {
+                Status = STATUS_SUCCESS;
+            }
+
+            break;
+
+        case IoObjectPipe:
+            Status = IopClosePipe(IoHandle);
+            break;
+
+        case IoObjectSocket:
+            Status = IopCloseSocket(IoHandle);
+            break;
+
+        case IoObjectTerminalMaster:
+            Status = IopTerminalCloseMaster(IoHandle);
+            break;
+
+        case IoObjectTerminalSlave:
+            Status = IopTerminalCloseSlave(IoHandle);
+            break;
+
+        default:
             Status = STATUS_SUCCESS;
+            break;
         }
 
-        break;
-
-    case IoObjectPipe:
-        Status = IopClosePipe(IoHandle);
-        break;
-
-    case IoObjectSocket:
-        Status = IopCloseSocket(IoHandle);
-        break;
-
-    case IoObjectTerminalMaster:
-        Status = IopTerminalCloseMaster(IoHandle);
-        break;
-
-    case IoObjectTerminalSlave:
-        Status = IopTerminalCloseSlave(IoHandle);
-        break;
-
-    default:
-        Status = STATUS_SUCCESS;
-        break;
-    }
-
-    if (!KSUCCESS(Status)) {
-        goto CloseEnd;
+        if (!KSUCCESS(Status)) {
+            goto CloseEnd;
+        }
     }
 
     //
@@ -3696,25 +3701,29 @@ Return Value:
     }
 
     //
-    // If the file object in the handle is not the same as the one in the
-    // path entry, release the reference on the one in the handle.
-    //
-
-    if (FileObject != IoHandle->FileObject) {
-        IopFileObjectReleaseReference(IoHandle->FileObject);
-    }
-
-    //
     // Let go of the path point, and slide gently into the night. Be careful,
-    // as anonymous objects do not have a mount point.
+    // as anonymous objects do not have a mount point. Also handles that failed
+    // to open do not have a path entry.
     //
 
     if (IoHandle->PathPoint.PathEntry != NULL) {
+
+        //
+        // If the file object in the handle is not the same as the one in the
+        // path entry, release the reference on the one in the handle.
+        //
+
+        if (FileObject != IoHandle->FileObject) {
+            IopFileObjectReleaseReference(IoHandle->FileObject);
+        }
+
         IoPathEntryReleaseReference(IoHandle->PathPoint.PathEntry);
         if (IoHandle->PathPoint.MountPoint != NULL) {
             IoMountPointReleaseReference(IoHandle->PathPoint.MountPoint);
         }
     }
+
+    Status = STATUS_SUCCESS;
 
 CloseEnd:
     return Status;
