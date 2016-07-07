@@ -239,6 +239,7 @@ Return Value:
     NewMaskLocal = *NewMask;
     REMOVE_SIGNAL(NewMaskLocal, SIGNAL_STOP);
     REMOVE_SIGNAL(NewMaskLocal, SIGNAL_KILL);
+    REMOVE_SIGNAL(NewMaskLocal, SIGNAL_CONTINUE);
     KeAcquireQueuedLock(Process->QueuedLock);
     if (OriginalMask != NULL) {
         *OriginalMask = Thread->BlockedSignals;
