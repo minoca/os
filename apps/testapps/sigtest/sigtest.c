@@ -94,6 +94,15 @@ typedef enum _SIGNAL_TEST_TYPE {
     SignalTestQuickWait,
 } SIGNAL_TEST_TYPE, *PSIGNAL_TEST_TYPE;
 
+typedef enum _SIGNAL_TEST_WAIT_TYPE {
+    SignalTestWaitBusy,
+    SignalTestWaitSigsuspend,
+    SignalTestWaitSigwait,
+    SignalTestWaitSigwaitinfo,
+    SignalTestWaitSigtimedwait,
+    SignalTestWaitTypeCount
+} SIGNAL_TEST_WAIT_TYPE, *PSIGNAL_TEST_WAIT_TYPE;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -125,7 +134,7 @@ ULONG
 TestSigchild (
     ULONG ChildCount,
     ULONG ChildAdditionalThreads,
-    BOOL UseSigsuspend,
+    SIGNAL_TEST_WAIT_TYPE WaitType,
     BOOL ChildrenExitVoluntarily
     );
 
@@ -134,6 +143,12 @@ TestWaitpidChildSignalHandler (
     int Signal,
     siginfo_t *SignalInformation,
     void *Context
+    );
+
+void
+TestWaitpidProcessChildSignal (
+    int Signal,
+    siginfo_t *SignalInformation
     );
 
 void
@@ -178,6 +193,14 @@ volatile ULONG ChildSignalsExpected;
 volatile LONG ChildSignalPid;
 volatile ULONG ChildSignalFailures;
 volatile ULONG ChildProcessesReady;
+
+PSTR SignalTestWaitTypeStrings[SignalTestWaitTypeCount] = {
+    "busy spin",
+    "sigsuspend",
+    "sigwait",
+    "sigwaitinfo",
+    "sigtimedwait"
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -524,6 +547,7 @@ Return Value:
     ULONG Errors;
     ULONG Iteration;
     ULONG Percent;
+    ULONG WaitType;
 
     PRINT("Running sigchld test with %d iterations and %d children.\n",
           Iterations,
@@ -536,10 +560,11 @@ Return Value:
 
     Errors = 0;
     for (Iteration = 0; Iteration < Iterations; Iteration += 1) {
-        Errors += TestSigchild(ChildCount, 3, FALSE, FALSE);
-        Errors += TestSigchild(ChildCount, 3, FALSE, TRUE);
-        Errors += TestSigchild(ChildCount, 3, TRUE, FALSE);
-        Errors += TestSigchild(ChildCount, 3, TRUE, TRUE);
+        for (WaitType = 0; WaitType < SignalTestWaitTypeCount; WaitType += 1) {
+            Errors += TestSigchild(ChildCount, 3, WaitType, FALSE);
+            Errors += TestSigchild(ChildCount, 3, WaitType, TRUE);
+        }
+
         if ((Iteration % Percent) == 0) {
             PRINT("c");
         }
@@ -794,7 +819,7 @@ ULONG
 TestSigchild (
     ULONG ChildCount,
     ULONG ChildAdditionalThreads,
-    BOOL UseSigsuspend,
+    SIGNAL_TEST_WAIT_TYPE WaitType,
     BOOL ChildrenExitVoluntarily
     )
 
@@ -811,8 +836,8 @@ Arguments:
     ChildAdditionalThreads - Supplies the number of additional threads each
         child should spin up.
 
-    UseSigsuspend - Supplies a boolean indicating whether sigsuspend should be
-        called in the main loop (TRUE) or busy waiting (FALSE).
+    WaitType - Supplies the type of waiting that should be used in the main
+        loop.
 
     ChildrenExitVoluntarily - Supplies a boolean indicating whether children
         exit on their own or need to be killed.
@@ -836,21 +861,29 @@ Return Value:
     struct sigaction OriginalChildAction;
     struct sigaction OriginalRealtimeAction;
     sigset_t OriginalSignalMask;
+    siginfo_t SignalInformation;
+    int SignalNumber;
     union sigval SignalValue;
     int Status;
     ULONG ThreadIndex;
+    struct timespec Timeout;
     pid_t WaitPid;
+
+    if (WaitType >= SignalTestWaitTypeCount) {
+        PRINT_ERROR("Invalid wait type %d.\n", WaitType);
+        return 1;
+    }
 
     //
     // Allocate child array.
     //
 
     DEBUG_PRINT("Testing SIGCHLD: %d children each with %d extra "
-                "threads. UseSigsuspend: %d, ChildrenExitVoluntarily: "
+                "threads. WaitType: %s, ChildrenExitVoluntarily: "
                 "%d.\n\n",
                 ChildCount,
                 ChildAdditionalThreads,
-                UseSigsuspend,
+                SignalTestWaitTypeStrings[WaitType],
                 ChildrenExitVoluntarily);
 
     Children = malloc(sizeof(pid_t) * ChildCount);
@@ -1017,11 +1050,12 @@ Return Value:
     // In the parent process, wait for the children.
     //
 
-    DEBUG_PRINT("Parent waiting for children UsingSuspend %d.\n",
-                UseSigsuspend);
+    DEBUG_PRINT("Parent waiting for children via %s.\n",
+                SignalTestWaitTypeStrings[WaitType]);
 
     Status = 0;
-    if (UseSigsuspend != FALSE) {
+    switch (WaitType) {
+    case SignalTestWaitSigsuspend:
         for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
             if (ChildSignalsExpected == 0) {
                 break;
@@ -1035,7 +1069,107 @@ Return Value:
             DEBUG_PRINT("Returned from sigsuspend.\n");
         }
 
-    } else {
+        break;
+
+    case SignalTestWaitSigwait:
+        for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+            if (ChildSignalsExpected == 0) {
+                break;
+            }
+
+            DEBUG_PRINT("Expecting %d more child signals. "
+                        "Running sigwait.\n",
+                        ChildSignalsExpected);
+
+            Status = sigwait(&ChildSignalMask, &SignalNumber);
+            DEBUG_PRINT("Returned from sigwait.\n");
+            if (Status != 0) {
+                PRINT_ERROR("Failed sigwait: %s.\n", strerror(Status));
+                Errors += 1;
+                continue;
+            }
+
+            //
+            // The signal handler was not called and the parameters are not
+            // available, so just process the signal without the parameters.
+            //
+
+            TestWaitpidProcessChildSignal(SignalNumber, NULL);
+        }
+
+        break;
+
+    case SignalTestWaitSigwaitinfo:
+        for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+            if (ChildSignalsExpected == 0) {
+                break;
+            }
+
+            DEBUG_PRINT("Expecting %d more child signals. "
+                        "Running sigwaitinfo.\n",
+                        ChildSignalsExpected);
+
+            SignalNumber = sigwaitinfo(&ChildSignalMask, &SignalInformation);
+            DEBUG_PRINT("Returned from sigwaitinfo.\n");
+            if (SignalNumber == -1) {
+                if (errno != EINTR) {
+                    PRINT_ERROR("Failed sigwaitinfo: %s.\n", strerror(Status));
+                    Errors += 1;
+                }
+
+                continue;
+            }
+
+            //
+            // Handle the signal in-line as the handler was not called.
+            //
+
+            TestWaitpidProcessChildSignal(SignalNumber, &SignalInformation);
+        }
+
+        break;
+
+    case SignalTestWaitSigtimedwait:
+        Timeout.tv_nsec = 0;
+        Timeout.tv_sec = 1;
+        for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+            if (ChildSignalsExpected == 0) {
+                break;
+            }
+
+            DEBUG_PRINT("Expecting %d more child signals. "
+                        "Running sigtimedwait.\n",
+                        ChildSignalsExpected);
+
+            SignalNumber = sigtimedwait(&ChildSignalMask,
+                                        &SignalInformation,
+                                        &Timeout);
+
+            DEBUG_PRINT("Returned from sigtimedwait.\n");
+            if (SignalNumber == -1) {
+                if (errno != EINTR) {
+                    PRINT_ERROR("Failed sigtimedwait: %s.\n", strerror(Status));
+                    Errors += 1;
+                }
+
+                if (errno == EAGAIN) {
+                    DEBUG_PRINT("sigtimedwait timed out. Retrying.\n");
+                }
+
+                continue;
+            }
+
+            //
+            // Handle the signal in-line as the handler was not called.
+            //
+
+            TestWaitpidProcessChildSignal(SignalNumber, &SignalInformation);
+        }
+
+        break;
+
+    case SignalTestWaitBusy:
+    default:
         sigprocmask(SIG_UNBLOCK, &ChildSignalMask, NULL);
         for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
             if (ChildSignalsExpected == 0) {
@@ -1046,6 +1180,7 @@ Return Value:
         }
 
         sigprocmask(SIG_BLOCK, &ChildSignalMask, NULL);
+        break;
     }
 
     if (ChildSignalsExpected != 0) {
@@ -1116,14 +1251,46 @@ Return Value:
 
 {
 
+    TestWaitpidProcessChildSignal(Signal, SignalInformation);
+    return;
+}
+
+void
+TestWaitpidProcessChildSignal (
+    int Signal,
+    siginfo_t *SignalInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes a child signal.
+
+Arguments:
+
+    Signal - Supplies the signal number coming in, in this case always SIGCHLD.
+
+    SignalInformation - Supplies an optional pointer to the signal information.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
     int PidStatus;
     BOOL SignaledPidFound;
     int Status;
     LONG WaitPidResult;
 
-    DEBUG_PRINT("SIGCHLD Pid %d Status %d.\n",
-                SignalInformation->si_pid,
-                SignalInformation->si_status);
+    if (SignalInformation != NULL) {
+        DEBUG_PRINT("SIGCHLD Pid %d Status %d.\n",
+                    SignalInformation->si_pid,
+                    SignalInformation->si_status);
+    }
 
     if (Signal != SIGCHLD) {
         PRINT_ERROR("Error: Signal %d came in instead of SIGCHLD.\n", Signal);
@@ -1135,27 +1302,30 @@ Return Value:
         ChildSignalFailures += 1;
     }
 
-    if (SignalInformation->si_signo != SIGCHLD) {
-        PRINT_ERROR("Error: Signal %d came in si_signo instead of SIGCHLD.\n",
-                    SignalInformation->si_signo);
-
-        ChildSignalFailures += 1;
-    }
-
-    if (SignalInformation->si_code == CLD_EXITED) {
-        if (SignalInformation->si_status != 99) {
-            PRINT_ERROR("Error: si_status was %d instead of %d.\n",
-                        SignalInformation->si_status,
-                        99);
+    if (SignalInformation != NULL) {
+        if (SignalInformation->si_signo != SIGCHLD) {
+            PRINT_ERROR("Error: Signal %d came in si_signo instead of "
+                        "SIGCHLD.\n",
+                        SignalInformation->si_signo);
 
             ChildSignalFailures += 1;
         }
 
-    } else if (SignalInformation->si_code != CLD_KILLED) {
-        PRINT_ERROR("Error: unexpected si_code %x.\n",
-                    SignalInformation->si_code);
+        if (SignalInformation->si_code == CLD_EXITED) {
+            if (SignalInformation->si_status != 99) {
+                PRINT_ERROR("Error: si_status was %d instead of %d.\n",
+                            SignalInformation->si_status,
+                            99);
 
-        ChildSignalFailures += 1;
+                ChildSignalFailures += 1;
+            }
+
+        } else if (SignalInformation->si_code != CLD_KILLED) {
+            PRINT_ERROR("Error: unexpected si_code %x.\n",
+                        SignalInformation->si_code);
+
+            ChildSignalFailures += 1;
+        }
     }
 
     //
@@ -1165,7 +1335,9 @@ Return Value:
     if (ChildSignalsExpected == 1) {
         SignaledPidFound = TRUE;
         WaitPidResult = waitpid(-1, &Status, WNOHANG);
-        if (WaitPidResult != SignalInformation->si_pid) {
+        if ((SignalInformation != NULL) &&
+            (WaitPidResult != SignalInformation->si_pid)) {
+
             SignaledPidFound = FALSE;
             PRINT_ERROR("Error: SignalInformation->si_pid = %x but "
                         "waitpid() = %x\n.",
@@ -1181,7 +1353,9 @@ Return Value:
         SignaledPidFound = FALSE;
         while (ChildSignalsExpected != 0) {
             WaitPidResult = waitpid(-1, &PidStatus, WNOHANG);
-            if (WaitPidResult == SignalInformation->si_pid) {
+            if ((SignalInformation != NULL) &&
+                (WaitPidResult == SignalInformation->si_pid)) {
+
                 Status = PidStatus;
                 SignaledPidFound = TRUE;
             }
@@ -1195,31 +1369,33 @@ Return Value:
         }
     }
 
-    if (SignaledPidFound == FALSE) {
-        PRINT_ERROR("Error: Pid %d signaled but waitpid could not find "
-                    "it.\n",
-                    SignalInformation->si_pid);
+    if (SignalInformation != NULL) {
+        if (SignaledPidFound == FALSE) {
+            PRINT_ERROR("Error: Pid %d signaled but waitpid could not find "
+                        "it.\n",
+                        SignalInformation->si_pid);
 
-        ChildSignalFailures += 1;
+            ChildSignalFailures += 1;
 
-    } else {
-        if (SignalInformation->si_code == CLD_EXITED) {
-            if ((!WIFEXITED(Status)) || (WEXITSTATUS(Status) != 99)) {
-                PRINT_ERROR("Error: Status was %x, not returning exited or "
-                            "exit status %d.\n",
-                            Status,
-                            99);
+        } else {
+            if (SignalInformation->si_code == CLD_EXITED) {
+                if ((!WIFEXITED(Status)) || (WEXITSTATUS(Status) != 99)) {
+                    PRINT_ERROR("Error: Status was %x, not returning exited "
+                                "or exit status %d.\n",
+                                Status,
+                                99);
 
-                ChildSignalFailures += 1;
-            }
+                    ChildSignalFailures += 1;
+                }
 
-        } else if (SignalInformation->si_code == CLD_KILLED) {
-            if ((!WIFSIGNALED(Status)) || (WTERMSIG(Status) != SIGKILL)) {
-                PRINT_ERROR("Error: Status was %x, not returning signaled or "
-                            "SIGKILL.\n",
-                            Status);
+            } else if (SignalInformation->si_code == CLD_KILLED) {
+                if ((!WIFSIGNALED(Status)) || (WTERMSIG(Status) != SIGKILL)) {
+                    PRINT_ERROR("Error: Status was %x, not returning signaled "
+                                "or SIGKILL.\n",
+                                Status);
 
-                ChildSignalFailures += 1;
+                    ChildSignalFailures += 1;
+                }
             }
         }
     }
@@ -1239,7 +1415,10 @@ Return Value:
         }
     }
 
-    ChildSignalPid = SignalInformation->si_pid;
+    if (SignalInformation != NULL) {
+        ChildSignalPid = SignalInformation->si_pid;
+    }
+
     return;
 }
 
