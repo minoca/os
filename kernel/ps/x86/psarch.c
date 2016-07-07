@@ -262,7 +262,8 @@ Return Value:
 VOID
 PspPrepareThreadForFirstRun (
     PKTHREAD Thread,
-    PTRAP_FRAME TrapFrame
+    PTRAP_FRAME TrapFrame,
+    BOOL ParameterIsStack
     )
 
 /*++
@@ -278,6 +279,9 @@ Arguments:
 
     TrapFrame - Supplies an optional pointer for the thread to restore on its
         first run.
+
+    ParameterIsStack - Supplies a boolean indicating whether the thread
+        parameter is the value that should be used as the initial stack pointer.
 
 Return Value:
 
@@ -308,15 +312,26 @@ Return Value:
 
     if ((Thread->Flags & THREAD_FLAG_USER_MODE) != 0) {
 
+        ASSERT((TrapFrame == NULL) || (ParameterIsStack == FALSE));
+
         //
         // Set up the values on the user mode stack. Push the parameter and a
         // dummy return address.
         //
 
-        UserStackPointer = Thread->UserStack + Thread->UserStackSize -
-                           sizeof(PVOID);
-
         if (TrapFrame == NULL) {
+            if (ParameterIsStack != FALSE) {
+                UserStackPointer = Thread->ThreadParameter - sizeof(PVOID);
+
+                ASSERT(((PVOID)UserStackPointer >= Thread->UserStack) &&
+                       ((PVOID)UserStackPointer <
+                        Thread->UserStack + Thread->UserStackSize));
+
+            } else {
+                UserStackPointer = Thread->UserStack + Thread->UserStackSize -
+                                   sizeof(PVOID);
+            }
+
             MmUserWrite(UserStackPointer, (UINTN)Thread->ThreadParameter);
             UserStackPointer -= 1;
             MmUserWrite(UserStackPointer, 0);
@@ -412,8 +427,11 @@ Return Value:
     PUINTN UserStackPointer;
 
     Thread->ThreadPointer = PsInitialThreadPointer;
-    UserStackPointer = Thread->UserStack + Thread->UserStackSize -
-                       sizeof(PVOID);
+    UserStackPointer = Thread->ThreadParameter - sizeof(PVOID);
+
+    ASSERT(((PVOID)UserStackPointer >= Thread->UserStack) &&
+           ((PVOID)UserStackPointer <
+            Thread->UserStack + Thread->UserStackSize));
 
     MmUserWrite(UserStackPointer, (UINTN)(Thread->ThreadParameter));
     UserStackPointer -= 1;

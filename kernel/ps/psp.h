@@ -839,7 +839,8 @@ Return Value:
 VOID
 PspPrepareThreadForFirstRun (
     PKTHREAD Thread,
-    PTRAP_FRAME TrapFrame
+    PTRAP_FRAME TrapFrame,
+    BOOL ParameterIsStack
     );
 
 /*++
@@ -855,6 +856,9 @@ Arguments:
 
     TrapFrame - Supplies an optional pointer for the thread to restore on its
         first run.
+
+    ParameterIsStack - Supplies a boolean indicating whether the thread
+        parameter is the value that should be used as the initial stack pointer.
 
 Return Value:
 

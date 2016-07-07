@@ -421,10 +421,9 @@ Author:
 //
 
 #define THREAD_FLAG_USER_MODE       0x0001
-#define THREAD_FLAG_ADD_REFERENCE   0x0002
-#define THREAD_FLAG_IN_SYSTEM_CALL  0x0004
-#define THREAD_FLAG_SINGLE_STEP     0x0008
-#define THREAD_FLAG_FREE_USER_STACK 0x0010
+#define THREAD_FLAG_IN_SYSTEM_CALL  0x0002
+#define THREAD_FLAG_SINGLE_STEP     0x0004
+#define THREAD_FLAG_FREE_USER_STACK 0x0008
 
 //
 // Define thread FPU flags.
@@ -438,8 +437,7 @@ Author:
 // also the set of flags that will propagate when a thread is copied.
 //
 
-#define THREAD_FLAG_CREATION_MASK \
-    (THREAD_FLAG_USER_MODE | THREAD_FLAG_ADD_REFERENCE)
+#define THREAD_FLAG_CREATION_MASK (THREAD_FLAG_USER_MODE)
 
 #define DEFAULT_USER_STACK_SIZE (8 * _1MB)
 #define DEFAULT_KERNEL_STACK_SIZE 0x3000
@@ -1873,6 +1871,10 @@ Members:
         this is a user mode address, this will also be set as the thread ID
         pointer value for the thread.
 
+    Environment - Stores an optional kernel mode pointer to an environment to
+        copy over to the stack of the created thread. This is only used when
+        creating a process directly from kernel mode.
+
 --*/
 
 typedef struct _THREAD_CREATION_PARAMETERS {
@@ -1886,6 +1888,7 @@ typedef struct _THREAD_CREATION_PARAMETERS {
     ULONG Flags;
     PVOID ThreadPointer;
     PTHREAD_ID ThreadIdPointer;
+    PPROCESS_ENVIRONMENT Environment;
 } THREAD_CREATION_PARAMETERS, *PTHREAD_CREATION_PARAMETERS;
 
 //
@@ -3765,7 +3768,7 @@ PsCopyEnvironment (
     PPROCESS_ENVIRONMENT Source,
     PPROCESS_ENVIRONMENT *Destination,
     BOOL FromUserMode,
-    BOOL ToUserMode
+    PKTHREAD DestinationThread
     );
 
 /*++
@@ -3784,9 +3787,9 @@ Arguments:
     FromUserMode - Supplies a boolean indicating whether the environment exists
         in user mode or not.
 
-    ToUserMode - Supplies a boolean indicating whether the environment should
-        be copied into user space. If this variable is set, the source
-        environment must come from kernel mode.
+    DestinationThread - Supplies an optional pointer to the user mode thread
+        to copy the environment into. Supply NULL to copy the environment to
+        a new kernel mode buffer.
 
 Return Value:
 

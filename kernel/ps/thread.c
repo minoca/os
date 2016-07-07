@@ -212,7 +212,9 @@ Return Value:
     PKTHREAD CurrentThread;
     UINTN KernelStackSize;
     PKTHREAD NewThread;
+    BOOL ParameterIsStack;
     KSTATUS Status;
+    PPROCESS_ENVIRONMENT UserEnvironment;
 
     KernelStackSize = 0;
     if ((Parameters->Flags & THREAD_FLAG_USER_MODE) == 0) {
@@ -263,6 +265,7 @@ Return Value:
     // Create the user mode stack if needed.
     //
 
+    ParameterIsStack = FALSE;
     if ((Parameters->Flags & THREAD_FLAG_USER_MODE) != 0) {
         if (Parameters->UserStack == NULL) {
             NewThread->Flags |= THREAD_FLAG_FREE_USER_STACK;
@@ -292,9 +295,25 @@ Return Value:
         RtlCopyMemory(&(NewThread->BlockedSignals),
                       &(CurrentThread->BlockedSignals),
                       sizeof(SIGNAL_SET));
+
+        //
+        // Set up the environment if there is one.
+        //
+
+        if (Parameters->Environment != NULL) {
+            ParameterIsStack = TRUE;
+            Status = PsCopyEnvironment(Parameters->Environment,
+                                       &UserEnvironment,
+                                       FALSE,
+                                       NewThread);
+
+            if (!KSUCCESS(Status)) {
+                goto CreateThreadEnd;
+            }
+        }
     }
 
-    PspPrepareThreadForFirstRun(NewThread, NULL);
+    PspPrepareThreadForFirstRun(NewThread, NULL, ParameterIsStack);
 
     //
     // Insert the thread onto the ready list.
@@ -309,9 +328,6 @@ CreateThreadEnd:
             PspSetThreadUserStackSize(NewThread, 0);
             PspDestroyCredentials(NewThread);
             ObReleaseReference(NewThread);
-            if ((Parameters->Flags & THREAD_FLAG_ADD_REFERENCE) != 0) {
-                ObReleaseReference(NewThread);
-            }
         }
     }
 
@@ -1066,14 +1082,6 @@ Return Value:
     PKTHREAD NewThread;
     KSTATUS Status;
 
-    //
-    // The add reference flag had better not be set, as it's unlikely that the
-    // kernel entity that set that flag is now aware that it has another
-    // release to do on this newly forked thread.
-    //
-
-    ASSERT((Thread->Flags & THREAD_FLAG_ADD_REFERENCE) == 0);
-
     NewThread = PspCreateThread(DestinationProcess,
                                 Thread->KernelStackSize,
                                 Thread->ThreadRoutine,
@@ -1108,7 +1116,7 @@ Return Value:
     NewThread->BlockedSignals = Thread->BlockedSignals;
     NewThread->UserStack = Thread->UserStack;
     NewThread->UserStackSize = Thread->UserStackSize;
-    PspPrepareThreadForFirstRun(NewThread, TrapFrame);
+    PspPrepareThreadForFirstRun(NewThread, TrapFrame, FALSE);
     NewThread->ThreadPointer = Thread->ThreadPointer;
     NewThread->ThreadIdPointer = Thread->ThreadIdPointer;
 
@@ -1123,7 +1131,6 @@ CloneThreadEnd:
     if (!KSUCCESS(Status)) {
         if (NewThread != NULL) {
 
-            ASSERT((NewThread->Flags & THREAD_FLAG_ADD_REFERENCE) == 0);
             ASSERT(NewThread->SupplementaryGroups == NULL);
 
             ObReleaseReference(NewThread);
@@ -1166,6 +1173,7 @@ Return Value:
 {
 
     KSTATUS Status;
+    PPROCESS_ENVIRONMENT UserEnvironment;
 
     //
     // Create the user mode stack.
@@ -1177,6 +1185,16 @@ Return Value:
     Status = PspSetThreadUserStackSize(
                                    Thread,
                                    Thread->Limits[ResourceLimitStack].Current);
+
+    if (!KSUCCESS(Status)) {
+        goto CreateThreadEnd;
+    }
+
+    Thread->ThreadParameter = NULL;
+    Status = PsCopyEnvironment(Thread->OwningProcess->Environment,
+                               &UserEnvironment,
+                               FALSE,
+                               Thread);
 
     if (!KSUCCESS(Status)) {
         goto CreateThreadEnd;
@@ -1514,16 +1532,6 @@ Return Value:
     NewThread->ThreadPointer = PsInitialThreadPointer;
 
     //
-    // Add an extra reference if desired. This is used so that the creator can
-    // wait on the thread object without having to worry about racing with the
-    // thread exiting.
-    //
-
-    if ((Flags & THREAD_FLAG_ADD_REFERENCE) != 0) {
-        ObAddReference(NewThread);
-    }
-
-    //
     // Allocate a kernel stack.
     //
 
@@ -1613,10 +1621,6 @@ CreateThreadEnd:
     if (!KSUCCESS(Status)) {
         if (NewThread != NULL) {
             ObReleaseReference(NewThread);
-            if ((Flags & THREAD_FLAG_ADD_REFERENCE) != 0) {
-                ObReleaseReference(NewThread);
-            }
-
             NewThread = NULL;
         }
     }

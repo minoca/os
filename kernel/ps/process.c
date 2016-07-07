@@ -489,7 +489,6 @@ Return Value:
     PROCESS_START_DATA StartData;
     KSTATUS Status;
     PKTHREAD Thread;
-    PPROCESS_ENVIRONMENT UserEnvironment;
 
     ASSERT(SystemCallNumber == SystemCallExecuteImage);
 
@@ -520,7 +519,7 @@ Return Value:
     Status = PsCopyEnvironment(&(Parameters->Environment),
                                &NewEnvironment,
                                TRUE,
-                               FALSE);
+                               NULL);
 
     if (!KSUCCESS(Status)) {
         goto SysExecuteProcessEnd;
@@ -650,31 +649,11 @@ Return Value:
     Thread->ThreadRoutine = StartData.EntryPoint;
 
     //
-    // Create the user mode environment.
-    //
-
-    Status = PsCopyEnvironment(Process->Environment,
-                               &UserEnvironment,
-                               FALSE,
-                               TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto SysExecuteProcessEnd;
-    }
-
-    Process->Environment->StartData = NULL;
-
-    //
-    // Set the new environment as the thread parameter.
-    //
-
-    Thread->ThreadParameter = UserEnvironment;
-
-    //
     // Reset the thread in preparation for execution.
     //
 
     Status = PspResetThread(Thread, TrapFrame);
+    Process->Environment->StartData = NULL;
     if (!KSUCCESS(Status)) {
         goto SysExecuteProcessEnd;
     }
@@ -2048,7 +2027,7 @@ Return Value:
             Status = PsCopyEnvironment(SourceEnvironment,
                                        &Environment,
                                        FALSE,
-                                       FALSE);
+                                       NULL);
 
         } else {
             Status = PsCreateEnvironment(CommandLine,
@@ -3407,7 +3386,6 @@ Return Value:
     PROCESS_START_DATA StartData;
     KSTATUS Status;
     THREAD_CREATION_PARAMETERS ThreadParameters;
-    PPROCESS_ENVIRONMENT UserEnvironment;
 
     Process = PsGetCurrentProcess();
 
@@ -3436,21 +3414,6 @@ Return Value:
     Process->Environment->StartData = &StartData;
 
     //
-    // Create the user mode environment.
-    //
-
-    Status = PsCopyEnvironment(Process->Environment,
-                               &UserEnvironment,
-                               FALSE,
-                               TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto LoaderThreadEnd;
-    }
-
-    Process->Environment->StartData = NULL;
-
-    //
     // Kick off the primary usermode thread.
     //
 
@@ -3458,9 +3421,10 @@ Return Value:
     ThreadParameters.Name = "MainThread";
     ThreadParameters.NameSize = sizeof("MainThread");
     ThreadParameters.ThreadRoutine = StartData.EntryPoint;
-    ThreadParameters.Parameter = UserEnvironment;
+    ThreadParameters.Environment = Process->Environment;
     ThreadParameters.Flags = THREAD_FLAG_USER_MODE;
     Status = PsCreateThread(&ThreadParameters);
+    Process->Environment->StartData = NULL;
     if (!KSUCCESS(Status)) {
         goto LoaderThreadEnd;
     }

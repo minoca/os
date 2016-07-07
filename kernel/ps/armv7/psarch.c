@@ -248,7 +248,8 @@ Return Value:
 VOID
 PspPrepareThreadForFirstRun (
     PKTHREAD Thread,
-    PTRAP_FRAME TrapFrame
+    PTRAP_FRAME TrapFrame,
+    BOOL ParameterIsStack
     )
 
 /*++
@@ -265,6 +266,9 @@ Arguments:
     TrapFrame - Supplies an optional pointer for the thread to restore on its
         first run.
 
+    ParameterIsStack - Supplies a boolean indicating whether the thread
+        parameter is the value that should be used as the initial stack pointer.
+
 Return Value:
 
     None.
@@ -277,7 +281,7 @@ Return Value:
     ULONG Flags;
     PULONG StackPointer;
     PTRAP_FRAME StackTrapFrame;
-    UINTN UserStackPointer;
+    PVOID UserStackPointer;
 
     //
     // Get the initial stack pointer, and word align it.
@@ -293,12 +297,24 @@ Return Value:
     if ((Thread->Flags & THREAD_FLAG_USER_MODE) != 0) {
         Flags |= ARM_MODE_USER;
         EntryPoint = (UINTN)Thread->ThreadRoutine;
-        UserStackPointer = (UINTN)Thread->UserStack + Thread->UserStackSize;
+
+        ASSERT((TrapFrame == NULL) || (ParameterIsStack == FALSE));
+
+        if (ParameterIsStack != FALSE) {
+            UserStackPointer = Thread->ThreadParameter;
+
+            ASSERT((UserStackPointer >= Thread->UserStack) &&
+                   (UserStackPointer <
+                    Thread->UserStack + Thread->UserStackSize));
+
+        } else {
+            UserStackPointer = Thread->UserStack + Thread->UserStackSize;
+        }
 
     } else {
         Flags |= ARM_MODE_SVC;
         EntryPoint = (UINTN)PspKernelThreadStart;
-        UserStackPointer = 0x66666666;
+        UserStackPointer = (PVOID)0x66666666;
     }
 
     if (((UINTN)EntryPoint & ARM_THUMB_BIT) != 0) {
@@ -360,9 +376,13 @@ Return Value:
 
     ULONG OldSvcLink;
     ULONG OldSvcStackPointer;
-    PUINTN UserStackPointer;
+    PVOID UserStackPointer;
 
-    UserStackPointer = Thread->UserStack + Thread->UserStackSize;
+    UserStackPointer = Thread->ThreadParameter;
+
+    ASSERT((UserStackPointer >= Thread->UserStack) &&
+           (UserStackPointer < Thread->UserStack + Thread->UserStackSize));
+
     OldSvcLink = TrapFrame->SvcLink;
     OldSvcStackPointer = TrapFrame->SvcSp;
     RtlZeroMemory(TrapFrame, sizeof(TRAP_FRAME));

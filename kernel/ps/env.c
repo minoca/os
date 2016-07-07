@@ -66,7 +66,7 @@ PsCopyEnvironment (
     PPROCESS_ENVIRONMENT Source,
     PPROCESS_ENVIRONMENT *Destination,
     BOOL FromUserMode,
-    BOOL ToUserMode
+    PKTHREAD DestinationThread
     )
 
 /*++
@@ -85,9 +85,9 @@ Arguments:
     FromUserMode - Supplies a boolean indicating whether the environment exists
         in user mode or not.
 
-    ToUserMode - Supplies a boolean indicating whether the environment should
-        be copied into user space. If this variable is set, the source
-        environment must come from kernel mode.
+    DestinationThread - Supplies an optional pointer to the user mode thread
+        to copy the environment into. Supply NULL to copy the environment to
+        a new kernel mode buffer.
 
 Return Value:
 
@@ -104,7 +104,6 @@ Return Value:
     ULONG ElementCount;
     ULONG ElementIndex;
     UINTN EnvironmentBufferLength;
-    ULONG Flags;
     UINTN ImageNameLength;
     PPROCESS_ENVIRONMENT NewEnvironment;
     UINTN Offset;
@@ -116,7 +115,7 @@ Return Value:
     // Environments cannot be copied directly from user mode to user mode.
     //
 
-    ASSERT((FromUserMode == FALSE) || (ToUserMode == FALSE));
+    ASSERT((FromUserMode == FALSE) || (DestinationThread == NULL));
 
     NewEnvironment = NULL;
     Process = PsGetCurrentProcess();
@@ -126,7 +125,7 @@ Return Value:
     // process.
     //
 
-    ASSERT(((FromUserMode == FALSE) && (ToUserMode == FALSE)) ||
+    ASSERT(((FromUserMode == FALSE) && (DestinationThread == NULL)) ||
            (Process != PsGetKernelProcess()));
 
     //
@@ -164,7 +163,7 @@ Return Value:
                      EnvironmentBufferLength +
                      sizeof(PROCESS_START_DATA);
 
-    if (ToUserMode != FALSE) {
+    if (DestinationThread != NULL) {
         AllocationSize += sizeof(PROCESS_START_DATA);
     }
 
@@ -173,27 +172,37 @@ Return Value:
         goto CopyEnvironmentEnd;
     }
 
-    if (ToUserMode != FALSE) {
-        Flags = IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE;
-        Status = MmMapFileSection(INVALID_HANDLE,
-                                  0,
-                                  AllocationSize,
-                                  Flags,
-                                  FALSE,
-                                  NULL,
-                                  AllocationStrategyAnyAddress,
-                                  (PVOID)(&NewEnvironment));
+    if (DestinationThread != NULL) {
 
-        if (!KSUCCESS(Status)) {
+        //
+        // If copying to user mode, then the user stack had better be set up,
+        // and this had better be the only thread (otherwise sudden unmappings
+        // could cause bad faults in kernel mode).
+        //
+
+        ASSERT((DestinationThread->UserStackSize != 0) &&
+               (DestinationThread->OwningProcess == Process) &&
+               (DestinationThread->ThreadParameter == NULL));
+
+        //
+        // Don't allow the environment to cover too much of the stack.
+        //
+
+        if (AllocationSize > DestinationThread->UserStackSize / 2) {
+            RtlDebugPrint("Environment too large!\n");
+            Status = STATUS_INSUFFICIENT_RESOURCES;
             goto CopyEnvironmentEnd;
         }
 
+        NewEnvironment = DestinationThread->UserStack +
+                         DestinationThread->UserStackSize -
+                         AllocationSize;
+
         //
-        // It's okay to directly write to user mode memory in this case
-        // because there is no user mode code running.
+        // Set the thread parameter to point at the environment.
         //
 
-        ASSERT(Process->ThreadCount == 1);
+        DestinationThread->ThreadParameter = NewEnvironment;
 
     } else {
         NewEnvironment = MmAllocatePagedPool(AllocationSize,
@@ -443,7 +452,7 @@ Return Value:
 
     ASSERT(AllocationSize >= sizeof(PROCESS_START_DATA));
 
-    if (ToUserMode != FALSE) {
+    if (DestinationThread != NULL) {
 
         ASSERT(Source->StartData != NULL);
 
