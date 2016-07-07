@@ -37,10 +37,11 @@ DiskData["Format"] = PARTITION_FORMAT_MBR;
 //
 
 BootEntry["DebugDevice"] = 1;
-BootEntry["KernelArguments"] += " ps.env=CONSOLE=/dev/tty/Slave2 ";
+BootEntry["KernelArguments"] += " ps.env=CONSOLE=/dev/Terminal/Slave2 ";
 
 //
 // Set the EFI boot manager name.
 //
 
 BootmefiCopy["Destination"] += EFI_DEFAULT_APP_X86;
+
