@@ -762,13 +762,14 @@ Return Value:
         return 0;
     }
 
-    if (Delta.tv_sec > MAX_ULONG - MILLISECONDS_PER_SECOND) {
+    if (Delta.tv_sec >
+        ((MAX_ULONG - MILLISECONDS_PER_SECOND) / MILLISECONDS_PER_SECOND)) {
+
         return SYS_WAIT_TIME_INDEFINITE;
     }
 
     Result = (Delta.tv_sec * MILLISECONDS_PER_SECOND) +
-             (Delta.tv_nsec /
-              (NANOSECONDS_PER_SECOND / MILLISECONDS_PER_SECOND));
+             (Delta.tv_nsec / NANOSECONDS_PER_MILLISECOND);
 
     return Result;
 }
