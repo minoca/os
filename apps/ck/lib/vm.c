@@ -138,7 +138,7 @@ Return Value:
         return NULL;
     }
 
-    CkZero(Vm, sizeof(Vm));
+    CkZero(Vm, sizeof(CK_VM));
     if (Configuration == NULL) {
         CkCopy(&(Vm->Configuration), Default, sizeof(CK_CONFIGURATION));
 

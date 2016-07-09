@@ -34,6 +34,7 @@ Environment:
 #include "compiler.h"
 #include "lang.h"
 #include "compsup.h"
+#include "debug.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -319,10 +320,12 @@ Return Value:
     Parser.Parser.Grammar = &CkGrammar;
     Parser.Parser.Reallocate = CkpCompilerReallocate;
     Parser.Parser.Callback = CkpParserCallback;
+    Parser.Parser.Error = CkpParserError;
     Parser.Parser.Context = &Compiler;
     Parser.Parser.Lexer = &(Parser.Lexer);
     Parser.Parser.GetToken = CkpLexerGetToken;
     Parser.Parser.ValueSize = sizeof(CK_SYMBOL_UNION);
+    Parser.Line = 1;
     Error = CkpInitializeCompiler(&Compiler, &Parser, NULL, TRUE);
     if (Error != CkSuccess) {
         Parser.Errors += 1;
@@ -340,10 +343,11 @@ Return Value:
     }
 
     //
-    // Compile the translation unit.
+    // Compile the translation unit, which is always one beyond the node count
+    // (since the callback only counts the children).
     //
 
-    TranslationUnit = Parser.Nodes + (Parser.NodeCount - 1);
+    TranslationUnit = Parser.Nodes + Parser.NodeCount;
 
     CK_ASSERT(TranslationUnit->Symbol == CkNodeTranslationUnit);
 
@@ -670,6 +674,14 @@ FinalizeCompilerEnd:
         Compiler->UpvalueCapacity = 0;
     }
 
+    if (Compiler->Function != NULL) {
+        if (CK_VM_FLAG_SET(Compiler->Parser->Vm,
+                           CK_CONFIGURATION_DEBUG_COMPILER)) {
+
+            CkpDumpCode(Compiler->Parser->Vm, Compiler->Function);
+        }
+    }
+
     return Compiler->Function;
 }
 
@@ -820,7 +832,7 @@ Return Value:
                                      Token->Size);
 
         CkpEmitConstant(Compiler, NameString);
-        CkpCallMethod(Compiler, 1, "__getModuleVariable@1", 7);
+        CkpCallMethod(Compiler, 1, "__getModuleVariable@1", 21);
         if (IdentifierList->Children > 1) {
             IdentifierList = CK_GET_AST_NODE(Compiler,
                                              IdentifierList->ChildIndex);
@@ -989,7 +1001,6 @@ Return Value:
     PCK_AST_NODE CurrentNode;
     PLEXER_TOKEN Identifier;
     UINTN Length;
-    PCK_AST_NODE NextNode;
     PCK_STRING_OBJECT String;
     CK_VALUE Value;
 
@@ -1013,9 +1024,9 @@ Return Value:
         //
 
         Length += Identifier->Size + 1;
-        NextNode = CK_GET_AST_NODE(Compiler, CurrentNode->ChildIndex);
+        CurrentNode = CK_GET_AST_NODE(Compiler, CurrentNode->ChildIndex);
 
-        CK_ASSERT(NextNode->Symbol == CkNodeModuleName);
+        CK_ASSERT(CurrentNode->Symbol == CkNodeModuleName);
     }
 
     //
@@ -1039,7 +1050,7 @@ Return Value:
            Compiler->Parser->Source + Identifier->Position,
            Identifier->Size);
 
-    Current += Identifier->Position;
+    Current += Identifier->Size;
 
     //
     // Walk back up the list adding the identifiers.
@@ -1058,7 +1069,7 @@ Return Value:
                Compiler->Parser->Source + Identifier->Position,
                Identifier->Size);
 
-        Current += Identifier->Position;
+        Current += Identifier->Size;
     }
 
     CkpStringHash(String);
@@ -1144,6 +1155,7 @@ Return Value:
     IsFunction = TRUE;
     if (Compiler->EnclosingClass != FALSE) {
         IsFunction = FALSE;
+        Compiler->EnclosingClass->InStatic = IsStatic;
     }
 
     if ((IsStatic != FALSE) && (IsFunction != FALSE)) {
@@ -1162,6 +1174,10 @@ Return Value:
     while (Argument->Children > 1) {
         Signature.Arity += 1;
         Argument = CK_GET_AST_NODE(Compiler, Argument->ChildIndex);
+    }
+
+    if (Argument->Children > 0) {
+        Signature.Arity += 1;
     }
 
     if (Signature.Arity >= CK_MAX_ARGUMENTS) {
@@ -1188,7 +1204,7 @@ Return Value:
     //
 
     if (Argument->Children > 0) {
-        CkpDeclareVariable(Compiler,
+        CkpDeclareVariable(&MethodCompiler,
                            CK_GET_AST_TOKEN(Compiler, Argument->ChildIndex));
 
         while (Argument != ArgumentsNode) {
@@ -1197,7 +1213,7 @@ Return Value:
             CK_ASSERT(Argument->Children == 3);
 
             ArgumentName = CK_GET_AST_TOKEN(Compiler, Argument->ChildIndex + 2);
-            CkpDeclareVariable(Compiler, ArgumentName);
+            CkpDeclareVariable(&MethodCompiler, ArgumentName);
         }
     }
 
@@ -1314,9 +1330,9 @@ Return Value:
         // If return as an expression, go compile that expression.
         //
 
-        if (Node->Children > 1) {
+        if (Node->Children > 2) {
 
-            CK_ASSERT(Node->Children == 2);
+            CK_ASSERT(Node->Children == 3);
 
             CkpVisitNode(Compiler,
                          CK_GET_AST_NODE(Compiler, Node->ChildIndex + 1));
@@ -1510,7 +1526,7 @@ Return Value:
 
         //
         // The old traditional for loop looks like this:
-        // for ( expression_statement expression_statement [expression] )
+        // for ( statement expression ; [expression] )
         //     compound_statement.
         //
 
@@ -1550,9 +1566,9 @@ Return Value:
             // so also pop it off the stack.
             //
 
-            if (Node->Children == 7) {
+            if (Node->Children == 8) {
                 CkpVisitNode(Compiler,
-                             CK_GET_AST_NODE(Compiler, Node->ChildIndex + 4));
+                             CK_GET_AST_NODE(Compiler, Node->ChildIndex + 5));
 
                 CkpEmitOp(Compiler, CkOpPop);
             }
@@ -1850,7 +1866,7 @@ Return Value:
     PLEXER_TOKEN Static;
     CK_SYMBOL_INDEX Symbol;
 
-    NameIndex = Node->ChildIndex + Node->Children + 1;
+    NameIndex = Node->ChildIndex + Node->Children - 1;
     Name = CK_GET_AST_TOKEN(Compiler, NameIndex);
 
     CK_ASSERT(((Node->Children == 2) || (Node->Children == 3)) &&
@@ -1874,6 +1890,7 @@ Return Value:
 
         if (Static->Value == CkTokenStatic) {
             Symbol = CkpDeclareVariable(Compiler, Name);
+            CkpEmitOp(Compiler, CkOpNull);
             CkpDefineVariable(Compiler, Symbol);
 
         //
@@ -1985,6 +2002,7 @@ Return Value:
 {
 
     PCK_AST_NODE CurrentNode;
+    UINTN LastIndex;
     PCK_AST_NODE NextNode;
     PCK_AST_NODE VisitNode;
 
@@ -2007,8 +2025,10 @@ Return Value:
     // Visit the bottom most element.
     //
 
-    VisitNode = CK_GET_AST_NODE(Compiler, CurrentNode->ChildIndex);
-    CkpVisitNode(Compiler, VisitNode);
+    if (CurrentNode->Children != 0) {
+        VisitNode = CK_GET_AST_NODE(Compiler, CurrentNode->ChildIndex);
+        CkpVisitNode(Compiler, VisitNode);
+    }
 
     //
     // Now loop going back up the tree visiting the other elements.
@@ -2019,7 +2039,8 @@ Return Value:
 
         CK_ASSERT(CurrentNode->Symbol == Node->Symbol);
 
-        VisitNode = CK_GET_AST_NODE(Compiler, CurrentNode->ChildIndex + 1);
+        LastIndex = CurrentNode->ChildIndex + CurrentNode->Children - 1;
+        VisitNode = CK_GET_AST_NODE(Compiler, LastIndex);
         CkpVisitNode(Compiler, VisitNode);
     }
 
@@ -2245,7 +2266,6 @@ Return Value:
            ElementCount * sizeof(CK_SYMBOL_UNION));
 
     Child = Parser->Nodes + Parser->NodeCount;
-    Parser->NodeCount += ElementCount;
 
     //
     // Sum the descendents.
@@ -2259,26 +2279,30 @@ Return Value:
             if (Child->Node.Depth + 1 > NewNode->Depth) {
                 NewNode->Depth = Child->Node.Depth + 1;
             }
-        }
 
-        //
-        // Initially set the child's parent to the end node, which will be
-        // incorrect except for the very last translation unit. For all the
-        // grandchildren nodes, now that the parent is settled into the array,
-        // update their parent indices.
-        //
+            //
+            // Initially set the child's parent to the end node, which will be
+            // incorrect except for the very last translation unit. For all the
+            // grandchildren nodes, now that the parent is settled into the
+            // array, update their parent indices.
+            //
 
-        Child->Node.Parent = Parser->NodeCount;
-        for (GrandchildIndex = 0;
-             GrandchildIndex < Child->Node.Children;
-             GrandchildIndex += 1) {
+            Child->Node.Parent = Parser->NodeCount + ElementCount;
+            for (GrandchildIndex = 0;
+                 GrandchildIndex < Child->Node.Children;
+                 GrandchildIndex += 1) {
 
-            Grandchild = Parser->Nodes + Child->Node.ChildIndex;
-            Grandchild->Node.Parent = ChildIndex;
+                Grandchild = Parser->Nodes + Child->Node.ChildIndex;
+                if (Grandchild->Symbol >= CkNodeStart) {
+                    Grandchild->Node.Parent = ChildIndex + Parser->NodeCount;
+                }
+            }
         }
 
         Child += 1;
     }
+
+    Parser->NodeCount += ElementCount;
 
     //
     // Copy the current node as well in case it ends up being the last

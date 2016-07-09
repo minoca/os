@@ -38,3 +38,4 @@ include $(SRCROOT)/os/minoca.mk
 gram.c:
 	@echo Generating Grammar - $@
 	@../gram/gramgen $@
+

@@ -376,7 +376,8 @@ Return Value:
 
 VOID
 CkpLoadThis (
-    PCK_COMPILER Compiler
+    PCK_COMPILER Compiler,
+    PLEXER_TOKEN Token
     )
 
 /*++
@@ -389,6 +390,9 @@ Arguments:
 
     Compiler - Supplies a pointer to the compiler.
 
+    Token - Supplies a pointer to the token, to point to in case it was an
+        inappropriate scope for this.
+
 Return Value:
 
     None.
@@ -397,7 +401,15 @@ Return Value:
 
 {
 
-    CkpLoadVariable(Compiler, CkpResolveNonGlobal(Compiler, "this", 4));
+    CK_VARIABLE This;
+
+    This = CkpResolveNonGlobal(Compiler, "this", 4);
+    if (This.Index == -1) {
+        CkpCompileError(Compiler, Token, "\"this\" used outside class method");
+        return;
+    }
+
+    CkpLoadVariable(Compiler, This);
     return;
 }
 

@@ -250,12 +250,7 @@ Return Value:
     case CkErrorCompile:
     case CkErrorRuntime:
     default:
-        fprintf(stderr,
-                "%s:%d: %s\n",
-                Module,
-                Line,
-                Message);
-
+        fprintf(stderr, "%s:%d: %s.\n", Module, Line, Message);
         break;
     }
 

@@ -51,6 +51,12 @@ Author:
 #define CK_CONFIGURATION_GC_STRESS 0x00000001
 
 //
+// Define this flag to print the bytecode for all compiled functions.
+//
+
+#define CK_CONFIGURATION_DEBUG_COMPILER 0x00000002
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

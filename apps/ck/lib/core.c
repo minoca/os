@@ -71,6 +71,17 @@ Return Value:
 
 {
 
+    PCK_MODULE CoreModule;
+    CK_VALUE Value;
+
+    CoreModule = CkpModuleCreate(Vm, NULL);
+    if (CoreModule == NULL) {
+        return CkErrorNoMemory;
+    }
+
+    CK_OBJECT_VALUE(Value, CoreModule);
+    CkpDictSet(Vm, Vm->Modules, CK_NULL_VALUE, Value);
+
     //
     // TODO: Implement CkpInitializeCore.
     //

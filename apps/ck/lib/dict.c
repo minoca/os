@@ -227,6 +227,8 @@ Return Value:
     if (CkpDictAddEntry(Dict->Entries, Dict->Capacity, Key, Value) != FALSE) {
         Dict->Count += 1;
     }
+
+    return;
 }
 
 CK_VALUE
@@ -361,7 +363,10 @@ Return Value:
 
     for (Loop = 0; Loop < Dict->Capacity; Loop += 1) {
         Entry = &(Dict->Entries[Index]);
-        if (CK_IS_UNDEFINED(Entry->Value)) {
+        if (CK_IS_UNDEFINED(Entry->Key)) {
+            if (CK_IS_UNDEFINED(Entry->Value)) {
+                break;
+            }
 
         } else if (CkpAreValuesEqual(Entry->Key, Key) != FALSE) {
             return Entry;
@@ -446,7 +451,10 @@ Return Value:
     // Remove the old array and replace it with the new one.
     //
 
-    CkFree(Vm, Dict->Entries);
+    if (Dict->Entries != NULL) {
+        CkFree(Vm, Dict->Entries);
+    }
+
     Dict->Entries = NewEntries;
     Dict->Capacity = NewCapacity;
     return;

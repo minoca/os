@@ -90,7 +90,7 @@ Return Value:
     //
     // An expression is either just an assignment expression, or it takes the
     // form expression , assignment_expression. In the form with the comma,
-    // the first expression is dicarded.
+    // the first expression is discarded.
     //
 
     LastIndex = Node->ChildIndex + Node->Children - 1;
@@ -527,7 +527,12 @@ Return Value:
             CK_ASSERT(ArgumentsNode->Symbol == CkNodeArgumentExpressionList);
 
             Signature.Arity += 1;
-            ArgumentsNode = CK_GET_AST_NODE(Compiler, Node->ChildIndex);
+            ArgumentsNode = CK_GET_AST_NODE(Compiler,
+                                            ArgumentsNode->ChildIndex);
+        }
+
+        if (ArgumentsNode->Children > 0) {
+            Signature.Arity += 1;
         }
 
         if (Signature.Arity >= CK_MAX_ARGUMENTS) {
@@ -671,7 +676,7 @@ Return Value:
 
     case CkTokenThis:
     case CkTokenSuper:
-        CkpLoadThis(Compiler);
+        CkpLoadThis(Compiler, Token);
         break;
 
     case CkTokenTrue:
@@ -1016,9 +1021,11 @@ Return Value:
     //
 
     ClassCompiler = CkpGetClassCompiler(Compiler);
-    Variable.Index = CkpSymbolTableFind(&(ClassCompiler->Fields),
-                                        Name,
-                                        Token->Size);
+    if ((ClassCompiler != NULL) && (ClassCompiler->InStatic == FALSE)) {
+        Variable.Index = CkpSymbolTableFind(&(ClassCompiler->Fields),
+                                            Name,
+                                            Token->Size);
+    }
 
     if (Variable.Index != -1) {
 
@@ -1043,7 +1050,7 @@ Return Value:
         //
 
         } else {
-            CkpLoadThis(Compiler);
+            CkpLoadThis(Compiler, Token);
             Op = CkOpLoadField;
             if (Store != FALSE) {
                 Op = CkOpStoreField;

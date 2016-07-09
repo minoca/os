@@ -109,7 +109,8 @@ typedef enum _CK_OBJECT_TYPE {
     CkObjectModule,
     CkObjectRange,
     CkObjectString,
-    CkObjectUpvalue
+    CkObjectUpvalue,
+    CkObjectTypeCount
 } CK_OBJECT_TYPE, *PCK_OBJECT_TYPE;
 
 typedef enum _CK_VALUE_TYPE {

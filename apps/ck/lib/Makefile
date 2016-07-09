@@ -33,6 +33,7 @@ DIRS = build \
 include $(SRCROOT)/os/minoca.mk
 
 build: gram
-gram.c: gram
+gram.c: gram/gramgen.c
 	@echo Generating Grammar - $@
 	@./gram/gramgen $@
+

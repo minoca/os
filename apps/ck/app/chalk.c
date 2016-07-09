@@ -44,12 +44,17 @@ Environment:
     "usage: chalk [options] [file] [arguments...]\n"                           \
     "Chalk is a nifty scripting language. It's designed to be intuitive, \n"   \
     "small, and easily embeddable. Options are:\n"                             \
+    "  --debug-gc -- Stress the garbage collector.\n"                          \
+    "  --debug-compiler -- Print the compiled bytecode.\n"                     \
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n"
 
 #define CHALK_OPTIONS_STRING "hV"
 
 #define CHALK_LINE_MAX 2048
+
+#define CHALK_OPTION_DEBUG_GC 257
+#define CHALK_OPTION_DEBUG_COMPILER 258
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -114,6 +119,8 @@ ChalkReadLine (
 //
 
 struct option ChalkLongOptions[] = {
+    {"debug-gc", no_argument, 0, CHALK_OPTION_DEBUG_GC},
+    {"debug-compiler", no_argument, 0, CHALK_OPTION_DEBUG_COMPILER},
     {"help", no_argument, 0, 'h'},
     {"verbose", no_argument, 0, 'v'},
     {NULL, 0, 0, 0},
@@ -185,6 +192,14 @@ Return Value:
         }
 
         switch (Option) {
+        case CHALK_OPTION_DEBUG_GC:
+            Context.Configuration.Flags |= CK_CONFIGURATION_GC_STRESS;
+            break;
+
+        case CHALK_OPTION_DEBUG_COMPILER:
+            Context.Configuration.Flags |= CK_CONFIGURATION_DEBUG_COMPILER;
+            break;
+
         case 'V':
             printf("Chalk version %d.%d.%d. Copyright 2016 Minoca Corp. "
                    "All Rights Reserved.\n",
@@ -292,6 +307,7 @@ Return Value:
     }
 
     CkInitializeConfiguration(&(Context->Configuration));
+    Status = 0;
 
 InitializeEnd:
     return Status;

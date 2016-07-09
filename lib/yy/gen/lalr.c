@@ -95,6 +95,8 @@ Members:
         parallel to the lookahead sets and lookahead rule arrays. It shows
         which gotos use that lookahead.
 
+    StartGoto - Stores the goto index associated with the start symbol.
+
 --*/
 
 typedef struct _YYGEN_LALR_CONTEXT {
@@ -109,6 +111,7 @@ typedef struct _YYGEN_LALR_CONTEXT {
     PYY_GOTO_INDEX *Relations;
     PYY_GOTO_INDEX *Includes;
     PYYGEN_LOOKBACK *Lookback;
+    YY_GOTO_INDEX StartGoto;
 } YYGEN_LALR_CONTEXT, *PYYGEN_LALR_CONTEXT;
 
 //
@@ -613,6 +616,7 @@ Return Value:
 {
 
     YY_STATE_INDEX DestinationState;
+    YY_VALUE Goal;
     YY_GOTO_INDEX GotoIndex;
     PYY_GOTO_INDEX GotoMap;
     YY_VALUE ShiftIndex;
@@ -726,6 +730,7 @@ Return Value:
     // shifts.
     //
 
+    Goal = Context->Items[1];
     Shifts = Context->FirstShift;
     while (Shifts != NULL) {
         for (ShiftIndex = Shifts->Count - 1; ShiftIndex >= 0; ShiftIndex -= 1) {
@@ -736,6 +741,16 @@ Return Value:
             }
 
             GotoIndex = WorkingMap[Symbol - TokenCount];
+
+            //
+            // Remember the goto for the final state, as it needs to get an EOF
+            // set in the initial follow set.
+            //
+
+            if (Symbol == Goal) {
+                Lalr->StartGoto = GotoIndex;
+            }
+
             WorkingMap[Symbol - TokenCount] += 1;
             Context->FromState[GotoIndex] = Shifts->Number;
             Context->ToState[GotoIndex] = DestinationState;
@@ -909,7 +924,8 @@ Return Value:
     // The goto for the starting symbol is followed by EOF.
     //
 
-    YYGEN_BITMAP_SET(Lalr->GotoFollows, 0);
+    Row = Lalr->GotoFollows + (Lalr->StartGoto * Lalr->TokenSetSize);
+    YYGEN_BITMAP_SET(Row, 0);
 
     //
     // Traverse through the empty states to figure out the terminals that
@@ -1369,14 +1385,18 @@ Return Value:
     Lalr->Relations = Relations;
     Lalr->Infinity = Lalr->GotoCount + 2;
     if (Lalr->GotoVertex == NULL) {
-        Lalr->GotoVertex = YypAllocate(Lalr->GotoCount * sizeof(YY_GOTO_INDEX));
+        Lalr->GotoVertex =
+                    YypAllocate((Lalr->GotoCount + 1) * sizeof(YY_GOTO_INDEX));
+
         if (Lalr->GotoVertex == NULL) {
             goto BuildDigraphEnd;
         }
     }
 
     if (Lalr->Vertices == NULL) {
-        Lalr->Vertices = YypAllocate(Lalr->GotoCount * sizeof(YY_GOTO_INDEX));
+        Lalr->Vertices =
+                    YypAllocate((Lalr->GotoCount + 1) * sizeof(YY_GOTO_INDEX));
+
         if (Lalr->Vertices == NULL) {
             goto BuildDigraphEnd;
         }

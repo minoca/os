@@ -429,7 +429,7 @@ Return Value:
                    Grammar->Rules[Next]);
         }
 
-        Status = Parser->Callback(Parser->Callback,
+        Status = Parser->Callback(Parser->Context,
                                   LeftSide + Grammar->MaxToken + 2,
                                   FirstElement,
                                   Length,

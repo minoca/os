@@ -158,7 +158,7 @@ Return Value:
         return Existing;
     }
 
-    return CkpSymbolTableEnsure(Vm, SymbolTable, Name, Size);
+    return CkpSymbolTableAdd(Vm, SymbolTable, Name, Size);
 }
 
 CK_SYMBOL_INDEX
@@ -203,6 +203,7 @@ Return Value:
         return -1;
     }
 
+    CkCopy(String.Data, Name, Size);
     String.Data[Size] = '\0';
     String.Size = Size;
     Status = CkpArrayAppend(Vm, SymbolTable, String);
@@ -347,6 +348,7 @@ Return Value:
                Count * ElementSize);
     }
 
+    ByteArray->Count += Count;
     return CkSuccess;
 }
 

@@ -819,9 +819,9 @@ Return Value:
     }
 
     Bytes = Compiler->Function->Code.Data + Offset;
-    *Bytes = (UCHAR)(Offset >> 8);
+    *Bytes = (UCHAR)(JumpTarget >> 8);
     Bytes += 1;
-    *Bytes = (UCHAR)Offset;
+    *Bytes = (UCHAR)JumpTarget;
     return;
 }
 
@@ -1068,88 +1068,6 @@ Return Value:
     return;
 }
 
-INT
-CkpGetLineForOffset (
-    PCK_FUNCTION Function,
-    ULONG CodeOffset
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines what line the given bytecode offset is on.
-
-Arguments:
-
-    Function - Supplies a pointer to the function containing the bytecode.
-
-    CodeOffset - Supplies the offset whose line number is desired.
-
-Return Value:
-
-    Returns the line number the offset in question.
-
-    -1 if no line number information could be found.
-
---*/
-
-{
-
-    PUCHAR End;
-    ULONG Line;
-    PUCHAR LineProgram;
-    ULONG Offset;
-    CK_LINE_OP Op;
-
-    LineProgram = Function->Debug.LineProgram.Data;
-    End = LineProgram + Function->Debug.LineProgram.Count;
-    Offset = 0;
-    Line = 0;
-    while (LineProgram < End) {
-        Op = *LineProgram;
-        LineProgram += 1;
-        switch (Op) {
-        case CkLineOpNop:
-            break;
-
-        case CkLineOpSetLine:
-            CkCopy(&Line, LineProgram, sizeof(ULONG));
-            LineProgram += sizeof(ULONG);
-            break;
-
-        case CkLineOpSetOffset:
-            CkCopy(&Offset, LineProgram, sizeof(ULONG));
-            LineProgram += sizeof(ULONG);
-            break;
-
-        case CkLineOpAdvanceLine:
-            Line += CkpUtf8Decode(LineProgram, End - LineProgram);
-            LineProgram += CkpUtf8DecodeSize(*LineProgram);
-            break;
-
-        case CkLineOpAdvanceOffset:
-            Offset += CkpUtf8Decode(LineProgram, End - LineProgram);
-            LineProgram += CkpUtf8DecodeSize(*LineProgram);
-            break;
-
-        case CkLineOpSpecial:
-        default:
-            Line += CK_LINE_ADVANCE(Op);
-            Offset += CK_OFFSET_ADVANCE(Op);
-            break;
-        }
-
-        if (Offset >= CodeOffset) {
-            return Line;
-        }
-    }
-
-    CK_ASSERT(FALSE);
-
-    return -1;
-}
-
 CK_VALUE
 CkpReadSourceInteger (
     PCK_COMPILER Compiler,
@@ -1256,6 +1174,7 @@ Return Value:
 
 {
 
+    PSTR BasicStart;
     CK_BYTE_ARRAY ByteArray;
     INT Character;
     PSTR Current;
@@ -1273,7 +1192,25 @@ Return Value:
     Current += 1;
     End -= 1;
     while (Current < End) {
-        if (*Current == '\\') {
+
+        //
+        // Most of the string is probably not backslashes, so batch as much of
+        // that together for copy as possible.
+        //
+
+        BasicStart = Current;
+        while ((Current < End) && (*Current != '\\')) {
+            Current += 1;
+        }
+
+        if (Current != BasicStart) {
+            CkpFillArray(Compiler->Parser->Vm,
+                         &ByteArray,
+                         BasicStart,
+                         Current - BasicStart);
+        }
+
+        if ((Current < End) && (*Current == '\\')) {
             Current += 1;
 
             CK_ASSERT(Current != End);
@@ -1360,9 +1297,6 @@ Return Value:
                 CkpArrayAppend(Compiler->Parser->Vm, &ByteArray, Character);
                 Current += 1;
             }
-
-        } else {
-            CkpArrayAppend(Compiler->Parser->Vm, &ByteArray, *Current);
         }
     }
 
@@ -1485,6 +1419,18 @@ Return Value:
     Offset = Compiler->Function->Code.Count;
 
     //
+    // If this is the first thing ever emitted, initialize the first line.
+    //
+
+    if (Compiler->Function->Debug.FirstLine == 0) {
+
+        CK_ASSERT(Line != 0);
+
+        Compiler->Function->Debug.FirstLine = Line;
+        Compiler->Line = Line;
+    }
+
+    //
     // Emit the next statement in the line number program used to store the
     // relationship between bytecode bytes and line numbers. The line program
     // is similar to the DWARF line program, except there are fewer opcodes and
@@ -1570,6 +1516,8 @@ Return Value:
         if (CK_LINE_IS_SPECIAL_ENCODABLE(LineAdvance, OffsetAdvance)) {
             Op = CK_LINE_ENCODE_SPECIAL(LineAdvance, OffsetAdvance);
             CkpArrayAppend(Compiler->Parser->Vm, LineProgram, Op);
+            Compiler->LastLineOp = LineProgram->Data +
+                                   LineProgram->Count - 1;
 
         //
         // The line or offset advance is too wild to encode with a special byte.
@@ -1627,9 +1575,10 @@ Return Value:
             Compiler->LastLineOp = LineProgram->Data +
                                    LineProgram->Count - Size;
         }
+
+        Compiler->Line = Line;
     }
 
-    Compiler->Line = Line;
     Compiler->LineOffset = Offset;
     return;
 }

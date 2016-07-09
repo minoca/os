@@ -363,12 +363,12 @@ YY_VALUE CkgIterationStatement[] = {
         CkTokenIn, CkNodeExpression, CkTokenCloseParentheses,
         CkNodeCompoundStatement, -1,
 
-    CkTokenFor, CkTokenOpenParentheses, CkNodeExpressionStatement,
-        CkNodeExpressionStatement, CkTokenCloseParentheses,
+    CkTokenFor, CkTokenOpenParentheses, CkNodeStatement,
+        CkNodeExpression, CkTokenSemicolon, CkTokenCloseParentheses,
         CkNodeCompoundStatement, -1,
 
-    CkTokenFor, CkTokenOpenParentheses, CkNodeExpressionStatement,
-        CkNodeExpressionStatement, CkNodeExpression,
+    CkTokenFor, CkTokenOpenParentheses, CkNodeStatement,
+        CkNodeExpression, CkTokenSemicolon, CkNodeExpression,
         CkTokenCloseParentheses, CkNodeCompoundStatement, -1,
 
     0

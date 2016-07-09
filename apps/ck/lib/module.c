@@ -45,12 +45,6 @@ CkpModuleGet (
     CK_VALUE Name
     );
 
-PCK_MODULE
-CkpModuleCreate (
-    PCK_VM Vm,
-    PCK_STRING_OBJECT Name
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -147,48 +141,6 @@ Return Value:
     return Fiber;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-PCK_MODULE
-CkpModuleGet (
-    PCK_VM Vm,
-    CK_VALUE Name
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to find a previously loaded module.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Name - Supplies the module name value.
-
-Return Value:
-
-    Returns a pointer to the module with the given name on success.
-
-    NULL if no such module exists.
-
---*/
-
-{
-
-    CK_VALUE Module;
-
-    Module = CkpDictGet(Vm->Modules, Name);
-    if (CK_IS_UNDEFINED(Module)) {
-        return NULL;
-    }
-
-    return CK_AS_MODULE(Module);
-}
-
 PCK_MODULE
 CkpModuleCreate (
     PCK_VM Vm,
@@ -236,5 +188,47 @@ Return Value:
     Module->Name = Name;
     CkpPopRoot(Vm);
     return Module;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+PCK_MODULE
+CkpModuleGet (
+    PCK_VM Vm,
+    CK_VALUE Name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find a previously loaded module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Name - Supplies the module name value.
+
+Return Value:
+
+    Returns a pointer to the module with the given name on success.
+
+    NULL if no such module exists.
+
+--*/
+
+{
+
+    CK_VALUE Module;
+
+    Module = CkpDictGet(Vm->Modules, Name);
+    if (CK_IS_UNDEFINED(Module)) {
+        return NULL;
+    }
+
+    return CK_AS_MODULE(Module);
 }
 

@@ -21,6 +21,14 @@ Author:
 //
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+#define CK_READ8(_Bytes) (*(PUCHAR)(_Bytes))
+#define CK_READ16(_Bytes) \
+    (((*(PUCHAR)(_Bytes)) << 8) | *(((PUCHAR)(_Bytes)) + 1))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -141,9 +149,9 @@ Values:
     CkOpLoop - Moves the instruction pointer backward by the number of bytes
         specified in the following instruction word.
 
-    CkOpJumpIf - Pops a value off the stack. If it is true-ish then jump the
-        instruction pointer forward by the amount specified by the following
-        instruction word.
+    CkOpJumpIf - Pops a value off the stack. If it is not true-ish then jump
+        the instruction pointer forward by the amount specified by the
+        following instruction word.
 
     CkOpAnd - Check the boolean value of the value at the top of the stack. If
         it is false, move the instruction pointer forward by the amount
@@ -205,9 +213,23 @@ typedef enum _CK_OPCODE {
     CkOpConstant,
     CkOpNull,
     CkOpLiteral0,
-    CkOpLiteral8 = CkOpLiteral0 + 8,
+    CkOpLiteral1,
+    CkOpLiteral2,
+    CkOpLiteral3,
+    CkOpLiteral4,
+    CkOpLiteral5,
+    CkOpLiteral6,
+    CkOpLiteral7,
+    CkOpLiteral8,
     CkOpLoadLocal0,
-    CkOpLoadLocal8 = CkOpLoadLocal0 + 8,
+    CkOpLoadLocal1,
+    CkOpLoadLocal2,
+    CkOpLoadLocal3,
+    CkOpLoadLocal4,
+    CkOpLoadLocal5,
+    CkOpLoadLocal6,
+    CkOpLoadLocal7,
+    CkOpLoadLocal8,
     CkOpLoadLocal,
     CkOpStoreLocal,
     CkOpLoadUpvalue,
@@ -220,11 +242,25 @@ typedef enum _CK_OPCODE {
     CkOpStoreField,
     CkOpPop,
     CkOpCall0,
-    CkOpCall8 = CkOpCall0 + 8,
+    CkOpCall1,
+    CkOpCall2,
+    CkOpCall3,
+    CkOpCall4,
+    CkOpCall5,
+    CkOpCall6,
+    CkOpCall7,
+    CkOpCall8,
     CkOpCall,
     CkOpIndirectCall,
     CkOpSuperCall0,
-    CkOpSuperCall8 = CkOpSuperCall0 + 8,
+    CkOpSuperCall1,
+    CkOpSuperCall2,
+    CkOpSuperCall3,
+    CkOpSuperCall4,
+    CkOpSuperCall5,
+    CkOpSuperCall6,
+    CkOpSuperCall7,
+    CkOpSuperCall8,
     CkOpSuperCall,
     CkOpJump,
     CkOpLoop,
@@ -564,3 +600,28 @@ Return Value:
 
 --*/
 
+PCK_MODULE
+CkpModuleCreate (
+    PCK_VM Vm,
+    PCK_STRING_OBJECT Name
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new module object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Name - Supplies a pointer to the module name.
+
+Return Value:
+
+    Returns a pointer to the newly allocated module on success.
+
+    NULL on allocation failure.
+
+--*/

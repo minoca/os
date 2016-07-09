@@ -215,6 +215,7 @@ Return Value:
         return NULL;
     }
 
+    CkZero(Function, sizeof(CK_FUNCTION));
     CkpInitializeObject(Vm,
                         &(Function->Header),
                         CkObjectFunction,
@@ -529,6 +530,9 @@ Return Value:
 
     if (Left.Type == CkValueInteger) {
         return Left.U.Integer == Right.U.Integer;
+
+    } else if (Left.Type == CkValueNull) {
+        return TRUE;
     }
 
     return Left.U.Object == Right.U.Object;

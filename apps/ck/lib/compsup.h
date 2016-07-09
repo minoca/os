@@ -871,7 +871,8 @@ Return Value:
 
 VOID
 CkpLoadThis (
-    PCK_COMPILER Compiler
+    PCK_COMPILER Compiler,
+    PLEXER_TOKEN Token
     );
 
 /*++
@@ -883,6 +884,9 @@ Routine Description:
 Arguments:
 
     Compiler - Supplies a pointer to the compiler.
+
+    Token - Supplies a pointer to the token, to point to in case it was an
+        inappropriate scope for this.
 
 Return Value:
 
@@ -1588,32 +1592,6 @@ Arguments:
 Return Value:
 
     None.
-
---*/
-
-INT
-CkpGetLineForOffset (
-    PCK_FUNCTION Function,
-    ULONG CodeOffset
-    );
-
-/*++
-
-Routine Description:
-
-    This routine determines what line the given bytecode offset is on.
-
-Arguments:
-
-    Function - Supplies a pointer to the function containing the bytecode.
-
-    CodeOffset - Supplies the offset whose line number is desired.
-
-Return Value:
-
-    Returns the line number the offset in question.
-
-    -1 if no line number information could be found.
 
 --*/
 

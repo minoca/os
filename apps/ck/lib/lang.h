@@ -256,7 +256,7 @@ Members:
 
 --*/
 
-typedef union _CK_PARSER {
+typedef struct _CK_PARSER {
     PCK_VM Vm;
     PCK_MODULE Module;
     PSTR Source;

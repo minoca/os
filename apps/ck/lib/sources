@@ -25,6 +25,7 @@ OBJS = compexpr.o    \
        compio.o      \
        compvar.o     \
        core.o        \
+       debug.o       \
        dict.o        \
        gram.o        \
        lex.o         \
