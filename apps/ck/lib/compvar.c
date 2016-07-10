@@ -237,8 +237,8 @@ Return Value:
 
     CK_SYMBOL_INDEX Symbol;
 
-    Symbol = CkpSymbolTableEnsure(Compiler->Parser->Vm,
-                                  &(Compiler->Parser->Vm->MethodNames),
+    Symbol = CkpStringTableEnsure(Compiler->Parser->Vm,
+                                  &(Compiler->Function->Module->Strings),
                                   Name,
                                   Length);
 
@@ -364,7 +364,7 @@ Return Value:
 
     CK_SYMBOL_INDEX Symbol;
 
-    Symbol = CkpSymbolTableFind(&(Compiler->Parser->Module->VariableNames),
+    Symbol = CkpStringTableFind(&(Compiler->Parser->Module->VariableNames),
                                 Name,
                                 strlen(Name));
 
@@ -882,13 +882,23 @@ Return Value:
 
 {
 
+    PCK_OBJECT Object;
+
     if (Compiler->Parser->Errors != 0) {
         return -1;
     }
 
     if (Compiler->Function->Constants.Count < CK_MAX_CONSTANTS) {
         if (CK_IS_OBJECT(Constant)) {
-            CkpPushRoot(Compiler->Parser->Vm, CK_AS_OBJECT(Constant));
+            Object = CK_AS_OBJECT(Constant);
+
+            //
+            // Strings belong in their own constant table.
+            //
+
+            CK_ASSERT(Object->Type != CkObjectString);
+
+            CkpPushRoot(Compiler->Parser->Vm, Object);
         }
 
         CkpArrayAppend(Compiler->Parser->Vm,
@@ -904,6 +914,55 @@ Return Value:
     }
 
     return Compiler->Function->Constants.Count - 1;
+}
+
+CK_SYMBOL_INDEX
+CkpAddStringConstant (
+    PCK_COMPILER Compiler,
+    CK_VALUE Constant
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds a new string constant value to the current function.
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Constant - Supplies the string constant to add.
+
+Return Value:
+
+    Returns the index of the constant.
+
+    -1 if the compiler already has an error.
+
+--*/
+
+{
+
+    CK_SYMBOL_INDEX Index;
+
+    CK_ASSERT((CK_IS_OBJECT(Constant)) &&
+              (CK_AS_OBJECT(Constant)->Type == CkObjectString));
+
+    if (Compiler->Parser->Errors != 0) {
+        return -1;
+    }
+
+    Index = CkpStringTableEnsureValue(Compiler->Parser->Vm,
+                                      &(Compiler->Function->Module->Strings),
+                                      Constant);
+
+    if (Index >= CK_MAX_CONSTANTS) {
+        CkpCompileError(Compiler, NULL, "Too many string constants");
+        Index = -1;
+    }
+
+    return Index;
 }
 
 VOID
@@ -1149,4 +1208,3 @@ Return Value:
 
     return -1;
 }
-

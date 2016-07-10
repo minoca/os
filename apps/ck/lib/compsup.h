@@ -267,7 +267,7 @@ Members:
 
 typedef struct _CK_CLASS_COMPILER {
     PCK_STRING_OBJECT Name;
-    CK_SYMBOL_TABLE Fields;
+    CK_STRING_TABLE Fields;
     CK_INT_ARRAY Methods;
     CK_INT_ARRAY StaticMethods;
     BOOL InStatic;
@@ -1137,6 +1137,32 @@ Arguments:
     Compiler - Supplies a pointer to the compiler.
 
     Constant - Supplies the constant to add.
+
+Return Value:
+
+    Returns the index of the constant.
+
+    -1 if the compiler already has an error.
+
+--*/
+
+CK_SYMBOL_INDEX
+CkpAddStringConstant (
+    PCK_COMPILER Compiler,
+    CK_VALUE Constant
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds a new string constant value to the current function.
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Constant - Supplies the string constant to add.
 
 Return Value:
 

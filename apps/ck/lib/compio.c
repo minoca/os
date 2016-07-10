@@ -93,6 +93,7 @@ CkpReadHexDigit (
 CHAR CkOpcodeStackEffects[CkOpcodeCount] = {
     0,  // CkOpNop
     1,  // CkOpConstant
+    1,  // CkOpStringConstant
     1,  // CkOpNull
     1,  // CkOpLiteral0
     1,
@@ -167,7 +168,8 @@ CHAR CkOpcodeStackEffects[CkOpcodeCount] = {
 
 UCHAR CkCompilerOperandSizes[CkOpcodeCount] = {
     0, // CkOpNop
-    0, // CkOpConstant
+    2, // CkOpConstant
+    2, // CkOpStringConstant
     0, // CkOpNull
     0, // CkOpLiteral0
     0,
@@ -890,8 +892,22 @@ Return Value:
 
     CK_SYMBOL_INDEX Index;
 
-    Index = CkpAddConstant(Compiler, Constant);
-    CkpEmitShortOp(Compiler, CkOpConstant, Index);
+    //
+    // If the constant is a string, emit a string constant op. Strings are
+    // stored in their own table so they can be reused within a module.
+    //
+
+    if ((CK_IS_OBJECT(Constant)) &&
+        (CK_AS_OBJECT(Constant)->Type == CkObjectString)) {
+
+        Index = CkpAddStringConstant(Compiler, Constant);
+        CkpEmitShortOp(Compiler, CkOpStringConstant, Index);
+
+    } else {
+        Index = CkpAddConstant(Compiler, Constant);
+        CkpEmitShortOp(Compiler, CkOpConstant, Index);
+    }
+
     return;
 }
 

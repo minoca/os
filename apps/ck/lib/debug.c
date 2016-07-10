@@ -395,6 +395,7 @@ Return Value:
     PSTR LocalType;
     CK_OPCODE Op;
     UINTN Start;
+    PCK_STRING_OBJECT StringObject;
     CK_SYMBOL_INDEX Symbol;
 
     Start = Offset;
@@ -430,17 +431,26 @@ Return Value:
         CkpDumpValue(Vm, Function->Constants.Data[Constant]);
         break;
 
+    case CkOpStringConstant:
+        Constant = CK_READ16(ByteCode + Offset);
+        Offset += 2;
+
+        CK_ASSERT(Constant < Function->Module->Strings.List.Count);
+
+        CkpDumpValue(Vm, Function->Module->Strings.List.Data[Constant]);
+        break;
+
     case CkOpLoadModuleVariable:
     case CkOpStoreModuleVariable:
         Symbol = CK_READ16(ByteCode + Offset);
         Offset += 2;
 
-        CK_ASSERT(Symbol < Function->Module->VariableNames.Count);
+        CK_ASSERT(Symbol < Function->Module->VariableNames.List.Count);
 
-        CkpDebugPrint(Vm,
-                      "%s",
-                      Function->Module->VariableNames.Data[Symbol].Data);
+        StringObject =
+               CK_AS_STRING(Function->Module->VariableNames.List.Data[Symbol]);
 
+        CkpDebugPrint(Vm, "%s", StringObject->Value);
         break;
 
     case CkOpCall:
@@ -476,9 +486,12 @@ Return Value:
         Symbol = CK_READ16(ByteCode + Offset);
         Offset += 2;
 
-        CK_ASSERT(Symbol < Vm->MethodNames.Count);
+        CK_ASSERT(Symbol < Function->Module->Strings.List.Count);
 
-        CkpDebugPrint(Vm, "%s", Vm->MethodNames.Data[Symbol].Data);
+        StringObject =
+                     CK_AS_STRING(Function->Module->Strings.List.Data[Symbol]);
+
+        CkpDebugPrint(Vm, "%s", StringObject->Value);
         break;
 
     case CkOpIndirectCall:

@@ -942,7 +942,7 @@ Return Value:
 
     CkpPushScope(Compiler);
     ClassCompiler.Name = ClassNameString;
-    CkpSymbolTableInitialize(Compiler->Parser->Vm, &(ClassCompiler.Fields));
+    CkpStringTableInitialize(Compiler->Parser->Vm, &(ClassCompiler.Fields));
     CkpInitializeArray(&(ClassCompiler.Methods));
     CkpInitializeArray(&(ClassCompiler.StaticMethods));
     Compiler->EnclosingClass = &ClassCompiler;
@@ -959,12 +959,12 @@ Return Value:
     // Now that the number of fields is known, patch it up.
     //
 
-    CK_ASSERT(ClassCompiler.Fields.Count <= CK_MAX_FIELDS);
+    CK_ASSERT(ClassCompiler.Fields.List.Count <= CK_MAX_FIELDS);
 
     Compiler->Function->Code.Data[FieldCountInstruction] =
-                                                    ClassCompiler.Fields.Count;
+                                               ClassCompiler.Fields.List.Count;
 
-    CkpSymbolTableClear(Compiler->Parser->Vm, &(ClassCompiler.Fields));
+    CkpStringTableClear(Compiler->Parser->Vm, &(ClassCompiler.Fields));
     CkpClearArray(Compiler->Parser->Vm, &(ClassCompiler.Methods));
     CkpClearArray(Compiler->Parser->Vm, &(ClassCompiler.StaticMethods));
     CkpPopScope(Compiler);
@@ -1900,7 +1900,7 @@ Return Value:
 
         } else {
             NameString = Compiler->Parser->Source + Name->Position;
-            Symbol = CkpSymbolTableFind(&(Compiler->EnclosingClass->Fields),
+            Symbol = CkpStringTableFind(&(Compiler->EnclosingClass->Fields),
                                         NameString,
                                         Name->Size);
 
@@ -1908,7 +1908,7 @@ Return Value:
                 CkpCompileError(Compiler, Name, "Field already declared");
 
             } else {
-                Symbol = CkpSymbolTableAdd(Compiler->Parser->Vm,
+                Symbol = CkpStringTableAdd(Compiler->Parser->Vm,
                                            &(Compiler->EnclosingClass->Fields),
                                            NameString,
                                            Name->Size);

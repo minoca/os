@@ -49,22 +49,22 @@ Environment:
 //
 
 CK_ERROR_TYPE
-CkpSymbolTableInitialize (
+CkpStringTableInitialize (
     PCK_VM Vm,
-    PCK_SYMBOL_TABLE SymbolTable
+    PCK_STRING_TABLE StringTable
     )
 
 /*++
 
 Routine Description:
 
-    This routine initializes a symbol table.
+    This routine initializes a string table.
 
 Arguments:
 
     Vm - Supplies a pointer to the VM.
 
-    SymbolTable - Supplies a pointer to the symbol table to initialize.
+    StringTable - Supplies a pointer to the string table to initialize.
 
 Return Value:
 
@@ -76,27 +76,32 @@ Return Value:
 
 {
 
-    CkpInitializeArray(SymbolTable);
+    CkpInitializeArray(&(StringTable->List));
+    StringTable->Dict = CkpDictCreate(Vm);
+    if (StringTable->Dict == NULL) {
+        return CkErrorNoMemory;
+    }
+
     return CkSuccess;
 }
 
 VOID
-CkpSymbolTableClear (
+CkpStringTableClear (
     PCK_VM Vm,
-    PCK_SYMBOL_TABLE SymbolTable
+    PCK_STRING_TABLE StringTable
     )
 
 /*++
 
 Routine Description:
 
-    This routine resets a symbol table to empty.
+    This routine resets a string table to empty.
 
 Arguments:
 
     Vm - Supplies a pointer to the VM.
 
-    SymbolTable - Supplies a pointer to the symbol table to reset.
+    StringTable - Supplies a pointer to the string table to reset.
 
 Return Value:
 
@@ -106,20 +111,15 @@ Return Value:
 
 {
 
-    LONG Index;
-
-    for (Index = 0; Index < SymbolTable->Count; Index += 1) {
-        CkFree(Vm, SymbolTable->Data[Index].Data);
-    }
-
-    CkpClearArray(Vm, SymbolTable);
+    CkpClearArray(Vm, &(StringTable->List));
+    CkpDictClear(Vm, StringTable->Dict);
     return;
 }
 
 CK_SYMBOL_INDEX
-CkpSymbolTableEnsure (
+CkpStringTableEnsure (
     PCK_VM Vm,
-    PCK_SYMBOL_TABLE SymbolTable,
+    PCK_STRING_TABLE StringTable,
     PSTR Name,
     UINTN Size
     )
@@ -128,22 +128,22 @@ CkpSymbolTableEnsure (
 
 Routine Description:
 
-    This routine returns the index of the given symbol table. If it did not
-    exist before, it is added.
+    This routine returns the index of the given string in the table. If it did
+    not exist before, it is added.
 
 Arguments:
 
     Vm - Supplies a pointer to the VM.
 
-    SymbolTable - Supplies a pointer to the symbol table.
+    StringTable - Supplies a pointer to the string table.
 
-    Name - Supplies a pointer to the name of the symbol to locate or add.
+    Name - Supplies a pointer to the name of the string to locate or add.
 
-    Size - Supplies the size of the symbol, not including the null terminator.
+    Size - Supplies the size of the string, not including the null terminator.
 
 Return Value:
 
-    Returns the symbol index of the new symbol on success.
+    Returns the index of the new string on success.
 
     -1 on allocation failure.
 
@@ -151,43 +151,44 @@ Return Value:
 
 {
 
-    CK_SYMBOL_INDEX Existing;
+    CK_STRING_OBJECT FakeObject;
+    CK_VALUE Index;
+    CK_VALUE String;
 
-    Existing = CkpSymbolTableFind(SymbolTable, Name, Size);
-    if (Existing != -1) {
-        return Existing;
+    String = CkpStringFake(&FakeObject, Name, Size);
+    Index = CkpDictGet(StringTable->Dict, String);
+    if (CK_IS_INTEGER(Index)) {
+        return CK_AS_INTEGER(Index);
     }
 
-    return CkpSymbolTableAdd(Vm, SymbolTable, Name, Size);
+    return CkpStringTableAdd(Vm, StringTable, Name, Size);
 }
 
 CK_SYMBOL_INDEX
-CkpSymbolTableAdd (
+CkpStringTableEnsureValue (
     PCK_VM Vm,
-    PCK_SYMBOL_TABLE SymbolTable,
-    PSTR Name,
-    UINTN Size
+    PCK_STRING_TABLE StringTable,
+    CK_VALUE String
     )
 
 /*++
 
 Routine Description:
 
-    This routine unconditionally adds a symbol to the given symbol table.
+    This routine returns the index of the given string in the table. If it did
+    not exist before, it is added.
 
 Arguments:
 
     Vm - Supplies a pointer to the VM.
 
-    SymbolTable - Supplies a pointer to the symbol table.
+    StringTable - Supplies a pointer to the string table.
 
-    Name - Supplies a pointer to the name of the symbol to add.
-
-    Size - Supplies the size of the symbol, not including the null terminator.
+    String - Supplies the string to add.
 
 Return Value:
 
-    Returns the symbol index of the new symbol on success.
+    Returns the index of the new string on success.
 
     -1 on allocation failure.
 
@@ -195,28 +196,23 @@ Return Value:
 
 {
 
-    CK_ERROR_TYPE Status;
-    CK_RAW_STRING String;
+    CK_VALUE Index;
 
-    String.Data = CkAllocate(Vm, Size + 1);
-    if (String.Data == NULL) {
-        return -1;
+    Index = CkpDictGet(StringTable->Dict, String);
+    if (CK_IS_INTEGER(Index)) {
+        return CK_AS_INTEGER(Index);
     }
 
-    CkCopy(String.Data, Name, Size);
-    String.Data[Size] = '\0';
-    String.Size = Size;
-    Status = CkpArrayAppend(Vm, SymbolTable, String);
-    if (Status != CkSuccess) {
-        return -1;
-    }
-
-    return SymbolTable->Count - 1;
+    CK_INT_VALUE(Index, StringTable->List.Count);
+    CkpDictSet(Vm, StringTable->Dict, String, Index);
+    CkpArrayAppend(Vm, &(StringTable->List), String);
+    return CK_AS_INTEGER(Index);
 }
 
 CK_SYMBOL_INDEX
-CkpSymbolTableFind (
-    PCK_SYMBOL_TABLE SymbolTable,
+CkpStringTableAdd (
+    PCK_VM Vm,
+    PCK_STRING_TABLE StringTable,
     PSTR Name,
     UINTN Size
     )
@@ -225,38 +221,81 @@ CkpSymbolTableFind (
 
 Routine Description:
 
-    This routine returns the index of the given symbol table.
+    This routine unconditionally adds a string to the given string table.
 
 Arguments:
 
-    SymbolTable - Supplies a pointer to the symbol table.
+    Vm - Supplies a pointer to the VM.
 
-    Name - Supplies a pointer to the name of the symbol to find.
+    StringTable - Supplies a pointer to the string table.
 
-    Size - Supplies the size of the symbol, not including the null terminator.
+    Name - Supplies a pointer to the name of the string to add.
+
+    Size - Supplies the size of the string, not including the null terminator.
 
 Return Value:
 
-    Returns the symbol index of the new symbol on success.
+    Returns the index of the new string on success.
 
-    -1 if the symbol does not exist in the table.
+    -1 on allocation failure.
 
 --*/
 
 {
 
-    CK_SYMBOL_INDEX Index;
-    PCK_RAW_STRING String;
+    CK_VALUE Index;
+    CK_VALUE String;
 
-    String = SymbolTable->Data;
-    for (Index = 0; Index < SymbolTable->Count; Index += 1) {
-        if ((String->Size == Size) &&
-            (CkCompareMemory(String->Data, Name, Size) == 0)) {
+    String = CkpStringCreate(Vm, Name, Size);
+    if (CK_IS_NULL(String)) {
+        return -1;
+    }
 
-            return Index;
-        }
+    CK_INT_VALUE(Index, StringTable->List.Count);
+    CkpDictSet(Vm, StringTable->Dict, String, Index);
+    CkpArrayAppend(Vm, &(StringTable->List), String);
+    return CK_AS_INTEGER(Index);
+}
 
-        String += 1;
+CK_SYMBOL_INDEX
+CkpStringTableFind (
+    PCK_STRING_TABLE StringTable,
+    PSTR Name,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the index of the given string table.
+
+Arguments:
+
+    StringTable - Supplies a pointer to the string table.
+
+    Name - Supplies a pointer to the name of the string to find.
+
+    Size - Supplies the size of the string, not including the null terminator.
+
+Return Value:
+
+    Returns the index of the new string on success.
+
+    -1 if the string does not exist in the table.
+
+--*/
+
+{
+
+    CK_STRING_OBJECT FakeObject;
+    CK_VALUE Index;
+    CK_VALUE String;
+
+    String = CkpStringFake(&FakeObject, Name, Size);
+    Index = CkpDictGet(StringTable->Dict, String);
+    if (CK_IS_INTEGER(Index)) {
+        return CK_AS_INTEGER(Index);
     }
 
     return -1;

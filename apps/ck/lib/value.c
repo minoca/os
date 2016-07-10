@@ -347,7 +347,8 @@ Return Value:
 
     case CkObjectModule:
         Module = (PCK_MODULE)Object;
-        CkpSymbolTableClear(Vm, &(Module->VariableNames));
+        CkpStringTableClear(Vm, &(Module->VariableNames));
+        CkpStringTableClear(Vm, &(Module->Strings));
         CkpClearArray(Vm, &(Module->Variables));
         break;
 

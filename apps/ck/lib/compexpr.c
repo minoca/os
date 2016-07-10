@@ -1022,7 +1022,7 @@ Return Value:
 
     ClassCompiler = CkpGetClassCompiler(Compiler);
     if ((ClassCompiler != NULL) && (ClassCompiler->InStatic == FALSE)) {
-        Variable.Index = CkpSymbolTableFind(&(ClassCompiler->Fields),
+        Variable.Index = CkpStringTableFind(&(ClassCompiler->Fields),
                                             Name,
                                             Token->Size);
     }
@@ -1067,7 +1067,7 @@ Return Value:
     //
 
     Variable.Scope = CkScopeModule;
-    Variable.Index = CkpSymbolTableFind(
+    Variable.Index = CkpStringTableFind(
                                     &(Compiler->Parser->Module->VariableNames),
                                     Name,
                                     Token->Size);

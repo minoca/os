@@ -312,6 +312,36 @@ Return Value:
     return Value;
 }
 
+VOID
+CkpDictClear (
+    PCK_VM Vm,
+    PCK_DICT Dict
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes all entries from the given dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Dict - Supplies a pointer to the dictionary object.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    Dict->Count = 0;
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

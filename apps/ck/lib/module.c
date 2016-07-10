@@ -95,6 +95,7 @@ Return Value:
     PCK_FUNCTION Function;
     CK_SYMBOL_INDEX Index;
     PCK_MODULE Module;
+    PCK_STRING_OBJECT String;
     CK_VALUE Value;
 
     Module = CkpModuleGet(Vm, ModuleName);
@@ -114,10 +115,11 @@ Return Value:
 
         CoreModule = CkpModuleGet(Vm, CK_NULL_VALUE);
         for (Index = 0; Index < CoreModule->Variables.Count; Index += 1) {
+            String = CK_AS_STRING(CoreModule->VariableNames.List.Data[Index]);
             CkpDefineModuleVariable(Vm,
                                     Module,
-                                    CoreModule->VariableNames.Data[Index].Data,
-                                    CoreModule->VariableNames.Data[Index].Size,
+                                    String->Value,
+                                    String->Length,
                                     CoreModule->Variables.Data[Index]);
         }
     }
@@ -169,6 +171,7 @@ Return Value:
 
 {
 
+    CK_ERROR_TYPE Error;
     PCK_MODULE Module;
 
     Module = CkAllocate(Vm, sizeof(CK_MODULE));
@@ -183,9 +186,22 @@ Return Value:
 
     CkpInitializeObject(Vm, &(Module->Header), CkObjectModule, NULL);
     CkpPushRoot(Vm, &(Module->Header));
-    CkpSymbolTableInitialize(Vm, &(Module->VariableNames));
+    Error = CkpStringTableInitialize(Vm, &(Module->VariableNames));
+    if (Error != CkSuccess) {
+        Module = NULL;
+        goto ModuleCreateEnd;
+    }
+
+    Error = CkpStringTableInitialize(Vm, &(Module->Strings));
+    if (Error != CkSuccess) {
+        Module = NULL;
+        goto ModuleCreateEnd;
+    }
+
     CkpInitializeArray(&(Module->Variables));
     Module->Name = Name;
+
+ModuleCreateEnd:
     CkpPopRoot(Vm);
     return Module;
 }

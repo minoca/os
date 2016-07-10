@@ -136,26 +136,6 @@ typedef enum _CK_METHOD_TYPE {
 
 Structure Description:
 
-    This structure encapsulates a raw string (as opposed to a string object
-    instance).
-
-Members:
-
-    Data - Stores a pointer to the string data itself.
-
-    Size - Stores the size of the string, not including the null terminator.
-
---*/
-
-typedef struct _CK_RAW_STRING {
-    PSTR Data;
-    UINTN Size;
-} CK_RAW_STRING, *PCK_RAW_STRING;
-
-/*++
-
-Structure Description:
-
     This structure defines an array of integers.
 
 Members:
@@ -174,29 +154,6 @@ typedef struct _CK_INT_ARRAY {
     UINTN Count;
     UINTN Capacity;
 } CK_INT_ARRAY, *PCK_INT_ARRAY;
-
-/*++
-
-Structure Description:
-
-    This structure defines an array of Chalk strings.
-
-Members:
-
-    Data - Stores a pointer to the array itself.
-
-    Count - Stores the number of elements currently in the array.
-
-    Capacity - Stores the maximum size of the array before it must be
-        reallocated.
-
---*/
-
-typedef struct _CK_STRING_ARRAY {
-    PCK_RAW_STRING Data;
-    UINTN Count;
-    UINTN Capacity;
-} CK_STRING_ARRAY, *PCK_STRING_ARRAY;
 
 /*++
 
@@ -266,8 +223,6 @@ typedef struct _CK_METHOD_ARRAY {
     UINTN Count;
     UINTN Capacity;
 } CK_METHOD_ARRAY, *PCK_METHOD_ARRAY;
-
-typedef CK_STRING_ARRAY CK_SYMBOL_TABLE, *PCK_SYMBOL_TABLE;
 
 /*++
 
@@ -407,6 +362,70 @@ struct _CK_UPVALUE {
 
 Structure Description:
 
+    This structure contains a single dictionary element.
+
+Members:
+
+    Key - Stores the key associated with the value.
+
+    Value - Stores the value in this slot.
+
+--*/
+
+typedef struct _CK_DICT_ENTRY {
+    CK_VALUE Key;
+    CK_VALUE Value;
+} CK_DICT_ENTRY, *PCK_DICT_ENTRY;
+
+/*++
+
+Structure Description:
+
+    This structure encapsulates a hash table dictionary.
+
+Members:
+
+    Header - Stores the required object header.
+
+    Count - Stores the number of values in the dictionary.
+
+    Capacity - Stores the size of the entries array.
+
+    Entries - Stores a pointer to the entries.
+
+--*/
+
+typedef struct _CK_DICT {
+    CK_OBJECT Header;
+    UINTN Count;
+    UINTN Capacity;
+    PCK_DICT_ENTRY Entries;
+} CK_DICT, *PCK_DICT;
+
+/*++
+
+Structure Description:
+
+    This structure contains a string table, which can be linearly indexed and
+    searched quickly.
+
+Members:
+
+    List - Stores the list of entries, which allows for linear indexing.
+
+    Dict - Stores the dictionary of entries, which allows for fast searching.
+
+--*/
+
+typedef struct _CK_STRING_TABLE {
+    CK_VALUE_ARRAY List;
+    PCK_DICT Dict;
+} CK_STRING_TABLE, *PCK_STRING_TABLE;
+
+/*++
+
+Structure Description:
+
     This structure defines a module object.
 
 Members:
@@ -415,7 +434,9 @@ Members:
 
     Variables - Stores the array of module level variables.
 
-    VariableNames - Stores the array of module level variable names.
+    VariableNames - Stores the array of module level symbol names.
+
+    Strings - Stores the table of string constants in the module.
 
     Name - Stores a pointer to the string containing the name of the module.
 
@@ -424,7 +445,8 @@ Members:
 typedef struct _CK_MODULE {
     CK_OBJECT Header;
     CK_VALUE_ARRAY Variables;
-    CK_SYMBOL_TABLE VariableNames;
+    CK_STRING_TABLE VariableNames;
+    CK_STRING_TABLE Strings;
     PCK_STRING_OBJECT Name;
 } CK_MODULE, *PCK_MODULE;
 
@@ -645,50 +667,6 @@ typedef struct _CK_LIST {
     CK_OBJECT Header;
     CK_VALUE_ARRAY Elements;
 } CK_LIST, *PCK_LIST;
-
-/*++
-
-Structure Description:
-
-    This structure contains a single dictionary element.
-
-Members:
-
-    Key - Stores the key associated with the value.
-
-    Value - Stores the value in this slot.
-
---*/
-
-typedef struct _CK_DICT_ENTRY {
-    CK_VALUE Key;
-    CK_VALUE Value;
-} CK_DICT_ENTRY, *PCK_DICT_ENTRY;
-
-/*++
-
-Structure Description:
-
-    This structure encapsulates a hash table dictionary.
-
-Members:
-
-    Header - Stores the required object header.
-
-    Count - Stores the number of values in the dictionary.
-
-    Capacity - Stores the size of the entries array.
-
-    Entries - Stores a pointer to the entries.
-
---*/
-
-typedef struct _CK_DICT {
-    CK_OBJECT Header;
-    UINTN Count;
-    UINTN Capacity;
-    PCK_DICT_ENTRY Entries;
-} CK_DICT, *PCK_DICT;
 
 /*++
 
@@ -1148,6 +1126,30 @@ Return Value:
 
 --*/
 
+VOID
+CkpDictClear (
+    PCK_VM Vm,
+    PCK_DICT Dict
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes all entries from the given dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Dict - Supplies a pointer to the dictionary object.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // String functions
 //
@@ -1505,3 +1507,35 @@ Return Value:
     None.
 
 --*/
+
+CK_VALUE
+CkpStringFake (
+    PCK_STRING_OBJECT FakeStringObject,
+    PSTR String,
+    UINTN Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes a temporary string object, usually used as a local
+    variable in a C function. It's important that this string not get saved
+    anywhere that might stick around after this fake string goes out of scope.
+
+Arguments:
+
+    FakeStringObject - Supplies a pointer to the string object storage to
+        initialize.
+
+    String - Supplies a pointer to the string to use.
+
+    Length - Supplies the length of the string in bytes, not including the null
+        terminator.
+
+Return Value:
+
+    Returns a string value for the fake string.
+
+--*/
+

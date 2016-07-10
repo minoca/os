@@ -65,6 +65,10 @@ Values:
     CkOpConstant - Pushes the constant with the index specified by the next
         two bytes in the instruction stream onto the stack.
 
+    CkOpStringConstant - Pushes the string constant with the index specified
+        by the next two bytes in the instruction stream onto the stack. The
+        string constant table is located in the module.
+
     CkOpNull - Pushes null onto the stack.
 
     CkOpLiteral0 - Pushes the value 0 onto the stack. Subsequent opcodes up to
@@ -211,6 +215,7 @@ Values:
 typedef enum _CK_OPCODE {
     CkOpNop,
     CkOpConstant,
+    CkOpStringConstant,
     CkOpNull,
     CkOpLiteral0,
     CkOpLiteral1,
@@ -378,8 +383,6 @@ Members:
     Compiler - Stores an optional pointer to the current compiler. This link is
         needed so the garbage collector can discover its objects.
 
-    MethodNames - Stores the giant array of all possible method signatures.
-
 --*/
 
 struct _CK_VM {
@@ -396,7 +399,6 @@ struct _CK_VM {
     ULONG WorkingObjectCount;
     PCK_HANDLE Handles;
     PCK_COMPILER Compiler;
-    CK_SYMBOL_TABLE MethodNames;
 };
 
 //

@@ -835,6 +835,51 @@ Return Value:
     return;
 }
 
+CK_VALUE
+CkpStringFake (
+    PCK_STRING_OBJECT FakeStringObject,
+    PSTR String,
+    UINTN Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes a temporary string object, usually used as a local
+    variable in a C function. It's important that this string not get saved
+    anywhere that might stick around after this fake string goes out of scope.
+
+Arguments:
+
+    FakeStringObject - Supplies a pointer to the string object storage to
+        initialize.
+
+    String - Supplies a pointer to the string to use.
+
+    Length - Supplies the length of the string in bytes, not including the null
+        terminator.
+
+Return Value:
+
+    Returns a string value for the fake string.
+
+--*/
+
+{
+
+    CK_VALUE Value;
+
+    FakeStringObject->Header.Type = CkObjectString;
+    FakeStringObject->Header.Next = NULL;
+    FakeStringObject->Header.Class = NULL;
+    FakeStringObject->Length = Length;
+    FakeStringObject->Value = String;
+    CkpStringHash(FakeStringObject);
+    CK_OBJECT_VALUE(Value, FakeStringObject);
+    return Value;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

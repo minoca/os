@@ -155,7 +155,6 @@ Return Value:
     }
 
     Vm->NextGarbageCollection = Vm->Configuration.InitialHeapSize;
-    CkpSymbolTableInitialize(Vm, &(Vm->MethodNames));
     Vm->Modules = CkpDictCreate(Vm);
     if (Vm->Modules == NULL) {
         Status = CkErrorNoMemory;
@@ -228,8 +227,6 @@ Return Value:
     }
 
     CK_ASSERT(Vm->Handles == NULL);
-
-    CkpSymbolTableClear(Vm, &(Vm->MethodNames));
 
     //
     // Null out the reallocate function to catch double frees.
@@ -358,7 +355,7 @@ Return Value:
         return -2;
     }
 
-    Symbol = CkpSymbolTableAdd(Vm, &(Module->VariableNames), Name, Length);
+    Symbol = CkpStringTableAdd(Vm, &(Module->VariableNames), Name, Length);
     if (Symbol == -1) {
         return -2;
     }
@@ -423,14 +420,14 @@ Return Value:
         CkpPushRoot(Vm, CK_AS_OBJECT(Value));
     }
 
-    Symbol = CkpSymbolTableFind(&(Module->VariableNames), Name, Length);
+    Symbol = CkpStringTableFind(&(Module->VariableNames), Name, Length);
 
     //
     // Add a brand new symbol.
     //
 
     if (Symbol == -1) {
-        Symbol = CkpSymbolTableAdd(Vm, &(Module->VariableNames), Name, Length);
+        Symbol = CkpStringTableAdd(Vm, &(Module->VariableNames), Name, Length);
         Error = CkpArrayAppend(Vm, &(Module->Variables), Value);
         if (Error != CkSuccess) {
             return -2;
