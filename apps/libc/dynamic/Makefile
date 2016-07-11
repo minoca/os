@@ -117,6 +117,7 @@ OBJS = assert.o             \
        resource.o           \
        setjmp.o             \
        scan.o               \
+       sched.o              \
        shadow.o             \
        signals.o            \
        socket.o             \

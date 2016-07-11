@@ -96,6 +96,7 @@ function build() {
         "regexexe.c",
         "resolv.c",
         "resource.c",
+        "sched.c",
         "setjmp.c",
         "scan.c",
         "shadow.c",
