@@ -40,6 +40,15 @@ extern "C" {
 #define POSIX
 
 //
+// Wide characters (wchar_t) are 32-bits, meaning that the short identifier of
+// every character in the Unicode required set has the same value when stored
+// in a wchar_t. The Minoca C Library supports this compatibility as of the
+// 4th edition of the ISO/IEC 10646 standard.
+//
+
+#define __STDC_ISO_10646__ 201409L
+
+//
 // Error out if the architecture is unknown.
 //
 
