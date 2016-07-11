@@ -25,11 +25,30 @@ Environment:
 //
 
 #include "libcp.h"
+#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <unistd.h>
+
+//
+// --------------------------------------------------------------------- Macros
+//
+
+#define ASSERT_RESOURCE_LIMITS_EQUIVALENT() \
+    assert((RLIMIT_CORE == ResourceLimitCore) && \
+           (RLIMIT_CPU == ResourceLimitCpuTime) && \
+           (RLIMIT_DATA == ResourceLimitData) && \
+           (RLIMIT_FSIZE == ResourceLimitFileSize) && \
+           (RLIMIT_NOFILE == ResourceLimitFileCount) && \
+           (RLIMIT_STACK == ResourceLimitStack) && \
+           (RLIMIT_AS == ResourceLimitAddressSpace) && \
+           (RLIMIT_NPROC == ResourceLimitProcessCount) && \
+           (RLIMIT_SIGPENDING == ResourceLimitSignals) && \
+           (RLIMIT_NICE == ResourceLimitNice) && \
+           (sizeof(RESOURCE_LIMIT) == sizeof(struct rlimit)) && \
+           (sizeof(rlim_t) == sizeof(UINTN)))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -171,12 +190,17 @@ Return Value:
 
 {
 
-    //
-    // TODO: Implement getrlimit.
-    //
+    KSTATUS Status;
 
-    errno = ENOSYS;
-    return -1;
+    ASSERT_RESOURCE_LIMITS_EQUIVALENT();
+
+    Status = OsSetResourceLimit(Resource, NULL, (PRESOURCE_LIMIT)Limit);
+    if (!KSUCCESS(Status)) {
+        errno = ClConvertKstatusToErrorNumber(Status);
+        return -1;
+    }
+
+    return 0;
 }
 
 LIBC_API
@@ -215,12 +239,17 @@ Return Value:
 
 {
 
-    //
-    // TODO: Implement setrlimit.
-    //
+    KSTATUS Status;
 
-    errno = ENOSYS;
-    return -1;
+    ASSERT_RESOURCE_LIMITS_EQUIVALENT();
+
+    Status = OsSetResourceLimit(Resource, (PRESOURCE_LIMIT)Limit, NULL);
+    if (!KSUCCESS(Status)) {
+        errno = ClConvertKstatusToErrorNumber(Status);
+        return -1;
+    }
+
+    return 0;
 }
 
 LIBC_API
