@@ -1131,8 +1131,10 @@ KSTATUS
 MmpAllocateFromAccountant (
     PMEMORY_ACCOUNTING Accountant,
     PVOID *Address,
-    ULONGLONG Size,
+    UINTN Size,
     ULONG Alignment,
+    UINTN Min,
+    UINTN Max,
     MEMORY_TYPE MemoryType,
     ALLOCATION_STRATEGY Strategy
     );
@@ -1141,7 +1143,7 @@ MmpAllocateFromAccountant (
 
 Routine Description:
 
-    This routine allocates a piece of free memory from the given memroy
+    This routine allocates a piece of free memory from the given memory
     accountant's memory list and marks it as the given memory type.
 
 Arguments:
@@ -1155,6 +1157,10 @@ Arguments:
     Alignment - Supplies the alignment requirement for the allocation, in bytes.
         Valid values are powers of 2. Set to 1 or 0 to specify no alignment
         requirement.
+
+    Min - Supplies the minimum address to allocate.
+
+    Max - Supplies the maximum address to allocate.
 
     MemoryType - Supplies the type of memory to mark the allocation as.
 
@@ -1238,6 +1244,8 @@ MmpAllocateAddressRange (
     PMEMORY_ACCOUNTING Accountant,
     UINTN Size,
     ULONG Alignment,
+    PVOID Min,
+    PVOID Max,
     MEMORY_TYPE MemoryType,
     ALLOCATION_STRATEGY Strategy,
     BOOL LockHeld,
@@ -1258,6 +1266,10 @@ Arguments:
     Size - Supplies the size of the allocation, in bytes.
 
     Alignment - Supplies the required alignment, in bytes, of the allocation.
+
+    Min - Supplies the minimum address to allocate.
+
+    Max - Supplies the maximum address to allocate.
 
     MemoryType - Supplies a the type of memory this allocation should be marked
         as. Do not specify MemoryTypeFree for this parameter.

@@ -395,6 +395,8 @@ Return Value:
                                  &Address,
                                  PageSize,
                                  PageSize,
+                                 0,
+                                 MAX_UINTN,
                                  MemoryTypeHardware,
                                  AllocationStrategyAnyAddress);
 
@@ -419,6 +421,8 @@ Return Value:
                                  &Address,
                                  2 << PageShift,
                                  2 << PageShift,
+                                 0,
+                                 MAX_UINTN,
                                  MemoryTypeReserved,
                                  AllocationStrategyAnyAddress);
 
@@ -444,6 +448,8 @@ Return Value:
                                  &Address,
                                  PageSize,
                                  4 << PageShift,
+                                 0,
+                                 MAX_UINTN,
                                  MemoryTypeHardware,
                                  AllocationStrategyAnyAddress);
 
@@ -468,6 +474,8 @@ Return Value:
                                  &Address,
                                  4 << PageShift,
                                  0x10 << PageShift,
+                                 0,
+                                 MAX_UINTN,
                                  MemoryTypeHardware,
                                  AllocationStrategyAnyAddress);
 

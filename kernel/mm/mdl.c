@@ -1099,6 +1099,8 @@ MmMdAllocateFromMdl (
     PULONGLONG Address,
     ULONGLONG Size,
     ULONG Alignment,
+    ULONGLONG Min,
+    ULONGLONG Max,
     MEMORY_TYPE MemoryType,
     ALLOCATION_STRATEGY Strategy
     )
@@ -1121,6 +1123,10 @@ Arguments:
     Alignment - Supplies the alignment requirement for the allocation, in bytes.
         Valid values are powers of 2. Set to 1 or 0 to specify no alignment
         requirement.
+
+    Min - Supplies the minimum address to allocate.
+
+    Max - Supplies the maximum address to allocate.
 
     MemoryType - Supplies the type of memory to mark the allocation as.
 
@@ -1146,8 +1152,10 @@ Return Value:
     UINTN BinIndex;
     PLIST_ENTRY CurrentEntry;
     PMEMORY_DESCRIPTOR Descriptor;
+    ULONGLONG End;
     MEMORY_DESCRIPTOR Original;
     MEMORY_DESCRIPTOR Replacement;
+    ULONGLONG Start;
     KSTATUS Status;
 
     ASSERT(Strategy < AllocationStrategyFixedAddress);
@@ -1198,24 +1206,33 @@ Return Value:
 
             ASSERT(IS_MEMORY_FREE_TYPE(Descriptor->Type));
 
+            Start = Descriptor->BaseAddress;
+            End = Start + Descriptor->Size;
+            if ((End < Min) || (Start >= Max)) {
+                continue;
+            }
+
+            if (Start < Min) {
+                Start = Min;
+            }
+
+            if (End > Max) {
+                End = Max;
+            }
+
             if (Strategy == AllocationStrategyHighestAddress) {
-                AlignedAddress = ALIGN_RANGE_DOWN(
-                             Descriptor->BaseAddress + Descriptor->Size - Size,
-                             Alignment);
+                AlignedAddress = ALIGN_RANGE_DOWN(End - Size, Alignment);
 
             } else {
-                AlignedAddress = ALIGN_RANGE_UP(Descriptor->BaseAddress,
-                                                Alignment);
+                AlignedAddress = ALIGN_RANGE_UP(Start, Alignment);
             }
 
             //
             // Skip it if it's not big enough or wraps in some weird way.
             //
 
-            if ((AlignedAddress + Size >
-                 Descriptor->BaseAddress + Descriptor->Size) ||
-                (AlignedAddress < Descriptor->BaseAddress) ||
-                (AlignedAddress + Size < Descriptor->BaseAddress) ||
+            if ((AlignedAddress + Size > End) ||
+                (AlignedAddress < Start) ||
                 (AlignedAddress + Size < AlignedAddress)) {
 
                 continue;

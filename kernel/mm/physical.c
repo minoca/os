@@ -1250,6 +1250,8 @@ Return Value:
                                  Allocation,
                                  PageCount << MmPageShift(),
                                  Alignment,
+                                 0,
+                                 MAX_ULONGLONG,
                                  MemoryTypeMmStructures,
                                  Strategy);
 

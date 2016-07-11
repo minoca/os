@@ -53,6 +53,8 @@ Author:
 
 #define MAX_INTN    ((INTN)0x7FFFFFFF)
 #define MAX_UINTN   ((UINTN)0xFFFFFFFF)
+
+#undef MAX_ADDRESS
 #define MAX_ADDRESS MAX_UINTN
 
 //
@@ -92,12 +94,8 @@ typedef char CHAR8;
 // Define the native architectural integer size.
 //
 
-#ifndef __MINOCA_TYPES_H
-
 typedef UINT32 UINTN;
 typedef INT32 INTN;
-
-#endif
 
 //
 // -------------------------------------------------------------------- Globals

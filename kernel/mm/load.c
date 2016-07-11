@@ -280,6 +280,8 @@ Return Value:
         Status = MmpAllocateAddressRange(Realtor,
                                          AdjustedSize,
                                          PageSize,
+                                         0,
+                                         MAX_ADDRESS,
                                          MemoryTypeReserved,
                                          Strategy,
                                          AccountingLockHeld,

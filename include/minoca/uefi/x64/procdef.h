@@ -51,13 +51,10 @@ Author:
 // Define the limits for the native integer.
 //
 
-#ifndef __MINOCA_TYPES_H
-
 #define MAX_INTN    ((INTN)0x7FFFFFFFFFFFFFFF)
 #define MAX_UINTN   ((UINTN)0xFFFFFFFFFFFFFFFF)
 
-#endif
-
+#undef MAX_ADDRESS
 #define MAX_ADDRESS MAX_UINTN
 
 //
@@ -92,12 +89,8 @@ typedef char CHAR8;
 // Define the native architectural integer size.
 //
 
-#ifndef __MINOCA_TYPES_H
-
 typedef UINT64 UINTN;
 typedef INT64 INTN;
-
-#endif
 
 //
 // -------------------------------------------------------------------- Globals

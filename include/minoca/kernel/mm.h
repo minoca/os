@@ -2235,6 +2235,8 @@ MmMdAllocateFromMdl (
     PULONGLONG Address,
     ULONGLONG Size,
     ULONG Alignment,
+    ULONGLONG Min,
+    ULONGLONG Max,
     MEMORY_TYPE MemoryType,
     ALLOCATION_STRATEGY Strategy
     );
@@ -2257,6 +2259,10 @@ Arguments:
     Alignment - Supplies the alignment requirement for the allocation, in bytes.
         Valid values are powers of 2. Set to 1 or 0 to specify no alignment
         requirement.
+
+    Min - Supplies the minimum address to allocate.
+
+    Max - Supplies the maximum address to allocate.
 
     MemoryType - Supplies the type of memory to mark the allocation as.
 

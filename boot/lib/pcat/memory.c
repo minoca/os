@@ -341,6 +341,8 @@ Return Value:
                                  Address,
                                  Size,
                                  Alignment,
+                                 0,
+                                 MAX_UINTN,
                                  MemoryType,
                                  AllocationStrategyLowestAddress);
 

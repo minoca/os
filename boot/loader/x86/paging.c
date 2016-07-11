@@ -233,6 +233,8 @@ Return Value:
                                      &MappedAddress,
                                      AlignedSize,
                                      PAGE_SIZE,
+                                     0,
+                                     MAX_UINTN,
                                      MemoryType,
                                      Strategy);
 

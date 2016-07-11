@@ -261,6 +261,8 @@ Return Value:
         Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
                                          PageCount << PAGE_SHIFT,
                                          PAGE_SIZE,
+                                         0,
+                                         MAX_ADDRESS,
                                          MemoryTypeReserved,
                                          AllocationStrategyFixedAddress,
                                          FALSE,

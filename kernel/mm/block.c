@@ -1095,6 +1095,8 @@ Return Value:
         Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
                                          SegmentSize,
                                          Alignment,
+                                         0,
+                                         MAX_ADDRESS,
                                          MemoryTypeReserved,
                                          AllocationStrategyAnyAddress,
                                          FALSE,

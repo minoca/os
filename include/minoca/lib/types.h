@@ -112,6 +112,8 @@ Author:
 
 #endif
 
+#define MAX_ADDRESS (PVOID)MAX_UINTN
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //

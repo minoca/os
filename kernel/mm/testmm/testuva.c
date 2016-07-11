@@ -562,6 +562,8 @@ Return Value:
     Status = MmpAllocateAddressRange(Process->AddressSpace->Accountant,
                                      Size,
                                      0,
+                                     0,
+                                     MAX_ADDRESS,
                                      MemoryTypeReserved,
                                      Strategy,
                                      TRUE,

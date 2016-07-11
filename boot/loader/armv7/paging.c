@@ -275,6 +275,8 @@ Return Value:
                                      (PVOID)&MappedAddress,
                                      PageCount << PAGE_SHIFT,
                                      PAGE_SIZE,
+                                     0,
+                                     MAX_UINTN,
                                      MemoryType,
                                      Strategy);
 
@@ -840,6 +842,8 @@ Return Value:
                                  &Address,
                                  SelfMapSize,
                                  SelfMapSize,
+                                 0,
+                                 MAX_UINTN,
                                  MemoryTypeMmStructures,
                                  AllocationStrategyAnyAddress);
 
