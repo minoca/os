@@ -196,7 +196,7 @@ Return Value:
 
         NewEnvironment = DestinationThread->UserStack +
                          DestinationThread->UserStackSize -
-                         AllocationSize;
+                         ALIGN_RANGE_UP(AllocationSize, STACK_ALIGNMENT);
 
         //
         // Set the thread parameter to point at the environment.
