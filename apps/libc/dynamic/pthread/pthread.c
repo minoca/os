@@ -540,6 +540,15 @@ Return Value:
     DestroyRegionSize = 0;
 
     //
+    // Mask out all signals, as this thread will not be handling anything else,
+    // and then exit. This may touch errno so it must be done before the thread
+    // is torn down.
+    //
+
+    sigfillset(&SignalMask);
+    pthread_sigmask(SIG_SETMASK, &SignalMask, NULL);
+
+    //
     // Indicate that the thread has exited.
     //
 
@@ -550,24 +559,19 @@ Return Value:
     if (OldState == PthreadStateDetached) {
 
         //
-        // No one will be joining this thread, it must clean itself up.
+        // No one will be joining this thread, it must clean itself up. The
+        // kernel will help with the last deallocation since it is the stack.
         //
 
         pthread_mutex_lock(&ClThreadListMutex);
         LIST_REMOVE(&(Thread->ListEntry));
         pthread_mutex_unlock(&ClThreadListMutex);
-        pthread_mutex_destroy(&(Thread->StartMutex));
         DestroyRegion = Thread->ThreadAllocation;
         DestroyRegionSize = Thread->ThreadAllocationSize;
+        Thread->ThreadAllocationSize = 0;
+        ClpDestroyThread(Thread);
     }
 
-    //
-    // Mask out all signals, as this thread will not be handling anything else,
-    // and then exit.
-    //
-
-    sigfillset(&SignalMask);
-    pthread_sigmask(SIG_SETMASK, &SignalMask, NULL);
     OsExitThread(DestroyRegion, DestroyRegionSize);
 }
 
@@ -1417,7 +1421,10 @@ Return Value:
         Thread->OsData = NULL;
     }
 
-    munmap(Thread->ThreadAllocation, Thread->ThreadAllocationSize);
+    if (Thread->ThreadAllocationSize != 0) {
+        munmap(Thread->ThreadAllocation, Thread->ThreadAllocationSize);
+    }
+
     return;
 }
 
