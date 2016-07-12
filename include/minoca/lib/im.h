@@ -672,12 +672,7 @@ Return Value:
 typedef
 KSTATUS
 (*PIM_ALLOCATE_ADDRESS_SPACE) (
-    PVOID SystemContext,
-    PIMAGE_FILE_INFORMATION File,
-    ULONG Size,
-    HANDLE *Handle,
-    PVOID *Address,
-    PVOID *AccessibleAddress
+    PLOADED_IMAGE Image
     );
 
 /*++
@@ -689,25 +684,10 @@ Routine Description:
 
 Arguments:
 
-    SystemContext - Supplies the context pointer passed to the load executable
-        function.
-
-    File - Supplies a pointer to the image file information.
-
-    Size - Supplies the required size of the allocation, in bytes.
-
-    Handle - Supplies a pointer where the handle representing this allocation
-        will be returned on success.
-
-    Address - Supplies a pointer that on input contains the preferred virtual
-        address of the image load. On output, contains the allocated virtual
-        address range. This is the VA allocated, but it may not actually be
-        accessible at this time.
-
-    AccessibleAddress - Supplies a pointer where a pointer will be returned
-        that the caller can reach through to access the in-memory image. In
-        online image loads this is probably the same as the returned address,
-        though this cannot be assumed.
+    Image - Supplies a pointer to the image being loaded. The system context,
+        size, file information, load flags, and preferred virtual address will
+        be initialized. This routine should set up the loaded image buffer,
+        loaded lowest address, and allocator handle if needed.
 
 Return Value:
 
@@ -718,9 +698,7 @@ Return Value:
 typedef
 VOID
 (*PIM_FREE_ADDRESS_SPACE) (
-    HANDLE Handle,
-    PVOID Address,
-    UINTN Size
+    PLOADED_IMAGE Image
     );
 
 /*++
@@ -732,12 +710,7 @@ Routine Description:
 
 Arguments:
 
-    Handle - Supplies the handle returned during the allocate call.
-
-    Address - Supplies the virtual address originally returned by the allocate
-        routine.
-
-    Size - Supplies the size in bytes of the originally allocated region.
+    Image - Supplies a pointer to the loaded (or partially loaded) image.
 
 Return Value:
 

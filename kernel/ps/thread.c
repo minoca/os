@@ -327,6 +327,14 @@ CreateThreadEnd:
         if (NewThread != NULL) {
             PspSetThreadUserStackSize(NewThread, 0);
             PspDestroyCredentials(NewThread);
+            KeAcquireQueuedLock(NewThread->OwningProcess->QueuedLock);
+            LIST_REMOVE(&(NewThread->ProcessEntry));
+            NewThread->ProcessEntry.Next = NULL;
+            NewThread->OwningProcess->ThreadCount -= 1;
+
+            ASSERT(NewThread->OwningProcess->ThreadCount != 0);
+
+            KeReleaseQueuedLock(NewThread->OwningProcess->QueuedLock);
             ObReleaseReference(NewThread);
         }
     }
@@ -877,42 +885,62 @@ Return Value:
 {
 
     ULONG Flags;
+    UINTN MapSize;
+    PVOID MaxMapRegion;
     PVOID NewBase;
     ULONG PageSize;
     KSTATUS Status;
+    ALLOCATION_STRATEGY Strategy;
 
     PageSize = MmPageSize();
     NewStackSize = ALIGN_RANGE_UP(NewStackSize, PageSize);
 
     //
-    // Destroy the stack if requested.
+    // Shrink or destroy the stack if requested. This whole routine assumes the
+    // stack grows down.
     //
 
-    if (NewStackSize == 0) {
-
-        //
-        // If there was previously a stack, destroy it.
-        //
-
+    if (NewStackSize <= Thread->UserStackSize) {
         if ((Thread->UserStackSize != 0) &&
-            ((Thread->Flags & THREAD_FLAG_FREE_USER_STACK) != 0)) {
+            (NewStackSize != Thread->UserStackSize)) {
 
             Status = MmUnmapFileSection(Thread->OwningProcess,
                                         Thread->UserStack,
-                                        Thread->UserStackSize,
+                                        Thread->UserStackSize - NewStackSize,
                                         NULL);
 
-            ASSERT(KSUCCESS(Status));
+            if (NewStackSize != 0) {
+                Thread->UserStack += Thread->UserStackSize - NewStackSize;
+            }
+
+            Thread->UserStackSize = NewStackSize;
         }
 
-        Thread->UserStack = NULL;
-        Thread->UserStackSize = 0;
+        if (NewStackSize == 0) {
+            Thread->UserStack = NULL;
+            Thread->UserStackSize = 0;
+        }
 
     //
-    // Create the stack.
+    // Create or grow the stack.
     //
 
     } else {
+        if (Thread->UserStackSize == 0) {
+            NewBase = NULL;
+            Strategy = AllocationStrategyHighestAddress;
+            MapSize = NewStackSize;
+
+        } else {
+            Strategy = AllocationStrategyFixedAddress;
+            NewBase = Thread->UserStack + Thread->UserStackSize - NewStackSize;
+            if (NewBase > Thread->UserStack) {
+                Status = STATUS_INTEGER_OVERFLOW;
+                goto SetThreadUserStackSizeEnd;
+            }
+
+            MapSize = NewStackSize - Thread->UserStackSize;
+        }
 
         ASSERT(Thread->UserStackSize == 0);
         ASSERT(Thread->UserStack == NULL);
@@ -930,18 +958,46 @@ Return Value:
         Flags = IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE;
         Status = MmMapFileSection(INVALID_HANDLE,
                                   0,
-                                  NewStackSize,
+                                  MapSize,
+                                  0,
+                                  MAX_ADDRESS,
                                   Flags,
                                   FALSE,
                                   NULL,
-                                  AllocationStrategyHighestAddress,
+                                  Strategy,
                                   &NewBase);
 
         if (!KSUCCESS(Status)) {
             goto SetThreadUserStackSizeEnd;
         }
 
-        Thread->Flags |= THREAD_FLAG_FREE_USER_STACK;
+        //
+        // If this was the first time the stack size has been set, save the
+        // upper limit for memory mapped regions. This gives the stack some
+        // breathing room to grow.
+        //
+
+        if ((Thread->UserStackSize == 0) &&
+            (Thread->OwningProcess->AddressSpace->MaxMemoryMap == 0)) {
+
+            MaxMapRegion = NewBase;
+            if (NewStackSize < USER_STACK_REGION_MIN) {
+                MaxMapRegion = NewBase + NewStackSize - USER_STACK_REGION_MIN;
+            }
+
+            Thread->OwningProcess->AddressSpace->MaxMemoryMap = MaxMapRegion;
+        }
+
+        //
+        // Don't free the stack for the first thread, as it contains the
+        // environment and arguments. Do free it for all the other threads
+        // that used the kernel to allocate a stack.
+        //
+
+        if (Thread->OwningProcess->ThreadCount > 1) {
+            Thread->Flags |= THREAD_FLAG_FREE_USER_STACK;
+        }
+
         Thread->UserStack = NewBase;
         Thread->UserStackSize = NewStackSize;
     }
@@ -1909,8 +1965,6 @@ Return Value:
         MmFreeKernelStack(Thread->KernelStack, Thread->KernelStackSize);
         Thread->KernelStack = NULL;
     }
-
-    ASSERT(Thread->UserStack == NULL);
 
     //
     // Remove the thread from its scheduling group.

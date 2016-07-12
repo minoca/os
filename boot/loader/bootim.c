@@ -129,19 +129,12 @@ BopImUnloadBuffer (
 
 KSTATUS
 BopImAllocateAddressSpace (
-    PVOID SystemContext,
-    PIMAGE_FILE_INFORMATION File,
-    ULONG Size,
-    HANDLE *Handle,
-    PVOID *Address,
-    PVOID *AccessibleAddress
+    PLOADED_IMAGE Image
     );
 
 VOID
 BopImFreeAddressSpace (
-    HANDLE Handle,
-    PVOID Address,
-    UINTN Size
+    PLOADED_IMAGE Image
     );
 
 KSTATUS
@@ -627,12 +620,7 @@ Return Value:
 
 KSTATUS
 BopImAllocateAddressSpace (
-    PVOID SystemContext,
-    PIMAGE_FILE_INFORMATION File,
-    ULONG Size,
-    HANDLE *Handle,
-    PVOID *Address,
-    PVOID *AccessibleAddress
+    PLOADED_IMAGE Image
     )
 
 /*++
@@ -644,25 +632,10 @@ Routine Description:
 
 Arguments:
 
-    SystemContext - Supplies the context pointer passed to the load executable
-        function.
-
-    File - Supplies a pointer to the image file information.
-
-    Size - Supplies the required size of the allocation, in bytes.
-
-    Handle - Supplies a pointer where the handle representing this allocation
-        will be returned on success.
-
-    Address - Supplies a pointer that on input contains the preferred virtual
-        address of the image load. On output, contains the allocated virtual
-        address range. This is the VA allocated, but it may not actually be
-        accessible at this time.
-
-    AccessibleAddress - Supplies a pointer where a pointer will be returned
-        that the caller can reach through to access the in-memory image. In
-        online image loads this is probably the same as the returned address,
-        though this cannot be assumed.
+    Image - Supplies a pointer to the image being loaded. The system context,
+        size, file information, load flags, and preferred virtual address will
+        be initialized. This routine should set up the loaded image buffer,
+        loaded lowest address, and allocator handle if needed.
 
 Return Value:
 
@@ -679,10 +652,8 @@ Return Value:
     PVOID PreferredAddress;
     KSTATUS Status;
 
-    *Handle = INVALID_HANDLE;
-    PreferredAddress = *Address;
-    *Address = NULL;
-    *AccessibleAddress = NULL;
+    Image->AllocatorHandle = INVALID_HANDLE;
+    PreferredAddress = Image->PreferredLowestAddress;
     Allocation = BoAllocateMemory(sizeof(BOOT_ADDRESS_SPACE_ALLOCATION));
     if (Allocation == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -694,7 +665,7 @@ Return Value:
     PageOffset = (UINTN)PreferredAddress -
                  ALIGN_RANGE_DOWN((UINTN)PreferredAddress, PageSize);
 
-    AlignedSize = ALIGN_RANGE_UP(Size + PageOffset, PageSize);
+    AlignedSize = ALIGN_RANGE_UP(Image->Size + PageOffset, PageSize);
 
     //
     // Allocate pages from the boot environment. This memory backs a boot
@@ -732,14 +703,14 @@ AllocateAddressSpaceEnd:
         }
 
     } else {
-        *Handle = Allocation;
-        *Address = Allocation->VirtualAddress + PageOffset;
+        Image->AllocatorHandle = Allocation;
+        Image->LoadedLowestAddress = Allocation->VirtualAddress + PageOffset;
 
         ASSERT((UINTN)Allocation->PhysicalAddress ==
                Allocation->PhysicalAddress);
 
-        *AccessibleAddress = (PVOID)(UINTN)Allocation->PhysicalAddress +
-                             PageOffset;
+        Image->LoadedImageBuffer = (PVOID)(UINTN)Allocation->PhysicalAddress +
+                                   PageOffset;
     }
 
     return Status;
@@ -747,9 +718,7 @@ AllocateAddressSpaceEnd:
 
 VOID
 BopImFreeAddressSpace (
-    HANDLE Handle,
-    PVOID Address,
-    UINTN Size
+    PLOADED_IMAGE Image
     )
 
 /*++
@@ -761,12 +730,7 @@ Routine Description:
 
 Arguments:
 
-    Handle - Supplies the handle returned during the allocate call.
-
-    Address - Supplies the virtual address originally returned by the allocate
-        routine.
-
-    Size - Supplies the size in bytes of the originally allocated region.
+    Image - Supplies a pointer to the loaded (or partially loaded) image.
 
 Return Value:
 
@@ -776,7 +740,7 @@ Return Value:
 
 {
 
-    BoFreeMemory((PBOOT_ADDRESS_SPACE_ALLOCATION)Handle);
+    BoFreeMemory((PBOOT_ADDRESS_SPACE_ALLOCATION)(Image->AllocatorHandle));
     return;
 }
 

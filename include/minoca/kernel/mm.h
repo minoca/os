@@ -54,6 +54,13 @@ Author:
 
 #define INVALID_PHYSICAL_ADDRESS 0
 
+//
+// Define the minimum size to reserve for user mode stack expansion. Calls to
+// map memory will not use this region.
+//
+
+#define USER_STACK_REGION_MIN (128 * _1MB)
+
 #define MM_STATISTICS_VERSION 1
 #define MM_STATISTICS_MAX_VERSION 0x10000000
 
@@ -675,6 +682,9 @@ Members:
     MaxResidentSet - Stores the maximum resident set ever mapped into the
         process.
 
+    MaxMemoryMap - Stores the maximum address that map/unmap system calls
+        should return.
+
 --*/
 
 typedef struct _ADDRESS_SPACE {
@@ -683,6 +693,7 @@ typedef struct _ADDRESS_SPACE {
     PMEMORY_ACCOUNTING Accountant;
     volatile UINTN ResidentSet;
     volatile UINTN MaxResidentSet;
+    PVOID MaxMemoryMap;
 } ADDRESS_SPACE, *PADDRESS_SPACE;
 
 //
@@ -2731,6 +2742,9 @@ PMEMORY_RESERVATION
 MmCreateMemoryReservation (
     PVOID PreferredVirtualAddress,
     UINTN Size,
+    PVOID Min,
+    PVOID Max,
+    ALLOCATION_STRATEGY FallbackStrategy,
     BOOL KernelMode
     );
 
@@ -2746,6 +2760,13 @@ Arguments:
         reservation. Supply NULL to indicate no preference.
 
     Size - Supplies the size of the requested reservation, in bytes.
+
+    Min - Supplies the minimum virtual address to allocate.
+
+    Max - Supplies the maximum virtual address to allocate.
+
+    FallbackStrategy - Supplies the fallback memory allocation strategy in
+        case the preferred address isn't available (or wasn't supplied).
 
     KernelMode - Supplies a boolean indicating whether the VA reservation must
         be in kernel mode (TRUE) or user mode (FALSE).
@@ -3148,6 +3169,8 @@ MmMapFileSection (
     HANDLE FileHandle,
     IO_OFFSET FileOffset,
     UINTN SectionLength,
+    PVOID Min,
+    PVOID Max,
     ULONG Flags,
     BOOL KernelSpace,
     PMEMORY_RESERVATION Reservation,
@@ -3171,6 +3194,10 @@ Arguments:
 
     SectionLength - Supplies the desired length of the memory mapping, in bytes.
         Supply 0 to map until the end of the file.
+
+    Min - Supplies the minimum address to allocate.
+
+    Max - Supplies the maximum address to allocate.
 
     Flags - Supplies flags governing the mapping of the section. See
         IMAGE_SECTION_* definitions.

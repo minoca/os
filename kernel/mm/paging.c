@@ -2460,7 +2460,13 @@ Return Value:
                                IO_BUFFER_INTERNAL_FLAG_EXTENDABLE |
                                IO_BUFFER_INTERNAL_FLAG_MEMORY_LOCKED;
 
-    SwapRegion = MmCreateMemoryReservation(NULL, PAGE_OUT_CHUNK_SIZE, TRUE);
+    SwapRegion = MmCreateMemoryReservation(NULL,
+                                           PAGE_OUT_CHUNK_SIZE,
+                                           0,
+                                           MAX_ADDRESS,
+                                           AllocationStrategyAnyAddress,
+                                           TRUE);
+
     if (SwapRegion == NULL) {
         MmFreeIoBuffer(IoBuffer);
         return;
@@ -5015,7 +5021,14 @@ Return Value:
 
     if ((Context->Flags & PAGE_IN_CONTEXT_FLAG_ALLOCATE_SWAP_SPACE) != 0) {
         PageSize = MmPageSize();
-        Context->SwapSpace = MmCreateMemoryReservation(NULL, PageSize, TRUE);
+        Context->SwapSpace = MmCreateMemoryReservation(
+                                                  NULL,
+                                                  PageSize,
+                                                  0,
+                                                  MAX_ADDRESS,
+                                                  AllocationStrategyAnyAddress,
+                                                  TRUE);
+
         if (Context->SwapSpace == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto AllocatePageInStructuresEnd;

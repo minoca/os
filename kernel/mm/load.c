@@ -52,6 +52,8 @@ MmMapFileSection (
     HANDLE FileHandle,
     IO_OFFSET FileOffset,
     UINTN SectionLength,
+    PVOID Min,
+    PVOID Max,
     ULONG Flags,
     BOOL KernelSpace,
     PMEMORY_RESERVATION Reservation,
@@ -75,6 +77,10 @@ Arguments:
 
     SectionLength - Supplies the desired length of the memory mapping, in bytes.
         Supply 0 to map until the end of the file.
+
+    Min - Supplies the minimum address to allocate.
+
+    Max - Supplies the maximum address to allocate.
 
     Flags - Supplies flags governing the mapping of the section. See
         IMAGE_SECTION_* definitions.
@@ -280,8 +286,8 @@ Return Value:
         Status = MmpAllocateAddressRange(Realtor,
                                          AdjustedSize,
                                          PageSize,
-                                         0,
-                                         MAX_ADDRESS,
+                                         Min,
+                                         Max,
                                          MemoryTypeReserved,
                                          Strategy,
                                          AccountingLockHeld,
@@ -552,7 +558,7 @@ Return Value:
         FileOffset = 0;
         MapFlags = Parameters->Flags;
         SectionFlags = IMAGE_SECTION_MAP_SYSTEM_CALL;
-        Strategy = AllocationStrategyAnyAddress;
+        Strategy = AllocationStrategyHighestAddress;
 
         //
         // The offset must be page-aligned.
@@ -720,6 +726,8 @@ Return Value:
         Status = MmMapFileSection(IoHandle,
                                   FileOffset,
                                   Parameters->Size,
+                                  0,
+                                  CurrentProcess->AddressSpace->MaxMemoryMap,
                                   SectionFlags,
                                   FALSE,
                                   NULL,

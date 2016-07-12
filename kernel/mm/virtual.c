@@ -691,6 +691,9 @@ PMEMORY_RESERVATION
 MmCreateMemoryReservation (
     PVOID PreferredVirtualAddress,
     UINTN Size,
+    PVOID Min,
+    PVOID Max,
+    ALLOCATION_STRATEGY FallbackStrategy,
     BOOL KernelMode
     )
 
@@ -706,6 +709,13 @@ Arguments:
         reservation. Supply NULL to indicate no preference.
 
     Size - Supplies the size of the requested reservation, in bytes.
+
+    Min - Supplies the minimum virtual address to allocate.
+
+    Max - Supplies the maximum virtual address to allocate.
+
+    FallbackStrategy - Supplies the fallback memory allocation strategy in
+        case the preferred address isn't available (or wasn't supplied).
 
     KernelMode - Supplies a boolean indicating whether the VA reservation must
         be in kernel mode (TRUE) or user mode (FALSE).
@@ -809,8 +819,8 @@ Return Value:
         Status = MmpAllocateAddressRange(Accountant,
                                          AlignedSize,
                                          0,
-                                         0,
-                                         MAX_ADDRESS,
+                                         Min,
+                                         Max,
                                          MemoryTypeReserved,
                                          AllocationStrategyFixedAddress,
                                          FALSE,
@@ -840,10 +850,10 @@ Return Value:
     Status = MmpAllocateAddressRange(Accountant,
                                      AlignedSize,
                                      PageSize,
-                                     0,
-                                     MAX_ADDRESS,
+                                     Min,
+                                     Max,
                                      MemoryTypeReserved,
-                                     AllocationStrategyAnyAddress,
+                                     FallbackStrategy,
                                      FALSE,
                                      &AllocatedAddress);
 
@@ -1142,6 +1152,7 @@ Return Value:
     MmpLockAccountant(Source->Accountant, FALSE);
     MmpLockAccountant(Destination->Accountant, TRUE);
     MmAcquireAddressSpaceLock(Source);
+    Destination->MaxMemoryMap = Source->MaxMemoryMap;
 
     //
     // Preallocate all the page tables in the destination process so that

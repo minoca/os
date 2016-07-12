@@ -521,13 +521,7 @@ Return Value:
         //
 
         Image->LoadedLowestAddress = Image->PreferredLowestAddress;
-        Status = ImAllocateAddressSpace(Image->SystemContext,
-                                        &(Image->File),
-                                        Image->Size,
-                                        &(Image->AllocatorHandle),
-                                        &(Image->LoadedLowestAddress),
-                                        &(Image->LoadedImageBuffer));
-
+        Status = ImAllocateAddressSpace(Image);
         if (!KSUCCESS(Status)) {
             goto LoadExecutableEnd;
         }
@@ -576,9 +570,7 @@ LoadExecutableEnd:
 
         if (Image != NULL) {
             if (Image->AllocatorHandle != INVALID_HANDLE) {
-                ImFreeAddressSpace(Image->AllocatorHandle,
-                                   Image->LoadedLowestAddress,
-                                   Image->Size);
+                ImFreeAddressSpace(Image);
             }
 
             if (Image->File.Handle != INVALID_HANDLE) {
@@ -844,9 +836,7 @@ Return Value:
     ImpUnloadImage(Image);
     LIST_REMOVE(&(Image->ListEntry));
     if (Image->AllocatorHandle != INVALID_HANDLE) {
-        ImFreeAddressSpace(Image->AllocatorHandle,
-                           Image->LoadedLowestAddress,
-                           Image->Size);
+        ImFreeAddressSpace(Image);
     }
 
     if (Image->File.Handle != INVALID_HANDLE) {

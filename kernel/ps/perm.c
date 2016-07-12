@@ -615,6 +615,17 @@ Return Value:
 
     Thread->Limits[Type].Max = NewValue.Max;
     Thread->Limits[Type].Current = NewValue.Current;
+
+    //
+    // Attempt to set the new stack size now, and silently ignore failures.
+    //
+
+    if (Type == ResourceLimitStack) {
+        if ((Thread->Flags & THREAD_FLAG_FREE_USER_STACK) != 0) {
+            PspSetThreadUserStackSize(Thread, NewValue.Current);
+        }
+    }
+
     Status = STATUS_SUCCESS;
 
 SysSetResourceLimitEnd:
