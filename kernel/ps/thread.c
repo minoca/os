@@ -885,12 +885,10 @@ Return Value:
 {
 
     ULONG Flags;
-    UINTN MapSize;
     PVOID MaxMapRegion;
-    PVOID NewBase;
     ULONG PageSize;
     KSTATUS Status;
-    ALLOCATION_STRATEGY Strategy;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     PageSize = MmPageSize();
     NewStackSize = ALIGN_RANGE_UP(NewStackSize, PageSize);
@@ -926,20 +924,20 @@ Return Value:
     //
 
     } else {
-        if (Thread->UserStackSize == 0) {
-            NewBase = NULL;
-            Strategy = AllocationStrategyHighestAddress;
-            MapSize = NewStackSize;
+        VaRequest.Address = NULL;
+        VaRequest.Size = NewStackSize;
+        VaRequest.Strategy = AllocationStrategyHighestAddress;
+        if (Thread->UserStackSize != 0) {
+            VaRequest.Strategy = AllocationStrategyFixedAddress;
+            VaRequest.Address = Thread->UserStack + Thread->UserStackSize -
+                                NewStackSize;
 
-        } else {
-            Strategy = AllocationStrategyFixedAddress;
-            NewBase = Thread->UserStack + Thread->UserStackSize - NewStackSize;
-            if (NewBase > Thread->UserStack) {
+            if (VaRequest.Address > Thread->UserStack) {
                 Status = STATUS_INTEGER_OVERFLOW;
                 goto SetThreadUserStackSizeEnd;
             }
 
-            MapSize = NewStackSize - Thread->UserStackSize;
+            VaRequest.Size = NewStackSize - Thread->UserStackSize;
         }
 
         ASSERT(Thread->UserStackSize == 0);
@@ -954,18 +952,17 @@ Return Value:
             goto SetThreadUserStackSizeEnd;
         }
 
-        NewBase = NULL;
         Flags = IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE;
+        VaRequest.Alignment = 0;
+        VaRequest.Min = 0;
+        VaRequest.Max = MAX_ADDRESS;
+        VaRequest.MemoryType = MemoryTypeReserved;
         Status = MmMapFileSection(INVALID_HANDLE,
                                   0,
-                                  MapSize,
-                                  0,
-                                  MAX_ADDRESS,
+                                  &VaRequest,
                                   Flags,
                                   FALSE,
-                                  NULL,
-                                  Strategy,
-                                  &NewBase);
+                                  NULL);
 
         if (!KSUCCESS(Status)) {
             goto SetThreadUserStackSizeEnd;
@@ -980,9 +977,10 @@ Return Value:
         if ((Thread->UserStackSize == 0) &&
             (Thread->OwningProcess->AddressSpace->MaxMemoryMap == 0)) {
 
-            MaxMapRegion = NewBase;
+            MaxMapRegion = VaRequest.Address;
             if (NewStackSize < USER_STACK_REGION_MIN) {
-                MaxMapRegion = NewBase + NewStackSize - USER_STACK_REGION_MIN;
+                MaxMapRegion = VaRequest.Address + NewStackSize -
+                               USER_STACK_REGION_MIN;
             }
 
             Thread->OwningProcess->AddressSpace->MaxMemoryMap = MaxMapRegion;
@@ -998,7 +996,7 @@ Return Value:
             Thread->Flags |= THREAD_FLAG_FREE_USER_STACK;
         }
 
-        Thread->UserStack = NewBase;
+        Thread->UserStack = VaRequest.Address;
         Thread->UserStackSize = NewStackSize;
     }
 

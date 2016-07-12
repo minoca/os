@@ -51,14 +51,10 @@ KSTATUS
 MmMapFileSection (
     HANDLE FileHandle,
     IO_OFFSET FileOffset,
-    UINTN SectionLength,
-    PVOID Min,
-    PVOID Max,
+    PVM_ALLOCATION_PARAMETERS VaRequest,
     ULONG Flags,
     BOOL KernelSpace,
-    PMEMORY_RESERVATION Reservation,
-    ALLOCATION_STRATEGY Strategy,
-    PVOID *FileMapping
+    PMEMORY_RESERVATION Reservation
     )
 
 /*++
@@ -75,12 +71,10 @@ Arguments:
     FileOffset - Supplies the offset, in bytes, from the start of the file
         where the mapping should begin.
 
-    SectionLength - Supplies the desired length of the memory mapping, in bytes.
-        Supply 0 to map until the end of the file.
-
-    Min - Supplies the minimum address to allocate.
-
-    Max - Supplies the maximum address to allocate.
+    VaRequest - Supplies a pointer to the virtual address allocation
+        parameters. If the supplied size is zero, then this routine will
+        attempt to map until the end of the file. The alignment will be set
+        to a page size, and the memory type will be set to reserved.
 
     Flags - Supplies flags governing the mapping of the section. See
         IMAGE_SECTION_* definitions.
@@ -93,14 +87,6 @@ Arguments:
         need to be allocated in the same range together for any one mapping to
         be useful.
 
-    Strategy - Supplies the allocation strategy to use when selecting a
-        virtual address.
-
-    FileMapping - Supplies a pointer to the requested virtual address of the
-        mapping on input. Supply NULL as the value of this pointer to accept a
-        mapping at any VA. On output, returns the virtual address of the mapped
-        file will be returned on success.
-
 Return Value:
 
     Status code.
@@ -110,9 +96,7 @@ Return Value:
 {
 
     BOOL AccountingLockHeld;
-    UINTN AdjustedSize;
     ULONG Adjustment;
-    PVOID Allocation;
     ULONGLONG FileSize;
     ULONG HandleAccess;
     PKPROCESS ImageProcess;
@@ -125,7 +109,6 @@ Return Value:
     ULONG UnmapFlags;
 
     AccountingLockHeld = FALSE;
-    AdjustedSize = 0;
     KernelProcess = PsGetKernelProcess();
     PageSize = MmPageSize();
 
@@ -135,7 +118,7 @@ Return Value:
     // The file mapping must be page aligned.
     //
 
-    ASSERT(IS_POINTER_ALIGNED(*FileMapping, PageSize) != FALSE);
+    ASSERT(IS_POINTER_ALIGNED(VaRequest->Address, PageSize) != FALSE);
 
     Process = PsGetCurrentProcess();
     Realtor = NULL;
@@ -163,7 +146,7 @@ Return Value:
     //
 
     if ((Process == KernelProcess) &&
-        (Strategy == AllocationStrategyFixedAddressClobber)) {
+        (VaRequest->Strategy == AllocationStrategyFixedAddressClobber)) {
 
         ASSERT(FALSE);
 
@@ -195,7 +178,7 @@ Return Value:
     // If the size was zero, find out how big the file is and use that.
     //
 
-    if (SectionLength == 0) {
+    if (VaRequest->Size == 0) {
         Status = IoGetFileSize(FileHandle, &FileSize);
         if (!KSUCCESS(Status)) {
             goto MapFileSectionEnd;
@@ -206,7 +189,7 @@ Return Value:
             goto MapFileSectionEnd;
         }
 
-        SectionLength = FileSize - FileOffset;
+        VaRequest->Size = FileSize - FileOffset;
     }
 
     if (KernelSpace != FALSE) {
@@ -222,37 +205,38 @@ Return Value:
     //
 
     Adjustment = 0;
-    Allocation = NULL;
     if (Reservation != NULL) {
-        if ((Strategy == AllocationStrategyFixedAddress) ||
-            (Strategy == AllocationStrategyFixedAddressClobber)) {
+        if ((VaRequest->Strategy == AllocationStrategyFixedAddress) ||
+            (VaRequest->Strategy == AllocationStrategyFixedAddressClobber)) {
 
             //
             // Use the requested address.
             //
 
-            Allocation = ALIGN_POINTER_DOWN(*FileMapping, PageSize);
-            Adjustment = REMAINDER((UINTN)*FileMapping, PageSize);
+            Adjustment = REMAINDER((UINTN)VaRequest->Address, PageSize);
+            VaRequest->Address = ALIGN_POINTER_DOWN(VaRequest->Address,
+                                                    PageSize);
 
             //
             // Fail if the requested VA is outside the reservation. Truncate
             // the size if it goes beyond the reservation.
             //
 
-            if ((Allocation < Reservation->VirtualBase) ||
-                (Allocation > (Reservation->VirtualBase + Reservation->Size))) {
+            if ((VaRequest->Address < Reservation->VirtualBase) ||
+                (VaRequest->Address >
+                 (Reservation->VirtualBase + Reservation->Size))) {
 
                 Status = STATUS_INVALID_PARAMETER;
                 goto MapFileSectionEnd;
             }
 
-            if ((UINTN)*FileMapping + SectionLength >
-                (UINTN)Reservation->VirtualBase + Reservation->Size) {
+            if (VaRequest->Address + VaRequest->Size >
+                Reservation->VirtualBase + Reservation->Size) {
 
-                SectionLength = (UINTN)Reservation->VirtualBase +
-                                Reservation->Size - (UINTN)*FileMapping;
+                VaRequest->Size = (UINTN)Reservation->VirtualBase +
+                                  Reservation->Size - (UINTN)VaRequest->Address;
 
-                if (SectionLength == 0) {
+                if (VaRequest->Size == 0) {
                     Status = STATUS_INVALID_PARAMETER;
                     goto MapFileSectionEnd;
                 }
@@ -270,6 +254,12 @@ Return Value:
         }
     }
 
+    if ((VaRequest->Strategy != AllocationStrategyFixedAddress) &&
+        (VaRequest->Strategy != AllocationStrategyFixedAddressClobber)) {
+
+        VaRequest->Address = NULL;
+    }
+
     //
     // If the allocation has not yet been done, then allocate now.
     //
@@ -279,19 +269,14 @@ Return Value:
         AccountingLockHeld = TRUE;
     }
 
-    AdjustedSize = ALIGN_RANGE_UP(SectionLength + Adjustment, PageSize);
-    if (Allocation == NULL) {
-        Allocation = *FileMapping;
+    VaRequest->Size = ALIGN_RANGE_UP(VaRequest->Size + Adjustment, PageSize);
+    VaRequest->Alignment = PageSize;
+    VaRequest->MemoryType = MemoryTypeReserved;
+    if (VaRequest->Address == NULL) {
         Adjustment = REMAINDER(FileOffset, PageSize);
         Status = MmpAllocateAddressRange(Realtor,
-                                         AdjustedSize,
-                                         PageSize,
-                                         Min,
-                                         Max,
-                                         MemoryTypeReserved,
-                                         Strategy,
-                                         AccountingLockHeld,
-                                         &Allocation);
+                                         VaRequest,
+                                         AccountingLockHeld);
 
         if (!KSUCCESS(Status)) {
             goto MapFileSectionEnd;
@@ -306,8 +291,8 @@ Return Value:
     //
 
     Status = MmpAddImageSection(ImageProcess->AddressSpace,
-                                Allocation,
-                                AdjustedSize,
+                                VaRequest->Address,
+                                VaRequest->Size,
                                 Flags,
                                 FileHandle,
                                 FileOffset - Adjustment);
@@ -316,7 +301,7 @@ Return Value:
         goto MapFileSectionEnd;
     }
 
-    *FileMapping = Allocation + Adjustment;
+    VaRequest->Address += Adjustment;
     Status = STATUS_SUCCESS;
 
 MapFileSectionEnd:
@@ -329,8 +314,8 @@ MapFileSectionEnd:
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(ImageProcess->AddressSpace,
-                                   Allocation,
-                                   AdjustedSize,
+                                   VaRequest->Address,
+                                   VaRequest->Size,
                                    TRUE,
                                    UnmapFlags);
         }
@@ -519,7 +504,7 @@ Return Value:
     SET_FILE_INFORMATION Request;
     ULONG SectionFlags;
     KSTATUS Status;
-    ALLOCATION_STRATEGY Strategy;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     CurrentProcess = PsGetCurrentProcess();
     IoHandle = INVALID_HANDLE;
@@ -558,7 +543,7 @@ Return Value:
         FileOffset = 0;
         MapFlags = Parameters->Flags;
         SectionFlags = IMAGE_SECTION_MAP_SYSTEM_CALL;
-        Strategy = AllocationStrategyHighestAddress;
+        VaRequest.Strategy = AllocationStrategyHighestAddress;
 
         //
         // The offset must be page-aligned.
@@ -704,7 +689,7 @@ Return Value:
         //
 
         if ((MapFlags & SYS_MAP_FLAG_FIXED) != 0) {
-            Strategy = AllocationStrategyFixedAddressClobber;
+            VaRequest.Strategy = AllocationStrategyFixedAddressClobber;
             if ((IS_ALIGNED((UINTN)Parameters->Address, PageSize) == FALSE) ||
                 ((Parameters->Address + Parameters->Size) >= KERNEL_VA_START) ||
                 (Parameters->Address == NULL)) {
@@ -719,20 +704,25 @@ Return Value:
         //
 
         } else if (Parameters->Address != NULL) {
-            Strategy = AllocationStrategyPreferredAddress;
+            VaRequest.Strategy = AllocationStrategyPreferredAddress;
         }
 
         Parameters->Size = ALIGN_RANGE_UP(Parameters->Size, PageSize);
+        VaRequest.Address = Parameters->Address;
+        VaRequest.Size = Parameters->Size;
+        VaRequest.Alignment = 0;
+        VaRequest.Min = 0;
+        VaRequest.Max = CurrentProcess->AddressSpace->MaxMemoryMap;
+        VaRequest.MemoryType = MemoryTypeReserved;
         Status = MmMapFileSection(IoHandle,
                                   FileOffset,
-                                  Parameters->Size,
-                                  0,
-                                  CurrentProcess->AddressSpace->MaxMemoryMap,
+                                  &VaRequest,
                                   SectionFlags,
                                   FALSE,
-                                  NULL,
-                                  Strategy,
-                                  &(Parameters->Address));
+                                  NULL);
+
+        Parameters->Address = VaRequest.Address;
+        Parameters->Size = VaRequest.Size;
 
     //
     // Otherwise search through the current process' list of image sections and

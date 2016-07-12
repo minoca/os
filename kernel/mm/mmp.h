@@ -1130,13 +1130,7 @@ Return Value:
 KSTATUS
 MmpAllocateFromAccountant (
     PMEMORY_ACCOUNTING Accountant,
-    PVOID *Address,
-    UINTN Size,
-    ULONG Alignment,
-    UINTN Min,
-    UINTN Max,
-    MEMORY_TYPE MemoryType,
-    ALLOCATION_STRATEGY Strategy
+    PVM_ALLOCATION_PARAMETERS Request
     );
 
 /*++
@@ -1150,21 +1144,8 @@ Arguments:
 
     Accountant - Supplies a pointer to the memory accounting structure.
 
-    Address - Supplies a pointer to where the allocation will be returned.
-
-    Size - Supplies the size of the required space.
-
-    Alignment - Supplies the alignment requirement for the allocation, in bytes.
-        Valid values are powers of 2. Set to 1 or 0 to specify no alignment
-        requirement.
-
-    Min - Supplies the minimum address to allocate.
-
-    Max - Supplies the maximum address to allocate.
-
-    MemoryType - Supplies the type of memory to mark the allocation as.
-
-    Strategy - Supplies the memory allocation strategy for this allocation.
+    Request - Supplies a pointer to the allocation request. The allocated
+        address is also returned here.
 
 Return Value:
 
@@ -1242,14 +1223,8 @@ Return Value:
 KSTATUS
 MmpAllocateAddressRange (
     PMEMORY_ACCOUNTING Accountant,
-    UINTN Size,
-    ULONG Alignment,
-    PVOID Min,
-    PVOID Max,
-    MEMORY_TYPE MemoryType,
-    ALLOCATION_STRATEGY Strategy,
-    BOOL LockHeld,
-    PVOID *Allocation
+    PVM_ALLOCATION_PARAMETERS Request,
+    BOOL LockHeld
     );
 
 /*++
@@ -1263,24 +1238,11 @@ Arguments:
 
     Accountant - Supplies a pointer to the memory accounting structure.
 
-    Size - Supplies the size of the allocation, in bytes.
-
-    Alignment - Supplies the required alignment, in bytes, of the allocation.
-
-    Min - Supplies the minimum address to allocate.
-
-    Max - Supplies the maximum address to allocate.
-
-    MemoryType - Supplies a the type of memory this allocation should be marked
-        as. Do not specify MemoryTypeFree for this parameter.
-
-    Strategy - Supplies the allocation strategy for this allocation.
+    Request - Supplies a pointer to the allocation request. The resulting
+        allocation is also returned here.
 
     LockHeld - Supplies a boolean indicating whether or not the accountant's
         lock is already held exclusively.
-
-    Allocation - Supplies a pointer to the requested address range on input if
-        the allocation strategy allows. On output, returns the allocation.
 
 Return Value:
 

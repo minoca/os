@@ -929,8 +929,6 @@ Return Value:
 {
 
     ULONG AlignedBlockSize;
-    ULONG Alignment;
-    PVOID Allocation;
     ULONG AllocationSize;
     ULONG BitmapSize;
     ULONG BlockSize;
@@ -950,6 +948,7 @@ Return Value:
     PBLOCK_ALLOCATOR_SEGMENT Segment;
     ULONG SegmentSize;
     KSTATUS Status;
+    VM_ALLOCATION_PARAMETERS VaRequest;
     PVOID VirtualAddress;
 
     ASSERT(Allocator->ExpansionBlockCount != 0);
@@ -1091,25 +1090,25 @@ Return Value:
         Segment->Size = SegmentSize;
         Segment->TotalBlocks = ExpansionBlockCount;
         Segment->FreeBlocks = Segment->TotalBlocks;
-        Alignment = ALIGN_RANGE_UP(Allocator->Alignment, PageSize);
+        VaRequest.Address = NULL;
+        VaRequest.Size = SegmentSize;
+        VaRequest.Alignment = ALIGN_RANGE_UP(Allocator->Alignment, PageSize);
+        VaRequest.Min = 0;
+        VaRequest.Max = MAX_ADDRESS;
+        VaRequest.MemoryType = MemoryTypeReserved;
+        VaRequest.Strategy = AllocationStrategyAnyAddress;
         Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                         SegmentSize,
-                                         Alignment,
-                                         0,
-                                         MAX_ADDRESS,
-                                         MemoryTypeReserved,
-                                         AllocationStrategyAnyAddress,
-                                         FALSE,
-                                         &Allocation);
+                                         &VaRequest,
+                                         FALSE);
 
         if (!KSUCCESS(Status)) {
             goto ExpandBlockAllocatorEnd;
         }
 
-        Segment->VirtualAddress = Allocation;
+        Segment->VirtualAddress = VaRequest.Address;
         Status = MmpMapRange(Segment->VirtualAddress,
                              SegmentSize,
-                             Alignment,
+                             VaRequest.Alignment,
                              PhysicalRunSize,
                              FALSE,
                              NonCached);

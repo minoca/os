@@ -991,6 +991,7 @@ Return Value:
     ULONGLONG AlignedSize;
     UINTN PageSize;
     KSTATUS Status;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     PageSize = MmPageSize();
     AlignedSize = ALIGN_RANGE_UP(File->Size, PageSize);
@@ -998,21 +999,25 @@ Return Value:
         return STATUS_NOT_SUPPORTED;;
     }
 
+    VaRequest.Address = NULL;
+    VaRequest.Size = AlignedSize;
+    VaRequest.Alignment = PageSize;
+    VaRequest.Min = 0;
+    VaRequest.Max = MAX_ADDRESS;
+    VaRequest.MemoryType = MemoryTypeReserved;
+    VaRequest.Strategy = AllocationStrategyAnyAddress;
     Status = MmMapFileSection(File->Handle,
                               0,
-                              (UINTN)AlignedSize,
-                              0,
-                              MAX_ADDRESS,
+                              &VaRequest,
                               IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE,
                               TRUE,
-                              NULL,
-                              AllocationStrategyAnyAddress,
-                              &(Buffer->Data));
+                              NULL);
 
     if (!KSUCCESS(Status)) {
         return Status;
     }
 
+    Buffer->Data = VaRequest.Address;
     Buffer->Size = File->Size;
     return STATUS_SUCCESS;
 }
@@ -1327,7 +1332,6 @@ Return Value:
 
 {
 
-    PVOID Address;
     UINTN BytesCompleted;
     PIO_HANDLE FileHandle;
     PVOID FileRegion;
@@ -1339,8 +1343,6 @@ Return Value:
     BOOL KernelMode;
     PKPROCESS KernelProcess;
     ULONG MapFlags;
-    PVOID MaxAddress;
-    UINTN MemoryRegionSize;
     UINTN MemorySize;
     UINTN NextPage;
     UINTN PageMask;
@@ -1353,6 +1355,7 @@ Return Value:
     PMEMORY_RESERVATION Reservation;
     UINTN SegmentAddress;
     KSTATUS Status;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     ASSERT((PreviousSegment == NULL) ||
            (Segment->VirtualAddress > PreviousSegment->VirtualAddress));
@@ -1389,15 +1392,19 @@ Return Value:
         MapFlags |= IMAGE_SECTION_EXECUTABLE;
     }
 
+    VaRequest.Alignment = 0;
+    VaRequest.Min = 0;
+    VaRequest.MemoryType = MemoryTypeReserved;
+    VaRequest.Strategy = AllocationStrategyFixedAddress;
     Process = Reservation->Process;
     if (Process == KernelProcess) {
         KernelMode = TRUE;
         MapFlags |= IMAGE_SECTION_NON_PAGED;
         IoBufferFlags |= IO_BUFFER_FLAG_KERNEL_MODE_DATA;
-        MaxAddress = MAX_ADDRESS;
+        VaRequest.Max = MAX_ADDRESS;
 
     } else {
-        MaxAddress = Process->AddressSpace->MaxMemoryMap;
+        VaRequest.Max = Process->AddressSpace->MaxMemoryMap;
     }
 
     //
@@ -1507,6 +1514,8 @@ Return Value:
         PageOffset = FileOffset & PageMask;
         FileRegion = (PVOID)(SegmentAddress - PageOffset);
         FileRegionSize = ALIGN_RANGE_UP(FileSize + PageOffset, PageSize);
+        VaRequest.Address = FileRegion;
+        VaRequest.Size = FileRegionSize;
 
         //
         // Try to memory map the file directly.
@@ -1515,14 +1524,10 @@ Return Value:
         if (PageOffset == (SegmentAddress & PageMask)) {
             Status = MmMapFileSection(FileHandle,
                                       FileOffset - PageOffset,
-                                      FileRegionSize,
-                                      0,
-                                      MaxAddress,
+                                      &VaRequest,
                                       MapFlags,
                                       KernelMode,
-                                      Reservation,
-                                      AllocationStrategyFixedAddress,
-                                      &FileRegion);
+                                      Reservation);
 
             if (!KSUCCESS(Status)) {
                 RtlDebugPrint("Failed to map %x bytes at %x: %x\n",
@@ -1543,14 +1548,10 @@ Return Value:
         } else {
             Status = MmMapFileSection(INVALID_HANDLE,
                                       0,
-                                      FileRegionSize,
-                                      0,
-                                      MaxAddress,
+                                      &VaRequest,
                                       MapFlags,
                                       KernelMode,
-                                      Reservation,
-                                      AllocationStrategyFixedAddress,
-                                      &FileRegion);
+                                      Reservation);
 
             if (!KSUCCESS(Status)) {
                 RtlDebugPrint("Failed to map %x bytes at %x: %x\n",
@@ -1642,25 +1643,18 @@ Return Value:
     //
 
     PageOffset = SegmentAddress & PageMask;
-    Address = (PVOID)(SegmentAddress - PageOffset);
-    MemoryRegionSize = MemorySize + PageOffset;
-    MemoryRegionSize = ALIGN_RANGE_UP(MemoryRegionSize, PageSize);
+    VaRequest.Address = (PVOID)(SegmentAddress - PageOffset);
+    VaRequest.Size = ALIGN_RANGE_UP(MemorySize + PageOffset, PageSize);
     Status = MmMapFileSection(INVALID_HANDLE,
                               0,
-                              MemoryRegionSize,
-                              0,
-                              MaxAddress,
+                              &VaRequest,
                               MapFlags,
                               KernelMode,
-                              Reservation,
-                              AllocationStrategyFixedAddress,
-                              &Address);
+                              Reservation);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to map %x bytes at %x: %x\n",
-                      MemorySize + PageOffset,
-                      Address,
-                      Status);
+
+        ASSERT(FALSE);
 
         goto MapImageSegmentEnd;
     }
@@ -1672,11 +1666,11 @@ Return Value:
     //
 
     if (KernelMode != FALSE) {
-        RtlZeroMemory(Address, MemoryRegionSize);
+        RtlZeroMemory(VaRequest.Address, VaRequest.Size);
     }
 
     if (Segment->MappingStart == NULL) {
-        Segment->MappingStart = Address;
+        Segment->MappingStart = VaRequest.Address;
     }
 
 MapImageSegmentEnd:

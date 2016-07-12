@@ -243,6 +243,7 @@ Return Value:
     ULONG Flags;
     PHYSICAL_ADDRESS PhysicalAddress;
     KSTATUS Status;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     PhysicalAddress = MmpAllocateIdentityMappablePhysicalPages(PageCount, 0);
 
@@ -258,17 +259,20 @@ Return Value:
     *Allocation = (PVOID)(UINTN)PhysicalAddress;
     if (*Allocation >= KERNEL_VA_START) {
         Flags |= MAP_FLAG_GLOBAL;
+        VaRequest.Address = *Allocation;
+        VaRequest.Size = PageCount << PAGE_SHIFT;
+        VaRequest.Alignment = PAGE_SIZE;
+        VaRequest.Min = 0;
+        VaRequest.Max = MAX_ADDRESS;
+        VaRequest.MemoryType = MemoryTypeReserved;
+        VaRequest.Strategy = AllocationStrategyFixedAddress;
         Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                         PageCount << PAGE_SHIFT,
-                                         PAGE_SIZE,
-                                         0,
-                                         MAX_ADDRESS,
-                                         MemoryTypeReserved,
-                                         AllocationStrategyFixedAddress,
-                                         FALSE,
-                                         Allocation);
+                                         &VaRequest,
+                                         FALSE);
 
         ASSERT(KSUCCESS(Status));
+
+        *Allocation = VaRequest.Address;
 
     } else {
 

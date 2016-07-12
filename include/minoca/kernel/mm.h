@@ -696,6 +696,42 @@ typedef struct _ADDRESS_SPACE {
     PVOID MaxMemoryMap;
 } ADDRESS_SPACE, *PADDRESS_SPACE;
 
+/*++
+
+Structure Description:
+
+    This structure defines the usual set of parameters for a virtual memory
+    allocation request.
+
+Members:
+
+    Address - Stores the preferred or demanded address on input, and the
+        returned address on output.
+
+    Size - Stores the size of the allocation.
+
+    Alignment - Stores the required alignment of the allocation.
+
+    Min - Stores the minimum address to allocate.
+
+    Max - Stores the maximum address to allocate.
+
+    MemoryType - Stores the requested memory type.
+
+    Strategy - Stores the memory allocation strategy to use.
+
+--*/
+
+typedef struct _VM_ALLOCATION_PARAMETERS {
+    PVOID Address;
+    UINTN Size;
+    ULONG Alignment;
+    PVOID Min;
+    PVOID Max;
+    MEMORY_TYPE MemoryType;
+    ALLOCATION_STRATEGY Strategy;
+} VM_ALLOCATION_PARAMETERS, *PVM_ALLOCATION_PARAMETERS;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -3168,14 +3204,10 @@ KSTATUS
 MmMapFileSection (
     HANDLE FileHandle,
     IO_OFFSET FileOffset,
-    UINTN SectionLength,
-    PVOID Min,
-    PVOID Max,
+    PVM_ALLOCATION_PARAMETERS VaRequest,
     ULONG Flags,
     BOOL KernelSpace,
-    PMEMORY_RESERVATION Reservation,
-    ALLOCATION_STRATEGY Strategy,
-    PVOID *FileMapping
+    PMEMORY_RESERVATION Reservation
     );
 
 /*++
@@ -3192,12 +3224,10 @@ Arguments:
     FileOffset - Supplies the offset, in bytes, from the start of the file
         where the mapping should begin.
 
-    SectionLength - Supplies the desired length of the memory mapping, in bytes.
-        Supply 0 to map until the end of the file.
-
-    Min - Supplies the minimum address to allocate.
-
-    Max - Supplies the maximum address to allocate.
+    VaRequest - Supplies a pointer to the virtual address allocation
+        parameters. If the supplied size is zero, then this routine will
+        attempt to map until the end of the file. The alignment will be set
+        to a page size, and the memory type will be set to reserved.
 
     Flags - Supplies flags governing the mapping of the section. See
         IMAGE_SECTION_* definitions.
@@ -3209,14 +3239,6 @@ Arguments:
         desired mapping. A reservation is required only if several mappings
         need to be allocated in the same range together for any one mapping to
         be useful.
-
-    Strategy - Supplies the allocation strategy to use when selecting a
-        virtual address.
-
-    FileMapping - Supplies a pointer to the requested virtual address of the
-        mapping on input. Supply NULL as the value of this pointer to accept a
-        mapping at any VA. On output, returns the virtual address of the mapped
-        file will be returned on success.
 
 Return Value:
 

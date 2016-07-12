@@ -171,12 +171,12 @@ Return Value:
     UINTN PhysicalRunSize;
     KSTATUS Status;
     ULONG UnmapFlags;
-    PVOID VirtualAddress;
+    VM_ALLOCATION_PARAMETERS VaRequest;
     BOOL WriteThrough;
 
     PageShift = MmPageShift();
     PageSize = MmPageSize();
-    VirtualAddress = NULL;
+    VaRequest.Address = NULL;
 
     //
     // Align both the alignment and the size up to a page. Alignment up to a
@@ -263,16 +263,13 @@ Return Value:
     // Allocate a region of kernel address space.
     //
 
-    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                     AlignedSize,
-                                     PageSize,
-                                     0,
-                                     MAX_ADDRESS,
-                                     MemoryTypeIoBuffer,
-                                     AllocationStrategyAnyAddress,
-                                     FALSE,
-                                     &VirtualAddress);
-
+    VaRequest.Size = AlignedSize;
+    VaRequest.Alignment = PageSize;
+    VaRequest.Min = 0;
+    VaRequest.Max = MAX_ADDRESS;
+    VaRequest.MemoryType = MemoryTypeIoBuffer;
+    VaRequest.Strategy = AllocationStrategyAnyAddress;
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace, &VaRequest, FALSE);
     if (!KSUCCESS(Status)) {
         goto AllocateIoBufferEnd;
     }
@@ -299,7 +296,7 @@ Return Value:
        WriteThrough = TRUE;
     }
 
-    Status = MmpMapRange(VirtualAddress,
+    Status = MmpMapRange(VaRequest.Address,
                          AlignedSize,
                          PhysicalRunAlignment,
                          PhysicalRunSize,
@@ -316,9 +313,9 @@ Return Value:
 
     if ((Flags & IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS) != 0) {
         IoBuffer->FragmentCount = 1;
-        IoBuffer->Fragment[0].VirtualAddress = VirtualAddress;
+        IoBuffer->Fragment[0].VirtualAddress = VaRequest.Address;
         IoBuffer->Fragment[0].Size = AlignedSize;
-        PhysicalAddress = MmpVirtualToPhysical(VirtualAddress, NULL);
+        PhysicalAddress = MmpVirtualToPhysical(VaRequest.Address, NULL);
 
         ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
 
@@ -333,7 +330,7 @@ Return Value:
         // into the same fragment.
         //
 
-        CurrentAddress = VirtualAddress;
+        CurrentAddress = VaRequest.Address;
         FragmentIndex = 0;
         for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
             PhysicalAddress = MmpVirtualToPhysical(CurrentAddress, NULL);
@@ -382,12 +379,12 @@ Return Value:
 AllocateIoBufferEnd:
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("MmAllocateNonPagedIoBuffer(%x): %x\n", Size, Status);
-        if (VirtualAddress != NULL) {
+        if (VaRequest.Address != NULL) {
             UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(NULL,
-                                   VirtualAddress,
+                                   VaRequest.Address,
                                    AlignedSize,
                                    FALSE,
                                    UnmapFlags);
@@ -2949,6 +2946,7 @@ Return Value:
     UINTN SearchIndex;
     UINTN Size;
     KSTATUS Status;
+    VM_ALLOCATION_PARAMETERS VaRequest;
     PVOID VirtualAddress;
     PVOID Virtuals[MM_MAP_IO_BUFFER_LOCAL_VIRTUAL_PAGES];
 
@@ -3014,19 +3012,22 @@ Return Value:
         if (VirtuallyContiguous != FALSE) {
             AddressCount = 1;
             if (Virtuals[0] == NULL) {
+                VaRequest.Address = NULL;
+                VaRequest.Size = Size;
+                VaRequest.Alignment = PageSize;
+                VaRequest.Min = 0;
+                VaRequest.Max = MAX_ADDRESS;
+                VaRequest.MemoryType = MemoryTypeIoBuffer;
+                VaRequest.Strategy = AllocationStrategyAnyAddress;
                 Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                                 Size,
-                                                 PageSize,
-                                                 0,
-                                                 MAX_ADDRESS,
-                                                 MemoryTypeIoBuffer,
-                                                 AllocationStrategyAnyAddress,
-                                                 FALSE,
-                                                 &(Virtuals[0]));
+                                                 &VaRequest,
+                                                 FALSE);
 
                 if (!KSUCCESS(Status)) {
                     goto MapIoBufferFragmentsEnd;
                 }
+
+                Virtuals[0] = VaRequest.Address;
             }
 
             ASSERT(Virtuals[0] >= KERNEL_VA_START);

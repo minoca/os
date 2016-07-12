@@ -613,7 +613,6 @@ Return Value:
 {
 
     UINTN Alignment;
-    PVOID Allocation;
     PLIST_ENTRY Entry;
     RUNLEVEL OldRunLevel;
     ULONG PageSize;
@@ -621,10 +620,11 @@ Return Value:
     PVOID Stack;
     KSTATUS Status;
     ULONG UnmapFlags;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    Allocation = NULL;
+    VaRequest.Address = NULL;
     PageSize = MmPageSize();
     RangeAllocated = FALSE;
     Stack = NULL;
@@ -647,7 +647,7 @@ Return Value:
                 MmFreeKernelStackCount -= 1;
                 Entry = MmFreeKernelStackList.Next;
                 LIST_REMOVE(Entry);
-                Allocation = Entry;
+                VaRequest.Address = Entry;
             }
 
             KeReleaseSpinLock(&MmFreeKernelStackLock);
@@ -670,21 +670,21 @@ Return Value:
         }
     }
 
-    if (Allocation == NULL) {
+    if (VaRequest.Address == NULL) {
 
         //
         // Allocate space, plus an extra guard page.
         //
 
+        VaRequest.Size = Size + PageSize;
+        VaRequest.Alignment = Alignment;
+        VaRequest.Min = 0;
+        VaRequest.Max = MAX_ADDRESS;
+        VaRequest.MemoryType = MemoryTypeReserved;
+        VaRequest.Strategy = AllocationStrategyAnyAddress;
         Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                         Size + PageSize,
-                                         Alignment,
-                                         0,
-                                         MAX_ADDRESS,
-                                         MemoryTypeReserved,
-                                         AllocationStrategyAnyAddress,
-                                         FALSE,
-                                         &Allocation);
+                                         &VaRequest,
+                                         FALSE);
 
         if (!KSUCCESS(Status)) {
             goto AllocateKernelStackEnd;
@@ -696,14 +696,14 @@ Return Value:
         // Map everything but the guard page.
         //
 
-        Stack = Allocation + PageSize;
+        Stack = VaRequest.Address + PageSize;
         Status = MmpMapRange(Stack, Size, PageSize, PageSize, FALSE, FALSE);
         if (!KSUCCESS(Status)) {
             goto AllocateKernelStackEnd;
         }
 
     } else {
-        Stack = Allocation;
+        Stack = VaRequest.Address;
     }
 
     Status = STATUS_SUCCESS;
@@ -959,14 +959,14 @@ Return Value:
 
 {
 
-    PVOID Allocation;
     BOOL LockHeld;
     RUNLEVEL OldRunLevel;
     ULONG PageSize;
     KSTATUS Status;
     ULONG UnmapFlags;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
-    Allocation = NULL;
+    VaRequest.Address = NULL;
     LockHeld = TRUE;
     PageSize = MmPageSize();
 
@@ -989,38 +989,41 @@ Return Value:
     KeReleaseSpinLock(&MmNonPagedPoolLock);
     KeLowerRunLevel(OldRunLevel);
     LockHeld = FALSE;
-    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                     Size,
-                                     PageSize,
-                                     0,
-                                     MAX_ADDRESS,
-                                     MemoryTypeNonPagedPool,
-                                     AllocationStrategyAnyAddress,
-                                     FALSE,
-                                     &Allocation);
-
+    VaRequest.Size = Size;
+    VaRequest.Alignment = PageSize;
+    VaRequest.Min = 0;
+    VaRequest.Max = MAX_ADDRESS;
+    VaRequest.MemoryType = MemoryTypeNonPagedPool;
+    VaRequest.Strategy = AllocationStrategyAnyAddress;
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace, &VaRequest, FALSE);
     if (!KSUCCESS(Status)) {
         goto ExpandNonPagedPoolEnd;
     }
 
-    Status = MmpMapRange(Allocation, Size, PageSize, PageSize, FALSE, FALSE);
+    Status = MmpMapRange(VaRequest.Address,
+                         Size,
+                         PageSize,
+                         PageSize,
+                         FALSE,
+                         FALSE);
+
     if (!KSUCCESS(Status)) {
         goto ExpandNonPagedPoolEnd;
     }
 
 ExpandNonPagedPoolEnd:
     if (!KSUCCESS(Status)) {
-        if (Allocation != NULL) {
+        if (VaRequest.Address != NULL) {
             UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(NULL,
-                                   Allocation,
+                                   VaRequest.Address,
                                    Size,
                                    FALSE,
                                    UnmapFlags);
 
-            Allocation = NULL;
+            VaRequest.Address = NULL;
         }
     }
 
@@ -1030,7 +1033,7 @@ ExpandNonPagedPoolEnd:
         MmNonPagedPoolOldRunLevel = OldRunLevel;
     }
 
-    return Allocation;
+    return VaRequest.Address;
 }
 
 BOOL
@@ -1146,36 +1149,33 @@ Return Value:
 
 {
 
-    PVOID Expansion;
     PKPROCESS KernelProcess;
     ULONG PageSize;
     ULONG SectionFlags;
     KSTATUS Status;
     ULONG UnmapFlags;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
-    Expansion = NULL;
     KernelProcess = PsGetKernelProcess();
     PageSize = MmPageSize();
 
     ASSERT(ALIGN_RANGE_DOWN(Size, PageSize) == Size);
 
-    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                     Size,
-                                     PageSize,
-                                     0,
-                                     MAX_ADDRESS,
-                                     MemoryTypePagedPool,
-                                     AllocationStrategyAnyAddress,
-                                     FALSE,
-                                     &Expansion);
-
+    VaRequest.Address = NULL;
+    VaRequest.Size = Size;
+    VaRequest.Alignment = PageSize;
+    VaRequest.Min = 0;
+    VaRequest.Max = MAX_ADDRESS;
+    VaRequest.MemoryType = MemoryTypePagedPool;
+    VaRequest.Strategy = AllocationStrategyAnyAddress;
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace, &VaRequest, FALSE);
     if (!KSUCCESS(Status)) {
         goto ExpandPagedPoolEnd;
     }
 
     SectionFlags = IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE;
     Status = MmpAddImageSection(KernelProcess->AddressSpace,
-                                Expansion,
+                                VaRequest.Address,
                                 Size,
                                 SectionFlags,
                                 INVALID_HANDLE,
@@ -1187,12 +1187,12 @@ Return Value:
 
 ExpandPagedPoolEnd:
     if (!KSUCCESS(Status)) {
-        if (Expansion != NULL) {
+        if (VaRequest.Address != NULL) {
             UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(NULL,
-                                   Expansion,
+                                   VaRequest.Address,
                                    Size,
                                    FALSE,
                                    UnmapFlags);
@@ -1201,7 +1201,7 @@ ExpandPagedPoolEnd:
         return NULL;
     }
 
-    return (PVOID)(UINTN)Expansion;
+    return VaRequest.Address;
 }
 
 BOOL

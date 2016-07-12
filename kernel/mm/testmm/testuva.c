@@ -552,6 +552,7 @@ Return Value:
     KSTATUS Status;
     ALLOCATION_STRATEGY Strategy;
     BOOL Valid;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     Allocation = RequestedAddress;
     Strategy = AllocationStrategyAnyAddress;
@@ -559,16 +560,18 @@ Return Value:
         Strategy = AllocationStrategyFixedAddress;
     }
 
+    VaRequest.Address = RequestedAddress;
+    VaRequest.Size = Size;
+    VaRequest.Alignment = 0;
+    VaRequest.Min = 0;
+    VaRequest.Max = MAX_ADDRESS;
+    VaRequest.MemoryType = MemoryTypeReserved;
+    VaRequest.Strategy = Strategy;
     Status = MmpAllocateAddressRange(Process->AddressSpace->Accountant,
-                                     Size,
-                                     0,
-                                     0,
-                                     MAX_ADDRESS,
-                                     MemoryTypeReserved,
-                                     Strategy,
-                                     TRUE,
-                                     &Allocation);
+                                     &VaRequest,
+                                     TRUE);
 
+    Allocation = VaRequest.Address;
     if ((!KSUCCESS(Status)) && (ExpectedSuccess != FALSE)) {
         printf("Error: Allocation Failed: size %d, Requested address: "
                "0x%08x, Status = 0x%x.\n",

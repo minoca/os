@@ -383,9 +383,9 @@ Return Value:
 
 {
 
-    PVOID Allocation;
     UINTN PageSize;
     KSTATUS Status;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     PageSize = MmPageSize();
     StartBlock->StackBase = MmAllocateKernelStack(DEFAULT_IDLE_STACK_SIZE);
@@ -403,21 +403,19 @@ Return Value:
     // address is only ever used by the processor that owns it, it's all fine.
     //
 
-    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                     PageSize,
-                                     PageSize,
-                                     0,
-                                     MAX_ADDRESS,
-                                     MemoryTypeReserved,
-                                     AllocationStrategyAnyAddress,
-                                     FALSE,
-                                     &Allocation);
-
+    VaRequest.Address = NULL;
+    VaRequest.Alignment = PageSize;
+    VaRequest.Size = PageSize;
+    VaRequest.Min = 0;
+    VaRequest.Max = MAX_ADDRESS;
+    VaRequest.MemoryType = MemoryTypeReserved;
+    VaRequest.Strategy = AllocationStrategyAnyAddress;
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace, &VaRequest, FALSE);
     if (!KSUCCESS(Status)) {
         goto PrepareForProcessorLaunchEnd;
     }
 
-    StartBlock->SwapPage = Allocation;
+    StartBlock->SwapPage = VaRequest.Address;
     Status = STATUS_SUCCESS;
 
 PrepareForProcessorLaunchEnd:

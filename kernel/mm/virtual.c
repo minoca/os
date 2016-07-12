@@ -732,12 +732,12 @@ Return Value:
 
     PMEMORY_ACCOUNTING Accountant;
     UINTN AlignedSize;
-    PVOID AllocatedAddress;
     PKPROCESS KernelProcess;
     ULONG PageSize;
     PKPROCESS Process;
     PMEMORY_RESERVATION Reservation;
     KSTATUS Status;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -814,17 +814,16 @@ Return Value:
     // If there was a preferred address, attempt to allocate it.
     //
 
+    VaRequest.Address = NULL;
+    VaRequest.Size = AlignedSize;
+    VaRequest.Alignment = PageSize;
+    VaRequest.Min = Min;
+    VaRequest.Max = Max;
+    VaRequest.MemoryType = MemoryTypeReserved;
     if (PreferredVirtualAddress != NULL) {
-        AllocatedAddress = PreferredVirtualAddress;
-        Status = MmpAllocateAddressRange(Accountant,
-                                         AlignedSize,
-                                         0,
-                                         Min,
-                                         Max,
-                                         MemoryTypeReserved,
-                                         AllocationStrategyFixedAddress,
-                                         FALSE,
-                                         &AllocatedAddress);
+        VaRequest.Strategy = AllocationStrategyFixedAddress;
+        VaRequest.Address = PreferredVirtualAddress;
+        Status = MmpAllocateAddressRange(Accountant, &VaRequest, FALSE);
 
         //
         // If the range was successfully allocated, fill out the reservation
@@ -833,7 +832,7 @@ Return Value:
 
         if (KSUCCESS(Status)) {
 
-            ASSERT(AllocatedAddress == PreferredVirtualAddress);
+            ASSERT(VaRequest.Address == PreferredVirtualAddress);
 
             Reservation->Process = Process;
             Reservation->VirtualBase = PreferredVirtualAddress;
@@ -842,27 +841,21 @@ Return Value:
         }
     }
 
+    VaRequest.Address = NULL;
+    VaRequest.Strategy = FallbackStrategy;
+
     //
     // Either there was no preferred address, or the attempt to allocate at
     // that preferred address failed. Allocate anywhere.
     //
 
-    Status = MmpAllocateAddressRange(Accountant,
-                                     AlignedSize,
-                                     PageSize,
-                                     Min,
-                                     Max,
-                                     MemoryTypeReserved,
-                                     FallbackStrategy,
-                                     FALSE,
-                                     &AllocatedAddress);
-
+    Status = MmpAllocateAddressRange(Accountant, &VaRequest, FALSE);
     if (!KSUCCESS(Status)) {
         goto CreateMemoryReservationEnd;
     }
 
     Reservation->Process = Process;
-    Reservation->VirtualBase = AllocatedAddress;
+    Reservation->VirtualBase = VaRequest.Address;
     Reservation->Size = AlignedSize;
     Status = STATUS_SUCCESS;
 
@@ -1398,13 +1391,7 @@ AddAccountingDescriptorEnd:
 KSTATUS
 MmpAllocateFromAccountant (
     PMEMORY_ACCOUNTING Accountant,
-    PVOID *Address,
-    UINTN Size,
-    ULONG Alignment,
-    UINTN Min,
-    UINTN Max,
-    MEMORY_TYPE MemoryType,
-    ALLOCATION_STRATEGY Strategy
+    PVM_ALLOCATION_PARAMETERS Request
     )
 
 /*++
@@ -1418,21 +1405,8 @@ Arguments:
 
     Accountant - Supplies a pointer to the memory accounting structure.
 
-    Address - Supplies a pointer to where the allocation will be returned.
-
-    Size - Supplies the size of the required space.
-
-    Alignment - Supplies the alignment requirement for the allocation, in bytes.
-        Valid values are powers of 2. Set to 1 or 0 to specify no alignment
-        requirement.
-
-    Min - Supplies the minimum address to allocate.
-
-    Max - Supplies the maximum address to allocate.
-
-    MemoryType - Supplies the type of memory to mark the allocation as.
-
-    Strategy - Supplies the memory allocation strategy for this allocation.
+    Request - Supplies a pointer to the allocation request. The allocated
+        address is also returned here.
 
 Return Value:
 
@@ -1465,12 +1439,12 @@ Return Value:
     AddressResult = 0;
     Status = MmMdAllocateFromMdl(&(Accountant->Mdl),
                                  &AddressResult,
-                                 Size,
-                                 Alignment,
-                                 Min,
-                                 Max,
-                                 MemoryType,
-                                 Strategy);
+                                 Request->Size,
+                                 Request->Alignment,
+                                 (UINTN)(Request->Min),
+                                 (UINTN)(Request->Max),
+                                 Request->MemoryType,
+                                 Request->Strategy);
 
     if (!KSUCCESS(Status)) {
         goto AllocateFromAccountantEnd;
@@ -1478,7 +1452,7 @@ Return Value:
 
     ASSERT((UINTN)AddressResult == AddressResult);
 
-    *Address = (PVOID)(UINTN)AddressResult;
+    Request->Address = (PVOID)(UINTN)AddressResult;
 
 AllocateFromAccountantEnd:
     return Status;
@@ -1694,14 +1668,8 @@ RemoveAccountingRangeEnd:
 KSTATUS
 MmpAllocateAddressRange (
     PMEMORY_ACCOUNTING Accountant,
-    UINTN Size,
-    ULONG Alignment,
-    PVOID Min,
-    PVOID Max,
-    MEMORY_TYPE MemoryType,
-    ALLOCATION_STRATEGY Strategy,
-    BOOL LockHeld,
-    PVOID *Allocation
+    PVM_ALLOCATION_PARAMETERS Request,
+    BOOL LockHeld
     )
 
 /*++
@@ -1715,24 +1683,11 @@ Arguments:
 
     Accountant - Supplies a pointer to the memory accounting structure.
 
-    Size - Supplies the size of the allocation, in bytes.
-
-    Alignment - Supplies the required alignment, in bytes, of the allocation.
-
-    Min - Supplies the minimum address to allocate.
-
-    Max - Supplies the maximum address to allocate.
-
-    MemoryType - Supplies a the type of memory this allocation should be marked
-        as. Do not specify MemoryTypeFree for this parameter.
-
-    Strategy - Supplies the allocation strategy for this allocation.
+    Request - Supplies a pointer to the allocation request. The resulting
+        allocation is also returned here.
 
     LockHeld - Supplies a boolean indicating whether or not the accountant's
         lock is already held exclusively.
-
-    Allocation - Supplies a pointer to the requested address range on input if
-        the allocation strategy allows. On output, returns the allocation.
 
 Return Value:
 
@@ -1746,14 +1701,13 @@ Return Value:
     MEMORY_DESCRIPTOR NewDescriptor;
     BOOL RangeFree;
     KSTATUS Status;
-    PVOID VirtualAddress;
 
     LockAcquired = FALSE;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(MemoryType != MemoryTypeFree);
+    ASSERT(Request->MemoryType != MemoryTypeFree);
 
-    if (Size == 0) {
+    if (Request->Size == 0) {
         Status = STATUS_INVALID_PARAMETER;
         goto AllocateAddressRangeEnd;
     }
@@ -1768,18 +1722,17 @@ Return Value:
     // use. If it is not, go ahead and allocate it.
     //
 
-    if ((Strategy == AllocationStrategyFixedAddress) ||
-        (Strategy == AllocationStrategyFixedAddressClobber) ||
-        (Strategy == AllocationStrategyPreferredAddress)) {
+    if ((Request->Strategy == AllocationStrategyFixedAddress) ||
+        (Request->Strategy == AllocationStrategyFixedAddressClobber) ||
+        (Request->Strategy == AllocationStrategyPreferredAddress)) {
 
-        VirtualAddress = *Allocation;
-        if (Strategy == AllocationStrategyFixedAddressClobber) {
+        if (Request->Strategy == AllocationStrategyFixedAddressClobber) {
             RangeFree = TRUE;
 
         } else {
             RangeFree = MmpIsAccountingRangeFree(Accountant,
-                                                 VirtualAddress,
-                                                 Size);
+                                                 Request->Address,
+                                                 Request->Size);
         }
 
         if (RangeFree != FALSE) {
@@ -1788,10 +1741,11 @@ Return Value:
             // This virtual address is available. Allocate it.
             //
 
-            MmMdInitDescriptor(&NewDescriptor,
-                               (UINTN)VirtualAddress,
-                               (ULONGLONG)(UINTN)VirtualAddress + Size,
-                               MemoryType);
+            MmMdInitDescriptor(
+                            &NewDescriptor,
+                            (UINTN)Request->Address,
+                            (ULONGLONG)(UINTN)Request->Address + Request->Size,
+                            Request->MemoryType);
 
             Status = MmpAddAccountingDescriptor(Accountant, &NewDescriptor);
             if (KSUCCESS(Status)) {
@@ -1802,33 +1756,23 @@ Return Value:
             Status = STATUS_MEMORY_CONFLICT;
         }
 
-        if (Strategy == AllocationStrategyFixedAddress) {
+        if (Request->Strategy == AllocationStrategyFixedAddress) {
             goto AllocateAddressRangeEnd;
         }
 
-        ASSERT(Strategy != AllocationStrategyFixedAddressClobber);
+        ASSERT(Request->Strategy != AllocationStrategyFixedAddressClobber);
 
-        Strategy = AllocationStrategyAnyAddress;
+        Request->Strategy = AllocationStrategyAnyAddress;
     }
 
     //
     // Otherwise allocate any free address range.
     //
 
-    Status = MmpAllocateFromAccountant(Accountant,
-                                       &VirtualAddress,
-                                       Size,
-                                       Alignment,
-                                       (UINTN)Min,
-                                       (UINTN)Max,
-                                       MemoryType,
-                                       Strategy);
-
+    Status = MmpAllocateFromAccountant(Accountant, Request);
     if (!KSUCCESS(Status)) {
         goto AllocateAddressRangeEnd;
     }
-
-    *Allocation = VirtualAddress;
 
 AllocateAddressRangeEnd:
 
@@ -2493,11 +2437,11 @@ Return Value:
     ULONG PageSize;
     UINTN Size;
     KSTATUS Status;
-    PVOID VirtualAddress;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     PageShift = MmPageShift();
     PageSize = MmPageSize();
-    VirtualAddress = NULL;
+    VaRequest.Address = NULL;
 
     ASSERT((PhysicalAddress & (PageSize - 1)) == 0);
 
@@ -2512,16 +2456,13 @@ Return Value:
     // Find a VA range for this mapping.
     //
 
-    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                     Size,
-                                     PageSize,
-                                     0,
-                                     MAX_ADDRESS,
-                                     MemoryType,
-                                     AllocationStrategyAnyAddress,
-                                     FALSE,
-                                     &VirtualAddress);
-
+    VaRequest.Size = Size;
+    VaRequest.Alignment = PageSize;
+    VaRequest.Min = 0;
+    VaRequest.Max = MAX_ADDRESS;
+    VaRequest.MemoryType = MemoryType;
+    VaRequest.Strategy = AllocationStrategyAnyAddress;
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace, &VaRequest, FALSE);
     if (!KSUCCESS(Status)) {
         goto MapPhysicalAddressEnd;
     }
@@ -2544,7 +2485,7 @@ Return Value:
     }
 
     CurrentPhysicalAddress = PhysicalAddress;
-    CurrentVirtualAddress = VirtualAddress;
+    CurrentVirtualAddress = VaRequest.Address;
     for (Index = 0; Index < PageCount; Index += 1) {
         MmpMapPage(CurrentPhysicalAddress, CurrentVirtualAddress, MapFlags);
         CurrentPhysicalAddress += PageSize;
@@ -2561,16 +2502,16 @@ MapPhysicalAddressEnd:
         // pages as those are owned by the caller.
         //
 
-        if (VirtualAddress != NULL) {
+        if (VaRequest.Address != NULL) {
             MmpFreeAccountingRange(NULL,
-                                   VirtualAddress,
+                                   VaRequest.Address,
                                    Size,
                                    FALSE,
                                    UNMAP_FLAG_SEND_INVALIDATE_IPI);
         }
     }
 
-    return (PVOID)(UINTN)VirtualAddress;
+    return VaRequest.Address;
 }
 
 KSTATUS
@@ -2601,6 +2542,7 @@ Return Value:
     KSTATUS Status;
     ULONG UnmapFlags;
     PVOID UserSharedDataPage;
+    VM_ALLOCATION_PARAMETERS VaRequest;
 
     PageSize = MmPageSize();
 
@@ -2612,20 +2554,19 @@ Return Value:
     //
 
     UserSharedDataPage = NULL;
-    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                     PageSize,
-                                     PageSize,
-                                     0,
-                                     MAX_ADDRESS,
-                                     MemoryTypeReserved,
-                                     AllocationStrategyAnyAddress,
-                                     FALSE,
-                                     &UserSharedDataPage);
-
+    VaRequest.Address = NULL;
+    VaRequest.Size = ALIGN_RANGE_UP(sizeof(USER_SHARED_DATA), PageSize);
+    VaRequest.Alignment = PageSize;
+    VaRequest.Min = 0;
+    VaRequest.Max = MAX_ADDRESS;
+    VaRequest.MemoryType = MemoryTypeReserved;
+    VaRequest.Strategy = AllocationStrategyAnyAddress;
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace, &VaRequest, FALSE);
     if (!KSUCCESS(Status)) {
         goto InitializeUserSharedDataEnd;
     }
 
+    UserSharedDataPage = VaRequest.Address;
     Status = MmpMapRange(UserSharedDataPage,
                          PageSize,
                          PageSize,
