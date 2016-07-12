@@ -184,6 +184,14 @@ extern "C" {
 #define S_IRWXU (S_IRUSR | S_IWUSR | S_IXUSR)
 
 //
+// User read, write, and execute synonyms for compatibility.
+//
+
+#define S_IEXEC S_IXUSR
+#define S_IWRITE S_IWUSR
+#define S_IREAD S_IRUSR
+
+//
 // Restricted deletion in directory flag
 //
 
