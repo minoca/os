@@ -334,6 +334,28 @@ Return Value:
         goto GetImageSizeEnd;
     }
 
+    switch (ElfHeader->Machine) {
+    case ELF_MACHINE_ARM:
+        Image->Machine = ImageMachineTypeArm32;
+        break;
+
+    case ELF_MACHINE_I386:
+        Image->Machine = ImageMachineTypeX86;
+        break;
+
+    case ELF_MACHINE_X86_64:
+        Image->Machine = ImageMachineTypeX64;
+        break;
+
+    case ELF_MACHINE_AARCH64:
+        Image->Machine = ImageMachineTypeArm64;
+        break;
+
+    default:
+        Image->Machine = ImageMachineTypeUnknown;
+        break;
+    }
+
     //
     // Loop through the program headers once to get the image size and base
     // address.
@@ -497,28 +519,6 @@ Return Value:
     }
 
     LoadingImage->ElfHeader = ElfHeader;
-    switch (ElfHeader->Machine) {
-    case ELF_MACHINE_ARM:
-        Image->Machine = ImageMachineTypeArm32;
-        break;
-
-    case ELF_MACHINE_I386:
-        Image->Machine = ImageMachineTypeX86;
-        break;
-
-    case ELF_MACHINE_X86_64:
-        Image->Machine = ImageMachineTypeX64;
-        break;
-
-    case ELF_MACHINE_AARCH64:
-        Image->Machine = ImageMachineTypeArm64;
-        break;
-
-    default:
-        Image->Machine = ImageMachineTypeUnknown;
-        break;
-    }
-
     SegmentCount = ElfHeader->ProgramHeaderCount;
     FirstProgramHeader = ImpReadBuffer(
                                   &(Image->File),
@@ -1409,6 +1409,80 @@ RelocateImagesEnd:
     return Status;
 }
 
+VOID
+ImpElfRelocateSelf (
+    PIMAGE_BUFFER Buffer,
+    PLOADED_IMAGE Image
+    )
+
+/*++
+
+Routine Description:
+
+    This routine relocates the currently running image.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the image buffer.
+
+    Image - Supplies a pointer to the zeroed but otherwise uninitialized
+        image buffer.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    LIST_ENTRY FakeList;
+    PSTR InterpreterPath;
+    ELF_LOADING_IMAGE LoadingImage;
+    KSTATUS Status;
+
+    //
+    // Create a fake image list, and a fake ELF loading image context.
+    //
+
+    INITIALIZE_LIST_HEAD(&FakeList);
+    RtlZeroMemory(&LoadingImage, sizeof(ELF_LOADING_IMAGE));
+    RtlCopyMemory(&(LoadingImage.Buffer), Buffer, sizeof(IMAGE_BUFFER));
+
+    //
+    // Set the "no static constructors" flag so that gather export information
+    // doesn't try to allocate a static functions structure.
+    //
+
+    Image->LoadFlags = IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE |
+                       IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS |
+                       IMAGE_LOAD_FLAG_IGNORE_INTERPRETER;
+
+    Status = ImpElfGetImageSize(&FakeList, Image, Buffer, &InterpreterPath);
+    if (!KSUCCESS(Status)) {
+        goto ElfRelocateSelfEnd;
+    }
+
+    Image->File.Size = Image->Size;
+    LoadingImage.Buffer.Size = Image->Size;
+    LoadingImage.ElfHeader = Buffer->Data;
+    Image->LoadedLowestAddress = Buffer->Data;
+    Image->LoadedImageBuffer = Image->LoadedLowestAddress;
+    Image->ImageContext = &LoadingImage;
+    Status = ImpElfGatherExportInformation(Image, TRUE);
+    if (!KSUCCESS(Status)) {
+        goto ElfRelocateSelfEnd;
+    }
+
+    Status = ImpElfRelocateImage(&FakeList, Image);
+
+ElfRelocateSelfEnd:
+
+    ASSERT(KSUCCESS(Status));
+
+    return;
+}
+
 KSTATUS
 ImpElfGetSymbolAddress (
     PLIST_ENTRY ListHead,
@@ -2112,7 +2186,10 @@ Return Value:
 
         //
         // Upon finding the GOT, save the image and the resolution address in
-        // the second and third entries of the GOT.
+        // the second and third entries of the GOT. Note that reaching through
+        // a global would be bad if trying to relocate oneself, but that
+        // should only ever be done by the dynamic linker, which won't have
+        // imports.
         //
 
         case ELF_DYNAMIC_PLT_GOT:

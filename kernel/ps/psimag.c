@@ -1193,7 +1193,10 @@ Return Value:
     KSTATUS Status;
     ALLOCATION_STRATEGY Strategy;
 
+    PageSize = MmPageSize();
     Process = (PKPROCESS)(Image->SystemContext);
+    Address = NULL;
+    AlignedPreferredAddress = NULL;
     if (Process == PsGetKernelProcess()) {
         KernelMode = TRUE;
         Max = MAX_ADDRESS;
@@ -1205,17 +1208,15 @@ Return Value:
         Strategy = AllocationStrategyHighestAddress;
         if ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0) {
             Strategy = AllocationStrategyAnyAddress;
+            Address = Image->PreferredLowestAddress;
+            AlignedPreferredAddress =
+                      (PVOID)(UINTN)ALIGN_RANGE_DOWN((UINTN)Address, PageSize);
         }
     }
 
     //
     // Align the preferred address down to a page.
     //
-
-    PageSize = MmPageSize();
-    Address = Image->PreferredLowestAddress;
-    AlignedPreferredAddress = (PVOID)(UINTN)ALIGN_RANGE_DOWN((UINTN)Address,
-                                                             PageSize);
 
     PageOffset = (UINTN)Address - (UINTN)AlignedPreferredAddress;
     Reservation = MmCreateMemoryReservation(AlignedPreferredAddress,

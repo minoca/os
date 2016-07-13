@@ -3385,9 +3385,11 @@ Return Value:
     PKPROCESS Process;
     PROCESS_START_DATA StartData;
     KSTATUS Status;
+    PKTHREAD Thread;
     THREAD_CREATION_PARAMETERS ThreadParameters;
 
-    Process = PsGetCurrentProcess();
+    Thread = KeGetCurrentThread();
+    Process = Thread->OwningProcess;
 
     //
     // Map the user shared data page into the process' usermode address space.
@@ -3397,6 +3399,15 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto LoaderThreadEnd;
     }
+
+    //
+    // Initialize the memory map limit, otherwise the image loads can't map
+    // anything anywhere.
+    //
+
+    Process->AddressSpace->MaxMemoryMap = MAX_USER_ADDRESS -
+                                  (Thread->Limits[ResourceLimitStack].Current +
+                                   USER_STACK_REGION_MIN) + 1;
 
     //
     // Load the executable image for the process.

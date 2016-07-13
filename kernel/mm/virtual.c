@@ -779,17 +779,6 @@ Return Value:
         }
 
         Accountant = Process->AddressSpace->Accountant;
-
-        //
-        // If the preferred virtual address is in kernel mode, pretend like
-        // there was no preferred virtual address.
-        //
-
-        if ((PreferredVirtualAddress != NULL) &&
-            (PreferredVirtualAddress >= KERNEL_VA_START)) {
-
-            PreferredVirtualAddress = NULL;
-        }
     }
 
     //

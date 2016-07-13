@@ -94,6 +94,7 @@ Author:
 #define ImpElfGetSection ImpElf64GetSection
 #define ImpElfLoadAllImports ImpElf64LoadAllImports
 #define ImpElfRelocateImages ImpElf64RelocateImages
+#define ImpElfRelocateSelf ImpElf64RelocateSelf
 #define ImpElfGetSymbolAddress ImpElf64GetSymbolAddress
 #define ImpElfResolvePltEntry ImpElf64ResolvePltEntry
 
@@ -166,6 +167,7 @@ Author:
 #define ImpElfGetSection ImpElf32GetSection
 #define ImpElfLoadAllImports ImpElf32LoadAllImports
 #define ImpElfRelocateImages ImpElf32RelocateImages
+#define ImpElfRelocateSelf ImpElf32RelocateSelf
 #define ImpElfGetSymbolAddress ImpElf32GetSymbolAddress
 #define ImpElfResolvePltEntry ImpElf32ResolvePltEntry
 

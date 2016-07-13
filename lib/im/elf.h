@@ -1075,6 +1075,31 @@ Return Value:
 
 --*/
 
+VOID
+ImpElf32RelocateSelf (
+    PIMAGE_BUFFER Buffer,
+    PLOADED_IMAGE Image
+    );
+
+/*++
+
+Routine Description:
+
+    This routine relocates the currently running image.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the image buffer.
+
+    Image - Supplies a pointer to the zeroed but otherwise uninitialized
+        image buffer.
+
+Return Value:
+
+    None.
+
+--*/
+
 KSTATUS
 ImpElf32GetSymbolAddress (
     PLIST_ENTRY ListHead,
@@ -1376,6 +1401,31 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+VOID
+ImpElf64RelocateSelf (
+    PIMAGE_BUFFER Buffer,
+    PLOADED_IMAGE Image
+    );
+
+/*++
+
+Routine Description:
+
+    This routine relocates the currently running image.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the image buffer.
+
+    Image - Supplies a pointer to the zeroed but otherwise uninitialized
+        image buffer.
+
+Return Value:
+
+    None.
 
 --*/
 

@@ -60,17 +60,6 @@ X86_OBJS = x86/features.o \
 X64_OBJS = x64/osbasea.o \
            x64/syscall.o \
 
-##
-## ARM binutils starts binaries at 0x8000, so leave enough room for a large
-## static executable.
-##
-
-ifeq ($(ARCH), $(filter armv7 armv6,$(ARCH)))
-EXTRA_LDFLAGS += -Wl,-Ttext-segment=0x10000000
-else
-EXTRA_LDFLAGS += -Wl,-Ttext-segment=0x200000
-endif
-
 EXTRA_LDFLAGS += -Wl,-Bsymbolic
 EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib -Wl,--whole-archive
 

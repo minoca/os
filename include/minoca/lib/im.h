@@ -1402,6 +1402,27 @@ Return Value:
 
 --*/
 
+VOID
+ImRelocateSelf (
+    PVOID Base
+    );
+
+/*++
+
+Routine Description:
+
+    This routine relocates the currently running image.
+
+Arguments:
+
+    Base - Supplies a pointer to the base of the loaded image.
+
+Return Value:
+
+    None.
+
+--*/
+
 PVOID
 ImResolvePltEntry (
     PLIST_ENTRY ListHead,

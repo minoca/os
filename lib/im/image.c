@@ -90,6 +90,12 @@ ImpGetSymbolAddress (
     PVOID *Address
     );
 
+VOID
+ImpRelocateSelf (
+    PIMAGE_BUFFER Buffer,
+    PLOADED_IMAGE Image
+    );
+
 PLOADED_IMAGE
 ImpFindImageInList (
     PLIST_ENTRY ListHead,
@@ -643,7 +649,7 @@ Return Value:
     Image = ImpAllocateImage(BinaryName, NameSize);
     if (Image == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddExecutableEnd;
+        goto AddImageEnd;
     }
 
     Image->Format = ImGetImageFormat(Buffer);
@@ -651,7 +657,7 @@ Return Value:
     Image->File.Size = Buffer->Size;
     Status = ImpAddImage(Buffer, Image);
 
-AddExecutableEnd:
+AddImageEnd:
     if (!KSUCCESS(Status)) {
         if (Image != NULL) {
             ImFreeMemory(Image);
@@ -1148,6 +1154,41 @@ Return Value:
     return Status;
 }
 
+VOID
+ImRelocateSelf (
+    PVOID Base
+    )
+
+/*++
+
+Routine Description:
+
+    This routine relocates the currently running image.
+
+Arguments:
+
+    Base - Supplies a pointer to the base of the loaded image.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    IMAGE_BUFFER Buffer;
+    LOADED_IMAGE FakeImage;
+
+    Buffer.Context = NULL;
+    Buffer.Data = Base;
+    Buffer.Size = -1;
+    RtlZeroMemory(&FakeImage, sizeof(LOADED_IMAGE));
+    FakeImage.Format = ImGetImageFormat(&Buffer);
+    ImpRelocateSelf(&Buffer, &FakeImage);
+    return;
+}
+
 PVOID
 ImResolvePltEntry (
     PLIST_ENTRY ListHead,
@@ -1585,6 +1626,49 @@ Return Value:
     //
 
     return Status;
+}
+
+VOID
+ImpRelocateSelf (
+    PIMAGE_BUFFER Buffer,
+    PLOADED_IMAGE Image
+    )
+
+/*++
+
+Routine Description:
+
+    This routine relocates the currently running image.
+
+Arguments:
+
+    Buffer - Supplies a pointer to an initialized buffer pointing at the base
+        of the loaded image.
+
+    Image - Supplies a pointer to a zeroed out image structure. The image
+        format should be initialized. This can be stack allocated.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    switch (Image->Format) {
+    case ImageElf32:
+        ImpElf32RelocateSelf(Buffer, Image);
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        break;
+    }
+
+    return;
 }
 
 PLOADED_IMAGE

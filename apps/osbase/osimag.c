@@ -311,6 +311,12 @@ Return Value:
     INT Status;
     PVOID ThreadData;
 
+    //
+    // Start by relocating this image. Until this is done, no global variables
+    // can be touched.
+    //
+
+    ImRelocateSelf(Environment->StartData->OsLibraryBase);
     OsInitializeLibrary(Environment);
     OsImExecutableLoaded = FALSE;
     Status = OspLoadInitialImageList(TRUE);
@@ -2185,6 +2191,7 @@ Return Value:
         goto LoadInitialImageListEnd;
     }
 
+    OsLibrary->Flags |= IMAGE_FLAG_RELOCATED | IMAGE_FLAG_IMPORTS_LOADED;
     INSERT_BEFORE(&(OsLibrary->ListEntry), &OsLoadedImagesHead);
     OsLibrary->LoadFlags |= IMAGE_LOAD_FLAG_PRIMARY_LOAD;
     if ((StartData->InterpreterBase != NULL) &&

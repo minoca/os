@@ -496,6 +496,12 @@ Author:
 #define RESOURCE_LIMIT_INFINITE MAX_UINTN
 
 //
+// Define the largest valid user mode address.
+//
+
+#define MAX_USER_ADDRESS ((PVOID)0x7FFFFFFF)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
