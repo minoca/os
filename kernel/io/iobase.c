@@ -1606,6 +1606,7 @@ Return Value:
     PSTR LocalSourcePath;
     ULONG LocalSourcePathSize;
     BOOL LocksHeld;
+    ULONG NameHash;
     PPATH_ENTRY PathEntry;
     SYSTEM_CONTROL_RENAME RenameRequest;
     PFILE_OBJECT SourceDirectoryFileObject;
@@ -1624,6 +1625,7 @@ Return Value:
     FoundPathPoint.PathEntry = NULL;
     LocksHeld = FALSE;
     SourceDirectoryPathPoint.PathEntry = NULL;
+    SourceFileObject = NULL;
     SourcePathPoint.PathEntry = NULL;
     SourceStartPathPoint = NULL;
     if ((SourcePathSize <= 1) || (DestinationPathSize <= 1)) {
@@ -2214,13 +2216,40 @@ Return Value:
         }
 
     //
-    // Otherwise, if the call was successful, unlink the source file path from
-    // its parent entry so that new path walks will not find it and so that
-    // delete will see that it's too late. If the call failed and there was no
-    // hard link delta for the source, then it never got moved from the source.
+    // Rename succeeded.
     //
 
     } else if (KSUCCESS(Status)) {
+
+        //
+        // Create a path entry at the destination to avoid the painful
+        // penalty of having to do a file system lookup on this object next
+        // time.
+        //
+
+        if (SourcePathPoint.PathEntry->DoNotCache == FALSE) {
+            NameHash = IopHashPathString(DestinationFile, DestinationFileSize);
+            PathEntry = IopCreatePathEntry(
+                                       DestinationFile,
+                                       DestinationFileSize,
+                                       NameHash,
+                                       DestinationDirectoryPathPoint.PathEntry,
+                                       SourceFileObject);
+
+            if (PathEntry != NULL) {
+                INSERT_BEFORE(
+                        &(PathEntry->SiblingListEntry),
+                        &(DestinationDirectoryPathPoint.PathEntry->ChildList));
+
+                IopFileObjectAddReference(SourceFileObject);
+            }
+        }
+
+        //
+        // Unlink the source file path from its parent so new paths walks will
+        // not find it and so that delete will see that it's too late.
+        //
+
         IopPathUnlink(SourcePathPoint.PathEntry);
 
         //
@@ -2253,7 +2282,7 @@ RenameEnd:
         }
     }
 
-    if (KSUCCESS(Status)) {
+    if ((KSUCCESS(Status)) && (SourceFileObject != DestinationFileObject)) {
         IopPathCleanCache(SourcePathPoint.PathEntry);
     }
 

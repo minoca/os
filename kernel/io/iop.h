@@ -3975,6 +3975,31 @@ Return Value:
 
 --*/
 
+ULONG
+IopHashPathString (
+    PSTR String,
+    ULONG StringSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine generates the hash associated with a path name. This hash is
+    used to speed up comparisons.
+
+Arguments:
+
+    String - Supplies a pointer to the string to hash.
+
+    StringSize - Supplies the size of the string, including the null terminator.
+
+Return Value:
+
+    Returns the hash of the given string.
+
+--*/
+
 BOOL
 IopIsDescendantPath (
     PPATH_ENTRY Ancestor,
