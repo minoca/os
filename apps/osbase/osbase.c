@@ -2668,6 +2668,40 @@ Return Value:
 }
 
 OS_API
+VOID
+OsSetProgramBreak (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the application program break for the process.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // TODO: Implement OsSetProgramBreak. It's only here now to stage
+    // properly in the automation.
+    //
+
+    ASSERT(FALSE);
+
+    return;
+}
+
+OS_API
 KSTATUS
 OsMemoryMap (
     HANDLE Handle,
