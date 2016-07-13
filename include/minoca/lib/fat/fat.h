@@ -918,6 +918,30 @@ Return Value:
 
 --*/
 
+VOID
+FatIoBufferSetOffset (
+    PFAT_IO_BUFFER FatIoBuffer,
+    UINTN Offset
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the given FAT I/O buffer's current offset.
+
+Arguments:
+
+    FatIoBuffer - Supplies a pointer to a FAT I/O buffer.
+
+    Offset - Supplies the new offset to set.
+
+Return Value:
+
+    None.
+
+--*/
+
 KSTATUS
 FatZeroIoBuffer (
     PFAT_IO_BUFFER FatIoBuffer,

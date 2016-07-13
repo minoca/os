@@ -29,6 +29,10 @@ Environment:
 #include "fatlibp.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -98,6 +102,7 @@ Return Value:
     ULONGLONG FatSize;
     KSTATUS Status;
     ULONG WindowCount;
+    ULONG WindowIndex;
     ULONG WindowSize;
 
     //
@@ -139,7 +144,7 @@ Return Value:
 
     AllocationSize = (WindowCount * sizeof(PFAT_IO_BUFFER)) +
                      (WindowCount * sizeof(PVOID)) +
-                     (WindowCount * sizeof(BOOL));
+                     (WindowCount * sizeof(FAT_WINDOW_DIRTY_REGION));
 
     DeviceToken = Volume->Device.DeviceToken;
     Volume->FatCache.WindowBuffers = FatAllocateNonPagedMemory(DeviceToken,
@@ -154,8 +159,14 @@ Return Value:
     Volume->FatCache.Windows = (PVOID *)(Volume->FatCache.WindowBuffers +
                                          WindowCount);
 
-    Volume->FatCache.Dirty = (PBOOL)(Volume->FatCache.Windows + WindowCount);
-    Volume->FatCache.DirtyStart = 0;
+    Volume->FatCache.Dirty =
+            (PFAT_WINDOW_DIRTY_REGION)(Volume->FatCache.Windows + WindowCount);
+
+    for (WindowIndex = 0; WindowIndex < WindowCount; WindowIndex += 1) {
+        Volume->FatCache.Dirty[WindowIndex].Min = WindowSize;
+    }
+
+    Volume->FatCache.DirtyStart = MAX_ULONG;
     Volume->FatCache.DirtyEnd = 0;
     Volume->FatCache.WindowSize = WindowSize;
 
@@ -472,9 +483,11 @@ Return Value:
 
 {
 
+    ULONG EndOffset;
     PFAT_CACHE FatCache;
     PVOID FatWindow;
     ULONG Original;
+    ULONG StartOffset;
     KSTATUS Status;
     ULONG WindowIndex;
     ULONG WindowOffset;
@@ -515,6 +528,8 @@ Return Value:
     WindowOffset = 0;
     if (Volume->Format == Fat12Format) {
         Original = FAT12_READ_CLUSTER(FatWindow, Cluster);
+        StartOffset = (UINTN)FAT12_CLUSTER_BYTE(0, Cluster);
+        EndOffset = (UINTN)FAT12_CLUSTER_BYTE(0, Cluster + 1);
 
     } else {
         WindowOffset = Cluster - FAT_WINDOW_INDEX_TO_CLUSTER(Volume,
@@ -522,9 +537,13 @@ Return Value:
 
         if (Volume->Format == Fat16Format) {
             Original = ((PUSHORT)FatWindow)[WindowOffset];
+            StartOffset = WindowOffset * sizeof(USHORT);
+            EndOffset = StartOffset + sizeof(USHORT);
 
         } else {
             Original = ((PULONG)FatWindow)[WindowOffset];
+            StartOffset = WindowOffset * sizeof(ULONG);
+            EndOffset = StartOffset + sizeof(ULONG);
         }
     }
 
@@ -561,22 +580,27 @@ Return Value:
     }
 
     //
-    // Mark the window as dirty.
+    // Mark the region in the window that's dirty.
     //
 
-    FatCache->Dirty[WindowIndex] = TRUE;
-    if (FatCache->DirtyStart == FatCache->DirtyEnd) {
+    if (FatCache->Dirty[WindowIndex].Min > StartOffset) {
+        FatCache->Dirty[WindowIndex].Min = StartOffset;
+    }
+
+    if (FatCache->Dirty[WindowIndex].Max < EndOffset) {
+        FatCache->Dirty[WindowIndex].Max = EndOffset;
+    }
+
+    //
+    // Potentially expand the set of windows that need to be flushed.
+    //
+
+    if (FatCache->DirtyStart > WindowIndex) {
         FatCache->DirtyStart = WindowIndex;
+    }
+
+    if (FatCache->DirtyEnd < WindowIndex + 1) {
         FatCache->DirtyEnd = WindowIndex + 1;
-
-    } else {
-        if (FatCache->DirtyStart > WindowIndex) {
-            FatCache->DirtyStart = WindowIndex;
-        }
-
-        if (FatCache->DirtyEnd < WindowIndex + 1) {
-            FatCache->DirtyEnd = WindowIndex + 1;
-        }
     }
 
     Status = STATUS_SUCCESS;
@@ -624,29 +648,33 @@ Return Value:
          WindowIndex < FatCache->DirtyEnd;
          WindowIndex += 1) {
 
-        if (FatCache->Dirty[WindowIndex] != FALSE) {
+        if (FatCache->Dirty[WindowIndex].Min >
+            FatCache->Dirty[WindowIndex].Max) {
 
-            //
-            // This is metadata, so don't write it synchronized unless the
-            // caller wants metadata flushed.
-            //
+            continue;
+        }
 
-            if ((IoFlags & IO_FLAG_METADATA_SYNCHRONIZED) == 0) {
-                IoFlags &= ~IO_FLAG_DATA_SYNCHRONIZED;
-            }
+        //
+        // This is metadata, so don't write it synchronized unless the
+        // caller wants metadata flushed.
+        //
 
-            Status = FatpFatCacheWriteWindow(Volume, IoFlags, WindowIndex);
-            if (!KSUCCESS(Status)) {
-                TotalStatus = Status;
+        if ((IoFlags & IO_FLAG_METADATA_SYNCHRONIZED) == 0) {
+            IoFlags &= ~IO_FLAG_DATA_SYNCHRONIZED;
+        }
 
-            } else {
-                FatCache->Dirty[WindowIndex] = FALSE;
-            }
+        Status = FatpFatCacheWriteWindow(Volume, IoFlags, WindowIndex);
+        if (!KSUCCESS(Status)) {
+            TotalStatus = Status;
+
+        } else {
+            FatCache->Dirty[WindowIndex].Min = FatCache->WindowSize;
+            FatCache->Dirty[WindowIndex].Max = 0;
         }
     }
 
     if (KSUCCESS(TotalStatus)) {
-        FatCache->DirtyStart = 0;
+        FatCache->DirtyStart = MAX_ULONG;
         FatCache->DirtyEnd = 0;
     }
 
@@ -797,33 +825,40 @@ Return Value:
     ULONGLONG BlockAddress;
     UINTN BlockCount;
     ULONG BlockShift;
-    ULONGLONG FatBlock;
+    PFAT_WINDOW_DIRTY_REGION Dirty;
+    ULONGLONG DirtyEnd;
+    ULONGLONG DirtyStart;
+    PFAT_CACHE FatCache;
     ULONG FatIndex;
     PFAT_IO_BUFFER FatIoBuffer;
+    ULONGLONG FatStart;
     KSTATUS Status;
-    ULONGLONG WindowByteOffset;
-    ULONG WindowSize;
 
     BlockShift = Volume->BlockShift;
     FatIoBuffer = Volume->FatCache.WindowBuffers[WindowIndex];
 
     ASSERT(FatIoBuffer != NULL);
 
+    FatCache = &(Volume->FatCache);
+    Dirty = &(FatCache->Dirty[WindowIndex]);
+
+    ASSERT((Dirty->Min < Dirty->Max) && (Dirty->Max <= FatCache->WindowSize));
+
     IoFlags |= IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA;
-    WindowSize = Volume->FatCache.WindowSize;
-    BlockCount = WindowSize >> BlockShift;
+    DirtyStart = ((WindowIndex << FatCache->WindowShift) + Dirty->Min) >>
+                 BlockShift;
 
-    //
-    // Avoid writing off the end of the FAT.
-    //
+    DirtyEnd = (WindowIndex << FatCache->WindowShift) + Dirty->Max;
+    DirtyEnd = ALIGN_RANGE_UP(DirtyEnd, Volume->Device.BlockSize);
 
-    FatBlock = (WindowIndex << Volume->FatCache.WindowShift) >> BlockShift;
-    if (FatBlock + BlockCount > (Volume->FatSize >> BlockShift)) {
+    ASSERT(DirtyEnd <= Volume->FatSize);
 
-        ASSERT(FatBlock < (Volume->FatSize >> BlockShift));
+    DirtyEnd >>= BlockShift;
+    BlockCount = DirtyEnd - DirtyStart;
 
-        BlockCount = (Volume->FatSize >> BlockShift) - FatBlock;
-    }
+    ASSERT(BlockCount != 0);
+
+    FatIoBufferSetOffset(FatIoBuffer, (Dirty->Min >> BlockShift) << BlockShift);
 
     //
     // Write the result out to each FAT.
@@ -831,13 +866,11 @@ Return Value:
 
     Status = STATUS_VOLUME_CORRUPT;
     for (FatIndex = 0; FatIndex < Volume->FatCount; FatIndex += 1) {
-        WindowByteOffset = Volume->FatByteStart + (FatIndex * Volume->FatSize) +
-                           (WindowIndex * WindowSize);
+        FatStart = Volume->FatByteStart + (FatIndex * Volume->FatSize);
 
-        BlockAddress = WindowByteOffset >> BlockShift;
+        ASSERT(IS_ALIGNED(FatStart, Volume->Device.BlockSize));
 
-        ASSERT(IS_ALIGNED(WindowSize, Volume->Device.BlockSize));
-
+        BlockAddress = (FatStart >> BlockShift) + DirtyStart;
         Status = FatWriteDevice(Volume->Device.DeviceToken,
                                 BlockAddress,
                                 BlockCount,

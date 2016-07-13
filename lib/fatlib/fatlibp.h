@@ -124,6 +124,25 @@ Author:
 
 Structure Description:
 
+    This structure stores the dirty region for a particular FAT window.
+
+Members:
+
+    Min - Stores the minimum offset that's dirty.
+
+    Max - Stores the maximum offset that's dirty.
+
+--*/
+
+typedef struct _FAT_WINDOW_DIRTY_REGION {
+    ULONG Min;
+    ULONG Max;
+} FAT_WINDOW_DIRTY_REGION, *PFAT_WINDOW_DIRTY_REGION;
+
+/*++
+
+Structure Description:
+
     This structure defines the cache for the File Allocation Table.
 
 Members:
@@ -134,8 +153,7 @@ Members:
     Windows - Stores an array of pointers to virtually contiguous mappings of
         the I/O buffers that store windows into the File Allocation Table.
 
-    Dirty - Stores an array of booleans for each window buffer indicating
-        whether or not the buffer is dirty.
+    Dirty - Stores an array of the region that is dirty in each window.
 
     DirtyStart - Stores the starting index (inclusive) of the dirty FAT windows.
 
@@ -152,7 +170,7 @@ Members:
 typedef struct _FAT_CACHE {
     PFAT_IO_BUFFER *WindowBuffers;
     PVOID *Windows;
-    PBOOL Dirty;
+    PFAT_WINDOW_DIRTY_REGION Dirty;
     ULONG DirtyStart;
     ULONG DirtyEnd;
     ULONG WindowCount;
