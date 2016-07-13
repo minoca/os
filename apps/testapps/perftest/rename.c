@@ -120,7 +120,7 @@ Return Value:
     }
 
     SourceFile = FileNames[0];
-    DestinationFile = FileNames[0];
+    DestinationFile = FileNames[1];
 
     //
     // Create the source file.
