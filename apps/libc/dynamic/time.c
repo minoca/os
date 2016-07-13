@@ -2027,7 +2027,7 @@ int
 timer_settime (
     timer_t TimerId,
     int Flags,
-    struct itimerspec *Value,
+    const struct itimerspec *Value,
     struct itimerspec *OldValue
     )
 
@@ -3063,8 +3063,8 @@ ClpStructTmToCalendarTime (
 
 Routine Description:
 
-    This routine converts the given calendar time structure into the C library
-    tm structure.
+    This routine converts the given C library tm structure into the calendar
+    time structure.
 
 Arguments:
 

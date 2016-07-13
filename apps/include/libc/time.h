@@ -943,7 +943,7 @@ int
 timer_settime (
     timer_t TimerId,
     int Flags,
-    struct itimerspec *Value,
+    const struct itimerspec *Value,
     struct itimerspec *OldValue
     );
 
