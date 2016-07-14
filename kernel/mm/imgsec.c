@@ -29,6 +29,23 @@ Environment:
 #include "mmp.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro asserts that the touched boundaries of the section lie within the
+// section.
+//
+
+#define ASSERT_SECTION_TOUCH_BOUNDARIES(_Section) \
+    ASSERT(((_Section)->MinTouched >= (_Section)->VirtualAddress) && \
+           ((_Section)->MinTouched <= \
+            (_Section)->VirtualAddress + (_Section)->Size) && \
+           ((_Section)->MaxTouched >= (_Section)->VirtualAddress) && \
+           ((_Section)->MaxTouched <= \
+            (_Section)->VirtualAddress + (_Section)->Size))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -1296,6 +1313,8 @@ Return Value:
     INITIALIZE_LIST_HEAD(&(NewSection->ChildList));
     NewSection->AddressSpace = DestinationAddressSpace;
     NewSection->VirtualAddress = SectionToCopy->VirtualAddress;
+    NewSection->MinTouched = SectionToCopy->MinTouched;
+    NewSection->MaxTouched = SectionToCopy->MaxTouched;
     NewSection->Size = SectionToCopy->Size;
     NewSection->TruncateCount = 0;
     NewSection->SwapSpace = NULL;
@@ -1390,13 +1409,16 @@ Return Value:
     // destination in one skillful maneuver.
     //
 
-    Status = MmpCopyAndChangeSectionMappings(DestinationAddressSpace,
-                                             SectionToCopy->AddressSpace,
-                                             SectionToCopy->VirtualAddress,
-                                             SectionToCopy->Size);
+    if (SectionToCopy->MinTouched < SectionToCopy->MaxTouched) {
+        Status = MmpCopyAndChangeSectionMappings(
+                        DestinationAddressSpace,
+                        SectionToCopy->AddressSpace,
+                        SectionToCopy->MinTouched,
+                        SectionToCopy->MaxTouched - SectionToCopy->MinTouched);
 
-    if (!KSUCCESS(Status)) {
-        goto CopyImageSectionEnd;
+        if (!KSUCCESS(Status)) {
+            goto CopyImageSectionEnd;
+        }
     }
 
     KeReleaseQueuedLock(SectionToCopy->Lock);
@@ -1633,6 +1655,11 @@ Return Value:
         goto FlushImageSectionRegionEnd;
     }
 
+    if (Section->MinTouched >= Section->MaxTouched) {
+        Status = STATUS_SUCCESS;
+        goto FlushImageSectionRegionEnd;
+    }
+
     ASSERT(Section->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
     MmpImageSectionAddImageBackingReference(Section);
@@ -1645,6 +1672,12 @@ Return Value:
         //
 
         CurrentAddress = Section->VirtualAddress + (PageIndex << PageShift);
+        if ((CurrentAddress < Section->MinTouched) ||
+            (CurrentAddress > Section->MaxTouched)) {
+
+            continue;
+        }
+
         PhysicalAddress = MmpVirtualToPhysical(CurrentAddress, &PageAttributes);
         if ((PhysicalAddress == INVALID_PHYSICAL_ADDRESS) ||
             ((PageAttributes & MAP_FLAG_DIRTY) == 0) ||
@@ -2678,6 +2711,8 @@ Return Value:
     NewSection->PageFileBacking.DeviceHandle = INVALID_HANDLE;
     NewSection->ImageBacking.DeviceHandle = ImageHandle;
     NewSection->ImageBackingReferenceCount = 1;
+    NewSection->MinTouched = VirtualAddress + Size;
+    NewSection->MaxTouched = VirtualAddress;
     if (ImageHandle != INVALID_HANDLE) {
         IoIoHandleAddReference(ImageHandle);
         NewSection->ImageBacking.Offset = ImageOffset;
@@ -2962,6 +2997,13 @@ Return Value:
 
     KeAcquireQueuedLock(Section->Lock);
     if (RemainderSection != NULL) {
+        if (Section->MaxTouched > RegionEnd) {
+            RemainderSection->MaxTouched = Section->MaxTouched;
+            RemainderSection->MinTouched = Section->MinTouched;
+            if (RemainderSection->MinTouched < RegionEnd) {
+                RemainderSection->MinTouched = RegionEnd;
+            }
+        }
 
         //
         // Copy the bitmaps to the remainder section. This gets ugly because
@@ -3061,6 +3103,19 @@ Return Value:
     //
 
     Section->Size = (UINTN)HoleBegin - (UINTN)(Section->VirtualAddress);
+
+    //
+    // If the minimum touched address is above the hole, then none of this
+    // section has been touched.
+    //
+
+    if (Section->MinTouched > HoleBegin) {
+        Section->MinTouched = HoleBegin;
+        Section->MaxTouched = Section->VirtualAddress;
+
+    } else if (Section->MaxTouched > HoleBegin) {
+        Section->MaxTouched = HoleBegin;
+    }
 
     //
     // Put the remainder section online.
@@ -3531,6 +3586,7 @@ Return Value:
 
     UINTN BitmapIndex;
     ULONG BitmapMask;
+    UINTN Boundary;
     BOOL Dirty;
     ULONG DirtyPageCount;
     BOOL FreePhysicalPage;
@@ -3539,6 +3595,7 @@ Return Value:
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN PageIndex;
     BOOL PageMapped;
+    ULONG PageShift;
     PHYSICAL_ADDRESS PhysicalAddress;
     KSTATUS Status;
 
@@ -3567,6 +3624,40 @@ Return Value:
 
     if ((Flags & IMAGE_SECTION_UNMAP_FLAG_TRUNCATE) != 0) {
         Section->TruncateCount += 1;
+    }
+
+    //
+    // Return immediately if the image section has never been touched.
+    //
+
+    if (Section->MinTouched >= Section->MaxTouched) {
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Clip the bounds by what has been actually accessed in the section.
+    //
+
+    ASSERT_SECTION_TOUCH_BOUNDARIES(Section);
+
+    PageShift = MmPageShift();
+    Boundary = (Section->MaxTouched - Section->VirtualAddress) >> PageShift;
+    if (Boundary <= PageOffset) {
+        return STATUS_SUCCESS;
+    }
+
+    if (Boundary < PageOffset + PageCount) {
+        PageCount = Boundary - PageOffset;
+    }
+
+    Boundary = (Section->MinTouched - Section->VirtualAddress) >> PageShift;
+    if (Boundary >= PageOffset + PageCount) {
+        return STATUS_SUCCESS;
+    }
+
+    if (Boundary > PageOffset) {
+        PageCount = PageOffset + PageCount - Boundary;
+        PageOffset = Boundary;
     }
 
     //
@@ -3862,29 +3953,32 @@ Return Value:
     UINTN RunSize;
     ULONG UnmapFlags;
 
+    PageSize = MmPageSize();
+
     ASSERT(KeGetRunLevel() == RunLevelLow);
     ASSERT(KeIsQueuedLockHeld(Section->Lock) != FALSE);
+    ASSERT_SECTION_TOUCH_BOUNDARIES(Section);
+    ASSERT(IS_POINTER_ALIGNED(Section->VirtualAddress, PageSize));
 
     //
     // If this section has been reduced to nothing, then just exit.
     //
 
     PageShift = MmPageShift();
-    PageCount = Section->Size >> PageShift;
-    if (PageCount == 0) {
+    if (Section->MinTouched >= Section->MaxTouched) {
         return;
     }
 
     CurrentProcess = PsGetCurrentProcess();
     DirtyPageCount = 0;
-    PageSize = MmPageSize();
     AddressSpace = Section->AddressSpace;
 
     //
     // Record the first virtual address of the section.
     //
 
-    CurrentAddress = ALIGN_POINTER_DOWN(Section->VirtualAddress, PageSize);
+    CurrentAddress = Section->MinTouched;
+    PageCount = (Section->MaxTouched - CurrentAddress) >> PageShift;
 
     //
     // Depending on the image section, there are different, more efficient

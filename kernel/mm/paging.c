@@ -1633,6 +1633,24 @@ Return Value:
             }
 
             if (TraverseChildren != FALSE) {
+
+                //
+                // Update the mapped boundaries.
+                //
+
+                if (CreateMapping != FALSE) {
+                    if (CurrentSection->MinTouched > VirtualAddress) {
+                        CurrentSection->MinTouched = VirtualAddress;
+                    }
+
+                    if (CurrentSection->MaxTouched <
+                        VirtualAddress + (1 << PageShift)) {
+
+                        CurrentSection->MaxTouched =
+                                         VirtualAddress + (1 << PageShift);
+                    }
+                }
+
                 if ((CurrentSection->AddressSpace ==
                      CurrentProcess->AddressSpace) ||
                     (VirtualAddress >= KERNEL_VA_START)) {
@@ -3180,6 +3198,18 @@ PageInSharedSectionEnd:
             }
 
             MmpMapPage(PhysicalAddress, VirtualAddress, MapFlags);
+
+            //
+            // Update the mapped section boundaries.
+            //
+
+            if (ImageSection->MinTouched > VirtualAddress) {
+                ImageSection->MinTouched = VirtualAddress;
+            }
+
+            if (ImageSection->MaxTouched < VirtualAddress + (1 << PageShift)) {
+                ImageSection->MaxTouched = VirtualAddress + (1 << PageShift);
+            }
         }
 
         //

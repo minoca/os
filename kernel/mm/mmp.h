@@ -214,6 +214,10 @@ Members:
         closed earlier, preventing the paging thread from holding the bag of
         closing this handle (which is paged).
 
+    MinTouched - Stores the minimum address that has been accessed.
+
+    MaxTouched - Stores the maximum address that has been accessed.
+
 --*/
 
 typedef struct _IMAGE_SECTION IMAGE_SECTION, *PIMAGE_SECTION;
@@ -237,6 +241,8 @@ struct _IMAGE_SECTION {
     IMAGE_BACKING PageFileBacking;
     IMAGE_BACKING ImageBacking;
     UINTN ImageBackingReferenceCount;
+    PVOID MinTouched;
+    PVOID MaxTouched;
 };
 
 /*++
