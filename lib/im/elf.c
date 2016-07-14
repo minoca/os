@@ -3485,12 +3485,24 @@ Return Value:
                             Symbols[SymbolIndex].Size;
 
         } else {
-            *RelocationPlace = Address;
-            RelocationEnd = RelocationPlace + 1;
+
+            //
+            // Avoid the write unless it's necessary, as unnecessary write
+            // faults are expensive.
+            //
+
+            if (*RelocationPlace != Address) {
+                *RelocationPlace = Address;
+                RelocationEnd = RelocationPlace + 1;
+
+            } else {
+                RelocationEnd = NULL;
+            }
         }
 
         if ((LoadingImage != NULL) &&
-            ((Image->Flags & IMAGE_FLAG_TEXT_RELOCATIONS) != 0)) {
+            ((Image->Flags & IMAGE_FLAG_TEXT_RELOCATIONS) != 0) &&
+            (RelocationEnd != NULL)) {
 
             if ((LoadingImage->RelocationStart == ELF_INVALID_RELOCATION) ||
                 (LoadingImage->RelocationStart > (PVOID)RelocationPlace)) {
