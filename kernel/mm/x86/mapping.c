@@ -2063,7 +2063,7 @@ Return Value:
          DirectoryIndex < ((UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT);
          DirectoryIndex += 1) {
 
-        if (Source[DirectoryIndex].Present == 0) {
+        if (Source[DirectoryIndex].Entry == 0) {
             continue;
         }
 

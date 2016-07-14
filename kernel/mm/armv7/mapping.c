@@ -2533,7 +2533,7 @@ Return Value:
     Destination = DestinationSpace->PageDirectory;
     Source = SourceSpace->PageDirectory;
     for (Index = 0; Index < FLT_INDEX(KERNEL_VA_START); Index += 4) {
-        if (Source[Index].Format != FLT_COARSE_PAGE_TABLE) {
+        if (Source[Index].Entry == 0) {
             continue;
         }
 
