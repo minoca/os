@@ -1947,6 +1947,7 @@ Return Value:
     IO_OFFSET EvictionOffset;
     ULONGLONG FileSize;
     ULONG PageSize;
+    SYSTEM_CONTROL_TRUNCATE Request;
     KSTATUS Status;
     IO_OFFSET UnmapOffset;
     ULONGLONG UnmapSize;
@@ -1963,46 +1964,52 @@ Return Value:
         goto ModifyFileObjectSizeEnd;
     }
 
+    BlockSize = FileObject->Properties.BlockSize;
+
+    //
+    // TODO: Block size should be managed by the file system.
+    //
+
+    FileObject->Properties.BlockCount =
+                       ALIGN_RANGE_UP(NewFileSize, BlockSize) / BlockSize;
+
+    //
+    // If this is a shared memory object, then handle that separately.
+    //
+
+    if (FileObject->Properties.Type == IoObjectSharedMemoryObject) {
+        Status = IopTruncateSharedMemoryObject(FileObject, NewFileSize);
+
+    //
+    // Otherwise call the driver to truncate the file or device. The
+    // driver will check the file size and truncate the file down to
+    // the new size.
+    //
+
+    } else {
+        if (DeviceContext == NULL) {
+            DeviceContext = FileObject->DeviceContext;
+        }
+
+        Request.FileProperties = &(FileObject->Properties);
+        Request.DeviceContext = DeviceContext;
+        Request.NewSize = NewFileSize;
+        Status = IopSendSystemControlIrp(FileObject->Device,
+                                         IrpMinorSystemControlTruncate,
+                                         &Request);
+    }
+
+    IopMarkFileObjectPropertiesDirty(FileObject);
+    if (!KSUCCESS(Status)) {
+        goto ModifyFileObjectSizeEnd;
+    }
+
     //
     // If the new size is less than the current size, then work needs to be
     // done to make sure the system isn't using any of the truncated data.
     //
 
     if (NewFileSize < FileSize) {
-        WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewFileSize);
-        BlockSize = FileObject->Properties.BlockSize;
-        FileObject->Properties.BlockCount =
-                           ALIGN_RANGE_UP(NewFileSize, BlockSize) / BlockSize;
-
-        IopMarkFileObjectPropertiesDirty(FileObject);
-
-        //
-        // If this is a shared memory object, then handle that separately.
-        //
-
-        if (FileObject->Properties.Type == IoObjectSharedMemoryObject) {
-            Status = IopTruncateSharedMemoryObject(FileObject);
-
-        //
-        // Otherwise call the driver to truncate the file or device. The
-        // driver will check the file size and truncate the file down to
-        // the new size.
-        //
-
-        } else {
-            if (DeviceContext == NULL) {
-                DeviceContext = FileObject->DeviceContext;
-            }
-
-            Status = IopSendFileOperationIrp(IrpMinorSystemControlTruncate,
-                                             FileObject,
-                                             DeviceContext,
-                                             0);
-        }
-
-        if (!KSUCCESS(Status)) {
-            goto ModifyFileObjectSizeEnd;
-        }
 
         //
         // Unmap all image sections that might have mapped portions of this
@@ -2032,17 +2039,6 @@ Return Value:
 
             IopEvictPageCacheEntries(FileObject, EvictionOffset, EvictionFlags);
         }
-
-        Status = STATUS_SUCCESS;
-
-    //
-    // Otherwise just update the file object's file size to allow reads beyond
-    // the old file size.
-    //
-
-    } else {
-        IopUpdateFileObjectFileSize(FileObject, NewFileSize);
-        Status = STATUS_SUCCESS;
     }
 
 ModifyFileObjectSizeEnd:

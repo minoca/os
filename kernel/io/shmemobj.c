@@ -614,7 +614,8 @@ CreateSharedMemoryObjectEnd:
 
 KSTATUS
 IopTruncateSharedMemoryObject (
-    PFILE_OBJECT FileObject
+    PFILE_OBJECT FileObject,
+    ULONGLONG NewSize
     )
 
 /*++
@@ -629,6 +630,8 @@ Arguments:
     FileObject - Supplies a pointer to the file object that owns the shared
         memory object.
 
+    NewSize - Supplies the new size to set.
+
 Return Value:
 
     Status code.
@@ -639,8 +642,6 @@ Return Value:
 
     PIO_HANDLE BackingImage;
     PFILE_OBJECT BackingImageObject;
-    ULONGLONG BackingImageSize;
-    ULONGLONG FileSize;
     PSHARED_MEMORY_OBJECT SharedMemoryObject;
     KSTATUS Status;
 
@@ -662,15 +663,13 @@ Return Value:
 
     BackingImage = SharedMemoryObject->BackingImage;
     BackingImageObject = BackingImage->FileObject;
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
-    READ_INT64_SYNC(&(BackingImageObject->Properties.FileSize),
-                    &BackingImageSize);
+    Status = IopModifyFileObjectSize(BackingImageObject,
+                                     BackingImage->DeviceContext,
+                                     NewSize);
 
-    ASSERT(FileSize < BackingImageSize);
-
-    Status =  IopModifyFileObjectSize(BackingImageObject,
-                                      BackingImage->DeviceContext,
-                                      FileSize);
+    if (KSUCCESS(Status)) {
+        WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
+    }
 
     return Status;
 }

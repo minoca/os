@@ -2596,6 +2596,131 @@ RenameEnd:
 }
 
 KSTATUS
+FatTruncate (
+    PVOID Volume,
+    PVOID FileToken,
+    FILE_ID FileId,
+    ULONGLONG OldSize,
+    ULONGLONG NewSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine truncates a file to the given file size. This can be used to
+    both shrink and grow the file.
+
+Arguments:
+
+    Volume - Supplies a pointer to the volume.
+
+    FileToken - Supplies the file context of the file to operate on.
+
+    FileId - Supplies the file ID of the file to operate on.
+
+    OldSize - Supplies the original size of the file.
+
+    NewSize - Supplies the new size to make the file. If smaller, then
+        unused clusters will be freed. If larger, then the file will be
+        zeroed to make room.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN BytesThisRound;
+    UINTN BytesWritten;
+    ULONG ClusterSize;
+    PFAT_VOLUME FatVolume;
+    FAT_SEEK_INFORMATION Seek;
+    KSTATUS Status;
+    PFAT_IO_BUFFER ZeroBuffer;
+
+    FatVolume = Volume;
+    ClusterSize = FatVolume->ClusterSize;
+    ZeroBuffer = NULL;
+    if (NewSize < OldSize) {
+        return FatDeleteFileBlocks(Volume, FileToken, FileId, NewSize, TRUE);
+    }
+
+    //
+    // Create a cluster sized buffer full of zeros.
+    //
+
+    ZeroBuffer = FatAllocateIoBuffer(FatVolume->Device.DeviceToken,
+                                     ClusterSize);
+
+    if (ZeroBuffer == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto TruncateEnd;
+    }
+
+    Status = FatZeroIoBuffer(ZeroBuffer, 0, ClusterSize);
+    if (!KSUCCESS(Status)) {
+        goto TruncateEnd;
+    }
+
+    //
+    // It's time to grow the file. Seek to the old end of the file.
+    //
+
+    RtlZeroMemory(&Seek, sizeof(FAT_SEEK_INFORMATION));
+    Status = FatFileSeek(FileToken,
+                         NULL,
+                         0,
+                         SeekCommandFromBeginning,
+                         OldSize,
+                         &Seek);
+
+    if (!KSUCCESS(Status)) {
+        goto TruncateEnd;
+    }
+
+    while (OldSize < NewSize) {
+        if (!IS_ALIGNED(OldSize, ClusterSize)) {
+            BytesThisRound = ClusterSize - REMAINDER(OldSize, ClusterSize);
+
+        } else {
+            BytesThisRound = ClusterSize;
+        }
+
+        if (OldSize + BytesThisRound > NewSize) {
+            BytesThisRound = NewSize - OldSize;
+        }
+
+        Status = FatWriteFile(FileToken,
+                              &Seek,
+                              ZeroBuffer,
+                              BytesThisRound,
+                              0,
+                              NULL,
+                              &BytesWritten);
+
+        if (!KSUCCESS(Status)) {
+            goto TruncateEnd;
+        }
+
+        ASSERT(BytesWritten != 0);
+
+        OldSize += BytesWritten;
+    }
+
+    Status = STATUS_SUCCESS;
+
+TruncateEnd:
+    if (ZeroBuffer != NULL) {
+        FatFreeIoBuffer(ZeroBuffer);
+    }
+
+    return Status;
+}
+
+KSTATUS
 FatFileSeek (
     PVOID FileToken,
     PVOID Irp,
@@ -2904,7 +3029,13 @@ Return Value:
         if ((CurrentCluster < FAT_CLUSTER_BEGIN) ||
             (CurrentCluster >= ClusterBad)) {
 
-            Status = STATUS_END_OF_FILE;
+            if (CurrentOffset == ClusterAlignedDestination) {
+                Status = STATUS_SUCCESS;
+
+            } else {
+                Status = STATUS_END_OF_FILE;
+            }
+
             DiskByteOffset = FAT_CLUSTER_TO_BYTE(Volume, PreviousCluster);
 
             //
@@ -2957,35 +3088,6 @@ Return Value:
 
 FatFileSeekEnd:
     return Status;
-}
-
-ULONG
-FatGetFileBlockSize (
-    PVOID FileToken
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the block size for the FAT file.
-
-Arguments:
-
-    FileToken - Supplies the opaque token returned when the file was opened.
-
-Return Value:
-
-    Returns the size of a block for the file.
-
---*/
-
-{
-
-    PFAT_FILE FatFile;
-
-    FatFile = (PFAT_FILE)FileToken;
-    return FatFile->Volume->ClusterSize;
 }
 
 KSTATUS

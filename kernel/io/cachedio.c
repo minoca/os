@@ -1216,7 +1216,10 @@ Return Value:
         MissContext.TimeoutInMilliseconds = TimeoutInMilliseconds;
         MissContext.Write = TRUE;
         Status = IopHandleCacheReadMiss(FileObject, &MissContext);
-        if (!KSUCCESS(Status) && (Status != STATUS_END_OF_FILE)) {
+        if ((!KSUCCESS(Status)) &&
+            ((Status != STATUS_END_OF_FILE) ||
+             (MissContext.BytesCompleted == 0))) {
+
             goto HandleCacheWriteMissEnd;
         }
 
@@ -1645,7 +1648,10 @@ Return Value:
     ReadIoContext.TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
     ReadIoContext.Write = FALSE;
     Status = IopPerformNonCachedRead(FileObject, &ReadIoContext, NULL);
-    if (!KSUCCESS(Status) && (Status != STATUS_END_OF_FILE)) {
+    if ((!KSUCCESS(Status)) &&
+        ((Status != STATUS_END_OF_FILE) ||
+         (ReadIoContext.BytesCompleted == 0))) {
+
         goto HandleDefaultCacheReadMissEnd;
     }
 
@@ -1954,7 +1960,10 @@ Return Value:
     //
 
     Status = IopSendIoReadIrp(Device, &Parameters);
-    if ((!KSUCCESS(Status)) && (Status != STATUS_END_OF_FILE)) {
+    if ((!KSUCCESS(Status)) &&
+        ((Status != STATUS_END_OF_FILE) ||
+         (Parameters.IoBytesCompleted == 0))) {
+
         goto PerformDefaultNonCachedReadEnd;
     }
 
@@ -2328,7 +2337,10 @@ Return Value:
     Parameters.NewIoOffset = Parameters.IoOffset;
     Parameters.IoBuffer = AlignedIoBuffer;
     Status = IopSendIoReadIrp(Device, &Parameters);
-    if (!KSUCCESS(Status) && (Status != STATUS_END_OF_FILE)) {
+    if ((!KSUCCESS(Status)) &&
+        ((Status != STATUS_END_OF_FILE) ||
+         (Parameters.IoBytesCompleted == 0))) {
+
         goto PerformDefaultPartialWriteEnd;
     }
 

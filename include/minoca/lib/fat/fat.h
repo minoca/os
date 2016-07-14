@@ -636,6 +636,42 @@ Return Value:
 --*/
 
 KSTATUS
+FatTruncate (
+    PVOID Volume,
+    PVOID FileToken,
+    FILE_ID FileId,
+    ULONGLONG OldSize,
+    ULONGLONG NewSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine truncates a file to the given file size. This can be used to
+    both shrink and grow the file.
+
+Arguments:
+
+    Volume - Supplies a pointer to the volume.
+
+    FileToken - Supplies the file context of the file to operate on.
+
+    FileId - Supplies the file ID of the file to operate on.
+
+    OldSize - Supplies the original size of the file.
+
+    NewSize - Supplies the new size to make the file. If smaller, then
+        unused clusters will be freed. If larger, then the file will be
+        zeroed to make room.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 FatFileSeek (
     PVOID FileToken,
     PVOID Irp,
@@ -680,27 +716,6 @@ Return Value:
     STATUS_FILE_CORRUPT if the file system has a problem.
 
     Other errors on device I/O error.
-
---*/
-
-ULONG
-FatGetFileBlockSize (
-    PVOID FileToken
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the block size for the FAT file.
-
-Arguments:
-
-    FileToken - Supplies the opaque token returned when the file was opened.
-
-Return Value:
-
-    Returns the size of a block for the file.
 
 --*/
 

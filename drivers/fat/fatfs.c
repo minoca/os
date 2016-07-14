@@ -245,6 +245,7 @@ KSTATUS
 FatpTruncateFile (
     PFATFS_VOLUME Volume,
     PFILE_PROPERTIES FileProperties,
+    ULONGLONG NewSize,
     PVOID FileToken
     );
 
@@ -967,11 +968,6 @@ Return Value:
 {
 
     UINTN BytesCompleted;
-    UINTN BytesCompletedThisRound;
-    UINTN BytesToCompleteThisRound;
-    ULONG ClusterByteOffset;
-    ULONG ClusterSize;
-    ULONGLONG CurrentOffset;
     PFATFS_DIRECTORY_OBJECT DirectoryObject;
     PIRP DiskIrp;
     ULONG ElementsRead;
@@ -984,8 +980,6 @@ Return Value:
     ULONGLONG IoOffset;
     KSTATUS Status;
     PFATFS_TRANSFER Transfer;
-    UINTN ZeroBufferSize;
-    PIO_BUFFER ZeroIoBuffer;
 
     ASSERT(Irp->Direction == IrpDown);
     ASSERT(Irp->MajorCode == IrpMajorIo);
@@ -1017,7 +1011,6 @@ Return Value:
 
     IoBuffer = Irp->U.ReadWrite.IoBuffer;
     IoOffset = Irp->U.ReadWrite.IoOffset;
-    ZeroIoBuffer = NULL;
 
     //
     // All requests must supply an I/O buffer.
@@ -1080,6 +1073,26 @@ Return Value:
     }
 
     //
+    // If the seek didn't get all the way to the desired offset, write some
+    // zeroes.
+    //
+
+    if ((Irp->MinorCode == IrpMinorIoWrite) && (FileProperties != NULL)) {
+        READ_INT64_SYNC(&(FileProperties->FileSize), &FileSize);
+        if (FileSize < IoOffset) {
+            Status = FatTruncate(FatVolume->VolumeToken,
+                                 FatFile->FileToken,
+                                 FileProperties->FileId,
+                                 FileSize,
+                                 IoOffset);
+
+            if (!KSUCCESS(Status)) {
+                goto DispatchIoEnd;
+            }
+        }
+    }
+
+    //
     // Seek to the desired offset within the file. If the seek reaches the end
     // of file and this is not a write operation, fail.
     //
@@ -1092,113 +1105,12 @@ Return Value:
                          IoOffset,
                          &FatSeekInformation);
 
-    if (!KSUCCESS(Status) &&
-        ((Irp->MinorCode != IrpMinorIoWrite) ||
-         (Status != STATUS_END_OF_FILE))) {
-
+    if (!KSUCCESS(Status)) {
         if (Status == STATUS_OUT_OF_BOUNDS) {
             Status = STATUS_END_OF_FILE;
         }
 
         goto DispatchIoEnd;
-    }
-
-    //
-    // If the seek didn't get all the way to the desired offset, write some
-    // zeroes.
-    //
-
-    ClusterSize = FatGetFileBlockSize(FatFile->FileToken);
-    if (Irp->MinorCode == IrpMinorIoWrite) {
-        CurrentOffset = FatSeekInformation.FileByteOffset;
-
-        //
-        // If the current offset is beyond the file size, then the seek
-        // above went to the end of the cluster, but some of that cluster
-        // needs to be zero'd out. Seek back. Make no assumptions about the
-        // system having already zero'd the uninitialized portion of a cluster.
-        // The FAT partition could have come from another system and all bets
-        // are off.
-        //
-
-        if (FileProperties != NULL) {
-            READ_INT64_SYNC(&(FileProperties->FileSize), &FileSize);
-            if (CurrentOffset > FileSize) {
-                Status = FatFileSeek(FatFile->FileToken,
-                                     DiskIrp,
-                                     Irp->U.ReadWrite.IoFlags,
-                                     SeekCommandFromBeginning,
-                                     FileSize,
-                                     &FatSeekInformation);
-
-                if (!KSUCCESS(Status)) {
-                    goto DispatchIoEnd;
-                }
-
-                ASSERT(FileSize == FatSeekInformation.FileByteOffset);
-
-                CurrentOffset = FileSize;
-            }
-        }
-
-        if (CurrentOffset != IoOffset) {
-            ZeroBufferSize = IoOffset - CurrentOffset;
-            if (ZeroBufferSize > FAT_ZERO_BUFFER_SIZE) {
-                ZeroBufferSize = FAT_ZERO_BUFFER_SIZE;
-            }
-
-            ZeroIoBuffer = MmAllocatePagedIoBuffer(ZeroBufferSize, 0);
-            if (ZeroIoBuffer == NULL) {
-                Status = STATUS_INSUFFICIENT_RESOURCES;
-                goto DispatchIoEnd;
-            }
-
-            MmZeroIoBuffer(ZeroIoBuffer, 0, ZeroBufferSize);
-
-            //
-            // Zero out the file block by block.
-            //
-
-            while (CurrentOffset != IoOffset) {
-
-                //
-                // If the offset is not aligned, just write the rest of the
-                // block.
-                //
-
-                BytesToCompleteThisRound = ZeroBufferSize;
-                if (IS_ALIGNED(CurrentOffset, ClusterSize) == FALSE) {
-                    ClusterByteOffset = FatSeekInformation.ClusterByteOffset;
-
-                    ASSERT(ClusterByteOffset < ClusterSize);
-
-                    BytesToCompleteThisRound = ClusterSize - ClusterByteOffset;
-                }
-
-                if ((IoOffset - CurrentOffset) < BytesToCompleteThisRound) {
-                    BytesToCompleteThisRound = IoOffset - CurrentOffset;
-                }
-
-                Status = FatWriteFile(FatFile->FileToken,
-                                      &FatSeekInformation,
-                                      (PFAT_IO_BUFFER)ZeroIoBuffer,
-                                      BytesToCompleteThisRound,
-                                      Irp->U.ReadWrite.IoFlags,
-                                      DiskIrp,
-                                      &BytesCompletedThisRound);
-
-                if (!KSUCCESS(Status)) {
-                    goto DispatchIoEnd;
-                }
-
-                ASSERT(BytesCompletedThisRound != 0);
-
-                CurrentOffset += BytesCompletedThisRound;
-            }
-
-            MmFreeIoBuffer(ZeroIoBuffer);
-            ZeroIoBuffer = NULL;
-        }
     }
 
     //
@@ -1233,10 +1145,6 @@ Return Value:
     Irp->U.ReadWrite.NewIoOffset = IoOffset + BytesCompleted;
 
 DispatchIoEnd:
-    if (ZeroIoBuffer != NULL) {
-        MmFreeIoBuffer(ZeroIoBuffer);
-    }
-
     IoCompleteIrp(FatDriver, Irp, Status);
     return;
 }
@@ -1352,6 +1260,7 @@ Return Value:
     PSYSTEM_CONTROL_LOOKUP Lookup;
     PSYSTEM_CONTROL_RENAME Rename;
     KSTATUS Status;
+    PSYSTEM_CONTROL_TRUNCATE Truncate;
     PSYSTEM_CONTROL_UNLINK Unlink;
     PFATFS_VOLUME Volume;
 
@@ -1602,14 +1511,15 @@ Return Value:
     //
 
     case IrpMinorSystemControlTruncate:
-        FileOperation = (PSYSTEM_CONTROL_FILE_OPERATION)Context;
+        Truncate = (PSYSTEM_CONTROL_TRUNCATE)Context;
 
-        ASSERT(FileOperation->FileProperties->Type == IoObjectRegularFile);
-        ASSERT(FileOperation->DeviceContext != NULL);
+        ASSERT(Truncate->FileProperties->Type == IoObjectRegularFile);
+        ASSERT(Truncate->DeviceContext != NULL);
 
-        File = (PFATFS_FILE)(FileOperation->DeviceContext);
+        File = (PFATFS_FILE)(Truncate->DeviceContext);
         Status = FatpTruncateFile(Volume,
-                                  FileOperation->FileProperties,
+                                  Truncate->FileProperties,
+                                  Truncate->NewSize,
                                   File->FileToken);
 
         IoCompleteIrp(FatDriver, Irp, Status);
@@ -1833,6 +1743,7 @@ KSTATUS
 FatpTruncateFile (
     PFATFS_VOLUME Volume,
     PFILE_PROPERTIES FileProperties,
+    ULONGLONG NewSize,
     PVOID FileToken
     )
 
@@ -1849,6 +1760,8 @@ Arguments:
     FileProperties - Supplies a pointer to the properties of the file being
         destroyed.
 
+    NewSize - Supplies the new file size to set.
+
     FileToken - Supplies an optional open file token.
 
 Return Value:
@@ -1859,15 +1772,19 @@ Return Value:
 
 {
 
-    ULONGLONG FileSize;
+    ULONGLONG OldSize;
     KSTATUS Status;
 
-    READ_INT64_SYNC(&(FileProperties->FileSize), &FileSize);
-    Status = FatDeleteFileBlocks(Volume->VolumeToken,
-                                 FileToken,
-                                 FileProperties->FileId,
-                                 FileSize,
-                                 TRUE);
+    READ_INT64_SYNC(&(FileProperties->FileSize), &OldSize);
+    Status = FatTruncate(Volume->VolumeToken,
+                         FileToken,
+                         FileProperties->FileId,
+                         OldSize,
+                         NewSize);
+
+    if (KSUCCESS(Status)) {
+        WRITE_INT64_SYNC(&(FileProperties->FileSize), NewSize);
+    }
 
     return Status;
 }

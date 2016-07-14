@@ -3684,18 +3684,23 @@ Return Value:
 
 KSTATUS
 IopTruncateSharedMemoryObject (
-    PFILE_OBJECT FileObject
+    PFILE_OBJECT FileObject,
+    ULONGLONG NewSize
     );
 
 /*++
 
 Routine Description:
 
-    This routine truncates a shared memory object.
+    This routine truncates a shared memory object. It assumes that the file's
+    lock is held exclusively.
 
 Arguments:
 
-    FileObject - Supplies a pointer to a shared memory object.
+    FileObject - Supplies a pointer to the file object that owns the shared
+        memory object.
+
+    NewSize - Supplies the new size to set.
 
 Return Value:
 

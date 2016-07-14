@@ -2158,8 +2158,8 @@ typedef struct _SYSTEM_CONTROL_LOOKUP {
 
 Structure Description:
 
-    This structure defines the information sent to a file system for the
-    following requests: write file properties, truncate, and delete.
+    This structure defines the information sent to a file system for
+    flushing file properties and unlink.
 
 Members:
 
@@ -2310,6 +2310,31 @@ typedef struct _SYSTEM_CONTROL_RENAME {
     PSTR Name;
     ULONG NameSize;
 } SYSTEM_CONTROL_RENAME, *PSYSTEM_CONTROL_RENAME;
+
+/*++
+
+Structure Description:
+
+    This structure defines the information sent to a file system for a truncate
+    operation.
+
+Members:
+
+    File - Stores a pointer to the properties of the target file.
+
+    DeviceContext - Stores a pointer to the open device context for the file if
+        there is one. This is filled in for some operations (like truncate),
+        but not all.
+
+    NewSize - Stores the new size to truncate the file to.
+
+--*/
+
+typedef struct _SYSTEM_CONTROL_TRUNCATE {
+    PFILE_PROPERTIES FileProperties;
+    PVOID DeviceContext;
+    ULONGLONG NewSize;
+} SYSTEM_CONTROL_TRUNCATE, *PSYSTEM_CONTROL_TRUNCATE;
 
 /*++
 
