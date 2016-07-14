@@ -64,6 +64,7 @@ extern const double ClInverseLn2;
 extern const double ClTwo54;
 extern const double ClLn2High[2];
 extern const double ClLn2Low[2];
+extern const double ClTwo52[2];
 
 //
 // -------------------------------------------------------- Function Prototypes

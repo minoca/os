@@ -38,6 +38,7 @@ function build() {
         "math/log10.c",
         "math/modf.c",
         "math/pow.c",
+        "math/rint.c",
         "math/scalbn.c",
         "math/sqrt.c",
         "math/trig.c",

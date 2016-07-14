@@ -656,6 +656,30 @@ Return Value:
 
 LIBC_API
 double
+rint (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given value into the nearest integral in the
+    direction of the current rounding mode.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integral value in the direction of the current rounding
+    mode.
+
+--*/
+
+LIBC_API
+double
 hypot (
     double Length,
     double Width

@@ -127,7 +127,7 @@ Return Value:
             NonExponent = DOUBLE_HIGH_VALUE_MASK >> Exponent;
 
             //
-            // Return the value itself if it's integra.
+            // Return the value itself if it's integral.
             //
 
             if (((HighWord & NonExponent) | LowWord) == 0) {
