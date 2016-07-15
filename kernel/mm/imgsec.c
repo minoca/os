@@ -1283,7 +1283,9 @@ Return Value:
                  BITS_PER_BYTE;
 
     AllocationSize = sizeof(IMAGE_SECTION) + (2 * BitmapSize);
-    NewSection = MmAllocateNonPagedPool(AllocationSize, MM_ALLOCATION_TAG);
+    NewSection = MmAllocateNonPagedPool(AllocationSize,
+                                        MM_IMAGE_SECTION_ALLOCATION_TAG);
+
     if (NewSection == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CopyImageSectionEnd;
@@ -2688,7 +2690,9 @@ Return Value:
                  BITS_PER_BYTE;
 
     AllocationSize = sizeof(IMAGE_SECTION) + (BitmapCount * BitmapSize);
-    NewSection = MmAllocateNonPagedPool(AllocationSize, MM_ALLOCATION_TAG);
+    NewSection = MmAllocateNonPagedPool(AllocationSize,
+                                        MM_IMAGE_SECTION_ALLOCATION_TAG);
+
     if (NewSection == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto AllocateImageSectionEnd;
@@ -3940,6 +3944,7 @@ Return Value:
     PKPROCESS CurrentProcess;
     UINTN DirtyPageCount;
     BOOL MarkedDirty;
+    UINTN MinOffset;
     BOOL MultipleIpisRequired;
     BOOL OtherProcess;
     PPAGE_CACHE_ENTRY PageCacheEntry;
@@ -3979,6 +3984,7 @@ Return Value:
 
     CurrentAddress = Section->MinTouched;
     PageCount = (Section->MaxTouched - CurrentAddress) >> PageShift;
+    MinOffset = (CurrentAddress - Section->VirtualAddress) >> PageShift;
 
     //
     // Depending on the image section, there are different, more efficient
@@ -4065,8 +4071,8 @@ Return Value:
     RunPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
     PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
     for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
-        BitmapIndex = IMAGE_SECTION_BITMAP_INDEX(PageIndex);
-        BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageIndex);
+        BitmapIndex = IMAGE_SECTION_BITMAP_INDEX(PageIndex + MinOffset);
+        BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageIndex + MinOffset);
         UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                      UNMAP_FLAG_SEND_INVALIDATE_IPI;
 

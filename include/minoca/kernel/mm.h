@@ -43,6 +43,12 @@ Author:
 #define MM_ADDRESS_SPACE_ALLOCATION_TAG 0x64416D4D
 
 //
+// Define the allocation tag used by image sections.
+//
+
+#define MM_IMAGE_SECTION_ALLOCATION_TAG 0x6D496D4D
+
+//
 // Define the pool magic values for non-paged pool (NonP) and paged-pool (PagP).
 //
 
