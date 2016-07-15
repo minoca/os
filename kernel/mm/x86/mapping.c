@@ -57,6 +57,7 @@ MmpDestroyPageDirectory (
 
 VOID
 MmpCreatePageTable (
+    PADDRESS_SPACE_X86 AddressSpace,
     volatile PTE *Directory,
     PVOID VirtualAddress
     );
@@ -1043,7 +1044,7 @@ Return Value:
     //
 
     if (Directory[DirectoryIndex].Present == 0) {
-        MmpCreatePageTable(Directory, VirtualAddress);
+        MmpCreatePageTable(AddressSpace, Directory, VirtualAddress);
     }
 
     ASSERT(Directory[DirectoryIndex].Present != 0);
@@ -1749,7 +1750,7 @@ Return Value:
     //
 
     if (Directory[DirectoryIndex].Present == 0) {
-        MmpCreatePageTable(Directory, VirtualAddress);
+        MmpCreatePageTable(Space, Directory, VirtualAddress);
     }
 
     PageTablePhysical = (UINTN)(Directory[DirectoryIndex].Entry << PAGE_SHIFT);
@@ -2055,11 +2056,13 @@ Return Value:
     PHYSICAL_ADDRESS Physical;
     PPTE Source;
     PADDRESS_SPACE_X86 SourceSpace;
+    ULONG Total;
 
     DestinationSpace = (PADDRESS_SPACE_X86)DestinationAddressSpace;
     SourceSpace = (PADDRESS_SPACE_X86)SourceAddressSpace;
     Destination = DestinationSpace->PageDirectory;
     Source = SourceSpace->PageDirectory;
+    Total = 0;
     for (DirectoryIndex = 0;
          DirectoryIndex < ((UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT);
          DirectoryIndex += 1) {
@@ -2094,8 +2097,10 @@ Return Value:
         }
 
         Destination[DirectoryIndex].Entry = (ULONG)Physical >> PAGE_SHIFT;
+        Total += 1;
     }
 
+    DestinationSpace->PageTableCount = Total;
     return STATUS_SUCCESS;
 }
 
@@ -2380,6 +2385,8 @@ Return Value:
             return;
         }
 
+        AddressSpace = NULL;
+
     } else {
         AddressSpace =
               (PADDRESS_SPACE_X86)(CurrentThread->OwningProcess->AddressSpace);
@@ -2395,7 +2402,8 @@ Return Value:
 
     while (DirectoryIndex <= DirectoryEndIndex) {
         if (Directory[DirectoryIndex].Present == 0) {
-            MmpCreatePageTable(Directory,
+            MmpCreatePageTable(AddressSpace,
+                               Directory,
                                (PVOID)(DirectoryIndex << PAGE_DIRECTORY_SHIFT));
         }
 
@@ -2533,6 +2541,7 @@ Return Value:
     PHYSICAL_ADDRESS PhysicalAddress;
     PHYSICAL_ADDRESS RunPhysicalAddress;
     UINTN RunSize;
+    ULONG Total;
 
     //
     // Loop through and free every allocated page table in user mode.
@@ -2540,6 +2549,7 @@ Return Value:
 
     RunSize = 0;
     RunPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+    Total = 0;
     Directory = AddressSpace->PageDirectory;
     if (Directory == NULL) {
         return;
@@ -2550,6 +2560,7 @@ Return Value:
          DirectoryIndex += 1) {
 
         if (Directory[DirectoryIndex].Entry != 0) {
+            Total += 1;
             PhysicalAddress = (ULONG)(Directory[DirectoryIndex].Entry <<
                                       PAGE_SHIFT);
 
@@ -2576,6 +2587,13 @@ Return Value:
         MmFreePhysicalPages(RunPhysicalAddress, RunSize >> PAGE_SHIFT);
     }
 
+    //
+    // Assert if page tables were leaked somewhere.
+    //
+
+    ASSERT(Total == AddressSpace->PageTableCount);
+
+    AddressSpace->PageTableCount -= Total;
     MmFreeBlock(MmPageDirectoryBlockAllocator, Directory);
     AddressSpace->PageDirectory = NULL;
     AddressSpace->PageDirectoryPhysical = INVALID_PHYSICAL_ADDRESS;
@@ -2584,6 +2602,7 @@ Return Value:
 
 VOID
 MmpCreatePageTable (
+    PADDRESS_SPACE_X86 AddressSpace,
     volatile PTE *Directory,
     PVOID VirtualAddress
     )
@@ -2597,8 +2616,10 @@ Routine Description:
 
 Arguments:
 
-    Directory - Supplies a pointer to the page directory that will own the
-        page table.
+    AddressSpace - Supplies a pointer to the address space.
+
+    Directory - Supplies a pointer to the page directory, in case this is an
+        early call and there is no address space yet.
 
     VirtualAddress - Supplies the virtual address that the page table will
         eventually service.
@@ -2612,6 +2633,7 @@ Return Value:
 {
 
     ULONG DirectoryIndex;
+    ULONG NewCount;
     PHYSICAL_ADDRESS NewPageTable;
     BOOL NewPageTableUsed;
     RUNLEVEL OldRunLevel;
@@ -2656,10 +2678,11 @@ Return Value:
         (Directory[DirectoryIndex].Entry != 0)) {
 
         NewPageTable = (ULONG)(Directory[DirectoryIndex].Entry << PAGE_SHIFT);
-        Directory[DirectoryIndex].Entry = 0;
+        NewCount = 0;
 
     } else {
         NewPageTable = MmpAllocatePhysicalPages(1, 0);
+        NewCount = 1;
     }
 
     ASSERT(NewPageTable != INVALID_PHYSICAL_ADDRESS);
@@ -2721,6 +2744,7 @@ Return Value:
 
         } else {
             Directory[DirectoryIndex].User = 1;
+            AddressSpace->PageTableCount += NewCount;
         }
 
         Directory[DirectoryIndex].Present = 1;

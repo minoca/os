@@ -69,9 +69,9 @@ MmpDestroyPageDirectory (
 
 VOID
 MmpCreatePageTable (
+    PADDRESS_SPACE_ARM AddressSpace,
     volatile FIRST_LEVEL_TABLE *FirstLevelTable,
-    PVOID VirtualAddress,
-    BOOL CurrentProcess
+    PVOID VirtualAddress
     );
 
 VOID
@@ -1328,7 +1328,7 @@ Return Value:
     //
 
     if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {
-        MmpCreatePageTable(FirstLevelTable, VirtualAddress, TRUE);
+        MmpCreatePageTable(AddressSpace, FirstLevelTable, VirtualAddress);
     }
 
     SecondLevelTable = GET_PAGE_TABLE(FirstIndex);
@@ -2097,7 +2097,7 @@ Return Value:
     //
 
     if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {
-        MmpCreatePageTable(FirstLevelTable, VirtualAddress, FALSE);
+        MmpCreatePageTable(OtherAddressSpace, FirstLevelTable, VirtualAddress);
     }
 
     PageTablePhysical = (ULONG)(FirstLevelTable[FirstIndex].Entry <<
@@ -2527,11 +2527,13 @@ Return Value:
     PHYSICAL_ADDRESS Physical;
     PFIRST_LEVEL_TABLE Source;
     PADDRESS_SPACE_ARM SourceSpace;
+    ULONG Total;
 
     DestinationSpace = (PADDRESS_SPACE_ARM)DestinationAddressSpace;
     SourceSpace = (PADDRESS_SPACE_ARM)SourceAddressSpace;
     Destination = DestinationSpace->PageDirectory;
     Source = SourceSpace->PageDirectory;
+    Total = 0;
     for (Index = 0; Index < FLT_INDEX(KERNEL_VA_START); Index += 4) {
         if (Source[Index].Entry == 0) {
             continue;
@@ -2562,9 +2564,14 @@ Return Value:
             return STATUS_INSUFFICIENT_RESOURCES;
         }
 
+        Total += 1;
         Destination[Index].Entry = (ULONG)Physical >> SLT_ALIGNMENT;
+        Destination[Index + 1].Entry = (ULONG)Physical >> SLT_ALIGNMENT;
+        Destination[Index + 2].Entry = (ULONG)Physical >> SLT_ALIGNMENT;
+        Destination[Index + 3].Entry = (ULONG)Physical >> SLT_ALIGNMENT;
     }
 
+    DestinationSpace->PageTableCount = Total;
     return STATUS_SUCCESS;
 }
 
@@ -2955,6 +2962,8 @@ Return Value:
             return;
         }
 
+        AddressSpace = NULL;
+
     } else {
         AddressSpace =
               (PADDRESS_SPACE_ARM)(CurrentThread->OwningProcess->AddressSpace);
@@ -2969,9 +2978,9 @@ Return Value:
 
     while (FirstIndex <= FirstIndexEnd) {
         if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {
-            MmpCreatePageTable(FirstLevelTable,
-                               (PVOID)(FirstIndex << FLT_INDEX_SHIFT),
-                               TRUE);
+            MmpCreatePageTable(AddressSpace,
+                               FirstLevelTable,
+                               (PVOID)(FirstIndex << FLT_INDEX_SHIFT));
         }
 
         FirstIndex += 1;
@@ -3158,6 +3167,7 @@ Return Value:
     PHYSICAL_ADDRESS PhysicalAddress;
     PHYSICAL_ADDRESS RunPhysicalAddress;
     UINTN RunSize;
+    ULONG Total;
 
     ASSERT(Space->PageDirectory != MmKernelFirstLevelTable);
 
@@ -3170,11 +3180,13 @@ Return Value:
     RunSize = 0;
     RunPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
     FirstLevelTable = Space->PageDirectory;
+    Total = 0;
     for (FirstIndex = 0;
          FirstIndex < FLT_INDEX(KERNEL_VA_START);
          FirstIndex += 4) {
 
         if (FirstLevelTable[FirstIndex].Entry != 0) {
+            Total += 1;
             PhysicalAddress =
                    (ULONG)(FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT);
 
@@ -3201,6 +3213,9 @@ Return Value:
         MmFreePhysicalPages(RunPhysicalAddress, RunSize >> PAGE_SHIFT);
     }
 
+    ASSERT(Total == Space->PageTableCount);
+
+    Space->PageTableCount -= Total;
     MmFreeBlock(MmPageDirectoryBlockAllocator, Space->PageDirectory);
     Space->PageDirectory = NULL;
     Space->PageDirectoryPhysical = 0;
@@ -3209,9 +3224,9 @@ Return Value:
 
 VOID
 MmpCreatePageTable (
+    PADDRESS_SPACE_ARM AddressSpace,
     volatile FIRST_LEVEL_TABLE *FirstLevelTable,
-    PVOID VirtualAddress,
-    BOOL CurrentProcess
+    PVOID VirtualAddress
     )
 
 /*++
@@ -3223,15 +3238,13 @@ Routine Description:
 
 Arguments:
 
+    AddressSpace - Supplies a pointer to the address space.
+
     FirstLevelTable - Supplies a pointer to the first level table that will own
         the page table.
 
     VirtualAddress - Supplies the virtual address that the page table will
         eventually service.
-
-    CurrentProcess - Supplies a boolean indicating if the current process is
-        requesting the page to be created (TRUE) or if the work is happening on
-        behalf of another process.
 
 Return Value:
 
@@ -3241,12 +3254,15 @@ Return Value:
 
 {
 
+    BOOL CurrentProcess;
     ULONG Entry;
     ULONG FirstIndex;
     ULONG FirstIndexDown;
     ULONG LoopIndex;
+    ULONG NewCount;
     RUNLEVEL OldRunLevel;
     PHYSICAL_ADDRESS PageTablePhysical;
+    PKPROCESS Process;
     PPROCESSOR_BLOCK ProcessorBlock;
     volatile SECOND_LEVEL_TABLE *SecondLevelTable;
     ULONG SelfMapIndex;
@@ -3266,6 +3282,17 @@ Return Value:
         return;
     }
 
+    if (VirtualAddress >= KERNEL_VA_START) {
+        CurrentProcess = TRUE;
+
+    } else {
+        CurrentProcess = FALSE;
+        Process = PsGetCurrentProcess();
+        if (Process->AddressSpace == &(AddressSpace->Common)) {
+            CurrentProcess = TRUE;
+        }
+    }
+
     //
     // Allocate a page outside of the lock. Create calls that are not just
     // synchronization calls need to be at low level.
@@ -3277,10 +3304,11 @@ Return Value:
         PageTablePhysical = (ULONG)(FirstLevelTable[FirstIndex].Entry <<
                                     SLT_ALIGNMENT);
 
-        FirstLevelTable[FirstIndex].Entry = 0;
+        NewCount = 0;
 
     } else {
         PageTablePhysical = MmpAllocatePhysicalPages(1, 0);
+        NewCount = 1;
     }
 
     ASSERT(PageTablePhysical != INVALID_PHYSICAL_ADDRESS);
@@ -3347,6 +3375,8 @@ Return Value:
         } else {
             SelfMapPageTable =
                       (PSECOND_LEVEL_TABLE)((PVOID)FirstLevelTable + FLT_SIZE);
+
+            AddressSpace->PageTableCount += NewCount;
         }
 
         SelfMapIndex = FirstIndex >> 2;

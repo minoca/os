@@ -751,12 +751,16 @@ Members:
     PageDirectoryPhysical - Stores the physical address of the top level page
         directory.
 
+    PageTableCount - Stores the number of page tables that were allocated on
+        behalf of this process (user mode only).
+
 --*/
 
 typedef struct _ADDRESS_SPACE_X86 {
     ADDRESS_SPACE Common;
     PPTE PageDirectory;
     ULONG PageDirectoryPhysical;
+    ULONG PageTableCount;
 } ADDRESS_SPACE_X86, *PADDRESS_SPACE_X86;
 
 //

@@ -1315,8 +1315,6 @@ Return Value:
     INITIALIZE_LIST_HEAD(&(NewSection->ChildList));
     NewSection->AddressSpace = DestinationAddressSpace;
     NewSection->VirtualAddress = SectionToCopy->VirtualAddress;
-    NewSection->MinTouched = SectionToCopy->MinTouched;
-    NewSection->MaxTouched = SectionToCopy->MaxTouched;
     NewSection->Size = SectionToCopy->Size;
     NewSection->TruncateCount = 0;
     NewSection->SwapSpace = NULL;
@@ -1390,6 +1388,8 @@ Return Value:
     //
 
     KeAcquireQueuedLock(SectionToCopy->Lock);
+    NewSection->MinTouched = SectionToCopy->MinTouched;
+    NewSection->MaxTouched = SectionToCopy->MaxTouched;
 
     //
     // Synchronize with destruction of the parent. If the parent is on its way
@@ -2364,6 +2364,8 @@ Return Value:
     } else {
 
         ASSERT((Section->Flags & IMAGE_SECTION_SHARED) == 0);
+        ASSERT((Section->MinTouched <= VirtualAddress) &&
+               (Section->MaxTouched > VirtualAddress));
 
         MmpCopyPage(Section, VirtualAddress, PhysicalAddress);
 
@@ -3290,7 +3292,9 @@ Return Value:
     KeAcquireQueuedLock(Section->Lock);
 
     //
-    // If the section inherits from another, remove it as a child.
+    // If the section inherits from another, remove it as a child. Don't set
+    // the parent to NULL because it still may need to isolate (really hand
+    // pages over) from the parent.
     //
 
     if (Section->Parent != NULL) {
