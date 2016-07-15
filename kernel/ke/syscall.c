@@ -153,6 +153,7 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
     {IoSysPerformVectoredIo, sizeof(SYSTEM_CALL_PERFORM_VECTORED_IO)},
     {PsSysSetITimer, sizeof(SYSTEM_CALL_SET_ITIMER)},
     {PsSysSetResourceLimit, sizeof(SYSTEM_CALL_SET_RESOURCE_LIMIT)},
+    {MmSysSetBreak, sizeof(SYSTEM_CALL_SET_BREAK)},
 };
 
 //

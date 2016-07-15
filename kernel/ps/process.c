@@ -3498,6 +3498,7 @@ Return Value:
     ULONG Flags;
     PLOADED_IMAGE Interpreter;
     PLOADED_IMAGE OsBaseLibrary;
+    ULONG PageSize;
     PKPROCESS Process;
     KSTATUS Status;
 
@@ -3566,6 +3567,16 @@ Return Value:
         ImImageReleaseReference(OsBaseLibrary);
     }
 
+    //
+    // Save the address of the program break.
+    //
+
+    PageSize = MmPageSize();
+    Process->AddressSpace->BreakStart =
+           ALIGN_POINTER_UP(Executable->LoadedLowestAddress + Executable->Size,
+                            PageSize);
+
+    Process->AddressSpace->BreakEnd = Process->AddressSpace->BreakStart;
     PspInitializeProcessStartData(StartData,
                                   OsBaseLibrary,
                                   Executable,

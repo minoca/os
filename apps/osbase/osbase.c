@@ -2668,37 +2668,37 @@ Return Value:
 }
 
 OS_API
-VOID
+PVOID
 OsSetProgramBreak (
-    VOID
+    PVOID NewBreak
     )
 
 /*++
 
 Routine Description:
 
-    This routine sets the application program break for the process.
+    This routine gets or sets the application program break for the process.
 
 Arguments:
 
-    None.
+    NewBreak - Supplies an optional pointer to the new break to set. If this
+        is less than the original break, then no change is made. Set to NULL
+        to simply get the current program break.
 
 Return Value:
 
-    None.
+    Returns the current program break, which is either the new value set or
+    the previous value.
 
 --*/
 
 {
 
-    //
-    // TODO: Implement OsSetProgramBreak. It's only here now to stage
-    // properly in the automation.
-    //
+    SYSTEM_CALL_SET_BREAK Request;
 
-    ASSERT(FALSE);
-
-    return;
+    Request.Break = NewBreak;
+    OsSystemCall(SystemCallSetBreak, &Request);
+    return Request.Break;
 }
 
 OS_API

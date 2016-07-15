@@ -307,6 +307,7 @@ typedef enum _SYSTEM_CALL_NUMBER {
     SystemCallPerformVectoredIo,
     SystemCallSetITimer,
     SystemCallSetResourceLimit,
+    SystemCallSetBreak,
     SystemCallCount
 } SYSTEM_CALL_NUMBER, *PSYSTEM_CALL_NUMBER;
 
@@ -2739,6 +2740,28 @@ typedef struct _SYSTEM_CALL_SET_ITIMER {
 Structure Description:
 
     This structure defines the system call parameters for getting or setting
+    the program break address. Increasing the program break dynamically gives
+    the application more memory, usually used for the heap.
+
+Members:
+
+    Break - Stores the new break address to set. If this is greater than the
+        original program, then the kernel will attempt to set the given
+        break address, subject to memory limitations. If this is NULL or less
+        than the original break, the kernel will not attempt a set. Returns
+        the current program break.
+
+--*/
+
+typedef struct _SYSTEM_CALL_SET_BREAK {
+    PVOID Break;
+} SYSCALL_STRUCT SYSTEM_CALL_SET_BREAK, *PSYSTEM_CALL_SET_BREAK;
+
+/*++
+
+Structure Description:
+
+    This structure defines the system call parameters for getting or setting
     the current thread's resource limits.
 
 Members:
@@ -2847,6 +2870,7 @@ typedef union _SYSTEM_CALL_PARAMETER_UNION {
     SYSTEM_CALL_DUPLICATE_HANDLE DuplicateHandle;
     SYSTEM_CALL_SET_ITIMER SetITimer;
     SYSTEM_CALL_SET_RESOURCE_LIMIT SetResourceLimit;
+    SYSTEM_CALL_SET_BREAK SetBreak;
 } SYSCALL_STRUCT SYSTEM_CALL_PARAMETER_UNION, *PSYSTEM_CALL_PARAMETER_UNION;
 
 typedef

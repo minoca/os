@@ -1889,6 +1889,31 @@ Return Value:
 --*/
 
 OS_API
+PVOID
+OsSetProgramBreak (
+    PVOID NewBreak
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the application program break for the process.
+
+Arguments:
+
+    NewBreak - Supplies an optional pointer to the new break to set. If this
+        is less than the original break, then no change is made. Set to NULL
+        to simply get the current program break.
+
+Return Value:
+
+    Returns the current program break, which is either the new value set or
+    the previous value.
+
+--*/
+
+OS_API
 KSTATUS
 OsMemoryMap (
     HANDLE Handle,

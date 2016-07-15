@@ -1135,6 +1135,8 @@ Return Value:
     MmpLockAccountant(Destination->Accountant, TRUE);
     MmAcquireAddressSpaceLock(Source);
     Destination->MaxMemoryMap = Source->MaxMemoryMap;
+    Destination->BreakStart = Source->BreakStart;
+    Destination->BreakEnd = Source->BreakEnd;
 
     //
     // Preallocate all the page tables in the destination process so that

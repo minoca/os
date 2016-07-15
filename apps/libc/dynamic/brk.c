@@ -50,9 +50,7 @@ Environment:
 // Store the current break.
 //
 
-void *ClBreakBase;
 void *ClCurrentBreak;
-size_t ClBreakSize;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -90,67 +88,15 @@ Return Value:
 
 {
 
-    size_t AdditionalSize;
-    void *ExtraSpace;
-    ULONG Flags;
-    size_t NewSize;
-    KSTATUS Status;
+    PVOID CurrentBreak;
 
-    Flags = SYS_MAP_FLAG_ANONYMOUS |
-            SYS_MAP_FLAG_READ |
-            SYS_MAP_FLAG_WRITE |
-            SYS_MAP_FLAG_EXECUTE;
-
-    if (ClBreakBase == NULL) {
-        Status = OsMemoryMap(INVALID_HANDLE,
-                             0,
-                             INITIAL_BREAK_SIZE,
-                             Flags,
-                             &ClBreakBase);
-
-        if (!KSUCCESS(Status)) {
-            errno = ClConvertKstatusToErrorNumber(Status);
-            return -1;
-        }
-
-        ClBreakSize = INITIAL_BREAK_SIZE;
-        ClCurrentBreak = ClBreakBase;
-    }
-
-    if ((size_t)Address < (size_t)ClBreakBase) {
-        errno = EINVAL;
+    CurrentBreak = OsSetProgramBreak(Address);
+    ClCurrentBreak = CurrentBreak;
+    if (CurrentBreak != Address) {
+        errno = ENOMEM;
         return -1;
     }
 
-    NewSize = ALIGN_RANGE_UP((size_t)Address - (size_t)ClBreakBase, 0x1000);
-    if (NewSize < ClBreakSize) {
-        ClCurrentBreak = Address;
-        return 0;
-    }
-
-    AdditionalSize = NewSize - ClBreakSize;
-    ExtraSpace = ClBreakBase + ClBreakSize;
-    if (AdditionalSize != 0) {
-        Status = OsMemoryMap(INVALID_HANDLE,
-                             0,
-                             AdditionalSize,
-                             Flags,
-                             &ExtraSpace);
-
-        if (!KSUCCESS(Status)) {
-            errno = ClConvertKstatusToErrorNumber(Status);
-            return -1;
-        }
-
-        if (ExtraSpace != ClBreakBase + ClBreakSize) {
-            OsMemoryUnmap(ExtraSpace, AdditionalSize);
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-
-    ClBreakSize = NewSize;
-    ClCurrentBreak = Address;
     return 0;
 }
 
@@ -188,47 +134,22 @@ Return Value:
 
 {
 
-    ULONG Flags;
-    void *OriginalBreak;
-    size_t OriginalSize;
-    int Result;
-    KSTATUS Status;
+    PVOID OldBreak;
 
-    Flags = SYS_MAP_FLAG_ANONYMOUS |
-            SYS_MAP_FLAG_READ |
-            SYS_MAP_FLAG_WRITE |
-            SYS_MAP_FLAG_EXECUTE;
-
-    if (ClBreakBase == NULL) {
-        Status = OsMemoryMap(INVALID_HANDLE,
-                             0,
-                             INITIAL_BREAK_SIZE,
-                             Flags,
-                             &ClBreakBase);
-
-        if (!KSUCCESS(Status)) {
-            errno = ClConvertKstatusToErrorNumber(Status);
-            return (void *)-1;
-        }
-
-        ClBreakSize = INITIAL_BREAK_SIZE;
-        ClCurrentBreak = ClBreakBase;
+    if (ClCurrentBreak == NULL) {
+        ClCurrentBreak = OsSetProgramBreak(NULL);
     }
 
-    OriginalSize = (size_t)ClCurrentBreak - (size_t)ClBreakBase;
-    if (Increment < 0) {
-        if (-Increment > OriginalSize) {
-            Increment = -OriginalSize;
-        }
+    OldBreak = ClCurrentBreak;
+    if (Increment == 0) {
+        return OldBreak;
     }
 
-    OriginalBreak = ClCurrentBreak;
-    Result = brk(ClCurrentBreak + Increment);
-    if (Result != 0) {
+    if (brk(OldBreak + Increment) != 0) {
         return (void *)-1;
     }
 
-    return OriginalBreak;
+    return OldBreak;
 }
 
 //
