@@ -175,6 +175,7 @@ Return Value:
 
 {
 
+    ULONG AccountingFlags;
     PADDRESS_SPACE Space;
     KSTATUS Status;
 
@@ -199,8 +200,11 @@ Return Value:
             goto CreateAddressSpaceEnd;
         }
 
+        AccountingFlags = MEMORY_ACCOUNTING_FLAG_USER |
+                          MEMORY_ACCOUNTING_FLAG_NO_MAP;
+
         Status = MmInitializeMemoryAccounting(Space->Accountant,
-                                              MEMORY_ACCOUNTING_FLAG_USER);
+                                              AccountingFlags);
 
         if (!KSUCCESS(Status)) {
             goto CreateAddressSpaceEnd;
