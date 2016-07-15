@@ -434,5 +434,10 @@ Return Value:
 
 --*/
 
+#ifdef __cplusplus
+
+}
+
+#endif
 #endif
 
