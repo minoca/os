@@ -61,7 +61,7 @@ extern "C" {
 // Define the highest possible limit value.
 //
 
-#define RLIM_INFINITY (-1)
+#define RLIM_INFINITY (-1UL)
 #define RLIM64_INFINITY RLIM_INFINITY
 
 //
@@ -187,7 +187,7 @@ extern "C" {
 // Type used for describing resource limit values.
 //
 
-typedef long rlim_t, rlim64_t;
+typedef unsigned long rlim_t, rlim64_t;
 
 /*++
 
