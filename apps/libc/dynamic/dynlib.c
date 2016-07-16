@@ -235,6 +235,52 @@ Return Value:
     return Address;
 }
 
+LIBC_API
+int
+dladdr (
+    void *Address,
+    Dl_info *Information
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resolves an address into the symbol and dynamic library
+    information.
+
+Arguments:
+
+    Address - Supplies the address being resolved.
+
+    Information - Supplies a pointer that recevies that dynamic library
+        information for the given address.
+
+Return Value:
+
+    Non-zero on success.
+
+    0 on failure, but dlerror will not be set to contain more information.
+
+--*/
+
+{
+
+    KSTATUS Status;
+    IMAGE_SYMBOL_INFORMATION Symbol;
+
+    Status = OsGetSymbolForAddress(INVALID_HANDLE, Address, &Symbol);
+    if (!KSUCCESS(Status)) {
+        return 0;
+    }
+
+    Information->dli_fname = Symbol.ImageName;
+    Information->dli_fbase = Symbol.ImageBaseAddress;
+    Information->dli_sname = Symbol.SymbolName;
+    Information->dli_saddr = Symbol.SymbolAddress;
+    return 1;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

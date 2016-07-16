@@ -90,6 +90,15 @@ ImpGetSymbolAddress (
     PVOID *Address
     );
 
+KSTATUS
+ImpGetSymbolForAddress (
+    PLOADED_IMAGE Image,
+    PVOID Address,
+    ULONG RecursionLevel,
+    UCHAR VisitMarker,
+    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    );
+    
 VOID
 ImpRelocateSelf (
     PIMAGE_BUFFER Buffer,
@@ -1154,6 +1163,72 @@ Return Value:
     return Status;
 }
 
+KSTATUS
+ImGetSymbolForAddress (
+    PLOADED_IMAGE Image,
+    PVOID Address,
+    BOOL Recursive,
+    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to resolve the given address into a symbol. This
+    routine also looks through the image imports if the recursive flag is
+    specified.
+
+Arguments:
+
+    Image - Supplies a pointer to the image to query.
+
+    Address - Supplies the address to search for.
+
+    Recursive - Supplies a boolean indicating if the routine should recurse
+        into imports or just query this binary.
+
+    SymbolInformation - Supplies a pointer to a structure that receives the
+        address's symbol information on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG RecursionLevel;
+    KSTATUS Status;
+    UCHAR VisitMarker;
+
+    //
+    // Toggle between two values that are not the default. This means only one
+    // thread can be in here at a time.
+    //
+
+    VisitMarker = 1;
+    if (ImLastVisitMarker == 1) {
+        VisitMarker = 2;
+    }
+
+    ImLastVisitMarker = VisitMarker;
+    RecursionLevel = 0;
+    if (Recursive == FALSE) {
+        RecursionLevel = MAX_IMPORT_RECURSION_DEPTH;
+    }
+
+    RtlZeroMemory(SymbolInformation, sizeof(IMAGE_SYMBOL_INFORMATION));
+    Status = ImpGetSymbolForAddress(Image,
+                                    Address,
+                                    RecursionLevel,
+                                    VisitMarker,
+                                    SymbolInformation);
+
+    return Status;
+}
+
 VOID
 ImRelocateSelf (
     PVOID Base
@@ -1548,7 +1623,8 @@ Routine Description:
 
     This routine attempts to find an exported symbol with the given name in the
     given binary. This routine also looks through the image imports if the
-    recursive flag is specified.
+    recursive level is not greater than or equal to the maximum import
+    recursion depth.
 
 Arguments:
 
@@ -1614,6 +1690,92 @@ Return Value:
                                          RecursionLevel + 1,
                                          VisitMarker,
                                          Address);
+
+            if (Status != STATUS_NOT_FOUND) {
+                return Status;
+            }
+        }
+    }
+
+    //
+    // The image format is unknown or invalid.
+    //
+
+    return Status;
+}
+
+KSTATUS
+ImpGetSymbolForAddress (
+    PLOADED_IMAGE Image,
+    PVOID Address,
+    ULONG RecursionLevel,
+    UCHAR VisitMarker,
+    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to resolve the given address into a symbol. This
+    routine also looks through the image imports if the recursive level is not
+    greater than or equal to the maximum import recursion depth.
+
+Arguments:
+
+    Image - Supplies a pointer to the image to query.
+
+    Address - Supplies the address to search for.
+
+    RecursionLevel - Supplies the current level of recursion.
+
+    VisitMarker - Supplies the value that images are marked with to indicate
+        they've been visited in this trip already.
+
+    SymbolInformation - Supplies a pointer to a structure that receives the
+        address's symbol information on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PLOADED_IMAGE Import;
+    ULONG ImportIndex;
+    KSTATUS Status;
+
+    if (Image == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    switch (Image->Format) {
+    case ImageElf32:
+        Status = ImpElf32GetSymbolForAddress(Image, Address, SymbolInformation);
+        break;
+
+    default:
+        Status = STATUS_UNKNOWN_IMAGE_FORMAT;
+        break;
+    }
+
+    if ((Status != STATUS_NOT_FOUND) ||
+        (RecursionLevel >= MAX_IMPORT_RECURSION_DEPTH)) {
+
+        return Status;
+    }
+
+    Image->VisitMarker = VisitMarker;
+    for (ImportIndex = 0; ImportIndex < Image->ImportCount; ImportIndex += 1) {
+        Import = Image->Imports[ImportIndex];
+        if ((Import != NULL) && (Import->VisitMarker != VisitMarker)) {
+            Status = ImpGetSymbolForAddress(Import,
+                                            Address,
+                                            RecursionLevel + 1,
+                                            VisitMarker,
+                                            SymbolInformation);
 
             if (Status != STATUS_NOT_FOUND) {
                 return Status;

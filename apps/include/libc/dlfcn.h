@@ -69,6 +69,32 @@ extern "C" {
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure defines dynamic library information for an address.
+
+Members:
+
+    dli_fname - Stores the path name of the library that stores the address.
+
+    dli_fbase - Stores the base address at which the library is loaded.
+
+    dli_sname - Stores the name of the symbol that contains the address.
+
+    dli_saddr - Stores the address of the symbol. This may differ from the
+        address used to look up the symbol.
+
+--*/
+
+typedef struct {
+    const char *dli_fname;
+    void *dli_fbase;
+    const char *dli_sname;
+    void *dli_saddr;
+} Dl_info;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -194,6 +220,35 @@ Return Value:
 
     NULL if the handle was not valid or the symbol could not be found. More
     information can be retrieved via the dlerror function.
+
+--*/
+
+LIBC_API
+int
+dladdr (
+    void *Address,
+    Dl_info *Information
+    );
+
+/*++
+
+Routine Description:
+
+    This routine resolves an address into the symbol and dynamic library
+    information.
+
+Arguments:
+
+    Address - Supplies the address being resolved.
+
+    Information - Supplies a pointer that recevies that dynamic library
+        information for the given address.
+
+Return Value:
+
+    Non-zero on success.
+
+    0 on failure, but dlerror will not be set to contain more information.
 
 --*/
 

@@ -170,6 +170,32 @@ Return Value:
 
 Structure Description:
 
+    This structure stores information about a symbol.
+
+Members:
+
+    ImageName - Stores the name of the image that contains the symbol.
+
+    ImageBaseAddress - Stores the base address of the image that contains the
+        symbol.
+
+    SymbolName - Stores the name of the symbol.
+
+    SymbolAddress - Stores the address of the symbol.
+
+--*/
+
+typedef struct _IMAGE_SYMBOL_INFORMATION {
+    PSTR ImageName;
+    PVOID ImageBaseAddress;
+    PSTR SymbolName;
+    PVOID SymbolAddress;
+} IMAGE_SYMBOL_INFORMATION, *PIMAGE_SYMBOL_INFORMATION;
+
+/*++
+
+Structure Description:
+
     This structure stores information about an executable image.
 
 Members:
@@ -1395,6 +1421,40 @@ Arguments:
 
     Address - Supplies a pointer where the address of the symbol will be
         returned on success, or NULL will be returned on failure.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+ImGetSymbolForAddress (
+    PLOADED_IMAGE Image,
+    PVOID Address,
+    BOOL Recursive,
+    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to resolve the given address into a symbol. This
+    routine also looks through the image imports if the recursive flag is
+    specified.
+
+Arguments:
+
+    Image - Supplies a pointer to the image to query.
+
+    Address - Supplies the address to search for.
+
+    Recursive - Supplies a boolean indicating if the routine should recurse
+        into imports or just query this binary.
+
+    SymbolInformation - Supplies a pointer to a structure that receives the
+        address's symbol information on success.
 
 Return Value:
 

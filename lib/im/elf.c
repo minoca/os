@@ -837,11 +837,14 @@ Return Value:
     ELF_ADDR BaseDifference;
     PELF_HEADER ElfHeader;
     PELF_PROGRAM_HEADER FirstProgramHeader;
+    ELF_ADDR HighestVirtualAddress;
+    ELF_ADDR ImageSize;
     UINTN Index;
     PELF_LOADING_IMAGE LoadingImage;
     ELF_ADDR LowestVirtualAddress;
     PELF_PROGRAM_HEADER ProgramHeader;
     ELF_HALF SegmentCount;
+    ELF_ADDR SegmentEnd;
     KSTATUS Status;
 
     ElfHeader = Image->LoadedLowestAddress;
@@ -910,6 +913,7 @@ Return Value:
     //
 
     LowestVirtualAddress = (ELF_ADDR)-1ULL;
+    HighestVirtualAddress = 0;
     ProgramHeader = FirstProgramHeader;
     for (Index = 0; Index < SegmentCount; Index += 1) {
 
@@ -927,12 +931,29 @@ Return Value:
             if (ProgramHeader->VirtualAddress < LowestVirtualAddress) {
                 LowestVirtualAddress = ProgramHeader->VirtualAddress;
             }
+
+            SegmentEnd = ProgramHeader->VirtualAddress +
+                         ProgramHeader->MemorySize;
+
+            if (SegmentEnd > HighestVirtualAddress) {
+                HighestVirtualAddress = SegmentEnd;
+            }
         }
 
         ProgramHeader = (PELF_PROGRAM_HEADER)((PUCHAR)ProgramHeader +
                                               ElfHeader->ProgramHeaderSize);
     }
 
+    if (LowestVirtualAddress >= HighestVirtualAddress) {
+        Status = STATUS_UNKNOWN_IMAGE_FORMAT;
+        goto AddImageEnd;
+    }
+
+    ImageSize = HighestVirtualAddress - LowestVirtualAddress;
+
+    ASSERT((Image->Size == MAX_UINTN) || (Image->Size == ImageSize));
+
+    Image->Size = ImageSize;
     Image->PreferredLowestAddress = (PVOID)(UINTN)LowestVirtualAddress;
     BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
     if (Image->TlsImage != NULL) {
@@ -1496,7 +1517,7 @@ ImpElfGetSymbolAddress (
 Routine Description:
 
     This routine attempts to find an exported symbol with the given name in the
-    given binary. This routine looks through the image and its imports.
+    given binary.
 
 Arguments:
 
@@ -1540,6 +1561,169 @@ Return Value:
     }
 
     *Address = (PVOID)(UINTN)Value;
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+ImpElfGetSymbolForAddress (
+    PLOADED_IMAGE Image,
+    PVOID Address,
+    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the given address in the given image and
+    resolve it to a symbol.
+
+Arguments:
+
+    Image - Supplies a pointer to the image to query.
+
+    Address - Supplies the address to search for.
+
+    SymbolInformation - Supplies a pointer to a structure that receives the
+        address's symbol information on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ELF_ADDR BaseDifference;
+    ELF_WORD BucketCount;
+    ELF_WORD BucketIndex;
+    ELF_WORD FilterWords;
+    PELF_WORD HashBuckets;
+    PELF_WORD HashChains;
+    PELF_WORD HashTable;
+    PVOID ImageBaseAddress;
+    PSTR ImageName;
+    PELF_SYMBOL Symbol;
+    ELF_ADDR SymbolAddress;
+    ELF_WORD SymbolBase;
+    ULONG SymbolHash;
+    ELF_WORD SymbolIndex;
+    PSTR SymbolName;
+    ELF_ADDR Value;
+
+    //
+    // If the address is not within the bounds of the image, then it should not
+    // be in the symbols.
+    //
+
+    if ((Address < Image->LoadedLowestAddress) ||
+        (Address >= (Image->LoadedLowestAddress + Image->Size))) {
+
+        return STATUS_NOT_FOUND;
+    }
+
+    ImageName = Image->BinaryName;
+    ImageBaseAddress = Image->LoadedLowestAddress;
+    SymbolName = NULL;
+    SymbolAddress = 0;
+
+    //
+    // If there is no export symbol table for this image, then only report the
+    // image binary name and address without symbol information.
+    //
+
+    if (Image->ExportSymbolTable == NULL) {
+        goto GetAddressInformationEnd;
+    }
+
+    //
+    // Search for the symbol by its value, which is an address relative to the
+    // preferred lowest address.
+    //
+
+    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
+    Value = (ELF_ADDR)(UINTN)Address - BaseDifference;
+
+    //
+    // Handle GNU-style hashing to interate over the symbols.
+    //
+
+    if ((Image->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
+        HashTable = Image->ExportHashTable;
+        BucketCount = *HashTable;
+        HashTable += 1;
+        SymbolBase = *HashTable;
+        HashTable += 1;
+        FilterWords = *HashTable;
+        HashTable += 2;
+        HashTable = (PELF_WORD)(HashTable + FilterWords);
+        for (BucketIndex = 0; BucketIndex < BucketCount; BucketIndex += 1) {
+            SymbolIndex = HashTable[BucketIndex];
+            if (SymbolIndex == 0) {
+                break;
+            }
+
+            if (SymbolIndex < SymbolBase) {
+
+                ASSERT(FALSE);
+
+                break;
+            }
+
+            HashChains = HashTable + BucketCount;
+            do {
+                SymbolHash = HashChains[SymbolIndex - SymbolBase];
+                Symbol = (PELF_SYMBOL)Image->ExportSymbolTable + SymbolIndex;
+                if (((Symbol->Size == 0) && (Symbol->Value == Value)) ||
+                    ((Value >= Symbol->Value) &&
+                     (Value < (Symbol->Value + Symbol->Size)))) {
+
+                    SymbolName = Image->ExportStringTable + Symbol->NameOffset;
+                    SymbolAddress = Symbol->Value + BaseDifference;
+                    goto GetAddressInformationEnd;
+                }
+
+                SymbolIndex += 1;
+
+            } while ((SymbolHash & 0x1) == 0);
+        }
+
+    //
+    // Handle SVR hashing's mode of storing symbols.
+    //
+
+    } else {
+        BucketCount = *((PELF_WORD)Image->ExportHashTable);
+        HashBuckets = (PELF_WORD)Image->ExportHashTable + 2;
+        HashChains = (PELF_WORD)Image->ExportHashTable + 2 + BucketCount;
+        for (BucketIndex = 0; BucketIndex < BucketCount; BucketIndex += 1) {
+            SymbolIndex = *(HashBuckets + BucketIndex);
+            while (SymbolIndex != 0) {
+                Symbol = (PELF_SYMBOL)Image->ExportSymbolTable + SymbolIndex;
+                if (((Symbol->Size == 0) && (Symbol->Value == Value)) ||
+                    ((Value >= Symbol->Value) &&
+                     (Value < (Symbol->Value + Symbol->Size)))) {
+
+                    SymbolName = Image->ExportStringTable + Symbol->NameOffset;
+                    SymbolAddress = Symbol->Value + BaseDifference;
+                    goto GetAddressInformationEnd;
+                }
+
+                //
+                // Get the next entry in the chain.
+                //
+
+                SymbolIndex = *(HashChains + SymbolIndex);
+            }
+        }
+    }
+
+GetAddressInformationEnd:
+    SymbolInformation->ImageName = ImageName;
+    SymbolInformation->ImageBaseAddress = ImageBaseAddress;
+    SymbolInformation->SymbolName = SymbolName;
+    SymbolInformation->SymbolAddress = (PVOID)(UINTN)SymbolAddress;
     return STATUS_SUCCESS;
 }
 
@@ -2886,7 +3070,7 @@ ImpElfGetSymbol (
 Routine Description:
 
     This routine attempts to find an exported symbol with the given name in the
-    given binary. This routine looks through the image and its imports.
+    given binary.
 
 Arguments:
 

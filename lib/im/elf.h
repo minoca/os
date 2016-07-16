@@ -1113,7 +1113,7 @@ ImpElf32GetSymbolAddress (
 Routine Description:
 
     This routine attempts to find an exported symbol with the given name in the
-    given binary. This routine looks through the image and its imports.
+    given binary.
 
 Arguments:
 
@@ -1126,6 +1126,35 @@ Arguments:
 
     Address - Supplies a pointer where the address of the symbol will be
         returned on success, or NULL will be returned on failure.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+ImpElf32GetSymbolForAddress (
+    PLOADED_IMAGE Image,
+    PVOID Address,
+    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the given address in the given image and
+    resolve it to a symbol.
+
+Arguments:
+
+    Image - Supplies a pointer to the image to query.
+
+    Address - Supplies the address to search for.
+
+    SymbolInformation - Supplies a pointer to a structure that receives the
+        address's symbol information on success.
 
 Return Value:
 
@@ -1442,7 +1471,7 @@ ImpElf64GetSymbolAddress (
 Routine Description:
 
     This routine attempts to find an exported symbol with the given name in the
-    given binary. This routine looks through the image and its imports.
+    given binary.
 
 Arguments:
 
@@ -1455,6 +1484,35 @@ Arguments:
 
     Address - Supplies a pointer where the address of the symbol will be
         returned on success, or NULL will be returned on failure.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+ImpElf64GetSymbolForAddress (
+    PLOADED_IMAGE Image,
+    PVOID Address,
+    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the given address in the given image and
+    resolve it to a symbol.
+
+Arguments:
+
+    Image - Supplies a pointer to the image to query.
+
+    Address - Supplies the address to search for.
+
+    SymbolInformation - Supplies a pointer to a structure that receives the
+        address's symbol information on success.
 
 Return Value:
 

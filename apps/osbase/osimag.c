@@ -642,6 +642,110 @@ GetLibrarySymbolAddressEnd:
 
 OS_API
 KSTATUS
+OsGetSymbolForAddress (
+    HANDLE Library,
+    PVOID Address,
+    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resolves the given address into a symbol. A specific library
+    to search can be specified or the routine will search all libraries loaded
+    for the current application.
+
+Arguments:
+
+    Library - Supplies an optional handle to the library in which to search.
+        Supply INVALID_HANDLE to search all of the libraries loaded by the
+        calling application.
+
+    Address - Supplies the address to look up.
+
+    SymbolInformation - Supplies a pointer to a structure that receives the
+        resolved symbol information.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_HANDLE if the library handle is not valid.
+
+    STATUS_NOT_FOUND if the address could not be found.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PLOADED_IMAGE Image;
+    KSTATUS Status;
+
+    OspAcquireImageLock();
+    if (OsLoadedImagesHead.Next == NULL) {
+        Status = OspLoadInitialImageList(FALSE);
+        if (!KSUCCESS(Status)) {
+            goto GetAddressInformation;
+        }
+    }
+
+    //
+    // If no library was specified, search through all the primary images.
+    //
+
+    if (Library == INVALID_HANDLE) {
+        CurrentEntry = OsLoadedImagesHead.Next;
+        while (CurrentEntry != &OsLoadedImagesHead) {
+            Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+            CurrentEntry = CurrentEntry->Next;
+            if ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_LOAD) == 0) {
+                continue;
+            }
+
+            Status = ImGetSymbolForAddress(Image,
+                                           Address,
+                                           TRUE,
+                                           SymbolInformation);
+
+            if (KSUCCESS(Status)) {
+
+                //
+                // If no image name was returned on success and this is the
+                // primary executable, then set the image name from the OS
+                // environment.
+                //
+
+                if ((SymbolInformation->ImageName == NULL) &&
+                    ((Image->LoadFlags &
+                      IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0)) {
+
+                    SymbolInformation->ImageName = OsEnvironment->ImageName;
+                }
+
+                break;
+            }
+        }
+
+    //
+    // Otherwise only search through the supplied library.
+    //
+
+    } else {
+        Status = ImGetSymbolForAddress(Library,
+                                       Address,
+                                       TRUE,
+                                       SymbolInformation);
+    }
+
+GetAddressInformation:
+    OspReleaseImageLock();
+    return Status;
+}
+
+OS_API
+KSTATUS
 OsFlushCache (
     PVOID Address,
     UINTN Size
