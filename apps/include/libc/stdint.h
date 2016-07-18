@@ -50,7 +50,7 @@ extern "C" {
 #endif
 
 #ifndef __INT32_TYPE__
-#define __INT32_TYPE__ long
+#define __INT32_TYPE__ int
 #define __INT32_MAX__ 0x7FFFFFFF
 #define __INT32_C(_Value) _Value##L
 #endif
@@ -74,7 +74,7 @@ extern "C" {
 #endif
 
 #ifndef __UINT32_TYPE__
-#define __UINT32_TYPE__ unsigned long
+#define __UINT32_TYPE__ unsigned int
 #define __UINT32_MAX__ 0xFFFFFFFF
 #define __UINT32_C(_Value) _Value##UL
 #endif
