@@ -891,6 +891,10 @@ Return Value:
     VM_ALLOCATION_PARAMETERS VaRequest;
 
     PageSize = MmPageSize();
+    if (NewStackSize > USER_STACK_MAX) {
+        NewStackSize = USER_STACK_MAX;
+    }
+
     NewStackSize = ALIGN_RANGE_UP(NewStackSize, PageSize);
 
     //
@@ -978,9 +982,9 @@ Return Value:
             (Thread->OwningProcess->AddressSpace->MaxMemoryMap == 0)) {
 
             MaxMapRegion = VaRequest.Address;
-            if (NewStackSize < USER_STACK_REGION_MIN) {
+            if (NewStackSize < USER_STACK_HEADROOM) {
                 MaxMapRegion = VaRequest.Address + NewStackSize -
-                               USER_STACK_REGION_MIN;
+                               USER_STACK_HEADROOM;
             }
 
             Thread->OwningProcess->AddressSpace->MaxMemoryMap = MaxMapRegion;

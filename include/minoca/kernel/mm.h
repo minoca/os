@@ -65,8 +65,8 @@ Author:
 // map memory will not use this region.
 //
 
-#define USER_STACK_REGION_MIN (128 * _1MB)
-
+#define USER_STACK_HEADROOM (128 * _1MB)
+#define USER_STACK_MAX (((UINTN)MAX_USER_ADDRESS + 1) * 3 / 4)
 #define MM_STATISTICS_VERSION 1
 #define MM_STATISTICS_MAX_VERSION 0x10000000
 

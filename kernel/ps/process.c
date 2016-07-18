@@ -3407,7 +3407,7 @@ Return Value:
 
     Process->AddressSpace->MaxMemoryMap = MAX_USER_ADDRESS -
                                   (Thread->Limits[ResourceLimitStack].Current +
-                                   USER_STACK_REGION_MIN) + 1;
+                                   USER_STACK_HEADROOM) + 1;
 
     //
     // Load the executable image for the process.
