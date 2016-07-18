@@ -30,6 +30,12 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
 #if defined(__i386) || defined(__amd64)
 
 #define FE_INVALID      0x0001
@@ -407,6 +413,12 @@ Return Value:
     Non-zero on failure.
 
 --*/
+
+#endif
+
+#ifdef __cplusplus
+
+}
 
 #endif
 #endif

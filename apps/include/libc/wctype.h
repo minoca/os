@@ -37,6 +37,12 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -441,4 +447,10 @@ Return Value:
     Returns the lower cased version of the character, or the character itself.
 
 --*/
+
+#ifdef __cplusplus
+
+}
+
+#endif
 #endif

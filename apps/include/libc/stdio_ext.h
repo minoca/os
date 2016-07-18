@@ -31,6 +31,12 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
 //
 // Define locking types, passed as parameters and received as the return value
 // of the setlocking function.
@@ -419,5 +425,10 @@ Return Value:
 
 --*/
 
+#ifdef __cplusplus
+
+}
+
+#endif
 #endif
 

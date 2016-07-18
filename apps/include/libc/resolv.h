@@ -34,6 +34,12 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
 //
 // Define the resolver revision number.
 //
@@ -1057,5 +1063,10 @@ Return Value:
 
 --*/
 
+#ifdef __cplusplus
+
+}
+
+#endif
 #endif
 

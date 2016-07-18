@@ -33,6 +33,12 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
 //
 // Define address information (addrinfo) flags.
 //
@@ -1210,5 +1216,10 @@ Return Value:
 
 --*/
 
+#ifdef __cplusplus
+
+}
+
+#endif
 #endif
 
