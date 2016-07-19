@@ -976,8 +976,8 @@ Members:
 
 typedef struct _POLL_DESCRIPTOR {
     HANDLE Handle;
-    ULONG Events;
-    ULONG ReturnedEvents;
+    USHORT Events;
+    USHORT ReturnedEvents;
 } POLL_DESCRIPTOR, *PPOLL_DESCRIPTOR;
 
 /*++

@@ -796,6 +796,10 @@ Return Value:
                         Status = STATUS_INSUFFICIENT_RESOURCES;
                         goto CreateOrLookupFileObjectEnd;
                     }
+
+                    IoSetIoObjectState(NewObject->IoState,
+                                       POLL_EVENT_IN | POLL_EVENT_OUT,
+                                       TRUE);
                 }
 
                 NewObject->ReadyEvent = KeCreateEvent(NULL);

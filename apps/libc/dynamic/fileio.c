@@ -25,6 +25,7 @@ Environment:
 //
 
 #include "libcp.h"
+#include <alloca.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -39,6 +40,23 @@ Environment:
 //
 // --------------------------------------------------------------------- Macros
 //
+
+#define ASSERT_POLL_FLAGS_EQUIVALENT() \
+    ASSERT((POLLIN == POLL_EVENT_IN) && \
+           (POLLRDBAND == POLL_EVENT_IN_HIGH_PRIORITY) && \
+           (POLLOUT == POLL_EVENT_OUT) && \
+           (POLLWRBAND == POLL_EVENT_OUT_HIGH_PRIORITY) && \
+           (POLLERR == POLL_EVENT_ERROR) && \
+           (POLLHUP == POLL_EVENT_DISCONNECTED) && \
+           (POLLNVAL == POLL_EVENT_INVALID_HANDLE))
+
+//
+// Figure this out on 64 bits, as pollfd needs to have an int for a descriptor,
+// but the kernel wants pointer sized descriptors.
+//
+
+#define ASSERT_POLL_STRUCTURE_EQUIVALENT() \
+    ASSERT(sizeof(struct pollfd) == sizeof(POLL_DESCRIPTOR))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -2418,14 +2436,13 @@ Return Value:
 
 {
 
-    PPOLL_DESCRIPTOR Descriptor;
-    ULONG DescriptorIndex;
-    PPOLL_DESCRIPTOR Descriptors;
     ULONG DescriptorsSelected;
-    struct pollfd *PollDescriptor;
     INT Result;
     KSTATUS Status;
     ULONG TimeoutMilliseconds;
+
+    ASSERT_POLL_FLAGS_EQUIVALENT();
+    ASSERT_POLL_STRUCTURE_EQUIVALENT();
 
     Result = ClpConvertSpecificTimeoutToSystemTimeout(Timeout,
                                                       &TimeoutMilliseconds);
@@ -2436,60 +2453,11 @@ Return Value:
     }
 
     //
-    // Allocate the real descriptor structure array.
-    //
-
-    Descriptors = malloc(sizeof(POLL_DESCRIPTOR) * DescriptorCount);
-    if (Descriptors == NULL) {
-        errno = EAGAIN;
-        return -1;
-    }
-
-    //
-    // Loop through and fill out this new array.
-    //
-
-    Descriptor = &(Descriptors[0]);
-    PollDescriptor = &(PollDescriptors[0]);
-    for (DescriptorIndex = 0;
-         DescriptorIndex < DescriptorCount;
-         DescriptorIndex += 1) {
-
-        if (PollDescriptor->fd >= 0) {
-            Descriptor->Handle = (HANDLE)(UINTN)(PollDescriptor->fd);
-
-        } else {
-            Descriptor->Handle = INVALID_HANDLE;
-        }
-
-        Descriptor->Events = 0;
-        PollDescriptor->revents = 0;
-        if ((PollDescriptor->events & (POLLIN | POLLRDNORM)) != 0) {
-            Descriptor->Events |= POLL_EVENT_IN;
-        }
-
-        if ((PollDescriptor->events & (POLLRDBAND | POLLPRI)) != 0) {
-            Descriptor->Events |= POLL_EVENT_IN_HIGH_PRIORITY;
-        }
-
-        if ((PollDescriptor->events & (POLLOUT | POLLWRNORM)) != 0) {
-            Descriptor->Events |= POLL_EVENT_OUT;
-        }
-
-        if ((PollDescriptor->events & POLLWRBAND) != 0) {
-            Descriptor->Events |= POLL_EVENT_OUT_HIGH_PRIORITY;
-        }
-
-        Descriptor += 1;
-        PollDescriptor += 1;
-    }
-
-    //
     // Perform the actual poll call, and return if failure is received.
     //
 
     Status = OsPoll((PSIGNAL_SET)SignalMask,
-                    Descriptors,
+                    (PPOLL_DESCRIPTOR)PollDescriptors,
                     DescriptorCount,
                     TimeoutMilliseconds,
                     &DescriptorsSelected);
@@ -2498,63 +2466,7 @@ Return Value:
         goto pollEnd;
     }
 
-    //
-    // Loop through and convert the kernel's flags back into the C library
-    // flags.
-    //
-
-    Descriptor = &(Descriptors[0]);
-    PollDescriptor = &(PollDescriptors[0]);
-    for (DescriptorIndex = 0;
-         DescriptorIndex < DescriptorCount;
-         DescriptorIndex += 1) {
-
-        if (PollDescriptor->events == 0) {
-            PollDescriptor->revents = 0;
-
-        } else {
-            if ((Descriptor->ReturnedEvents & POLL_EVENT_IN) != 0) {
-                PollDescriptor->revents |= POLLIN;
-            }
-
-            if ((Descriptor->ReturnedEvents &
-                 POLL_EVENT_IN_HIGH_PRIORITY) != 0) {
-
-                PollDescriptor->revents |= POLLPRI;
-            }
-
-            if ((Descriptor->ReturnedEvents & POLL_EVENT_OUT) != 0) {
-                PollDescriptor->revents |= POLLOUT;
-            }
-
-            if ((Descriptor->ReturnedEvents &
-                 POLL_EVENT_OUT_HIGH_PRIORITY) != 0) {
-
-                PollDescriptor->revents |= POLLWRBAND;
-            }
-
-            if ((Descriptor->ReturnedEvents & POLL_EVENT_ERROR) != 0) {
-                PollDescriptor->revents |= POLLERR;
-            }
-
-            if ((Descriptor->ReturnedEvents & POLL_EVENT_DISCONNECTED) != 0) {
-                PollDescriptor->revents |= POLLHUP;
-            }
-
-            if ((Descriptor->ReturnedEvents & POLL_EVENT_INVALID_HANDLE) != 0) {
-                PollDescriptor->revents |= POLLNVAL;
-            }
-        }
-
-        Descriptor += 1;
-        PollDescriptor += 1;
-    }
-
 pollEnd:
-    if (Descriptors != NULL) {
-        free(Descriptors);
-    }
-
     if ((!KSUCCESS(Status)) && (Status != STATUS_TIMEOUT)) {
         errno = ClConvertKstatusToErrorNumber(Status);
         return -1;
@@ -2566,7 +2478,7 @@ pollEnd:
 LIBC_API
 int
 select (
-    int MaxDescriptorCount,
+    int DescriptorCount,
     fd_set *ReadDescriptors,
     fd_set *WriteDescriptors,
     fd_set *ErrorDescriptors,
@@ -2582,7 +2494,7 @@ Routine Description:
 
 Arguments:
 
-    MaxDescriptorCount - Supplies the range of file descriptors to be tested.
+    DescriptorCount - Supplies the range of file descriptors to be tested.
         This routine tests file descriptors in the range of 0 to the descriptor
         count - 1.
 
@@ -2608,7 +2520,11 @@ Arguments:
 
 Return Value:
 
-    None.
+    On success, returns the total number of bits set in the resulting bitmaps.
+
+    0 if the timeout expired.
+
+    -1 on error, and errno will be set to contain more information.
 
 --*/
 
@@ -2627,7 +2543,7 @@ Return Value:
         TimeoutPointer = NULL;
     }
 
-    Result = pselect(MaxDescriptorCount,
+    Result = pselect(DescriptorCount,
                      ReadDescriptors,
                      WriteDescriptors,
                      ErrorDescriptors,
@@ -2640,7 +2556,7 @@ Return Value:
 LIBC_API
 int
 pselect (
-    int MaxDescriptorCount,
+    int DescriptorCount,
     fd_set *ReadDescriptors,
     fd_set *WriteDescriptors,
     fd_set *ErrorDescriptors,
@@ -2657,7 +2573,7 @@ Routine Description:
 
 Arguments:
 
-    MaxDescriptorCount - Supplies the range of file descriptors to be tested.
+    DescriptorCount - Supplies the range of file descriptors to be tested.
         This routine tests file descriptors in the range of 0 to the descriptor
         count - 1.
 
@@ -2686,17 +2602,23 @@ Arguments:
 
 Return Value:
 
-    None.
+    On success, returns the total number of bits set in the resulting bitmaps.
+
+    0 if the timeout expired.
+
+    -1 on error, and errno will be set to contain more information.
 
 --*/
 
 {
 
+    ULONG ArrayIndex;
     PPOLL_DESCRIPTOR Descriptor;
-    ULONG DescriptorCount;
     ULONG DescriptorIndex;
     PPOLL_DESCRIPTOR Descriptors;
     ULONG DescriptorsSelected;
+    ULONG Events;
+    ULONG PollIndex;
     INT Result;
     KSTATUS Status;
     ULONG TimeoutInMilliseconds;
@@ -2709,14 +2631,13 @@ Return Value:
         return -1;
     }
 
-    DescriptorCount = MaxDescriptorCount;
     Descriptors = NULL;
     DescriptorsSelected = 0;
     if (DescriptorCount > FD_SETSIZE) {
         DescriptorCount = FD_SETSIZE;
     }
 
-    Descriptors = malloc(sizeof(POLL_DESCRIPTOR) * DescriptorCount);
+    Descriptors = alloca(sizeof(POLL_DESCRIPTOR) * DescriptorCount);
     if (Descriptors == NULL) {
         errno = ENOMEM;
         return -1;
@@ -2726,40 +2647,39 @@ Return Value:
     // Fill out the new poll descriptors.
     //
 
-    Descriptor = &(Descriptors[0]);
+    ArrayIndex = 0;
     for (DescriptorIndex = 0;
          DescriptorIndex < DescriptorCount;
          DescriptorIndex += 1) {
 
-        //
-        // Start by making this an ignored descriptor. If any of the three
-        // values have it set, then it becomes valid and listening.
-        //
-
-        Descriptor->Handle = INVALID_HANDLE;
-        Descriptor->Events = 0;
-        Descriptor->ReturnedEvents = 0;
+        Events = 0;
         if ((ReadDescriptors != NULL) &&
             (FD_ISSET(DescriptorIndex, ReadDescriptors) != FALSE)) {
 
-            Descriptor->Handle = (HANDLE)(UINTN)DescriptorIndex;
-            Descriptor->Events |= POLL_EVENT_IN;
+            Events |= POLL_EVENT_IN;
         }
 
         if ((WriteDescriptors != NULL) &&
             (FD_ISSET(DescriptorIndex, WriteDescriptors) != FALSE)) {
 
-            Descriptor->Handle = (HANDLE)(UINTN)DescriptorIndex;
-            Descriptor->Events |= POLL_EVENT_OUT;
+            Events |= POLL_EVENT_OUT;
         }
 
         if ((ErrorDescriptors != NULL) &&
             (FD_ISSET(DescriptorIndex, ErrorDescriptors) != FALSE)) {
 
-            Descriptor->Handle = (HANDLE)(UINTN)DescriptorIndex;
+            Events |= POLL_EVENT_ERROR;
         }
 
-        Descriptor += 1;
+        if (Events == 0) {
+            continue;
+        }
+
+        Descriptor = &(Descriptors[ArrayIndex]);
+        ArrayIndex += 1;
+        Descriptor->Handle = (HANDLE)(UINTN)DescriptorIndex;
+        Descriptor->Events = Events;
+        Descriptor->ReturnedEvents = 0;
     }
 
     //
@@ -2768,7 +2688,7 @@ Return Value:
 
     Status = OsPoll((PSIGNAL_SET)SignalMask,
                     Descriptors,
-                    DescriptorCount,
+                    ArrayIndex,
                     TimeoutInMilliseconds,
                     &DescriptorsSelected);
 
@@ -2777,18 +2697,30 @@ Return Value:
     }
 
     //
-    // Go back and mark all the descriptors in the set that had events.
+    // Go back and mark all the descriptors in the set that had events. Loop
+    // over the poll events this time to skip the empty regions of the bitmasks.
     //
 
     Descriptor = &(Descriptors[0]);
-    for (DescriptorIndex = 0;
-         DescriptorIndex < DescriptorCount;
-         DescriptorIndex += 1) {
+    for (PollIndex = 0; PollIndex < ArrayIndex; PollIndex += 1) {
+        Events = Descriptor->ReturnedEvents;
+        DescriptorIndex = (INT)(Descriptor->Handle);
+
+        ASSERT(DescriptorIndex < DescriptorCount);
+
+        //
+        // If the caller didn't want error events but one fired, set the in and
+        // out events to force them to take action.
+        //
+
+        if (((Events & POLL_EVENT_ERROR) != 0) && (ErrorDescriptors == NULL)) {
+            Events |= POLL_EVENT_IN | POLL_EVENT_OUT;
+        }
 
         if ((ReadDescriptors != NULL) &&
             (FD_ISSET(DescriptorIndex, ReadDescriptors) != FALSE)) {
 
-            if ((Descriptor->ReturnedEvents & POLL_EVENT_IN) == 0) {
+            if ((Events & POLL_EVENT_IN) == 0) {
                 FD_CLR(DescriptorIndex, ReadDescriptors);
             }
         }
@@ -2796,7 +2728,7 @@ Return Value:
         if ((WriteDescriptors != NULL) &&
             (FD_ISSET(DescriptorIndex, WriteDescriptors) != FALSE)) {
 
-            if ((Descriptor->ReturnedEvents & POLL_EVENT_OUT) == 0) {
+            if ((Events & POLL_EVENT_OUT) == 0) {
                 FD_CLR(DescriptorIndex, WriteDescriptors);
             }
         }
@@ -2807,7 +2739,7 @@ Return Value:
         //
 
         if (ErrorDescriptors != NULL) {
-            if ((Descriptor->ReturnedEvents & POLL_NONMASKABLE_EVENTS) != 0) {
+            if ((Events & POLL_NONMASKABLE_EVENTS) != 0) {
                 FD_SET(DescriptorIndex, ErrorDescriptors);
 
             } else {
@@ -2819,10 +2751,6 @@ Return Value:
     }
 
 selectEnd:
-    if (Descriptors != NULL) {
-        free(Descriptors);
-    }
-
     if (!KSUCCESS(Status)) {
         if (Status != STATUS_TIMEOUT) {
             errno = ClConvertKstatusToErrorNumber(Status);

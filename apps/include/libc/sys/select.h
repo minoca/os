@@ -157,7 +157,7 @@ struct timeval {
 LIBC_API
 int
 select (
-    int MaxDescriptorCount,
+    int DescriptorCount,
     fd_set *ReadDescriptors,
     fd_set *WriteDescriptors,
     fd_set *ErrorDescriptors,
@@ -173,7 +173,7 @@ Routine Description:
 
 Arguments:
 
-    MaxDescriptorCount - Supplies the range of file descriptors to be tested.
+    DescriptorCount - Supplies the range of file descriptors to be tested.
         This routine tests file descriptors in the range of 0 to the descriptor
         count - 1.
 
@@ -199,14 +199,18 @@ Arguments:
 
 Return Value:
 
-    None.
+    On success, returns the total number of bits set in the resulting bitmaps.
+
+    0 if the timeout expired.
+
+    -1 on error, and errno will be set to contain more information.
 
 --*/
 
 LIBC_API
 int
 pselect (
-    int MaxDescriptorCount,
+    int DescriptorCount,
     fd_set *ReadDescriptors,
     fd_set *WriteDescriptors,
     fd_set *ErrorDescriptors,
@@ -223,7 +227,7 @@ Routine Description:
 
 Arguments:
 
-    MaxDescriptorCount - Supplies the range of file descriptors to be tested.
+    DescriptorCount - Supplies the range of file descriptors to be tested.
         This routine tests file descriptors in the range of 0 to the descriptor
         count - 1.
 
@@ -252,7 +256,11 @@ Arguments:
 
 Return Value:
 
-    None.
+    On success, returns the total number of bits set in the resulting bitmaps.
+
+    0 if the timeout expired.
+
+    -1 on error, and errno will be set to contain more information.
 
 --*/
 

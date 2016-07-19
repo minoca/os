@@ -1423,7 +1423,6 @@ Return Value:
     BOOL ErrorEventsOccurred;
     PFILE_OBJECT FileObject;
     HANDLE Handle;
-    BOOL HaveRegularFiles;
     PIO_HANDLE IoHandle;
     PIO_OBJECT_STATE IoObjectState;
     ULONG MaskedEvents;
@@ -1443,7 +1442,6 @@ Return Value:
 
     Descriptors = NULL;
     ErrorEventsOccurred = FALSE;
-    HaveRegularFiles = FALSE;
     PollInformation = (PSYSTEM_CALL_POLL)SystemCallParameter;
     DescriptorCount = PollInformation->DescriptorCount;
     Thread = KeGetCurrentThread();
@@ -1511,7 +1509,7 @@ Return Value:
 
         Handle = Descriptors[DescriptorIndex].Handle;
         Descriptors[DescriptorIndex].ReturnedEvents = 0;
-        if (Handle == INVALID_HANDLE) {
+        if ((INTN)Handle < 0) {
             Descriptors[DescriptorIndex].Handle = NULL;
             continue;
         }
@@ -1558,23 +1556,6 @@ Return Value:
         }
 
         FileObject = IoHandle->FileObject;
-
-        //
-        // Regular files and directories always poll TRUE for reading and
-        // writing. Only look at the events for non-file descriptors.
-        //
-
-        ASSERT(FileObject->Properties.Type != IoObjectSymbolicLink);
-
-        if ((FileObject->Properties.Type == IoObjectRegularFile) ||
-            (FileObject->Properties.Type == IoObjectRegularDirectory) ||
-            (FileObject->Properties.Type == IoObjectObjectDirectory) ||
-            (FileObject->Properties.Type == IoObjectSharedMemoryObject)) {
-
-            HaveRegularFiles = TRUE;
-            continue;
-        }
-
         IoObjectState = FileObject->IoState;
 
         ASSERT(IoObjectState != NULL);
@@ -1618,7 +1599,7 @@ Return Value:
 
     ASSERT((ULONG)ObjectIndex == ObjectIndex);
 
-    if ((ErrorEventsOccurred == FALSE) && (HaveRegularFiles == FALSE)) {
+    if (ErrorEventsOccurred == FALSE) {
         Status = ObWaitOnObjects(
                                WaitObjects,
                                ObjectIndex,
@@ -1679,7 +1660,7 @@ Return Value:
         }
 
         Descriptors[DescriptorIndex].ReturnedEvents |= MaskedEvents;
-        Status = MmUserWrite32(
+        Status = MmUserWrite16(
                             &(UserDescriptors[DescriptorIndex].ReturnedEvents),
                             Descriptors[DescriptorIndex].ReturnedEvents);
 
