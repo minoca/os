@@ -1423,6 +1423,7 @@ Return Value:
     BOOL ErrorEventsOccurred;
     PFILE_OBJECT FileObject;
     HANDLE Handle;
+    BOOL HaveRegularFiles;
     PIO_HANDLE IoHandle;
     PIO_OBJECT_STATE IoObjectState;
     ULONG MaskedEvents;
@@ -1442,6 +1443,7 @@ Return Value:
 
     Descriptors = NULL;
     ErrorEventsOccurred = FALSE;
+    HaveRegularFiles = FALSE;
     PollInformation = (PSYSTEM_CALL_POLL)SystemCallParameter;
     DescriptorCount = PollInformation->DescriptorCount;
     Thread = KeGetCurrentThread();
@@ -1557,8 +1559,16 @@ Return Value:
 
         FileObject = IoHandle->FileObject;
         IoObjectState = FileObject->IoState;
+        if (IoObjectState == NULL) {
 
-        ASSERT(IoObjectState != NULL);
+            ASSERT((FileObject->Properties.Type == IoObjectRegularFile) ||
+                   (FileObject->Properties.Type == IoObjectRegularDirectory) ||
+                   (FileObject->Properties.Type == IoObjectObjectDirectory) ||
+                   (FileObject->Properties.Type == IoObjectSharedMemoryObject));
+
+            HaveRegularFiles = TRUE;
+            continue;
+        }
 
         //
         // Always wait on the error event.
@@ -1599,7 +1609,7 @@ Return Value:
 
     ASSERT((ULONG)ObjectIndex == ObjectIndex);
 
-    if (ErrorEventsOccurred == FALSE) {
+    if ((ErrorEventsOccurred == FALSE) && (HaveRegularFiles == FALSE)) {
         Status = ObWaitOnObjects(
                                WaitObjects,
                                ObjectIndex,
