@@ -66,6 +66,20 @@ extern "C" {
 #define RTLD_LOCAL 0x00000004
 
 //
+// Provide this handle to search for symbols in the executing program's global
+// scope.
+//
+
+#define RTLD_DEFAULT ((void *)0)
+
+//
+// Provide this handle to search for symbols in the executable after the
+// currently executing program. "Next" is defined in terms of load order.
+//
+
+#define RTLD_NEXT ((void *)-1)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

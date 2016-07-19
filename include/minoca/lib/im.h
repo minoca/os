@@ -170,32 +170,6 @@ Return Value:
 
 Structure Description:
 
-    This structure stores information about a symbol.
-
-Members:
-
-    ImageName - Stores the name of the image that contains the symbol.
-
-    ImageBaseAddress - Stores the base address of the image that contains the
-        symbol.
-
-    SymbolName - Stores the name of the symbol.
-
-    SymbolAddress - Stores the address of the symbol.
-
---*/
-
-typedef struct _IMAGE_SYMBOL_INFORMATION {
-    PSTR ImageName;
-    PVOID ImageBaseAddress;
-    PSTR SymbolName;
-    PVOID SymbolAddress;
-} IMAGE_SYMBOL_INFORMATION, *PIMAGE_SYMBOL_INFORMATION;
-
-/*++
-
-Structure Description:
-
     This structure stores information about an executable image.
 
 Members:
@@ -505,6 +479,32 @@ typedef struct _LOADED_IMAGE {
     PIMAGE_STATIC_FUNCTIONS StaticFunctions;
     UCHAR VisitMarker;
 } LOADED_IMAGE, *PLOADED_IMAGE;
+
+/*++
+
+Structure Description:
+
+    This structure stores information about a symbol.
+
+Members:
+
+    Image - Stores a pointer to the loaded image that contains the symbol.
+
+    Name - Stores the name of the symbol.
+
+    Address - Stores the address of the symbol.
+
+    TlsAddress - Stores a boolean indicating whether or not the symbol's
+        address is TLS relative.
+
+--*/
+
+typedef struct _IMAGE_SYMBOL {
+    PLOADED_IMAGE Image;
+    PSTR Name;
+    PVOID Address;
+    BOOL TlsAddress;
+} IMAGE_SYMBOL, *PIMAGE_SYMBOL;
 
 //
 // Outside support routines needed by the image library.
@@ -1391,12 +1391,11 @@ Return Value:
 --*/
 
 KSTATUS
-ImGetSymbolAddress (
-    PLIST_ENTRY ListHead,
+ImGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
     BOOL Recursive,
-    PVOID *Address
+    PIMAGE_SYMBOL Symbol
     );
 
 /*++
@@ -1409,8 +1408,6 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies the head of the list of loaded images.
-
     Image - Supplies a pointer to the image to query.
 
     SymbolName - Supplies a pointer to the string containing the name of the
@@ -1419,8 +1416,8 @@ Arguments:
     Recursive - Supplies a boolean indicating if the routine should recurse
         into imports or just query this binary.
 
-    Address - Supplies a pointer where the address of the symbol will be
-        returned on success, or NULL will be returned on failure.
+    Symbol - Supplies a pointer to a structure that receives the symbol's
+        information on success.
 
 Return Value:
 
@@ -1429,11 +1426,11 @@ Return Value:
 --*/
 
 KSTATUS
-ImGetSymbolForAddress (
+ImGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
     BOOL Recursive,
-    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    PIMAGE_SYMBOL Symbol
     );
 
 /*++
@@ -1453,8 +1450,8 @@ Arguments:
     Recursive - Supplies a boolean indicating if the routine should recurse
         into imports or just query this binary.
 
-    SymbolInformation - Supplies a pointer to a structure that receives the
-        address's symbol information on success.
+    Symbol - Supplies a pointer to a structure that receives the address's
+        symbol information on success.
 
 Return Value:
 

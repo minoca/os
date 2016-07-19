@@ -1101,11 +1101,10 @@ Return Value:
 --*/
 
 KSTATUS
-ImpElf32GetSymbolAddress (
-    PLIST_ENTRY ListHead,
+ImpElf32GetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
-    PVOID *Address
+    PIMAGE_SYMBOL Symbol
     );
 
 /*++
@@ -1117,15 +1116,13 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies the head of the list of loaded images.
-
     Image - Supplies a pointer to the image to query.
 
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
 
-    Address - Supplies a pointer where the address of the symbol will be
-        returned on success, or NULL will be returned on failure.
+    Symbol - Supplies a pointer to a structure that receives the symbol's
+        information on success.
 
 Return Value:
 
@@ -1134,10 +1131,10 @@ Return Value:
 --*/
 
 KSTATUS
-ImpElf32GetSymbolForAddress (
+ImpElf32GetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
-    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    PIMAGE_SYMBOL Symbol
     );
 
 /*++
@@ -1153,8 +1150,8 @@ Arguments:
 
     Address - Supplies the address to search for.
 
-    SymbolInformation - Supplies a pointer to a structure that receives the
-        address's symbol information on success.
+    Symbol - Supplies a pointer to a structure that receives the address's
+        symbol information on success.
 
 Return Value:
 
@@ -1459,11 +1456,10 @@ Return Value:
 --*/
 
 KSTATUS
-ImpElf64GetSymbolAddress (
-    PLIST_ENTRY ListHead,
+ImpElf64GetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
-    PVOID *Address
+    PIMAGE_SYMBOL Symbol
     );
 
 /*++
@@ -1475,15 +1471,13 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies the head of the list of loaded images.
-
     Image - Supplies a pointer to the image to query.
 
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
 
-    Address - Supplies a pointer where the address of the symbol will be
-        returned on success, or NULL will be returned on failure.
+    Symbol - Supplies a pointer to a structure that receives the symbol's
+        information on success.
 
 Return Value:
 
@@ -1492,10 +1486,10 @@ Return Value:
 --*/
 
 KSTATUS
-ImpElf64GetSymbolForAddress (
+ImpElf64GetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
-    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    PIMAGE_SYMBOL Symbol
     );
 
 /*++
@@ -1511,8 +1505,8 @@ Arguments:
 
     Address - Supplies the address to search for.
 
-    SymbolInformation - Supplies a pointer to a structure that receives the
-        address's symbol information on success.
+    Symbol - Supplies a pointer to a structure that receives the address's
+        symbol information on success.
 
 Return Value:
 

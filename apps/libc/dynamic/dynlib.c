@@ -221,10 +221,12 @@ Return Value:
     PVOID Address;
     KSTATUS Status;
 
-    if (Handle == NULL) {
-        ClDynamicLibraryStatus = STATUS_INVALID_HANDLE;
-        return NULL;
-    }
+    //
+    // The C Library handle definitions better line up with the OS base's.
+    //
+
+    ASSERT((RTLD_DEFAULT == OS_LIBRARY_DEFAULT) &&
+           (RTLD_NEXT == OS_LIBRARY_NEXT));
 
     Status = OsGetLibrarySymbolAddress(Handle, (PSTR)SymbolName, &Address);
     if (!KSUCCESS(Status)) {
@@ -267,15 +269,15 @@ Return Value:
 {
 
     KSTATUS Status;
-    IMAGE_SYMBOL_INFORMATION Symbol;
+    OS_LIBRARY_SYMBOL Symbol;
 
-    Status = OsGetSymbolForAddress(INVALID_HANDLE, Address, &Symbol);
+    Status = OsGetLibrarySymbolForAddress(OS_LIBRARY_DEFAULT, Address, &Symbol);
     if (!KSUCCESS(Status)) {
         return 0;
     }
 
-    Information->dli_fname = Symbol.ImageName;
-    Information->dli_fbase = Symbol.ImageBaseAddress;
+    Information->dli_fname = Symbol.LibraryName;
+    Information->dli_fbase = Symbol.LibraryBaseAddress;
     Information->dli_sname = Symbol.SymbolName;
     Information->dli_saddr = Symbol.SymbolAddress;
     return 1;

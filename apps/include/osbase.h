@@ -63,6 +63,20 @@ extern "C" {
 #define OS_LOCK_DEFAULT_SPIN_COUNT 500
 
 //
+// Provide this handle to search for symbols in the executing program's global
+// scope.
+//
+
+#define OS_LIBRARY_DEFAULT ((HANDLE)NULL)
+
+//
+// Provide this handle to search for symbols in the executable after the
+// currently executing program. "Next" is defined in terms of load order.
+//
+
+#define OS_LIBRARY_NEXT ((HANDLE)-1)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -145,6 +159,32 @@ typedef struct _TLS_INDEX {
     UINTN Module;
     UINTN Offset;
 } TLS_INDEX, *PTLS_INDEX;
+
+/*++
+
+Structure Description:
+
+    This structure defines a dynamic library's symbol.
+
+Members:
+
+    LibraryName - Stores the name of the library that contains the symbol.
+
+    LibraryBaseAddress - Stores the base address of the library that contains
+        the symbol.
+
+    SymbolName - Stores the name of the symbol.
+
+    SymbolAddress - Stores the address of the symbol.
+
+--*/
+
+typedef struct _OS_LIBRARY_SYMBOL {
+    PSTR LibraryName;
+    PVOID LibraryBaseAddress;
+    PSTR SymbolName;
+    PVOID SymbolAddress;
+} OS_LIBRARY_SYMBOL, *POS_LIBRARY_SYMBOL;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -3537,7 +3577,9 @@ Routine Description:
 
 Arguments:
 
-    Library - Supplies the library to look up.
+    Library - Supplies the library to look up. Use OS_LIBRARY_DEFAULT to search
+        the current executable or OS_LIBRARY_NEXT to start the search after the
+        current executable.
 
     SymbolName - Supplies a pointer to a null terminated string containing the
         name of the symbol to look up.
@@ -3557,30 +3599,29 @@ Return Value:
 
 OS_API
 KSTATUS
-OsGetSymbolForAddress (
+OsGetLibrarySymbolForAddress (
     HANDLE Library,
     PVOID Address,
-    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    POS_LIBRARY_SYMBOL Symbol
     );
 
 /*++
 
 Routine Description:
 
-    This routine resolves the given address into a symbol. A specific library
-    to search can be specified or the routine will search all libraries loaded
-    for the current application.
+    This routine resolves the given address into a symbol by searching the
+    given library. Both the library and all its imports will be searched.
 
 Arguments:
 
-    Library - Supplies an optional handle to the library in which to search.
-        Supply INVALID_HANDLE to search all of the libraries loaded by the
-        calling application.
+    Library - Supplies the library to look up. Use OS_LIBRARY_DEFAULT to search
+        the current executable or OS_LIBRARY_NEXT to start the search after the
+        current executable.
 
     Address - Supplies the address to look up.
 
-    SymbolInformation - Supplies a pointer to a structure that receives the
-        resolved symbol information.
+    Symbol - Supplies a pointer to a structure that receives the resolved
+        symbol information.
 
 Return Value:
 

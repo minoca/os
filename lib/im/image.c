@@ -81,24 +81,23 @@ ImpUnloadImage (
     );
 
 KSTATUS
-ImpGetSymbolAddress (
-    PLIST_ENTRY ListHead,
+ImpGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
     ULONG RecursionLevel,
     UCHAR VisitMarker,
-    PVOID *Address
+    PIMAGE_SYMBOL Symbol
     );
 
 KSTATUS
-ImpGetSymbolForAddress (
+ImpGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
     ULONG RecursionLevel,
     UCHAR VisitMarker,
-    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    PIMAGE_SYMBOL Symbol
     );
-    
+
 VOID
 ImpRelocateSelf (
     PIMAGE_BUFFER Buffer,
@@ -1094,12 +1093,11 @@ Return Value:
 }
 
 KSTATUS
-ImGetSymbolAddress (
-    PLIST_ENTRY ListHead,
+ImGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
     BOOL Recursive,
-    PVOID *Address
+    PIMAGE_SYMBOL Symbol
     )
 
 /*++
@@ -1112,8 +1110,6 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies the head of the list of loaded images.
-
     Image - Supplies a pointer to the image to query.
 
     SymbolName - Supplies a pointer to the string containing the name of the
@@ -1122,8 +1118,8 @@ Arguments:
     Recursive - Supplies a boolean indicating if the routine should recurse
         into imports or just query this binary.
 
-    Address - Supplies a pointer where the address of the symbol will be
-        returned on success, or NULL will be returned on failure.
+    Symbol - Supplies a pointer to a structure that receives the symbol's
+        information on success.
 
 Return Value:
 
@@ -1153,22 +1149,21 @@ Return Value:
         RecursionLevel = MAX_IMPORT_RECURSION_DEPTH;
     }
 
-    Status = ImpGetSymbolAddress(ListHead,
-                                 Image,
-                                 SymbolName,
-                                 RecursionLevel,
-                                 VisitMarker,
-                                 Address);
+    Status = ImpGetSymbolByName(Image,
+                                SymbolName,
+                                RecursionLevel,
+                                VisitMarker,
+                                Symbol);
 
     return Status;
 }
 
 KSTATUS
-ImGetSymbolForAddress (
+ImGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
     BOOL Recursive,
-    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    PIMAGE_SYMBOL Symbol
     )
 
 /*++
@@ -1188,8 +1183,8 @@ Arguments:
     Recursive - Supplies a boolean indicating if the routine should recurse
         into imports or just query this binary.
 
-    SymbolInformation - Supplies a pointer to a structure that receives the
-        address's symbol information on success.
+    Symbol - Supplies a pointer to a structure that receives the address's
+        symbol information on success.
 
 Return Value:
 
@@ -1219,12 +1214,11 @@ Return Value:
         RecursionLevel = MAX_IMPORT_RECURSION_DEPTH;
     }
 
-    RtlZeroMemory(SymbolInformation, sizeof(IMAGE_SYMBOL_INFORMATION));
-    Status = ImpGetSymbolForAddress(Image,
-                                    Address,
-                                    RecursionLevel,
-                                    VisitMarker,
-                                    SymbolInformation);
+    Status = ImpGetSymbolByAddress(Image,
+                                   Address,
+                                   RecursionLevel,
+                                   VisitMarker,
+                                   Symbol);
 
     return Status;
 }
@@ -1608,13 +1602,12 @@ Return Value:
 }
 
 KSTATUS
-ImpGetSymbolAddress (
-    PLIST_ENTRY ListHead,
+ImpGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
     ULONG RecursionLevel,
     UCHAR VisitMarker,
-    PVOID *Address
+    PIMAGE_SYMBOL Symbol
     )
 
 /*++
@@ -1628,8 +1621,6 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies the head of the list of loaded images.
-
     Image - Supplies a pointer to the image to query.
 
     SymbolName - Supplies a pointer to the string containing the name of the
@@ -1640,8 +1631,8 @@ Arguments:
     VisitMarker - Supplies the value that images are marked with to indicate
         they've been visited in this trip already.
 
-    Address - Supplies a pointer where the address of the symbol will be
-        returned on success, or NULL will be returned on failure.
+    Symbol - Supplies a pointer to a structure that receives the symbol's
+        information on success.
 
 Return Value:
 
@@ -1655,18 +1646,13 @@ Return Value:
     ULONG ImportIndex;
     KSTATUS Status;
 
-    *Address = NULL;
     if (Image == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
 
     switch (Image->Format) {
     case ImageElf32:
-        Status = ImpElf32GetSymbolAddress(ListHead,
-                                          Image,
-                                          SymbolName,
-                                          Address);
-
+        Status = ImpElf32GetSymbolByName(Image, SymbolName, Symbol);
         break;
 
     default:
@@ -1684,12 +1670,11 @@ Return Value:
     for (ImportIndex = 0; ImportIndex < Image->ImportCount; ImportIndex += 1) {
         Import = Image->Imports[ImportIndex];
         if ((Import != NULL) && (Import->VisitMarker != VisitMarker)) {
-            Status = ImpGetSymbolAddress(ListHead,
-                                         Import,
-                                         SymbolName,
-                                         RecursionLevel + 1,
-                                         VisitMarker,
-                                         Address);
+            Status = ImpGetSymbolByName(Import,
+                                        SymbolName,
+                                        RecursionLevel + 1,
+                                        VisitMarker,
+                                        Symbol);
 
             if (Status != STATUS_NOT_FOUND) {
                 return Status;
@@ -1705,12 +1690,12 @@ Return Value:
 }
 
 KSTATUS
-ImpGetSymbolForAddress (
+ImpGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
     ULONG RecursionLevel,
     UCHAR VisitMarker,
-    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    PIMAGE_SYMBOL Symbol
     )
 
 /*++
@@ -1732,8 +1717,8 @@ Arguments:
     VisitMarker - Supplies the value that images are marked with to indicate
         they've been visited in this trip already.
 
-    SymbolInformation - Supplies a pointer to a structure that receives the
-        address's symbol information on success.
+    Symbol - Supplies a pointer to a structure that receives the address's
+        symbol information on success.
 
 Return Value:
 
@@ -1753,7 +1738,7 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        Status = ImpElf32GetSymbolForAddress(Image, Address, SymbolInformation);
+        Status = ImpElf32GetSymbolByAddress(Image, Address, Symbol);
         break;
 
     default:
@@ -1771,11 +1756,11 @@ Return Value:
     for (ImportIndex = 0; ImportIndex < Image->ImportCount; ImportIndex += 1) {
         Import = Image->Imports[ImportIndex];
         if ((Import != NULL) && (Import->VisitMarker != VisitMarker)) {
-            Status = ImpGetSymbolForAddress(Import,
-                                            Address,
-                                            RecursionLevel + 1,
-                                            VisitMarker,
-                                            SymbolInformation);
+            Status = ImpGetSymbolByAddress(Import,
+                                           Address,
+                                           RecursionLevel + 1,
+                                           VisitMarker,
+                                           Symbol);
 
             if (Status != STATUS_NOT_FOUND) {
                 return Status;

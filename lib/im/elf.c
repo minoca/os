@@ -1505,11 +1505,10 @@ ElfRelocateSelfEnd:
 }
 
 KSTATUS
-ImpElfGetSymbolAddress (
-    PLIST_ENTRY ListHead,
+ImpElfGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
-    PVOID *Address
+    PIMAGE_SYMBOL Symbol
     )
 
 /*++
@@ -1521,15 +1520,13 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies the head of the list of loaded images.
-
     Image - Supplies a pointer to the image to query.
 
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
 
-    Address - Supplies a pointer where the address of the symbol will be
-        returned on success, or NULL will be returned on failure.
+    Symbol - Supplies a pointer to a structure that receives the symbol's
+        information on success.
 
 Return Value:
 
@@ -1539,8 +1536,10 @@ Return Value:
 
 {
 
+    ELF_ADDR BaseDifference;
+    PELF_SYMBOL ElfSymbol;
     ULONG Hash;
-    PELF_SYMBOL Symbol;
+    ELF_SYMBOL_TYPE SymbolType;
     ELF_ADDR Value;
 
     if ((Image->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
@@ -1550,25 +1549,46 @@ Return Value:
         Hash = ImpElfOriginalHash(SymbolName);
     }
 
-    Symbol = ImpElfGetSymbol(Image, Hash, SymbolName);
-    if (Symbol == NULL) {
+    ElfSymbol = ImpElfGetSymbol(Image, Hash, SymbolName);
+    if ((ElfSymbol == NULL) || (ElfSymbol->SectionIndex == 0)) {
         return STATUS_NOT_FOUND;
     }
 
-    Value = ImpElfGetSymbolValue(ListHead, Image, Symbol, NULL, NULL);
-    if (Value == ELF_INVALID_ADDRESS) {
-        return STATUS_NOT_FOUND;
+    //
+    // TLS symbols are relative to their section base and are not adjusted.
+    //
+
+    Symbol->TlsAddress = FALSE;
+    SymbolType = ELF_GET_SYMBOL_TYPE(ElfSymbol->Information);
+    if (SymbolType == ElfSymbolTls) {
+        Value = ElfSymbol->Value;
+        Symbol->TlsAddress = TRUE;
+
+    } else if (ElfSymbol->SectionIndex >= ELF_SECTION_RESERVED_LOW) {
+        if (ElfSymbol->SectionIndex != ELF_SECTION_ABSOLUTE) {
+            return STATUS_NOT_FOUND;
+        }
+
+        Value = ElfSymbol->Value;
+
+    } else {
+        BaseDifference = Image->LoadedLowestAddress -
+                         Image->PreferredLowestAddress;
+
+        Value = ElfSymbol->Value + BaseDifference;
     }
 
-    *Address = (PVOID)(UINTN)Value;
+    Symbol->Address = (PVOID)(UINTN)Value;
+    Symbol->Name = Image->ExportStringTable + ElfSymbol->NameOffset;
+    Symbol->Image = Image;
     return STATUS_SUCCESS;
 }
 
 KSTATUS
-ImpElfGetSymbolForAddress (
+ImpElfGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
-    PIMAGE_SYMBOL_INFORMATION SymbolInformation
+    PIMAGE_SYMBOL Symbol
     )
 
 /*++
@@ -1584,8 +1604,8 @@ Arguments:
 
     Address - Supplies the address to search for.
 
-    SymbolInformation - Supplies a pointer to a structure that receives the
-        address's symbol information on success.
+    Symbol - Supplies a pointer to a structure that receives the address's
+        symbol information on success.
 
 Return Value:
 
@@ -1598,13 +1618,11 @@ Return Value:
     ELF_ADDR BaseDifference;
     ELF_WORD BucketCount;
     ELF_WORD BucketIndex;
+    PELF_SYMBOL ElfSymbol;
     ELF_WORD FilterWords;
     PELF_WORD HashBuckets;
     PELF_WORD HashChains;
     PELF_WORD HashTable;
-    PVOID ImageBaseAddress;
-    PSTR ImageName;
-    PELF_SYMBOL Symbol;
     ELF_ADDR SymbolAddress;
     ELF_WORD SymbolBase;
     ULONG SymbolHash;
@@ -1623,8 +1641,6 @@ Return Value:
         return STATUS_NOT_FOUND;
     }
 
-    ImageName = Image->BinaryName;
-    ImageBaseAddress = Image->LoadedLowestAddress;
     SymbolName = NULL;
     SymbolAddress = 0;
 
@@ -1674,13 +1690,15 @@ Return Value:
             HashChains = HashTable + BucketCount;
             do {
                 SymbolHash = HashChains[SymbolIndex - SymbolBase];
-                Symbol = (PELF_SYMBOL)Image->ExportSymbolTable + SymbolIndex;
-                if (((Symbol->Size == 0) && (Symbol->Value == Value)) ||
-                    ((Value >= Symbol->Value) &&
-                     (Value < (Symbol->Value + Symbol->Size)))) {
+                ElfSymbol = (PELF_SYMBOL)Image->ExportSymbolTable + SymbolIndex;
+                if (((ElfSymbol->Size == 0) && (ElfSymbol->Value == Value)) ||
+                    ((Value >= ElfSymbol->Value) &&
+                     (Value < (ElfSymbol->Value + ElfSymbol->Size)))) {
 
-                    SymbolName = Image->ExportStringTable + Symbol->NameOffset;
-                    SymbolAddress = Symbol->Value + BaseDifference;
+                    SymbolName = Image->ExportStringTable +
+                                 ElfSymbol->NameOffset;
+
+                    SymbolAddress = ElfSymbol->Value + BaseDifference;
                     goto GetAddressInformationEnd;
                 }
 
@@ -1700,13 +1718,15 @@ Return Value:
         for (BucketIndex = 0; BucketIndex < BucketCount; BucketIndex += 1) {
             SymbolIndex = *(HashBuckets + BucketIndex);
             while (SymbolIndex != 0) {
-                Symbol = (PELF_SYMBOL)Image->ExportSymbolTable + SymbolIndex;
-                if (((Symbol->Size == 0) && (Symbol->Value == Value)) ||
-                    ((Value >= Symbol->Value) &&
-                     (Value < (Symbol->Value + Symbol->Size)))) {
+                ElfSymbol = (PELF_SYMBOL)Image->ExportSymbolTable + SymbolIndex;
+                if (((ElfSymbol->Size == 0) && (ElfSymbol->Value == Value)) ||
+                    ((Value >= ElfSymbol->Value) &&
+                     (Value < (ElfSymbol->Value + ElfSymbol->Size)))) {
 
-                    SymbolName = Image->ExportStringTable + Symbol->NameOffset;
-                    SymbolAddress = Symbol->Value + BaseDifference;
+                    SymbolName = Image->ExportStringTable +
+                                 ElfSymbol->NameOffset;
+
+                    SymbolAddress = ElfSymbol->Value + BaseDifference;
                     goto GetAddressInformationEnd;
                 }
 
@@ -1720,10 +1740,10 @@ Return Value:
     }
 
 GetAddressInformationEnd:
-    SymbolInformation->ImageName = ImageName;
-    SymbolInformation->ImageBaseAddress = ImageBaseAddress;
-    SymbolInformation->SymbolName = SymbolName;
-    SymbolInformation->SymbolAddress = (PVOID)(UINTN)SymbolAddress;
+    Symbol->Image = Image;
+    Symbol->Name = SymbolName;
+    Symbol->Address = (PVOID)(UINTN)SymbolAddress;
+    Symbol->TlsAddress = FALSE;
     return STATUS_SUCCESS;
 }
 
