@@ -456,7 +456,7 @@ Return Value:
     Destination = State;
     Word = Seed;
     Degree = RandomData->rand_deg;
-    for (Index = 0; Index < Degree; Index += 1) {
+    for (Index = 1; Index < Degree; Index += 1) {
 
         //
         // Set State[i] equal to (State[i - 1] * 16807) % 0x7FFFFFFF.
