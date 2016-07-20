@@ -122,6 +122,7 @@ OBJS = assert.o             \
        shadow.o             \
        signals.o            \
        socket.o             \
+       spawn.o              \
        stat.o               \
        statvfs.o            \
        stream.o             \

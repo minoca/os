@@ -40,6 +40,23 @@ extern "C" {
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure stores a scheduler parameter.
+
+Members:
+
+    __sched_priority - Stores the internal scheduling priority, whose meaning
+        depends on the scheduler in use.
+
+--*/
+
+struct sched_param {
+    int __sched_priority;
+};
+
 //
 // -------------------------------------------------------------------- Globals
 //
