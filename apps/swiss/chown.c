@@ -137,12 +137,10 @@ Return Value:
     PSTR Argument;
     ULONG ArgumentIndex;
     CHOWN_CONTEXT Context;
-    gid_t GroupId;
     INT Option;
     struct stat Stat;
     int Status;
     int TotalStatus;
-    uid_t UserId;
 
     memset(&Context, 0, sizeof(CHOWN_CONTEXT));
     Context.User = -1;
@@ -192,13 +190,14 @@ Return Value:
             break;
 
         case 'F':
-            Status = ChownConvertUserGroupName(optarg, &UserId, &GroupId);
+            Status = ChownConvertUserGroupName(optarg,
+                                               &(Context.User),
+                                               &(Context.Group));
+
             if (Status != 0) {
                 goto MainEnd;
             }
 
-            Context.FromUser = UserId;
-            Context.FromGroup = GroupId;
             break;
 
         case 'D':
@@ -266,13 +265,13 @@ Return Value:
     if ((Context.User == (uid_t)-1) && (Context.Group == (gid_t)-1)) {
         Argument = Arguments[ArgumentIndex];
         ArgumentIndex += 1;
-        Status = ChownConvertUserGroupName(Argument, &UserId, &GroupId);
+        Status = ChownConvertUserGroupName(Argument,
+                                           &(Context.User),
+                                           &(Context.Group));
+
         if (Status != 0) {
             goto MainEnd;
         }
-
-        Context.User = UserId;
-        Context.Group = GroupId;
     }
 
     if (ArgumentIndex >= ArgumentCount) {
