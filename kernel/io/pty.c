@@ -2089,12 +2089,12 @@ Return Value:
         KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
         if (CodeNumber == TerminalControlGetOutputQueueSize) {
-            QueueSize = IopTerminalGetOutputBufferSpace(Terminal) -
-                        TERMINAL_OUTPUT_BUFFER_SIZE;
+            QueueSize = (TERMINAL_OUTPUT_BUFFER_SIZE - 1) -
+                        IopTerminalGetOutputBufferSpace(Terminal);
 
         } else {
-            QueueSize = IopTerminalGetInputBufferSpace(Terminal) -
-                        TERMINAL_INPUT_BUFFER_SIZE;
+            QueueSize = (TERMINAL_INPUT_BUFFER_SIZE - 1) -
+                        IopTerminalGetInputBufferSpace(Terminal);
         }
 
         KeReleaseQueuedLock(Terminal->InputLock);
