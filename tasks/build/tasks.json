@@ -444,6 +444,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/emacs-24.5"
         },
         {
+            "name": "Make ninja",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/ninja-1.7.1"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"

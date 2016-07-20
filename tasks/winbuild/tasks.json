@@ -155,6 +155,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/cmake-3.5.2 tools"
         },
         {
+            "name": "Make ninja (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/ninja-1.7.1 tools"
+        },
+        {
             "name": "Make awk",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/awk"
@@ -418,6 +423,11 @@
             "name": "Make lua",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/lua-5.3.3"
+        },
+        {
+            "name": "Make ninja",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/ninja-1.7.1"
         },
         {
             "name": "Make OS",
