@@ -66,12 +66,6 @@ Author:
 #define CK_MAX_JUMP 0x10000
 
 //
-// Define a reasonable size for error messages.
-//
-
-#define CK_MAX_ERROR_MESSAGE (CK_MAX_NAME + 128)
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 

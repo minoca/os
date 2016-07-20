@@ -65,6 +65,60 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+BOOL
+CkpDictGetPrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpDictSetPrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpDictSlice (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpDictSliceAssign (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpDictClearPrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpDictContainsKey (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpDictLength (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpDictIteratePrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpDictIteratorValue (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
 PCK_DICT_ENTRY
 CkpDictFindEntry (
     PCK_DICT Dict,
@@ -99,6 +153,19 @@ CkpHashObject (
 //
 // -------------------------------------------------------------------- Globals
 //
+
+CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[] = {
+    {"get@1", CkpDictGetPrimitive},
+    {"set@2", CkpDictSetPrimitive},
+    {"__slice@1", CkpDictSlice},
+    {"__sliceAssign@2", CkpDictSliceAssign},
+    {"clear@0", CkpDictClearPrimitive},
+    {"containsKey@1", CkpDictContainsKey},
+    {"length@0", CkpDictLength},
+    {"iterate@1", CkpDictIteratePrimitive},
+    {"iteratorValue@1", CkpDictIteratorValue},
+    {NULL, NULL}
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -221,7 +288,22 @@ Return Value:
             NewCapacity = DICT_MIN_CAPACITY;
         }
 
+        if (CK_IS_OBJECT(Key)) {
+            CkpPushRoot(Vm, CK_AS_OBJECT(Key));
+        }
+
+        if (CK_IS_OBJECT(Value)) {
+            CkpPushRoot(Vm, CK_AS_OBJECT(Value));
+        }
+
         CkpDictResize(Vm, Dict, NewCapacity);
+        if (CK_IS_OBJECT(Value)) {
+            CkpPopRoot(Vm);
+        }
+
+        if (CK_IS_OBJECT(Key)) {
+            CkpPopRoot(Vm);
+        }
     }
 
     if (CkpDictAddEntry(Dict->Entries, Dict->Capacity, Key, Value) != FALSE) {
@@ -342,8 +424,481 @@ Return Value:
     return;
 }
 
+VOID
+CkpDictInitializeIterator (
+    PCK_VM Vm,
+    PCK_DICT Dict,
+    PCK_DICT_ITERATOR Iterator
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes a dictionary iterator.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Dict - Supplies a pointer to the dictionary object.
+
+    Iterator - Supplies a pointer to the dictionary iterator.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    *Iterator = 0;
+    return;
+}
+
+CK_VALUE
+CkpDictIterate (
+    PCK_DICT Dict,
+    PCK_DICT_ITERATOR Iterator
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the next key in a dictionary iteration.
+
+Arguments:
+
+    Dict - Supplies a pointer to the dictionary object.
+
+    Iterator - Supplies a pointer to the dictionary iterator.
+
+Return Value:
+
+    Returns the next key on success.
+
+    Returns an undefined value if there are no more keys.
+
+--*/
+
+{
+
+    CK_VALUE Key;
+
+    while (*Iterator < Dict->Capacity) {
+        Key = Dict->Entries[*Iterator].Key;
+        *Iterator += 1;
+        if (!CK_IS_UNDEFINED(Key)) {
+            return Key;
+        }
+    }
+
+    return CkUndefinedValue;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
+//
+
+//
+// Primitives that implement methods on the Dict class.
+//
+
+BOOL
+CkpDictGetPrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets a member of the given dictionary, returning NULL if the
+    given key is not found in the dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+    CK_VALUE Value;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    Value = CkpDictGet(Dict, Arguments[1]);
+    if (CK_IS_UNDEFINED(Value)) {
+        Arguments[0] = CkNullValue;
+
+    } else {
+        Arguments[0] = Value;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpDictSetPrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets a member of the given dictionary, and returns the
+    dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    CkpDictSet(Vm, Dict, Arguments[1], Arguments[2]);
+    return TRUE;
+}
+
+BOOL
+CkpDictSlice (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets a member of the given dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+    CK_VALUE Value;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    Value = CkpDictGet(Dict, Arguments[1]);
+    if (CK_IS_UNDEFINED(Value)) {
+        CkpRuntimeError(Vm, "Key is not defined");
+        return FALSE;
+    }
+
+    Arguments[0] = Value;
+    return TRUE;
+}
+
+BOOL
+CkpDictSliceAssign (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets a member of the given dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    CkpDictSet(Vm, Dict, Arguments[1], Arguments[2]);
+    Arguments[0] = Arguments[2];
+    return TRUE;
+}
+
+BOOL
+CkpDictClearPrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resets a dictionary to be empty.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    CkpDictClear(Vm, Dict);
+    return TRUE;
+}
+
+BOOL
+CkpDictContainsKey (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a boolean indicating whether or not the dictionary
+    contains the given key.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    if (CK_IS_UNDEFINED(CkpDictGet(Dict, Arguments[1]))) {
+        Arguments[0] = CkZeroValue;
+
+    } else {
+        Arguments[0] = CkOneValue;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpDictLength (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of elements in the given dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    CK_INT_VALUE(Arguments[0], Dict->Count);
+    return TRUE;
+}
+
+BOOL
+CkpDictIteratePrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the iterate method primitive, which initializes or
+    advances an iterator.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+    UINTN Index;
+    CK_INTEGER Integer;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    if (Dict->Count == 0) {
+        Arguments[0] = CkNullValue;
+        return TRUE;
+    }
+
+    Index = 0;
+    if (!CK_IS_NULL(Arguments[1])) {
+        if (!CK_IS_INTEGER(Arguments[1])) {
+            CkpRuntimeError(Vm, "Expected an integer");
+            return FALSE;
+        }
+
+        Integer = CK_AS_INTEGER(Arguments[1]);
+        if ((Integer < 0) || (Integer >= Dict->Capacity)) {
+            Arguments[0] = CkNullValue;
+            return TRUE;
+        }
+
+        Index = Integer;
+    }
+
+    //
+    // Find an occupied slot.
+    //
+
+    while (Index < Dict->Capacity) {
+        if (!CK_IS_UNDEFINED(Dict->Entries[Index].Key)) {
+            CK_INT_VALUE(Arguments[0], Index);
+            return TRUE;
+        }
+
+        Index += 1;
+    }
+
+    Arguments[0] = CkNullValue;
+    return TRUE;
+}
+
+BOOL
+CkpDictIteratorValue (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the primitive for getting a value from the given
+    iterator state.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+    PCK_DICT_ENTRY Entry;
+    UINTN Index;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    Index = CkpGetIndex(Vm, Arguments[1], Dict->Capacity);
+    if (Index == MAX_UINTN) {
+        return FALSE;
+    }
+
+    Entry = &(Dict->Entries[Index]);
+    if (CK_IS_UNDEFINED(Entry->Key)) {
+        CkpRuntimeError(Vm, "Dict changed while iterating");
+        return FALSE;
+    }
+
+    Arguments[0] = Entry->Key;
+    return TRUE;
+}
+
+//
+// Support functions
 //
 
 PCK_DICT_ENTRY

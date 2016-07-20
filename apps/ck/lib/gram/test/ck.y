@@ -78,8 +78,7 @@ unary_expression
     ;
 
 unary_operator
-    : '+'
-    | '-'
+    : '-'
     | '~'
     | '!'
     ;

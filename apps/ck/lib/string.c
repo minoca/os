@@ -25,6 +25,7 @@ Environment:
 //
 
 #include <stdarg.h>
+#include <ctype.h>
 #include <stdio.h>
 #include "chalkp.h"
 
@@ -40,9 +41,122 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+BOOL
+CkpStringFromCharacter (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringByteAt (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringCharacterAt (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringContains (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringStartsWith (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringEndsWith (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringIndexOf (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringIterate (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringIteratorValue (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringLower (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringUpper (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringLength (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringAdd (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringSlice (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpStringToString (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[] = {
+    {"byteAt@1", CkpStringByteAt},
+    {"charAt@1", CkpStringCharacterAt},
+    {"contains@1", CkpStringContains},
+    {"startsWith@1", CkpStringStartsWith},
+    {"endsWith@1", CkpStringEndsWith},
+    {"indexOf@1", CkpStringIndexOf},
+    {"iterate@1", CkpStringIterate},
+    {"iteratorValue@1", CkpStringIteratorValue},
+    {"lower@0", CkpStringLower},
+    {"upper@0", CkpStringUpper},
+    {"length@", CkpStringLength},
+    {"__add@1", CkpStringAdd},
+    {"__slice@1", CkpStringSlice},
+    {"__str@0", CkpStringToString},
+    {NULL, NULL}
+};
+
+CK_PRIMITIVE_DESCRIPTION CkStringStaticPrimitives[] = {
+    {"fromCharacter@1", CkpStringFromCharacter},
+    {NULL, NULL}
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -883,4 +997,712 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+//
+// String primitives
+//
+
+BOOL
+CkpStringFromCharacter (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a UTF8 codepoint into a string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    CK_INTEGER CodePoint;
+
+    if (!CK_IS_INTEGER(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected an integer");
+        return FALSE;
+    }
+
+    CodePoint = CK_AS_INTEGER(Arguments[1]);
+    if ((CodePoint < 0) || (CodePoint > CK_MAX_UTF8)) {
+        CkpRuntimeError(Vm, "Invalid UTF8 code point");
+        return FALSE;
+    }
+
+    Arguments[0] = CkpStringCreateFromCharacter(Vm, CodePoint);
+    return TRUE;
+}
+
+BOOL
+CkpStringByteAt (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the byte of the string at the given index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    UINTN Index;
+    PCK_STRING_OBJECT String;
+
+    String = CK_AS_STRING(Arguments[0]);
+    Index = CkpGetIndex(Vm, Arguments[1], String->Length);
+    if (Index == MAX_UINTN) {
+        return FALSE;
+    }
+
+    CK_INT_VALUE(Arguments[0], String->Value[Index]);
+    return TRUE;
+}
+
+BOOL
+CkpStringCharacterAt (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the UTF8 codepoint at the given byte offset.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    UINT Character;
+    INTN Index;
+    PCK_STRING_OBJECT String;
+
+    String = CK_AS_STRING(Arguments[0]);
+    Index = CkpGetIndex(Vm, Arguments[1], String->Length);
+    if (Index == MAX_UINTN) {
+        return FALSE;
+    }
+
+    Character = CkpUtf8Decode((PUCHAR)(String->Value) + Index,
+                              String->Length - Index);
+
+    if (Character < 0) {
+        CkpRuntimeError(Vm, "Invalid UTF-8 character");
+        return FALSE;
+    }
+
+    CK_INT_VALUE(Arguments[0], Character);
+    return TRUE;
+}
+
+BOOL
+CkpStringContains (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if one string is present within another.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_STRING_OBJECT Haystack;
+    UINTN Index;
+    PCK_STRING_OBJECT Needle;
+
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected a string");
+        return FALSE;
+    }
+
+    Needle = CK_AS_STRING(Arguments[0]);
+    Haystack = CK_AS_STRING(Arguments[1]);
+    Index = CkpStringFind(Haystack, Needle);
+    if (Index == (UINTN)-1) {
+        Arguments[0] = CkZeroValue;
+
+    } else {
+        Arguments[0] = CkOneValue;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpStringStartsWith (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if one string starts with another.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_STRING_OBJECT Haystack;
+    PCK_STRING_OBJECT Needle;
+
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected a string");
+        return FALSE;
+    }
+
+    Needle = CK_AS_STRING(Arguments[0]);
+    Haystack = CK_AS_STRING(Arguments[1]);
+    if ((Needle->Length > Haystack->Length) ||
+        (CkCompareMemory(Needle->Value, Haystack->Value, Needle->Length) !=
+         0)) {
+
+        Arguments[0] = CkZeroValue;
+
+    } else {
+        Arguments[0] = CkOneValue;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpStringEndsWith (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if one string ends with another.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    INT Compare;
+    PCK_STRING_OBJECT Haystack;
+    PSTR HaystackEnd;
+    PCK_STRING_OBJECT Needle;
+
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected a string");
+        return FALSE;
+    }
+
+    Needle = CK_AS_STRING(Arguments[0]);
+    Haystack = CK_AS_STRING(Arguments[1]);
+    if (Needle->Length > Haystack->Length) {
+        Arguments[0] = CkZeroValue;
+
+    } else {
+        HaystackEnd = Haystack->Value + Haystack->Length - Needle->Length;
+        Compare = CkCompareMemory(HaystackEnd, Needle->Value, Needle->Length);
+        if (Compare == 0) {
+            Arguments[0] = CkOneValue;
+
+        } else {
+            Arguments[0] = CkZeroValue;
+        }
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpStringIndexOf (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine finds the index of the given string within the receiver.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_STRING_OBJECT Haystack;
+    UINTN Index;
+    PCK_STRING_OBJECT Needle;
+
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected a string");
+        return FALSE;
+    }
+
+    Needle = CK_AS_STRING(Arguments[0]);
+    Haystack = CK_AS_STRING(Arguments[1]);
+    Index = CkpStringFind(Haystack, Needle);
+    if (Index == (UINTN)-1) {
+        CK_INT_VALUE(Arguments[0], -1);
+
+    } else {
+        CK_INT_VALUE(Arguments[0], Index);
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpStringIterate (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes or advances a string iterator, which iterates
+    over UTF8 characters.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    UINTN Index;
+    PCK_STRING_OBJECT String;
+
+    String = CK_AS_STRING(Arguments[0]);
+
+    //
+    // Initialize a new iterator.
+    //
+
+    if (CK_IS_NULL(Arguments[1])) {
+        if (String->Length == 0) {
+            Arguments[0] = CkNullValue;
+            return TRUE;
+        }
+    }
+
+    //
+    // Advance the iterator.
+    //
+
+    if (!CK_IS_INTEGER(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected an integer");
+        return FALSE;
+    }
+
+    Index = CK_AS_INTEGER(Arguments[1]);
+    if (Index < 0) {
+        Arguments[0] = CkNullValue;
+        return TRUE;
+    }
+
+    do {
+        Index += 1;
+        if (Index >= String->Length) {
+            Arguments[0] = CkNullValue;
+            return TRUE;
+        }
+
+    } while ((String->Value[Index] & 0xC0) == 0x80);
+
+    CK_INT_VALUE(Arguments[0], Index);
+    return TRUE;
+}
+
+BOOL
+CkpStringIteratorValue (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the iterator value for the given iterator.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    return CkpStringCharacterAt(Vm, Arguments);
+}
+
+BOOL
+CkpStringLower (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a new string that converts all uppercase ASCII
+    characters into lowercase characters.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_STRING_OBJECT Copy;
+    UINTN Index;
+    PCK_STRING_OBJECT Source;
+    PSTR String;
+
+    Source = CK_AS_STRING(Arguments[0]);
+    Arguments[0] = CkpStringCreate(Vm, Source->Value, Source->Length);
+    if (CK_IS_NULL(Arguments[0])) {
+        return TRUE;
+    }
+
+    Copy = CK_AS_STRING(Arguments[0]);
+    String = Copy->Value;
+    for (Index = 0; Index < Copy->Length; Index += 1) {
+        *String = tolower(*String);
+        String += 1;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpStringUpper (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a new string that converts all lowercase ASCII
+    characters into uppercase characters.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_STRING_OBJECT Copy;
+    UINTN Index;
+    PCK_STRING_OBJECT Source;
+    PSTR String;
+
+    Source = CK_AS_STRING(Arguments[0]);
+    Arguments[0] = CkpStringCreate(Vm, Source->Value, Source->Length);
+    if (CK_IS_NULL(Arguments[0])) {
+        return TRUE;
+    }
+
+    Copy = CK_AS_STRING(Arguments[0]);
+    String = Copy->Value;
+    for (Index = 0; Index < Copy->Length; Index += 1) {
+        *String = toupper(*String);
+        String += 1;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpStringLength (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the length of the string in bytes.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_STRING_OBJECT String;
+
+    String = CK_AS_STRING(Arguments[0]);
+    CK_INT_VALUE(Arguments[0], String->Length);
+    return TRUE;
+}
+
+BOOL
+CkpStringAdd (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine concatenates two strings.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected a string");
+        return FALSE;
+    }
+
+    Arguments[0] = CkpStringFormat(Vm, "@@", Arguments[0], Arguments[1]);
+    return TRUE;
+}
+
+BOOL
+CkpStringSlice (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a substring slice of a given string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    UINTN Count;
+    INTN Start;
+    INTN Step;
+    PCK_STRING_OBJECT String;
+
+    String = CK_AS_STRING(Arguments[0]);
+    if (CK_IS_INTEGER(Arguments[1])) {
+        return CkpStringCharacterAt(Vm, Arguments);
+    }
+
+    if (!CK_IS_RANGE(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected an integer or range");
+        return FALSE;
+    }
+
+    Start = CkpGetRange(Vm, CK_AS_RANGE(Arguments[1]), &Count, &Step);
+    if (Start == MAX_UINTN) {
+        return FALSE;
+    }
+
+    Arguments[0] = CkpStringCreateFromRange(Vm, String, Start, Count, Step);
+    return TRUE;
+}
+
+BOOL
+CkpStringToString (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the no-op function of converting a string to a
+    string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    return TRUE;
+}
 

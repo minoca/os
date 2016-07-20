@@ -59,7 +59,8 @@ CkpDefaultReallocate (
 PSTR
 CkpDefaultLoadModule (
     PCK_VM Vm,
-    PSTR ModuleName
+    PSTR ModuleName,
+    PUINTN Size
     );
 
 VOID
@@ -133,7 +134,8 @@ Return Value:
 PSTR
 CkpDefaultLoadModule (
     PCK_VM Vm,
-    PSTR ModuleName
+    PSTR ModuleName,
+    PUINTN Size
     )
 
 /*++
@@ -147,6 +149,9 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     ModuleName - Supplies the name of the module to load.
+
+    Size - Supplies a pointer where the size of the module string will be
+        returned, not including the null terminator.
 
 Return Value:
 

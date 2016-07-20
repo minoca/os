@@ -47,6 +47,12 @@ Author:
 #define CK_MAX_WORKING_OBJECTS 5
 
 //
+// Define a reasonable size for error messages.
+//
+
+#define CK_MAX_ERROR_MESSAGE (CK_MAX_NAME + 128)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -317,6 +323,8 @@ Members:
 
     Module - Stores a pointer to the module class.
 
+    Core - Stores a pointer to the core interpreter class.
+
 --*/
 
 typedef struct _CK_BUILTIN_CLASSES {
@@ -331,6 +339,7 @@ typedef struct _CK_BUILTIN_CLASSES {
     PCK_CLASS Range;
     PCK_CLASS String;
     PCK_CLASS Module;
+    PCK_CLASS Core;
 } CK_BUILTIN_CLASSES, *PCK_BUILTIN_CLASSES;
 
 /*++
@@ -383,6 +392,8 @@ Members:
     Compiler - Stores an optional pointer to the current compiler. This link is
         needed so the garbage collector can discover its objects.
 
+    Fiber - Stores a pointer to the currently running fiber.
+
 --*/
 
 struct _CK_VM {
@@ -399,6 +410,7 @@ struct _CK_VM {
     ULONG WorkingObjectCount;
     PCK_HANDLE Handles;
     PCK_COMPILER Compiler;
+    PCK_FIBER Fiber;
 };
 
 //
@@ -484,6 +496,35 @@ Return Value:
 
 --*/
 
+CK_VALUE
+CkpFindModuleVariable (
+    PCK_VM Vm,
+    PCK_MODULE Module,
+    PSTR Name
+    );
+
+/*++
+
+Routine Description:
+
+    This routine locates a module level variable with the given name.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module to search in.
+
+    Name - Supplies a pointer to the name.
+
+Return Value:
+
+    Returns the module variable value on success.
+
+    CK_UNDEFINED_VALUE if the variable does not exist.
+
+--*/
+
 VOID
 CkpPushRoot (
     PCK_VM Vm,
@@ -564,12 +605,71 @@ Return Value:
 
 --*/
 
+CK_ERROR_TYPE
+CkpInterpret (
+    PCK_VM Vm,
+    PSTR ModuleName,
+    PSTR Source,
+    UINTN Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine interprets the given Chalk source string within the context of
+    the given module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies a pointer to the module to interpret the source in.
+
+    Source - Supplies a pointer to the null terminated string containing the
+        source to interpret.
+
+    Length - Supplies the length of the source string, not including the null
+        terminator.
+
+Return Value:
+
+    Chalk status.
+
+--*/
+
 //
 // Module support functions
 //
 
-PCK_FIBER
+CK_VALUE
 CkpModuleLoad (
+    PCK_VM Vm,
+    CK_VALUE ModuleName
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads the given module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies the module name value.
+
+Return Value:
+
+    Returns the newly loaded module value on success.
+
+    CK_NULL_VALUE on failure.
+
+--*/
+
+PCK_MODULE
+CkpModuleLoadSource (
     PCK_VM Vm,
     CK_VALUE ModuleName,
     PSTR Source,
@@ -596,9 +696,9 @@ Arguments:
 
 Return Value:
 
-    Returns a pointer to a newly created fiber to execute on success.
+    Returns a pointer to the newly loaded module on success.
 
-    NULL on allocation failure.
+    NULL on failure.
 
 --*/
 

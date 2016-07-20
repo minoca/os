@@ -151,7 +151,6 @@ YY_VALUE CkgUnaryExpression[] = {
 };
 
 YY_VALUE CkgUnaryOperator[] = {
-    CkTokenPlus, -1,
     CkTokenMinus, -1,
     CkTokenBitNot, -1,
     CkTokenLogicalNot, -1,

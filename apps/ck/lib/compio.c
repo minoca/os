@@ -571,10 +571,6 @@ Return Value:
             Method = "__neg@0";
             break;
 
-        case CkTokenPlus:
-            Method = "__pos@0";
-            break;
-
         default:
             break;
         }

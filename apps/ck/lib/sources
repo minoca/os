@@ -20,15 +20,19 @@
 #
 ################################################################################
 
-OBJS = compexpr.o    \
+OBJS = ckcore.o      \
+       compexpr.o    \
        compiler.o    \
        compio.o      \
        compvar.o     \
        core.o        \
        debug.o       \
        dict.o        \
+       fiber.o       \
        gram.o        \
+       int.o         \
        lex.o         \
+       list.o        \
        module.o      \
        string.o      \
        utils.o       \

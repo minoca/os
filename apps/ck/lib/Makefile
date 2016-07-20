@@ -37,3 +37,14 @@ gram.c: gram/gramgen.c
 	@echo Generating Grammar - $@
 	@./gram/gramgen $@
 
+##
+## Objectify the .ck sources into data that gets compiled at runtime.
+##
+
+%.o:%.ck
+	@echo Objectifying - $(notdir $<)
+	@cp $< $(CURDIR) && \
+	   $(OBJCOPY) --rename-section \
+	       .data=.rodata,alloc,load,data,contents,readonly -I binary \
+	       -O $(OBJ_FORMAT) -B $(BFD_ARCH) $(notdir $<) $@ && \
+	   rm $(notdir $<)

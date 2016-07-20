@@ -25,7 +25,6 @@ Environment:
 //
 
 #include "chalkp.h"
-#include "core.h"
 #include "compiler.h"
 #include "vmsys.h"
 
@@ -40,14 +39,6 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-CK_ERROR_TYPE
-CkpInterpret (
-    PCK_VM Vm,
-    PSTR ModuleName,
-    PSTR Source,
-    UINTN Length
-    );
 
 CK_ERROR_TYPE
 CkpRunInterpreter (
@@ -456,6 +447,49 @@ Return Value:
     return Symbol;
 }
 
+CK_VALUE
+CkpFindModuleVariable (
+    PCK_VM Vm,
+    PCK_MODULE Module,
+    PSTR Name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine locates a module level variable with the given name.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module to search in.
+
+    Name - Supplies a pointer to the name.
+
+Return Value:
+
+    Returns the module variable value on success.
+
+    CK_UNDEFINED_VALUE if the variable does not exist.
+
+--*/
+
+{
+
+    CK_SYMBOL_INDEX Symbol;
+
+    Symbol = CkpStringTableFind(&(Module->VariableNames), Name, strlen(Name));
+    if (Symbol == -1) {
+        return CkUndefinedValue;
+    }
+
+    CK_ASSERT(Symbol < Module->Variables.Count);
+
+    return Module->Variables.Data[Symbol];
+}
+
 VOID
 CkpPushRoot (
     PCK_VM Vm,
@@ -593,10 +627,6 @@ Return Value:
     return Allocation;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
 CK_ERROR_TYPE
 CkpInterpret (
     PCK_VM Vm,
@@ -633,6 +663,7 @@ Return Value:
 {
 
     PCK_FIBER Fiber;
+    PCK_MODULE Module;
     CK_VALUE NameValue;
 
     if (ModuleName != NULL) {
@@ -640,17 +671,23 @@ Return Value:
         CkpPushRoot(Vm, CK_AS_OBJECT(NameValue));
     }
 
-    Fiber = CkpModuleLoad(Vm, NameValue, Source, Length);
+    Module = CkpModuleLoadSource(Vm, NameValue, Source, Length);
     if (ModuleName != NULL) {
         CkpPopRoot(Vm);
     }
 
-    if (Fiber == NULL) {
+    if ((Module == NULL) || (Module->Fiber == NULL)) {
         return CkErrorCompile;
     }
 
+    Fiber = Module->Fiber;
+    Module->Fiber = NULL;
     return CkpRunInterpreter(Vm, Fiber);
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 CK_ERROR_TYPE
 CkpRunInterpreter (

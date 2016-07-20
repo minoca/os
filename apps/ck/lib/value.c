@@ -39,11 +39,11 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-VOID
-CkpFiberReset (
+PCK_METHOD
+CkpMethodCreate (
     PCK_VM Vm,
-    PCK_FIBER Fiber,
-    PCK_CLOSURE Closure
+    CK_METHOD_TYPE Type,
+    PVOID Function
     );
 
 //
@@ -105,76 +105,6 @@ Return Value:
     Closure->Upvalues = (PCK_UPVALUE *)(Closure + 1);
     CkZero(Closure->Upvalues, UpvalueSize);
     return Closure;
-}
-
-PCK_FIBER
-CkpFiberCreate (
-    PCK_VM Vm,
-    PCK_CLOSURE Closure
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a new fiber object.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Closure - Supplies a pointer to the closure to execute.
-
-Return Value:
-
-    Returns a pointer to the new fiber on success.
-
-    NULL on allocation failure.
-
---*/
-
-{
-
-    PCK_CALL_FRAME CallFrames;
-    PCK_FIBER Fiber;
-    PCK_VALUE Stack;
-    UINTN StackCapacity;
-
-    //
-    // Allocate the call frames first in case it triggers a garbage collection.
-    //
-
-    CallFrames = CkAllocate(Vm, sizeof(CK_CALL_FRAME) * CK_INITIAL_CALL_FRAMES);
-    if (CallFrames == NULL) {
-        return NULL;
-    }
-
-    StackCapacity = CK_INITIAL_CALL_FRAMES;
-    if (Closure != NULL) {
-        while (StackCapacity < Closure->Function->MaxStack + 1) {
-            StackCapacity <<= 1;
-        }
-    }
-
-    Stack = CkAllocate(Vm, StackCapacity * sizeof(CK_VALUE));
-    if (Stack == NULL) {
-        CkFree(Vm, CallFrames);
-        return NULL;
-    }
-
-    Fiber = CkAllocate(Vm, sizeof(CK_FIBER));
-    if (Fiber == NULL) {
-        CkFree(Vm, CallFrames);
-        CkFree(Vm, Stack);
-    }
-
-    CkpInitializeObject(Vm, &(Fiber->Header), CkObjectFiber, Vm->Class.Fiber);
-    Fiber->Frames = CallFrames;
-    Fiber->FrameCapacity = CK_INITIAL_CALL_FRAMES;
-    Fiber->Stack = Stack;
-    Fiber->StackCapacity = StackCapacity;
-    CkpFiberReset(Vm, Fiber, Closure);
-    return Fiber;
 }
 
 PCK_FUNCTION
@@ -306,7 +236,7 @@ Return Value:
 
     switch (Object->Type) {
     case CkObjectClass:
-        CkpClearArray(Vm, &(((PCK_CLASS)Object)->Methods));
+        CkpDictClear(Vm, ((PCK_CLASS)Object)->Methods);
         break;
 
     case CkObjectFiber:
@@ -338,7 +268,7 @@ Return Value:
         break;
 
     case CkObjectList:
-        CkpClearArray(Vm, &(((PCK_LIST)Object)->Elements));
+        CkpListDestroy(Vm, (PCK_LIST)Object);
         break;
 
     case CkObjectDict:
@@ -357,6 +287,7 @@ Return Value:
     case CkObjectRange:
     case CkObjectString:
     case CkObjectUpvalue:
+    case CkObjectMethod:
         break;
 
     default:
@@ -539,30 +470,184 @@ Return Value:
     return Left.U.Object == Right.U.Object;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-VOID
-CkpFiberReset (
-    PCK_VM Vm,
-    PCK_FIBER Fiber,
-    PCK_CLOSURE Closure
+BOOL
+CkpGetValueBoolean (
+    CK_VALUE Value
     )
 
 /*++
 
 Routine Description:
 
-    This routine reinitializes a fiber object for fresh execution.
+    This routine determines if the given value "is" or "isn't".
+
+Arguments:
+
+    Value - Supplies the value to evaluate.
+
+Return Value:
+
+    FALSE if the value is undefined, Null, or zero.
+
+    TRUE otherwise.
+
+--*/
+
+{
+
+    switch (Value.Type) {
+    case CkValueNull:
+    case CkValueUndefined:
+        return FALSE;
+
+    case CkValueInteger:
+        return CK_AS_INTEGER(Value) != 0;
+
+    case CkValueObject:
+        break;
+
+    default:
+
+        CK_ASSERT(FALSE);
+
+        break;
+    }
+
+    return TRUE;
+}
+
+PCK_CLASS
+CkpGetClass (
+    PCK_VM Vm,
+    CK_VALUE Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the class of the given value.
 
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    Fiber - Supplies a pointer to the fiber to reset.
+    Value - Supplies a pointer to the class object.
 
-    Closure - Supplies a pointer to the closure to execute.
+Return Value:
+
+    NULL for the undefined value.
+
+    Returns a pointer to the class for all other values.
+
+--*/
+
+{
+
+    switch (Value.Type) {
+    case CkValueNull:
+        return Vm->Class.Null;
+
+    case CkValueInteger:
+        return Vm->Class.Int;
+
+    case CkValueObject:
+        return CK_AS_OBJECT(Value)->Class;
+
+    case CkValueUndefined:
+        break;
+
+    default:
+
+        CK_ASSERT(FALSE);
+
+        break;
+    }
+
+    return NULL;
+}
+
+PCK_CLASS
+CkpClassAllocate (
+    PCK_VM Vm,
+    CK_SYMBOL_INDEX FieldCount,
+    PCK_STRING_OBJECT Name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates a new class object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldCount - Supplies the number of fields the class has.
+
+    Name - Supplies a pointer to the name of the class.
+
+Return Value:
+
+    Returns a pointer to the newly allocated class object on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PCK_CLASS Class;
+
+    Class = CkAllocate(Vm, sizeof(CK_CLASS));
+    if (Class == NULL) {
+        return NULL;
+    }
+
+    CkpInitializeObject(Vm, &(Class->Header), CkObjectClass, NULL);
+    Class->Super = NULL;
+    Class->FieldCount = FieldCount;
+    Class->Name = Name;
+    Class->Methods = CkpDictCreate(Vm);
+    if (Class->Methods == NULL) {
+        return NULL;
+    }
+
+    return Class;
+}
+
+VOID
+CkpBindMethod (
+    PCK_VM Vm,
+    PCK_MODULE Module,
+    PCK_CLASS Class,
+    CK_SYMBOL_INDEX StringIndex,
+    CK_METHOD_TYPE MethodType,
+    PVOID MethodValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine binds a method to a class.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module the class is defined in.
+
+    Class - Supplies a pointer to the class to bind the method to.
+
+    StringIndex - Supplies the index into the module-level string table of the
+        signature string for this method.
+
+    MethodType - Supplies the type of the method value.
+
+    MethodValue - Supplies a pointer to the primitive function, foreign
+        function, or closure, depending on the type.
 
 Return Value:
 
@@ -572,11 +657,123 @@ Return Value:
 
 {
 
-    Fiber->StackTop = Fiber->Stack;
-    Fiber->OpenUpvalues = NULL;
-    Fiber->Caller = NULL;
-    Fiber->Error = CK_NULL_VALUE;
-    Fiber->FrameCount = 0;
+    CK_VALUE KeyValue;
+    PCK_METHOD Method;
+    PCK_STRING_OBJECT SignatureString;
+    CK_VALUE Value;
+
+    CK_ASSERT(StringIndex < Module->Strings.List.Count);
+
+    SignatureString = CK_AS_STRING(Module->Strings.List.Data[StringIndex]);
+    Method = CkpMethodCreate(Vm, MethodType, MethodValue);
+    if (Method == NULL) {
+        return;
+    }
+
+    CK_OBJECT_VALUE(KeyValue, SignatureString);
+    CK_OBJECT_VALUE(Value, Method);
+    CkpDictSet(Vm, Class->Methods, KeyValue, Value);
     return;
+}
+
+VOID
+CkpBindSuperclass (
+    PCK_VM Vm,
+    PCK_CLASS Class,
+    PCK_CLASS Super
+    )
+
+/*++
+
+Routine Description:
+
+    This routine binds a class to its superclass.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Class - Supplies a pointer to the subclass.
+
+    Super - Supplies a pointer to the superclass.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CK_DICT_ITERATOR Iterator;
+    CK_VALUE Key;
+
+    Class->Super = Super;
+    Class->SuperFieldCount = Super->SuperFieldCount + Super->FieldCount;
+
+    //
+    // Copy all the methods in the superclass to this class.
+    //
+
+    CkpDictInitializeIterator(Vm, Super->Methods, &Iterator);
+    while (TRUE) {
+        Key = CkpDictIterate(Super->Methods, &Iterator);
+        if (CK_IS_UNDEFINED(Key)) {
+            break;
+        }
+
+        CkpDictSet(Vm, Class->Methods, Key, CkpDictGet(Super->Methods, Key));
+    }
+
+    return;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+PCK_METHOD
+CkpMethodCreate (
+    PCK_VM Vm,
+    CK_METHOD_TYPE Type,
+    PVOID Function
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new method object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Type - Supplies the type of the method object.
+
+    Function - Supplies a pointer to the primitive routine, foreign routine,
+        or function object to call, depending on the type.
+
+Return Value:
+
+    Returns a pointer to a method object on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PCK_METHOD Method;
+
+    Method = CkAllocate(Vm, sizeof(CK_METHOD));
+    if (Method == NULL) {
+        return NULL;
+    }
+
+    CkpInitializeObject(Vm, &(Method->Header), CkObjectMethod, NULL);
+    Method->Type = Type;
+    Method->U.Primitive = Function;
+    return Method;
 }
 

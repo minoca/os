@@ -728,12 +728,15 @@ Return Value:
     // Import statements can take a couple of forms.
     // import mydir.mymodule compiles to:
     //     var mymodule = Core.importModule("mydir.mymodule");
+    //     mymodule.run();
     // from mydir.mymodule import thing1, thing2 compiles to:
     //     var mymodule = Core.importModule("mydir.mymodule");
-    //     thing1 = mymodule.thing1;
-    //     thing2 = mymodule.thing2;
+    //     mymodule.run();
+    //     thing1 = mymodule.get("thing1");
+    //     thing2 = mymodule.get("thing2");
     // from mydir.mymodule import * compiles to:
     //     var mymodule = Core.importModule("mydir.mymodule");
+    //     mymodule.run();
     //     Core.importAllSymbols(mymodule);
     //
     // Start by loading the Core module and pushing it onto the stack.
@@ -771,6 +774,12 @@ Return Value:
     //
 
     CkpCallMethod(Compiler, 1, "importModule@1", 14);
+
+    //
+    // Run the module contents to get everything actually loaded.
+    //
+
+    CkpCallMethod(Compiler, 0, "run@0", 5);
 
     //
     // Create a variable to store the resulting module.
@@ -832,7 +841,7 @@ Return Value:
                                      Token->Size);
 
         CkpEmitConstant(Compiler, NameString);
-        CkpCallMethod(Compiler, 1, "__getModuleVariable@1", 21);
+        CkpCallMethod(Compiler, 1, "get@1", 21);
         if (IdentifierList->Children > 1) {
             IdentifierList = CK_GET_AST_NODE(Compiler,
                                              IdentifierList->ChildIndex);

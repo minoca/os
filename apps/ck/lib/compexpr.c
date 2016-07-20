@@ -814,7 +814,7 @@ Return Value:
     while (TRUE) {
         LastChild = CurrentNode->ChildIndex + CurrentNode->Children - 1;
         CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, LastChild));
-        CkpCallMethod(Compiler, 2, "_addEntry@2", 13);
+        CkpCallMethod(Compiler, 2, "set@2", 5);
         if (CurrentNode == Node) {
             break;
         }
@@ -932,7 +932,7 @@ Return Value:
     while (TRUE) {
         LastChild = CurrentNode->ChildIndex + CurrentNode->Children - 1;
         CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, LastChild));
-        CkpCallMethod(Compiler, 1, "_addElement@1", 13);
+        CkpCallMethod(Compiler, 1, "append@1", 8);
         if (CurrentNode == Node) {
             break;
         }

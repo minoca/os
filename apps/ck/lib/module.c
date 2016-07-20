@@ -45,16 +45,107 @@ CkpModuleGet (
     CK_VALUE Name
     );
 
+BOOL
+CkpModuleRun (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpModuleGetVariable (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[] = {
+    {"run@0", CkpModuleRun},
+    {"get@1", CkpModuleGetVariable},
+    {NULL, NULL}
+};
 
 //
 // ------------------------------------------------------------------ Functions
 //
 
-PCK_FIBER
+CK_VALUE
 CkpModuleLoad (
+    PCK_VM Vm,
+    CK_VALUE ModuleName
+    )
+
+/*++
+
+Routine Description:
+
+    This routine loads the given module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies the module name value.
+
+Return Value:
+
+    Returns the newly loaded module value on success.
+
+    CK_NULL_VALUE on failure.
+
+--*/
+
+{
+
+    PCK_MODULE Module;
+    PCK_STRING_OBJECT NameString;
+    UINTN Size;
+    PSTR Source;
+    CK_VALUE Value;
+
+    CK_ASSERT(CK_IS_STRING(ModuleName));
+
+    NameString = CK_AS_STRING(ModuleName);
+
+    //
+    // If the module already exists, just return it.
+    //
+
+    Module = CkpModuleGet(Vm, ModuleName);
+    if (Module != NULL) {
+        CK_OBJECT_VALUE(Value, Module);
+        return Value;
+    }
+
+    if (Vm->Configuration.LoadModule == NULL) {
+        CkpRuntimeError(Vm, "Module load not supported");
+        return CkNullValue;
+    }
+
+    //
+    // Call out to the big city to actually go get the module.
+    //
+
+    Source = Vm->Configuration.LoadModule(Vm, NameString->Value, &Size);
+    if (Source == NULL) {
+        CkpRuntimeError(Vm, "Module load error: %s", NameString->Value);
+        return CkNullValue;
+    }
+
+    Module = CkpModuleLoadSource(Vm, ModuleName, Source, Size);
+    if (Module == NULL) {
+        CkpRuntimeError(Vm, "Module compile error: %s", NameString->Value);
+        return CkNullValue;
+    }
+
+    CK_OBJECT_VALUE(Value, Module);
+    return Value;
+}
+
+PCK_MODULE
+CkpModuleLoadSource (
     PCK_VM Vm,
     CK_VALUE ModuleName,
     PSTR Source,
@@ -81,9 +172,9 @@ Arguments:
 
 Return Value:
 
-    Returns a pointer to a newly created fiber to execute on success.
+    Returns a pointer to the newly loaded module on success.
 
-    NULL on allocation failure.
+    NULL on failure.
 
 --*/
 
@@ -91,7 +182,6 @@ Return Value:
 
     PCK_CLOSURE Closure;
     PCK_MODULE CoreModule;
-    PCK_FIBER Fiber;
     PCK_FUNCTION Function;
     CK_SYMBOL_INDEX Index;
     PCK_MODULE Module;
@@ -137,10 +227,10 @@ Return Value:
     }
 
     CkpPushRoot(Vm, &(Closure->Header));
-    Fiber = CkpFiberCreate(Vm, Closure);
+    Module->Fiber = CkpFiberCreate(Vm, Closure);
     CkpPopRoot(Vm);
     CkpPopRoot(Vm);
-    return Fiber;
+    return Module;
 }
 
 PCK_MODULE
@@ -246,5 +336,115 @@ Return Value:
     }
 
     return CK_AS_MODULE(Module);
+}
+
+//
+// Module class primitives
+//
+
+BOOL
+CkpModuleRun (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine executes the contents of a module, if not already run.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_MODULE Module;
+
+    Module = CK_AS_MODULE(Arguments[0]);
+    Fiber = Module->Fiber;
+    if (Fiber == NULL) {
+        Arguments[0] = CkNullValue;
+        return TRUE;
+    }
+
+    //
+    // Clear out and switch to the module contents fiber.
+    //
+
+    CK_ASSERT((Fiber->FrameCount != 0) && (CK_IS_NULL(Fiber->Error)));
+
+    Module->Fiber = NULL;
+    Fiber->Caller = Vm->Fiber;
+    Vm->Fiber = Fiber;
+
+    //
+    // Return false to indicate a fiber switch.
+    //
+
+    return FALSE;
+}
+
+BOOL
+CkpModuleGetVariable (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a module level variable.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_MODULE Module;
+    PCK_STRING_OBJECT Name;
+
+    Module = CK_AS_MODULE(Arguments[0]);
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected a string");
+        return FALSE;
+    }
+
+    Name = CK_AS_STRING(Arguments[1]);
+    Arguments[0] = CkpFindModuleVariable(Vm, Module, Name->Value);
+    if (CK_IS_UNDEFINED(Arguments[0])) {
+        CkpRuntimeError(Vm,
+                        "No such variable '%s' in module '%s'",
+                        Name->Value,
+                        Module->Name->Value);
+
+        return FALSE;
+    }
+
+    return TRUE;
 }
 

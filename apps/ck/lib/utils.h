@@ -284,3 +284,70 @@ Return Value:
 
 --*/
 
+UINTN
+CkpGetRange (
+    PCK_VM Vm,
+    PCK_RANGE Range,
+    PUINTN Count,
+    PLONG Step
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the starting index, length, and direction from a
+    given range.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Range - Supplies a pointer to the range to get dimensions from.
+
+    Count - Supplies a pointer that on input contains the number of elements
+        possible to iterate over. On output, returns the number of elements to
+        iterate over will be returned.
+
+    Step - Supplies a pointer where +1 or -1 will be returned to indicate the
+        direction.
+
+Return Value:
+
+    Returns the index to start with on success.
+
+    MAX_UINTN on validation failure. A runtime error will the thrown.
+
+--*/
+
+UINTN
+CkpGetIndex (
+    PCK_VM Vm,
+    CK_VALUE Index,
+    UINTN Count
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns an index value, handling invalid cases and converting
+    negative values.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Index - Supplies the index value given. It will be validated that this is
+        an integer.
+
+    Count - Supplies the number of elements in the actual array, for
+        validatation and negative purposes.
+
+Return Value:
+
+    Returns an index in the range of 0 to Count on success.
+
+    MAX_UINTN on validation failure. A runtime error will the thrown.
+
+--*/

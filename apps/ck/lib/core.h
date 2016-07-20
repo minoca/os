@@ -28,9 +28,40 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure contains the state for the Chalk interpreter.
+
+Members:
+
+    Name - Stores the name string of the function to attach to the class.
+
+    Primitive - Stores a pointer to the primitive function to call for the
+        function
+
+--*/
+
+typedef struct _CK_PRIMITIVE_DESCRIPTION {
+    PSTR Name;
+    PCK_PRIMITIVE_METHOD Primitive;
+} CK_PRIMITIVE_DESCRIPTION, *PCK_PRIMITIVE_DESCRIPTION;
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+extern CK_PRIMITIVE_DESCRIPTION CkIntPrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkIntStaticPrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkRangePrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkStringStaticPrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkListPrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkFiberPrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkFiberStaticPrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[];
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -58,3 +89,29 @@ Return Value:
 
 --*/
 
+VOID
+CkpRuntimeError (
+    PCK_VM Vm,
+    PSTR MessageFormat,
+    ...
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reports a runtime error in the current fiber.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    MessageFormat - Supplies the printf message format string.
+
+    ... - Supplies the remaining arguments.
+
+Return Value:
+
+    None.
+
+--*/

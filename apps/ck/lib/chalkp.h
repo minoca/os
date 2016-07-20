@@ -28,6 +28,7 @@ Author:
 #include <string.h>
 
 #include "value.h"
+#include "core.h"
 #include "utils.h"
 #include "vm.h"
 

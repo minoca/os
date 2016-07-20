@@ -33,6 +33,22 @@ Author:
 #define CK_IS_INTEGER(_Value) ((_Value).Type == CkValueInteger)
 #define CK_IS_UNDEFINED(_Value) ((_Value).Type == CkValueUndefined)
 
+#define CK_IS_OBJECT_TYPE(_Value, _Type) \
+    ((CK_IS_OBJECT(_Value)) && (CK_AS_OBJECT(_Value)->Type == (_Type)))
+
+#define CK_IS_CLASS(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectClass)
+#define CK_IS_CLOSURE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectClosure)
+#define CK_IS_FIBER(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectFiber)
+#define CK_IS_FUNCTION(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectFunction)
+#define CK_IS_INSTANCE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectInstance)
+#define CK_IS_LIST(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectList)
+#define CK_IS_DICT(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectDict)
+#define CK_IS_MODULE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectModule)
+#define CK_IS_RANGE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectRange)
+#define CK_IS_STRING(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectString)
+#define CK_IS_UPVALUE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectUpvalue)
+#define CK_IS_METHOD(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectMethod)
+
 //
 // This macro evaluates to the object pointer within a given value.
 //
@@ -50,6 +66,8 @@ Author:
 #define CK_AS_MODULE(_Value) ((PCK_MODULE)CK_AS_OBJECT(_Value))
 #define CK_AS_RANGE(_Value) ((PCK_RANGE)CK_AS_OBJECT(_Value))
 #define CK_AS_STRING(_Value) ((PCK_STRING_OBJECT)CK_AS_OBJECT(_Value))
+#define CK_AS_UPVALUE(_Value) ((PCK_UPVALUE)CK_AS_OBJECT(_Value))
+#define CK_AS_METHOD(_Value) ((PCK_METHOD)CK_AS_OBJECT(_Value))
 
 //
 // These macros initialize a value with the given object or primitive.
@@ -110,6 +128,7 @@ typedef enum _CK_OBJECT_TYPE {
     CkObjectRange,
     CkObjectString,
     CkObjectUpvalue,
+    CkObjectMethod,
     CkObjectTypeCount
 } CK_OBJECT_TYPE, *PCK_OBJECT_TYPE;
 
@@ -200,29 +219,6 @@ typedef struct _CK_VALUE_ARRAY {
     UINTN Count;
     UINTN Capacity;
 } CK_VALUE_ARRAY, *PCK_VALUE_ARRAY;
-
-/*++
-
-Structure Description:
-
-    This structure defines an array of Chalk methods.
-
-Members:
-
-    Data - Stores a pointer to the array itself.
-
-    Count - Stores the number of elements currently in the array.
-
-    Capacity - Stores the maximum size of the array before it must be
-        reallocated.
-
---*/
-
-typedef struct _CK_METHOD_ARRAY {
-    PCK_METHOD Data;
-    UINTN Count;
-    UINTN Capacity;
-} CK_METHOD_ARRAY, *PCK_METHOD_ARRAY;
 
 /*++
 
@@ -402,6 +398,8 @@ typedef struct _CK_DICT {
     PCK_DICT_ENTRY Entries;
 } CK_DICT, *PCK_DICT;
 
+typedef UINTN CK_DICT_ITERATOR, *PCK_DICT_ITERATOR;
+
 /*++
 
 Structure Description:
@@ -440,6 +438,9 @@ Members:
 
     Name - Stores a pointer to the string containing the name of the module.
 
+    Fiber - Stores a pointer to the fiber used to load the module contents.
+        Once loaded, this becomes NULL.
+
 --*/
 
 typedef struct _CK_MODULE {
@@ -448,6 +449,7 @@ typedef struct _CK_MODULE {
     CK_STRING_TABLE VariableNames;
     CK_STRING_TABLE Strings;
     PCK_STRING_OBJECT Name;
+    PCK_FIBER Fiber;
 } CK_MODULE, *PCK_MODULE;
 
 /*++
@@ -573,6 +575,8 @@ Structure Description:
 
 Members:
 
+    Header - Stores the required object header.
+
     Type - Stores the method type, which indicates which member of the union
         below is valid.
 
@@ -587,6 +591,7 @@ Members:
 --*/
 
 struct _CK_METHOD {
+    CK_OBJECT Header;
     CK_METHOD_TYPE Type;
     union {
         PCK_PRIMITIVE_METHOD Primitive;
@@ -608,13 +613,15 @@ Members:
 
     Super - Stores a pointer to the superclass.
 
+    SuperFieldCount - Stores the cumulative number of fields in the hierarchy
+        of super classes up to the root.
+
     FieldCount - Stores the number of fields required for an instance of this
         class, including all of its superclass fields.
 
-    Methods - Stores an array of methods defined by or inherited by this class.
-        Methods are called by symbol index, so this array is index by symbol.
-        It means some elements of this array may be empty for superclass
-        methods this class doesn't implement.
+    Methods - Stores a dictionary of methods defined by or inherited by this
+        class. The keys are the signature strings, and the values are method
+        objects.
 
     Name - Stores a pointer to the string object containing the name of the
         class.
@@ -624,8 +631,9 @@ Members:
 struct _CK_CLASS {
     CK_OBJECT Header;
     PCK_CLASS Super;
+    CK_SYMBOL_INDEX SuperFieldCount;
     CK_SYMBOL_INDEX FieldCount;
-    CK_METHOD_ARRAY Methods;
+    PCK_DICT Methods;
     PCK_STRING_OBJECT Name;
 };
 
@@ -822,32 +830,6 @@ Return Value:
 
 --*/
 
-PCK_FIBER
-CkpFiberCreate (
-    PCK_VM Vm,
-    PCK_CLOSURE Closure
-    );
-
-/*++
-
-Routine Description:
-
-    This routine creates a new fiber object.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Closure - Supplies a pointer to the closure to execute.
-
-Return Value:
-
-    Returns a pointer to the new fiber on success.
-
-    NULL on allocation failure.
-
---*/
-
 PCK_FUNCTION
 CkpFunctionCreate (
     PCK_VM Vm,
@@ -1015,6 +997,149 @@ Return Value:
 
 --*/
 
+BOOL
+CkpGetValueBoolean (
+    CK_VALUE Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value "is" or "isn't".
+
+Arguments:
+
+    Value - Supplies the value to evaluate.
+
+Return Value:
+
+    FALSE if the value is undefined, Null, or zero.
+
+    TRUE otherwise.
+
+--*/
+
+PCK_CLASS
+CkpGetClass (
+    PCK_VM Vm,
+    CK_VALUE Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the class of the given value.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Value - Supplies a pointer to the class object.
+
+Return Value:
+
+    NULL for the undefined value.
+
+    Returns a pointer to the class for all other values.
+
+--*/
+
+PCK_CLASS
+CkpClassAllocate (
+    PCK_VM Vm,
+    CK_SYMBOL_INDEX FieldCount,
+    PCK_STRING_OBJECT Name
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates a new class object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldCount - Supplies the number of fields the class has.
+
+    Name - Supplies a pointer to the name of the class.
+
+Return Value:
+
+    Returns a pointer to the newly allocated class object on success.
+
+    NULL on allocation failure.
+
+--*/
+
+VOID
+CkpBindMethod (
+    PCK_VM Vm,
+    PCK_MODULE Module,
+    PCK_CLASS Class,
+    CK_SYMBOL_INDEX StringIndex,
+    CK_METHOD_TYPE MethodType,
+    PVOID MethodValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine binds a method to a class.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module the class is defined in.
+
+    Class - Supplies a pointer to the class to bind the method to.
+
+    StringIndex - Supplies the index into the module-level string table of the
+        signature string for this method.
+
+    MethodType - Supplies the type of the method value.
+
+    MethodValue - Supplies a pointer to the primitive function, foreign
+        function, or closure, depending on the type.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+CkpBindSuperclass (
+    PCK_VM Vm,
+    PCK_CLASS Class,
+    PCK_CLASS Super
+    );
+
+/*++
+
+Routine Description:
+
+    This routine binds a class to its superclass.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Class - Supplies a pointer to the subclass.
+
+    Super - Supplies a pointer to the superclass.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // Dictionary functions
 //
@@ -1143,6 +1268,231 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     Dict - Supplies a pointer to the dictionary object.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+CkpDictInitializeIterator (
+    PCK_VM Vm,
+    PCK_DICT Dict,
+    PCK_DICT_ITERATOR Iterator
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes a dictionary iterator.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Dict - Supplies a pointer to the dictionary object.
+
+    Iterator - Supplies a pointer to the dictionary iterator.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_VALUE
+CkpDictIterate (
+    PCK_DICT Dict,
+    PCK_DICT_ITERATOR Iterator
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the next key in a dictionary iteration.
+
+Arguments:
+
+    Dict - Supplies a pointer to the dictionary object.
+
+    Iterator - Supplies a pointer to the dictionary iterator.
+
+Return Value:
+
+    Returns the next key on success.
+
+    Returns an undefined value if there are no more keys.
+
+--*/
+
+//
+// List functions
+//
+
+PCK_LIST
+CkpListCreate (
+    PCK_VM Vm,
+    UINTN ElementCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new list object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ElementCount - Supplies the initial capacity and count to allocate. The
+        caller is expected to fill these in with values, as the count is set
+        to this number so the elements are live.
+
+Return Value:
+
+    Returns a pointer to the created list on success.
+
+    NULL on allocation failure.
+
+--*/
+
+VOID
+CkpListDestroy (
+    PCK_VM Vm,
+    PCK_LIST List
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys a list object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    List - Supplies a pointer to the list to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+CkpListInsert (
+    PCK_VM Vm,
+    PCK_LIST List,
+    CK_VALUE Element,
+    UINTN Index
+    );
+
+/*++
+
+Routine Description:
+
+    This routine inserts an element into the list.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    List - Supplies a pointer to the list to insert into.
+
+    Element - Supplies the element to insert.
+
+    Index - Supplies the index into the list to insert. Valid values are 0 to
+        the current size of the list, inclusive.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_VALUE
+CkpListRemoveIndex (
+    PCK_VM Vm,
+    PCK_LIST List,
+    UINTN Index
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes the element at the given index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    List - Supplies a pointer to the list to operate on.
+
+    Index - Supplies the index into the list to remove. The elements after this
+        one will be shifted down. Valid values are between 0 and the number of
+        elements in the list, exclusive.
+
+Return Value:
+
+    Returns the element at the index that was removed.
+
+--*/
+
+PCK_LIST
+CkpListConcatenate (
+    PCK_VM Vm,
+    PCK_LIST Destination,
+    PCK_LIST Source
+    );
+
+/*++
+
+Routine Description:
+
+    This routine concatenates two lists together. It can alternatively be used
+    to copy a list.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Destination - Supplies an optional pointer to the list to operate on. If
+        this is NULL, then a new list is created.
+
+    Source - Supplies the list to append to the end of the destination list.
+
+Return Value:
+
+    Returns the destination list on success. If no destination list was
+    provided, returns a pointer to a new list.
+
+    NULL on allocation failure.
+
+--*/
+
+VOID
+CkpListClear (
+    PCK_VM Vm,
+    PCK_LIST List
+    );
+
+/*++
+
+Routine Description:
+
+    This routine resets a list to be empty.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    List - Supplies a pointer to the list to clear.
 
 Return Value:
 
@@ -1536,6 +1886,36 @@ Arguments:
 Return Value:
 
     Returns a string value for the fake string.
+
+--*/
+
+//
+// Fiber functions
+//
+
+PCK_FIBER
+CkpFiberCreate (
+    PCK_VM Vm,
+    PCK_CLOSURE Closure
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new fiber object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Closure - Supplies a pointer to the closure to execute.
+
+Return Value:
+
+    Returns a pointer to the new fiber on success.
+
+    NULL on allocation failure.
 
 --*/
 

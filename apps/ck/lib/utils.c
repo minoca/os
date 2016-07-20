@@ -391,6 +391,176 @@ Return Value:
     return CkSuccess;
 }
 
+UINTN
+CkpGetRange (
+    PCK_VM Vm,
+    PCK_RANGE Range,
+    PUINTN Count,
+    PLONG Step
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the starting index, length, and direction from a
+    given range.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Range - Supplies a pointer to the range to get dimensions from.
+
+    Count - Supplies a pointer that on input contains the number of elements
+        possible to iterate over. On output, returns the number of elements to
+        iterate over will be returned.
+
+    Step - Supplies a pointer where +1 or -1 will be returned to indicate the
+        direction.
+
+Return Value:
+
+    Returns the index to start with on success.
+
+    MAX_UINTN on validation failure. A runtime error will the thrown.
+
+--*/
+
+{
+
+    CK_INTEGER From;
+    CK_INTEGER To;
+
+    //
+    // If the thing is size zero, then it's easy.
+    //
+
+    if (*Count == 0) {
+        return 0;
+    }
+
+    //
+    // Create a left side. If it's out of range, make it in range.
+    //
+
+    From = Range->From.Int;
+    if (From < 0) {
+        From += *Count;
+    }
+
+    if (From < 0) {
+        From = 0;
+
+    } else if (From >= *Count) {
+        From = *Count - 1;
+    }
+
+    To = Range->To.Int;
+    if (To < 0) {
+        To += *Count;
+    }
+
+    //
+    // Convert an exclusive range into an inclusive one.
+    //
+
+    if (Range->Inclusive == FALSE) {
+
+        //
+        // If the start and end are equal, it's empty.
+        //
+
+        if (From == To) {
+            *Count = 0;
+            return From;
+        }
+
+        if (To >= From) {
+            To -= 1;
+
+        } else {
+            To += 1;
+        }
+    }
+
+    //
+    // Clip the range to be in bounds.
+    //
+
+    if (To < 0) {
+        To = 0;
+
+    } else if (To >= *Count) {
+        To = *Count - 1;
+    }
+
+    if (To >= From) {
+        *Count = To - From + 1;
+        *Step = 1;
+
+    } else {
+        *Count = From - To + 1;
+        *Step = -1;
+    }
+
+    return From;
+}
+
+UINTN
+CkpGetIndex (
+    PCK_VM Vm,
+    CK_VALUE Index,
+    UINTN Count
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns an index value, handling invalid cases and converting
+    negative values.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Index - Supplies the index value given. It will be validated that this is
+        an integer.
+
+    Count - Supplies the number of elements in the actual array, for
+        validatation and negative purposes.
+
+Return Value:
+
+    Returns an index in the range of 0 to Count on success.
+
+    MAX_UINTN on validation failure. A runtime error will the thrown.
+
+--*/
+
+{
+
+    CK_INTEGER IndexValue;
+
+    if (!CK_IS_INTEGER(Index)) {
+        CkpRuntimeError(Vm, "Expected an integer");
+        return MAX_UINTN;
+    }
+
+    IndexValue = CK_AS_INTEGER(Index);
+    if (IndexValue < 0) {
+        IndexValue += Count;
+    }
+
+    if ((IndexValue < 0) || (IndexValue >= Count) || (IndexValue > MAX_INTN)) {
+        CkpRuntimeError(Vm, "Index %lld out of range", (LONGLONG)IndexValue);
+        return MAX_UINTN;
+    }
+
+    return IndexValue;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
