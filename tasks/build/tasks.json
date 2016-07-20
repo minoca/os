@@ -439,6 +439,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/lua-5.3.3"
         },
         {
+            "name": "Make emacs",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/emacs-24.5"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
