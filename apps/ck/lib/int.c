@@ -340,7 +340,7 @@ Return Value:
 
     PSTR AfterScan;
     CK_INTEGER Integer;
-    PCK_STRING_OBJECT StringObject;
+    PCK_STRING StringObject;
 
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "Expected a string");

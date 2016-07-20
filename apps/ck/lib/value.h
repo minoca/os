@@ -65,7 +65,7 @@ Author:
 #define CK_AS_DICT(_Value) ((PCK_DICT)CK_AS_OBJECT(_Value))
 #define CK_AS_MODULE(_Value) ((PCK_MODULE)CK_AS_OBJECT(_Value))
 #define CK_AS_RANGE(_Value) ((PCK_RANGE)CK_AS_OBJECT(_Value))
-#define CK_AS_STRING(_Value) ((PCK_STRING_OBJECT)CK_AS_OBJECT(_Value))
+#define CK_AS_STRING(_Value) ((PCK_STRING)CK_AS_OBJECT(_Value))
 #define CK_AS_UPVALUE(_Value) ((PCK_UPVALUE)CK_AS_OBJECT(_Value))
 #define CK_AS_METHOD(_Value) ((PCK_METHOD)CK_AS_OBJECT(_Value))
 
@@ -318,12 +318,12 @@ Members:
 
 --*/
 
-typedef struct _CK_STRING_OBJECT {
+typedef struct _CK_STRING {
     CK_OBJECT Header;
     UINTN Length;
     ULONG Hash;
     PSTR Value;
-} CK_STRING_OBJECT, *PCK_STRING_OBJECT;
+} CK_STRING, *PCK_STRING;
 
 /*++
 
@@ -448,7 +448,7 @@ typedef struct _CK_MODULE {
     CK_VALUE_ARRAY Variables;
     CK_STRING_TABLE VariableNames;
     CK_STRING_TABLE Strings;
-    PCK_STRING_OBJECT Name;
+    PCK_STRING Name;
     PCK_FIBER Fiber;
 } CK_MODULE, *PCK_MODULE;
 
@@ -634,7 +634,7 @@ struct _CK_CLASS {
     CK_SYMBOL_INDEX SuperFieldCount;
     CK_SYMBOL_INDEX FieldCount;
     PCK_DICT Methods;
-    PCK_STRING_OBJECT Name;
+    PCK_STRING Name;
 };
 
 /*++
@@ -1050,7 +1050,7 @@ PCK_CLASS
 CkpClassAllocate (
     PCK_VM Vm,
     CK_SYMBOL_INDEX FieldCount,
-    PCK_STRING_OBJECT Name
+    PCK_STRING Name
     );
 
 /*++
@@ -1538,7 +1538,7 @@ Return Value:
 CK_VALUE
 CkpStringCreateFromRange (
     PCK_VM Vm,
-    PCK_STRING_OBJECT Source,
+    PCK_STRING Source,
     UINTN Start,
     UINTN Count,
     LONG Step
@@ -1600,7 +1600,7 @@ Return Value:
 CK_VALUE
 CkpStringCreateFromIndex (
     PCK_VM Vm,
-    PCK_STRING_OBJECT Source,
+    PCK_STRING Source,
     UINTN Index
     );
 
@@ -1688,8 +1688,8 @@ Return Value:
 
 UINTN
 CkpStringFind (
-    PCK_STRING_OBJECT Haystack,
-    PCK_STRING_OBJECT Needle
+    PCK_STRING Haystack,
+    PCK_STRING Needle
     );
 
 /*++
@@ -1810,7 +1810,7 @@ Return Value:
 
 --*/
 
-PCK_STRING_OBJECT
+PCK_STRING
 CkpStringAllocate (
     PCK_VM Vm,
     UINTN Length
@@ -1839,7 +1839,7 @@ Return Value:
 
 VOID
 CkpStringHash (
-    PCK_STRING_OBJECT String
+    PCK_STRING String
     );
 
 /*++
@@ -1860,7 +1860,7 @@ Return Value:
 
 CK_VALUE
 CkpStringFake (
-    PCK_STRING_OBJECT FakeStringObject,
+    PCK_STRING FakeStringObject,
     PSTR String,
     UINTN Length
     );

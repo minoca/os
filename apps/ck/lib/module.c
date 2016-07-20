@@ -100,7 +100,7 @@ Return Value:
 {
 
     PCK_MODULE Module;
-    PCK_STRING_OBJECT NameString;
+    PCK_STRING NameString;
     UINTN Size;
     PSTR Source;
     CK_VALUE Value;
@@ -185,7 +185,7 @@ Return Value:
     PCK_FUNCTION Function;
     CK_SYMBOL_INDEX Index;
     PCK_MODULE Module;
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
     CK_VALUE Value;
 
     Module = CkpModuleGet(Vm, ModuleName);
@@ -236,7 +236,7 @@ Return Value:
 PCK_MODULE
 CkpModuleCreate (
     PCK_VM Vm,
-    PCK_STRING_OBJECT Name
+    PCK_STRING Name
     )
 
 /*++
@@ -426,7 +426,7 @@ Return Value:
 {
 
     PCK_MODULE Module;
-    PCK_STRING_OBJECT Name;
+    PCK_STRING Name;
 
     Module = CK_AS_MODULE(Arguments[0]);
     if (!CK_IS_STRING(Arguments[1])) {

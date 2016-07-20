@@ -195,7 +195,7 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
     CK_VALUE Value;
 
     String = CkpStringAllocate(Vm, Length);
@@ -215,7 +215,7 @@ Return Value:
 CK_VALUE
 CkpStringCreateFromRange (
     PCK_VM Vm,
-    PCK_STRING_OBJECT Source,
+    PCK_STRING Source,
     UINTN Start,
     UINTN Count,
     LONG Step
@@ -255,7 +255,7 @@ Return Value:
     PUCHAR From;
     UINTN Index;
     UINTN Length;
-    PCK_STRING_OBJECT NewString;
+    PCK_STRING NewString;
     UINTN SourceLength;
     PUCHAR To;
     CK_VALUE Value;
@@ -334,7 +334,7 @@ Return Value:
 CK_VALUE
 CkpStringCreateFromIndex (
     PCK_VM Vm,
-    PCK_STRING_OBJECT Source,
+    PCK_STRING Source,
     UINTN Index
     )
 
@@ -459,10 +459,10 @@ Return Value:
     va_list ArgumentList;
     PSTR Current;
     UINTN Length;
-    PCK_STRING_OBJECT NewString;
+    PCK_STRING NewString;
     PSTR Out;
     PSTR Parameter;
-    PCK_STRING_OBJECT StringParameter;
+    PCK_STRING StringParameter;
     UINTN TotalLength;
     CK_VALUE Value;
 
@@ -541,8 +541,8 @@ Return Value:
 
 UINTN
 CkpStringFind (
-    PCK_STRING_OBJECT Haystack,
-    PCK_STRING_OBJECT Needle
+    PCK_STRING Haystack,
+    PCK_STRING Needle
     )
 
 /*++
@@ -861,7 +861,7 @@ Return Value:
     return Character;
 }
 
-PCK_STRING_OBJECT
+PCK_STRING
 CkpStringAllocate (
     PCK_VM Vm,
     UINTN Length
@@ -890,9 +890,9 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
 
-    String = CkAllocate(Vm, sizeof(CK_STRING_OBJECT) + Length + 1);
+    String = CkAllocate(Vm, sizeof(CK_STRING) + Length + 1);
     if (String == NULL) {
         return NULL;
     }
@@ -910,7 +910,7 @@ Return Value:
 
 VOID
 CkpStringHash (
-    PCK_STRING_OBJECT String
+    PCK_STRING String
     )
 
 /*++
@@ -951,7 +951,7 @@ Return Value:
 
 CK_VALUE
 CkpStringFake (
-    PCK_STRING_OBJECT FakeStringObject,
+    PCK_STRING FakeStringObject,
     PSTR String,
     UINTN Length
     )
@@ -1076,7 +1076,7 @@ Return Value:
 {
 
     UINTN Index;
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
 
     String = CK_AS_STRING(Arguments[0]);
     Index = CkpGetIndex(Vm, Arguments[1], String->Length);
@@ -1118,7 +1118,7 @@ Return Value:
 
     UINT Character;
     INTN Index;
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
 
     String = CK_AS_STRING(Arguments[0]);
     Index = CkpGetIndex(Vm, Arguments[1], String->Length);
@@ -1166,9 +1166,9 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT Haystack;
+    PCK_STRING Haystack;
     UINTN Index;
-    PCK_STRING_OBJECT Needle;
+    PCK_STRING Needle;
 
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "Expected a string");
@@ -1216,8 +1216,8 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT Haystack;
-    PCK_STRING_OBJECT Needle;
+    PCK_STRING Haystack;
+    PCK_STRING Needle;
 
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "Expected a string");
@@ -1268,9 +1268,9 @@ Return Value:
 {
 
     INT Compare;
-    PCK_STRING_OBJECT Haystack;
+    PCK_STRING Haystack;
     PSTR HaystackEnd;
-    PCK_STRING_OBJECT Needle;
+    PCK_STRING Needle;
 
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "Expected a string");
@@ -1324,9 +1324,9 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT Haystack;
+    PCK_STRING Haystack;
     UINTN Index;
-    PCK_STRING_OBJECT Needle;
+    PCK_STRING Needle;
 
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "Expected a string");
@@ -1376,7 +1376,7 @@ Return Value:
 {
 
     UINTN Index;
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
 
     String = CK_AS_STRING(Arguments[0]);
 
@@ -1479,9 +1479,9 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT Copy;
+    PCK_STRING Copy;
     UINTN Index;
-    PCK_STRING_OBJECT Source;
+    PCK_STRING Source;
     PSTR String;
 
     Source = CK_AS_STRING(Arguments[0]);
@@ -1529,9 +1529,9 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT Copy;
+    PCK_STRING Copy;
     UINTN Index;
-    PCK_STRING_OBJECT Source;
+    PCK_STRING Source;
     PSTR String;
 
     Source = CK_AS_STRING(Arguments[0]);
@@ -1578,7 +1578,7 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
 
     String = CK_AS_STRING(Arguments[0]);
     CK_INT_VALUE(Arguments[0], String->Length);
@@ -1653,7 +1653,7 @@ Return Value:
     UINTN Count;
     INTN Start;
     INTN Step;
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
 
     String = CK_AS_STRING(Arguments[0]);
     if (CK_IS_INTEGER(Arguments[1])) {

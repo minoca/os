@@ -395,7 +395,7 @@ Return Value:
     PSTR LocalType;
     CK_OPCODE Op;
     UINTN Start;
-    PCK_STRING_OBJECT StringObject;
+    PCK_STRING StringObject;
     CK_SYMBOL_INDEX Symbol;
 
     Start = Offset;
@@ -650,7 +650,7 @@ Return Value:
 
     switch (Object->Type) {
     case CkObjectString:
-        CkpDebugPrint(Vm, "\"%s\"", ((PCK_STRING_OBJECT)Object)->Value);
+        CkpDebugPrint(Vm, "\"%s\"", ((PCK_STRING)Object)->Value);
         break;
 
     default:

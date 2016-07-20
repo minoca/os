@@ -705,7 +705,7 @@ Return Value:
 PCK_MODULE
 CkpModuleCreate (
     PCK_VM Vm,
-    PCK_STRING_OBJECT Name
+    PCK_STRING Name
     );
 
 /*++

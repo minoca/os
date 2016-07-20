@@ -372,10 +372,10 @@ Return Value:
     INT Compare;
     PCK_OBJECT LeftObject;
     PCK_RANGE LeftRange;
-    PCK_STRING_OBJECT LeftString;
+    PCK_STRING LeftString;
     PCK_OBJECT RightObject;
     PCK_RANGE RightRange;
-    PCK_STRING_OBJECT RightString;
+    PCK_STRING RightString;
 
     if (CkpAreValuesIdentical(Left, Right) != FALSE) {
         return TRUE;
@@ -405,8 +405,8 @@ Return Value:
         break;
 
     case CkObjectString:
-        LeftString = (PCK_STRING_OBJECT)LeftObject;
-        RightString = (PCK_STRING_OBJECT)RightObject;
+        LeftString = (PCK_STRING)LeftObject;
+        RightString = (PCK_STRING)RightObject;
         if ((LeftString->Hash == RightString->Hash) &&
             (LeftString->Length == RightString->Length)) {
 
@@ -571,7 +571,7 @@ PCK_CLASS
 CkpClassAllocate (
     PCK_VM Vm,
     CK_SYMBOL_INDEX FieldCount,
-    PCK_STRING_OBJECT Name
+    PCK_STRING Name
     )
 
 /*++
@@ -659,7 +659,7 @@ Return Value:
 
     CK_VALUE KeyValue;
     PCK_METHOD Method;
-    PCK_STRING_OBJECT SignatureString;
+    PCK_STRING SignatureString;
     CK_VALUE Value;
 
     CK_ASSERT(StringIndex < Module->Strings.List.Count);

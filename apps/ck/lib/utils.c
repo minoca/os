@@ -151,7 +151,7 @@ Return Value:
 
 {
 
-    CK_STRING_OBJECT FakeObject;
+    CK_STRING FakeObject;
     CK_VALUE Index;
     CK_VALUE String;
 
@@ -288,7 +288,7 @@ Return Value:
 
 {
 
-    CK_STRING_OBJECT FakeObject;
+    CK_STRING FakeObject;
     CK_VALUE Index;
     CK_VALUE String;
 

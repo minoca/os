@@ -884,7 +884,7 @@ Return Value:
 
     ULONG BodyIndex;
     CK_CLASS_COMPILER ClassCompiler;
-    PCK_STRING_OBJECT ClassNameString;
+    PCK_STRING ClassNameString;
     CK_VALUE ClassNameValue;
     UINTN FieldCountInstruction;
     PLEXER_TOKEN NameToken;
@@ -1010,7 +1010,7 @@ Return Value:
     PCK_AST_NODE CurrentNode;
     PLEXER_TOKEN Identifier;
     UINTN Length;
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
     CK_VALUE Value;
 
     //

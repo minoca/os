@@ -1200,7 +1200,7 @@ Return Value:
         //
 
     case CkObjectString:
-        return ((PCK_STRING_OBJECT)Object)->Hash;
+        return ((PCK_STRING)Object)->Hash;
 
     //
     // Hash the lower bits of the two sides for a range.

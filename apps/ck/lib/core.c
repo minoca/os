@@ -503,7 +503,7 @@ Return Value:
 {
 
     PCK_CLASS Class;
-    PCK_STRING_OBJECT NameString;
+    PCK_STRING NameString;
     CK_VALUE Value;
 
     Value = CkpStringFormat(Vm, "$", Name);
@@ -1259,7 +1259,7 @@ Return Value:
 
 {
 
-    PCK_STRING_OBJECT String;
+    PCK_STRING String;
 
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "Expected a string");

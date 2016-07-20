@@ -266,7 +266,7 @@ Members:
 --*/
 
 typedef struct _CK_CLASS_COMPILER {
-    PCK_STRING_OBJECT Name;
+    PCK_STRING Name;
     CK_STRING_TABLE Fields;
     CK_INT_ARRAY Methods;
     CK_INT_ARRAY StaticMethods;
