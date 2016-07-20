@@ -827,3 +827,28 @@ Return Value:
 
 --*/
 
+PSTR
+ClpGetFqdn (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a null terminated string containing the fully
+    qualified domain name of the machine.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a null terminated string containing nodename.domainname on success.
+    The caller is responsible for freeing this string.
+
+    NULL on allocation failure.
+
+--*/
+

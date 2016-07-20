@@ -3901,6 +3901,7 @@ Return Value:
     DEVICE_INFORMATION_RESULT *Devices;
     PDNS_RESULT DnsResult;
     ULONG Flags;
+    PSTR FullName;
     NETWORK_DEVICE_INFORMATION Information;
     PVOID NewBuffer;
     INT Result;
@@ -3908,6 +3909,7 @@ Return Value:
     KSTATUS Status;
 
     DnsResult = NULL;
+    FullName = NULL;
 
     //
     // Get the array of devices that return network device information.
@@ -3957,6 +3959,12 @@ Return Value:
         goto GetLocalAddressInformationEnd;
     }
 
+    FullName = ClpGetFqdn();
+    if (FullName == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto GetLocalAddressInformationEnd;
+    }
+
     //
     // Loop through all the network devices and get the address information for
     // the request address families.
@@ -3999,6 +4007,12 @@ Return Value:
                 } else {
                     DnsResult->Type = DNS_RECORD_TYPE_A;
                     DnsResult->Class = DNS_CLASS_INTERNET;
+                    DnsResult->Name = strdup(FullName);
+                    if (DnsResult->Name == NULL) {
+                        Status = STATUS_INSUFFICIENT_RESOURCES;
+                        goto GetLocalAddressInformationEnd;
+                    }
+
                     INSERT_BEFORE(&(DnsResult->ListEntry), ListHead);
                 }
 
@@ -4039,6 +4053,12 @@ Return Value:
                 } else {
                     DnsResult->Type = DNS_RECORD_TYPE_AAAA;
                     DnsResult->Class = DNS_CLASS_INTERNET;
+                    DnsResult->Name = strdup(FullName);
+                    if (DnsResult->Name == NULL) {
+                        Status = STATUS_INSUFFICIENT_RESOURCES;
+                        goto GetLocalAddressInformationEnd;
+                    }
+
                     INSERT_BEFORE(&(DnsResult->ListEntry), ListHead);
                 }
 
@@ -4056,6 +4076,10 @@ GetLocalAddressInformationEnd:
 
     if (DnsResult != NULL) {
         free(DnsResult);
+    }
+
+    if (FullName != NULL) {
+        free(FullName);
     }
 
     Result = 0;

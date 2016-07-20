@@ -3160,7 +3160,7 @@ gethostname (
 
 Routine Description:
 
-    This routine returns the standard host name for the current machine.
+    This routine returns the network host name for the current machine.
 
 Arguments:
 
@@ -3173,7 +3173,35 @@ Return Value:
 
     0 on success.
 
-    -1 on failure. No errors are defined.
+    -1 on failure, and errno will be set to indicate the error.
+
+--*/
+
+LIBC_API
+int
+getdomainname (
+    char *Name,
+    size_t NameLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the network domain name for the current machine.
+
+Arguments:
+
+    Name - Supplies a pointer where the null-terminated name will be returned
+        on success.
+
+    NameLength - Supplies the length of the name buffer in bytes.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to indicate the error.
 
 --*/
 

@@ -161,7 +161,7 @@ gethostname (
 
 Routine Description:
 
-    This routine returns the standard host name for the current machine.
+    This routine returns the network host name for the current machine.
 
 Arguments:
 
@@ -180,8 +180,6 @@ Return Value:
 
 {
 
-    int BytesConverted;
-    size_t DomainLength;
     size_t NodeLength;
     int Result;
     struct utsname UtsName;
@@ -192,34 +190,116 @@ Return Value:
     }
 
     NodeLength = strlen(UtsName.nodename);
-    DomainLength = strlen(UtsName.domainname);
-    if (DomainLength != 0) {
-        BytesConverted = snprintf(Name,
-                                  NameLength,
-                                  "%s.%s",
-                                  UtsName.nodename,
-                                  UtsName.domainname);
-
-        if (BytesConverted < 0) {
-            Result = BytesConverted;
-
-        } else {
-            if (NameLength < (NodeLength + DomainLength + 2)) {
-                errno = ENAMETOOLONG;
-                Result = -1;
-            }
-        }
-
-    } else {
-        strncpy(Name, UtsName.nodename, NameLength);
-        if (NameLength < (NodeLength + 1)) {
-            errno = ENAMETOOLONG;
-            Result = -1;
-            Name[NameLength] = '\0';
-        }
+    strncpy(Name, UtsName.nodename, NameLength);
+    if (NameLength < (NodeLength + 1)) {
+        errno = ENAMETOOLONG;
+        Result = -1;
+        Name[NameLength] = '\0';
     }
 
     return Result;
+}
+
+LIBC_API
+int
+getdomainname (
+    char *Name,
+    size_t NameLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the network domain name for the current machine.
+
+Arguments:
+
+    Name - Supplies a pointer where the null-terminated name will be returned
+        on success.
+
+    NameLength - Supplies the length of the name buffer in bytes.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to indicate the error.
+
+--*/
+
+{
+
+    size_t DomainLength;
+    int Result;
+    struct utsname UtsName;
+
+    Result = uname(&UtsName);
+    if (Result != 0) {
+        return Result;
+    }
+
+    DomainLength = strlen(UtsName.domainname);
+    strncpy(Name, UtsName.domainname, NameLength);
+    if (NameLength < (DomainLength + 1)) {
+        errno = ENAMETOOLONG;
+        Result = -1;
+        Name[NameLength] = '\0';
+    }
+
+    return Result;
+}
+
+PSTR
+ClpGetFqdn (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a null terminated string containing the fully
+    qualified domain name of the machine.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a null terminated string containing nodename.domainname on success.
+    The caller is responsible for freeing this string.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PSTR FullName;
+    ULONG HostNameLength;
+
+    FullName = malloc((HOST_NAME_MAX * 2) + 3);
+    if (FullName == NULL) {
+        return NULL;
+    }
+
+    FullName[HOST_NAME_MAX] = '\0';
+    if (gethostname(FullName, HOST_NAME_MAX) != 0) {
+        FullName[0] = '\0';
+    }
+
+    HostNameLength = strlen(FullName);
+    FullName[HostNameLength + HOST_NAME_MAX] = '\0';
+    if (getdomainname(FullName + HostNameLength + 1, HOST_NAME_MAX) == 0) {
+        FullName[HostNameLength] = '.';
+
+    } else {
+        FullName[HostNameLength] = '\0';
+    }
+
+    return FullName;
 }
 
 //
