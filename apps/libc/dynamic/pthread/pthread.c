@@ -262,6 +262,7 @@ Return Value:
     pthread_sigmask(SIG_SETMASK, &OriginalMask, NULL);
     if (!KSUCCESS(KernelStatus)) {
         Status = ClConvertKstatusToErrorNumber(KernelStatus);
+        ClpDestroyThreadKeyData(NewThread);
         ClpDestroyThread(NewThread);
         return Status;
     }
