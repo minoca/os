@@ -9,5 +9,6 @@ www-data:x:7:
 shadow:x:8:
 utmp:x:9:
 tty:x:10:
+games:x:11:
 users:x:100:
 nogroup:x:65534:
