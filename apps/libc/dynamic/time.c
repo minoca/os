@@ -39,6 +39,13 @@ Environment:
 //
 
 //
+// Define the allocation tag used to create time zone information in the C
+// library: ClTz.
+//
+
+#define C_TIME_ZONE_ALLOCATION_TAG 0x7A546C43
+
+//
 // This macro determines whether or not the process ID can be converted to a
 // CPU time clock ID.
 //
@@ -3248,7 +3255,7 @@ Return Value:
     StandardOffset = 0;
     Strings = NULL;
     CustomSize = sizeof(CUSTOM_TIME_ZONE);
-    Custom = malloc(CustomSize);
+    Custom = OsHeapAllocate(CustomSize, C_TIME_ZONE_ALLOCATION_TAG);
     if (Custom == NULL) {
         Status = ENOMEM;
         goto CreateCustomTimeZoneEnd;
