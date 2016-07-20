@@ -102,7 +102,7 @@ struct termios DbgOriginalTerminalSettings;
 // Store the ID of the terminal's original foreground process group.
 //
 
-pid_t DbgOrignalTerminalForegroundProcessGroupId;
+pid_t DbgOriginalTerminalForegroundProcessGroupId;
 
 //
 // Store the remote pipe.
@@ -443,7 +443,7 @@ Return Value:
         return;
     }
 
-    DbgOrignalTerminalForegroundProcessGroupId = tcgetpgrp(STDIN_FILENO);
+    DbgOriginalTerminalForegroundProcessGroupId = tcgetpgrp(STDIN_FILENO);
     tcsetattr(STDIN_FILENO, TCSANOW, &DbgTerminalSettings);
 
     //
@@ -657,7 +657,7 @@ Return Value:
     // group.
     //
 
-    tcsetpgrp(STDIN_FILENO, DbgOrignalTerminalForegroundProcessGroupId);
+    tcsetpgrp(STDIN_FILENO, DbgOriginalTerminalForegroundProcessGroupId);
     tcsetattr(STDIN_FILENO, TCSANOW, &DbgOriginalTerminalSettings);
     return;
 }
