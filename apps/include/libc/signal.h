@@ -879,6 +879,39 @@ Return Value:
 
 LIBC_API
 int
+killpg (
+    pid_t ProcessGroupId,
+    int SignalNumber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends a signal to a group of processes.
+
+Arguments:
+
+    ProcessGroupId - Supplies the process group ID of the process group to
+        signal. If zero is supplied, then the signal is sent to all processes
+        in the current process group. If the process group ID is 1, then the
+        signal will be sent to all processs the signal can reach.
+
+    SignalNumber - Supplies the signal number to send. This value is expected
+        to be one of the standard signal numbers (i.e. not a real time signal
+        number).
+
+Return Value:
+
+    0 if a signal was actually sent to any processes.
+
+    -1 on error, and the errno variable will contain more information about the
+    error.
+
+--*/
+
+LIBC_API
+int
 raise (
     int SignalNumber
     );
