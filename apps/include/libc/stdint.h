@@ -166,13 +166,23 @@ extern "C" {
 #endif
 
 #ifndef __INTPTR_TYPE__
+#if (__SIZEOF_POINTER__ == 8)
 #define __INTPTR_TYPE__ long
 #define __INTPTR_MAX__ __LONG_MAX__
+#else
+#define __INTPTR_TYPE__ int
+#define __INTPTR_MAX__ __INT_MAX__
+#endif
 #endif
 
 #ifndef __UINTPTR_TYPE__
+#if (__SIZEOF_POINTER__ == 8)
 #define __UINTPTR_TYPE__ unsigned long
 #define __UINTPTR_MAX__ ((2 * __LONG_MAX__) + 1)
+#else
+#define __UINTPTR_TYPE__ unsigned int
+#define __UINTPTR_MAX__ ((2 * __INT_MAX__) + 1)
+#endif
 #endif
 
 #ifndef __INTMAX_C
