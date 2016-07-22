@@ -65,6 +65,7 @@ OBJS = assert.o             \
        getopt.o             \
        glob.o               \
        heap.o               \
+       if.o                 \
        inet.o               \
        init.o               \
        kerror.o             \

@@ -65,6 +65,7 @@ function build() {
         "getopt.c",
         "glob.c",
         "heap.c",
+        "if.c",
         "inet.c",
         "init.c",
         "kerror.c",
