@@ -2305,6 +2305,70 @@ Return Value:
 
 LIBC_API
 int
+dprintf (
+    int FileDescriptor,
+    const char *Format,
+    ...
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatted string to the given file descriptor.
+
+Arguments:
+
+    FileDescriptor - Supplies the file descriptor to print to.
+
+    Format - Supplies the printf format string.
+
+    ... - Supplies a variable number of arguments, as required by the printf
+        format string argument.
+
+Return Value:
+
+    Returns the number of bytes successfully converted, not including the null
+    terminator.
+
+    Returns a negative number if an error was encountered.
+
+--*/
+
+LIBC_API
+int
+vdprintf (
+    int FileDescriptor,
+    const char *Format,
+    va_list Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatted string to the given file descriptor.
+
+Arguments:
+
+    FileDescriptor - Supplies the file descriptor to print to.
+
+    Format - Supplies the printf format string.
+
+    Arguments - Supplies the argument list to the format string. The va_end
+        macro is not invoked on this list.
+
+Return Value:
+
+    Returns the number of bytes successfully converted. A null terminator is
+    not written.
+
+    Returns a negative number if an error was encountered.
+
+--*/
+
+LIBC_API
+int
 sprintf (
     char *OutputString,
     const char *Format,
@@ -2432,6 +2496,77 @@ Arguments:
 
     OutputString - Supplies a pointer to the buffer where the resulting string
         will be written.
+
+    Format - Supplies the printf format string.
+
+    Arguments - Supplies the argument list to the format string. The va_end
+        macro is not invoked on this list.
+
+Return Value:
+
+    Returns the number of bytes successfully converted, not including the null
+    terminator.
+
+    Returns a negative number if an error was encountered.
+
+--*/
+
+LIBC_API
+int
+asprintf (
+    char **OutputString,
+    const char *Format,
+    ...
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatting string to a string similar to vsnprintf,
+    except the destination string is allocated by this function using malloc.
+
+Arguments:
+
+    OutputString - Supplies a pointer where a pointer to a newly allocated
+        buffer containing the formatted string result (including the null
+        terminator) will be returned. The caller is reponsible for freeing this
+        string.
+
+    Format - Supplies the printf format string.
+
+    ... - Supplies the argument list to the format string.
+
+Return Value:
+
+    Returns the number of bytes successfully converted, not including the null
+    terminator.
+
+    Returns a negative number if an error was encountered.
+
+--*/
+
+LIBC_API
+int
+vasprintf (
+    char **OutputString,
+    const char *Format,
+    va_list Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatting string to a string similar to vsnprintf,
+    except the destination string is allocated by this function using malloc.
+
+Arguments:
+
+    OutputString - Supplies a pointer where a pointer to a newly allocated
+        buffer containing the formatted string result (including the null
+        terminator) will be returned. The caller is reponsible for freeing this
+        string.
 
     Format - Supplies the printf format string.
 

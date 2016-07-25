@@ -196,6 +196,13 @@ extern "C" {
 #define RTSIG_MAX 32
 
 //
+// Define the maximum number of IO vectors that can be passed to the vectored
+// IO functions.
+//
+
+#define IOV_MAX 1024
+
+//
 // Define POSIX minimum requirements.
 //
 

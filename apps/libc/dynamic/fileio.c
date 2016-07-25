@@ -69,8 +69,38 @@ Environment:
 #define INITIAL_TERMINAL_NAME_BUFFER_SIZE 64
 
 //
+// Define the initial allocation size for the asprintf destination string.
+//
+
+#define ASPRINT_INITIAL_BUFFER_SIZE 64
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
+
+/*++
+
+Structure Description:
+
+    This structure defines the context used during the asprintf/vasprintf
+    routines.
+
+Members:
+
+    Buffer - Stores a pointer to the allocated string buffer.
+
+    Size - Stores the number of valid characters currently in the buffer.
+
+    Capacity - Stores the maximum number of bytes that can fit in the buffer
+        before it will need to be reallocated.
+
+--*/
+
+typedef struct _ASPRINT_CONTEXT {
+    PSTR Buffer;
+    UINTN Size;
+    UINTN Capacity;
+} ASPRINT_CONTEXT, *PASPRINT_CONTEXT;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -82,6 +112,12 @@ ClpOpen (
     const char *Path,
     int OpenFlags,
     va_list ArgumentList
+    );
+
+BOOL
+ClpAsPrintWriteCharacter (
+    CHAR Character,
+    PPRINT_FORMAT_CONTEXT Context
     );
 
 //
@@ -2149,6 +2185,115 @@ Return Value:
 
 LIBC_API
 int
+dprintf (
+    int FileDescriptor,
+    const char *Format,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatted string to the given file descriptor.
+
+Arguments:
+
+    FileDescriptor - Supplies the file descriptor to print to.
+
+    Format - Supplies the printf format string.
+
+    ... - Supplies a variable number of arguments, as required by the printf
+        format string argument.
+
+Return Value:
+
+    Returns the number of bytes successfully converted, not including the null
+    terminator.
+
+    Returns a negative number if an error was encountered.
+
+--*/
+
+{
+
+    va_list Arguments;
+    int Result;
+
+    va_start(Arguments, Format);
+    Result = vdprintf(FileDescriptor, Format, Arguments);
+    va_end(Arguments);
+    return Result;
+}
+
+LIBC_API
+int
+vdprintf (
+    int FileDescriptor,
+    const char *Format,
+    va_list Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatted string to the given file descriptor.
+
+Arguments:
+
+    FileDescriptor - Supplies the file descriptor to print to.
+
+    Format - Supplies the printf format string.
+
+    Arguments - Supplies the argument list to the format string. The va_end
+        macro is not invoked on this list.
+
+Return Value:
+
+    Returns the number of bytes successfully converted. A null terminator is
+    not written.
+
+    Returns a negative number if an error was encountered.
+
+--*/
+
+{
+
+    int Result;
+    PSTR String;
+    size_t TotalWritten;
+    ssize_t Written;
+
+    String = NULL;
+    Result = vasprintf(&String, Format, Arguments);
+    if (Result <= 0) {
+        return Result;
+    }
+
+    TotalWritten = 0;
+    while (TotalWritten < Result) {
+        do {
+            Written = write(FileDescriptor,
+                            String + TotalWritten,
+                            Result - TotalWritten);
+
+        } while ((Written < 0) && (errno == EINTR));
+
+        if (Written <= 0) {
+            Result = Written;
+            break;
+        }
+
+        TotalWritten += Written;
+    }
+
+    free(String);
+    return Result;
+}
+
+LIBC_API
+int
 sprintf (
     char *OutputString,
     const char *Format,
@@ -2329,6 +2474,119 @@ Return Value:
 {
 
     return vsnprintf(OutputString, MAX_LONG, Format, Arguments);
+}
+
+LIBC_API
+int
+asprintf (
+    char **OutputString,
+    const char *Format,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatting string to a string similar to vsnprintf,
+    except the destination string is allocated by this function using malloc.
+
+Arguments:
+
+    OutputString - Supplies a pointer where a pointer to a newly allocated
+        buffer containing the formatted string result (including the null
+        terminator) will be returned. The caller is reponsible for freeing this
+        string.
+
+    Format - Supplies the printf format string.
+
+    ... - Supplies the argument list to the format string.
+
+Return Value:
+
+    Returns the number of bytes successfully converted, not including the null
+    terminator.
+
+    Returns a negative number if an error was encountered.
+
+--*/
+
+{
+
+    va_list Arguments;
+    int Status;
+
+    va_start(Arguments, Format);
+    Status = vasprintf(OutputString, Format, Arguments);
+    va_end(Arguments);
+    return Status;
+}
+
+LIBC_API
+int
+vasprintf (
+    char **OutputString,
+    const char *Format,
+    va_list Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatting string to a string similar to vsnprintf,
+    except the destination string is allocated by this function using malloc.
+
+Arguments:
+
+    OutputString - Supplies a pointer where a pointer to a newly allocated
+        buffer containing the formatted string result (including the null
+        terminator) will be returned. The caller is reponsible for freeing this
+        string.
+
+    Format - Supplies the printf format string.
+
+    Arguments - Supplies the argument list to the format string. The va_end
+        macro is not invoked on this list.
+
+Return Value:
+
+    Returns the number of bytes successfully converted, not including the null
+    terminator.
+
+    Returns a negative number if an error was encountered.
+
+--*/
+
+{
+
+    ASPRINT_CONTEXT AsContext;
+    PRINT_FORMAT_CONTEXT PrintContext;
+
+    *OutputString = NULL;
+    memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
+    PrintContext.Context = &AsContext;
+    PrintContext.U.WriteCharacter = ClpAsPrintWriteCharacter;
+    RtlInitializeMultibyteState(&(PrintContext.State),
+                                CharacterEncodingDefault);
+
+    AsContext.Buffer = malloc(ASPRINT_INITIAL_BUFFER_SIZE);
+    if (AsContext.Buffer == NULL) {
+        return -1;
+    }
+
+    AsContext.Size = 0;
+    AsContext.Capacity = ASPRINT_INITIAL_BUFFER_SIZE;
+    RtlFormat(&PrintContext, (PSTR)Format, Arguments);
+    if (AsContext.Buffer == NULL) {
+        return -1;
+    }
+
+    ASSERT(AsContext.Size < AsContext.Capacity);
+
+    AsContext.Buffer[AsContext.Size] = '\0';
+    *OutputString = AsContext.Buffer;
+    return PrintContext.CharactersWritten;
 }
 
 LIBC_API
@@ -3206,5 +3464,66 @@ Return Value:
     }
 
     return (int)(UINTN)FileHandle;
+}
+
+BOOL
+ClpAsPrintWriteCharacter (
+    CHAR Character,
+    PPRINT_FORMAT_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes a character to the output during a printf-style
+    formatting operation.
+
+Arguments:
+
+    Character - Supplies the character to be written.
+
+    Context - Supplies a pointer to the printf-context.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+{
+
+    PASPRINT_CONTEXT AsContext;
+    PSTR NewBuffer;
+    UINTN NewCapacity;
+
+    AsContext = Context->Context;
+
+    //
+    // Reallocate the buffer if needed.
+    //
+
+    if (AsContext->Size + 1 >= AsContext->Capacity) {
+        NewCapacity = AsContext->Capacity * 2;
+        NewBuffer = NULL;
+        if (NewCapacity > AsContext->Capacity) {
+            NewBuffer = realloc(AsContext->Buffer, NewCapacity);
+        }
+
+        if (NewBuffer == NULL) {
+            free(AsContext->Buffer);
+            AsContext->Buffer = NULL;
+            return FALSE;
+        }
+
+        AsContext->Buffer = NewBuffer;
+        AsContext->Capacity = NewCapacity;
+    }
+
+    AsContext->Buffer[AsContext->Size] = Character;
+    AsContext->Size += 1;
+    return TRUE;
 }
 
