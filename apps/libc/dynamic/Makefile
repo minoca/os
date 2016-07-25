@@ -56,6 +56,7 @@ OBJS = assert.o             \
        dirio.o              \
        dynlib.o             \
        env.o                \
+       err.o                \
        errno.o              \
        exec.o               \
        exit.o               \
