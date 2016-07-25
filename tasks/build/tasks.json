@@ -449,6 +449,16 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/ninja-1.7.1"
         },
         {
+            "name": "Make libevent",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libevent-2.0.22-stable"
+        },
+        {
+            "name": "Make tmux",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/tmux-2.2"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
