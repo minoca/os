@@ -1098,7 +1098,7 @@ Return Value:
     // Enable software flow control.
     //
 
-    Settings->c_iflag |= IXON | IXOFF;
+    Settings->c_iflag |= IXON | IXOFF | IMAXBEL;
 
     //
     // Set up canonical mode, echo, and signals.

@@ -547,6 +547,15 @@ Author:
 #define TERMINAL_INPUT_ANY_CHARACTER_RESTARTS_OUTPUT 0x00000800
 
 //
+// Set this flag to cause a bell character to be sent to the output if the
+// input buffer is full. If this flag is not set and a new character is
+// received when the input queue is full, then the entire current input and
+// output queue is discarded.
+//
+
+#define TERMINAL_INPUT_MAX_BELL 0x00001000
+
+//
 // Define terminal output control flags.
 //
 

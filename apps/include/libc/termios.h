@@ -113,6 +113,15 @@ extern "C" {
 #define IXANY 0x00000800
 
 //
+// Set this flag to cause a bell character to be sent to the output if the
+// input buffer is full. If this flag is not set and a new character is
+// received when the input queue is full, then the entire current input and
+// output queue is discarded.
+//
+
+#define IMAXBEL 0x00001000
+
+//
 // Define output control flags.
 //
 

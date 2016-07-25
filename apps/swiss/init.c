@@ -808,7 +808,7 @@ Return Value:
 
     Settings.c_cflag &= CSIZE | CSTOPB | PARENB | PARODD;
     Settings.c_cflag |= CREAD | HUPCL | CLOCAL;
-    Settings.c_iflag = ICRNL | IXON | IXOFF;
+    Settings.c_iflag = ICRNL | IXON | IXOFF | IMAXBEL;
     Settings.c_oflag = OPOST | ONLCR;
     Settings.c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOKE | ECHOCTL | IEXTEN;
     tcsetattr(STDIN_FILENO, TCSANOW, &Settings);

@@ -53,6 +53,7 @@ Environment:
            (IXANY == TERMINAL_INPUT_ANY_CHARACTER_RESTARTS_OUTPUT) &&   \
            (IXOFF == TERMINAL_INPUT_ENABLE_INPUT_FLOW_CONTROL) &&       \
            (IXON == TERMINAL_INPUT_ENABLE_OUTPUT_FLOW_CONTROL) &&       \
+           (IMAXBEL == TERMINAL_INPUT_MAX_BELL) &&                      \
            (PARMRK == TERMINAL_INPUT_MARK_PARITY_ERRORS) &&             \
            (OPOST == TERMINAL_OUTPUT_POST_PROCESS) &&                   \
            (ONLCR == TERMINAL_OUTPUT_NEWLINE_TO_CRLF) &&                \

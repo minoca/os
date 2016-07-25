@@ -2859,7 +2859,9 @@ Return Value:
                                     TERMINAL_LOCAL_CANONICAL |
                                     TERMINAL_LOCAL_SIGNALS;
 
-    Terminal->Settings.InputFlags = TERMINAL_INPUT_CR_TO_NEWLINE;
+    Terminal->Settings.InputFlags = TERMINAL_INPUT_CR_TO_NEWLINE |
+                                    TERMINAL_INPUT_MAX_BELL;
+
     Terminal->Settings.OutputFlags = TERMINAL_OUTPUT_POST_PROCESS |
                                      TERMINAL_OUTPUT_NEWLINE_TO_CRLF;
 
@@ -3259,41 +3261,91 @@ Return Value:
             }
 
             //
+            // If the character should be added but the input is full, then
+            // the max bell flag comes into play.
+            //
+
+            if ((AddCharacter != FALSE) &&
+                (Terminal->WorkingInputLength >=
+                 TERMINAL_CANONICAL_BUFFER_SIZE)) {
+
+                //
+                // If the max bell flag is set, beep at the user and keep
+                // what's currently in the input buffer.
+                //
+
+                if ((Terminal->Settings.InputFlags &
+                     TERMINAL_INPUT_MAX_BELL) != 0) {
+
+                    AddCharacter = FALSE;
+                    Byte = '\a';
+                    IopTerminalWriteOutputBuffer(Terminal,
+                                                 &Byte,
+                                                 1,
+                                                 1,
+                                                 TimeoutInMilliseconds);
+
+                //
+                // Just discard the input buffer and reset it. This will
+                // look quite weird.
+                //
+
+                } else {
+                    if (InputLockHeld == FALSE) {
+                        KeAcquireQueuedLock(Terminal->InputLock);
+                        InputLockHeld = TRUE;
+                    }
+
+                    InputAdded = FALSE;
+                    Terminal->WorkingInputCursor = 0;
+                    Terminal->WorkingInputLength = 0;
+                    DirtyRegionBegin = 0;
+                    DirtyRegionEnd = 0;
+                    ScreenCursorPosition = 0;
+                    Terminal->Flags |= TERMINAL_FLAG_VIRGIN_LINE |
+                                       TERMINAL_FLAG_UNEDITED_LINE;
+
+                    KeReleaseQueuedLock(Terminal->InputLock);
+                    InputLockHeld = FALSE;
+                }
+            }
+
+            //
             // Add the character to the working buffer if needed.
             //
 
             if (AddCharacter != FALSE) {
-                if (Terminal->WorkingInputLength !=
-                    TERMINAL_CANONICAL_BUFFER_SIZE) {
 
-                    if (Terminal->WorkingInputCursor < DirtyRegionBegin) {
-                        DirtyRegionBegin = Terminal->WorkingInputCursor;
-                    }
+                ASSERT(Terminal->WorkingInputLength <
+                       TERMINAL_CANONICAL_BUFFER_SIZE);
 
-                    //
-                    // Make a hole.
-                    //
+                if (Terminal->WorkingInputCursor < DirtyRegionBegin) {
+                    DirtyRegionBegin = Terminal->WorkingInputCursor;
+                }
 
-                    for (MoveIndex = Terminal->WorkingInputLength;
-                         MoveIndex > Terminal->WorkingInputCursor;
-                         MoveIndex -= 1) {
+                //
+                // Make a hole.
+                //
 
-                        Terminal->WorkingInputBuffer[MoveIndex] =
+                for (MoveIndex = Terminal->WorkingInputLength;
+                     MoveIndex > Terminal->WorkingInputCursor;
+                     MoveIndex -= 1) {
+
+                    Terminal->WorkingInputBuffer[MoveIndex] =
                                    Terminal->WorkingInputBuffer[MoveIndex - 1];
-                    }
+                }
 
-                    Terminal->WorkingInputBuffer[Terminal->WorkingInputCursor] =
+                Terminal->WorkingInputBuffer[Terminal->WorkingInputCursor] =
                                                                           Byte;
 
-                    Terminal->WorkingInputCursor += 1;
-                    Terminal->WorkingInputLength += 1;
-                    if ((IsEndOfLine == FALSE) &&
-                        (Terminal->WorkingInputLength > DirtyRegionEnd)) {
+                Terminal->WorkingInputCursor += 1;
+                Terminal->WorkingInputLength += 1;
+                if ((IsEndOfLine == FALSE) &&
+                    (Terminal->WorkingInputLength > DirtyRegionEnd)) {
 
-                        DirtyRegionEnd = Terminal->WorkingInputLength;
-                        Terminal->Flags &= ~(TERMINAL_FLAG_VIRGIN_LINE |
-                                             TERMINAL_FLAG_UNEDITED_LINE);
-                    }
+                    DirtyRegionEnd = Terminal->WorkingInputLength;
+                    Terminal->Flags &= ~(TERMINAL_FLAG_VIRGIN_LINE |
+                                         TERMINAL_FLAG_UNEDITED_LINE);
                 }
             }
 
@@ -3386,8 +3438,6 @@ Return Value:
                            Terminal->InputBufferStart);
                 }
 
-                KeReleaseQueuedLock(Terminal->InputLock);
-                InputLockHeld = FALSE;
                 InputAdded = TRUE;
                 Terminal->WorkingInputCursor = 0;
                 Terminal->WorkingInputLength = 0;
@@ -3396,6 +3446,9 @@ Return Value:
                 ScreenCursorPosition = 0;
                 Terminal->Flags |= TERMINAL_FLAG_VIRGIN_LINE |
                                    TERMINAL_FLAG_UNEDITED_LINE;
+
+                KeReleaseQueuedLock(Terminal->InputLock);
+                InputLockHeld = FALSE;
             }
 
         //

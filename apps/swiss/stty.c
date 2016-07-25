@@ -291,6 +291,7 @@ STTY_MEMBER SttyOptions[] = {
     {"ixon", SttyTermiosInput, IXON, 0, 0},
     {"ixoff", SttyTermiosInput, IXOFF, 0, STTY_SANE_CLEAR},
     {"ixany", SttyTermiosInput, IXANY, 0, STTY_SANE_CLEAR},
+    {"imaxbel", SttyTermiosInput, IMAXBEL, 0, STTY_SANE_SET},
     {"opost", SttyTermiosOutput, OPOST, 0, STTY_SANE_SET},
     {"ocrnl", SttyTermiosOutput, OCRNL, 0, STTY_SANE_CLEAR},
     {"onlcr", SttyTermiosOutput, ONLCR, 0, STTY_SANE_SET},
