@@ -415,6 +415,54 @@ Return Value:
 }
 
 LIBC_API
+int
+wcswidth (
+    const wchar_t *String,
+    size_t Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the display width of the given string.
+
+Arguments:
+
+    String - Supplies a pointer to the string whose display width should be
+        computed.
+
+    Size - Supplies the size of the string in characters.
+
+Return Value:
+
+    Returns the number of columns the given string occupies.
+
+    -1 if one of the characters is invalid.
+
+--*/
+
+{
+
+    int Total;
+    int Width;
+
+    Total = 0;
+    while ((*String != L'\0') && (Size != 0)) {
+        Width = wcwidth(*String);
+        if (Width < 0) {
+            return -1;
+        }
+
+        Total += Width;
+        String += 1;
+        Size -= 1;
+    }
+
+    return Total;
+}
+
+LIBC_API
 wchar_t *
 wcscpy (
     wchar_t *DestinationString,

@@ -556,6 +556,33 @@ Return Value:
 --*/
 
 LIBC_API
+int
+wcwidth (
+    wchar_t Character
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of display column positions the given wide
+    character occupies.
+
+Arguments:
+
+    Character - Supplies the character to examine.
+
+Return Value:
+
+    0 for the null character.
+
+    -1 if the character is not printable.
+
+    Otherwise, returns the number of columns the given character takes up.
+
+--*/
+
+LIBC_API
 wint_t
 fgetwc (
     FILE *Stream
@@ -1899,6 +1926,34 @@ Arguments:
 Return Value:
 
     Returns the length of the string, not including the null terminator.
+
+--*/
+
+LIBC_API
+int
+wcswidth (
+    const wchar_t *String,
+    size_t Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the display width of the given string.
+
+Arguments:
+
+    String - Supplies a pointer to the string whose display width should be
+        computed.
+
+    Size - Supplies the size of the string in characters.
+
+Return Value:
+
+    Returns the number of columns the given string occupies.
+
+    -1 if one of the characters is invalid.
 
 --*/
 
