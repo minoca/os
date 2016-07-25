@@ -40,6 +40,7 @@ Environment:
 
 #define SYSTEM_HEAP_MINIMUM_EXPANSION_PAGES 0x10
 #define SYSTEM_HEAP_MAGIC 0x6C6F6F50 // 'looP'
+#define SYSTEM_HEAP_DIRECT_ALLOCATION_THRESHOLD (256 * _1MB)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -273,6 +274,7 @@ Return Value:
                       SYSTEM_HEAP_MAGIC,
                       Flags);
 
+    OsHeap.DirectAllocationThreshold = SYSTEM_HEAP_DIRECT_ALLOCATION_THRESHOLD;
     return;
 }
 
