@@ -53,7 +53,8 @@ Environment:
            (MSG_TRUNC == SOCKET_IO_DATA_TRUNCATED) &&     \
            (MSG_CTRUNC == SOCKET_IO_CONTROL_TRUNCATED) && \
            (MSG_NOSIGNAL == SOCKET_IO_NO_SIGNAL) &&       \
-           (MSG_DONTWAIT == SOCKET_IO_NON_BLOCKING))
+           (MSG_DONTWAIT == SOCKET_IO_NON_BLOCKING) &&    \
+           (MSG_DONTROUTE == SOCKET_IO_DONT_ROUTE))
 
 #define ASSERT_SOCKET_TYPES_EQUIVALENT()                   \
     ASSERT((SOCK_DGRAM == NetSocketDatagram) &&            \
@@ -75,7 +76,7 @@ Environment:
            (IPPROTO_UDP == SocketInformationUdp) &&  \
            (IPPROTO_RAW == SocketInformationRaw))
 
-#define ASSERT_SOCKET_BASIC_OPTIONS_EQUIVALENT() \
+#define ASSERT_SOCKET_BASIC_OPTIONS_EQUIVALENT()                    \
     ASSERT((SO_ACCEPTCONN == SocketBasicOptionAcceptConnections) && \
            (SO_BROADCAST == SocketBasicOptionBroadcastEnabled) &&   \
            (SO_DEBUG == SocketBasicOptionDebug) &&                  \
@@ -94,8 +95,23 @@ Environment:
            (SO_PASSCRED == SocketBasicOptionPassCredentials) &&     \
            (SO_PEERCRED == SocketBasicOptionPeerCredentials))
 
-#define ASSERT_SOCKET_IPV4_OPTIONS_EQUIVALENT() \
-    ASSERT(IP_HDRINCL == SocketIp4OptionHeaderIncluded)
+#define ASSERT_SOCKET_IPV4_OPTIONS_EQUIVALENT()                          \
+    ASSERT((IP_HDRINCL == SocketIp4OptionHeaderIncluded) &&              \
+           (IP_ADD_MEMBERSHIP == SocketIp4OptionJoinMulticastGroup) &&   \
+           (IP_DROP_MEMBERSHIP == SocketIp4OptionLeaveMulticastGroup) && \
+           (IP_MULTICAST_IF == SocketIp4OptionMulticastInterface) &&     \
+           (IP_MULTICAST_TTL == SocketIp4OptionMulticastTimeToLive) &&   \
+           (IP_MULTICAST_LOOP == SocketIp4OptionMulticastLoopback) &&    \
+           (IP_TTL == SocketIp4OptionTimeToLive))
+
+#define ASSERT_SOCKET_IPV6_OPTIONS_EQUIVALENT()                         \
+    ASSERT((IPV6_JOIN_GROUP == SocketIp6OptionJoinMulticastGroup) &&    \
+           (IPV6_LEAVE_GROUP == SocketIp6OptionLeaveMulticastGroup) &&  \
+           (IPV6_MULTICAST_HOPS == SocketIp6OptionMulticastHops) &&     \
+           (IPV6_MULTICAST_IF == SocketIp6OptionMulticastInterface) &&  \
+           (IPV6_MULTICAST_LOOP == SocketIp6OptionMulticastLoopback) && \
+           (IPV6_UNICAST_HOPS == SocketIp6OptionUnicastHops) &&       \
+           (IPV6_V6ONLY == SocketIp6OptionIpv6Only))
 
 #define ASSERT_SOCKET_TCP_OPTIONS_EQUIVALENT()                  \
     ASSERT((TCP_NODELAY == SocketTcpOptionNoDelay) &&           \
@@ -1245,6 +1261,7 @@ Return Value:
     ASSERT_SOCKET_LEVELS_EQUIVALENT();
     ASSERT_SOCKET_BASIC_OPTIONS_EQUIVALENT();
     ASSERT_SOCKET_IPV4_OPTIONS_EQUIVALENT();
+    ASSERT_SOCKET_IPV6_OPTIONS_EQUIVALENT();
     ASSERT_SOCKET_TCP_OPTIONS_EQUIVALENT();
 
     LocalOptionLength = OptionLength;
@@ -1322,6 +1339,7 @@ Return Value:
     ASSERT_SOCKET_LEVELS_EQUIVALENT();
     ASSERT_SOCKET_BASIC_OPTIONS_EQUIVALENT();
     ASSERT_SOCKET_IPV4_OPTIONS_EQUIVALENT();
+    ASSERT_SOCKET_IPV6_OPTIONS_EQUIVALENT();
     ASSERT_SOCKET_TCP_OPTIONS_EQUIVALENT();
 
     //

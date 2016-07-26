@@ -526,6 +526,7 @@ Return Value:
         NewSocket->PacketSizeInformation.HeaderSize += sizeof(IP4_HEADER);
     }
 
+    NewSocket->HopLimit = IP4_INITIAL_TIME_TO_LIVE;
     return STATUS_SUCCESS;
 }
 
@@ -1084,7 +1085,7 @@ Return Value:
                 }
 
                 Header->FragmentOffset = CPU_TO_NETWORK16(FragmentOffset);
-                Header->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;
+                Header->TimeToLive = Socket->HopLimit;
 
                 ASSERT(Socket->KernelSocket.Protocol !=
                        SOCKET_INTERNET_PROTOCOL_RAW);
@@ -1155,7 +1156,7 @@ Return Value:
             Header->Identification = CPU_TO_NETWORK16(Socket->SendPacketCount);
             Socket->SendPacketCount += 1;
             Header->FragmentOffset = 0;
-            Header->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;
+            Header->TimeToLive = Socket->HopLimit;
 
             ASSERT(Socket->KernelSocket.Protocol !=
                    SOCKET_INTERNET_PROTOCOL_RAW);
@@ -1612,6 +1613,7 @@ Return Value:
 
     ULONG BooleanOption;
     ULONG Flags;
+    ULONG IntegerOption;
     SOCKET_IP4_OPTION Ip4Option;
     UINTN RequiredSize;
     PVOID Source;
@@ -1670,6 +1672,40 @@ Return Value:
         }
 
         break;
+
+    case SocketIp4OptionTimeToLive:
+        RequiredSize = sizeof(ULONG);
+        if (Set != FALSE) {
+            if (*DataSize < RequiredSize) {
+                *DataSize = RequiredSize;
+                Status = STATUS_BUFFER_TOO_SMALL;
+                break;
+            }
+
+            IntegerOption = *((PULONG)Data);
+            if (IntegerOption > MAX_UCHAR) {
+                Status = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            Socket->HopLimit = (UCHAR)IntegerOption;
+
+        } else {
+            Source = &IntegerOption;
+            IntegerOption = Socket->HopLimit;
+        }
+
+        break;
+
+    case SocketIp4OptionJoinMulticastGroup:
+    case SocketIp4OptionLeaveMulticastGroup:
+    case SocketIp4OptionMulticastInterface:
+    case SocketIp4OptionMulticastTimeToLive:
+    case SocketIp4OptionMulticastLoopback:
+
+        //
+        // TODO: Implement IPv4 multicast.
+        //
 
     default:
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
@@ -2251,7 +2287,7 @@ Return Value:
         NewHeader->TotalLength = CPU_TO_NETWORK16(TotalLength);
         NewHeader->Identification = Header->Identification;
         NewHeader->FragmentOffset = 0;
-        NewHeader->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;
+        NewHeader->TimeToLive = Header->TimeToLive;
         NewHeader->Protocol = Header->Protocol;
         NewHeader->SourceAddress = Header->SourceAddress;
         NewHeader->DestinationAddress = Header->DestinationAddress;

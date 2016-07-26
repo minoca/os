@@ -220,10 +220,18 @@ extern "C" {
 #define MSG_NOSIGNAL 0x00000040
 
 //
-// This flag is requests that the operation not block.
+// This flag requests that the operation not block.
 //
 
 #define MSG_DONTWAIT 0x00000080
+
+//
+// This flag requests that routing tables not be used when sending a packet.
+// This limits the system to sending the packet across networks that are
+// directly connected.
+//
+
+#define MSG_DONTROUTE 0x00000100
 
 //
 // Define the shutdown types. Read closes the socket for further reading, write
@@ -435,6 +443,13 @@ extern "C" {
 //
 
 #define SIOCATMARK 0x7300
+
+//
+// Define the maximum length of the connection backlog queue for listen calls
+// before the system stats refusing connection requests.
+//
+
+#define SOMAXCONN 512
 
 //
 // ------------------------------------------------------ Data Type Definitions

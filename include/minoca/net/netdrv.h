@@ -988,6 +988,9 @@ Members:
         accepted connections that are allowed to accumulate before connections
         are refused. In the sockets API this is known as the backlog count.
 
+    HopLimit - Stores the hop limit / time-to-live that is to be set in the
+        network layer's header of every packet sent by this socket.
+
 --*/
 
 typedef struct _NET_SOCKET {
@@ -1011,6 +1014,7 @@ typedef struct _NET_SOCKET {
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     ULONG SendPacketCount;
     ULONG MaxIncomingConnections;
+    UCHAR HopLimit;
 } NET_SOCKET, *PNET_SOCKET;
 
 /*++

@@ -1123,7 +1123,8 @@ Return Value:
         //
         // TODO: Properly determine the route for this destination, rather
         // than just connecting through the first working network link and first
-        // address inside it.
+        // address inside it. Make sure to not use the routing tables if
+        // SOCKET_IO_DONT_ROUTE is set at time of send/receive.
         //
 
         KeAcquireQueuedLock(CurrentLink->QueuedLock);

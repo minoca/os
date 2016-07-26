@@ -190,10 +190,18 @@ Author:
 #define SOCKET_IO_NO_SIGNAL 0x00000040
 
 //
-// This flag is requests that the operation not block.
+// This flag requests that the operation not block.
 //
 
 #define SOCKET_IO_NON_BLOCKING 0x00000080
+
+//
+// This flag requests that routing tables not be used when sending a packet.
+// This limits the system to sending the packet across networks that are
+// directly connected.
+//
+
+#define SOCKET_IO_DONT_ROUTE 0x00000100
 
 //
 // Define common internet protocol numbers, as defined by the IANA.
@@ -488,8 +496,8 @@ typedef struct _SOCKET_LINGER {
 
 Structure Description:
 
-    This structure describes socket option time information. This structure
-    lines up exactly with the C library timeval struction.
+    This structure defines socket option time information. This structure lines
+    up exactly with the C library timeval structure.
 
 Members:
 
@@ -519,12 +527,127 @@ Values:
         call for this socket include an IPv4 header. This options takes a
         boolean.
 
+    SocketIp4OptionJoinMulticastGroup - Indicates a request to join a multicast
+        group. This option takes a SOCKET_IP4_MULTICAST_REQUEST structure.
+
+    SocketIp4OptionLeaveMulticastGroup - Indicates a request to leave a
+        multicast group. This option takes a SOCKET_MULTICAST_REQUEST structure.
+
+    SocketIp4OptionMulticastInterface - Indicates the network interface to use
+        for multicast messages. This option takes a ULONG.
+
+    SocketIp4OptionMulticastTimeToLive - Indicates the time-to-live value for
+        multicast packets. This option takes a ULONG.
+
+    SocketIp4OptionMulticastLoopback - Indicates whether or not multicast
+        packets should be sent back to sockets on local interfaces. This option
+        takes a ULONG boolean.
+
+    SocketIp4OptionTimeToLive - Indicates the time-to-live value for all
+        unicast packets sent from the socket. This option takes a ULONG.
+
 --*/
 
 typedef enum _SOCKET_IP4_OPTION {
     SocketIp4OptionInvalid,
-    SocketIp4OptionHeaderIncluded
+    SocketIp4OptionHeaderIncluded,
+    SocketIp4OptionJoinMulticastGroup,
+    SocketIp4OptionLeaveMulticastGroup,
+    SocketIp4OptionMulticastInterface,
+    SocketIp4OptionMulticastTimeToLive,
+    SocketIp4OptionMulticastLoopback,
+    SocketIp4OptionTimeToLive
 } SOCKET_IP4_OPTION, *PSOCKET_IP4_OPTION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a socket option IPv4 multicast request to join or
+    leave a group. This structure lines up exactly with the C library ip_mreq
+    structure.
+
+Members:
+
+    Address - Stores the address of the multicast group to join or leave.
+
+    Interface - Stores the index of the network interfaces that is to join or
+        leave the multicast group.
+
+--*/
+
+typedef struct _SOCKET_IP4_MULTICAST_REQUEST {
+    ULONG Address;
+    ULONG Interface;
+} SOCKET_IP4_MULTICAST_REQUEST, *PSOCKET_IP4_MULTICAST_REQUEST;
+
+/*++
+
+Enumeration Description:
+
+    This enumeration describes the various IPv6 options for the IPv6 socket
+    information class.
+
+Values:
+
+    SocketIp6OptionInvalid - Indicates an invalid IPv6 socket option.
+
+    SocketIp6OptionJoinMulticastGroup - Indicates a request to join a multicast
+        group. This option takes a SOCKET_IP6_MULTICAST_REQUEST structure.
+
+    SocketIp6OptionLeaveMulticastGroup - Indicates a request to leave a
+        multicast group. This option takes a SOCKET_MULTICAST_REQUEST structure.
+
+    SocketIp6OptionMulticastHops - Indicates the multicast hop limit for the
+        socket. This option takes a ULONG.
+
+    SocketIp6OptionMulticastInterface - Indicates the network interface to use
+        for multicast messages. This option takes a ULONG.
+
+    SocketIp6OptionMulticastLoopback - Indicates whether or not multicast
+        packets should be sent back to sockets oo local interfaces. This option
+        takes a ULONG boolean.
+
+    SocketIp6OptionUnicastHops - Indicates the unicast hop limit. This option
+        takes a ULONG.
+
+    SocketIp6OptionIpv6Only - Indicates that the socket can only communicate
+        via IPv6 packets.
+
+--*/
+
+typedef enum _SOCKET_IP6_OPTION {
+    SocketIp6OptionInvalid,
+    SocketIp6OptionJoinMulticastGroup,
+    SocketIp6OptionLeaveMulticastGroup,
+    SocketIp6OptionMulticastHops,
+    SocketIp6OptionMulticastInterface,
+    SocketIp6OptionMulticastLoopback,
+    SocketIp6OptionUnicastHops,
+    SocketIp6OptionIpv6Only
+} SOCKET_IP6_OPTION, *PSOCKET_IP6_OPTION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a socket option IPv6 multicast request to join or
+    leave a group. This structure lines up exactly with the C library ip_mreq
+    structure.
+
+Members:
+
+    Address - Stores the address of the multicast group to join or leave.
+
+    Interface - Stores the index of the network interfaces that is to join or
+        leave the multicast group.
+
+--*/
+
+typedef struct _SOCKET_IP6_MULTICAST_REQUEST {
+    UINTN Address[16 / sizeof(UINTN)];
+    ULONG Interface;
+} SOCKET_IP6_MULTICAST_REQUEST, *PSOCKET_IP6_MULTICAST_REQUEST;
 
 /*++
 

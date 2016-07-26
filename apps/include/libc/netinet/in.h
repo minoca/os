@@ -218,6 +218,7 @@ extern "C" {
 #define IPPROTO_TCP 6
 #define IPPROTO_UDP 17
 #define IPPROTO_IPV6 41
+#define IPPROTO_ICMPV6 58
 #define IPPROTO_RAW 255
 
 //
@@ -274,10 +275,46 @@ extern "C" {
 //
 
 //
-// This options indicates that data packets contain the IPv4 header.
+// This option indicates that data packets contain the IPv4 header.
 //
 
 #define IP_HDRINCL 1
+
+//
+// This option joins a multicast group.
+//
+
+#define IP_ADD_MEMBERSHIP 2
+
+//
+// This option leaves a multicast group.
+//
+
+#define IP_DROP_MEMBERSHIP 3
+
+//
+// This option defines the interface to use for outgoing multicast packets.
+//
+
+#define IP_MULTICAST_IF 4
+
+//
+// This options defines the time-to-live value for outgoing multicast packets.
+//
+
+#define IP_MULTICAST_TTL 5
+
+//
+// This option specifies if packets are delivered back to the local application.
+//
+
+#define IP_MULTICAST_LOOP 6
+
+//
+// This options defines the time-to-live value for outgoing packets.
+//
+
+#define IP_TTL 7
 
 //
 // Define socket options for IPv6.
@@ -417,6 +454,26 @@ struct sockaddr_in {
 
 Structure Description:
 
+    This structure defines an internet family version 4 multicast request.
+
+Members:
+
+    imr_multiaddr - Stores the multicast address of the group to join or leave.
+
+    imr_interface - Stores the index of the interface that is to join or leave
+        the multicast group.
+
+--*/
+
+struct ip_mreq {
+    struct in_addr imr_multiaddr;
+    struct in_addr imr_interface;
+};
+
+/*++
+
+Structure Description:
+
     This structure defines an internet family version 6 address. This structure
     is defined to only have one member, s6_addr, which is an array of 8-bit
     integers. Many macros need to access the words of it however, and to avoid
@@ -471,13 +528,15 @@ struct sockaddr_in6 {
 
 Structure Description:
 
-    This structure defines an internet family version 6 multicast address.
+    This structure defines an internet family version 6 multicast request.
 
 Members:
 
-    ipv6mr_multiaddr - Stores the multicast address.
+    ipv6mr_multiaddr - Stores the multicast address of the group to join or
+        leave.
 
-    ipv6mr_interface - Stores the interface index.
+    ipv6mr_interface - Stores the index of the interface that is to join or
+        leave the multicast group.
 
 --*/
 
