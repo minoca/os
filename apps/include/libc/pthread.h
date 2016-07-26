@@ -24,10 +24,9 @@ Author:
 //
 
 #include <libcbase.h>
-#include <sys/types.h>
+#include <sched.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <time.h>
 
 //
 // --------------------------------------------------------------------- Macros
