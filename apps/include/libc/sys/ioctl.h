@@ -240,6 +240,14 @@ extern "C" {
 #define TIOCPKT 0x7420
 
 //
+// This ioctl enables or disables non-blocking mode on the given descriptor. It
+// is the same as using fcntl to enable non-blocking mode. The argument is an
+// int, which if zero disables non-blocking mode, or otherwise enables it.
+//
+
+#define FIONBIO 0x7421
+
+//
 // This ioctl gives up the controlling terminal if the given terminal was
 // the controlling terminal of the calling process. If this process was the
 // session leader, SIGHUP and SIGCONT are sent to the foreground process group

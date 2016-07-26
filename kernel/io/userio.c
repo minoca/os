@@ -4159,7 +4159,7 @@ Return Value:
     KSTATUS Status;
 
     switch (MinorCode) {
-    case TerminalControlAsync:
+    case FileIoControlAsync:
         if (ContextBufferSize < sizeof(INT)) {
             Status = STATUS_DATA_LENGTH_MISMATCH;
             break;
@@ -4182,6 +4182,33 @@ Return Value:
         }
 
         Status = IoSetHandleAsynchronous(Handle, Descriptor, Asynchronous);
+        break;
+
+    case FileIoControlNonBlocking:
+        if (ContextBufferSize < sizeof(INT)) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (FromKernelMode != FALSE) {
+            Argument = *((PULONG)ContextBuffer);
+
+        } else {
+            Argument = 0;
+            Status = MmCopyFromUserMode(&Argument, ContextBuffer, sizeof(INT));
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        if (Argument != 0) {
+            Handle->OpenFlags |= OPEN_FLAG_NON_BLOCKING;
+
+        } else {
+            Handle->OpenFlags &= ~OPEN_FLAG_NON_BLOCKING;
+        }
+
+        Status = STATUS_SUCCESS;
         break;
 
     default:

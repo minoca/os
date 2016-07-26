@@ -990,8 +990,17 @@ typedef enum _TERMINAL_USER_CONTROL_CODE {
     TerminalControlStartBreak                = 0x7427,
     TerminalControlStopBreak                 = 0x7428,
     TerminalControlGetCurrentSessionId       = 0x7429,
-    TerminalControlAsync                     = 0x7452,
 } TERMINAL_USER_CONTROL_CODE, *PTERMINAL_USER_CONTROL_CODE;
+
+//
+// Define file I/O user control (IOCTL) codes. These must line up with what's
+// defined in sys/ioctl.h in the C library.
+//
+
+typedef enum _FILE_IO_USER_CONTROL_CODE {
+    FileIoControlNonBlocking = 0x7421,
+    FileIoControlAsync       = 0x7452,
+} FILE_IO_USER_CONTROL_CODE, *PFILE_IO_USER_CONTROL_CODE;
 
 typedef enum _CRASH_DRIVER_ERROR_CODE {
     DriverErrorInvalid,
