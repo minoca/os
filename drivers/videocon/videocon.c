@@ -295,7 +295,8 @@ Members:
     Lock - Stores a pointer to a lock that serializes access to the console.
 
     NextColumn - Stores the zero-based column number where the next character
-        will be printed.
+        will be printed. This might be equal to the column count in order to
+        handle the old VT100 wraparound bug.
 
     NextRow - Stores the zero-based row number where the next character will be
         printed. This is a screen row, not a buffer row.
@@ -487,13 +488,6 @@ VcpInsertLines (
     PVIDEO_CONSOLE_DEVICE Console,
     LONG Count,
     LONG StartingRow
-    );
-
-VOID
-VcpGetCursorPosition (
-    PVIDEO_CONSOLE_DEVICE Console,
-    PLONG Row,
-    PLONG Column
     );
 
 //
@@ -1236,7 +1230,12 @@ Return Value:
 
             ASSERT(BytesRead == 0);
 
-            VcpGetCursorPosition(Device, &CursorRow, &CursorColumn);
+            CursorRow = Device->NextRow;
+            CursorColumn = Device->NextColumn;
+            if (CursorColumn == Device->Columns) {
+                CursorColumn -= 1;
+            }
+
             Line = GET_CONSOLE_LINE(Device, CursorRow);
             Line->Character[CursorColumn].Data.Attributes ^= BASE_VIDEO_CURSOR;
             CursorAttributes = Line->Character[CursorColumn].Data.Attributes;
@@ -1327,7 +1326,12 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     KeAcquireQueuedLock(Console->Lock);
-    VcpGetCursorPosition(Console, &StartRow, &StartColumn);
+    StartRow = Console->NextRow;
+    StartColumn = Console->NextColumn;
+    if (StartColumn == Console->Columns) {
+        StartColumn -= 1;
+    }
+
     EndColumn = StartColumn;
     EndRow = StartRow;
 
@@ -1413,10 +1417,6 @@ Return Value:
 
             } else if (Character == '\b') {
                 if (Console->NextColumn != 0) {
-                    if (Console->NextColumn == Console->Columns) {
-                        Line = NULL;
-                    }
-
                     Console->NextColumn -= 1;
 
                 } else {
@@ -1438,7 +1438,7 @@ Return Value:
                 }
 
                 if (Line == NULL) {
-                    VcpGetCursorPosition(Console, &CursorRow, &CursorColumn);
+                    CursorRow = Console->NextRow;
                     Line = GET_CONSOLE_LINE(Console, CursorRow);
                     Characters = (PBASE_VIDEO_CHARACTER)(Line->Character);
                 }
@@ -1447,7 +1447,7 @@ Return Value:
 
             } else if ((Character >= ' ') && (Character < 0x80)) {
                 if (Line == NULL) {
-                    VcpGetCursorPosition(Console, &CursorRow, &CursorColumn);
+                    CursorRow = Console->NextRow;
                     Line = GET_CONSOLE_LINE(Console, CursorRow);
                     Characters = (PBASE_VIDEO_CHARACTER)(Line->Character);
                 }
@@ -1471,9 +1471,6 @@ Return Value:
                 //
 
                 if (Console->NextColumn == Console->Columns) {
-
-                    ASSERT(Console->NextRow != Console->ScreenRows - 1);
-
                     Console->NextColumn = 0;
                     VcpAdvanceRow(Console);
                     Line = GET_CONSOLE_LINE(Console, Console->NextRow);
@@ -1492,22 +1489,6 @@ Return Value:
                 if ((Console->Mode & CONSOLE_MODE_AUTO_WRAP) != 0) {
                     if (Console->NextColumn < Console->Columns) {
                         Console->NextColumn += 1;
-
-                        //
-                        // If this is the last line, create another line so
-                        // that the cursor can be shown, but readjust the row
-                        // back to leave the cursor overhanging.
-                        //
-
-                        if ((Console->NextColumn == Console->Columns) &&
-                            (Console->NextRow == Console->ScreenRows - 1)) {
-
-                            VcpAdvanceRow(Console);
-
-                            ASSERT(Console->NextRow == Console->ScreenRows - 1);
-
-                            Console->NextRow -= 1;
-                        }
                     }
 
                 } else if (Console->NextColumn < Console->Columns - 1) {
@@ -1616,14 +1597,9 @@ Return Value:
     //
 
     } else {
-        if (StartColumn == Console->Columns) {
-            StartColumn -= 1;
-        }
-
         EndColumn += 1;
         if (EndColumn > Console->Columns) {
-            EndColumn -= Console->Columns;
-            EndRow += 1;
+            EndColumn = Console->Columns;
         }
 
         StartRow -= Console->RowViewOffset;
@@ -1651,7 +1627,12 @@ Return Value:
     // Set the cursor character.
     //
 
-    VcpGetCursorPosition(Console, &CursorRow, &CursorColumn);
+    CursorRow = Console->NextRow;
+    CursorColumn = Console->NextColumn;
+    if (CursorColumn == Console->Columns) {
+        CursorColumn -= 1;
+    }
+
     Line = GET_CONSOLE_LINE(Console, CursorRow);
     Characters = (PBASE_VIDEO_CHARACTER)(Line->Character);
     if ((Console->Mode & CONSOLE_MODE_CURSOR) != 0) {
@@ -1747,7 +1728,7 @@ Return Value:
         Count = Command->Parameter[0];
 
         ASSERT((Command->ParameterCount != 0) && (Count > 0));
-        ASSERT(Console->NextColumn <= Console->Columns - 1);
+        ASSERT(Console->NextColumn < Console->Columns);
 
         VcpMoveCursorRelative(Console, Count, 0);
         break;
@@ -2526,8 +2507,14 @@ Return Value:
     Blank.Data.Attributes = Console->TextAttributes;
     Blank.Data.Character = ' ';
 
-    ASSERT((StartColumn < Console->Columns) && (EndColumn <= Console->Columns));
+    ASSERT((StartColumn <= Console->Columns) &&
+           (EndColumn <= Console->Columns));
+
     ASSERT((StartRow < Console->ScreenRows) && (EndRow <= Console->ScreenRows));
+
+    if (StartColumn >= Console->Columns) {
+        StartColumn = Console->Columns - 1;
+    }
 
     //
     // Loop through each row on the screen.
@@ -3238,51 +3225,6 @@ Return Value:
 
     Console->PendingAction |= VIDEO_ACTION_REDRAW_ENTIRE_SCREEN |
                               VIDEO_ACTION_RESET_SCROLL;
-
-    return;
-}
-
-VOID
-VcpGetCursorPosition (
-    PVIDEO_CONSOLE_DEVICE Console,
-    PLONG Row,
-    PLONG Column
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the row and column where the cursor should appear.
-
-Arguments:
-
-    Console - Supplies a pointer to the video console.
-
-    Row - Supplies a pointer where the cursor row index will be returned.
-
-    Column - Supplies a pointer where the cursor column index will be returned.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ASSERT((Console->NextRow < Console->ScreenRows) &&
-           (Console->NextColumn <= Console->Columns));
-
-    *Row = Console->NextRow;
-    *Column = Console->NextColumn;
-    if (*Column == Console->Columns) {
-
-        ASSERT(*Row != Console->ScreenRows - 1);
-
-        *Column = 0;
-        *Row += 1;
-    }
 
     return;
 }
