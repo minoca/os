@@ -361,6 +361,14 @@ Return Value:
     UnixSockets[1]->State = UnixSocketStateConnected;
     IopUnixSocketInitializeCredentials(UnixSockets[0]);
     IopUnixSocketInitializeCredentials(UnixSockets[1]);
+    IoSetIoObjectState(UnixSockets[0]->KernelSocket.IoState,
+                       POLL_EVENT_OUT,
+                       TRUE);
+
+    IoSetIoObjectState(UnixSockets[1]->KernelSocket.IoState,
+                       POLL_EVENT_OUT,
+                       TRUE);
+
     Status = STATUS_SUCCESS;
 
 CreateUnixSocketPairEnd:
