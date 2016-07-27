@@ -101,6 +101,25 @@ MmpMdIterationRoutine (
     PVOID Context
     );
 
+PMEMORY_DESCRIPTOR
+MmpMdFindAnyDescriptor (
+    PMEMORY_DESCRIPTOR_LIST Mdl,
+    ULONGLONG Size,
+    ULONG Alignment,
+    ULONGLONG Min,
+    ULONGLONG Max
+    );
+
+PMEMORY_DESCRIPTOR
+MmpMdFindEdgeDescriptor (
+    PMEMORY_DESCRIPTOR_LIST Mdl,
+    ULONGLONG Size,
+    ULONG Alignment,
+    ULONGLONG Min,
+    ULONGLONG Max,
+    ALLOCATION_STRATEGY Strategy
+    );
+
 COMPARISON_RESULT
 MmpMdCompareDescriptors (
     PRED_BLACK_TREE Tree,
@@ -1146,11 +1165,6 @@ Return Value:
 {
 
     ULONGLONG AlignedAddress;
-    ULONGLONG BestAlignedAddress;
-    PMEMORY_DESCRIPTOR BestDescriptor;
-    PLIST_ENTRY Bin;
-    UINTN BinIndex;
-    PLIST_ENTRY CurrentEntry;
     PMEMORY_DESCRIPTOR Descriptor;
     ULONGLONG End;
     MEMORY_DESCRIPTOR Original;
@@ -1158,197 +1172,118 @@ Return Value:
     ULONGLONG Start;
     KSTATUS Status;
 
-    ASSERT(Strategy < AllocationStrategyFixedAddress);
+    ASSERT((Strategy < AllocationStrategyFixedAddress) && (Min < Max));
 
-    if (Alignment == 1) {
-        Alignment = 0;
-    }
-
-    BestAlignedAddress = 0;
-    BestDescriptor = NULL;
-    Original.Size = 0;
-
-    //
-    // Loop over each free bin, starting with the most appropriate size. If
-    // allocating from the highest address, get it from the top of the largest
-    // free block.
-    //
-
-    BinIndex = MmpMdGetFreeBinIndex(Size);
     if (Alignment == 0) {
         Alignment = 1;
     }
 
+    Original.Size = 0;
+
+    //
+    // Search differently depending on the allocation strategy.
+    //
+
+    if (Strategy == AllocationStrategyAnyAddress) {
+        Descriptor = MmpMdFindAnyDescriptor(Mdl, Size, Alignment, Min, Max);
+
+    } else {
+        Descriptor = MmpMdFindEdgeDescriptor(Mdl,
+                                             Size,
+                                             Alignment,
+                                             Min,
+                                             Max,
+                                             Strategy);
+    }
+
+    if (Descriptor == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto AllocateFromMdlEnd;
+    }
+
+    ASSERT(IS_MEMORY_FREE_TYPE(Descriptor->Type));
+
+    Start = Descriptor->BaseAddress;
+    End = Start + Descriptor->Size;
+
+    ASSERT((End >= Min) && (Start < Max));
+
+    if (Start < Min) {
+        Start = Min;
+    }
+
+    if (End > Max) {
+        End = Max;
+    }
+
     if (Strategy == AllocationStrategyHighestAddress) {
-        BinIndex = MDL_BIN_COUNT - 1;
-        while ((BinIndex != 0) &&
-               (LIST_EMPTY(&(Mdl->FreeLists[BinIndex])) != FALSE)) {
+        AlignedAddress = ALIGN_RANGE_DOWN(End - Size, Alignment);
 
-            BinIndex -= 1;
-        }
+    } else {
+        AlignedAddress = ALIGN_RANGE_UP(Start, Alignment);
     }
 
-    while (BinIndex < MDL_BIN_COUNT) {
-        Bin = &(Mdl->FreeLists[BinIndex]);
-        BinIndex += 1;
-
-        //
-        // Loop over each entry in the bin, trying to find one big enough.
-        //
-
-        CurrentEntry = Bin->Next;
-        while (CurrentEntry != Bin) {
-            Descriptor = LIST_VALUE(CurrentEntry,
-                                    MEMORY_DESCRIPTOR,
-                                    FreeListEntry);
-
-            CurrentEntry = CurrentEntry->Next;
-
-            ASSERT(IS_MEMORY_FREE_TYPE(Descriptor->Type));
-
-            Start = Descriptor->BaseAddress;
-            End = Start + Descriptor->Size;
-            if ((End < Min) || (Start >= Max)) {
-                continue;
-            }
-
-            if (Start < Min) {
-                Start = Min;
-            }
-
-            if (End > Max) {
-                End = Max;
-            }
-
-            if (Strategy == AllocationStrategyHighestAddress) {
-                AlignedAddress = ALIGN_RANGE_DOWN(End - Size, Alignment);
-
-            } else {
-                AlignedAddress = ALIGN_RANGE_UP(Start, Alignment);
-            }
-
-            //
-            // Skip it if it's not big enough or wraps in some weird way.
-            //
-
-            if ((AlignedAddress + Size > End) ||
-                (AlignedAddress < Start) ||
-                (AlignedAddress + Size < AlignedAddress)) {
-
-                continue;
-            }
-
-            if (BestDescriptor == NULL) {
-                BestDescriptor = Descriptor;
-                BestAlignedAddress = AlignedAddress;
-
-            } else {
-                if (Strategy == AllocationStrategyLowestAddress) {
-                    if (AlignedAddress < BestAlignedAddress) {
-                        BestDescriptor = Descriptor;
-                        BestAlignedAddress = AlignedAddress;
-                    }
-
-                } else if (Strategy == AllocationStrategyAnyAddress) {
-                    break;
-
-                } else if (Strategy == AllocationStrategyHighestAddress) {
-                    if (AlignedAddress > BestAlignedAddress) {
-                        BestDescriptor = Descriptor;
-                        BestAlignedAddress = AlignedAddress;
-                    }
-                }
-            }
-        }
-
-        //
-        // In the case where the caller is not picky, this hopefully found
-        // something suitable fast.
-        //
-
-        if ((BestDescriptor != NULL) &&
-            (Strategy == AllocationStrategyAnyAddress)) {
-
-            break;
-        }
-    }
+    RtlCopyMemory(&Original, Descriptor, sizeof(MEMORY_DESCRIPTOR));
 
     //
-    // If the very best descriptor was found, sacrifice it.
+    // After the descriptor is removed, it cannot be touched anymore,
+    // as it's free for reuse. Make sure to use only the local copy.
     //
 
-    if (BestDescriptor != NULL) {
-        Descriptor = BestDescriptor;
-        AlignedAddress = BestAlignedAddress;
-        RtlCopyMemory(&Original, Descriptor, sizeof(MEMORY_DESCRIPTOR));
+    MmMdRemoveDescriptorFromList(Mdl, Descriptor);
+    Descriptor = NULL;
 
-        //
-        // After the descriptor is removed, it cannot be touched anymore,
-        // as it's free for reuse. Make sure to use only the local copy.
-        //
+    //
+    // Add the free sliver at the beginning if the alignment bumped
+    // this up.
+    //
 
-        MmMdRemoveDescriptorFromList(Mdl, Descriptor);
-        Descriptor = NULL;
-
-        //
-        // Add the free sliver at the beginning if the alignment bumped
-        // this up.
-        //
-
-        if (AlignedAddress != Original.BaseAddress) {
-            MmMdInitDescriptor(&Replacement,
-                               Original.BaseAddress,
-                               AlignedAddress,
-                               Original.Type);
-
-            Status = MmMdAddDescriptorToList(Mdl, &Replacement);
-            if (!KSUCCESS(Status)) {
-                goto AllocateFromMdlEnd;
-            }
-        }
-
-        //
-        // Add the end chunk as well if this allocation doesn't cover it.
-        //
-
-        if (AlignedAddress + Size <
-            Original.BaseAddress + Original.Size) {
-
-            MmMdInitDescriptor(&Replacement,
-                               AlignedAddress + Size,
-                               Original.BaseAddress + Original.Size,
-                               Original.Type);
-
-            Status = MmMdAddDescriptorToList(Mdl, &Replacement);
-            if (!KSUCCESS(Status)) {
-                goto AllocateFromMdlEnd;
-            }
-        }
-
-        //
-        // Add the new allocation.
-        //
-
+    if (AlignedAddress != Original.BaseAddress) {
         MmMdInitDescriptor(&Replacement,
+                           Original.BaseAddress,
                            AlignedAddress,
-                           AlignedAddress + Size,
-                           MemoryType);
+                           Original.Type);
 
         Status = MmMdAddDescriptorToList(Mdl, &Replacement);
         if (!KSUCCESS(Status)) {
             goto AllocateFromMdlEnd;
         }
-
-        *Address = AlignedAddress;
-        Status = STATUS_SUCCESS;
-
-    //
-    // No descriptor was found.
-    //
-
-    } else {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
     }
+
+    //
+    // Add the end chunk as well if this allocation doesn't cover it.
+    //
+
+    if (AlignedAddress + Size <
+        Original.BaseAddress + Original.Size) {
+
+        MmMdInitDescriptor(&Replacement,
+                           AlignedAddress + Size,
+                           Original.BaseAddress + Original.Size,
+                           Original.Type);
+
+        Status = MmMdAddDescriptorToList(Mdl, &Replacement);
+        if (!KSUCCESS(Status)) {
+            goto AllocateFromMdlEnd;
+        }
+    }
+
+    //
+    // Add the new allocation.
+    //
+
+    MmMdInitDescriptor(&Replacement,
+                       AlignedAddress,
+                       AlignedAddress + Size,
+                       MemoryType);
+
+    Status = MmMdAddDescriptorToList(Mdl, &Replacement);
+    if (!KSUCCESS(Status)) {
+        goto AllocateFromMdlEnd;
+    }
+
+    *Address = AlignedAddress;
+    Status = STATUS_SUCCESS;
 
 AllocateFromMdlEnd:
     if (!KSUCCESS(Status)) {
@@ -2100,6 +2035,223 @@ Return Value:
                                      IterateContext->Context);
 
     return;
+}
+
+PMEMORY_DESCRIPTOR
+MmpMdFindAnyDescriptor (
+    PMEMORY_DESCRIPTOR_LIST Mdl,
+    ULONGLONG Size,
+    ULONG Alignment,
+    ULONGLONG Min,
+    ULONGLONG Max
+    )
+
+/*++
+
+Routine Description:
+
+    This routine finds any free descriptor that satisfies the given
+    requirements.
+
+Arguments:
+
+    Mdl - Supplies a pointer to the descriptor list to allocate memory from.
+
+    Size - Supplies the size of the required space.
+
+    Alignment - Supplies the alignment requirement for the allocation, in bytes.
+        Valid values are powers of 2. Set to 1 or 0 to specify no alignment
+        requirement.
+
+    Min - Supplies the minimum address to allocate.
+
+    Max - Supplies the maximum address to allocate.
+
+Return Value:
+
+    Returns a pointer to a free descriptor that satisfies the requirements
+    on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    ULONGLONG AlignedAddress;
+    PLIST_ENTRY Bin;
+    ULONG BinIndex;
+    PLIST_ENTRY CurrentEntry;
+    PMEMORY_DESCRIPTOR Descriptor;
+    ULONGLONG End;
+    ULONGLONG Start;
+
+    //
+    // Loop over each free bin, starting with the most appropriate size.
+    //
+
+    BinIndex = MmpMdGetFreeBinIndex(Size);
+    if (Alignment == 0) {
+        Alignment = 1;
+    }
+
+    while (BinIndex < MDL_BIN_COUNT) {
+        Bin = &(Mdl->FreeLists[BinIndex]);
+        BinIndex += 1;
+
+        //
+        // Loop over each entry in the bin, trying to find one big enough.
+        //
+
+        CurrentEntry = Bin->Next;
+        while (CurrentEntry != Bin) {
+            Descriptor = LIST_VALUE(CurrentEntry,
+                                    MEMORY_DESCRIPTOR,
+                                    FreeListEntry);
+
+            CurrentEntry = CurrentEntry->Next;
+
+            ASSERT(IS_MEMORY_FREE_TYPE(Descriptor->Type));
+
+            Start = Descriptor->BaseAddress;
+            End = Start + Descriptor->Size;
+            if ((End < Min) || (Start >= Max)) {
+                continue;
+            }
+
+            if (Start < Min) {
+                Start = Min;
+            }
+
+            if (End > Max) {
+                End = Max;
+            }
+
+            AlignedAddress = ALIGN_RANGE_UP(Start, Alignment);
+
+            //
+            // Skip it if it's not big enough or wraps in some weird way.
+            //
+
+            if ((AlignedAddress + Size > End) ||
+                (AlignedAddress < Start) ||
+                (AlignedAddress + Size < AlignedAddress)) {
+
+                continue;
+            }
+
+            return Descriptor;
+        }
+    }
+
+    return NULL;
+}
+
+PMEMORY_DESCRIPTOR
+MmpMdFindEdgeDescriptor (
+    PMEMORY_DESCRIPTOR_LIST Mdl,
+    ULONGLONG Size,
+    ULONG Alignment,
+    ULONGLONG Min,
+    ULONGLONG Max,
+    ALLOCATION_STRATEGY Strategy
+    )
+
+/*++
+
+Routine Description:
+
+    This routine finds the lowest or highest free descriptor that matches the
+    given requirements.
+
+Arguments:
+
+    Mdl - Supplies a pointer to the descriptor list to allocate memory from.
+
+    Size - Supplies the size of the required space.
+
+    Alignment - Supplies the alignment requirement for the allocation, in bytes.
+        Valid values are powers of 2. Set to 1 or 0 to specify no alignment
+        requirement.
+
+    Min - Supplies the minimum address to allocate.
+
+    Max - Supplies the maximum address to allocate.
+
+    Strategy - Supplies the strategy, which must be either lowest or highest
+        address.
+
+Return Value:
+
+    Returns a pointer to a free descriptor that satisfies the requirements
+    on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    ULONGLONG AlignedAddress;
+    BOOL Descending;
+    PMEMORY_DESCRIPTOR Descriptor;
+    ULONGLONG End;
+    PRED_BLACK_TREE_NODE Node;
+    ULONGLONG Start;
+
+    if (Strategy == AllocationStrategyLowestAddress) {
+        Node = RtlRedBlackTreeGetLowestNode(&(Mdl->Tree));
+        Descending = FALSE;
+
+    } else {
+
+        ASSERT(Strategy == AllocationStrategyHighestAddress);
+
+        Node = RtlRedBlackTreeGetHighestNode(&(Mdl->Tree));
+        Descending = TRUE;
+    }
+
+    while (Node != NULL) {
+        Descriptor = RED_BLACK_TREE_VALUE(Node, MEMORY_DESCRIPTOR, TreeNode);
+        Node = RtlRedBlackTreeGetNextNode(&(Mdl->Tree), Descending, Node);
+        if ((Descriptor->Type != MemoryTypeFree) ||
+            (Descriptor->Size < Size)) {
+
+            continue;
+        }
+
+        Start = Descriptor->BaseAddress;
+        End = Start + Descriptor->Size;
+        if ((End < Min) || (Start >= Max)) {
+            continue;
+        }
+
+        if (Start < Min) {
+            Start = Min;
+        }
+
+        if (End > Max) {
+            End = Max;
+        }
+
+        if (Strategy == AllocationStrategyLowestAddress) {
+            AlignedAddress = ALIGN_RANGE_UP(Start, Alignment);
+
+        } else {
+            AlignedAddress = ALIGN_RANGE_DOWN(End - Size, Alignment);
+        }
+
+        if ((AlignedAddress + Size > End) ||
+            (AlignedAddress < Start) ||
+            (AlignedAddress + Size < AlignedAddress)) {
+
+            continue;
+        }
+
+        return Descriptor;
+    }
+
+    return NULL;
 }
 
 COMPARISON_RESULT
