@@ -587,7 +587,7 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoOpenControllingTerminal (
-    PIO_HANDLE *IoHandle
+    PIO_HANDLE IoHandle
     )
 
 /*++
@@ -598,8 +598,8 @@ Routine Description:
 
 Arguments:
 
-    IoHandle - Supplies a pointer where the open I/O handle will be returned on
-        success.
+    IoHandle - Supplies a pointer to an already open or opening I/O handle. The
+        contents of that handle will be replaced with the controlling terminal.
 
 Return Value:
 
@@ -609,44 +609,27 @@ Return Value:
 
 {
 
-    PIO_HANDLE Handle;
-    ULONG PreviousValue;
+    PFILE_OBJECT FileObject;
     PKPROCESS Process;
     KSTATUS Status;
 
-    *IoHandle = NULL;
     Process = PsGetCurrentProcess();
     KeAcquireQueuedLock(IoTerminalListLock);
-    if (Process->ControllingTerminal == NULL) {
+    FileObject = Process->ControllingTerminal;
+    if (FileObject == NULL) {
         Status = STATUS_NO_SUCH_DEVICE;
 
     } else {
-
-        //
-        // This part is a little fishy. Manually attempt to increment the
-        // reference count on the handle. If the handle reference count was
-        // zero, quietly back out. Because closing the slave acquires the
-        // terminal list lock held here, the handle cannot disappear entirely.
-        // But it can be in the process of closing. This concept was not
-        // generalized into the I/O handle code because the idea of not
-        // having a reference on the handle but somehow ensuring that it
-        // couldn't disappear did not seem like a legit contract to create a
-        // generic I/O handle function around.
-        //
-
-        Handle = Process->ControllingTerminal;
-        PreviousValue = RtlAtomicAdd32(&(Handle->ReferenceCount), 1);
-        if (PreviousValue == 0) {
-            RtlAtomicAdd32(&(Handle->ReferenceCount), -1);
-            Status = STATUS_NO_SUCH_DEVICE;
-
-        } else {
-            *IoHandle = Handle;
-            Status = STATUS_SUCCESS;
-        }
+        IopFileObjectAddReference(FileObject);
+        IopOverwriteIoHandle(IoHandle, FileObject);
+        Status = STATUS_SUCCESS;
     }
 
     KeReleaseQueuedLock(IoTerminalListLock);
+    if (KSUCCESS(Status)) {
+        Status = IopTerminalOpenSlave(IoHandle);
+    }
+
     return Status;
 }
 
@@ -843,6 +826,60 @@ Return Value:
 
 TerminalSetDeviceEnd:
     return Status;
+}
+
+VOID
+IoTerminalDisassociate (
+    PKPROCESS Process
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when a session leader dies to disassociate the
+    terminal from the rest of the session.
+
+Arguments:
+
+    Process - Supplies a pointer to the session leader that has exited.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PFILE_OBJECT FileObject;
+    PTERMINAL_SLAVE Slave;
+    PTERMINAL Terminal;
+
+    if (Process->ControllingTerminal == NULL) {
+        return;
+    }
+
+    ASSERT(PsIsSessionLeader(Process));
+    ASSERT(Process->ThreadCount == 0);
+
+    KeAcquireQueuedLock(IoTerminalListLock);
+    FileObject = Process->ControllingTerminal;
+    if (FileObject != NULL) {
+        Slave = FileObject->SpecialIo;
+        Terminal = Slave->Master;
+        if (Terminal->ProcessGroupId != TERMINAL_INVALID_PROCESS_GROUP) {
+            PsSignalProcessGroup(Terminal->ProcessGroupId,
+                                 SIGNAL_CONTROLLING_TERMINAL_CLOSED);
+        }
+
+        IopTerminalDisassociate(Terminal);
+
+        ASSERT(Process->ControllingTerminal == NULL);
+    }
+
+    KeReleaseQueuedLock(IoTerminalListLock);
+    return;
 }
 
 KSTATUS
@@ -1060,6 +1097,15 @@ Return Value:
     if (Terminal->MasterReferenceCount == 1) {
 
         //
+        // Send the foreground process group a hangup.
+        //
+
+        if (Terminal->ProcessGroupId != TERMINAL_INVALID_PROCESS_GROUP) {
+            PsSignalProcessGroup(Terminal->ProcessGroupId,
+                                 SIGNAL_CONTROLLING_TERMINAL_CLOSED);
+        }
+
+        //
         // Decrement the original reference, preventing any additional opens of
         // the master terminal during the destruction process. It is possible
         // that a path walk has already taken another reference on the master's
@@ -1237,7 +1283,7 @@ Return Value:
         (PsIsSessionLeader(Process) != FALSE) &&
         (Process->ControllingTerminal == NULL)) {
 
-        Process->ControllingTerminal = IoHandle;
+        Process->ControllingTerminal = FileObject;
         Terminal->ProcessGroupId = Process->Identifiers.ProcessGroupId;
         Terminal->SessionId = Process->Identifiers.SessionId;
     }
@@ -1320,25 +1366,10 @@ Return Value:
         IoSetIoObjectState(Terminal->MasterFileObject->IoState,
                            POLL_EVENT_IN | POLL_EVENT_DISCONNECTED,
                            TRUE);
-    }
-
-    //
-    // If this is a session leader closing its controlling terminal, then
-    // disassociate the controlling terminal for the entire session.
-    //
-
-    if ((PsIsSessionLeader(Process) != FALSE) &&
-        (IoHandle == Process->ControllingTerminal)) {
 
         //
-        // If the session leader is dying, send a hangup signal to the
-        // foreground process group.
+        // Remove the controlling terminal from the session.
         //
-
-        if (Process->ThreadCount == 0) {
-            PsSignalProcessGroup(Terminal->ProcessGroupId,
-                                 SIGNAL_CONTROLLING_TERMINAL_CLOSED);
-        }
 
         IopTerminalDisassociate(Terminal);
 
@@ -2428,7 +2459,7 @@ Return Value:
 
         } else {
             IopTerminalDisassociate(Terminal);
-            Process->ControllingTerminal = Handle;
+            Process->ControllingTerminal = Terminal->SlaveFileObject;
             Terminal->SessionId = CurrentSessionId;
             Terminal->ProcessGroupId = Process->Identifiers.ProcessGroupId;
         }
@@ -2484,7 +2515,7 @@ Return Value:
         KeAcquireQueuedLock(IoTerminalListLock);
         KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
-        if (Process->ControllingTerminal != Handle) {
+        if (Process->ControllingTerminal != Terminal->SlaveFileObject) {
             Status = STATUS_NOT_A_TERMINAL;
 
         } else {
@@ -3176,7 +3207,6 @@ Return Value:
 
                     PsSignalProcessGroup(Terminal->ProcessGroupId,
                                          SIGNAL_KEYBOARD_INTERRUPT);
-
                 }
             }
         }
@@ -3190,7 +3220,6 @@ Return Value:
 
                     PsSignalProcessGroup(Terminal->ProcessGroupId,
                                          SIGNAL_REQUEST_CORE_DUMP);
-
                 }
             }
         }
@@ -5204,6 +5233,8 @@ Return Value:
 {
 
     SESSION_ID SessionId;
+
+    ASSERT(KeIsQueuedLockHeld(IoTerminalListLock) != FALSE);
 
     SessionId = Terminal->SessionId;
     if (SessionId != TERMINAL_INVALID_SESSION) {

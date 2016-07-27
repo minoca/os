@@ -1868,12 +1868,8 @@ Members:
         pointer will be passed to the device to uniquely identify it for
         reads, writes, closes, and other operations.
 
-    Replacement - Stores an optional pointer to an open handle whose underlying
-        object should actually be responsible for performing the I/O. This is
-        generally only used when opening "special" objects that magically
-        redirect elsewhere. The system will not close this handle, as it is
-        expected that this replacement handle remain open as long as the new
-        handle created remains open.
+    IoHandle - Stores a pointer to the I/O handle being initialized with this
+        open.
 
 --*/
 
@@ -1883,7 +1879,7 @@ typedef struct _IRP_OPEN {
     ULONG DesiredAccess;
     ULONG OpenFlags;
     PVOID DeviceContext;
-    PIO_HANDLE Replacement;
+    PIO_HANDLE IoHandle;
 } IRP_OPEN, *PIRP_OPEN;
 
 /*++
@@ -5142,7 +5138,7 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoOpenControllingTerminal (
-    PIO_HANDLE *IoHandle
+    PIO_HANDLE IoHandle
     );
 
 /*++
@@ -5153,8 +5149,8 @@ Routine Description:
 
 Arguments:
 
-    IoHandle - Supplies a pointer where the open I/O handle will be returned on
-        success.
+    IoHandle - Supplies a pointer to an already open or opening I/O handle. The
+        contents of that handle will be replaced with the controlling terminal.
 
 Return Value:
 
@@ -5227,6 +5223,28 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+VOID
+IoTerminalDisassociate (
+    PKPROCESS Process
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when a session leader dies to disassociate the
+    terminal from the rest of the session.
+
+Arguments:
+
+    Process - Supplies a pointer to the session leader that has exited.
+
+Return Value:
+
+    None.
 
 --*/
 

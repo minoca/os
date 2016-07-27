@@ -3259,16 +3259,11 @@ Return Value:
 
             OpenIrp.DesiredAccess = IO_ACCESS_READ | IO_ACCESS_WRITE;
             OpenIrp.OpenFlags = Flags;
+            OpenIrp.IoHandle = NewHandle;
             Status = IopSendOpenIrp(Device, &OpenIrp);
             if (!KSUCCESS(Status)) {
                 goto OpenPathEntryEnd;
             }
-
-            //
-            // If someone wants to replace a cacheable file, think about this.
-            //
-
-            ASSERT(OpenIrp.Replacement == NULL);
 
             //
             // Now try to insert the device context into the file object. First
@@ -3322,12 +3317,11 @@ Return Value:
 
             OpenIrp.DesiredAccess = Access;
             OpenIrp.OpenFlags = Flags;
+            OpenIrp.IoHandle = NewHandle;
             Status = IopSendOpenIrp(Device, &OpenIrp);
             if (!KSUCCESS(Status)) {
                 goto OpenPathEntryEnd;
             }
-
-            ASSERT(OpenIrp.Replacement == NULL);
 
             OpenIrpSent = TRUE;
             NewHandle->DeviceContext = OpenIrp.DeviceContext;
@@ -3360,6 +3354,7 @@ Return Value:
         OpenIrp.IoState = FileObject->IoState;
         OpenIrp.DesiredAccess = Access;
         OpenIrp.OpenFlags = Flags;
+        OpenIrp.IoHandle = NewHandle;
         Device = FileObject->Device;
 
         ASSERT(IS_DEVICE_OR_VOLUME(Device));
@@ -3371,21 +3366,6 @@ Return Value:
 
         OpenIrpSent = TRUE;
         NewHandle->DeviceContext = OpenIrp.DeviceContext;
-
-        //
-        // If the caller actually wanted to replace this object with something
-        // else, overwrite the handle. Directories cannot be replaced,
-        // since they are too heavily involved with their path entries, which
-        // do not get overwritten.
-        //
-
-        if (OpenIrp.Replacement != NULL) {
-
-            ASSERT(FileObject->Properties.Type != IoObjectRegularDirectory);
-
-            IopOverwriteIoHandle(NewHandle, OpenIrp.Replacement);
-        }
-
         break;
 
     case IoObjectPipe:
@@ -3653,14 +3633,9 @@ Return Value:
     PFILE_OBJECT FileObject;
     KSTATUS Status;
 
-    //
-    // Use the file object in the path entry rather than the I/O handle so that
-    // opens and closes are balanced.
-    //
-
     FileObject = NULL;
     if (IoHandle->PathPoint.PathEntry != NULL) {
-        FileObject = IoHandle->PathPoint.PathEntry->FileObject;
+        FileObject = IoHandle->FileObject;
         switch (FileObject->Properties.Type) {
         case IoObjectRegularFile:
         case IoObjectRegularDirectory:

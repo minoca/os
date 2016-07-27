@@ -86,23 +86,6 @@ typedef struct _SPECIAL_PSEUDO_RANDOM_DEVICE {
 
 Structure Description:
 
-    This structure defines the context for the current terminal device.
-
-Members:
-
-    SourceHandle - Stores the open handle to the current terminal. This must
-        stay open as long as the special device is open.
-
---*/
-
-typedef struct _SPECIAL_CURRENT_TERMINAL_HANDLE {
-    PIO_HANDLE SourceHandle;
-} SPECIAL_CURRENT_TERMINAL_HANDLE, *PSPECIAL_CURRENT_TERMINAL_HANDLE;
-
-/*++
-
-Structure Description:
-
     This structure defines the context for a special device.
 
 Members:
@@ -582,41 +565,17 @@ Return Value:
 {
 
     PSPECIAL_DEVICE Device;
-    PSPECIAL_CURRENT_TERMINAL_HANDLE HandleContext;
     KSTATUS Status;
 
     Device = (PSPECIAL_DEVICE)DeviceContext;
 
     //
-    // For the current terminal, open the actual controlling terminal, save
-    // that handle in some context, and set it as the I/O replacement.
+    // For the current terminal, open the actual controlling terminal. This
+    // driver then does not get a close call.
     //
 
     if (Device->Type == SpecialDeviceCurrentTerminal) {
-        HandleContext = MmAllocateNonPagedPool(
-                                       sizeof(SPECIAL_CURRENT_TERMINAL_HANDLE),
-                                       SPECIAL_DEVICE_ALLOCATION_TAG);
-
-        if (HandleContext == NULL) {
-            IoCompleteIrp(SpecialDriver, Irp, STATUS_INSUFFICIENT_RESOURCES);
-            return;
-        }
-
-        RtlZeroMemory(HandleContext, sizeof(SPECIAL_CURRENT_TERMINAL_HANDLE));
-        Status = IoOpenControllingTerminal(&(HandleContext->SourceHandle));
-        Irp->U.Open.Replacement = HandleContext->SourceHandle;
-        if (!KSUCCESS(Status)) {
-            MmFreeNonPagedPool(HandleContext);
-            HandleContext = NULL;
-
-        } else {
-
-            ASSERT(HandleContext->SourceHandle != NULL);
-
-            SpecialDeviceAddReference(Device);
-        }
-
-        Irp->U.Open.DeviceContext = HandleContext;
+        Status = IoOpenControllingTerminal(Irp->U.Open.IoHandle);
         IoCompleteIrp(SpecialDriver, Irp, Status);
 
     //
@@ -675,24 +634,13 @@ Return Value:
 {
 
     PSPECIAL_DEVICE Device;
-    PSPECIAL_CURRENT_TERMINAL_HANDLE HandleContext;
-    KSTATUS Status;
 
     Device = (PSPECIAL_DEVICE)DeviceContext;
-    if (Device->Type == SpecialDeviceCurrentTerminal) {
-        HandleContext = Irp->U.Close.DeviceContext;
-        Status = IoClose(HandleContext->SourceHandle);
-        MmFreeNonPagedPool(HandleContext);
 
-    } else {
-        Status = STATUS_SUCCESS;
-    }
+    ASSERT(Device->Type != SpecialDeviceCurrentTerminal);
 
-    if (KSUCCESS(Status)) {
-        SpecialDeviceReleaseReference(Device);
-    }
-
-    IoCompleteIrp(SpecialDriver, Irp, Status);
+    SpecialDeviceReleaseReference(Device);
+    IoCompleteIrp(SpecialDriver, Irp, STATUS_SUCCESS);
     return;
 }
 

@@ -2387,27 +2387,23 @@ Return Value:
 VOID
 IopOverwriteIoHandle (
     PIO_HANDLE Destination,
-    PIO_HANDLE IoSource
+    PFILE_OBJECT FileObject
     );
 
 /*++
 
 Routine Description:
 
-    This routine takes the contents of the given source handle and overwrites
-    the destination handle with it. I/O actions performed on the destination
-    handle appear as if they were done to the I/O object of the source handle.
-    This replacement does not replace any information about the original path
-    opened in the destination. It also does not modify the access and open
-    flags in the destination. This routine is not thread safe.
+    This routine overwrites the file object of the given handle. I/O actions
+    performed on the destination handle go to the given file object. This
+    routine is not thread safe.
 
 Arguments:
 
     Destination - Supplies a pointer to the I/O handle that should magically
         redirect elsewhere.
 
-    IoSource - Supplies a pointer to the I/O handle that contains the
-        underlying I/O object the destination should interact with.
+    FileObject - Supplies a pointer to the file object to place in the handle.
 
 Return Value:
 

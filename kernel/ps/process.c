@@ -2876,6 +2876,9 @@ Return Value:
     PspImUnloadAllImages(Process);
     IoCloseProcessHandles(Process, 0);
     MmCleanUpProcessMemory(Process);
+    if (PsIsSessionLeader(Process)) {
+        IoTerminalDisassociate(Process);
+    }
 
     //
     // Remove the process from its process group and then notify its children

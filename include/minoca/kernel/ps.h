@@ -1369,7 +1369,7 @@ Members:
     Umask - Stores the user file creation permission bit mask for the process.
 
     ControllingTerminal - Stores an opaque pointer to the process' controlling
-        terminal. This is an I/O handle, but it's an I/O handle that this
+        terminal. This is a file object, but it's a file object that this
         process doesn't necessarily have a reference to. This pointer should
         not be touched without the terminal list lock held.
 
