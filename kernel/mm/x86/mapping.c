@@ -2180,19 +2180,14 @@ Return Value:
 
     MappedCount = 0;
     CurrentVirtual = VirtualAddress;
-    DirectoryIndexEnd = (UINTN)VirtualEnd >> PAGE_DIRECTORY_SHIFT;
+    DirectoryIndexEnd = (UINTN)ALIGN_POINTER_UP(VirtualEnd,
+                                                1 << PAGE_DIRECTORY_SHIFT);
+
+    DirectoryIndexEnd >>= PAGE_DIRECTORY_SHIFT;
     DirectoryIndexStart = (UINTN)VirtualAddress >> PAGE_DIRECTORY_SHIFT;
     for (DirectoryIndex = DirectoryIndexStart;
-         DirectoryIndex <= DirectoryIndexEnd;
+         DirectoryIndex < DirectoryIndexEnd;
          DirectoryIndex += 1) {
-
-        //
-        // If the source directory does not have this page table, then skip it.
-        //
-
-        if (SourceDirectory[DirectoryIndex].Present == 0) {
-            continue;
-        }
 
         //
         // Determine the start and end page table indices that will need to be
@@ -2202,27 +2197,24 @@ Return Value:
         TableIndexStart = ((UINTN)CurrentVirtual & PTE_INDEX_MASK) >>
                           PAGE_SHIFT;
 
+        CurrentVirtual = (PVOID)((DirectoryIndex + 1) << PAGE_DIRECTORY_SHIFT);
+        if (CurrentVirtual > VirtualEnd) {
+            CurrentVirtual = VirtualEnd;
+        }
+
         //
-        // If this is not the last page directory entry, then this VA
-        // region should run to the last index of this PTE.
+        // If the source directory does not have this page table, then skip it.
         //
 
-        if (DirectoryIndex < DirectoryIndexEnd) {
+        if (SourceDirectory[DirectoryIndex].Present == 0) {
+            continue;
+        }
+
+        TableIndexEnd = ((UINTN)CurrentVirtual & PTE_INDEX_MASK) >>
+                        PAGE_SHIFT;
+
+        if (TableIndexEnd == 0) {
             TableIndexEnd = PAGE_SIZE / sizeof(PTE);
-
-            //
-            // As this is not the last time around the loop, up the current
-            // virtual address.
-            //
-
-            CurrentVirtual += (TableIndexEnd - TableIndexStart) << PAGE_SHIFT;
-
-        //
-        // Otherwise the PTE index of the end virtual address should do.
-        //
-
-        } else {
-            TableIndexEnd = ((UINTN)VirtualEnd & PTE_INDEX_MASK) >> PAGE_SHIFT;
         }
 
         //

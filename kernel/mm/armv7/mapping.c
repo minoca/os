@@ -2661,11 +2661,27 @@ Return Value:
     CleanEnd = NULL;
     MappedCount = 0;
     CurrentVirtual = VirtualAddress;
-    FirstIndexEnd = ALIGN_RANGE_DOWN(FLT_INDEX(VirtualEnd), 4);
+    FirstIndexEnd = FLT_INDEX(
+                           ALIGN_POINTER_UP(VirtualEnd, 1 << FLT_INDEX_SHIFT));
+
     FirstIndexStart = ALIGN_RANGE_DOWN(FLT_INDEX(VirtualAddress), 4);
     for (FirstIndex = FirstIndexStart;
-         FirstIndex <= FirstIndexEnd;
+         FirstIndex < FirstIndexEnd;
          FirstIndex += 4) {
+
+        //
+        // Determine the start and end page table indices that will need to be
+        // synchronized.
+        //
+
+        TableIndexStart = SLT_INDEX(CurrentVirtual) +
+                          ((FLT_INDEX(CurrentVirtual) - FirstIndex) *
+                           (SLT_SIZE / sizeof(SECOND_LEVEL_TABLE)));
+
+        CurrentVirtual = (PVOID)((FirstIndex + 4) << FLT_INDEX_SHIFT);
+        if (CurrentVirtual > VirtualEnd) {
+            CurrentVirtual = VirtualEnd;
+        }
 
         //
         // If the source directory does not have this section of four first
@@ -2677,29 +2693,12 @@ Return Value:
             continue;
         }
 
-        //
-        // Determine the start end end page table indices that will need to be
-        // synchronized.
-        //
+        TableIndexEnd = SLT_INDEX(CurrentVirtual) +
+                        ((FLT_INDEX(CurrentVirtual) - FirstIndex) *
+                         (SLT_SIZE / sizeof(SECOND_LEVEL_TABLE)));
 
-        TableIndexStart = SLT_INDEX(CurrentVirtual) +
-                          ((FLT_INDEX(CurrentVirtual) - FirstIndex) *
-                           (SLT_SIZE / sizeof(SECOND_LEVEL_TABLE)));
-
-        if (FirstIndex < FirstIndexEnd) {
+        if (TableIndexEnd == 0) {
             TableIndexEnd = (SLT_SIZE * 4) / sizeof(SECOND_LEVEL_TABLE);
-
-            //
-            // As this is not the last time around the loop, up the current
-            // virtual address.
-            //
-
-            CurrentVirtual += (TableIndexEnd - TableIndexStart) << PAGE_SHIFT;
-
-        } else {
-            TableIndexEnd = SLT_INDEX(VirtualEnd) +
-                            ((FLT_INDEX(VirtualEnd) - FirstIndex) *
-                             (SLT_SIZE / sizeof(SECOND_LEVEL_TABLE)));
         }
 
         //
