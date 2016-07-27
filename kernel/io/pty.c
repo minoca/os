@@ -385,6 +385,12 @@ IopTerminalDisassociateIterator (
     PKPROCESS Process
     );
 
+KSTATUS
+IopTerminalValidateGroup (
+    PTERMINAL Terminal,
+    BOOL Input
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -700,6 +706,11 @@ Return Value:
 
     KeAcquireQueuedLock(Terminal->OutputLock);
     KeAcquireQueuedLock(Terminal->InputLock);
+    Status = IopTerminalValidateGroup(Terminal, FALSE);
+    if (!KSUCCESS(Status)) {
+        goto SetTerminalSettingsEnd;
+    }
+
     if (OriginalSettings != NULL) {
         RtlCopyMemory(OriginalSettings,
                       &(Terminal->Settings),
@@ -1886,7 +1897,6 @@ Return Value:
 
 {
 
-    BOOL AcceptingSignal;
     INT Argument;
     IO_CONTEXT Context;
     PROCESS_GROUP_ID CurrentProcessGroupId;
@@ -2332,7 +2342,6 @@ Return Value:
             break;
         }
 
-        AcceptingSignal = FALSE;
         KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
         if (Terminal->SessionId != CurrentSessionId) {
@@ -2345,39 +2354,21 @@ Return Value:
         //
 
         } else {
-            if (CurrentProcessGroupId != Terminal->ProcessGroupId) {
-                AcceptingSignal = PsIsThreadAcceptingSignal(
-                                            NULL,
-                                            SIGNAL_BACKGROUND_TERMINAL_OUTPUT);
+            Status = IopTerminalValidateGroup(Terminal, FALSE);
+            if (!KSUCCESS(Status)) {
+                if (Status == STATUS_DEVICE_IO_ERROR) {
+                    Status = STATUS_NOT_A_TERMINAL;
+                }
+
+                break;
             }
 
-            //
-            // If the process is not accepting signals or the signal did not
-            // need to be checked, then the process group is free to change.
-            //
-
-            if (AcceptingSignal == FALSE) {
-                Terminal->ProcessGroupId = ProcessGroupId;
-                Status = STATUS_SUCCESS;
-            }
+            Terminal->ProcessGroupId = ProcessGroupId;
+            Status = STATUS_SUCCESS;
         }
 
         KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
-
-        //
-        // If the process is accepting the signal checked above, send it and
-        // tell the caller to try again later. If it's not accepting it, just
-        // let it go through.
-        //
-
-        if (AcceptingSignal != FALSE) {
-            PsSignalProcessGroup(CurrentProcessGroupId,
-                                 SIGNAL_BACKGROUND_TERMINAL_OUTPUT);
-
-            Status = STATUS_TRY_AGAIN;
-        }
-
         break;
 
     case TerminalControlSetControllingTerminal:
@@ -2602,7 +2593,6 @@ Return Value:
 
 {
 
-    BOOL AcceptingSignal;
     PIO_OBJECT_STATE MasterIoState;
     PROCESS_GROUP_ID ProcessGroup;
     SESSION_ID Session;
@@ -2641,39 +2631,12 @@ Return Value:
     }
 
     //
-    // If the flushing process is not in the same process group, send the
-    // process group a signal unless the flushing process is ignoring or
-    // blocking that signal.
+    // Make sure this process can currently write to this terminal.
     //
 
-    if ((ProcessGroup != Terminal->ProcessGroupId) &&
-        ((Terminal->Settings.LocalFlags &
-          TERMINAL_LOCAL_STOP_BACKGROUND_WRITES) != 0)) {
-
-        AcceptingSignal = PsIsThreadAcceptingSignal(
-                                            NULL,
-                                            SIGNAL_BACKGROUND_TERMINAL_OUTPUT);
-
-        //
-        // If the process is accepting that signal, send it to it and tell it
-        // to try again later. The exception is an orphaned process group, in
-        // which case an error is returned. If the process is not accepting the
-        // signal, just let the flush go through.
-        //
-
-        if (AcceptingSignal != FALSE) {
-            if (PsIsProcessGroupOrphaned(ProcessGroup) != FALSE) {
-                Status = STATUS_DEVICE_IO_ERROR;
-
-            } else {
-                PsSignalProcessGroup(ProcessGroup,
-                                     SIGNAL_BACKGROUND_TERMINAL_OUTPUT);
-
-                Status = STATUS_TRY_AGAIN;
-            }
-
-            goto TerminalFlushEnd;
-        }
+    Status = IopTerminalValidateGroup(Terminal, FALSE);
+    if (!KSUCCESS(Status)) {
+        goto TerminalFlushEnd;
     }
 
     //
@@ -3687,17 +3650,13 @@ Return Value:
 
 {
 
-    BOOL AcceptingSignal;
     BOOL AnythingWritten;
     UINTN BytesThisRound;
     UINTN BytesWritten;
     UCHAR LocalBytes[64];
     BOOL LockHeld;
     PIO_OBJECT_STATE MasterIoState;
-    PROCESS_GROUP_ID ProcessGroup;
     ULONG ReturnedEvents;
-    SESSION_ID Session;
-    BOOL SignalProcessGroup;
     PTERMINAL_SLAVE Slave;
     PIO_OBJECT_STATE SlaveIoState;
     ULONG Space;
@@ -3709,7 +3668,6 @@ Return Value:
     BytesWritten = 0;
     LockHeld = FALSE;
     MasterIoState = NULL;
-    SignalProcessGroup = FALSE;
     Slave = FileObject->SpecialIo;
     Terminal = Slave->Master;
     TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
@@ -3723,7 +3681,6 @@ Return Value:
 
     SlaveIoState = Terminal->SlaveFileObject->IoState;
     MasterIoState = Terminal->MasterFileObject->IoState;
-    PsGetProcessGroup(NULL, &ProcessGroup, &Session);
 
     //
     // Synchronize the checks on the terminal attachment and the owning session
@@ -3734,37 +3691,12 @@ Return Value:
     LockHeld = TRUE;
 
     //
-    // If the writing process is not in the same process group, send the
-    // process group a signal unless the writing process is ignoring or
-    // blocking that signal.
+    // Make sure this process can currently write to this terminal.
     //
 
-    if ((ProcessGroup != Terminal->ProcessGroupId) &&
-        ((Terminal->Settings.LocalFlags &
-          TERMINAL_LOCAL_STOP_BACKGROUND_WRITES) != 0)) {
-
-        AcceptingSignal = PsIsThreadAcceptingSignal(
-                                            NULL,
-                                            SIGNAL_BACKGROUND_TERMINAL_OUTPUT);
-
-        //
-        // If the process is accepting that signal, send it to it and tell it
-        // to try again later. The exception is an orphaned process group, in
-        // which case an error is returned. If the process is not accepting the
-        // signal, just let the write go through.
-        //
-
-        if (AcceptingSignal != FALSE) {
-            if (PsIsProcessGroupOrphaned(ProcessGroup) != FALSE) {
-                Status = STATUS_DEVICE_IO_ERROR;
-
-            } else {
-                SignalProcessGroup = TRUE;
-                Status = STATUS_TRY_AGAIN;
-            }
-
-            goto TerminalSlaveWriteEnd;
-        }
+    Status = IopTerminalValidateGroup(Terminal, FALSE);
+    if (!KSUCCESS(Status)) {
+        goto TerminalSlaveWriteEnd;
     }
 
     //
@@ -3867,10 +3799,6 @@ TerminalSlaveWriteEnd:
 
     if (LockHeld != FALSE) {
         KeReleaseQueuedLock(Terminal->OutputLock);
-    }
-
-    if (SignalProcessGroup != FALSE) {
-        PsSignalProcessGroup(ProcessGroup, SIGNAL_BACKGROUND_TERMINAL_OUTPUT);
     }
 
     IoContext->BytesCompleted = BytesWritten;
@@ -4069,7 +3997,6 @@ Return Value:
 
 {
 
-    BOOL AcceptingSignal;
     UINTN AdvanceSize;
     BOOL AnythingRead;
     BOOL BreakForNewline;
@@ -4084,10 +4011,7 @@ Return Value:
     ULONG LocalFlags;
     BOOL LockHeld;
     PIO_OBJECT_STATE MasterIoState;
-    PROCESS_GROUP_ID ProcessGroup;
     ULONG ReturnedEvents;
-    SESSION_ID Session;
-    BOOL SignalProcessGroup;
     PTERMINAL_SLAVE Slave;
     PIO_OBJECT_STATE SlaveIoState;
     ULONG Space;
@@ -4095,7 +4019,6 @@ Return Value:
     PTERMINAL Terminal;
     ULONG TimeoutInMilliseconds;
 
-    SignalProcessGroup = FALSE;
     Slave = FileObject->SpecialIo;
 
     ASSERT(Slave->Header.Type == ObjectTerminalSlave);
@@ -4111,7 +4034,6 @@ Return Value:
     AnythingRead = FALSE;
     BytesRead = 0;
     LockHeld = FALSE;
-    PsGetProcessGroup(NULL, &ProcessGroup, &Session);
 
     //
     // Synchronize the checks on the terminal attachment and the owning session
@@ -4123,36 +4045,12 @@ Return Value:
     LocalFlags = Terminal->Settings.LocalFlags;
 
     //
-    // If the reading process is not in the same process group, send the
-    // process group a signal unless the reading process is ignoring or
-    // blocking that signal.
+    // Make sure this process can currently read from this terminal.
     //
 
-    if (ProcessGroup != Terminal->ProcessGroupId) {
-
-        //
-        // If it's an orphaned process, fail the I/O.
-        //
-
-        if (PsIsProcessGroupOrphaned(ProcessGroup) != FALSE) {
-            Status = STATUS_DEVICE_IO_ERROR;
-            goto TerminalSlaveReadEnd;
-        }
-
-        AcceptingSignal = PsIsThreadAcceptingSignal(
-                                             NULL,
-                                             SIGNAL_BACKGROUND_TERMINAL_INPUT);
-
-        //
-        // If the process is accepting that signal, send it to it and tell it
-        // to try again later. If it's not accepting it, just let it go through.
-        //
-
-        if (AcceptingSignal != FALSE) {
-            SignalProcessGroup = TRUE;
-            Status = STATUS_TRY_AGAIN;
-            goto TerminalSlaveReadEnd;
-        }
+    Status = IopTerminalValidateGroup(Terminal, TRUE);
+    if (!KSUCCESS(Status)) {
+        goto TerminalSlaveReadEnd;
     }
 
     //
@@ -4342,10 +4240,6 @@ TerminalSlaveReadEnd:
 
     if (LockHeld != FALSE) {
         KeReleaseQueuedLock(Terminal->InputLock);
-    }
-
-    if (SignalProcessGroup != FALSE) {
-        PsSignalProcessGroup(ProcessGroup, SIGNAL_BACKGROUND_TERMINAL_INPUT);
     }
 
     IoContext->BytesCompleted = BytesRead;
@@ -5279,5 +5173,77 @@ Return Value:
 
     Process->ControllingTerminal = NULL;
     return FALSE;
+}
+
+KSTATUS
+IopTerminalValidateGroup (
+    PTERMINAL Terminal,
+    BOOL Input
+    )
+
+/*++
+
+Routine Description:
+
+    This routine validates that the given terminal can be written to by the
+    current process.
+
+Arguments:
+
+    Terminal - Supplies a pointer to the terminal to check.
+
+    Input - Supplies a boolean indicating whether to send a terminal input
+        signal on failure (TRUE) or a terminal output signal (FALSE).
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_DEVICE_IO_ERROR if the current process group is orphaned.
+
+    STATUS_TRY_AGAIN if the process group is not orphaned. The process will
+    also be set a terminal output signal.
+
+--*/
+
+{
+
+    PKPROCESS Process;
+    PROCESS_GROUP_ID ProcessGroup;
+    ULONG Signal;
+    KSTATUS Status;
+
+    Signal = SIGNAL_BACKGROUND_TERMINAL_OUTPUT;
+    if (Input != FALSE) {
+        Signal = SIGNAL_BACKGROUND_TERMINAL_INPUT;
+    }
+
+    Process = PsGetCurrentProcess();
+    ProcessGroup = Process->Identifiers.ProcessGroupId;
+    Status = STATUS_SUCCESS;
+    if ((Process->ControllingTerminal == Terminal->SlaveFileObject) &&
+        (ProcessGroup != Terminal->ProcessGroupId) &&
+        ((Terminal->Settings.LocalFlags &
+          TERMINAL_LOCAL_STOP_BACKGROUND_WRITES) != 0)) {
+
+        //
+        // If the process is accepting that signal, send it to it and tell it
+        // to try again later. The exception is an orphaned process group, in
+        // which case an error is returned. If the process is not accepting the
+        // signal, just let the flush go through.
+        //
+
+        if (PsIsThreadAcceptingSignal(NULL, Signal) != FALSE) {
+            if (PsIsProcessGroupOrphaned(ProcessGroup) != FALSE) {
+                Status = STATUS_DEVICE_IO_ERROR;
+
+            } else {
+                PsSignalProcessGroup(ProcessGroup, Signal);
+                Status = STATUS_TRY_AGAIN;
+            }
+        }
+    }
+
+    return Status;
 }
 
