@@ -138,6 +138,16 @@ Return Value:
                                 &Argument);
 
         if (Status != 0) {
+
+            //
+            // The detach test case may create a bloom of new threads, too many
+            // to support on the system. Allow memory failures.
+            //
+
+            if ((JoinThread == 0) && (Status == ENOMEM)) {
+                continue;
+            }
+
             Result->Status = Status;
             break;
         }
