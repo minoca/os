@@ -2727,10 +2727,15 @@ Return Value:
     Console->PendingAction |= VIDEO_ACTION_REDRAW_ENTIRE_SCREEN;
 
     //
-    // Do nothing if the cursor made it beyond the bottom of the scroll area.
+    // If the cursor made it beyond the bottom of the scroll area, then allow
+    // movement towards the bottom of the screen. Don't scroll beyond that.
     //
 
     if (Console->NextRow > Console->ScreenRows - 1 - Console->BottomMargin) {
+        if (Console->NextRow < Console->ScreenRows - 1) {
+            Console->NextRow += 1;
+        }
+
         return;
     }
 
@@ -2802,7 +2807,7 @@ Return Value:
     //
 
     } else {
-        for (Row = Console->ScreenRows - 1;
+        for (Row = Console->ScreenRows;
              Row > Console->ScreenRows - 1 - Console->BottomMargin;
              Row -= 1) {
 
