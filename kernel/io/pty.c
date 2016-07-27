@@ -1358,10 +1358,7 @@ Return Value:
 
     Process = PsGetCurrentProcess();
     Terminal = Slave->Master;
-    if (PsIsSessionLeader(Process) != FALSE) {
-        KeAcquireQueuedLock(IoTerminalListLock);
-    }
-
+    KeAcquireQueuedLock(IoTerminalListLock);
     KeAcquireQueuedLock(Terminal->OutputLock);
     KeAcquireQueuedLock(Terminal->InputLock);
 
@@ -1389,9 +1386,7 @@ Return Value:
 
     KeReleaseQueuedLock(Terminal->OutputLock);
     KeReleaseQueuedLock(Terminal->InputLock);
-    if (PsIsSessionLeader(Process) != FALSE) {
-        KeReleaseQueuedLock(IoTerminalListLock);
-    }
+    KeReleaseQueuedLock(IoTerminalListLock);
 
     //
     // Release the reference on the master taken during opening, which may
