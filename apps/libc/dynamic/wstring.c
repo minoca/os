@@ -31,6 +31,7 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+#include <wctype.h>
 
 //
 // ---------------------------------------------------------------- Definitions

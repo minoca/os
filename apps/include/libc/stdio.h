@@ -2433,8 +2433,8 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes successfully converted, not including the null
-    terminator.
+    Returns the number of bytes that would have been converted had
+    OutputStringSize been large enough, not including the null terminator.
 
     Returns a negative number if an error was encountered.
 
@@ -2471,8 +2471,8 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes successfully converted, not including the null
-    terminator.
+    Returns the number of bytes that would have been converted had
+    OutputStringSize been large enough, not including the null terminator.
 
     Returns a negative number if an error was encountered.
 

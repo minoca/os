@@ -794,8 +794,8 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes successfully converted, not including the null
-    terminator.
+    Returns the number of wide characters successfully converted, not
+    including the null terminator.
 
     Returns a negative number if an error was encountered.
 
@@ -837,8 +837,8 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes successfully converted, not including the null
-    terminator.
+    Returns the number of wide characters successfully converted, not
+    including the null terminator.
 
     Returns a negative number if an error was encountered.
 
@@ -880,8 +880,8 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes successfully converted. A null terminator is
-    not written.
+    Returns the number of wide characters successfully converted, not
+    including the null terminator.
 
     Returns a negative number if an error was encountered.
 
@@ -923,8 +923,8 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes successfully converted. A null terminator is
-    not written.
+    Returns the number of wide characters successfully converted, not
+    including the null terminator.
 
     Returns a negative number if an error was encountered.
 
@@ -964,8 +964,8 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes successfully converted, not including the null
-    terminator.
+    Returns the number of wide characters successfully converted, not
+    including the null terminator.
 
     Returns a negative number if an error was encountered.
 
@@ -974,6 +974,111 @@ Return Value:
 {
 
     return vfwprintf(stdout, Format, Arguments);
+}
+
+LIBC_API
+int
+swprintf (
+    wchar_t *OutputString,
+    size_t OutputStringCount,
+    const wchar_t *Format,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatted wide string to the given bounded buffer.
+
+Arguments:
+
+    OutputString - Supplies the buffer where the formatted wide string will be
+        returned.
+
+    OutputStringCount - Supplies the number of wide characters that can fit in
+        the output buffer.
+
+    Format - Supplies the printf wide format string.
+
+    ... - Supplies a variable number of arguments, as required by the printf
+        format string argument.
+
+Return Value:
+
+    Returns the number of wide characters successfully converted, not
+    including the null terminator.
+
+    Returns a negative number if OutputStringCount or more wide characters
+    needed to be converted or if an error was encountered.
+
+--*/
+
+{
+
+    va_list Arguments;
+    int Result;
+
+    va_start(Arguments, Format);
+    Result = vswprintf(OutputString, OutputStringCount, Format, Arguments);
+    va_end(Arguments);
+    return Result;
+}
+
+LIBC_API
+int
+vswprintf (
+    wchar_t *OutputString,
+    size_t OutputStringSize,
+    const wchar_t *Format,
+    va_list Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the core string print format function.
+
+Arguments:
+
+    OutputString - Supplies a pointer to the buffer where the resulting string
+        will be written.
+
+    OutputStringSize - Supplies the size of the output string buffer, in bytes.
+        If the format is too long for the output buffer, the resulting string
+        will be truncated and the last byte will always be a null terminator.
+
+    Format - Supplies the printf format string.
+
+    Arguments - Supplies the argument list to the format string. The va_end
+        macro is not invoked on this list.
+
+Return Value:
+
+    Returns the number of wide characters successfully converted, not
+    including the null terminator.
+
+    Returns a negative number if OutputStringCount or more wide characters
+    needed to be converted or if an error was encountered.
+
+--*/
+
+{
+
+    ULONG Result;
+
+    Result = RtlFormatStringWide(OutputString,
+                                 OutputStringSize,
+                                 CharacterEncodingDefault,
+                                 (PWSTR)Format,
+                                 Arguments);
+
+    if (Result > OutputStringSize) {
+        return -1;
+    }
+
+    return Result - 1;
 }
 
 //

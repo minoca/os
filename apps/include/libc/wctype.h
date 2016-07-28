@@ -24,13 +24,6 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <libcbase.h>
-#include <ctype.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
 #include <wchar.h>
 
 //
@@ -46,6 +39,8 @@ extern "C" {
 //
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef unsigned long wctrans_t;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -440,11 +435,114 @@ Routine Description:
 
 Arguments:
 
-    Character - Supplies the character to check.
+    Character - Supplies the character to convert.
 
 Return Value:
 
     Returns the lower cased version of the character, or the character itself.
+
+--*/
+
+LIBC_API
+wctrans_t
+wctrans (
+    const char *CharacterClass
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the wide character mapping descriptor for the given
+    character class.
+
+Arguments:
+
+    CharacterClass - Supplies the name of the character class to look up.
+
+Return Value:
+
+    Returns the mapping descriptor if the character class if valid.
+
+    0 if the character class is invalid.
+
+--*/
+
+LIBC_API
+wint_t
+towctrans (
+    wint_t Character,
+    wctrans_t Descriptor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns converts the given wide character using the mapping
+    class identified by the descriptor.
+
+Arguments:
+
+    Character - Supplies the character to convert.
+
+    Descriptor - Supplies the descriptor for the mapping class to use.
+
+Return Value:
+
+    Returns the converted version of the character, or the character itself.
+
+--*/
+
+LIBC_API
+wctype_t
+wctype (
+    const char *Property
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the wide character type class for the given property.
+
+Arguments:
+
+    Property - Supplies the name of the character class to look up.
+
+Return Value:
+
+    Returns the type class identifier if the property is valid.
+
+    0 if the property is invalid.
+
+--*/
+
+LIBC_API
+int
+iswctype (
+    wint_t Character,
+    wctype_t Type
+    );
+
+/*++
+
+Routine Description:
+
+    This routine tests whether or not the given character belongs to the given
+    class.
+
+Arguments:
+
+    Character - Supplies the character to check.
+
+    CharacterClass - Supplies the identifier of the class to check against.
+
+Return Value:
+
+    Returns non-zero if the given character belongs to the class.
+
+    0 if the character does not.
 
 --*/
 

@@ -25,8 +25,7 @@ Environment:
 //
 
 #include "libcp.h"
-#include <ctype.h>
-#include <wchar.h>
+#include <wctype.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -36,6 +35,92 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef
+int
+(*CL_WIDE_CHARACTER_TEST_ROUTINE) (
+    wint_t Character
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns non-zero if the given wide character is the type being
+    tested.
+
+Arguments:
+
+    Character - Supplies the character to check.
+
+Return Value:
+
+    Returns non-zero if the given character is of the correct type.
+
+    0 if the character is not.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines a wide character type.
+
+Members:
+
+    Name - Stores the type name.
+
+    TestRoutine - Stores a pointer to the routine that tests whether or not the
+        character is of the type.
+
+--*/
+
+typedef struct _CL_WIDE_CHARACTER_TYPE {
+    PSTR Name;
+    CL_WIDE_CHARACTER_TEST_ROUTINE TestRoutine;
+} CL_WIDE_CHARATER_TYPE, *PCL_WIDE_CHARACTER_TYPE;
+
+typedef
+wint_t
+(*CL_WIDE_CHARACTER_MAP_ROUTINE) (
+    wint_t Character
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns converts the given wide character.
+
+Arguments:
+
+    Character - Supplies the character to convert.
+
+Return Value:
+
+    Returns the convert version of the character, or the character itself.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines a wide character mapping.
+
+Members:
+
+    Name - Stores the mapping name.
+
+    MapRoutine - Stores a pointer to the routine that maps the character.
+
+--*/
+
+typedef struct _CL_WIDE_CHARACTER_MAPPING {
+    PSTR Name;
+    CL_WIDE_CHARACTER_MAP_ROUTINE MapRoutine;
+} CL_WIDE_CHARACTER_MAPPING, *PCL_WIDE_CHARACTER_MAPPING;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -43,6 +128,26 @@ Environment:
 //
 // -------------------------------------------------------------------- Globals
 //
+
+CL_WIDE_CHARATER_TYPE ClpWideCharacterTypes[] = {
+    {"alnum", iswalnum},
+    {"alpha", iswalpha},
+    {"blank", iswblank},
+    {"cntrl", iswcntrl},
+    {"digit", iswdigit},
+    {"graph", iswgraph},
+    {"lower", iswlower},
+    {"print", iswprint},
+    {"punct", iswpunct},
+    {"space", iswspace},
+    {"upper", iswupper},
+    {"xdigit", iswxdigit}
+};
+
+CL_WIDE_CHARACTER_MAPPING ClpWideCharacterMappings[] = {
+    {"tolower", towlower},
+    {"toupper", towupper}
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -532,7 +637,7 @@ Routine Description:
 
 Arguments:
 
-    Character - Supplies the character to check.
+    Character - Supplies the character to convert.
 
 Return Value:
 
@@ -547,6 +652,175 @@ Return Value:
     }
 
     return Character;
+}
+
+LIBC_API
+wctrans_t
+wctrans (
+    const char *CharacterClass
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the wide character mapping descriptor for the given
+    character class.
+
+Arguments:
+
+    CharacterClass - Supplies the name of the character class to look up.
+
+Return Value:
+
+    Returns the mapping descriptor if the character class if valid.
+
+    0 if the character class is invalid.
+
+--*/
+
+{
+
+    int Count;
+    int Index;
+
+    Count = sizeof(ClpWideCharacterMappings) /
+            sizeof(ClpWideCharacterMappings[0]);
+
+    for (Index = 0; Index < Count; Index += 1) {
+        if (strcmp(CharacterClass, ClpWideCharacterMappings[Index].Name) == 0) {
+            return Index + 1;
+        }
+    }
+
+    return 0;
+}
+
+LIBC_API
+wint_t
+towctrans (
+    wint_t Character,
+    wctrans_t Descriptor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns converts the given wide character using the mapping
+    class identified by the descriptor.
+
+Arguments:
+
+    Character - Supplies the character to convert.
+
+    Descriptor - Supplies the descriptor for the mapping class to use.
+
+Return Value:
+
+    Returns the converted version of the character, or the character itself.
+
+--*/
+
+{
+
+    int Count;
+
+    if (Descriptor == 0) {
+        return Character;
+    }
+
+    Count = sizeof(ClpWideCharacterMappings) /
+            sizeof(ClpWideCharacterMappings[0]);
+
+    if (Descriptor > Count) {
+        return Character;
+    }
+
+    return ClpWideCharacterMappings[Descriptor - 1].MapRoutine(Character);
+}
+
+LIBC_API
+wctype_t
+wctype (
+    const char *Property
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the wide character type class for the given property.
+
+Arguments:
+
+    Property - Supplies the name of the character class to look up.
+
+Return Value:
+
+    Returns the type class identifier if the property is valid.
+
+    0 if the property is invalid.
+
+--*/
+
+{
+
+    int Count;
+    int Index;
+
+    Count = sizeof(ClpWideCharacterTypes) / sizeof(ClpWideCharacterTypes[0]);
+    for (Index = 0; Index < Count; Index += 1) {
+        if (strcmp(Property, ClpWideCharacterTypes[Index].Name) == 0) {
+            return Index + 1;
+        }
+    }
+
+    return 0;
+}
+
+LIBC_API
+int
+iswctype (
+    wint_t Character,
+    wctype_t CharacterClass
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tests whether or not the given character belongs to the given
+    class.
+
+Arguments:
+
+    Character - Supplies the character to check.
+
+    CharacterClass - Supplies the identifier of the class to check against.
+
+Return Value:
+
+    Returns non-zero if the given character belongs to the class.
+
+    0 if the character does not.
+
+--*/
+
+{
+
+    int Count;
+
+    if (CharacterClass == 0) {
+        return 0;
+    }
+
+    Count = sizeof(ClpWideCharacterTypes) / sizeof(ClpWideCharacterTypes[0]);
+    if (CharacterClass > Count) {
+        return 0;
+    }
+
+    return ClpWideCharacterTypes[CharacterClass - 1].TestRoutine(Character);
 }
 
 //
