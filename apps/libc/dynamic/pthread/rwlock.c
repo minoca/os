@@ -555,7 +555,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_rwlockattr_getpshared (
-    pthread_rwlockattr_t *Attribute,
+    const pthread_rwlockattr_t *Attribute,
     int *Shared
     )
 

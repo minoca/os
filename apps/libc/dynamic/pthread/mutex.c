@@ -536,7 +536,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_mutexattr_gettype (
-    pthread_mutexattr_t *Attribute,
+    const pthread_mutexattr_t *Attribute,
     int *Type
     )
 
@@ -622,7 +622,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_mutexattr_getpshared (
-    pthread_mutexattr_t *Attribute,
+    const pthread_mutexattr_t *Attribute,
     int *Shared
     )
 

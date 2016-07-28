@@ -119,7 +119,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_attr_getdetachstate (
-    pthread_attr_t *Attribute,
+    const pthread_attr_t *Attribute,
     int *State
     )
 
@@ -206,7 +206,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_attr_getschedpolicy (
-    pthread_attr_t *Attribute,
+    const pthread_attr_t *Attribute,
     int *Policy
     )
 
@@ -242,7 +242,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_attr_setschedpolicy (
-    pthread_attr_t *Attribute,
+    const pthread_attr_t *Attribute,
     int Policy
     )
 
@@ -278,7 +278,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_attr_getschedparam (
-    pthread_attr_t *Attribute,
+    const pthread_attr_t *Attribute,
     int *Parameter
     )
 
@@ -352,7 +352,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_attr_getscope (
-    pthread_attr_t *Attribute,
+    const pthread_attr_t *Attribute,
     int *Scope
     )
 
@@ -430,7 +430,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_attr_getstacksize (
-    pthread_attr_t *Attribute,
+    const pthread_attr_t *Attribute,
     size_t *StackSize
     )
 
@@ -510,7 +510,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_attr_getstack (
-    pthread_attr_t *Attribute,
+    const pthread_attr_t *Attribute,
     void **StackBase,
     size_t *StackSize
     )
@@ -603,7 +603,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_attr_getguardsize (
-    pthread_attr_t *Attribute,
+    const pthread_attr_t *Attribute,
     size_t *GuardSize
     )
 

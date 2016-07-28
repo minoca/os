@@ -363,7 +363,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_condattr_getpshared (
-    pthread_condattr_t *Attribute,
+    const pthread_condattr_t *Attribute,
     int *Shared
     )
 
@@ -453,7 +453,7 @@ Return Value:
 PTHREAD_API
 int
 pthread_condattr_getclock (
-    pthread_condattr_t *Attribute,
+    const pthread_condattr_t *Attribute,
     int *Clock
     )
 
