@@ -140,7 +140,7 @@ Return Value:
 
     0 if the conversion failed.
 
-    -1 eith errno set to EAFNOSUPPORT if the address family parameter is
+    -1 with errno set to EAFNOSUPPORT if the address family parameter is
     unrecognized.
 
 --*/
@@ -191,6 +191,34 @@ Return Value:
 
     Returns a pointer to the address string on success. This buffer will be
     overwritten on subsequent calls to this function.
+
+--*/
+
+LIBC_API
+int
+inet_aton (
+    const char *String,
+    struct in_addr *Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given string to an interger value suitable for
+    use as an IPv4 address.
+
+Arguments:
+
+    String - Supplies a pointer to the string to convert.
+
+    Address - Supplies a pointer that receives the converted IPv4 address.
+
+Return Value:
+
+    Returns non-zero if the address string is valid.
+
+    0 if the address string is invalid.
 
 --*/
 
