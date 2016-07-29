@@ -191,13 +191,11 @@ Members:
         while pages are being paged in or out.
 
     DirtyPageBitmap - Stores a pointer to a bitmap describing which pages are
-        clean (and can thus be backed from the images) and which pages are
+        clean (and can thus be backed by an image) and which pages are
         dirty (and therefore must be backed by the page file).
 
     InheritPageBitmap - Stores a pointer to a bitmap describing which pages
-        should be inherited from the parent. For private, page cache backed
-        image sections that do not have a parent, this bitmap represents
-        whether or not the page is inherited from the page cache.
+        should be inherited from the parent.
 
     Size - Stores the size of the section, in bytes.
 

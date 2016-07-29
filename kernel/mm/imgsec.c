@@ -1296,7 +1296,7 @@ Return Value:
     }
 
     //
-    // Zero the dirty bitmap and initialize the inherit bitmap to all 1's.
+    // Copy the dirty bitmap and initialize the inherit bitmap to all 1's.
     // As this is a hot path, do not zero the image section itself. The code
     // below initializes all the appropriate fields.
     //
@@ -1305,7 +1305,12 @@ Return Value:
     NewSection->InheritPageBitmap = NewSection->DirtyPageBitmap +
                                     (BitmapSize / sizeof(ULONG));
 
-    RtlZeroMemory(NewSection->DirtyPageBitmap, BitmapSize);
+    ASSERT(SectionToCopy->DirtyPageBitmap != NULL);
+
+    RtlCopyMemory(NewSection->DirtyPageBitmap,
+                  SectionToCopy->DirtyPageBitmap,
+                  BitmapSize);
+
     RtlSetMemory(NewSection->InheritPageBitmap, MAX_UCHAR, BitmapSize);
     NewSection->ReferenceCount = 1;
     NewSection->Flags = SectionToCopy->Flags;
@@ -2114,10 +2119,11 @@ Return Value:
     // needed later.
     //
 
-    if (((Section->Parent != NULL) ||
-         ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0)) &&
-        ((Section->Flags & IMAGE_SECTION_SHARED) == 0) &&
-        ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0)) {
+    if (((Section->Flags & IMAGE_SECTION_SHARED) == 0) &&
+        (((Section->Parent != NULL) &&
+          ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0)) ||
+         (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
+          ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0)))) {
 
         if ((Section->Flags & IMAGE_SECTION_NON_PAGED) == 0) {
             PagingEntry = MmpCreatePagingEntry(Section, PageOffset);
@@ -2150,7 +2156,7 @@ Return Value:
     SectionLocked = TRUE;
 
     //
-    // Loop through and allocate writable copies for all children.
+    // Loop through and allocate copies for all children.
     //
 
     CurrentEntry = Section->ChildList.Next;
@@ -2166,6 +2172,21 @@ Return Value:
         //
 
         if ((Child->InheritPageBitmap[BitmapIndex] & BitmapMask) == 0) {
+            CurrentEntry = CurrentEntry->Next;
+            continue;
+        }
+
+        //
+        // If the section is page cache backed and clean, then the children can
+        // continue to map the page cache page after clearing the inheritance.
+        //
+
+        if (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
+            ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0)) {
+
+            ASSERT((Child->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0);
+
+            Child->InheritPageBitmap[BitmapIndex] &= ~BitmapMask;
             CurrentEntry = CurrentEntry->Next;
             continue;
         }
@@ -2348,10 +2369,11 @@ Return Value:
     // attributes set.
     //
 
-    if (((Section->Parent == NULL) &&
-         ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0)) ||
-        ((Section->Flags & IMAGE_SECTION_SHARED) != 0) ||
-        ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) == 0)) {
+    if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) ||
+        (((Section->Parent == NULL) ||
+          ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) == 0)) &&
+         (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+          ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)))) {
 
         if ((Section->Flags & IMAGE_SECTION_WRITABLE) != 0) {
             MmpChangeMemoryRegionAccess(VirtualAddress,
@@ -2400,11 +2422,27 @@ Return Value:
                                              FALSE);
         }
 
-        ASSERT(Section->InheritPageBitmap != NULL);
+        if (Section->InheritPageBitmap != NULL) {
+            Section->InheritPageBitmap[BitmapIndex] &= ~BitmapMask;
+        }
 
-        Section->InheritPageBitmap[BitmapIndex] &= ~BitmapMask;
         PagingEntry = NULL;
         PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+    }
+
+    //
+    // If a dirty page bitmap is present, mark this page as dirty now that this
+    // section has stopped inheriting from the original source (i.e. the parent
+    // or the page cache). The only accurate version of this page is mapped by
+    // this image section. Page out must be aware of this. This must be set for
+    // both the case where this section gets a new page and just modifies the
+    // mapping for this page. The instance where the latter is necessary comes
+    // when a writable anonymous section forks, writes, and forks again. The
+    // child section on the second fork needs to inherit the dirty bit.
+    //
+
+    if (Section->DirtyPageBitmap != NULL) {
+        Section->DirtyPageBitmap[BitmapIndex] |= BitmapMask;
     }
 
     Status = STATUS_SUCCESS;
@@ -2640,14 +2678,16 @@ Return Value:
         Flags |= IMAGE_SECTION_PAGE_CACHE_BACKED;
 
         //
-        // Private, page cache backed sections get an inherit bitmap. This is
-        // used to track whether or not a mapped page is from the page cache.
-        // Shared sections always inherit from the page cache and do not need
-        // an inherit bitmap.
+        // Non-paged, cache-backed sections need a dirty page bitmap in order
+        // to track which pages are not mapped page cache entries so that they
+        // are released when the section is destroyed.
         //
 
-        if ((Flags & IMAGE_SECTION_SHARED) == 0) {
-            BitmapCount += 1;
+        if ((Flags & IMAGE_SECTION_NON_PAGED) != 0) {
+
+            ASSERT(BitmapCount == 0);
+
+            BitmapCount = 1;
         }
 
     //
@@ -2730,49 +2770,27 @@ Return Value:
 
     //
     // Set up the bitmaps based on the flags and number of bitmaps allocated.
-    // Non-paged sections can only have 1 bitmap and it is the inherit bitmap
-    // used by page cache backed sections.
+    // Shared image sections should have no bitmaps as they have no parent and
+    // always dirty page cache pages directly.
     //
 
-    ASSERT((BitmapCount != 0) ||
-           ((Flags & IMAGE_SECTION_NON_PAGED) != 0) ||
-           ((Flags & IMAGE_SECTION_SHARED) != 0));
+    ASSERT((BitmapCount == 0) || ((Flags & IMAGE_SECTION_SHARED) == 0));
 
     NewSection->InheritPageBitmap = NULL;
     NewSection->DirtyPageBitmap = NULL;
-    if ((Flags & IMAGE_SECTION_SHARED) == 0) {
-        if ((Flags & IMAGE_SECTION_NON_PAGED) != 0) {
-            if (BitmapCount == 1) {
+    if (BitmapCount != 0) {
 
-                ASSERT((Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
-
-                NewSection->InheritPageBitmap = (PULONG)(NewSection + 1);
-            }
+        ASSERT(BitmapCount == 1);
 
         //
-        // Private pageable sections always have the dirty page bitmap and may
-        // have the inherit bitmap if they are page cache backed.
+        // If a non-paged section has a bitmap, it better be cache backed.
         //
 
-        } else {
+        ASSERT(((Flags & IMAGE_SECTION_NON_PAGED) == 0) ||
+               ((Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0));
 
-            ASSERT(BitmapCount >= 1);
-
-            NewSection->DirtyPageBitmap = (PULONG)(NewSection + 1);
-            RtlZeroMemory(NewSection->DirtyPageBitmap, BitmapSize);
-            if (BitmapCount == 2) {
-                NewSection->InheritPageBitmap = NewSection->DirtyPageBitmap +
-                                                (BitmapSize / sizeof(ULONG));
-            }
-        }
-    }
-
-    //
-    // Initialize the bitmap to inherit everything from the parent.
-    //
-
-    if (NewSection->InheritPageBitmap != NULL) {
-        RtlSetMemory(NewSection->InheritPageBitmap, MAX_UCHAR, BitmapSize);
+        NewSection->DirtyPageBitmap = (PULONG)(NewSection + 1);
+        RtlZeroMemory(NewSection->DirtyPageBitmap, BitmapSize);
     }
 
     NewSection->Lock = KeCreateQueuedLock();
@@ -3600,9 +3618,9 @@ Return Value:
     ULONG BitmapMask;
     UINTN Boundary;
     BOOL Dirty;
+    PULONG DirtyPageBitmap;
     ULONG DirtyPageCount;
     BOOL FreePhysicalPage;
-    PULONG InheritPageBitmap;
     PIMAGE_SECTION OwningSection;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN PageIndex;
@@ -3685,21 +3703,23 @@ Return Value:
         BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageOffset + PageIndex);
 
         //
-        // If the section that owns this page is not inheriting, it's a private
-        // page. If only unmapping page cache pages, skip this one, as it's not
-        // page cache backed.
+        // If the section that owns this page is dirty, it's a private page. If
+        // only unmapping page cache pages, skip this one, as it's not page
+        // cache backed.
         //
 
         if ((Flags & IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY) != 0) {
+
+            ASSERT((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
+
             OwningSection = MmpGetOwningSection(Section,
                                                 PageOffset + PageIndex);
 
-            InheritPageBitmap = OwningSection->InheritPageBitmap;
-            if ((InheritPageBitmap != NULL) &&
-                ((InheritPageBitmap[BitmapIndex] & BitmapMask) == 0)) {
+            DirtyPageBitmap = OwningSection->DirtyPageBitmap;
+            if ((DirtyPageBitmap != NULL) &&
+                ((DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)) {
 
                 ASSERT((Section->Flags & IMAGE_SECTION_SHARED) == 0);
-                ASSERT((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
 
                 MmpImageSectionReleaseReference(OwningSection);
                 OwningSection = NULL;
@@ -3752,15 +3772,14 @@ Return Value:
 
         //
         // If the section is mapped shared or the section is backed by the page
-        // cache, has no parent and is inherited from the page cache, then do
+        // cache and isn't dirty (i.e. it still maps the page cache), then do
         // not free the physical page on unmap.
         //
 
         FreePhysicalPage = TRUE;
         if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) ||
             (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
-             (Section->Parent == NULL) &&
-             ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0))) {
+             ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0))) {
 
             FreePhysicalPage = FALSE;
         }
@@ -3779,14 +3798,15 @@ Return Value:
         //
         // Only record the dirty status if the section was writable. Some
         // architectures do not have a dirty bit in their page table entries,
-        // forcing unmap to assume every page is dirty. Checking whether the
-        // individual mapping was writable is not accurate as a dirty page may
-        // have been mapped read-only when creating a child section or during a
-        // memory protection call.
+        // forcing unmap to assume every page is dirty. Also check the dirty
+        // page bitmap, as a child might acquire a dirty page from a parent
+        // during isolation without the page table entry ever being set dirty.
         //
 
-        if ((Dirty != FALSE) &&
-            ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0)) {
+        if (((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
+            ((Dirty != FALSE) ||
+             ((Section->DirtyPageBitmap != NULL) &&
+              ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)))) {
 
             //
             // If the caller does not care about dirty pages and this was a
@@ -4088,17 +4108,15 @@ Return Value:
 
         //
         // If the page is shared with the section's parent, the section is
-        // mapped shared, or the section is backed by the page cache, has no
-        // parent and is inherited from the page cache, then do not free the
-        // physical page on unmap.
+        // mapped shared, or the section is backed by the page cache and is not
+        // dirty, then do not free the physical page on unmap.
         //
 
         if (((Section->Parent != NULL) &&
              ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0)) ||
             ((Section->Flags & IMAGE_SECTION_SHARED) != 0) ||
             (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
-             (Section->Parent == NULL) &&
-             ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0))) {
+             ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0))) {
 
             UnmapFlags &= ~UNMAP_FLAG_FREE_PHYSICAL_PAGES;
         }

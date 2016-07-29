@@ -1209,11 +1209,13 @@ Return Value:
            (Section->AddressSpace == MmKernelAddressSpace));
 
     //
-    // This section better not be non-paged or shared.
+    // This section better not be non-paged or shared and thus should have a
+    // dirty page bitmap.
     //
 
     ASSERT((Section->Flags & IMAGE_SECTION_NON_PAGED) == 0);
     ASSERT((Section->Flags & IMAGE_SECTION_SHARED) == 0);
+    ASSERT(Section->DirtyPageBitmap != NULL);
 
     //
     // Acquire the section's lock. Add a reference in case the only thing
@@ -1298,24 +1300,17 @@ Return Value:
         }
 
         //
-        // If the section is page cache backed and this page is using the
-        // page cache, then it can't be freed, as the page cache owns it.
+        // If the section is page cache backed and this page is using the page
+        // cache, then it can't be freed, as the page cache owns it.
         //
 
         if (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
-            ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0)) {
+            ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0)) {
 
             ASSERT((Offset != 0) || (PagingEntry == NULL));
 
             break;
         }
-
-        //
-        // The section stored in the paging entry should be the owning section.
-        //
-
-        ASSERT((Section->InheritPageBitmap == NULL) ||
-               ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) == 0));
 
         //
         // Get the physical address (except for the first one, which was
@@ -1364,11 +1359,14 @@ Return Value:
         // If the page is dirty, it will need to be written out to disk. Ignore
         // the dirty status if the section is not writable. Some architectures
         // do not have a dirty bit in their page table entries, forcing unmap
-        // to assume every page is dirty.
+        // to assume every page is dirty. Also check the dirty page bitmap, as
+        // a child might acquire a dirty page from a parent during isolation
+        // without the page table entry ever being set dirty.
         //
 
-        if ((Dirty != FALSE) &&
-            ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0)) {
+        if (((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
+            ((Dirty != FALSE) ||
+             ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0))) {
 
             CleanStreak = 0;
 
@@ -1377,8 +1375,6 @@ Return Value:
             // the swap file. This dirty bitmap update is protected by the
             // section lock.
             //
-
-            ASSERT(Section->DirtyPageBitmap != NULL);
 
             Section->DirtyPageBitmap[BitmapIndex] |= BitmapMask;
 
@@ -3303,8 +3299,8 @@ Return Value:
     ULONG BitmapMask;
     PAGE_IN_CONTEXT Context;
     BOOL Dirty;
+    PULONG DirtyPageBitmap;
     PHYSICAL_ADDRESS ExistingPhysicalAddress;
-    PULONG InheritPageBitmap;
     PIO_BUFFER IoBuffer;
     IO_BUFFER IoBufferData;
     ULONG IoBufferFlags;
@@ -3483,9 +3479,10 @@ Return Value:
 
         Dirty = FALSE;
         OwningSection = MmpGetOwningSection(ImageSection, PageOffset);
-        if ((OwningSection->DirtyPageBitmap != NULL) &&
-            ((OwningSection->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)) {
 
+        ASSERT(OwningSection->DirtyPageBitmap != NULL);
+
+        if ((OwningSection->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0) {
             Dirty = TRUE;
         }
 
@@ -3757,13 +3754,13 @@ PageInCacheBackedSectionEnd:
             }
 
             //
-            // If the owning section does not inherit from the page cache, then
-            // initialize the locked I/O buffer via physical address, locking
-            // the address for non-paged sections.
+            // If the owning section is dirty (i.e. it does not map a cached
+            // page), then initialize the locked I/O buffer via physical
+            // address, locking the address for non-paged sections.
             //
 
-            InheritPageBitmap = OwningSection->InheritPageBitmap;
-            if ((InheritPageBitmap[BitmapIndex] & BitmapMask) == 0) {
+            DirtyPageBitmap = OwningSection->DirtyPageBitmap;
+            if ((DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0) {
                 NonPaged = TRUE;
                 if ((OwningSection->Flags & IMAGE_SECTION_NON_PAGED) == 0) {
                     NonPaged = FALSE;
@@ -3989,16 +3986,16 @@ Return Value:
 
     OwningSection = MmpGetOwningSection(Section, PageOffset);
 
-    ASSERT(OwningSection->InheritPageBitmap != NULL);
+    ASSERT(OwningSection->DirtyPageBitmap != NULL);
 
     //
-    // If the page is not inherited from the page cache or it maps the already
-    // locked page, then exit successfully.
+    // If the page is not taken from the page cache (i.e. it's dirty) or it
+    // maps the already locked page, then exit successfully.
     //
 
     BitmapIndex = IMAGE_SECTION_BITMAP_INDEX(PageOffset);
     BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageOffset);
-    if (((OwningSection->InheritPageBitmap[BitmapIndex] & BitmapMask) == 0) ||
+    if (((OwningSection->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0) ||
         (*ExistingPhysicalAddress == LockedPhysicalAddress)) {
 
         Status = STATUS_SUCCESS;
@@ -5200,7 +5197,7 @@ Return Value:
         //
 
         if (((Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
-            ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0)) {
+            ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0)) {
 
             CanWrite = FALSE;
 
