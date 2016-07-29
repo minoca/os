@@ -291,6 +291,14 @@ Return Value:
             }
 
             ShClose(Shell, ActiveRedirect->OriginalDescriptor);
+
+        //
+        // If there was no original descriptor there, close whatever there is
+        // now to restore it to former non-glory.
+        //
+
+        } else {
+            ShClose(Shell, ActiveRedirect->FileNumber);
         }
 
         if (ActiveRedirect->ChildProcessId > 0) {
