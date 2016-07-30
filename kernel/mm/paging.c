@@ -2636,7 +2636,7 @@ Return Value:
         }
 
         //
-        // Acquire the section lock to free all mappings and unmappings.
+        // Acquire the section lock to freeze all mappings and unmappings.
         //
 
         KeAcquireQueuedLock(ImageSection->Lock);
@@ -2666,6 +2666,26 @@ Return Value:
         OwningSection = MmpGetOwningSection(ImageSection, PageOffset);
 
         ASSERT(ImageSection->Lock == OwningSection->Lock);
+
+        //
+        // If the owning section is destroyed, there is no reason to read
+        // anything from the page file or to allocate a new page. The entire
+        // section has already been unmapped.
+        //
+
+        if ((OwningSection->Flags & IMAGE_SECTION_DESTROYED) != 0) {
+
+            //
+            // A section isolates itself from all inheriting children before
+            // being destroyed. So a destroyed owning section must be the
+            // faulting section.
+            //
+
+            ASSERT(OwningSection == ImageSection);
+
+            Status = STATUS_TOO_LATE;
+            break;
+        }
 
         //
         // Figure out if the page is clean or dirty.
@@ -3473,15 +3493,34 @@ Return Value:
         }
 
         //
+        // If the owning section is destroyed, there is no reason to read
+        // anything from the page file or backing image. The entire section has
+        // already been unmapped.
+        //
+
+        OwningSection = MmpGetOwningSection(ImageSection, PageOffset);
+        if ((OwningSection->Flags & IMAGE_SECTION_DESTROYED) != 0) {
+
+            //
+            // A section isolates itself from all inheriting children before
+            // being destroyed. So a destroyed owning section must be the
+            // faulting section.
+            //
+
+            ASSERT(OwningSection == ImageSection);
+
+            Status = STATUS_TOO_LATE;
+            break;
+        }
+
+        //
         // Figure out if the page is clean or dirty by looking at the owning
         // section.
         //
 
-        Dirty = FALSE;
-        OwningSection = MmpGetOwningSection(ImageSection, PageOffset);
-
         ASSERT(OwningSection->DirtyPageBitmap != NULL);
 
+        Dirty = FALSE;
         if ((OwningSection->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0) {
             Dirty = TRUE;
         }
@@ -3534,11 +3573,6 @@ Return Value:
         // The page is not dirty, increment the reference count on the image
         // backing handle while the lock is still held.
         //
-
-        if ((OwningSection->Flags & IMAGE_SECTION_DESTROYED) != 0) {
-            Status = STATUS_TOO_LATE;
-            break;
-        }
 
         ASSERT(ImageSection->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
@@ -4121,6 +4155,27 @@ Return Value:
         }
 
         //
+        // If the owning section is destroyed, there is no reason to read
+        // anything from the page file or backing image. The entire section has
+        // already been unmapped.
+        //
+
+        OwningSection = MmpGetOwningSection(ImageSection, PageOffset);
+        if ((OwningSection->Flags & IMAGE_SECTION_DESTROYED) != 0) {
+
+            //
+            // A section isolates itself from all inheriting children before
+            // being destroyed. So a destroyed owning section must be the
+            // faulting section.
+            //
+
+            ASSERT(OwningSection == ImageSection);
+
+            Status = STATUS_TOO_LATE;
+            break;
+        }
+
+        //
         // Figure out if the page is clean or dirty by looking at the owning
         // section.
         //
@@ -4128,7 +4183,6 @@ Return Value:
         Dirty = FALSE;
         BitmapIndex = IMAGE_SECTION_BITMAP_INDEX(PageOffset);
         BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageOffset);
-        OwningSection = MmpGetOwningSection(ImageSection, PageOffset);
         if ((OwningSection->DirtyPageBitmap != NULL) &&
             ((OwningSection->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)) {
 
@@ -4181,16 +4235,8 @@ Return Value:
 
         //
         // The page is not dirty. Take a reference on the image handle so it
-        // can't be closed while the lock is released.
-        //
-
-        if ((ImageSection->Flags & IMAGE_SECTION_DESTROYED) != 0) {
-            Status = STATUS_TOO_LATE;
-            goto PageInDefaultSectionEnd;
-        }
-
-        //
-        // Also check to ensure the section covers the region.
+        // can't be closed while the lock is released. Also check to ensure the
+        // section covers the region.
         //
 
         if ((ImageSection->Size >> PageShift) <= PageOffset) {
@@ -4198,13 +4244,12 @@ Return Value:
             goto PageInDefaultSectionEnd;
         }
 
-        ASSERT((OwningSection->Flags & IMAGE_SECTION_DESTROYED) == 0);
-
         //
         // Only the owning section should have a handle to the original backing
         // device.
         //
 
+        ASSERT((OwningSection->Flags & IMAGE_SECTION_DESTROYED) == 0);
         ASSERT(OwningSection->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
         MmpImageSectionAddImageBackingReference(OwningSection);
@@ -4293,7 +4338,7 @@ Return Value:
             ASSERT((Attributes & MAP_FLAG_PRESENT) != 0);
 
             Status = STATUS_SUCCESS;
-            goto PageInDefaultSectionEnd;
+            break;
         }
 
         //
