@@ -1335,7 +1335,6 @@ Return Value:
 {
 
     PFILE_OBJECT FileObject;
-    PKPROCESS Process;
     PTERMINAL_SLAVE Slave;
     PTERMINAL Terminal;
 
@@ -1356,7 +1355,6 @@ Return Value:
 
     ASSERT(Slave->Header.Type == ObjectTerminalSlave);
 
-    Process = PsGetCurrentProcess();
     Terminal = Slave->Master;
     KeAcquireQueuedLock(IoTerminalListLock);
     KeAcquireQueuedLock(Terminal->OutputLock);
@@ -1380,8 +1378,6 @@ Return Value:
         //
 
         IopTerminalDisassociate(Terminal);
-
-        ASSERT(Process->ControllingTerminal == NULL);
     }
 
     KeReleaseQueuedLock(Terminal->OutputLock);
