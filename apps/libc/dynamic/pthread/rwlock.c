@@ -453,6 +453,8 @@ Return Value:
             if (NewState == OldState) {
                 break;
             }
+
+            OldState = NewState;
         }
 
         if (OldState == 0) {

@@ -100,10 +100,11 @@ Return Value:
         return EINVAL;
     }
 
+    if (OldValue == PTHREAD_ONCE_COMPLETE) {
+        return 0;
+    }
+
     while (TRUE) {
-        if (OldValue == PTHREAD_ONCE_COMPLETE) {
-            break;
-        }
 
         //
         // Try to switch it to running, from either running or not started.
@@ -112,6 +113,10 @@ Return Value:
         OldValue = RtlAtomicCompareExchange32((PULONG)Once,
                                               PTHREAD_ONCE_RUNNING,
                                               OldValue);
+
+        if (OldValue == PTHREAD_ONCE_COMPLETE) {
+            break;
+        }
 
         //
         // If this thread won, then call the routine.
