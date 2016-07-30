@@ -2119,7 +2119,8 @@ Return Value:
     // needed later.
     //
 
-    if (((Section->Flags & IMAGE_SECTION_SHARED) == 0) &&
+    if (((Section->Flags & IMAGE_SECTION_DESTROYING) == 0) &&
+        ((Section->Flags & IMAGE_SECTION_SHARED) == 0) &&
         (((Section->Parent != NULL) &&
           ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0)) ||
          (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
@@ -2333,7 +2334,9 @@ Return Value:
     // Make sure that the supplied section is still alive.
     //
 
-    if ((Section->Flags & IMAGE_SECTION_DESTROYED) != 0) {
+    if (((Section->Flags & IMAGE_SECTION_DESTROYED) != 0) ||
+        ((Section->Flags & IMAGE_SECTION_DESTROYING) != 0)) {
+
         Status = STATUS_SUCCESS;
         goto IsolateImageSectionEnd;
     }
