@@ -37,6 +37,27 @@ extern "C" {
 #endif
 
 //
+// On 64 bit architectures, use long as the 64 bit type and the pointer size.
+//
+
+#if (__SIZEOF_POINTER__ == 8)
+
+#define __PRIPTR "l"
+#define __PRI64 "l"
+
+//
+// On 32 bit architectures, use long long as the 64 bit type, and nothing (int)
+// as the pointer size.
+//
+
+#elif (__SIZEOF_POINTER__ == 4)
+
+#define __PRIPTR
+#define __PRI64 "ll"
+
+#endif
+
+//
 // Define print format string constants.
 //
 
@@ -54,19 +75,19 @@ extern "C" {
 #define PRIx16 "hx"
 #define PRIX16 "hX"
 
-#define PRId32 "ld"
-#define PRIi32 "li"
-#define PRIo32 "lo"
-#define PRIu32 "lu"
-#define PRIx32 "lx"
-#define PRIX32 "lX"
+#define PRId32 "d"
+#define PRIi32 "i"
+#define PRIo32 "o"
+#define PRIu32 "u"
+#define PRIx32 "x"
+#define PRIX32 "X"
 
-#define PRId64 "lld"
-#define PRIi64 "lli"
-#define PRIo64 "llo"
-#define PRIu64 "llu"
-#define PRIx64 "llx"
-#define PRIX64 "llX"
+#define PRId64 __PRI64 "d"
+#define PRIi64 __PRI64 "i"
+#define PRIo64 __PRI64 "o"
+#define PRIu64 __PRI64 "u"
+#define PRIx64 __PRI64 "x"
+#define PRIX64 __PRI64 "X"
 
 #define PRIdLEAST8 PRId8
 #define PRIiLEAST8 PRIi8
@@ -124,12 +145,12 @@ extern "C" {
 #define PRIxFAST64 PRIx64
 #define PRIXFAST64 PRIX64
 
-#define PRIdPTR PRId32
-#define PRIiPTR PRIi32
-#define PRIoPTR PRIo32
-#define PRIuPTR PRIu32
-#define PRIxPTR PRIx32
-#define PRIXPTR PRIX32
+#define PRIdPTR __PRIPTR "d"
+#define PRIiPTR __PRIPTR "i"
+#define PRIoPTR __PRIPTR "o"
+#define PRIuPTR __PRIPTR "u"
+#define PRIxPTR __PRIPTR "x"
+#define PRIXPTR __PRIPTR "X"
 
 #define PRIdMAX PRId64
 #define PRIiMAX PRIi64
@@ -156,19 +177,19 @@ extern "C" {
 #define SCNx16 "hx"
 #define SCNX16 "hX"
 
-#define SCNd32 "ld"
-#define SCNi32 "li"
-#define SCNo32 "lo"
-#define SCNu32 "lu"
-#define SCNx32 "lx"
-#define SCNX32 "lX"
+#define SCNd32 "d"
+#define SCNi32 "i"
+#define SCNo32 "o"
+#define SCNu32 "u"
+#define SCNx32 "x"
+#define SCNX32 "X"
 
-#define SCNd64 "lld"
-#define SCNi64 "lli"
-#define SCNo64 "llo"
-#define SCNu64 "llu"
-#define SCNx64 "llx"
-#define SCNX64 "llX"
+#define SCNd64 __PRI64 "d"
+#define SCNi64 __PRI64 "i"
+#define SCNo64 __PRI64 "o"
+#define SCNu64 __PRI64 "u"
+#define SCNx64 __PRI64 "x"
+#define SCNX64 __PRI64 "X"
 
 #define SCNdLEAST8 SCNd8
 #define SCNiLEAST8 SCNi8
@@ -226,12 +247,12 @@ extern "C" {
 #define SCNxFAST64 SCNx64
 #define SCNXFAST64 SCNX64
 
-#define SCNdPTR SCNd32
-#define SCNiPTR SCNi32
-#define SCNoPTR SCNo32
-#define SCNuPTR SCNu32
-#define SCNxPTR SCNx32
-#define SCNXPTR SCNX32
+#define SCNdPTR __PRIPTR "d"
+#define SCNiPTR __PRIPTR "i"
+#define SCNoPTR __PRIPTR "o"
+#define SCNuPTR __PRIPTR "u"
+#define SCNxPTR __PRIPTR "x"
+#define SCNXPTR __PRIPTR "X"
 
 #define SCNdMAX SCNd64
 #define SCNiMAX SCNi64
