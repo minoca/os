@@ -2790,7 +2790,9 @@ Return Value:
         while (CurrentEntry != &(Function->ParametersHead)) {
             Parameter = LIST_VALUE(CurrentEntry, DATA_SYMBOL, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            if (strcasecmp(LocalName, Parameter->Name) == 0) {
+            if ((Parameter->Name != NULL) &&
+                (strcasecmp(LocalName, Parameter->Name) == 0)) {
+
                 LocalSymbol = Parameter;
                 break;
             }
