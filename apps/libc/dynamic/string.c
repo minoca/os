@@ -600,7 +600,17 @@ Return Value:
 
 {
 
-    return strncpy(DestinationString, SourceString, (size_t)-1);
+    char *Current;
+
+    Current = DestinationString;
+    while (*SourceString != '\0') {
+        *Current = *SourceString;
+        Current += 1;
+        SourceString += 1;
+    }
+
+    *Current = '\0';
+    return DestinationString;
 }
 
 LIBC_API
@@ -671,9 +681,9 @@ Arguments:
 
     BytesToCopy - Supplies the maximum number of bytes to copy. If the source
         string is shorter than this value, then only bytes up to and including
-        the null terminator will be copied. If the source string is longer
-        than this value, then the destination string will not be null
-        terminated.
+        the null terminator will be copied. The remaining bytes will be zeroed.
+        If the source string is longer than this value, then the destination
+        string will not be null terminated.
 
 Return Value:
 
@@ -690,6 +700,11 @@ Return Value:
         if (SourceString[ByteIndex] == '\0') {
             break;
         }
+    }
+
+    while (ByteIndex < BytesToCopy) {
+        DestinationString[ByteIndex] = '\0';
+        ByteIndex += 1;
     }
 
     return DestinationString;

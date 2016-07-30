@@ -499,9 +499,9 @@ Arguments:
 
     BytesToCopy - Supplies the maximum number of bytes to copy. If the source
         string is shorter than this value, then only bytes up to and including
-        the null terminator will be copied. If the source string is longer
-        than this value, then the destination string will not be null
-        terminated.
+        the null terminator will be copied. The remaining bytes will be zeroed.
+        If the source string is longer than this value, then the destination
+        string will not be null terminated.
 
 Return Value:
 

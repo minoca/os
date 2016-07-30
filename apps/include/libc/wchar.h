@@ -2092,9 +2092,10 @@ Arguments:
 
     CharacterCount - Supplies the maximum number of characters to copy. If the
         source string is shorter than this value, then only characters up to
-        and including the null terminator will be copied. If the source string
-        is longer than this value, then the destination string will not be null
-        terminated.
+        and including the null terminator will be copied. The remaining
+        characters in the destination string will be zeroed out. If the source
+        string is longer than this value, then the destination string will not
+        be null terminated.
 
 Return Value:
 

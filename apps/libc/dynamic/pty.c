@@ -196,7 +196,7 @@ Return Value:
     }
 
     if (Name != NULL) {
-        strncpy(Name, Path, PATH_MAX);
+        strcpy(Name, Path);
     }
 
     Result = 0;
