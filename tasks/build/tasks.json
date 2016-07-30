@@ -459,6 +459,31 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/tmux-2.2"
         },
         {
+            "name": "Make libunistring",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libunistring-0.9.6"
+        },
+        {
+            "name": "Make libffi",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libffi-3.2.1"
+        },
+        {
+            "name": "Make libatomic_ops",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libatomic_ops-7.4.4"
+        },
+        {
+            "name": "Make gc",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gc-7.4.4"
+        },
+        {
+            "name": "Make screen",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/screen-4.4.0"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
