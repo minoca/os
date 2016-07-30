@@ -627,6 +627,9 @@ Return Value:
             if (Integer >= 0) {
                 Properties.Precision = (ULONG)Integer;
             }
+
+        } else {
+            Properties.Precision = 0;
         }
     }
 
