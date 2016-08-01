@@ -140,6 +140,11 @@ PAR_SAVE_RESTORE_FPU_CONTEXT ArRestoreFpuState;
 // Store globals for the per-processor data structures used by P0.
 //
 
+//
+// The P0 TSS will start out as the main kernel TSS, but will get swapped with
+// the double fault TSS so sysenter can reach its stack quickly.
+//
+
 TSS ArP0Tss;
 GDT_ENTRY ArP0Gdt[GDT_ENTRIES];
 PROCESSOR_GATE ArP0Idt[IDT_SIZE];
@@ -199,21 +204,17 @@ Return Value:
     UINTN Address;
     BOOL BootProcessor;
     ULONG Cr0;
-    PVOID DoubleFaultStack;
     PTSS DoubleFaultTss;
     PGDT_ENTRY Gdt;
     PPROCESSOR_GATE Idt;
     PVOID InterruptTable;
-    PVOID NmiStack;
     PTSS NmiTss;
     UINTN PageSize;
     PPROCESSOR_BLOCK ProcessorBlock;
     PTSS Tss;
 
     BootProcessor = TRUE;
-    DoubleFaultStack = NULL;
     DoubleFaultTss = NULL;
-    NmiStack = NULL;
     NmiTss = NULL;
     if (PhysicalMode == FALSE) {
         ArTranslationEnabled = TRUE;
@@ -248,13 +249,16 @@ Return Value:
             BootProcessor = FALSE;
             PageSize = MmPageSize();
             Address = ALIGN_RANGE_UP((UINTN)ProcessorStructures, PageSize);
-            DoubleFaultTss =
-                         (PVOID)(Address + ALTERNATE_STACK_SIZE - sizeof(TSS));
 
-            DoubleFaultStack = (PVOID)(DoubleFaultTss) - sizeof(PVOID);
+            //
+            // The main TSS is at the end of the double fault stack so that
+            // sysenter can get to its thread stack in a single SS: dereference.
+            // The double fault TSS is after th processor block.
+            //
+
+            Tss = (PVOID)(Address + ALTERNATE_STACK_SIZE - sizeof(TSS));
             Address += ALTERNATE_STACK_SIZE;
             NmiTss = (PVOID)(Address + ALTERNATE_STACK_SIZE - sizeof(TSS));
-            NmiStack = (PVOID)(NmiTss) - sizeof(PVOID);
             Gdt = (PGDT_ENTRY)(Address + ALTERNATE_STACK_SIZE);
 
             ASSERT(ALIGN_RANGE_DOWN((UINTN)Gdt, 8) == (UINTN)Gdt);
@@ -265,7 +269,7 @@ Return Value:
 
             Idt = ArP0Idt;
             ProcessorBlock = (PPROCESSOR_BLOCK)((PUCHAR)Gdt + sizeof(ArP0Gdt));
-            Tss = (PTSS)(ProcessorBlock + 1);
+            DoubleFaultTss = (PTSS)(ProcessorBlock + 1);
             Address = ALIGN_RANGE_UP((UINTN)(Tss + 1), 8);
             InterruptTable = ArP0InterruptTable;
         }
@@ -289,22 +293,15 @@ Return Value:
     Tss->Cr3 = ArGetCurrentPageDirectory();
     if (DoubleFaultTss != NULL) {
         ArpInitializeTss(DoubleFaultTss);
-        DoubleFaultTss->Esp0 = (UINTN)DoubleFaultStack;
+        DoubleFaultTss->Esp0 = (UINTN)Tss;
         DoubleFaultTss->Esp = DoubleFaultTss->Esp0;
         DoubleFaultTss->Eip = (UINTN)ArDoubleFaultHandlerAsm;
         DoubleFaultTss->Cr3 = Tss->Cr3;
-
-        //
-        // Squirrel away the double fault stack into the kernel TSS' Esp1,
-        // which is otherwise unused.
-        //
-
-        Tss->Esp1 = (UINTN)DoubleFaultStack;
     }
 
     if (NmiTss != NULL) {
         ArpInitializeTss(NmiTss);
-        NmiTss->Esp0 = (UINTN)NmiStack;
+        NmiTss->Esp0 = (UINTN)NmiTss;
         NmiTss->Esp = NmiTss->Esp0;
         NmiTss->Eip = (UINTN)KdNmiHandlerAsm;
         NmiTss->Cr3 = Tss->Cr3;
@@ -382,15 +379,38 @@ Return Value:
     Address = ALIGN_RANGE_UP((UINTN)Allocation, PageSize);
 
     //
-    // Initialize the double fault TSS and stack. Squirrel away the double
-    // fault stack in Esp1 of the main TSS, which is otherwise unused.
+    // Initialize the double fault TSS and stack. The main TSS is put on the
+    // double fault stack so that sysenter can get to its thread stack with
+    // just a single SS: dereference.
     //
 
-    Tss = (PVOID)(Address + ALTERNATE_STACK_SIZE - sizeof(TSS));
-    Stack = (PVOID)(Tss) - sizeof(PVOID);
-    ArpInitializeTss(Tss);
+    MainTss = (PVOID)(Address + ALTERNATE_STACK_SIZE - sizeof(TSS));
+    Stack = (PVOID)MainTss;
+
+    //
+    // Copy the old main TSS over to the new main TSS, and move the GDT entry
+    // as well.
+    //
+
+    RtlCopyMemory(MainTss, ProcessorBlock->Tss, sizeof(TSS));
+    ArpCreateSegmentDescriptor(
+                             &(GdtTable[KERNEL_TSS / sizeof(GDT_ENTRY)]),
+                             MainTss,
+                             sizeof(TSS),
+                             GdtByteGranularity,
+                             Gdt32BitTss,
+                             SEGMENT_PRIVILEGE_KERNEL,
+                             TRUE);
+
+    Tss = ProcessorBlock->Tss;
+    ProcessorBlock->Tss = MainTss;
+    ArLoadTr(KERNEL_TSS);
+
+    //
+    // Initialize the double fault TSS, which just used to be the main TSS.
+    //
+
     Tss->Esp0 = (UINTN)Stack;
-    MainTss->Esp1 = (UINTN)Stack;
     Tss->Esp = Tss->Esp0;
     Tss->Eip = (UINTN)ArDoubleFaultHandlerAsm;
     Tss->Cr3 = Cr3;

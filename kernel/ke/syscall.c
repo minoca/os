@@ -160,7 +160,7 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
 // ------------------------------------------------------------------ Functions
 //
 
-VOID
+BOOL
 KeSystemCallHandler (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter,
@@ -185,12 +185,17 @@ Arguments:
 
 Return Value:
 
-    None.
+    TRUE if a full trap frame restore needs to occur. This is needed if the
+    user context was changed in a significant way (ie a signal was delivered or
+    restored from).
+
+    FALSE if only a partial trap frame restore needs to occur.
 
 --*/
 
 {
 
+    BOOL FullRestore;
     PSYSTEM_CALL_TABLE_ENTRY Handler;
     SYSTEM_CALL_PARAMETER_UNION LocalParameters;
     ULONG ResultSize;
@@ -278,6 +283,14 @@ SystemCallHandlerEnd:
 
     PsCheckRuntimeTimers(Thread);
     PsDispatchPendingSignals(Thread, TrapFrame);
+
+    //
+    // If the thread seems to no longer be in a system call (even though it
+    // clearly started out in one given that execution is here), then do a full
+    // context restore, since it may be restoring to a pre-signal state.
+    //
+
+    FullRestore = (Thread->Flags & THREAD_FLAG_IN_SYSTEM_CALL) == 0;
     Thread->Flags &= ~THREAD_FLAG_IN_SYSTEM_CALL;
 
     //
@@ -285,7 +298,7 @@ SystemCallHandlerEnd:
     //
 
     KeBeginCycleAccounting(CycleAccountUser);
-    return;
+    return FullRestore;
 }
 
 //

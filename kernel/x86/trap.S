@@ -503,34 +503,32 @@ Return Value:
 FUNCTION(ArSysenterHandlerAsm)
 
     ##
-    ## To avoid having to set the MSR on context switches when using sysenter,
-    ## ESP is left at 0. So the first step is to set up the stack.
+    ## ESP is currently pointing at the processor double fault stack, which
+    ## pointed up is also the main TSS. Switch to the thread stack.
     ##
 
-    LoadKernelDataSegments
-    movl    %fs:(PROCESSOR_BLOCK_TSS), %eax  # Get the PROCESSOR_BLOCK.Tss.
-    movl    TSS_ESP0(%eax), %esp    # Load the stack.
-    sti                             # Re-enable interrupts.
+    movl    TSS_ESP0(%esp), %esp    # Load the stack.
 
     ##
     ## Make a fake trap frame and fill in the registers that need to be saved.
     ## This is needed because if a signal comes in these may be changed.
     ##
 
-    subl    $TRAP_FRAME_SIZE, %esp  # Allocate trap frame space.
+    pushl   %ecx                    # Save user ESP in trap frame.
+    pushfl                          # Save EFLAGS in trap frame.
+    movl    %eax, %ecx              # Get EAX free.
+    LoadKernelDataSegments          # Load kernel data segments (using EAX).
+    sti                             # Re-enable interrupts.
+    subl    $(TRAP_FRAME_SIZE - 8), %esp  # Allocate most of trap frame.
     movl    %edx, TRAP_EIP(%esp)    # EDX contains the return address.
-    movl    %ecx, TRAP_ESP(%esp)    # ECX contains return stack.
-    movl    $0x0, TRAP_EAX(%esp)    # Save 0 to EAX.
+    movl    %eax, TRAP_EAX(%esp)    # Save EAX.
     movl    %ebx, TRAP_EBX(%esp)    # Save EBX.
     movl    %esi, TRAP_ESI(%esp)    # Save ESI.
     movl    %edi, TRAP_EDI(%esp)    # Save EDI.
     movl    %ebp, TRAP_EBP(%esp)    # Save EBP.
-    pushfl                          # Push eflags.
-    popl    %eax                    # Get eflags in register.
-    movl    %eax, TRAP_EFLAGS(%esp) # Save eflags into trap frame.
     pushl   %esp                    # Push a pointer to the sort-of trap frame.
-    pushl   %edi                    # Push EDI, the system call parameter.
-    pushl   %esi                    # Push ESI, the system call number.
+    pushl   %ebx                    # Push EBX, the system call parameter.
+    pushl   %ecx                    # Push saved EAX, the system call number.
     call    KeSystemCallHandler     # Call out to the main service handler.
     addl    $0xC, %esp              # Pop the parameters.
 

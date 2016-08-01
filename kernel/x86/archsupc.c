@@ -108,8 +108,8 @@ Return Value:
     if ((Edx & X86_CPUID_BASIC_EDX_SYSENTER) != 0) {
 
         //
-        // Set up SYSENTER support. Sysenter shares the double fault stack
-        // (squirreled away in Esp1 of the main TSS, which is otherwise unused).
+        // Set up SYSENTER support. Sysenter shares the double fault stack,
+        // which happens to be right below the main TSS.
         // Normally sysenter doesn't need a stack, as the first thing the
         // handler does with interrupts disabled is to load Tss->Esp0. The one
         // exception is if usermode sets the trap flag when calling sysenter,
@@ -127,7 +127,7 @@ Return Value:
         Data->ProcessorFeatures |= X86_FEATURE_SYSENTER;
         ArWriteMsr(X86_MSR_SYSENTER_CS, KERNEL_CS);
         ArWriteMsr(X86_MSR_SYSENTER_EIP, (UINTN)ArSysenterHandlerAsm);
-        ArWriteMsr(X86_MSR_SYSENTER_ESP, Tss->Esp1);
+        ArWriteMsr(X86_MSR_SYSENTER_ESP, (UINTN)Tss);
 
     } else {
 

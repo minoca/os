@@ -106,11 +106,9 @@ Return Value:
 --*/
 
 FUNCTION(OspSysenterSystemCall)
-    pushl   %esi                # Save ESI.
-    pushl   %edi                # Save EDI.
+    pushl   %ebx                # Save EBX.
     call    OspSysenter         # Perform a call to get the return address.
-    popl    %edi                # Restore EDI.
-    popl    %esi                # Restore ESI.
+    popl    %ebx                # Restore EBX.
     ret                         # Return.
 
 ##
@@ -120,8 +118,8 @@ FUNCTION(OspSysenterSystemCall)
 
 OspSysenter:
     popl    %edx                # Put the return address in EDX for sysenter.
-    movl    12(%esp), %esi      # Move the system call number to ESI.
-    movl    16(%esp), %edi      # Move the system call parameter to EDI.
+    movl    8(%esp), %eax       # Move the system call number to EAX.
+    movl    12(%esp), %ebx      # Move the system call parameter to EBX.
     movl    %esp, %ecx          # ECX contains the return stack pointer.
     sysenter                    # Jump to kernel mode.
 
