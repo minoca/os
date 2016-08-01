@@ -2071,6 +2071,7 @@ Return Value:
 
 {
 
+    ULONG Attributes;
     UINTN BitmapIndex;
     ULONG BitmapMask;
     PIMAGE_SECTION Child;
@@ -2311,6 +2312,29 @@ Return Value:
 
         ChildPagingEntry = NULL;
         ChildPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+
+        //
+        // If the parent is dirty, mark the child dirty. There is no danger of
+        // the mapping attribute dirty flag being set after the check because
+        // the page is currently read-only in the current process and the lock
+        // is held.
+        //
+
+        if ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) {
+            if ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0) {
+                MmpVirtualToPhysical(VirtualAddress, &Attributes);
+
+                ASSERT((Attributes & MAP_FLAG_READ_ONLY) != 0);
+
+                if ((Attributes & MAP_FLAG_DIRTY) != 0) {
+                    Section->DirtyPageBitmap[BitmapIndex] |= BitmapMask;
+                    Child->DirtyPageBitmap[BitmapIndex] |= BitmapMask;
+                }
+
+            } else {
+                Child->DirtyPageBitmap[BitmapIndex] |= BitmapMask;
+            }
+        }
 
         //
         // Clear the inheritance bit in the child.

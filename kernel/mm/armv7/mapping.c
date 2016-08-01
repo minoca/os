@@ -1799,6 +1799,8 @@ Return Value:
 
             *Attributes |= MAP_FLAG_READ_ONLY;
         }
+
+        *Attributes |= MAP_FLAG_DIRTY;
     }
 
     return PhysicalAddress;

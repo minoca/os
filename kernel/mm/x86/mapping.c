@@ -1819,12 +1819,6 @@ Return Value:
         PageTable[PageTableIndex].Global = 1;
     }
 
-    //
-    // When mapping something in another process, assume that it's dirty. You
-    // don't know where that page came from.
-    //
-
-    PageTable[PageTableIndex].Dirty = 1;
     if ((MapFlags & MAP_FLAG_PRESENT) != 0) {
         PageTable[PageTableIndex].Present = 1;
     }
