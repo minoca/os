@@ -69,7 +69,8 @@ IopDestroyAsyncState (
 VOID
 IopSendIoSignal (
     PIO_ASYNC_STATE Async,
-    ULONG Event
+    USHORT SignalCode,
+    ULONG BandEvent
     );
 
 //
@@ -194,12 +195,17 @@ Return Value:
     // If read or write just went high, potentially signal the owner.
     //
 
-    if ((Set != FALSE) && (IoState->Async != NULL) &&
+    if ((Set != FALSE) &&
+        (IoState->Async != NULL) &&
         (IoState->Async->Owner != 0)) {
 
         RisingEdge = (PreviousEvents ^ Events) & Events;
-        if ((RisingEdge & (POLL_EVENT_IN | POLL_EVENT_OUT)) != 0) {
-            IopSendIoSignal(IoState->Async, PreviousEvents | Events);
+        if ((RisingEdge & POLL_EVENT_IN) != 0) {
+            IopSendIoSignal(IoState->Async, POLL_CODE_IN, POLL_EVENT_IN);
+        }
+
+        if ((RisingEdge & POLL_EVENT_OUT) != 0) {
+            IopSendIoSignal(IoState->Async, POLL_CODE_OUT, POLL_EVENT_OUT);
         }
     }
 
@@ -2756,7 +2762,8 @@ Return Value:
 VOID
 IopSendIoSignal (
     PIO_ASYNC_STATE Async,
-    ULONG Event
+    USHORT SignalCode,
+    ULONG BandEvent
     )
 
 /*++
@@ -2769,7 +2776,9 @@ Arguments:
 
     Async - Supplies a pointer to the async state.
 
-    Event - Supplies the event code to include.
+    SignalCode - Supplies a signal code to include.
+
+    BandEvent - Supplies the band event to include.
 
 Return Value:
 
@@ -2851,7 +2860,8 @@ Return Value:
     if (QueueEntry != NULL) {
         RtlZeroMemory(QueueEntry, sizeof(SIGNAL_QUEUE_ENTRY));
         QueueEntry->Parameters.SignalNumber = Signal;
-        QueueEntry->Parameters.SignalCode = Event;
+        QueueEntry->Parameters.SignalCode = SignalCode;
+        QueueEntry->Parameters.FromU.BandEvent = BandEvent;
         QueueEntry->CompletionRoutine = PsDefaultSignalCompletionRoutine;
     }
 
