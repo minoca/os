@@ -446,11 +446,14 @@ Members:
     FaultingAddress - Stores the faulting address that caused the signal, used
         for bus and segmentation fault signals.
 
+    OverflowCount - Stores the number of overflows that occurred. Used by the
+        timers.
+
     BandEvent - Stores the data direction that is available. Used by poll
         signals.
 
-    OverflowCount - Stores the number of overflows that occurred. Used by the
-        timers.
+    Descriptor - Stores the descriptor handle for the file that triggered the
+        poll signal.
 
     SendingUserId - Stores the user ID of the process that generated the signal.
 
@@ -466,8 +469,12 @@ typedef struct _SIGNAL_PARAMETERS {
     union {
         LONG SendingProcess;
         PVOID FaultingAddress;
-        LONG BandEvent;
         ULONG OverflowCount;
+        struct {
+            LONG BandEvent;
+            HANDLE Descriptor;
+        } Poll;
+
     } FromU;
 
     ULONG SendingUserId;

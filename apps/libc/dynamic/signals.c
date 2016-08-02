@@ -1086,8 +1086,10 @@ Return Value:
             SignalInformation->si_uid = SignalParameters.SendingUserId;
             SignalInformation->si_addr = SignalParameters.FromU.FaultingAddress;
             SignalInformation->si_status = SignalParameters.Parameter;
-            SignalInformation->si_band = SignalParameters.FromU.BandEvent;
+            SignalInformation->si_band = SignalParameters.FromU.Poll.BandEvent;
             SignalInformation->si_value.sival_int = SignalParameters.Parameter;
+            SignalInformation->si_fd =
+                            (int)(UINTN)SignalParameters.FromU.Poll.Descriptor;
         }
 
     } else {
@@ -1764,9 +1766,14 @@ Return Value:
                                       SignalInformation->FromU.FaultingAddress;
 
             HandlerInformation.si_status = SignalInformation->Parameter;
-            HandlerInformation.si_band = SignalInformation->FromU.BandEvent;
+            HandlerInformation.si_band =
+                                       SignalInformation->FromU.Poll.BandEvent;
+
             HandlerInformation.si_value.sival_int =
                                                   SignalInformation->Parameter;
+
+            HandlerInformation.si_fd =
+                          (int)(UINTN)SignalInformation->FromU.Poll.Descriptor;
 
             Action->sa_sigaction(Signal, &HandlerInformation, NULL);
 

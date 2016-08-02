@@ -2861,7 +2861,8 @@ Return Value:
         RtlZeroMemory(QueueEntry, sizeof(SIGNAL_QUEUE_ENTRY));
         QueueEntry->Parameters.SignalNumber = Signal;
         QueueEntry->Parameters.SignalCode = SignalCode;
-        QueueEntry->Parameters.FromU.BandEvent = BandEvent;
+        QueueEntry->Parameters.FromU.Poll.BandEvent = BandEvent;
+        QueueEntry->Parameters.FromU.Poll.Descriptor = Receiver->Descriptor;
         QueueEntry->CompletionRoutine = PsDefaultSignalCompletionRoutine;
     }
 

@@ -531,6 +531,8 @@ Members:
 
     si_value - Stores the value of the signal for real time signals.
 
+    si_fd - Stores the file descriptor that triggered the poll signal.
+
 --*/
 
 typedef struct {
@@ -543,6 +545,7 @@ typedef struct {
     int si_status;
     long si_band;
     union sigval si_value;
+    int si_fd;
 } siginfo_t;
 
 /*++
