@@ -251,7 +251,8 @@ extern "C" {
 #define SIG_SETMASK 2
 
 //
-// Define the code values that could come in with a child signal.
+// Define the code values that could come in with a child signal. These line up
+// with CHILD_SIGNAL_REASON_* definitions.
 //
 
 #define CLD_EXITED 1
@@ -374,6 +375,71 @@ extern "C" {
 #define sa_sigaction sa_u.sau_sigaction
 
 //
+// Define the signal codes that may come with an illegal instruction signal.
+// These line up with ILLEGAL_INSTRUCTION_* definitions.
+//
+
+#define ILL_ILLOPC 1
+#define ILL_ILLOPN 2
+#define ILL_ILLADR 3
+#define ILL_ILLTRP 4
+#define ILL_PRVOPC 5
+#define ILL_PRVREG 6
+#define ILL_COPROC 7
+#define ILL_BADSTK 8
+
+//
+// Define the signal codes that may come with an arithmetic error signal. These
+// line up with MATH_ERROR_* definitions.
+//
+
+#define FPE_INTDIV 1
+#define FPE_INTOVF 2
+#define FPE_FLTDIV 3
+#define FPE_FLTOVF 4
+#define FPE_FLTUND 5
+#define FPE_FLTRES 6
+#define FPE_FLTINV 7
+#define FPE_FLTSUB 8
+
+//
+// Define the signal codes that may come with an invalid memory reference
+// signal (SIGSEGV). These line up with ACCESS_VIOLATION_* definitions.
+//
+
+#define SEGV_MAPERR 1
+#define SEGV_ACCERR 2
+
+//
+// Define the signal codes that may come with bus error signal (SIGBUS). These
+// line up with BUS_ERROR_* definitions.
+//
+
+#define BUS_ADRALN 1
+#define BUS_ADRERR 2
+#define BUS_OBJERR 3
+
+//
+// Define the signal codes that may come with a trap signal. These line up with
+// TRAP_CODE_* definitions.
+//
+
+#define TRAP_BRKPT 1
+#define TRAP_TRACE 2
+
+//
+// Define the signal codes that may come with a poll signal. These line up with
+// POLL_CODE_* definitions.
+//
+
+#define POLL_IN 1
+#define POLL_OUT 2
+#define POLL_MSG 3
+#define POLL_ERR 4
+#define POLL_PRI 5
+#define POLL_HUP 6
+
+//
 // Define signal codes that may come out of queued signals.
 // TODO: Implement signal codes properly (meaning make sure the proper code is
 // making it through), including the kernel one. These line up with
@@ -386,6 +452,8 @@ extern "C" {
 #define SI_SIGIO (-4)
 #define SI_TKILL (-5)
 #define SI_KERNEL (-6)
+#define SI_ASYNCIO (-7)
+#define SI_MESGQ (-8)
 
 //
 // Define the minimum and default signal stack size.

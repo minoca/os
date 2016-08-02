@@ -342,11 +342,65 @@ Author:
 #define CHILD_SIGNAL_REASON_CONTINUED 6
 
 //
+// Define illegal instruction signal codes.
+//
+
+#define ILLEGAL_INSTRUCTION_OPCODE 1
+#define ILLEGAL_INSTRUCTION_OPERAND 2
+#define ILLEGAL_INSTRUCTION_ADDRESS_MODE 3
+#define ILLEGAL_INSTRUCTION_TRAP 4
+#define ILLEGAL_INSTRUCTION_PRIVILEGED_OPCODE 5
+#define ILLEGAL_INSTRUCTION_PRIVILEGED_REGISTER 6
+#define ILLEGAL_INSTRUCTION_COPROCESSOR 7
+#define ILLEGAL_INSTRUCTION_BAD_STACK 8
+
+//
+// Define the math error signal codes.
+//
+
+#define MATH_ERROR_INTEGER_DIVIDE_BY_ZERO 1
+#define MATH_ERROR_INTEGER_OVERFLOW 2
+#define MATH_ERROR_FLOAT_DIVIDE_BY_ZERO 3
+#define MATH_ERROR_FLOAT_OVERFLOW 4
+#define MATH_ERROR_FLOAT_UNDERFLOW 5
+#define MATH_ERROR_FLOAT_INEXACT_RESULT 6
+#define MATH_ERROR_FLOAT_INVALID_OPERATION 7
+#define MATH_ERROR_FLOAT_SUBSCRIPT_OUT_RANGE 8
+
+//
 // Define access violation signal codes.
 //
 
 #define ACCESS_VIOLATION_MAPPING_ERROR    1
 #define ACCESS_VIOLATION_PERMISSION_ERROR 2
+
+//
+// Define the signal codes that may come with bus error signal (SIGBUS). These
+// line up with BUS_ERROR_* definitions.
+//
+
+#define BUS_ERROR_ADDRESS_ALIGNMENT 1
+#define BUS_ERROR_INVALID_ADDRESS 2
+#define BUS_ERROR_HARDWARE 3
+
+//
+// Define the signal codes that may come with a trap signal. These line up with
+// TRAP_CODE_* definitions.
+//
+
+#define TRAP_CODE_BREAKPOINT 1
+#define TRAP_CODE_TRACE 2
+
+//
+// Define poll signal codes.
+//
+
+#define POLL_CODE_IN 1
+#define POLL_CODE_OUT 2
+#define POLL_CODE_MESSAGE 3
+#define POLL_CODE_ERROR 4
+#define POLL_CODE_PRIORITY 5
+#define POLL_CODE_DISCONNECTED 6
 
 //
 // Define user signal codes.
@@ -357,6 +411,10 @@ Author:
 #define SIGNAL_CODE_QUEUE (-2)
 #define SIGNAL_CODE_TIMER (-3)
 #define SIGNAL_CODE_IO (-4)
+#define SIGNAL_CODE_THREAD_KILL (-5)
+#define SIGNAL_CODE_KERNEL (-6)
+#define SIGNAL_CODE_ASYNC_IO (-7)
+#define SIGNAL_CODE_MESSAGE (-8)
 
 //
 // ------------------------------------------------------ Data Type Definitions
