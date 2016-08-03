@@ -1078,7 +1078,7 @@ Return Value:
                   PAGE_CACHE_SMALL_VIRTUAL_HEADROOM_RETREAT_BYTES >> PageShift;
 
         IoPageCacheMaxDirtyPages = ((MAX_UINTN - (UINTN)KERNEL_VA_START + 1) /
-                                    2) >> PageShift;
+                                    4) >> PageShift;
 
     } else {
         IoPageCacheHeadroomVirtualPagesTrigger =
