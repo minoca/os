@@ -54,8 +54,6 @@ Environment:
 #define PSR_FLAG_IRQ        0x00000080
 #define PSR_FLAG_FIQ        0x00000040
 
-#define PSR_FLAG_RESERVED20 0x00100000
-
 ##
 ## Processor modes
 ##

@@ -142,7 +142,7 @@ Author:
 //
 
 #define IS_TRAP_FRAME_COMPLETE(_TrapFrame) \
-    (((_TrapFrame)->Cpsr & PSR_FLAG_RESERVED20) == 0)
+    ((_TrapFrame)->ExceptionCpsr != 0xFFFFFFFF)
 
 //
 // This macro manipulates the bitfields in the coprocessor access mask.
@@ -190,13 +190,6 @@ Author:
 #define PSR_FLAG_THUMB      0x00000020
 #define PSR_FLAG_IRQ        0x00000080
 #define PSR_FLAG_FIQ        0x00000040
-
-//
-// This bit is always zero architecturally, but is set in the system call
-// handler's trap frames when the trap frame is incomplete.
-//
-
-#define PSR_FLAG_RESERVED20 0x00100000
 
 //
 // Interrupt vector ranges.

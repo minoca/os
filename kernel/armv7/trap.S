@@ -212,13 +212,12 @@ FUNCTION ArpSoftwareInterruptEntry
     cpsie   i, #ARM_MODE_SVC                    @ Enable interrupts, svc mode.
 
     ##
-    ## Set a reserved bit in the CPSR as a hint that this trap frame is
-    ## incomplete.
+    ## Set the exception CPSR to something wild as a hint that this trap frame
+    ## is incomplete.
     ##
 
-    ldr     %r3, [%sp, #TRAP_CPSR]              @ Get CPSR.
-    orr     %r3, #PSR_FLAG_RESERVED20           @ Set reserved flag.
-    str     %r3, [%sp, #TRAP_CPSR]              @ Store CPSR.
+    mov     %r3, #0xFFFFFFFF                    @ Create -1.
+    str     %r3, [%sp, #TRAP_EXCEPTION_CPSR]    @ Save into exception CPSR.
 
     ##
     ## The system call routine takes three parameters: the system call number,
