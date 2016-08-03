@@ -2951,7 +2951,21 @@ Return Value:
                     &DescriptorsSelected);
 
     if ((!KSUCCESS(Status)) && (Status != STATUS_TIMEOUT)) {
-        goto selectEnd;
+        goto pselectEnd;
+    }
+
+    //
+    // Check for invalid handles, since POSIX says on failure the bitmasks
+    // should not be modified.
+    //
+
+    for (PollIndex = 0; PollIndex < ArrayIndex; PollIndex += 1) {
+        if ((Descriptors[PollIndex].ReturnedEvents &
+             POLL_EVENT_INVALID_HANDLE) != 0) {
+
+            Status = STATUS_INVALID_HANDLE;
+            goto pselectEnd;
+        }
     }
 
     //
@@ -2971,7 +2985,7 @@ Return Value:
         // out events to force them to take action.
         //
 
-        if (((Events & POLL_EVENT_ERROR) != 0) && (ErrorDescriptors == NULL)) {
+        if (((Events & POLL_ERROR_EVENTS) != 0) && (ErrorDescriptors == NULL)) {
             Events |= POLL_EVENT_IN | POLL_EVENT_OUT;
         }
 
@@ -3008,7 +3022,7 @@ Return Value:
         Descriptor += 1;
     }
 
-selectEnd:
+pselectEnd:
     if (!KSUCCESS(Status)) {
         if (Status != STATUS_TIMEOUT) {
             errno = ClConvertKstatusToErrorNumber(Status);
