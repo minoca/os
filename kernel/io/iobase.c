@@ -1607,7 +1607,7 @@ Return Value:
     ULONG LocalSourcePathSize;
     BOOL LocksHeld;
     ULONG NameHash;
-    PPATH_ENTRY PathEntry;
+    PPATH_ENTRY NewPathEntry;
     SYSTEM_CONTROL_RENAME RenameRequest;
     PFILE_OBJECT SourceDirectoryFileObject;
     PATH_POINT SourceDirectoryPathPoint;
@@ -1624,6 +1624,7 @@ Return Value:
     DestinationStartPathPoint = NULL;
     FoundPathPoint.PathEntry = NULL;
     LocksHeld = FALSE;
+    NewPathEntry = NULL;
     SourceDirectoryPathPoint.PathEntry = NULL;
     SourceFileObject = NULL;
     SourcePathPoint.PathEntry = NULL;
@@ -1707,8 +1708,8 @@ Return Value:
                               &SourcePathPoint,
                               &SourceDirectoryPathPoint);
 
-        PathEntry = SourceDirectoryPathPoint.PathEntry;
-        SourceDirectoryFileObject = PathEntry->FileObject;
+        SourceDirectoryFileObject =
+                                SourceDirectoryPathPoint.PathEntry->FileObject;
 
         ASSERT(SourceDirectoryFileObject != NULL);
         ASSERT(SourcePathPoint.MountPoint ==
@@ -1800,8 +1801,8 @@ Return Value:
                 goto RenameEnd;
             }
 
-            PathEntry = DestinationDirectoryPathPoint.PathEntry;
-            DestinationDirectoryFileObject = PathEntry->FileObject;
+            DestinationDirectoryFileObject =
+                           DestinationDirectoryPathPoint.PathEntry->FileObject;
 
             //
             // Require write permission on the directory since the destination
@@ -1821,8 +1822,7 @@ Return Value:
         //
 
         } else {
-            PathEntry = DestinationPathPoint.PathEntry;
-            DestinationFileObject = PathEntry->FileObject;
+            DestinationFileObject = DestinationPathPoint.PathEntry->FileObject;
 
             //
             // If the destination is the same as the source, then it's a no-op.
@@ -1876,8 +1876,8 @@ Return Value:
                                   &DestinationPathPoint,
                                   &DestinationDirectoryPathPoint);
 
-            PathEntry = DestinationDirectoryPathPoint.PathEntry;
-            DestinationDirectoryFileObject = PathEntry->FileObject;
+            DestinationDirectoryFileObject =
+                           DestinationDirectoryPathPoint.PathEntry->FileObject;
 
             ASSERT(DestinationPathPoint.PathEntry->FileObject->Device ==
                    DestinationDirectoryPathPoint.PathEntry->FileObject->Device);
@@ -2229,16 +2229,16 @@ Return Value:
 
         if (SourcePathPoint.PathEntry->DoNotCache == FALSE) {
             NameHash = IopHashPathString(DestinationFile, DestinationFileSize);
-            PathEntry = IopCreatePathEntry(
+            NewPathEntry = IopCreatePathEntry(
                                        DestinationFile,
                                        DestinationFileSize,
                                        NameHash,
                                        DestinationDirectoryPathPoint.PathEntry,
                                        SourceFileObject);
 
-            if (PathEntry != NULL) {
+            if (NewPathEntry != NULL) {
                 INSERT_BEFORE(
-                        &(PathEntry->SiblingListEntry),
+                        &(NewPathEntry->SiblingListEntry),
                         &(DestinationDirectoryPathPoint.PathEntry->ChildList));
 
                 IopFileObjectAddReference(SourceFileObject);
@@ -2304,6 +2304,10 @@ RenameEnd:
 
     if (FoundPathPoint.PathEntry != NULL) {
         IO_PATH_POINT_RELEASE_REFERENCE(&FoundPathPoint);
+    }
+
+    if (NewPathEntry != NULL) {
+        IoPathEntryReleaseReference(NewPathEntry);
     }
 
     if (DestinationDirectory != NULL) {
