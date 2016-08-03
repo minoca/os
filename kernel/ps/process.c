@@ -1706,7 +1706,7 @@ Return Value:
     // the process.
     //
 
-    if (Thread->AccessViolationInProgress != FALSE) {
+    if (IS_SIGNAL_SET(Thread->RunningSignals, SignalNumber)) {
         PspSetProcessExitStatus(Process,
                                 CHILD_SIGNAL_REASON_KILLED,
                                 SignalNumber);
@@ -1747,7 +1747,6 @@ Return Value:
     Signal->Parameters.Parameter = (UINTN)ArGetInstructionPointer(TrapFrame);
     Signal->CompletionRoutine = PsDefaultSignalCompletionRoutine;
     PsSignalThread(Thread, SignalNumber, Signal);
-    Thread->AccessViolationInProgress = TRUE;
     return;
 }
 

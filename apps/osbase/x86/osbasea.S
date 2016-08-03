@@ -128,6 +128,7 @@ END_FUNCTION(OspSysenterSystemCall)
 ##
 ## VOID
 ## OspSignalHandler (
+##     PSIGNAL_PARAMETERS Parameters
 ##     )
 ##
 
@@ -140,8 +141,8 @@ Routine Description:
 
 Arguments:
 
-    None. The parameters are stored in registers, but do not conform to any C
-        calling convention.
+    Parameters - Supplies a pointer to the signal parameters. Beyond that on
+        the stack is the restore structure.
 
 Return Value:
 
@@ -150,13 +151,19 @@ Return Value:
 --*/
 
 FUNCTION(OspSignalHandler)
-    pushl   %esi                # Push ExitStatus/ValueParameter.
-    pushl   %ebx                # Push Sending User ID.
-    pushl   %eax                # Push FaultAddress/BandEvent/SnedingProcess.
-    pushl   %ebp                # Push the error number.
-    xorl    %ebp, %ebp          # Zero out that funky base pointer.
-    pushl   %edi                # Push the signal number and code.
-    call    OspProcessSignal    # Call the processing routine.
+
+    ##
+    ## Volatile registers are either saved or don't matter. Non-volatiles will
+    ## be saved and restored by any C routine called.
+    ##
+
+    pushl   %esp                # Push a pointer to the signal parameters.
+    call    OspProcessSignal    # Call out to the C routine to handle it.
+    addl    $(SIGNAL_PARAMETERS_SIZE + 4), %esp # Pop argument + signal params.
+    pushl   %esp                # Push system call parameter.
+    pushl   %esp                # It's a pointer to a pointer.
+    pushl   $SystemCallRestoreContext # Push system call number.
+    call    OspSystemCallFull   # Call the full restore handler.
     int     $3                  # Execution should never get back here.
 
 END_FUNCTION(OspSignalHandler)

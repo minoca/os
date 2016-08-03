@@ -78,6 +78,7 @@ KepTestSystemCall (
 
 SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
     {KepTestSystemCall, 0},
+    {PsSysRestoreContext, sizeof(SYSTEM_CALL_RESTORE_CONTEXT)},
     {PsSysExitThread, sizeof(SYSTEM_CALL_EXIT_THREAD)},
     {IoSysOpen, sizeof(SYSTEM_CALL_OPEN)},
     {IoSysClose, sizeof(SYSTEM_CALL_CLOSE)},
@@ -88,7 +89,6 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
     {PsSysExecuteImage, sizeof(SYSTEM_CALL_EXECUTE_IMAGE)},
     {IoSysChangeDirectory, sizeof(SYSTEM_CALL_CHANGE_DIRECTORY)},
     {PsSysSetSignalHandler, sizeof(SYSTEM_CALL_SET_SIGNAL_HANDLER)},
-    {PsSysResumePreSignalExecution, 0},
     {PsSysSendSignal, sizeof(SYSTEM_CALL_SEND_SIGNAL)},
     {PsSysGetSetProcessId, sizeof(SYSTEM_CALL_GET_SET_PROCESS_ID)},
     {PsSysSetSignalBehavior, sizeof(SYSTEM_CALL_SET_SIGNAL_BEHAVIOR)},
@@ -160,7 +160,7 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
 // ------------------------------------------------------------------ Functions
 //
 
-BOOL
+VOID
 KeSystemCallHandler (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter,
@@ -185,17 +185,12 @@ Arguments:
 
 Return Value:
 
-    TRUE if a full trap frame restore needs to occur. This is needed if the
-    user context was changed in a significant way (ie a signal was delivered or
-    restored from).
-
-    FALSE if only a partial trap frame restore needs to occur.
+    None.
 
 --*/
 
 {
 
-    BOOL FullRestore;
     PSYSTEM_CALL_TABLE_ENTRY Handler;
     SYSTEM_CALL_PARAMETER_UNION LocalParameters;
     ULONG ResultSize;
@@ -269,28 +264,8 @@ Return Value:
     }
 
 SystemCallHandlerEnd:
-
-    //
-    // Set up a single step exception coming out of the system call if needed.
-    // This is usually only needed if user mode steps into a sysenter
-    // instruction.
-    //
-
-    if ((Thread->Flags & THREAD_FLAG_SINGLE_STEP) != 0) {
-        Thread->Flags &= ~THREAD_FLAG_SINGLE_STEP;
-        ArSetSingleStep(TrapFrame);
-    }
-
     PsCheckRuntimeTimers(Thread);
     PsDispatchPendingSignals(Thread, TrapFrame);
-
-    //
-    // If the thread seems to no longer be in a system call (even though it
-    // clearly started out in one given that execution is here), then do a full
-    // context restore, since it may be restoring to a pre-signal state.
-    //
-
-    FullRestore = (Thread->Flags & THREAD_FLAG_IN_SYSTEM_CALL) == 0;
     Thread->Flags &= ~THREAD_FLAG_IN_SYSTEM_CALL;
 
     //
@@ -298,7 +273,7 @@ SystemCallHandlerEnd:
     //
 
     KeBeginCycleAccounting(CycleAccountUser);
-    return FullRestore;
+    return;
 }
 
 //

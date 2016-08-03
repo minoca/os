@@ -257,6 +257,16 @@ Author:
     (((_TrapFrame)->Cs & SEGMENT_PRIVILEGE_MASK) == 0)
 
 //
+// This macro determines whether or not the given trap frame is complete or
+// left mostly uninitialized by the system call handler. The system call
+// handler sets CS to user DS as a hint that the trap frame is incomplete.
+//
+
+#define IS_TRAP_FRAME_COMPLETE(_TrapFrame) \
+    (IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(_TrapFrame) || \
+     ((_TrapFrame)->Cs == USER_CS))
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -611,6 +621,33 @@ struct _TRAP_FRAME {
     ULONG Eip;
     ULONG Cs;
     ULONG Eflags;
+    ULONG Esp;
+} PACKED;
+
+/*++
+
+Structure Description:
+
+    This structure outlines the register state saved by the kernel when a
+    user mode signal is dispatched. This generally contains 1) control
+    registers which are clobbered by switching to the signal handler, and
+    2) volatile registers.
+
+Members:
+
+    Signal - Stores the signal number that fired.
+
+    Registers - Stores the previous state of the thread's registers.
+
+--*/
+
+struct _SIGNAL_CONTEXT {
+    ULONG Signal;
+    ULONG Eax;
+    ULONG Ecx;
+    ULONG Edx;
+    ULONG Eflags;
+    ULONG Eip;
     ULONG Esp;
 } PACKED;
 
@@ -1077,6 +1114,35 @@ ArMathFaultHandlerAsm (
 Routine Description:
 
     This routine is called directly when a x87 FPU fault occurs.
+
+Arguments:
+
+    ReturnEip - Supplies the address after the instruction that caused the trap.
+
+    ReturnCodeSelector - Supplies the code selector the code that trapped was
+        running under.
+
+    ReturnEflags - Supplies the EFLAGS register immediately before the trap.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ArTrapSystemCallHandlerAsm (
+    ULONG ReturnEip,
+    ULONG ReturnCodeSelector,
+    ULONG ReturnEflags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is entered when the sysenter routine is entered with the TF
+    flag set. It performs a normal save and sets the TF.
 
 Arguments:
 

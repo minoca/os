@@ -1172,6 +1172,7 @@ Return Value:
     //
 
     NewThread->BlockedSignals = Thread->BlockedSignals;
+    NewThread->RunningSignals = Thread->RunningSignals;
     NewThread->UserStack = Thread->UserStack;
     NewThread->UserStackSize = Thread->UserStackSize;
     PspPrepareThreadForFirstRun(NewThread, TrapFrame, FALSE);
@@ -1620,21 +1621,6 @@ Return Value:
     }
 
     //
-    // If it's a user mode thread, allocate a trap frame's worth of data for
-    // saving the user mode context during signal processing.
-    //
-
-    if ((NewThread->Flags & THREAD_FLAG_USER_MODE) != 0) {
-        NewThread->SavedSignalContext =
-                  MmAllocatePagedPool(ArGetTrapFrameSize(), PS_ALLOCATION_TAG);
-
-        if (NewThread->SavedSignalContext == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto CreateThreadEnd;
-        }
-    }
-
-    //
     // Update the page directory of the owning process to ensure the new stack
     // is visible to the process.
     //
@@ -1897,15 +1883,6 @@ Return Value:
     }
 
     DestroyProcess = FALSE;
-
-    //
-    // Free up the signal trap frame.
-    //
-
-    if (Thread->SavedSignalContext != NULL) {
-        MmFreePagedPool(Thread->SavedSignalContext);
-        Thread->SavedSignalContext = NULL;
-    }
 
     //
     // Destroy the built in timer.

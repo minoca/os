@@ -143,14 +143,14 @@ Return Value:
         //
         // Here's something interesting. The sysenter instruction doesn't clear
         // the trap flag, so if usermode sets TF and executes sysenter, it
-        // produces a single step exception in kernel mode. Watch out for this
-        // specifically.
+        // produces a single step exception in kernel mode. Move to the slow
+        // system call path (so that eflags gets restored), and move Eip to a
+        // version that sets TF in the trap frame.
         //
 
         if (TrapFrame->Eip == (UINTN)ArSysenterHandlerAsm) {
             TrapFrame->Eflags &= ~IA32_EFLAG_TF;
-            Thread = KeGetCurrentThread();
-            Thread->Flags |= THREAD_FLAG_SINGLE_STEP;
+            TrapFrame->Eip = (UINTN)ArTrapSystemCallHandlerAsm;
             return;
         }
 

@@ -73,11 +73,6 @@ OspSetSignalHandler (
     PVOID SignalHandlerRoutine
     );
 
-VOID
-OspResumePreSignalExecution (
-    VOID
-    );
-
 KSTATUS
 OspGetSetFileInformation (
     HANDLE Directory,
@@ -703,7 +698,7 @@ Return Value:
 
     Parameters.Status = STATUS_SUCCESS;
     Parameters.ProcessId = 0;
-    OsSystemCall(SystemCallForkProcess, &Parameters);
+    OspSystemCallFull(SystemCallForkProcess, &Parameters);
     *NewProcessId = Parameters.ProcessId;
     return Parameters.Status;
 }
@@ -742,7 +737,7 @@ Return Value:
                   Environment,
                   sizeof(PROCESS_ENVIRONMENT));
 
-    OsSystemCall(SystemCallExecuteImage, &Parameters);
+    OspSystemCallFull(SystemCallExecuteImage, &Parameters);
     return Parameters.Status;
 }
 
@@ -3349,11 +3344,7 @@ Return Value:
 
 VOID
 OspProcessSignal (
-    UINTN SignalNumberAndCode,
-    UINTN ErrorNumber,
-    UINTN UnionParameter1,
-    UINTN SendingUserId,
-    UINTN SignalValue
+    PSIGNAL_PARAMETERS Parameters
     )
 
 /*++
@@ -3364,45 +3355,23 @@ Routine Description:
 
 Arguments:
 
-    SignalNumberAndCode - Supplies the signal number and signal code, packed
-        together.
-
-    ErrorNumber - Supplies the error number parameter.
-
-    UnionParameter1 - Supplies the fauling address, band event, or sending
-        process ID.
-
-    SendingUserId - Supplies the ID of the user sending the signal.
-
-    SignalValue - Supplies the real time value, exit status, or terminating
-        signal.
+    Parameters - Supplies a pointer to the signal parameters from the kernel.
 
 Return Value:
 
-    None. This function does not return, the original execution context will
-    be restored.
+    None.
 
 --*/
 
 {
 
-    SIGNAL_PARAMETERS Parameters;
     PSIGNAL_HANDLER_ROUTINE SignalHandler;
 
     SignalHandler = OsSignalHandler;
     if (SignalHandler != NULL) {
-        Parameters.SignalNumber = (USHORT)SignalNumberAndCode;
-        Parameters.SignalCode =
-               (SHORT)(SignalNumberAndCode >> (sizeof(SHORT) * BITS_PER_BYTE));
-
-        Parameters.ErrorNumber = ErrorNumber;
-        Parameters.FromU.FaultingAddress = (PVOID)UnionParameter1;
-        Parameters.SendingUserId = SendingUserId;
-        Parameters.Parameter = SignalValue;
-        SignalHandler(&Parameters);
+        SignalHandler(Parameters);
     }
 
-    OspResumePreSignalExecution();
     return;
 }
 
@@ -3442,40 +3411,6 @@ Return Value:
     Parameters.SignalHandler = SignalHandlerRoutine;
     OsSystemCall(SystemCallSetSignalHandler, &Parameters);
     return Parameters.SignalHandler;
-}
-
-VOID
-OspResumePreSignalExecution (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine restores the execution context for the current thread that
-    was running before the signal currently being processed occurred.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None. This function does not return, the original execution context will
-    be restored.
-
---*/
-
-{
-
-    //
-    // This function explicitly calls the slow system call mechanism because
-    // the full processor context needs to be restored.
-    //
-
-    OspSystemCallFull(SystemCallResumePreSignalExecution, NULL);
-    return;
 }
 
 KSTATUS

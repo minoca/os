@@ -31,11 +31,11 @@ Author:
 //
 
 //
-// On ARM and x64, there's only one system call mechanism, so it can be a direct
-// function.
+// TODO: Implement syscall system call mechanism on x64, in addition to keeping
+// the old int mechanism for full save/restore.
 //
 
-#if defined(__arm__) || defined(__amd64)
+#if defined(__amd64)
 
 #define OsSystemCall OspSystemCallFull
 
@@ -141,6 +141,34 @@ Return Value:
     None.
 
 --*/
+
+#if defined (__arm__)
+
+VOID
+OsSystemCall (
+    ULONG SystemCallNumber,
+    PVOID SystemCallParameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine executes a system call.
+
+Arguments:
+
+    SystemCallNumber - Supplies the system call number.
+
+    SystemCallParameter - Supplies the system call parameter.
+
+Return Value:
+
+    None.
+
+--*/
+
+#endif
 
 VOID
 OspSetUpSystemCalls (

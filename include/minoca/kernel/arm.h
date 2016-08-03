@@ -136,6 +136,15 @@ Author:
     (((_TrapFrame)->Cpsr & ARM_MODE_MASK) != ARM_MODE_USER)
 
 //
+// This macro determines whether or not the given trap frame is complete or
+// left mostly uninitialized by the system call handler. The system call
+// handler sets a reserved flag in the CPSR.
+//
+
+#define IS_TRAP_FRAME_COMPLETE(_TrapFrame) \
+    (((_TrapFrame)->Cpsr & PSR_FLAG_RESERVED20) == 0)
+
+//
 // This macro manipulates the bitfields in the coprocessor access mask.
 //
 
@@ -181,6 +190,13 @@ Author:
 #define PSR_FLAG_THUMB      0x00000020
 #define PSR_FLAG_IRQ        0x00000080
 #define PSR_FLAG_FIQ        0x00000040
+
+//
+// This bit is always zero architecturally, but is set in the system call
+// handler's trap frames when the trap frame is incomplete.
+//
+
+#define PSR_FLAG_RESERVED20 0x00100000
 
 //
 // Interrupt vector ranges.
@@ -683,6 +699,36 @@ struct _TRAP_FRAME {
     ULONG Pc;
     ULONG Cpsr;
 };
+
+/*++
+
+Structure Description:
+
+    This structure outlines the register state saved by the kernel when a
+    user mode signal is dispatched. This generally contains 1) control
+    registers which are clobbered by switching to the signal handler, and
+    2) volatile registers.
+
+Members:
+
+    Signal - Stores the signal number that fired.
+
+    Registers - Stores the previous state of the thread's registers.
+
+--*/
+
+struct _SIGNAL_CONTEXT {
+    ULONG Signal;
+    ULONG R0;
+    ULONG R1;
+    ULONG R2;
+    ULONG R3;
+    ULONG R12;
+    ULONG Sp;
+    ULONG Lr;
+    ULONG Pc;
+    ULONG Cpsr;
+} PACKED;
 
 /*++
 

@@ -431,6 +431,47 @@ END_FUNCTION(ArMathFaultHandlerAsm)
 
 ##
 ## VOID
+## ArTrapSystemCallHandlerAsm (
+##     ULONG ReturnEip,
+##     ULONG ReturnCodeSelector,
+##     ULONG ReturnEflags
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine is entered when the sysenter routine is entered with the TF
+    flag set. It performs a normal save and sets the TF.
+
+Arguments:
+
+    ReturnEip - Supplies the address after the instruction that caused the trap.
+
+    ReturnCodeSelector - Supplies the code selector the code that trapped was
+        running under.
+
+    ReturnEflags - Supplies the EFLAGS register immediately before the trap.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION(ArTrapSystemCallHandlerAsm)
+    pushl   $0                      # Push a dummy error code.
+    call    ArGenerateTrapFrame     # Create a local trap frame.
+    orl     $IA32_EFLAG_TF, TRAP_EFLAGS(%esp)   # Set the trap flag.
+    movl    TRAP_EAX(%esp), %ecx    # Sysenter's syscall number was in eax.
+    movl    TRAP_EBX(%esp), %edx    # Sysenter's parameter was in ebx.
+    jmp     ArSystemCallHandlerAfterTrapSave    # Go to the regular path.
+
+END_FUNCTION(ArTrapSystemCallHandlerAsm)
+
+##
+## VOID
 ## ArSystemCallHandlerAsm (
 ##     ULONG ReturnEip,
 ##     ULONG ReturnCodeSelector,
@@ -465,6 +506,8 @@ FUNCTION(ArSystemCallHandlerAsm)
     call    ArGenerateTrapFrame     # Create a local trap frame.
     mov     TRAP_ECX(%ebx), %ecx    # Get ecx, containing the call number.
     mov     TRAP_EDX(%ebx), %edx    # Get edx, containing the parameter.
+
+ArSystemCallHandlerAfterTrapSave:
     pushl   %ebx                    # Push a pointer to the trap frame.
     pushl   %edx                    # Push system call parameter.
     pushl   %ecx                    # Push system call number.
@@ -508,24 +551,28 @@ FUNCTION(ArSysenterHandlerAsm)
     ##
 
     movl    TSS_ESP0(%esp), %esp    # Load the stack.
+    subl    $24, %esp               # Make room for possible (unusual) iret.
 
     ##
-    ## Make a fake trap frame and fill in the registers that need to be saved.
-    ## This is needed because if a signal comes in these may be changed.
+    ## Make a fake trap frame but fill in the bare minimum: Eip and Esp.
+    ## These are needed so they can be saved if a signal is dispatched. CS is
+    ## also needed so kernel code can determine whether the trap frame is
+    ## from user or kernel mode.
     ##
 
     pushl   %ecx                    # Save user ESP in trap frame.
-    pushfl                          # Save EFLAGS in trap frame.
     movl    %eax, %ecx              # Get EAX free.
     LoadKernelDataSegments          # Load kernel data segments (using EAX).
     sti                             # Re-enable interrupts.
-    subl    $(TRAP_FRAME_SIZE - 8), %esp  # Allocate most of trap frame.
+    subl    $(TRAP_FRAME_SIZE - 4), %esp  # Allocate most of trap frame.
     movl    %edx, TRAP_EIP(%esp)    # EDX contains the return address.
-    movl    %eax, TRAP_EAX(%esp)    # Save EAX.
-    movl    %ebx, TRAP_EBX(%esp)    # Save EBX.
-    movl    %esi, TRAP_ESI(%esp)    # Save ESI.
-    movl    %edi, TRAP_EDI(%esp)    # Save EDI.
-    movl    %ebp, TRAP_EBP(%esp)    # Save EBP.
+
+    ##
+    ## Move user DS (rather than user CS) into the trap frame to indicate
+    ## 1) this is a user mode trap frame and 2) it's incomplete.
+    ##
+
+    movl    $USER_DS, TRAP_CS(%esp) # Indicate a user mode trap frame.
     pushl   %esp                    # Push a pointer to the sort-of trap frame.
     pushl   %ebx                    # Push EBX, the system call parameter.
     pushl   %ecx                    # Push saved EAX, the system call number.
@@ -533,32 +580,15 @@ FUNCTION(ArSysenterHandlerAsm)
     addl    $0xC, %esp              # Pop the parameters.
 
     ##
-    ## Restore some portions of the pseudo trap frame. The signal application
-    ## routine may have adjusted them.
+    ## Restore some portions of the pseudo trap frame.
     ##
 
-    movl    TRAP_EBX(%esp), %ebx    # Restore EBX.
-    movl    TRAP_ESI(%esp), %esi    # Restore ESI.
-    movl    TRAP_EDI(%esp), %edi    # Restore EDI.
-    movl    TRAP_EBP(%esp), %ebp    # Restore EBP.
     movl    TRAP_ESP(%esp), %ecx    # Sysexit moves ECX to ESP.
     movl    TRAP_EIP(%esp), %edx    # Sysexit moves EDX to EIP.
+    xorl    %eax, %eax              # Zero eax to avoid leaking kernel state.
 
     ##
-    ## Take a look at eflags. If it's got the trap flag set, then an iret
-    ## return is required.
-    ##
-
-    movl    TRAP_EFLAGS(%esp), %eax # Get eflags.
-    test    $IA32_EFLAG_TF, %eax    # test trap flag.
-    jnz     ArSysenterHandlerAsmIretReturn  # Return with iret if TF set.
-
-    ##
-    ## Ordinarily this would be the place to pop the trap frame off the stack,
-    ## but since sysenter always moves it back to the same place there's no
-    ## need. Just jump back to user mode. Replace EAX as it has been used
-    ## locally and a signal handler may be looking to use the value stored in
-    ## the trap frame.
+    ## Reset the segment registers to user mode and return.
     ##
 
     mov     $USER_DS, %ax           # Get the user mode DS.
@@ -567,28 +597,7 @@ FUNCTION(ArSysenterHandlerAsm)
     mov     $GDT_THREAD, %ax        # Get the user-mode GS.
     mov     %ax, %fs                # Move to FS.
     mov     %ax, %gs                # Move to GS.
-    movl    TRAP_EAX(%esp), %eax    # Restore EAX.
     sysexit                         # Return to user mode, slickly.
-
-    ##
-    ## Set up and return using an iret since eflags needs to be popped. Again,
-    ## the stack doesn't need to be fully popped because the next interrupt or
-    ## system call starts from the fully popped place. Again, restore EAX. A
-    ## signal handler may need it and it has been used locally.
-    ##
-
-ArSysenterHandlerAsmIretReturn:
-    pushl   $GDT_THREAD             # Push GS.
-    pushl   $GDT_THREAD             # Push FS.
-    pushl   $USER_DS                # Push ES.
-    pushl   $USER_DS                # Push DS
-    pushl   $USER_DS                # Push SS.
-    pushl   %ecx                    # Push ESP.
-    pushl   %eax                    # Push eflags.
-    pushl   $USER_CS                # Push user-mode CS.
-    pushl   %edx                    # Push destination EIP.
-    movl    TRAP_EAX(%esp), %eax    # Restore EAX.
-    iret                            # Return back to user mode, old school.
 
 END_FUNCTION(ArSysenterHandlerAsm)
 

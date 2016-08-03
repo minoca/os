@@ -48,7 +48,8 @@ ASSEMBLY_FILE_HEADER
 
 Routine Description:
 
-    This routine executes a system call.
+    This routine executes a system call which performs a full register
+    save/restore.
 
 Arguments:
 
@@ -63,6 +64,7 @@ Return Value:
 --*/
 
 FUNCTION OspSystemCallFull
+    mov     %r2, #1                 @ Set "full" flag for complete save/restore.
     swi     #0x0                    @ Perform system call.
     bx      %lr                     @ Return.
 
@@ -70,7 +72,41 @@ END_FUNCTION OspSystemCallFull
 
 ##
 ## VOID
+## OsSystemCall (
+##     ULONG SystemCallNumber,
+##     PVOID SystemCallParameter
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine executes a system call.
+
+Arguments:
+
+    SystemCallNumber - Supplies the system call number.
+
+    SystemCallParameter - Supplies the system call parameter.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION OsSystemCall
+    eor     %r2, %r2, %r2           @ Clear "full" flag for fast system calls.
+    swi     #0x0                    @ Perform system call.
+    bx      %lr                     @ Return.
+
+END_FUNCTION OsSystemCall
+
+##
+## VOID
 ## OspSignalHandler (
+##     PSIGNAL_PARAMETERS Parameters
 ##     )
 ##
 
@@ -83,8 +119,8 @@ Routine Description:
 
 Arguments:
 
-    None. The parameters are stored in registers, but do not conform to any C
-        calling convention.
+    Parameters - Supplies a pointer to the signal parameters. Beyond that on
+        the stack is the restore structure.
 
 Return Value:
 
@@ -93,8 +129,14 @@ Return Value:
 --*/
 
 FUNCTION OspSignalHandler
-    stmdb   %sp!, {%r4}         @ Push the fifth parameter onto the stack.
+    mov     %r0, %sp            @ Get the argument at the top of the stack.
     bl      OspProcessSignal    @ The parameters are already set up. Just call.
+    add     %sp, #SIGNAL_PARAMETERS_SIZE    @ Pop the signal parameters.
+    mov     %r1, %sp            @ Get stack pointer.
+    push    {%r1}               @ Create the parameters structure.
+    mov     %r1, %sp            @ Pass a pointer to it.
+    mov     %r0, #SystemCallRestoreContext  @ Set up the system call number.
+    bl      OspSystemCallFull   @ Execute the system call to restore.
     DEBUGGER_BREAK              @ Execution should never get here.
 
 END_FUNCTION OspSignalHandler

@@ -505,7 +505,8 @@ Return Value:
 
     BOOL Result;
 
-    if ((UserModePointer + Size > KERNEL_VA_START) ||
+    if ((UserModePointer >= KERNEL_VA_START) ||
+        (UserModePointer + Size > KERNEL_VA_START) ||
         (UserModePointer + Size <= UserModePointer)) {
 
         return STATUS_ACCESS_VIOLATION;
@@ -555,7 +556,8 @@ Return Value:
 
     BOOL Result;
 
-    if ((UserModePointer + Size > KERNEL_VA_START) ||
+    if ((UserModePointer >= KERNEL_VA_START) ||
+        (UserModePointer + Size > KERNEL_VA_START) ||
         (UserModePointer + Size <= UserModePointer)) {
 
         return STATUS_ACCESS_VIOLATION;
@@ -606,7 +608,10 @@ Return Value:
 
     BOOL Result;
 
-    if ((Buffer + Size > KERNEL_VA_START) || (Buffer + Size <= Buffer)) {
+    if ((Buffer >= KERNEL_VA_START) ||
+        (Buffer + Size > KERNEL_VA_START) ||
+        (Buffer + Size <= Buffer)) {
+
         return STATUS_ACCESS_VIOLATION;
     }
 

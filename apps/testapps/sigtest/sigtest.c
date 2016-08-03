@@ -850,13 +850,13 @@ Return Value:
 
 {
 
-    ULONG BurnIndex;
     pid_t Child;
     struct sigaction ChildAction;
     ULONG ChildIndex;
     volatile ULONG ChildInitializing;
     pid_t *Children;
     sigset_t ChildSignalMask;
+    time_t EndTime;
     ULONG Errors;
     struct sigaction OriginalChildAction;
     struct sigaction OriginalRealtimeAction;
@@ -956,15 +956,14 @@ Return Value:
                 // something.
                 //
 
-                for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+                EndTime = time(NULL) + 10;
+                while (time(NULL) <= EndTime) {
                     if (ChildInitializing == 0) {
                         break;
                     }
-
-                    sleep(1);
                 }
 
-                if (BurnIndex == 20) {
+                if (ChildInitializing != 0) {
                     PRINT_ERROR("Thread failed to initialize!\n");
                 }
             }
@@ -1009,12 +1008,11 @@ Return Value:
     // This is the parent process, wait for all processes to be ready.
     //
 
-    for (BurnIndex = 0; BurnIndex < 100; BurnIndex += 1) {
+    EndTime = time(NULL) + 10;
+    while (time(NULL) <= EndTime) {
         if (ChildProcessesReady == ChildCount) {
             break;
         }
-
-        sleep(1);
     }
 
     if (ChildProcessesReady != ChildCount) {
@@ -1053,10 +1051,11 @@ Return Value:
     DEBUG_PRINT("Parent waiting for children via %s.\n",
                 SignalTestWaitTypeStrings[WaitType]);
 
+    EndTime = time(NULL) + 10;
     Status = 0;
     switch (WaitType) {
     case SignalTestWaitSigsuspend:
-        for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+        while (time(NULL) <= EndTime) {
             if (ChildSignalsExpected == 0) {
                 break;
             }
@@ -1072,7 +1071,7 @@ Return Value:
         break;
 
     case SignalTestWaitSigwait:
-        for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+        while (time(NULL) <= EndTime) {
             if (ChildSignalsExpected == 0) {
                 break;
             }
@@ -1100,7 +1099,7 @@ Return Value:
         break;
 
     case SignalTestWaitSigwaitinfo:
-        for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+        while (time(NULL) <= EndTime) {
             if (ChildSignalsExpected == 0) {
                 break;
             }
@@ -1132,7 +1131,7 @@ Return Value:
     case SignalTestWaitSigtimedwait:
         Timeout.tv_nsec = 0;
         Timeout.tv_sec = 1;
-        for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+        while (time(NULL) <= EndTime) {
             if (ChildSignalsExpected == 0) {
                 break;
             }
@@ -1171,12 +1170,11 @@ Return Value:
     case SignalTestWaitBusy:
     default:
         sigprocmask(SIG_UNBLOCK, &ChildSignalMask, NULL);
-        for (BurnIndex = 0; BurnIndex < 20; BurnIndex += 1) {
+        EndTime = time(NULL) + 10;
+        while (time(NULL) <= EndTime) {
             if (ChildSignalsExpected == 0) {
                 break;
             }
-
-            sleep(1);
         }
 
         sigprocmask(SIG_BLOCK, &ChildSignalMask, NULL);

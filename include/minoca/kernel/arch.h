@@ -32,6 +32,7 @@ Author:
 //
 
 typedef struct _TRAP_FRAME TRAP_FRAME, *PTRAP_FRAME;
+typedef struct _SIGNAL_CONTEXT SIGNAL_CONTEXT, *PSIGNAL_CONTEXT;
 typedef struct _PROCESSOR_CONTEXT PROCESSOR_CONTEXT, *PPROCESSOR_CONTEXT;
 typedef struct _FPU_CONTEXT FPU_CONTEXT, *PFPU_CONTEXT;
 
@@ -322,8 +323,8 @@ Return Value:
 
 --*/
 
-VOID
-ArSetSingleStep (
+BOOL
+ArIsTrapFrameComplete (
     PTRAP_FRAME TrapFrame
     );
 
@@ -331,16 +332,19 @@ ArSetSingleStep (
 
 Routine Description:
 
-    This routine modifies the given trap frame registers so that a single step
-    exception will occur. This is only supported on some architectures.
+    This routine determines if the given trap frame contains the full context
+    or only partial context as saved by the system call handler.
 
 Arguments:
 
-    TrapFrame - Supplies a pointer to the trap frame not modify.
+    TrapFrame - Supplies the trap frame.
 
 Return Value:
 
-    None.
+    TRUE if the trap frame has all registers filled out.
+
+    FALSE if the the trap frame is largely uninitialized as left by the system
+    call handler.
 
 --*/
 

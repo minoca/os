@@ -54,6 +54,8 @@ Environment:
 #define PSR_FLAG_IRQ        0x00000080
 #define PSR_FLAG_FIQ        0x00000040
 
+#define PSR_FLAG_RESERVED20 0x00100000
+
 ##
 ## Processor modes
 ##
@@ -160,6 +162,32 @@ Environment:
 #define EXCEPTION_STACK_CPSR 4
 
 ##
+## Define the offsets for members of the TRAP_FRAME structure.
+##
+
+#define TRAP_SVCSP 0
+#define TRAP_USERSP 4
+#define TRAP_USERLR 8
+#define TRAP_R0 12
+#define TRAP_EXCEPTION_CPSR 16
+#define TRAP_R1 20
+#define TRAP_R2 24
+#define TRAP_R3 28
+#define TRAP_R4 32
+#define TRAP_R5 36
+#define TRAP_R6 40
+#define TRAP_R7 44
+#define TRAP_R8 48
+#define TRAP_R9 52
+#define TRAP_R10 56
+#define TRAP_R11 60
+#define TRAP_R12 64
+#define TRAP_SVCLR 68
+#define TRAP_PC 72
+#define TRAP_CPSR 76
+#define TRAP_FRAME_SIZE 80
+
+##
 ## Define the size of the PROCESSOR_CONTEXT structure.
 ##
 
@@ -188,6 +216,13 @@ Environment:
 #error Unsupported ARM architecture version
 
 #endif
+
+##
+## Define the system call number for resuming after a signal.
+##
+
+#define SystemCallRestoreContext 1
+#define SIGNAL_PARAMETERS_SIZE 24
 
 ##
 ## -------------------------------------------------------------------- Macros

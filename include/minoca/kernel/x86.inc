@@ -149,6 +149,13 @@ Environment:
 #define APIC_EOI_OFFSET    0xB
 
 ##
+## Define the system call number for resuming after a signal.
+##
+
+#define SystemCallRestoreContext 1
+#define SIGNAL_PARAMETERS_SIZE 24
+
+##
 ## -------------------------------------------------------------------- Macros
 ##
 

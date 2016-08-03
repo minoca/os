@@ -307,7 +307,7 @@ Return Value:
 }
 
 VOID
-PsSysResumePreSignalExecution (
+PsSysRestoreContext (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter,
     PTRAP_FRAME TrapFrame,
@@ -345,27 +345,17 @@ Return Value:
 
 {
 
-    PKTHREAD Thread;
+    PSYSTEM_CALL_RESTORE_CONTEXT Parameters;
+    PKPROCESS Process;
 
-    ASSERT(SystemCallNumber == SystemCallResumePreSignalExecution);
+    ASSERT(SystemCallNumber == SystemCallRestoreContext);
 
-    Thread = KeGetCurrentThread();
-    if (Thread->SignalInProgress == FALSE) {
-        PsSignalProcess(Thread->OwningProcess, SIGNAL_ABORT, NULL);
-    }
-
-    Thread->AccessViolationInProgress = FALSE;
-    PspRestorePreSignalTrapFrame(Thread, TrapFrame);
-    Thread->SignalInProgress = FALSE;
-
-    //
-    // Turn off the "in system call" flag as well, to indicate that if a new
-    // signal is applied on the way out of this system call, registers that
-    // might normally be volatile for regular system calls are not currently
-    // okay to clear when saving context.
-    //
-
-    Thread->Flags &= ~THREAD_FLAG_IN_SYSTEM_CALL;
+    Parameters = SystemCallParameter;
+    PspRestorePreSignalTrapFrame(TrapFrame, Parameters->Context);
+    Process = PsGetCurrentProcess();
+    KeAcquireQueuedLock(Process->QueuedLock);
+    PspRequeueBlockedSignals(Process);
+    KeReleaseQueuedLock(Process->QueuedLock);
     return;
 }
 
@@ -1475,7 +1465,7 @@ Return Value:
     ASSERT((Thread->Flags & THREAD_FLAG_USER_MODE) != 0);
     ASSERT(Process != PsGetKernelProcess());
 
-    if (IS_SIGNAL_SET(Thread->BlockedSignals, SignalNumber) != FALSE) {
+    if (IS_SIGNAL_BLOCKED(Thread, SignalNumber) != FALSE) {
         return FALSE;
     }
 
@@ -1650,7 +1640,6 @@ Return Value:
     SIGNAL_SET ProcessSignalMask;
     ULONG QueueLoop;
     ULONG SavedSignalMask;
-    BOOL SignalBlocked;
     PSIGNAL_QUEUE_ENTRY SignalEntry;
     BOOL SignalHandled;
     BOOL SignalIgnored;
@@ -1668,15 +1657,6 @@ Return Value:
     DequeuedSignal = PspCheckForNonMaskableSignals(SignalParameters, TrapFrame);
     if (DequeuedSignal != -1) {
         return DequeuedSignal;
-    }
-
-    //
-    // If a signal is already in service, then signals cannot be processed at
-    // this time.
-    //
-
-    if (Thread->SignalInProgress != FALSE) {
-        return -1;
     }
 
     //
@@ -1709,6 +1689,7 @@ Return Value:
     ProcessSignalMask = Process->PendingSignals;
     OR_SIGNAL_SETS(CombinedSignalMask, ThreadSignalMask, ProcessSignalMask);
     REMOVE_SIGNALS_FROM_SET(CombinedSignalMask, Thread->BlockedSignals);
+    REMOVE_SIGNALS_FROM_SET(CombinedSignalMask, Thread->RunningSignals);
 
     //
     // Save the combined signal mask before removing the stop and terminate
@@ -1938,10 +1919,7 @@ Return Value:
                     // signal list.
                     //
 
-                    SignalBlocked = IS_SIGNAL_SET(Thread->BlockedSignals,
-                                                  SignalNumber);
-
-                    if (SignalBlocked != FALSE) {
+                    if (IS_SIGNAL_BLOCKED(Thread, SignalNumber) != FALSE) {
                         INSERT_BEFORE(&(SignalEntry->ListEntry),
                                       &(Process->BlockedSignalListHead));
 
@@ -3586,7 +3564,7 @@ Return Value:
     SignalIgnored = IS_SIGNAL_SET(Process->IgnoredSignals, SignalNumber);
     SignalBlocked = FALSE;
     if (Thread != NULL) {
-        SignalBlocked = IS_SIGNAL_SET(Thread->BlockedSignals, SignalNumber);
+        SignalBlocked = IS_SIGNAL_BLOCKED(Thread, SignalNumber);
     }
 
     if (SignalQueueEntry != NULL) {
@@ -3722,10 +3700,7 @@ Return Value:
             while (CurrentEntry != &(Process->ThreadListHead)) {
                 Thread = LIST_VALUE(CurrentEntry, KTHREAD, ProcessEntry);
                 CurrentEntry = CurrentEntry->Next;
-                SignalBlocked = IS_SIGNAL_SET(Thread->BlockedSignals,
-                                              SignalNumber);
-
-                if ((SignalBlocked == FALSE) ||
+                if ((!IS_SIGNAL_BLOCKED(Thread, SignalNumber)) ||
                     (SignalNumber == SIGNAL_CHILD_PROCESS_ACTIVITY)) {
 
                     LoopOnlyWakeSuspendedThreads = OnlyWakeSuspendedThreads;

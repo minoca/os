@@ -422,8 +422,7 @@ Author:
 
 #define THREAD_FLAG_USER_MODE       0x0001
 #define THREAD_FLAG_IN_SYSTEM_CALL  0x0002
-#define THREAD_FLAG_SINGLE_STEP     0x0004
-#define THREAD_FLAG_FREE_USER_STACK 0x0008
+#define THREAD_FLAG_FREE_USER_STACK 0x0004
 
 //
 // Define thread FPU flags.
@@ -1572,21 +1571,14 @@ Members:
     WaitBlock - Stores a pointer to the wait block this thread is currently
         blocking on.
 
-    SignalInProgress - Stores a boolean indicating whether or no a signal is
-        already in the process of being handled.
-
-    AccessViolationInProgress - Stores a boolean indicating whether or not
-        a thread is currently handling an access violation signal.
-
-    SavedSignalContext - Stores a pointer to a trap frame used to store the
-        user mode context while the user mode signal handler routine is
-        running.
-
     PendingSignals - Stores a bitfield of signals pending for the current
         thread.
 
     BlockedSignals - Stores a bitfield of signals that are blocked by the
         thread.
+
+    RunningSignals - Stores a bitfield of signals that are currently in progress
+        on the thread.
 
     SignalListHead - Stores the head of the list of signals that are currently
         queued for the process. The type of elements on this list will be
@@ -1654,11 +1646,9 @@ struct _KTHREAD {
     PVOID BuiltinTimer;
     PWAIT_BLOCK BuiltinWaitBlock;
     PWAIT_BLOCK WaitBlock;
-    BOOL SignalInProgress;
-    BOOL AccessViolationInProgress;
-    PTRAP_FRAME SavedSignalContext;
     SIGNAL_SET PendingSignals;
     SIGNAL_SET BlockedSignals;
+    SIGNAL_SET RunningSignals;
     LIST_ENTRY SignalListHead;
     RESOURCE_USAGE ResourceUsage;
     PFPU_CONTEXT FpuContext;
@@ -2299,7 +2289,7 @@ Return Value:
 --*/
 
 VOID
-PsSysResumePreSignalExecution (
+PsSysRestoreContext (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter,
     PTRAP_FRAME TrapFrame,

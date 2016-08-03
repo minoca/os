@@ -201,19 +201,24 @@ Return Value:
 --*/
 
 FUNCTION ArpSoftwareInterruptEntry
-    srsdb   %sp!, #ARM_MODE_SVC                  @ Push lr and spsr.
-    mov     %lr, #0                              @ Zero SVC link register.
-    stmdb   %sp!, {%r1-%r12, %lr}                @ Push general registers.
-    mrs     %r2, cpsr                            @ Get the "exception" CPSR.
-    stmdb   %sp!, {%r0, %r2}                     @ Push exception CPSR and R0.
-    mov     %r4, %sp                             @ Get stack.
-    sub     %sp, #8                              @ Account for pushes.
-    cps     #ARM_MODE_SYSTEM                     @ Switch to system mode.
-    str     %lr, [%r4, #-4]                      @ Save usermode SP.
-    str     %sp, [%r4, #-8]                      @ Save usermode LR.
-    cpsie   i, #ARM_MODE_SVC                     @ Enable interrupts, svc mode.
-    sub     %sp, #4                              @ Allocate room for sp.
-    str     %sp, [%sp]                           @ Save SP.
+    srsdb   %sp!, #ARM_MODE_SVC                 @ Push lr and spsr.
+    tst     %r2, %r2                            @ See if "full" is zero.
+    bne     ArpSoftwareInterruptEntrySlow       @ Go to slow path if non-zero.
+    sub     %sp, #(TRAP_FRAME_SIZE - 8)         @ Make space for rest of frame.
+    mov     %r3, %sp                            @ Get stack.
+    cps     #ARM_MODE_SYSTEM                    @ Switch to system mode.
+    str     %lr, [%r3, #TRAP_USERLR]            @ Save usermode SP.
+    str     %sp, [%r3, #TRAP_USERSP]            @ Save usermode LR.
+    cpsie   i, #ARM_MODE_SVC                    @ Enable interrupts, svc mode.
+
+    ##
+    ## Set a reserved bit in the CPSR as a hint that this trap frame is
+    ## incomplete.
+    ##
+
+    ldr     %r3, [%sp, #TRAP_CPSR]              @ Get CPSR.
+    orr     %r3, #PSR_FLAG_RESERVED20           @ Set reserved flag.
+    str     %r3, [%sp, #TRAP_CPSR]              @ Store CPSR.
 
     ##
     ## The system call routine takes three parameters: the system call number,
@@ -221,6 +226,50 @@ FUNCTION ArpSoftwareInterruptEntry
     ## set up the first two parameters in R0 and R1, and they were preserved
     ## throughout the context save process here. So all that's left is to put a
     ## pointer to the trap frame in R2.
+    ##
+
+    mov     %r2, %sp                            @ Set trap frame parameter.
+    bl      KeSystemCallHandler                 @ Handle system call.
+    mov     %r0, %sp                            @ Get SVC stack pointer.
+    cpsid   i, #ARM_MODE_SYSTEM                 @ Switch to system mode.
+    ldr     %sp, [%r0, #TRAP_USERSP]            @ Restore usermode SP.
+    ldr     %lr, [%r0, #TRAP_USERLR]            @ Restore usermode LR.
+    cpsid   i, #ARM_MODE_SVC                    @ Switch back to svc mode.
+    add     %sp, #(TRAP_FRAME_SIZE - 8)         @ Pop up to PC/Cpsr.
+
+    ##
+    ## Clear the volatile registers to avoid leaking kernel state.
+    ##
+
+    eor     %r0, %r0
+    eor     %r1, %r1
+    eor     %r2, %r2
+    eor     %r3, %r3
+    eor     %r12, %r12
+    rfeia   %sp!                                @ Restore PC and CPSR. Bye!
+
+    ##
+    ## Perform the slow version of the system call that builds up a complete
+    ## trap frame. This is used for system calls like fork and exec, where the
+    ## trap frame is used in the system call.
+    ##
+
+ArpSoftwareInterruptEntrySlow:
+    mov     %lr, #0                              @ Zero SVC link register.
+    stmdb   %sp!, {%r1-%r12, %lr}                @ Push general registers.
+    mrs     %r2, cpsr                            @ Get the "exception" CPSR.
+    stmdb   %sp!, {%r0, %r2}                     @ Push exception CPSR and R0.
+    sub     %sp, #12                             @ Account for pushes.
+    mov     %r4, %sp                             @ Get stack.
+    cps     #ARM_MODE_SYSTEM                     @ Switch to system mode.
+    str     %lr, [%r4, #TRAP_USERLR]             @ Save usermode SP.
+    str     %sp, [%r4, #TRAP_USERSP]             @ Save usermode LR.
+    cpsie   i, #ARM_MODE_SVC                     @ Enable interrupts, svc mode.
+    str     %sp, [%sp]                           @ Save SP.
+
+    ##
+    ## Just like in the fast case, R0 and R1 are preserved as the first two
+    ## parameters. Set the trap frame parameter and return.
     ##
 
     mov     %r2, %sp

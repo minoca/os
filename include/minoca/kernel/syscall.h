@@ -237,6 +237,7 @@ Author:
 
 typedef enum _SYSTEM_CALL_NUMBER {
     SystemCallInvalid,
+    SystemCallRestoreContext,
     SystemCallExitThread,
     SystemCallOpen,
     SystemCallClose,
@@ -247,7 +248,6 @@ typedef enum _SYSTEM_CALL_NUMBER {
     SystemCallExecuteImage,
     SystemCallChangeDirectory,
     SystemCallSetSignalHandler,
-    SystemCallResumePreSignalExecution,
     SystemCallSendSignal,
     SystemCallGetSetProcessId,
     SystemCallSetSignalBehavior,
@@ -397,6 +397,24 @@ typedef enum _RESOURCE_USAGE_REQUEST {
 //
 // System call parameter structures
 //
+
+/*++
+
+Structure Description:
+
+    This structure defines the system call parameters for restoring thread
+    context after handling a signal.
+
+Members:
+
+    Context - Supplies a pointer to the context to restore. This context is
+        architecture specific.
+
+--*/
+
+typedef struct _SYSTEM_CALL_RESTORE_CONTEXT {
+    PSIGNAL_CONTEXT Context;
+} SYSCALL_STRUCT SYSTEM_CALL_RESTORE_CONTEXT, *PSYSTEM_CALL_RESTORE_CONTEXT;
 
 /*++
 
@@ -2801,6 +2819,7 @@ Members:
 --*/
 
 typedef union _SYSTEM_CALL_PARAMETER_UNION {
+    SYSTEM_CALL_RESTORE_CONTEXT RestoreContext;
     SYSTEM_CALL_EXIT_THREAD ExitThread;
     SYSTEM_CALL_OPEN Open;
     SYSTEM_CALL_CLOSE CloseFile;
