@@ -978,6 +978,37 @@ Return Value:
 
 --*/
 
+typedef
+PVOID
+(*PTIME_ZONE_REALLOCATE_FUNCTION) (
+    PVOID Memory,
+    UINTN NewSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates, reallocates, or frees memory for the time zone
+    library.
+
+Arguments:
+
+    Memory - Supplies the original active allocation. If this parameter is
+        NULL, this routine will simply allocate memory.
+
+    NewSize - Supplies the new required size of the allocation. If this is
+        0, then the original allocation will simply be freed.
+
+Return Value:
+
+    Returns a pointer to a buffer with the new size (and original contents) on
+    success. This may be a new buffer or the same one.
+
+    NULL on failure or if the new size supplied was zero.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -1036,8 +1067,7 @@ Members:
     GmtOffset - Stores the offset from Greenwich Mean Time in seconds that
         this time is interpreted in.
 
-    TimeZone - Stores a string (potentially not null terminated) containing
-        the time zone abbreviation.
+    TimeZone - Stores a pointer to a string containing the time zone name.
 
 --*/
 
@@ -1053,7 +1083,7 @@ typedef struct _CALENDAR_TIME {
     LONG YearDay;
     LONG IsDaylightSaving;
     LONG GmtOffset;
-    CHAR TimeZone[TIME_ZONE_ABBREVIATION_SIZE];
+    PCSTR TimeZone;
 } CALENDAR_TIME, *PCALENDAR_TIME;
 
 typedef struct _MEMORY_HEAP MEMORY_HEAP, *PMEMORY_HEAP;
@@ -2111,7 +2141,7 @@ RTL_API
 ULONG
 RtlStringCopy (
     PSTR Destination,
-    PSTR Source,
+    PCSTR Source,
     ULONG BufferSize
     );
 
@@ -5116,18 +5146,19 @@ Return Value:
 --*/
 
 RTL_API
-KSTATUS
-RtlInitializeTimeZoneSynchronization (
+VOID
+RtlInitializeTimeZoneSupport (
     PTIME_ZONE_LOCK_FUNCTION AcquireTimeZoneLockFunction,
-    PTIME_ZONE_LOCK_FUNCTION ReleaseTimeZoneLockFunction
+    PTIME_ZONE_LOCK_FUNCTION ReleaseTimeZoneLockFunction,
+    PTIME_ZONE_REALLOCATE_FUNCTION ReallocateFunction
     );
 
 /*++
 
 Routine Description:
 
-    This routine initializes the callout functions used to synchronize access
-    to the time zone data. It can only be called once.
+    This routine initializes library support functions needed by the time zone
+    code.
 
 Arguments:
 
@@ -5137,11 +5168,12 @@ Arguments:
     ReleaseTimeZoneLockFunction - Supplies a pointer to the function called to
         relinquish access to the time zone data.
 
+    ReallocateFunction - Supplies a pointer to a function used to dynamically
+        allocate and free memory.
+
 Return Value:
 
-    STATUS_SUCCESS on success.
-
-    STATUS_TOO_LATE if this function has already been called.
+    None.
 
 --*/
 
@@ -5317,6 +5349,43 @@ Return Value:
     STATUS_FILE_CORRUPT if the time zone data was not valid.
 
     STATUS_NO_DATA_AVAILABLE if there is no data or the data is empty.
+
+--*/
+
+RTL_API
+VOID
+RtlGetTimeZoneNames (
+    PSTR *StandardName,
+    PSTR *DaylightName,
+    PLONG StandardGmtOffset,
+    PLONG DaylightGmtOffset
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the names of the currently selected time zone.
+
+Arguments:
+
+    StandardName - Supplies an optional pointer where a pointer to the standard
+        time zone name will be returned on success. The caller must not modify
+        this memory, and it may change if the time zone is changed.
+
+    DaylightName - Supplies an optional pointer where a pointer to the Daylight
+        Saving time zone name will be returned on success. The caller must not
+        modify this memory, and it may change if the time zone is changed.
+
+    StandardGmtOffset - Supplies an optional pointer where the offset from GMT
+        in seconds will be returned for the time zone.
+
+    DaylightGmtOffset - Supplies an optional pointer where the offset from GMT
+        in seconds during Daylight Saving will be returned.
+
+Return Value:
+
+    None.
 
 --*/
 

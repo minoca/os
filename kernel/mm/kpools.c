@@ -219,6 +219,87 @@ Return Value:
 }
 
 KERNEL_API
+PVOID
+MmReallocatePool (
+    POOL_TYPE PoolType,
+    PVOID Memory,
+    UINTN NewSize,
+    UINTN AllocationTag
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resizes the given allocation, potentially creating a new
+    buffer and copying the old contents in.
+
+Arguments:
+
+    PoolType - Supplies the type of pool the memory was allocated from. This
+        must agree with the type of pool the allocation originated from, or
+        the system will become unstable.
+
+    Memory - Supplies the original active allocation. If this parameter is
+        NULL, this routine will simply allocate memory.
+
+    NewSize - Supplies the new required size of the allocation. If this is
+        0, then the original allocation will simply be freed.
+
+    AllocationTag - Supplies an identifier for this allocation.
+
+Return Value:
+
+    Returns a pointer to a buffer with the new size (and original contents) on
+    success. This may be a new buffer or the same one.
+
+    NULL on failure or if the new size supplied was zero.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+
+    if (PoolType == PoolTypeNonPaged) {
+        OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+        KeAcquireSpinLock(&MmNonPagedPoolLock);
+        Memory = RtlHeapReallocate(&MmNonPagedPool,
+                                   Memory,
+                                   NewSize,
+                                   AllocationTag);
+
+        KeReleaseSpinLock(&MmNonPagedPoolLock);
+        KeLowerRunLevel(OldRunLevel);
+
+    } else if (PoolType == PoolTypePaged) {
+
+        ASSERT(KeGetRunLevel() == RunLevelLow);
+
+        if (MmPagedPoolLock != NULL) {
+            KeAcquireQueuedLock(MmPagedPoolLock);
+        }
+
+        Memory = RtlHeapReallocate(&MmPagedPool,
+                                   Memory,
+                                   NewSize,
+                                   AllocationTag);
+
+        if (MmPagedPoolLock != NULL) {
+            KeReleaseQueuedLock(MmPagedPoolLock);
+        }
+
+    } else {
+
+        ASSERT(FALSE);
+
+        Memory = NULL;
+    }
+
+    return Memory;
+}
+
+KERNEL_API
 VOID
 MmFreePool (
     POOL_TYPE PoolType,

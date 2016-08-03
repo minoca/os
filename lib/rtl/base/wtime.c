@@ -499,15 +499,11 @@ Return Value:
         case L'Z':
             CopyStringSize = sizeof(WorkingBuffer);
             CopyString = WorkingBuffer;
+            CopyStringSize = RtlStringCopy(CopyString,
+                                           CalendarTime->TimeZone,
+                                           CopyStringSize);
 
-            ASSERT(sizeof(CalendarTime->TimeZone) + 1 <= sizeof(WorkingBuffer));
-
-            RtlCopyMemory(CopyString,
-                          CalendarTime->TimeZone,
-                          sizeof(CalendarTime->TimeZone));
-
-            CopyString[CopyStringSize - 1] = '\0';
-            CopyStringSize = RtlStringLength(CopyString);
+            CopyStringSize -= 1;
             break;
 
         case L'%':

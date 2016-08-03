@@ -51,7 +51,7 @@ RTL_API
 ULONG
 RtlStringCopy (
     PSTR Destination,
-    PSTR Source,
+    PCSTR Source,
     ULONG BufferSize
     )
 

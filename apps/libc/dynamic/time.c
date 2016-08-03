@@ -219,7 +219,7 @@ LIBC_API long timezone;
 // pointers to the name of the timezone in Daylight Saving time.
 //
 
-LIBC_API char *tzname[2];
+LIBC_API char *tzname[2] = {"GMT", "GMT"};
 
 //
 // Store the ridiculous global time buffer used by some C library functions.
@@ -2567,8 +2567,9 @@ Return Value:
 
 {
 
-    RtlInitializeTimeZoneSynchronization(ClpAcquireTimeZoneLock,
-                                         ClpReleaseTimeZoneLock);
+    RtlInitializeTimeZoneSupport(ClpAcquireTimeZoneLock,
+                                 ClpReleaseTimeZoneLock,
+                                 (PTIME_ZONE_REALLOCATE_FUNCTION)realloc);
 
     return;
 }
@@ -3053,10 +3054,7 @@ Return Value:
     StructTm->tm_isdst = CalendarTime->IsDaylightSaving;
     StructTm->tm_nanosecond = CalendarTime->Nanosecond;
     StructTm->tm_gmtoff = CalendarTime->GmtOffset;
-    memcpy(StructTm->tm_zone,
-           CalendarTime->TimeZone,
-           sizeof(StructTm->tm_zone));
-
+    StructTm->tm_zone = CalendarTime->TimeZone;
     return;
 }
 
@@ -3098,10 +3096,7 @@ Return Value:
     CalendarTime->YearDay = StructTm->tm_yday;
     CalendarTime->IsDaylightSaving = StructTm->tm_isdst;
     CalendarTime->GmtOffset = StructTm->tm_gmtoff;
-    memcpy(CalendarTime->TimeZone,
-           StructTm->tm_zone,
-           sizeof(CalendarTime->TimeZone));
-
+    CalendarTime->TimeZone = StructTm->tm_zone;
     return;
 }
 
@@ -3129,9 +3124,14 @@ Return Value:
 
 {
 
+    CALENDAR_TIME CalendarTime;
+    PSTR DaylightName;
     PVOID OldData;
     ULONG OldDataSize;
+    PSTR StandardName;
+    LONG StandardOffset;
     KSTATUS Status;
+    SYSTEM_TIME SystemTime;
     PSTR Variable;
     PVOID ZoneData;
     ULONG ZoneDataSize;
@@ -3184,11 +3184,22 @@ Return Value:
     }
 
     //
-    // TODO: Set tzname, timezone, and daylight appropriately.
+    // Get the time zone names.
     //
 
-    tzname[0] = "UTC";
-    tzname[1] = "UTC";
+    RtlGetTimeZoneNames(&StandardName, &DaylightName, &StandardOffset, NULL);
+    tzname[0] = StandardName;
+    tzname[1] = DaylightName;
+    timezone = -StandardOffset;
+    OsGetSystemTime(&SystemTime);
+    RtlSystemTimeToLocalCalendarTime(&SystemTime, &CalendarTime);
+    if (CalendarTime.GmtOffset != StandardOffset) {
+        daylight = 1;
+
+    } else {
+        daylight = 0;
+    }
+
     ClTimeZoneDataInitialized = TRUE;
     Status = STATUS_SUCCESS;
 

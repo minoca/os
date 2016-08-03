@@ -57,6 +57,12 @@ KepReleaseTimeZoneLock (
     VOID
     );
 
+PVOID
+KepTimeZoneReallocate (
+    PVOID Memory,
+    UINTN NewSize
+    );
+
 KSTATUS
 KepReadTimeZoneAlmanac (
     PVOID *Buffer,
@@ -731,12 +737,9 @@ Return Value:
 
     NewData = NULL;
     KeInitializeSpinLock(&KeTimeZoneLock);
-    Status = RtlInitializeTimeZoneSynchronization(KepAcquireTimeZoneLock,
-                                                  KepReleaseTimeZoneLock);
-
-    if (!KSUCCESS(Status)) {
-        goto InitializeTimeZoneSupportEnd;
-    }
+    RtlInitializeTimeZoneSupport(KepAcquireTimeZoneLock,
+                                 KepReleaseTimeZoneLock,
+                                 KepTimeZoneReallocate);
 
     if ((TimeZoneData == NULL) || (TimeZoneDataSize == 0)) {
         Status = STATUS_SUCCESS;
@@ -849,6 +852,46 @@ Return Value:
     KeReleaseSpinLock(&KeTimeZoneLock);
     KeLowerRunLevel(OldRunLevel);
     return;
+}
+
+PVOID
+KepTimeZoneReallocate (
+    PVOID Memory,
+    UINTN NewSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates, reallocates, or frees memory for the time zone
+    library.
+
+Arguments:
+
+    Memory - Supplies the original active allocation. If this parameter is
+        NULL, this routine will simply allocate memory.
+
+    NewSize - Supplies the new required size of the allocation. If this is
+        0, then the original allocation will simply be freed.
+
+Return Value:
+
+    Returns a pointer to a buffer with the new size (and original contents) on
+    success. This may be a new buffer or the same one.
+
+    NULL on failure or if the new size supplied was zero.
+
+--*/
+
+{
+
+    Memory = MmReallocatePool(PoolTypeNonPaged,
+                              Memory,
+                              NewSize,
+                              TIME_ZONE_ALLOCATION_TAG);
+
+    return Memory;
 }
 
 //

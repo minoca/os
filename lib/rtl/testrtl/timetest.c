@@ -2291,7 +2291,7 @@ CALENDAR_TEST TestCalendarCase[] = {
 
 DATE_FORMAT_TEST TestDateFormatCase[] = {
     {
-     {1968, 9, 26, 17, 23, 58, 59, 6, 299, 1, -7 * 3600, {'P', 'D', 'T'}},
+     {1968, 9, 26, 17, 23, 58, 59, 6, 299, 1, -7 * 3600, "PDT"},
      198,
      EXHAUSTIVE_DATE_FORMAT,
      "Sat Saturday Oct October Sat Oct 26 17:23:58 1968 19 26 10/26/68 26 "
@@ -2299,7 +2299,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
      "17:23:58 6 42 43 6 43 10/26/68 17:23:58 68 1968 -0700 PDT %.\n\t."
     },
     {
-     {2006, 3, 1, 18, 1, 2, 3, 6, 90, 0, -8 * 3600, {'P', 'S', 'T'}},
+     {2006, 3, 1, 18, 1, 2, 3, 6, 90, 0, -8 * 3600, "PST"},
      196,
      EXHAUSTIVE_DATE_FORMAT,
      "Sat Saturday Apr April Sat Apr  1 18:01:02 2006 20 01 04/01/06  1 "
@@ -2307,7 +2307,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
      "18:01:02 6 13 13 6 13 04/01/06 18:01:02 06 2006 -0800 PST %.\n\t."
     },
     {
-     {5678, 0, 1, 1, 1, 2, 3, 6, 0, 0, -8 * 3600, {'P', 'S', 'T'}},
+     {5678, 0, 1, 1, 1, 2, 3, 6, 0, 0, -8 * 3600, "PST"},
      198,
      EXHAUSTIVE_DATE_FORMAT,
      "Sat Saturday Jan January Sat Jan  1 01:01:02 5678 56 01 01/01/78  1 "
@@ -2315,7 +2315,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
      "01:01:02 6 00 52 6 00 01/01/78 01:01:02 78 5678 -0800 PST %.\n\t."
     },
     {
-     {2010, 0, 1, 1, 1, 2, 3, 5, 0, 0, -8 * 3600, {'P', 'S', 'T'}},
+     {2010, 0, 1, 1, 1, 2, 3, 5, 0, 0, -8 * 3600, "PST"},
      196,
      EXHAUSTIVE_DATE_FORMAT,
      "Fri Friday Jan January Fri Jan  1 01:01:02 2010 20 01 01/01/10  1 "
@@ -2323,7 +2323,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
      "01:01:02 5 00 53 5 00 01/01/10 01:01:02 10 2010 -0800 PST %.\n\t."
     },
     {
-     {2011, 0, 1, 2, 1, 8, 3, 6, 0, 0, -8 * 3600, {'P', 'S', 'T'}},
+     {2011, 0, 1, 2, 1, 8, 3, 6, 0, 0, -8 * 3600, "PST"},
      198,
      EXHAUSTIVE_DATE_FORMAT,
      "Sat Saturday Jan January Sat Jan  1 02:01:08 2011 20 01 01/01/11  1 "
@@ -2331,7 +2331,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
      "02:01:08 6 00 52 6 00 01/01/11 02:01:08 11 2011 -0800 PST %.\n\t."
     },
     {
-     {2012, 0, 1, 2, 13, 16, 37, 0, 0, 0, -8 * 3600, {'P', 'S', 'T'}},
+     {2012, 0, 1, 2, 13, 16, 37, 0, 0, 0, -8 * 3600, "PST"},
      196,
      EXHAUSTIVE_DATE_FORMAT,
      "Sun Sunday Jan January Sun Jan  1 02:13:16 2012 20 01 01/01/12  1 "
@@ -2339,7 +2339,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
      "02:13:16 7 01 52 0 00 01/01/12 02:13:16 12 2012 -0800 PST %.\n\t."
     },
     {
-     {2012, 5, 7, 2, 13, 16, 37, 4, 158, 0, -8 * 3600, {'P', 'S', 'T'}},
+     {2012, 5, 7, 2, 13, 16, 37, 4, 158, 0, -8 * 3600, "PST"},
      195,
      EXHAUSTIVE_DATE_FORMAT,
      "Thu Thursday Jun June Thu Jun  7 02:13:16 2012 20 07 06/07/12  7 "
@@ -2400,13 +2400,9 @@ Return Value:
     // Initialize time zone support in the runtime library.
     //
 
-    Status = RtlInitializeTimeZoneSynchronization(TestTimeZoneLockFunction,
-                                                  TestTimeZoneLockFunction);
-
-    if (!KSUCCESS(Status)) {
-        printf("Timetest: Failed to initialize %x.\n", Status);
-        Failures += 1;
-    }
+    RtlInitializeTimeZoneSupport(TestTimeZoneLockFunction,
+                                 TestTimeZoneLockFunction,
+                                 (PTIME_ZONE_REALLOCATE_FUNCTION)realloc);
 
     Status = RtlSetTimeZoneData(TestTimeZoneData,
                                 sizeof(TestTimeZoneData),

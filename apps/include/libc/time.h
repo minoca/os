@@ -124,8 +124,8 @@ Members:
     tm_gmtoff - Stores the offset from Greenwich Mean Time in seconds that
         this time is interpreted in.
 
-    tm_zone - Stores a string (potentially not null terminated) containing the
-        time zone abbreviation.
+    tm_zone - Stores a pointer to a constant string containing the time zone
+        name. The user should not modify or free this buffer.
 
 --*/
 
@@ -141,7 +141,7 @@ struct tm {
     int tm_isdst;
     int tm_nanosecond;
     int tm_gmtoff;
-    char tm_zone[5];
+    const char *tm_zone;
 };
 
 //

@@ -281,7 +281,6 @@ Return Value:
     //
 
     CalendarTime->GmtOffset = 0;
-    RtlZeroMemory(&(CalendarTime->TimeZone), sizeof(CalendarTime->TimeZone));
 
     //
     // Convert the given GMT calendar time into a system time. This normalizes
@@ -819,15 +818,11 @@ Return Value:
         case 'Z':
             CopyStringSize = sizeof(WorkingBuffer);
             CopyString = WorkingBuffer;
+            CopyStringSize = RtlStringCopy(CopyString,
+                                           CalendarTime->TimeZone,
+                                           CopyStringSize);
 
-            ASSERT(sizeof(CalendarTime->TimeZone) + 1 <= sizeof(WorkingBuffer));
-
-            RtlCopyMemory(CopyString,
-                          CalendarTime->TimeZone,
-                          sizeof(CalendarTime->TimeZone));
-
-            CopyString[CopyStringSize - 1] = '\0';
-            CopyStringSize = RtlStringLength(CopyString);
+            CopyStringSize -= 1;
             break;
 
         case '%':

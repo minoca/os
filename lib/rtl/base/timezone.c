@@ -138,6 +138,11 @@ RtlpTimeZonePerformSubstitution (
     PTIME_ZONE_RULE Rule
     );
 
+PSTR
+RtlpTimeZoneCacheString (
+    PSTR String
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -151,6 +156,7 @@ ULONG RtlTimeZoneDataSize;
 ULONG RtlTimeZoneIndex;
 PTIME_ZONE_LOCK_FUNCTION RtlAcquireTimeZoneLock;
 PTIME_ZONE_LOCK_FUNCTION RtlReleaseTimeZoneLock;
+PTIME_ZONE_REALLOCATE_FUNCTION RtlTimeZoneReallocate;
 
 //
 // Store arrays of the names of the months and weeks.
@@ -225,28 +231,36 @@ SHORT RtlMonthDays[2][MONTHS_PER_YEAR] = {
 // Store the current time zone for standard and daylight time.
 //
 
-CHAR RtlStandardTimeZoneName[TIME_ZONE_NAME_MAX];
-CHAR RtlDaylightTimeZoneName[TIME_ZONE_NAME_MAX];
+PSTR RtlStandardTimeZoneName;
+PSTR RtlDaylightTimeZoneName;
 LONG RtlStandardTimeZoneOffset;
 LONG RtlDaylightTimeZoneOffset;
+
+//
+// Store the cache of time zone names handed out in calendar time structs.
+//
+
+PSTR *RtlTimeZoneNameCache;
+ULONG RtlTimeZoneNameCacheSize;
 
 //
 // ------------------------------------------------------------------ Functions
 //
 
 RTL_API
-KSTATUS
-RtlInitializeTimeZoneSynchronization (
+VOID
+RtlInitializeTimeZoneSupport (
     PTIME_ZONE_LOCK_FUNCTION AcquireTimeZoneLockFunction,
-    PTIME_ZONE_LOCK_FUNCTION ReleaseTimeZoneLockFunction
+    PTIME_ZONE_LOCK_FUNCTION ReleaseTimeZoneLockFunction,
+    PTIME_ZONE_REALLOCATE_FUNCTION ReallocateFunction
     )
 
 /*++
 
 Routine Description:
 
-    This routine initializes the callout functions used to synchronize access
-    to the time zone data. It can only be called once.
+    This routine initializes library support functions needed by the time zone
+    code.
 
 Arguments:
 
@@ -256,25 +270,25 @@ Arguments:
     ReleaseTimeZoneLockFunction - Supplies a pointer to the function called to
         relinquish access to the time zone data.
 
+    ReallocateFunction - Supplies a pointer to a function used to dynamically
+        allocate and free memory.
+
 Return Value:
 
-    STATUS_SUCCESS on success.
-
-    STATUS_TOO_LATE if this function has already been called.
+    None.
 
 --*/
 
 {
 
-    if ((RtlAcquireTimeZoneLock != NULL) ||
-        (RtlReleaseTimeZoneLock != NULL)) {
-
-        return STATUS_TOO_LATE;
-    }
+    ASSERT((RtlAcquireTimeZoneLock == NULL) &&
+           (RtlReleaseTimeZoneLock == NULL) &&
+           (RtlTimeZoneReallocate == NULL));
 
     RtlAcquireTimeZoneLock = AcquireTimeZoneLockFunction;
     RtlReleaseTimeZoneLock = ReleaseTimeZoneLockFunction;
-    return STATUS_SUCCESS;
+    RtlTimeZoneReallocate = ReallocateFunction;
+    return;
 }
 
 RTL_API
@@ -777,9 +791,10 @@ Return Value:
             *OldData = NULL;
             *OldDataSize = 0;
         }
-    }
 
-    RtlpSetTimeZoneNames();
+    } else {
+        RtlpSetTimeZoneNames();
+    }
 
 SetTimeZoneDataEnd:
     RtlReleaseTimeZoneLock();
@@ -925,6 +940,64 @@ ListTimeZonesEnd:
 }
 
 RTL_API
+VOID
+RtlGetTimeZoneNames (
+    PSTR *StandardName,
+    PSTR *DaylightName,
+    PLONG StandardGmtOffset,
+    PLONG DaylightGmtOffset
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the names of the currently selected time zone.
+
+Arguments:
+
+    StandardName - Supplies an optional pointer where a pointer to the standard
+        time zone name will be returned on success. The caller must not modify
+        this memory, and it may change if the time zone is changed.
+
+    DaylightName - Supplies an optional pointer where a pointer to the Daylight
+        Saving time zone name will be returned on success. The caller must not
+        modify this memory, and it may change if the time zone is changed.
+
+    StandardGmtOffset - Supplies an optional pointer where the offset from GMT
+        in seconds will be returned for the time zone.
+
+    DaylightGmtOffset - Supplies an optional pointer where the offset from GMT
+        in seconds during Daylight Saving will be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (StandardName != NULL) {
+        *StandardName = RtlStandardTimeZoneName;
+    }
+
+    if (DaylightName != NULL) {
+        *DaylightName = RtlDaylightTimeZoneName;
+    }
+
+    if (StandardGmtOffset != NULL) {
+        *StandardGmtOffset = RtlStandardTimeZoneOffset;
+    }
+
+    if (DaylightGmtOffset != NULL) {
+        *DaylightGmtOffset = RtlDaylightTimeZoneOffset;
+    }
+
+    return;
+}
+
+RTL_API
 KSTATUS
 RtlSelectTimeZone (
     PSTR ZoneName,
@@ -1047,6 +1120,7 @@ Return Value:
     LONG Weekday;
     PTIME_ZONE Zone;
     PTIME_ZONE_ENTRY ZoneEntries;
+    CHAR ZoneNameBuffer[TIME_ZONE_NAME_MAX];
 
     EffectiveRule = NULL;
     Format = NULL;
@@ -1113,11 +1187,12 @@ Return Value:
     //
 
     if (ZoneEntries[EntryIndex].Rules == -1) {
-        RtlpTimeZonePerformSubstitution(CalendarTime->TimeZone,
-                                        sizeof(CalendarTime->TimeZone),
+        RtlpTimeZonePerformSubstitution(ZoneNameBuffer,
+                                        sizeof(ZoneNameBuffer),
                                         Format,
                                         NULL);
 
+        CalendarTime->TimeZone = RtlpTimeZoneCacheString(ZoneNameBuffer);
         Status = STATUS_SUCCESS;
         goto SystemTimeToLocalCalendarTimeEnd;
     }
@@ -1341,10 +1416,12 @@ SystemTimeToLocalCalendarTimeEnd:
         }
 
         CalendarTime->GmtOffset += EffectiveRule->Save;
-        RtlpTimeZonePerformSubstitution(CalendarTime->TimeZone,
-                                        sizeof(CalendarTime->TimeZone),
+        RtlpTimeZonePerformSubstitution(ZoneNameBuffer,
+                                        sizeof(ZoneNameBuffer),
                                         Format,
                                         EffectiveRule);
+
+        CalendarTime->TimeZone = RtlpTimeZoneCacheString(ZoneNameBuffer);
     }
 
     RtlReleaseTimeZoneLock();
@@ -2447,6 +2524,7 @@ Return Value:
         goto SelectTimeZoneEnd;
     }
 
+    RtlpSetTimeZoneNames();
     Status = STATUS_SUCCESS;
 
 SelectTimeZoneEnd:
@@ -2756,6 +2834,7 @@ Return Value:
 
 {
 
+    CHAR Buffer[TIME_ZONE_NAME_MAX];
     PTIME_ZONE_RULE DaylightRule;
     ULONG FirstLength;
     PSTR Format;
@@ -2764,14 +2843,13 @@ Return Value:
     PTIME_ZONE_RULE Rule;
     ULONG RuleIndex;
     PTIME_ZONE_RULE Rules;
-    ULONG SecondLength;
     PSTR Slash;
     PTIME_ZONE_RULE StandardRule;
     PTIME_ZONE Zone;
     PTIME_ZONE_ENTRY ZoneEntry;
 
-    RtlStandardTimeZoneName[0] = '\0';
-    RtlDaylightTimeZoneName[0] = '\0';
+    RtlStandardTimeZoneName = "";
+    RtlDaylightTimeZoneName = "";
     Header = RtlTimeZoneData;
     Zone = (PVOID)Header + Header->ZoneOffset;
     if (RtlTimeZoneIndex >= Header->ZoneCount) {
@@ -2805,14 +2883,10 @@ Return Value:
             FirstLength = TIME_ZONE_NAME_MAX;
         }
 
-        RtlStringCopy(RtlStandardTimeZoneName, Format, FirstLength);
+        RtlStringCopy(Buffer, Format, FirstLength);
+        RtlStandardTimeZoneName = RtlpTimeZoneCacheString(Buffer);
         Slash += 1;
-        SecondLength = Length - (UINTN)Slash;
-        if (SecondLength > TIME_ZONE_NAME_MAX) {
-            SecondLength = TIME_ZONE_NAME_MAX;
-        }
-
-        RtlStringCopy(RtlDaylightTimeZoneName, Slash, SecondLength);
+        RtlDaylightTimeZoneName = RtlpTimeZoneCacheString(Slash);
         goto SetTimeZoneNamesEnd;
     }
 
@@ -2821,12 +2895,8 @@ Return Value:
     //
 
     if (ZoneEntry->Rules == -1) {
-        if (Length > TIME_ZONE_NAME_MAX) {
-            Length = TIME_ZONE_NAME_MAX;
-        }
-
-        RtlStringCopy(RtlStandardTimeZoneName, Format, Length);
-        RtlStringCopy(RtlDaylightTimeZoneName, Format, Length);
+        RtlStandardTimeZoneName = RtlpTimeZoneCacheString(Format);
+        RtlDaylightTimeZoneName = RtlStandardTimeZoneName;
         goto SetTimeZoneNamesEnd;
     }
 
@@ -2859,18 +2929,20 @@ Return Value:
         RtlDaylightTimeZoneOffset += DaylightRule->Save;
     }
 
-    RtlpTimeZonePerformSubstitution(RtlStandardTimeZoneName,
+    RtlpTimeZonePerformSubstitution(Buffer,
                                     TIME_ZONE_NAME_MAX,
                                     Format,
                                     StandardRule);
 
-    RtlStandardTimeZoneName[TIME_ZONE_NAME_MAX - 1] = '\0';
-    RtlpTimeZonePerformSubstitution(RtlDaylightTimeZoneName,
+    Buffer[TIME_ZONE_NAME_MAX - 1] = '\0';
+    RtlStandardTimeZoneName = RtlpTimeZoneCacheString(Buffer);
+    RtlpTimeZonePerformSubstitution(Buffer,
                                     TIME_ZONE_NAME_MAX,
                                     Format,
                                     DaylightRule);
 
-    RtlDaylightTimeZoneName[TIME_ZONE_NAME_MAX - 1] = '\0';
+    Buffer[TIME_ZONE_NAME_MAX - 1] = '\0';
+    RtlDaylightTimeZoneName = RtlpTimeZoneCacheString(Buffer);
 
 SetTimeZoneNamesEnd:
     return;
@@ -2963,5 +3035,94 @@ Return Value:
     }
 
     return;
+}
+
+PSTR
+RtlpTimeZoneCacheString (
+    PSTR String
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a cached string for the given string. This routine
+    assumes the time zone lock is already held.
+
+Arguments:
+
+    String - Supplies a pointer to the string to find the cached version of.
+
+Return Value:
+
+    Returns a pointer to the cached string on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    ULONG Index;
+    BOOL Match;
+    PSTR *NewBuffer;
+    ULONG NewCapacity;
+    PSTR NewString;
+    UINTN StringSize;
+
+    StringSize = RtlStringLength(String) + 1;
+
+    //
+    // There should never really be that many time zone names floating around
+    // (probably less than 6 at any time), so use a simple linear search of an
+    // array of strings.
+    //
+
+    for (Index = 0; Index < RtlTimeZoneNameCacheSize; Index += 1) {
+        if (RtlTimeZoneNameCache[Index] == NULL) {
+            break;
+        }
+
+        Match = RtlAreStringsEqual(RtlTimeZoneNameCache[Index],
+                                   String,
+                                   StringSize);
+
+        if (Match != FALSE) {
+            return RtlTimeZoneNameCache[Index];
+        }
+    }
+
+    //
+    // The string was not found. If the array is full, reallocate it.
+    //
+
+    if (Index == RtlTimeZoneNameCacheSize) {
+        if (Index == 0) {
+            NewCapacity = 8;
+
+        } else {
+            NewCapacity = Index * 2;
+        }
+
+        NewBuffer = RtlTimeZoneReallocate(RtlTimeZoneNameCache,
+                                          NewCapacity * sizeof(PSTR));
+
+        if (NewBuffer == NULL) {
+            return NULL;
+        }
+
+        RtlTimeZoneNameCache = NewBuffer;
+        RtlTimeZoneNameCacheSize = NewCapacity;
+        RtlZeroMemory(NewBuffer + Index, (NewCapacity - Index) * sizeof(PSTR));
+    }
+
+    NewString = RtlTimeZoneReallocate(NULL, StringSize);
+    if (NewString == NULL) {
+        return NULL;
+    }
+
+    RtlCopyMemory(NewString, String, StringSize);
+    RtlTimeZoneNameCache[Index] = NewString;
+    return NewString;
 }
 

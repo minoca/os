@@ -151,6 +151,7 @@ typedef unsigned long long PHYSICAL_ADDRESS, *PPHYSICAL_ADDRESS;
 
 typedef void *PVOID;
 typedef char *PSTR;
+typedef const char *PCSTR;
 typedef WCHAR *PWSTR;
 
 typedef PVOID HANDLE, *PHANDLE;
