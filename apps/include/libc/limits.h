@@ -125,6 +125,12 @@ extern "C" {
 #define ULONG_LONG_MAX (LONG_LONG_MAX * 2ULL + 1ULL)
 
 //
+// Define the maximum value an ssize_t can hold.
+//
+
+#define SSIZE_MAX LONG_MAX
+
+//
 // Define the maximum number of bytes in a multibyte character sequence.
 //
 

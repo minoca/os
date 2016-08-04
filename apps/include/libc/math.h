@@ -655,6 +655,56 @@ Return Value:
 --*/
 
 LIBC_API
+long
+lround (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine rounds the given value to the nearest integer value, rounding
+    halfway cases away from zero, regardless of the current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round.
+
+Return Value:
+
+    Returns the rounded integer on success.
+
+    Returns an unspecified value if the given value is out of range, or NaN.
+
+--*/
+
+LIBC_API
+long long
+llround (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine rounds the given value to the nearest integer value, rounding
+    halfway cases away from zero, regardless of the current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round.
+
+Return Value:
+
+    Returns the rounded integer on success.
+
+    Returns an unspecified value if the given value is out of range, or NaN.
+
+--*/
+
+LIBC_API
 double
 rint (
     double Value

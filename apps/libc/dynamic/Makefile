@@ -83,6 +83,7 @@ OBJS = assert.o             \
        math/log.o           \
        math/log2.o          \
        math/log10.o         \
+       math/lround.o        \
        math/modf.o          \
        math/pow.o           \
        math/rint.o          \
