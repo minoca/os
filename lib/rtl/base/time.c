@@ -818,11 +818,18 @@ Return Value:
         case 'Z':
             CopyStringSize = sizeof(WorkingBuffer);
             CopyString = WorkingBuffer;
-            CopyStringSize = RtlStringCopy(CopyString,
-                                           CalendarTime->TimeZone,
-                                           CopyStringSize);
+            if (CalendarTime->TimeZone != NULL) {
+                CopyStringSize = RtlStringCopy(CopyString,
+                                               CalendarTime->TimeZone,
+                                               CopyStringSize);
 
-            CopyStringSize -= 1;
+                CopyStringSize -= 1;
+
+            } else {
+                WorkingBuffer[0] = '\0';
+                CopyStringSize = 0;
+            }
+
             break;
 
         case '%':

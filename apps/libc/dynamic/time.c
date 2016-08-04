@@ -3124,14 +3124,13 @@ Return Value:
 
 {
 
-    CALENDAR_TIME CalendarTime;
     PSTR DaylightName;
+    LONG DaylightOffset;
     PVOID OldData;
     ULONG OldDataSize;
     PSTR StandardName;
     LONG StandardOffset;
     KSTATUS Status;
-    SYSTEM_TIME SystemTime;
     PSTR Variable;
     PVOID ZoneData;
     ULONG ZoneDataSize;
@@ -3187,13 +3186,15 @@ Return Value:
     // Get the time zone names.
     //
 
-    RtlGetTimeZoneNames(&StandardName, &DaylightName, &StandardOffset, NULL);
+    RtlGetTimeZoneNames(&StandardName,
+                        &DaylightName,
+                        &StandardOffset,
+                        &DaylightOffset);
+
     tzname[0] = StandardName;
     tzname[1] = DaylightName;
     timezone = -StandardOffset;
-    OsGetSystemTime(&SystemTime);
-    RtlSystemTimeToLocalCalendarTime(&SystemTime, &CalendarTime);
-    if (CalendarTime.GmtOffset != StandardOffset) {
+    if (StandardOffset != DaylightOffset) {
         daylight = 1;
 
     } else {
