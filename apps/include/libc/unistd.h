@@ -43,7 +43,106 @@ extern "C" {
 
 #define _POSIX_VERSION 200809L
 #define _POSIX2_VERSION 200809L
+#define _XOPEN_VERSION 700
+
+//
+// Define the POSIX constants for options and option groups.
+//
+
+#define _POSIX_BARRIERS 200809L
+#define _POSIX_CHOWN_RESTRICTED 1
+#define _POSIX_CLOCK_SELECTION 200809L
+#define _POSIX_CPUTIME -1
+#define _POSIX_FSYNC 200809L
+#define _POSIX_IPV6 200809L
+#define _POSIX_JOB_CONTROL 1
+#define _POSIX_MAPPED_FILES 200809L
+#define _POSIX_MEMLOCK -1
+#define _POSIX_MEMLOCK_RANGE -1
+#define _POSIX_MEMORY_PROTECTION 200809L
+#define _POSIX_MESSAGE_PASSING -1
+#define _POSIX_MONOTONIC_CLOCK 200809L
+#define _POSIX_NO_TRUNC 0
+#define _POSIX_PRIORITIZED_IO -1
+#define _POSIX_PRIORITY_SCHEDULING -1
+#define _POSIX_RAW_SOCKETS 200809L
+#define _POSIX_READER_WRITER_LOCKS 200809L
+#define _POSIX_REALTIME_SIGNALS 200809L
+#define _POSIX_REGEXP 1
+#define _POSIX_SAVED_IDS 1
+#define _POSIX_SEMAPHORES 200809L
+#define _POSIX_SHARED_MEMORY_OBJECTS 200809L
+#define _POSIX_SHELL 1
+#define _POSIX_SPAWN 200809L
+#define _POSIX_SPIN_LOCKS -1
+#define _POSIX_SPORADIC_SERVER -1
+#define _POSIX_SYNCHRONIZED_IO 200890L
+#define _POSIX_THREAD_ATTR_STACKADDR 200809L
+#define _POSIX_THREAD_ATTR_STACKSIZE 200809L
+#define _POSIX_THREAD_CPUTIME -1
+#define _POSIX_THREAD_PRIO_INHERIT -1
+#define _POSIX_THREAD_PRIO_PROTECT -1
+#define _POSIX_THREAD_PRIORITY_SCHEDULING -1
+#define _POSIX_THREAD_PROCESS_SHARED 200809L
+#define _POSIX_THREAD_ROBUST_PRIO_INHERIT -1
+#define _POSIX_THREAD_ROBUST_PRIO_PROTECT -1
+#define _POSIX_THREAD_SAFE_FUNCTIONS 200809L
+#define _POSIX_THREAD_SPORADIC_SERVER -1
 #define _POSIX_THREADS 200809L
+#define _POSIX_TIMEOUTS 200809L
+#define _POSIX_TIMERS 200809L
+#define _POSIX_TRACE -1
+#define _POSIX_TRACE_EVENT_FILTER -1
+#define _POSIX_TRACE_INHERIT -1
+#define _POSIX_TRACE_LOG -1
+#define _POSIX_TYPED_MEMORY_OBJECTS -1
+
+#if (__SIZEOF_POINTER__ == 8)
+
+#define _POSIX_V6_ILP32_OFF32 -1
+#define _POSIX_V6_ILP32_OFFBIG -1
+#define _POSIX_V6_LP64_OFF64 1
+#define _POSIX_V6_LPBIG_OFFBIG -1
+#define _POSIX_V7_ILP32_OFF32 -1
+#define _POSIX_V7_ILP32_OFFBIG -1
+#define _POSIX_V7_LP64_OFF64 1
+#define _POSIX_V7_LPBIG_OFFBIG -1
+
+#else
+
+#define _POSIX_V6_ILP32_OFF32 -1
+#define _POSIX_V6_ILP32_OFFBIG 1
+#define _POSIX_V6_LP64_OFF64 -1
+#define _POSIX_V6_LPBIG_OFFBIG -1
+#define _POSIX_V7_ILP32_OFF32 -1
+#define _POSIX_V7_ILP32_OFFBIG 1
+#define _POSIX_V7_LP64_OFF64 -1
+#define _POSIX_V7_LPBIG_OFFBIG -1
+
+#endif
+
+#define _POSIX2_C_BIND 200809L
+#define _POSIX2_C_DEV 200809L
+#define _POSIX2_CHAR_TERM 1
+#define _POSIX2_FORT_DEV -1
+#define _POSIX2_FORT_RUN -1
+#define _POSIX2_LOCALEDEF 200809L
+#define _POSIX2_PBS -1
+#define _POSIX2_PBS_ACCOUNTING -1
+#define _POSIX2_PBS_CHECKPOINT -1
+#define _POSIX2_PBS_LOCATE -1
+#define _POSIX2_PBS_MESSAGE -1
+#define _POSIX2_PBS_TRACK -1
+#define _POSIX2_SW_DEV 200809L
+#define _POSIX2_UPE 200809L
+#define _XOPEN_CRYPT 1
+#define _XOPEN_ENH_I18N 1
+#define _XOPEN_REALTIME -1
+#define _XOPEN_REALTIME_THREADS -1
+#define _XOPEN_SHM 1
+#define _XOPEN_STREAMS -1
+#define _XOPEN_UNIX 1
+#define _XOPEN_UUCP -1
 
 //
 // Define all libcrypt API functions to be imports unless otherwise specified.
@@ -245,7 +344,7 @@ extern "C" {
 #define _SC_2_FORT_RUN 24
 
 //
-// Determine whether the POSIX.2 creation of locates via localedef is supported.
+// Determine whether the POSIX.2 creation of locales via localedef is supported.
 //
 
 #define _SC_2_LOCALEDEF 25
@@ -299,6 +398,447 @@ extern "C" {
 //
 
 #define _SC_NGROUPS_MAX 33
+
+//
+// Determine whether POSIX thread barriers are supported.
+//
+
+#define _SC_BARRIERS 34
+
+//
+// Determine whether POSIX clock selection is supported.
+//
+
+#define _SC_CLOCK_SELECTION 35
+
+//
+// Determine whether the Process CPU-Time Clocks option is supported.
+//
+
+#define _SC_CPUTIME 36
+
+//
+// Determine whether the File Synchronization option is supported.
+//
+
+#define _SC_FSYNC 37
+
+//
+// Determine whether the IPv6 option is supported.
+//
+
+#define _SC_IPV6 38
+
+//
+// Determine whether job control is supported.
+//
+
+#define _SC_JOB_CONTROL 39
+
+//
+// Determine whether memory mapped files are supported.
+//
+
+#define _SC_MAPPED_FILES 40
+
+//
+// Determine whether the Process Memory Locking option is supported.
+//
+
+#define _SC_MEMLOCK 41
+
+//
+// Determine whether the Range Memory Locking option is supported.
+//
+
+#define _SC_MEMLOCK_RANGE 42
+
+//
+// Determine whether memory protection is supported.
+//
+
+#define _SC_MEMORY_PROTECTION 43
+
+//
+// Determine whether the Message Passing option is supported.
+//
+
+#define _SC_MESSAGE_PASSING 44
+
+//
+// Determine whether the the Monotonic Clock option is supported.
+//
+
+#define _SC_MONOTONIC_CLOCK 45
+
+//
+// Determine whether the Prioritized Input and Output option is supported.
+//
+
+#define _SC_PRIORITIZED_IO 46
+
+//
+// Determine whether the Process Scheduling opion is supported.
+//
+
+#define _SC_PRIORITY_SCHEDULING 47
+
+//
+// Determine whether the Raw Sockets options is supported.
+//
+
+#define _SC_RAW_SOCKETS 48
+
+//
+// Determine whether read-write locks are supported.
+//
+
+#define _SC_READER_WRITER_LOCKS 49
+
+//
+// Determine whether realtime signals are supported.
+//
+
+#define _SC_REALTIME_SIGNALS 50
+
+//
+// Determine whether regular expression handling is supported.
+//
+
+#define _SC_REGEXP 51
+
+//
+// Determine whether each process has a saved set-user-ID and a saved
+// set-group-ID.
+//
+
+#define _SC_SAVED_IDS 52
+
+//
+// Determine whether semaphores are supported.
+//
+
+#define _SC_SEMAPHORES 53
+
+//
+// Determine whether the Shared Memory Objects option is supported.
+//
+
+#define _SC_SHARED_MEMORY_OBJECTS 54
+
+//
+// Determine whether the POSIX shell is supported.
+//
+
+#define _SC_SHELL 55
+
+//
+// Determine whetherthe Spawn option is supported.
+//
+
+#define _SC_SPAWN 56
+
+//
+// Determine whether the Spin Locks options is supported.
+//
+
+#define _SC_SPIN_LOCKS 57
+
+//
+// Determine whether the Process Sporadic Server option is supported.
+//
+
+#define _SC_SPORADIC_SERVER 58
+
+//
+// Determine whether the Synchronized Input and Output option is supported.
+//
+
+#define _SC_SYNCHRONIZED_IO 59
+
+//
+// Determine whether the Thread Stack Address Attribute option is supported.
+//
+
+#define _SC_THREAD_ATTR_STACKADDR 60
+
+//
+// Determine whether the Thread Stack Size Attribute option is supported.
+//
+
+#define _SC_THREAD_ATTR_STACKSIZE 61
+
+//
+// Determine whether the Thread CPU-Time Clocks option is supported.
+//
+
+#define _SC_THREAD_CPUTIME 62
+
+//
+// Determine whether the Non-Robust Mutex Priority Inheritance option is
+// supported.
+//
+
+#define _SC_THREAD_PRIO_INHERIT 63
+
+//
+// Determine whether the Non-Robust Mutex Priority Protection option is
+// supported.
+//
+
+#define _SC_THREAD_PRIO_PROTECT 64
+
+//
+// Determine whether the Thread Execution Scheduilng option is supported.
+//
+
+#define _SC_THREAD_PRIORITY_SCHEDULING 65
+
+//
+// Determine whether the Thread Process-Shared Synchronization option is
+// supported.
+//
+
+#define _SC_THREAD_PROCESS_SHARED 66
+
+//
+// Determine whether the Robust Mutex Priority Inheritance option is supported.
+//
+
+#define _SC_THREAD_ROBUST_PRIO_INHERIT 67
+
+//
+// Determine whether the  Robust Mutex Priority Protection option is supported.
+//
+
+#define _SC_THREAD_ROBUST_PRIO_PROTECT 68
+
+//
+// Determine whether thread-safe functions are supported.
+//
+
+#define _SC_THREAD_SAFE_FUNCTIONS 69
+
+//
+// Determine whether the Thread Sporadic Server option is supported.
+//
+
+#define _SC_THREAD_SPORADIC_SERVER 70
+
+//
+// Determine whether threads are supported.
+//
+
+#define _SC_THREADS 71
+
+//
+// Determine whether timeouts are supported.
+//
+
+#define _SC_TIMEOUTS 72
+
+//
+// Determine whether timers are supported.
+//
+
+#define _SC_TIMERS 73
+
+//
+// Determine whether the Trace option is supported.
+//
+
+#define _SC_TRACE 74
+
+//
+// Determine whether the Trace Event Filter option is supported.
+//
+
+#define _SC_TRACE_EVENT_FILTER 75
+
+//
+// Determine whether the Trace Inherit option is supported.
+//
+
+#define _SC_TRACE_INHERIT 76
+
+//
+// Determine whether the Trace Log option is supported.
+//
+
+#define _SC_TRACE_LOG 77
+
+//
+// Determine whether the Typed Memory Objects option is supported.
+//
+
+#define _SC_TYPED_MEMORY_OBJECTS 78
+
+//
+// Determine whether the C-language compilation environment has 32-bit int,
+// long, pointer, and off_t types.
+//
+
+#define _SC_V6_ILP32_OFF32 79
+
+//
+// Determine whether the C-language compilation environment has 32-bit int,
+// long, and pointer types, and an off_t type of at least 64-bits.
+//
+
+#define _SC_V6_ILP32_OFFBIG 80
+
+//
+// Determine whether the C-language compilation environment has 32-bit int and
+// 64-bit long, pointer, and off_t types.
+//
+
+#define _SC_V6_LP64_OFF64 81
+
+//
+// Determine whether the C-language compilation environment has an int type of
+// at least 32-bits and long, pointer, and off_t types of at least 64-bits.
+//
+
+#define _SC_V6_LPBIG_OFFBIG 82
+
+//
+// Determine whether the C-language compilation environment has 32-bit int,
+// long, pointer, and off_t types.
+//
+
+#define _SC_V7_ILP32_OFF32 83
+
+//
+// Determine whether the C-language compilation environment has 32-bit int,
+// long, and pointer types, and an off_t type of at least 64-bits.
+//
+
+#define _SC_V7_ILP32_OFFBIG 84
+
+//
+// Determine whether the C-language compilation environment has 32-bit int and
+// 64-bit long, pointer, and off_t types.
+//
+
+#define _SC_V7_LP64_OFF64 85
+
+//
+// Determine whether the C-language compilation environment has an int type of
+// at least 32-bits and long, pointer, and off_t types of at least 64-bits.
+//
+
+#define _SC_V7_LPBIG_OFFBIG 86
+
+//
+// Determine whether the C-Language Binding option is supported.
+//
+
+#define _SC_2_C_BIND 87
+
+//
+// Determine whether the Terminal Characteristics option is supported.
+//
+
+#define _SC_2_CHAR_TERM 88
+
+//
+// Determine whether the Batch Environment Services and Utilities option is
+// supported.
+//
+
+#define _SC_2_PBS 89
+
+//
+// Determine whether the Batch Accounting option is supported.
+//
+
+#define _SC_2_PBS_ACCOUNTING 90
+
+//
+// Determine whether the Batch Checkpoint/Restart option is supported.
+//
+
+#define _SC_2_PBS_CHECKPOINT 91
+
+//
+// Determine whether the Locate Batch Job Request option is supported.
+//
+
+#define _SC_2_PBS_LOCATE 92
+
+//
+// Determine whether the Batch Job Message Request option is supported.
+//
+
+#define _SC_2_PBS_MESSAGE 93
+
+//
+// Determine whether the Track Batch Job Request option is supported.
+//
+
+#define _SC_2_PBS_TRACK 94
+
+//
+// Determine whether the User Portability Utilities option is supported.
+//
+
+#define _SC_2_UPE 95
+
+//
+// Determine whether the X/Open Encryption Option Group is supported.
+//
+
+#define _SC_XOPEN_CRYPT 96
+
+//
+// Determine whether the Issue 4, Version 2 Enhanced Internationalization
+// Option Group is supported.
+//
+
+#define _SC_XOPEN_ENH_I18N 97
+
+//
+// Determine whether the X/Open Realtime Option Group is supported.
+//
+
+#define _SC_XOPEN_REALTIME 98
+
+//
+// Determine whether the X/Open Realtime Threads Option Group is supported.
+//
+
+#define _SC_XOPEN_REALTIME_THREADS 99
+
+//
+// Determine whether the Issue 4, Version 2 Shared Memory Option Group is
+// supported.
+//
+
+#define _SC_XOPEN_SHM 100
+
+//
+// Determine whether the XSI STREAMS Option Group is supported.
+//
+
+#define _SC_XOPEN_STREAMS 101
+
+//
+// Determine whether the XSI option is supported.
+//
+
+#define _SC_XOPEN_UNIX 102
+
+//
+// Determine whether the UUCP Utilities option is supported.
+//
+
+#define _SC_XOPEN_UUCP 103
+
+//
+// Determine the version of the X/Open Portability Guide.
+//
+
+#define _SC_XOPEN_VERSION 104
 
 //
 // Define pathconf and fpathconf constants.

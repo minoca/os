@@ -220,7 +220,7 @@ extern "C" {
 #define _POSIX_AIO_LISTIO_MAX 2
 
 //
-// Define the numerb of outstanding asynchronous I/O operations.
+// Define the number of outstanding asynchronous I/O operations.
 //
 
 #define _POSIX_AIO_MAX 1

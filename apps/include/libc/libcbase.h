@@ -34,10 +34,13 @@ extern "C" {
 #endif
 
 //
-// This library is mostly POSIX compliant.
+// This library is mostly POSIX compliant. These need to be defined with the
+// inclusion of any POSIX header.
 //
 
 #define POSIX
+#define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 700
 
 //
 // Wide characters (wchar_t) are 32-bits, meaning that the short identifier of

@@ -164,11 +164,23 @@ Return Value:
         break;
 
     case _SC_VERSION:
-    case _SC_2_VERSION:
-    case _SC_2_LOCALEDEF:
-    case _SC_2_SW_DEV:
-    case _SC_2_C_DEV:
         Value = _POSIX_VERSION;
+        break;
+
+    case _SC_2_VERSION:
+        Value = _POSIX2_VERSION;
+        break;
+
+    case _SC_2_LOCALEDEF:
+        Value = _POSIX2_LOCALEDEF;
+        break;
+
+    case _SC_2_SW_DEV:
+        Value = _POSIX2_SW_DEV;
+        break;
+
+    case _SC_2_C_DEV:
+        Value = _POSIX2_C_DEV;
         break;
 
     case _SC_BC_BASE_MAX:
@@ -187,8 +199,11 @@ Return Value:
         break;
 
     case _SC_2_FORT_DEV:
+        Value = _POSIX2_FORT_DEV;
+        break;
+
     case _SC_2_FORT_RUN:
-        Value = -1;
+        Value = _POSIX2_FORT_RUN;
         break;
 
     case _SC_NPROCESSORS_CONF:
@@ -230,6 +245,290 @@ Return Value:
 
     case _SC_NGROUPS_MAX:
         Value = NGROUPS_MAX;
+        break;
+
+    case _SC_BARRIERS:
+        Value = _POSIX_BARRIERS;
+        break;
+
+    case _SC_CLOCK_SELECTION:
+        Value = _POSIX_CLOCK_SELECTION;
+        break;
+
+    case _SC_CPUTIME:
+        Value = _POSIX_CPUTIME;
+        break;
+
+    case _SC_FSYNC:
+        Value = _POSIX_FSYNC;
+        break;
+
+    case _SC_IPV6:
+        Value = _POSIX_IPV6;
+        break;
+
+    case _SC_JOB_CONTROL:
+        Value = _POSIX_JOB_CONTROL;
+        break;
+
+    case _SC_MAPPED_FILES:
+        Value = _POSIX_MAPPED_FILES;
+        break;
+
+    case _SC_MEMLOCK:
+        Value = _POSIX_MEMLOCK;
+        break;
+
+    case _SC_MEMLOCK_RANGE:
+        Value = _POSIX_MEMLOCK_RANGE;
+        break;
+
+    case _SC_MEMORY_PROTECTION:
+        Value = _POSIX_MEMORY_PROTECTION;
+        break;
+
+    case _SC_MESSAGE_PASSING:
+        Value = _POSIX_MESSAGE_PASSING;
+        break;
+
+    case _SC_MONOTONIC_CLOCK:
+        Value = _POSIX_MONOTONIC_CLOCK;
+        break;
+
+    case _SC_PRIORITIZED_IO:
+        Value = _POSIX_PRIORITIZED_IO;
+        break;
+
+    case _SC_PRIORITY_SCHEDULING:
+        Value = _POSIX_PRIORITY_SCHEDULING;
+        break;
+
+    case _SC_RAW_SOCKETS:
+        Value = _POSIX_RAW_SOCKETS;
+        break;
+
+    case _SC_READER_WRITER_LOCKS:
+        Value = _POSIX_READER_WRITER_LOCKS;
+        break;
+
+    case _SC_REALTIME_SIGNALS:
+        Value = _POSIX_REALTIME_SIGNALS;
+        break;
+
+    case _SC_REGEXP:
+        Value = _POSIX_REGEXP;
+        break;
+
+    case _SC_SAVED_IDS:
+        Value = _POSIX_SAVED_IDS;
+        break;
+
+    case _SC_SEMAPHORES:
+        Value = _POSIX_SEMAPHORES;
+        break;
+
+    case _SC_SHARED_MEMORY_OBJECTS:
+        Value = _POSIX_SHARED_MEMORY_OBJECTS;
+        break;
+
+    case _SC_SHELL:
+        Value = _POSIX_SHELL;
+        break;
+
+    case _SC_SPAWN:
+        Value = _POSIX_SPAWN;
+        break;
+
+    case _SC_SPIN_LOCKS:
+        Value = _POSIX_SPIN_LOCKS;
+        break;
+
+    case _SC_SPORADIC_SERVER:
+        Value = _POSIX_SPORADIC_SERVER;
+        break;
+
+    case _SC_SYNCHRONIZED_IO:
+        Value = _POSIX_SYNCHRONIZED_IO;
+        break;
+
+    case _SC_THREAD_ATTR_STACKADDR:
+        Value = _POSIX_THREAD_ATTR_STACKADDR;
+        break;
+
+    case _SC_THREAD_ATTR_STACKSIZE:
+        Value = _POSIX_THREAD_ATTR_STACKSIZE;
+        break;
+
+    case _SC_THREAD_CPUTIME:
+        Value = _POSIX_THREAD_CPUTIME;
+        break;
+
+    case _SC_THREAD_PRIO_INHERIT:
+        Value = _POSIX_THREAD_PRIO_INHERIT;
+        break;
+
+    case _SC_THREAD_PRIO_PROTECT:
+        Value = _POSIX_THREAD_PRIO_PROTECT;
+        break;
+
+    case _SC_THREAD_PRIORITY_SCHEDULING:
+        Value = _POSIX_THREAD_PRIORITY_SCHEDULING;
+        break;
+
+    case _SC_THREAD_PROCESS_SHARED:
+        Value = _POSIX_THREAD_PROCESS_SHARED;
+        break;
+
+    case _SC_THREAD_ROBUST_PRIO_INHERIT:
+        Value = _POSIX_THREAD_ROBUST_PRIO_INHERIT;
+        break;
+
+    case _SC_THREAD_ROBUST_PRIO_PROTECT:
+        Value = _POSIX_THREAD_ROBUST_PRIO_PROTECT;
+        break;
+
+    case _SC_THREAD_SAFE_FUNCTIONS:
+        Value = _POSIX_THREAD_SAFE_FUNCTIONS;
+        break;
+
+    case _SC_THREAD_SPORADIC_SERVER:
+        Value = _POSIX_THREAD_SPORADIC_SERVER;
+        break;
+
+    case _SC_THREADS:
+        Value = _POSIX_THREADS;
+        break;
+
+    case _SC_TIMEOUTS:
+        Value = _POSIX_TIMEOUTS;
+        break;
+
+    case _SC_TIMERS:
+        Value = _POSIX_TIMERS;
+        break;
+
+    case _SC_TRACE:
+        Value = _POSIX_TRACE;
+        break;
+
+    case _SC_TRACE_EVENT_FILTER:
+        Value = _POSIX_TRACE_EVENT_FILTER;
+        break;
+
+    case _SC_TRACE_INHERIT:
+        Value = _POSIX_TRACE_INHERIT;
+        break;
+
+    case _SC_TRACE_LOG:
+        Value = _POSIX_TRACE_LOG;
+        break;
+
+    case _SC_TYPED_MEMORY_OBJECTS:
+        Value = _POSIX_TYPED_MEMORY_OBJECTS;
+        break;
+
+    case _SC_V6_ILP32_OFF32:
+        Value = _POSIX_V6_ILP32_OFF32;
+        break;
+
+    case _SC_V6_ILP32_OFFBIG:
+        Value = _POSIX_V6_ILP32_OFFBIG;
+        break;
+
+    case _SC_V6_LP64_OFF64:
+        Value = _POSIX_V6_LP64_OFF64;
+        break;
+
+    case _SC_V6_LPBIG_OFFBIG:
+        Value = _POSIX_V6_LPBIG_OFFBIG;
+        break;
+
+    case _SC_V7_ILP32_OFF32:
+        Value = _POSIX_V7_ILP32_OFF32;
+        break;
+
+    case _SC_V7_ILP32_OFFBIG:
+        Value = _POSIX_V7_ILP32_OFFBIG;
+        break;
+
+    case _SC_V7_LP64_OFF64:
+        Value = _POSIX_V7_LP64_OFF64;
+        break;
+
+    case _SC_V7_LPBIG_OFFBIG:
+        Value = _POSIX_V7_LPBIG_OFFBIG;
+        break;
+
+    case _SC_2_C_BIND:
+        Value = _POSIX2_C_BIND;
+        break;
+
+    case _SC_2_CHAR_TERM:
+        Value = _POSIX2_CHAR_TERM;
+        break;
+
+    case _SC_2_PBS:
+        Value = _POSIX2_PBS;
+        break;
+
+    case _SC_2_PBS_ACCOUNTING:
+        Value = _POSIX2_PBS_ACCOUNTING;
+        break;
+
+    case _SC_2_PBS_CHECKPOINT:
+        Value = _POSIX2_PBS_CHECKPOINT;
+        break;
+
+    case _SC_2_PBS_LOCATE:
+        Value = _POSIX2_PBS_LOCATE;
+        break;
+
+    case _SC_2_PBS_MESSAGE:
+        Value = _POSIX2_PBS_MESSAGE;
+        break;
+
+    case _SC_2_PBS_TRACK:
+        Value = _POSIX2_PBS_TRACK;
+        break;
+
+    case _SC_2_UPE:
+        Value = _POSIX2_UPE;
+        break;
+
+    case _SC_XOPEN_CRYPT:
+        Value = _XOPEN_CRYPT;
+        break;
+
+    case _SC_XOPEN_ENH_I18N:
+        Value = _XOPEN_ENH_I18N;
+        break;
+
+    case _SC_XOPEN_REALTIME:
+        Value = _XOPEN_REALTIME;
+        break;
+
+    case _SC_XOPEN_REALTIME_THREADS:
+        Value = _XOPEN_REALTIME_THREADS;
+        break;
+
+    case _SC_XOPEN_SHM:
+        Value = _XOPEN_SHM;
+        break;
+
+    case _SC_XOPEN_STREAMS:
+        Value = _XOPEN_STREAMS;
+        break;
+
+    case _SC_XOPEN_UNIX:
+        Value = _XOPEN_UNIX;
+        break;
+
+    case _SC_XOPEN_UUCP:
+        Value = _XOPEN_UUCP;
+        break;
+
+    case _SC_XOPEN_VERSION:
+        Value = _XOPEN_VERSION;
         break;
 
     default:
@@ -297,7 +596,7 @@ Return Value:
         break;
 
     case _PC_CHOWN_RESTRICTED:
-        Result = 1;
+        Result = _POSIX_CHOWN_RESTRICTED;
         break;
 
     case _PC_FILESIZEBITS:
@@ -321,7 +620,7 @@ Return Value:
         break;
 
     case _PC_NO_TRUNC:
-        Result = 0;
+        Result = _POSIX_NO_TRUNC;
         break;
 
     case _PC_PATH_MAX:
