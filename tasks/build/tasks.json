@@ -484,6 +484,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/screen-4.4.0"
         },
         {
+            "name": "Make dropbear",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/dropbear-2016.74"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"

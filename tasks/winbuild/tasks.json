@@ -460,6 +460,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gc-7.4.4"
         },
         {
+            "name": "Make dropbear",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/dropbear-2016.74"
+        },
+        {
             "name": "Make OS",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os test"
