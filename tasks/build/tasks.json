@@ -489,6 +489,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/dropbear-2016.74"
         },
         {
+            "name": "Make rsync",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/rsync-3.1.2"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
