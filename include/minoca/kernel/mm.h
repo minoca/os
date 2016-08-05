@@ -317,7 +317,6 @@ typedef enum _ALLOCATION_STRATEGY {
     AllocationStrategyHighestAddress,
     AllocationStrategyFixedAddress,
     AllocationStrategyFixedAddressClobber,
-    AllocationStrategyPreferredAddress,
 } ALLOCATION_STRATEGY, *PALLOCATION_STRATEGY;
 
 typedef enum _POOL_TYPE {

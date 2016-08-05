@@ -254,12 +254,6 @@ Return Value:
         }
     }
 
-    if ((VaRequest->Strategy != AllocationStrategyFixedAddress) &&
-        (VaRequest->Strategy != AllocationStrategyFixedAddressClobber)) {
-
-        VaRequest->Address = NULL;
-    }
-
     //
     // If the allocation has not yet been done, then allocate now.
     //
@@ -697,14 +691,6 @@ Return Value:
                 Status = STATUS_INVALID_PARAMETER;
                 goto SysMapOrUnmapMemoryEnd;
             }
-
-        //
-        // If the caller specified an address, try for that one, but take
-        // anything.
-        //
-
-        } else if (Parameters->Address != NULL) {
-            VaRequest.Strategy = AllocationStrategyPreferredAddress;
         }
 
         Parameters->Size = ALIGN_RANGE_UP(Parameters->Size, PageSize);

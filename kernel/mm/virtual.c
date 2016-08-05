@@ -1714,14 +1714,11 @@ Return Value:
     }
 
     //
-    // If the caller requested a fixed address, check to see if the range is in
-    // use. If it is not, go ahead and allocate it.
+    // If the caller requested an address, check to see if the range is in use.
+    // If it is not, go ahead and allocate it.
     //
 
-    if ((Request->Strategy == AllocationStrategyFixedAddress) ||
-        (Request->Strategy == AllocationStrategyFixedAddressClobber) ||
-        (Request->Strategy == AllocationStrategyPreferredAddress)) {
-
+    if (Request->Address != NULL) {
         if (Request->Strategy == AllocationStrategyFixedAddressClobber) {
             RangeFree = TRUE;
 
@@ -1756,9 +1753,12 @@ Return Value:
             goto AllocateAddressRangeEnd;
         }
 
-        ASSERT(Request->Strategy != AllocationStrategyFixedAddressClobber);
+        //
+        // The original strategy is actually the fallback strategy when a
+        // provided address does not work.
+        //
 
-        Request->Strategy = AllocationStrategyAnyAddress;
+        ASSERT(Request->Strategy != AllocationStrategyFixedAddressClobber);
     }
 
     //
