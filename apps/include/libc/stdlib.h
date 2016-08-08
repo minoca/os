@@ -522,6 +522,38 @@ Return Value:
 --*/
 
 LIBC_API
+int
+posix_memalign (
+    void **AllocationPointer,
+    size_t AllocationAlignment,
+    size_t AllocationSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates aligned memory from the heap. The given alignment
+    must be a power of 2 and a multiple of the size of a pointer.
+
+Arguments:
+
+    AllocationPointer - Supplies a pointer that receives a pointer to the
+        allocated memory on success.
+
+    AllocationAlignment - Supplies the required allocation alignment in bytes.
+
+    AllocationSize - Supplies the required allocation size in bytes.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+LIBC_API
 char *
 getenv (
     const char *Name

@@ -206,6 +206,48 @@ Return Value:
 }
 
 OS_API
+KSTATUS
+OsHeapAlignedAllocate (
+    PVOID *Memory,
+    UINTN Alignment,
+    UINTN Size,
+    UINTN Tag
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates aligned memory from the heap.
+
+Arguments:
+
+    Memory - Supplies a pointer that receives the pointer to the aligned
+        allocation on success.
+
+    Alignment - Supplies the requested alignment for the allocation, in bytes.
+
+    Size - Supplies the size of the allocation request, in bytes.
+
+    Tag - Supplies an identification tag to mark this allocation with.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    OsAcquireLock(&OsHeapLock);
+    Status = RtlHeapAlignedAllocate(&OsHeap, Memory, Alignment, Size, Tag);
+    OsReleaseLock(&OsHeapLock);
+    return Status;
+}
+
+OS_API
 VOID
 OsValidateHeap (
     VOID

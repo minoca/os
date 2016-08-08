@@ -221,6 +221,57 @@ Return Value:
     return NewBuffer;
 }
 
+LIBC_API
+int
+posix_memalign (
+    void **AllocationPointer,
+    size_t AllocationAlignment,
+    size_t AllocationSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates aligned memory from the heap. The given alignment
+    must be a power of 2 and a multiple of the size of a pointer.
+
+Arguments:
+
+    AllocationPointer - Supplies a pointer that receives a pointer to the
+        allocated memory on success.
+
+    AllocationAlignment - Supplies the required allocation alignment in bytes.
+
+    AllocationSize - Supplies the required allocation size in bytes.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    if ((IS_ALIGNED(AllocationAlignment, sizeof(void *)) == FALSE) ||
+        (POWER_OF_2(AllocationAlignment) == FALSE) ||
+        (AllocationAlignment == 0)) {
+
+        return EINVAL;
+    }
+
+    Status = OsHeapAlignedAllocate(AllocationPointer,
+                                   AllocationAlignment,
+                                   AllocationSize,
+                                   MALLOC_ALLOCATION_TAG);
+
+    return ClConvertKstatusToErrorNumber(Status);
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

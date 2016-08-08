@@ -5658,6 +5658,41 @@ Return Value:
 --*/
 
 RTL_API
+KSTATUS
+RtlHeapAlignedAllocate (
+    PMEMORY_HEAP Heap,
+    PVOID *Memory,
+    UINTN Alignment,
+    UINTN Size,
+    UINTN Tag
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates aligned memory from a given heap.
+
+Arguments:
+
+    Heap - Supplies the heap to allocate from.
+
+    Memory - Supplies a pointer that receives the pointer to the aligned
+        allocation on success.
+
+    Alignment - Supplies the requested alignment for the allocation, in bytes.
+
+    Size - Supplies the size of the allocation request, in bytes.
+
+    Tag - Supplies an identification tag to mark this allocation with.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+RTL_API
 VOID
 RtlHeapFree (
     PMEMORY_HEAP Heap,

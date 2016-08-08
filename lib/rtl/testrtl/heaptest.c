@@ -42,6 +42,7 @@ Environment:
 #define TEST_HEAP_ALLOCATION_COUNT 5000
 #define TEST_HEAP_MAX_ALLOCATION_SIZE 0x1800
 #define TEST_HEAP_ITERATIONS 20000
+#define TEST_HEAP_MAX_ALIGNMENT 0x100000
 
 #define TEST_HEAP_TAG 0x74736554
 
@@ -130,6 +131,7 @@ Return Value:
 
 {
 
+    ULONG Alignment;
     PVOID *Allocations;
     ULONG Failures;
     ULONG Flags;
@@ -137,6 +139,7 @@ Return Value:
     ULONG Iteration;
     PVOID OriginalAllocation;
     ULONG Size;
+    KSTATUS Status;
 
     Failures = 0;
 
@@ -194,9 +197,27 @@ Return Value:
 
             } else {
                 OriginalAllocation = Allocations[Index];
-                Allocations[Index] = RtlHeapAllocate(&TestUpperHeap,
-                                                     Size,
-                                                     TEST_HEAP_TAG);
+                Alignment = rand() % TEST_HEAP_MAX_ALIGNMENT;
+                if ((Alignment & 0x1) != 0) {
+                    Allocations[Index] = RtlHeapAllocate(&TestUpperHeap,
+                                                         Size,
+                                                         TEST_HEAP_TAG);
+
+                } else {
+                    Status = RtlHeapAlignedAllocate(&TestUpperHeap,
+                                                    &(Allocations[Index]),
+                                                    Alignment,
+                                                    Size,
+                                                    TEST_HEAP_TAG);
+
+                    if (!KSUCCESS(Status)) {
+                        printf("Aligned heap allocation failure: Status 0x%x, "
+                               "Alignment 0x%x, Size 0x%x\n",
+                               Status,
+                               Alignment,
+                               Size);
+                    }
+                }
 
                 if (OriginalAllocation != NULL) {
                     RtlHeapFree(&TestUpperHeap, OriginalAllocation);

@@ -1416,6 +1416,192 @@ HeapReallocateEnd:
 }
 
 RTL_API
+KSTATUS
+RtlHeapAlignedAllocate (
+    PMEMORY_HEAP Heap,
+    PVOID *Memory,
+    UINTN Alignment,
+    UINTN Size,
+    UINTN Tag
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates aligned memory from a given heap.
+
+Arguments:
+
+    Heap - Supplies the heap to allocate from.
+
+    Memory - Supplies a pointer that receives the pointer to the aligned
+        allocation on success.
+
+    Alignment - Supplies the requested alignment for the allocation, in bytes.
+
+    Size - Supplies the size of the allocation request, in bytes.
+
+    Tag - Supplies an identification tag to mark this allocation with.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PHEAP_CHUNK AlignedChunk;
+    PVOID AlignedMemory;
+    UINTN AlignedOffset;
+    UINTN AlignedSize;
+    UINTN AllocationSize;
+    PHEAP_CHUNK NewChunk;
+    UINTN NewChunkSize;
+    PVOID NewMemory;
+    PHEAP_CHUNK RemainderChunk;
+    UINTN RemainderChunkSize;
+    UINTN Shift;
+    KSTATUS Status;
+
+    NewMemory = NULL;
+
+    //
+    // Make sure the alignment is big enough and a power of 2.
+    //
+
+    if (Alignment < HEAP_MIN_CHUNK_SIZE) {
+        Alignment = HEAP_MIN_CHUNK_SIZE;
+    }
+
+    if (!POWER_OF_2(Alignment)) {
+        Shift = RtlCountLeadingZeros(Alignment);
+        if (Shift == 0) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto HeapAlignedAllocateEnd;
+        }
+
+        Shift = (sizeof(UINTN) * BITS_PER_BYTE) - Shift;
+        Alignment = 1 << Shift;
+
+        ASSERT(POWER_OF_2(Alignment));
+    }
+
+    //
+    // Validate that the request can be aligned.
+    //
+
+    if (Size >= (HEAP_MAX_REQUEST - Alignment)) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto HeapAlignedAllocateEnd;
+    }
+
+    //
+    // Pad the allocation request so that it can be aligned up in case it does
+    // not come back aligned.
+    //
+
+    Size = HEAP_REQUEST_TO_SIZE(Size);
+    AllocationSize = Size +
+                     Alignment +
+                     HEAP_MIN_CHUNK_SIZE -
+                     HEAP_CHUNK_OVERHEAD;
+
+    NewMemory = RtlHeapAllocate(Heap, AllocationSize, Tag);
+    if (NewMemory == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto HeapAlignedAllocateEnd;
+    }
+
+    NewChunk = HEAP_MEMORY_TO_CHUNK(NewMemory);
+    AllocationSize = HEAP_CHUNK_SIZE(NewChunk);
+
+    //
+    // If the base of the allocation is not aligned, align it up to the
+    // requested alignment. There should be enough room to release the
+    // beginning of the allocation back to the heap.
+    //
+
+    if (!IS_POINTER_ALIGNED(NewMemory, Alignment)) {
+        AlignedMemory = ALIGN_POINTER_UP(NewMemory, Alignment);
+        AlignedChunk = HEAP_MEMORY_TO_CHUNK(AlignedMemory);
+        if (((PVOID)AlignedChunk - (PVOID)NewChunk) < HEAP_MIN_CHUNK_SIZE) {
+            AlignedChunk = HEAP_CHUNK_PLUS_OFFSET(AlignedChunk, Alignment);
+        }
+
+        AlignedOffset = (UINTN)((PVOID)AlignedChunk - (PVOID)NewChunk);
+        AlignedSize = HEAP_CHUNK_SIZE(NewChunk) - AlignedOffset;
+        if (HEAP_CHUNK_IS_MMAPPED(NewChunk)) {
+            AlignedChunk->PreviousFooter = NewChunk->PreviousFooter +
+                                           AlignedOffset;
+
+            AlignedChunk->Header = AlignedSize;
+
+        } else {
+            HEAP_CHUNK_SET_IN_USE(Heap, AlignedChunk, AlignedSize);
+            HEAP_CHUNK_SET_IN_USE(Heap, NewChunk, AlignedOffset);
+            NewChunk->Tag = HEAP_FREE_MAGIC;
+            RtlpHeapDisposeOfChunk(Heap, NewChunk, AlignedOffset);
+            Heap->Statistics.FreeListSize += AlignedOffset;
+        }
+
+        AlignedChunk->Tag = Tag;
+        NewChunk = AlignedChunk;
+    }
+
+    //
+    // If the trailing space is big enough to fit a minimum heap chunk, give
+    // it back. The trailing space never had the chunk tag set, so it does not
+    // need to be modified.
+    //
+
+    if (!HEAP_CHUNK_IS_MMAPPED(NewChunk)) {
+        NewChunkSize = HEAP_CHUNK_SIZE(NewChunk);
+        if (NewChunkSize > (Size + HEAP_MIN_CHUNK_SIZE)) {
+            RemainderChunkSize = NewChunkSize - Size;
+            RemainderChunk = HEAP_CHUNK_PLUS_OFFSET(NewChunk, Size);
+            HEAP_CHUNK_SET_IN_USE(Heap, NewChunk, Size);
+            HEAP_CHUNK_SET_IN_USE(Heap, RemainderChunk, RemainderChunkSize);
+            RtlpHeapDisposeOfChunk(Heap, RemainderChunk, RemainderChunkSize);
+            Heap->Statistics.FreeListSize += RemainderChunkSize;
+        }
+    }
+
+    NewMemory = HEAP_CHUNK_TO_MEMORY(NewChunk);
+
+    ASSERT(HEAP_CHUNK_SIZE(NewChunk) >= Size);
+    ASSERT(IS_POINTER_ALIGNED(NewMemory, Alignment));
+
+    RtlpHeapCheckInUseChunk(Heap, NewChunk);
+
+    //
+    // If the final chunk is not the same size as the allocated chunk, adjust
+    // the statistics.
+    //
+
+    if (((Heap->Flags & MEMORY_HEAP_FLAG_COLLECT_TAG_STATISTICS) != 0) &&
+        (HEAP_CHUNK_SIZE(NewChunk) != AllocationSize)) {
+
+        RtlpCollectTagStatistics(Heap, Tag, AllocationSize, FALSE);
+        RtlpCollectTagStatistics(Heap, Tag, HEAP_CHUNK_SIZE(NewChunk), TRUE);
+    }
+
+    Status = STATUS_SUCCESS;
+
+HeapAlignedAllocateEnd:
+    if (!KSUCCESS(Status)) {
+        if (NewMemory != NULL) {
+            RtlHeapFree(Heap, NewMemory);
+            NewMemory = NULL;
+        }
+    }
+
+    *Memory = NewMemory;
+    return Status;
+}
+
+RTL_API
 VOID
 RtlHeapFree (
     PMEMORY_HEAP Heap,
