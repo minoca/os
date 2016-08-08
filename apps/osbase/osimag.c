@@ -820,7 +820,7 @@ Return Value:
             Symbol->LibraryName = OsEnvironment->ImageName;
         }
 
-        Symbol->LibraryBaseAddress = Image->LoadedLowestAddress;
+        Symbol->LibraryBaseAddress = Image->LoadedImageBuffer;
         Symbol->SymbolName = ImageSymbol.Name;
         Symbol->SymbolAddress = ImageSymbol.Address;
     }
@@ -935,6 +935,51 @@ Return Value:
 
     OspAcquireImageLock();
     OspTlsDestroy(ThreadData);
+    OspReleaseImageLock();
+    return;
+}
+
+OS_API
+VOID
+OsIterateImages (
+    PIMAGE_ITERATOR_ROUTINE IteratorRoutine,
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine iterates over all images currently loaded in the process.
+
+Arguments:
+
+    IteratorRoutine - Supplies a pointer to the routine to call for each image.
+
+    Context - Supplies an opaque context pointer that is passed directly into
+        the iterator routine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PLOADED_IMAGE Image;
+
+    OspAcquireImageLock();
+    CurrentEntry = OsLoadedImagesHead.Next;
+    if (CurrentEntry != NULL) {
+        while (CurrentEntry != &OsLoadedImagesHead) {
+            Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+            CurrentEntry = CurrentEntry->Next;
+            IteratorRoutine(Image, Context);
+        }
+    }
+
     OspReleaseImageLock();
     return;
 }
@@ -1334,7 +1379,7 @@ Return Value:
                          MapFlags,
                          &Address);
 
-    Image->LoadedLowestAddress = Address;
+    Image->BaseDifference = Address - Image->PreferredLowestAddress;
     Image->LoadedImageBuffer = Address;
     Image->AllocatorHandle = Address;
     return Status;
@@ -1366,7 +1411,7 @@ Return Value:
 
     KSTATUS Status;
 
-    Status = OsMemoryUnmap(Image->LoadedLowestAddress, Image->Size);
+    Status = OsMemoryUnmap(Image->LoadedImageBuffer, Image->Size);
 
     ASSERT(KSUCCESS(Status));
 
@@ -1805,6 +1850,7 @@ Return Value:
 
     ASSERT(OsLoadedImagesHead.Next != NULL);
 
+    Image->Debug.DynamicLinkerBase = OsEnvironment->StartData->InterpreterBase;
     Notification.Version = PROCESS_DEBUG_MODULE_CHANGE_VERSION;
     Notification.Load = TRUE;
     Notification.Image = Image;
@@ -2384,6 +2430,7 @@ Return Value:
     OsLibrary->Flags |= IMAGE_FLAG_RELOCATED | IMAGE_FLAG_IMPORTS_LOADED;
     INSERT_BEFORE(&(OsLibrary->ListEntry), &OsLoadedImagesHead);
     OsLibrary->LoadFlags |= IMAGE_LOAD_FLAG_PRIMARY_LOAD;
+    OsLibrary->Debug.DynamicLinkerBase = StartData->InterpreterBase;
     if ((StartData->InterpreterBase != NULL) &&
         (StartData->InterpreterBase != StartData->OsLibraryBase)) {
 
@@ -2407,6 +2454,7 @@ Return Value:
         }
 
         INSERT_BEFORE(&(Executable->ListEntry), &OsLoadedImagesHead);
+        Executable->Debug.DynamicLinkerBase = StartData->InterpreterBase;
 
     } else {
         Executable = OsLibrary;

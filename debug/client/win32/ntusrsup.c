@@ -1017,8 +1017,7 @@ Return Value:
         Entry->StructureSize = FIELD_OFFSET(LOADED_MODULE_ENTRY, BinaryName) +
                                SizeNeeded + 1;
 
-        Entry->BaseAddress = (ULONG)ModuleInfo.lpBaseOfDll;
-        Entry->LowestAddress = Entry->BaseAddress;
+        Entry->LowestAddress = (UINT_PTR)(ModuleInfo.lpBaseOfDll);
         Entry->Size = ModuleInfo.SizeOfImage;
         Entry->Process = DbgTargetProcessId;
         BinaryName = (PSTR)(Entry->BinaryName);

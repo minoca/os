@@ -816,15 +816,15 @@ Return Value:
     KeGetRandomBytes(StartData->Random, PROCESS_START_DATA_RANDOM_SIZE);
     if (Interpreter != NULL) {
         StartData->EntryPoint = Interpreter->EntryPoint;
-        StartData->InterpreterBase = Interpreter->LoadedLowestAddress;
+        StartData->InterpreterBase = Interpreter->LoadedImageBuffer;
 
     } else {
         StartData->EntryPoint = Executable->EntryPoint;
         StartData->InterpreterBase = NULL;
     }
 
-    StartData->ExecutableBase = Executable->LoadedLowestAddress;
-    StartData->OsLibraryBase = OsBaseLibrary->LoadedLowestAddress;
+    StartData->ExecutableBase = Executable->LoadedImageBuffer;
+    StartData->OsLibraryBase = OsBaseLibrary->LoadedImageBuffer;
     return;
 }
 

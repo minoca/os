@@ -1284,13 +1284,12 @@ Return Value:
             goto PrintLoadedModulesEnd;
         }
 
-        DBGTEST_PRINT("    %d: %20s StructSize %2d Timestamp %I64x Base %8I64x "
+        DBGTEST_PRINT("    %d: %20s StructSize %2d Timestamp %I64x "
                       "LowestAddress %8I64x Size %I64x Process %x\n",
                       ModuleIndex,
                       Module->BinaryName,
                       Module->StructureSize,
                       Module->Timestamp,
-                      Module->BaseAddress,
                       Module->LowestAddress,
                       Module->Size,
                       Module->Process);

@@ -165,7 +165,6 @@ DbgpLoadModule (
     PDEBUGGER_CONTEXT Context,
     PSTR BinaryName,
     PSTR FriendlyName,
-    ULONGLONG BaseAddress,
     ULONGLONG Size,
     ULONGLONG LowestAddress,
     ULONGLONG Timestamp,
@@ -6994,7 +6993,6 @@ Return Value:
             DbgpLoadModule(Context,
                            CurrentTargetModule->BinaryName,
                            FriendlyName,
-                           CurrentTargetModule->BaseAddress,
                            CurrentTargetModule->Size,
                            CurrentTargetModule->LowestAddress,
                            CurrentTargetModule->Timestamp,
@@ -7815,7 +7813,6 @@ DbgpLoadModule (
     PDEBUGGER_CONTEXT Context,
     PSTR BinaryName,
     PSTR FriendlyName,
-    ULONGLONG BaseAddress,
     ULONGLONG Size,
     ULONGLONG LowestAddress,
     ULONGLONG Timestamp,
@@ -7837,8 +7834,6 @@ Arguments:
         the known symbol path to try to find this binary.
 
     FriendlyName - Supplies the friendly name of the module.
-
-    BaseAddress - Supplies the base address to load the module at.
 
     Size - Supplies the size of the module.
 
@@ -8148,23 +8143,19 @@ Return Value:
     }
 
     strcpy(NewModule->ModuleName, FriendlyName);
-    NewModule->BaseAddress = BaseAddress;
     NewModule->LowestAddress = LowestAddress;
     NewModule->Size = Size;
     NewModule->Process = Process;
     NewModule->Loaded = TRUE;
     INSERT_BEFORE(&(NewModule->ListEntry), &(Context->ModuleList.ModulesHead));
+    NewModule->BaseDifference = 0;
     if (NewModule->Symbols != NULL) {
-        if (NewModule->BaseAddress == -1ULL) {
-            NewModule->BaseAddress = NewModule->Symbols->ImageBase;
-        }
-
-        NewModule->BaseDifference = NewModule->BaseAddress -
+        NewModule->BaseDifference = LowestAddress -
                                     NewModule->Symbols->ImageBase;
     }
 
     DbgOut("Module loaded 0x%08I64x: %s -> ",
-           NewModule->BaseAddress,
+           NewModule->BaseDifference,
            NewModule->ModuleName);
 
     if (NewModule->Symbols == NULL) {

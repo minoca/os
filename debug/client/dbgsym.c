@@ -336,12 +336,12 @@ Return Value:
     }
 
     Address += Module->BaseDifference;
-    if (Address >= Module->BaseAddress) {
-        Offset = Address - Module->BaseAddress;
+    if (Address >= Module->LowestAddress) {
+        Offset = Address - Module->LowestAddress;
         sprintf(Symbol, "%s+0x%I64x", Module->ModuleName, Offset);
 
     } else {
-        Offset = Module->BaseAddress - Address;
+        Offset = Module->LowestAddress - Address;
         sprintf(Symbol, "%s-0x%I64x", Module->ModuleName, Offset);
     }
 

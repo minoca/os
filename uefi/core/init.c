@@ -351,7 +351,6 @@ Return Value:
                   FirmwareBinaryName,
                   ModuleNameLength);
 
-    DebugModule->BaseAddress = FirmwareBaseAddress;
     DebugModule->LowestAddress = FirmwareLowestAddress;
     DebugModule->Size = FirmwareSize;
     if (EfiDebugFirmware != FALSE) {

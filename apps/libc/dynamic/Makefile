@@ -72,6 +72,7 @@ OBJS = assert.o             \
        kerror.o             \
        langinfo.o           \
        line.o               \
+       link.o               \
        locale.o             \
        math/abs.o           \
        math/ceil.o          \

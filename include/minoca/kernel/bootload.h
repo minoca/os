@@ -28,9 +28,9 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define BOOT_INITIALIZATION_BLOCK_VERSION 2
+#define BOOT_INITIALIZATION_BLOCK_VERSION 3
 
-#define KERNEL_INITIALIZATION_BLOCK_VERSION 2
+#define KERNEL_INITIALIZATION_BLOCK_VERSION 3
 
 //
 // Define boot initialization flags.
@@ -117,9 +117,6 @@ Members:
     EfiSystemTable - Stores a pointer to the EFI system table as passed to the
         original EFI boot application. The type here is an EFI_SYSTEM_TABLE *.
 
-    ApplicationBaseAddress - Stores the loaded base address of the boot
-        application.
-
     PartitionOffset - Stores the offset in blocks from the beginning of the
         disk to the OS partition if the firmware doesn't support partitions
         natively.
@@ -159,7 +156,6 @@ typedef struct _BOOT_INITIALIZATION_BLOCK {
     ULONGLONG PartitionOffset;
     ULONG DriveNumber;
     PSTR ApplicationName;
-    PVOID ApplicationBaseAddress;
     PVOID ApplicationLowestAddress;
     UINTN ApplicationSize;
     PSTR ApplicationArguments;

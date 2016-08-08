@@ -119,6 +119,32 @@ Return Value:
 
 --*/
 
+typedef
+VOID
+(*PIMAGE_ITERATOR_ROUTINE) (
+    PLOADED_IMAGE Image,
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called for each loaded image in the process.
+
+Arguments:
+
+    Image - Supplies a pointer to the loaded image.
+
+    Context - Supplies the context pointer that was passed into the iterate
+        request function.
+
+Return Value:
+
+    None.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -3707,6 +3733,32 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+OS_API
+VOID
+OsIterateImages (
+    PIMAGE_ITERATOR_ROUTINE IteratorRoutine,
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine iterates over all images currently loaded in the process.
+
+Arguments:
+
+    IteratorRoutine - Supplies a pointer to the routine to call for each image.
+
+    Context - Supplies an opaque context pointer that is passed directly into
+        the iterator routine.
+
+Return Value:
+
+    None.
 
 --*/
 

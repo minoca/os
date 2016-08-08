@@ -262,6 +262,7 @@ Return Value:
     PLOADED_IMAGE Image;
     IMAGE_BUFFER ImageBuffer;
     PKPROCESS KernelProcess;
+    PVOID LoadedLowestAddress;
     PLOADED_IMAGE NewImage;
     KSTATUS Status;
 
@@ -276,7 +277,10 @@ Return Value:
     while (CurrentEntry != ListHead) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        ImageBuffer.Data = Image->LoadedLowestAddress;
+        LoadedLowestAddress = Image->PreferredLowestAddress +
+                              Image->BaseDifference;
+
+        ImageBuffer.Data = LoadedLowestAddress;
         ImageBuffer.Size = Image->Size;
         Status = ImAddImage(Image->BinaryName, &ImageBuffer, &NewImage);
         if (!KSUCCESS(Status)) {
@@ -297,15 +301,14 @@ Return Value:
         INSERT_BEFORE(&(NewImage->ListEntry), &(KernelProcess->ImageListHead));
         KernelProcess->ImageCount += 1;
         KernelProcess->ImageListSignature +=
-                                       NewImage->File.ModificationDate +
-                                       (UINTN)(NewImage->LoadedLowestAddress);
+                  NewImage->File.ModificationDate + (UINTN)LoadedLowestAddress;
 
         //
         // Load this image into the kernel debugger, but skip the kernel
         // image as that was already loaded.
         //
 
-        if (NewImage->LoadedLowestAddress != KernelLowestAddress) {
+        if (LoadedLowestAddress != KernelLowestAddress) {
             Status = PspLoadProcessImageIntoKernelDebugger(KernelProcess,
                                                            NewImage);
 
@@ -595,7 +598,7 @@ Return Value:
     while (CurrentEntry != &(Process->ImageListHead)) {
         CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        if (CurrentImage->LoadedLowestAddress == Image.LoadedLowestAddress) {
+        if (CurrentImage->LoadedImageBuffer == Image.LoadedImageBuffer) {
             ExistingImage = CurrentImage;
             break;
         }
@@ -674,9 +677,9 @@ Return Value:
     NewImage->Format = Image.Format;
     NewImage->Machine = Image.Machine;
     NewImage->Size = Image.Size;
-    NewImage->DeclaredBase = Image.DeclaredBase;
     NewImage->PreferredLowestAddress = Image.PreferredLowestAddress;
-    NewImage->LoadedLowestAddress = Image.LoadedLowestAddress;
+    NewImage->BaseDifference = Image.BaseDifference;
+    NewImage->LoadedImageBuffer = Image.LoadedImageBuffer;
     NewImage->EntryPoint = Image.EntryPoint;
     NewImage->ReferenceCount = 1;
     NewImage->LoadFlags = IMAGE_LOAD_FLAG_PLACEHOLDER;
@@ -1238,7 +1241,7 @@ Return Value:
     //
 
     Address = Reservation->VirtualBase + PageOffset;
-    Image->LoadedLowestAddress = Address;
+    Image->BaseDifference = Address - Image->PreferredLowestAddress;
     Image->LoadedImageBuffer = Address;
     Image->AllocatorHandle = (HANDLE)Reservation;
     Status = STATUS_SUCCESS;
@@ -1789,7 +1792,7 @@ Return Value:
 
     Process->ImageCount += 1;
     Process->ImageListSignature += Image->File.ModificationDate +
-                                   (UINTN)(Image->LoadedLowestAddress);
+                                   Image->BaseDifference;
 
     //
     // If the debug flag is enabled, then make the kernel debugger aware of
@@ -1865,7 +1868,7 @@ Return Value:
 
     Process->ImageCount -= 1;
     Process->ImageListSignature -= Image->File.ModificationDate +
-                                   (UINTN)(Image->LoadedLowestAddress);
+                                   Image->BaseDifference;
 
     if (Image->DebuggerModule != NULL) {
         KdReportModuleChange(Image->DebuggerModule, FALSE);
@@ -2194,7 +2197,7 @@ Return Value:
     }
 
     Destination->ImageListSignature += NewImage->File.ModificationDate +
-                                       (UINTN)(NewImage->LoadedLowestAddress);
+                                       NewImage->BaseDifference;
 
     Status = STATUS_SUCCESS;
 
@@ -2299,7 +2302,6 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    UINTN BaseDifference;
     PDEBUG_MODULE DebuggerModule;
     ULONG NameSize;
 
@@ -2339,11 +2341,9 @@ Return Value:
     RtlZeroMemory(DebuggerModule, AllocationSize);
     DebuggerModule->StructureSize = AllocationSize;
     DebuggerModule->Timestamp = Image->File.ModificationDate;
-    BaseDifference = (UINTN)Image->LoadedLowestAddress -
-                     (UINTN)Image->PreferredLowestAddress;
+    DebuggerModule->LowestAddress = Image->PreferredLowestAddress +
+                                    Image->BaseDifference;
 
-    DebuggerModule->BaseAddress = Image->DeclaredBase + BaseDifference;
-    DebuggerModule->LowestAddress = Image->LoadedLowestAddress;
     DebuggerModule->EntryPoint = Image->EntryPoint;
     DebuggerModule->Size = Image->Size;
     DebuggerModule->Process = Process->Identifiers.ProcessId;

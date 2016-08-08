@@ -707,7 +707,7 @@ Return Value:
         // Skip the kernel module.
         //
 
-        if (Image->LoadedLowestAddress ==
+        if (Image->LoadedImageBuffer ==
             Parameters->KernelModule->LowestAddress) {
 
             continue;

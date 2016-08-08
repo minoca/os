@@ -704,13 +704,15 @@ AllocateAddressSpaceEnd:
 
     } else {
         Image->AllocatorHandle = Allocation;
-        Image->LoadedLowestAddress = Allocation->VirtualAddress + PageOffset;
+        Image->LoadedImageBuffer = (PVOID)(UINTN)Allocation->PhysicalAddress +
+                                   PageOffset;
+
+        Image->BaseDifference = Allocation->VirtualAddress + PageOffset -
+                                Image->PreferredLowestAddress;
 
         ASSERT((UINTN)Allocation->PhysicalAddress ==
                Allocation->PhysicalAddress);
 
-        Image->LoadedImageBuffer = (PVOID)(UINTN)Allocation->PhysicalAddress +
-                                   PageOffset;
     }
 
     return Status;
@@ -894,7 +896,6 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    UINTN BaseDifference;
     PDEBUG_MODULE LoadedModule;
     ULONG NameSize;
     KSTATUS Status;
@@ -918,9 +919,9 @@ Return Value:
     RtlStringCopy(LoadedModule->BinaryName, Image->BinaryName, NameSize);
     LoadedModule->StructureSize = AllocationSize;
     LoadedModule->Timestamp = Image->File.ModificationDate;
-    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
-    LoadedModule->BaseAddress = Image->DeclaredBase + BaseDifference;
-    LoadedModule->LowestAddress = Image->LoadedLowestAddress;
+    LoadedModule->LowestAddress = Image->PreferredLowestAddress +
+                                  Image->BaseDifference;
+
     LoadedModule->Size = Image->Size;
     LoadedModule->EntryPoint = Image->EntryPoint;
     LoadedModule->Image = Image;

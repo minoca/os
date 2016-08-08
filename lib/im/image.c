@@ -534,7 +534,7 @@ Return Value:
         // Call out to the allocator to get space for the image.
         //
 
-        Image->LoadedLowestAddress = Image->PreferredLowestAddress;
+        Image->BaseDifference = 0;
         Status = ImAllocateAddressSpace(Image);
         if (!KSUCCESS(Status)) {
             goto LoadExecutableEnd;
@@ -545,7 +545,7 @@ Return Value:
         // be allocated, then this image cannot be loaded.
         //
 
-        if ((Image->LoadedLowestAddress != Image->PreferredLowestAddress) &&
+        if ((Image->BaseDifference != 0) &&
             ((Image->Flags & IMAGE_FLAG_RELOCATABLE) == 0)) {
 
             Status = STATUS_MEMORY_CONFLICT;
@@ -558,7 +558,7 @@ Return Value:
     //
 
     } else {
-        Image->LoadedLowestAddress = Image->PreferredLowestAddress;
+        Image->BaseDifference = 0;
     }
 
     //
@@ -661,7 +661,7 @@ Return Value:
     }
 
     Image->Format = ImGetImageFormat(Buffer);
-    Image->LoadedLowestAddress = Buffer->Data;
+    Image->LoadedImageBuffer = Buffer->Data;
     Image->File.Size = Buffer->Size;
     Status = ImpAddImage(Buffer, Image);
 
@@ -892,8 +892,7 @@ Return Value:
 
 {
 
-    PELF32_HEADER ElfHeader;
-    BOOL IsElfImage;
+    LOADED_IMAGE Image;
     BOOL IsPeImage;
     PIMAGE_NT_HEADERS PeHeaders;
     KSTATUS Status;
@@ -924,38 +923,13 @@ Return Value:
         goto GetImageInformationEnd;
     }
 
-    //
-    // Attempt to get the image information for an ELF image.
-    //
-
-    IsElfImage = ImpElf32GetHeader(Buffer, &ElfHeader);
-    if (IsElfImage != FALSE) {
-        Information->Format = ImageElf32;
-        Information->ImageBase = 0;
-        switch (ElfHeader->Machine) {
-        case ELF_MACHINE_ARM:
-            Information->Machine = ImageMachineTypeArm32;
-            break;
-
-        case ELF_MACHINE_I386:
-            Information->Machine = ImageMachineTypeX86;
-            break;
-
-        case ELF_MACHINE_X86_64:
-            Information->Machine = ImageMachineTypeX64;
-            break;
-
-        case ELF_MACHINE_AARCH64:
-            Information->Machine = ImageMachineTypeArm64;
-            break;
-
-        default:
-            Information->Machine = ImageMachineTypeUnknown;
-            break;
-        }
-
-        Information->EntryPoint = ElfHeader->EntryPoint;
-        Status = STATUS_SUCCESS;
+    RtlZeroMemory(&Image, sizeof(LOADED_IMAGE));
+    Status = ImpElf32GetImageSize(NULL, &Image, Buffer, NULL);
+    if (KSUCCESS(Status)) {
+        Information->Format = Image.Format;
+        Information->Machine = Image.Machine;
+        Information->EntryPoint = (ULONG)(Image.EntryPoint);
+        Information->ImageBase = (UINTN)(Image.PreferredLowestAddress);
         goto GetImageInformationEnd;
     }
 
@@ -1939,6 +1913,15 @@ Return Value:
         RtlStringCopy(Image->BinaryName, ImageName, ImageNameSize);
     }
 
+    Image->Debug.Version = IMAGE_DEBUG_VERSION;
+    Image->Debug.Image = Image;
+
+    //
+    // Consider consolidating ImNotifyImageLoad and ImNotifyImageUnload
+    // so this mechanism works fully.
+    //
+
+    Image->Debug.ImageChangeFunction = ImNotifyImageLoad;
     return Image;
 }
 

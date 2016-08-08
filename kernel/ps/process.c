@@ -3575,7 +3575,7 @@ Return Value:
 
     PageSize = MmPageSize();
     Process->AddressSpace->BreakStart =
-           ALIGN_POINTER_UP(Executable->LoadedLowestAddress + Executable->Size,
+           ALIGN_POINTER_UP(Executable->LoadedImageBuffer + Executable->Size,
                             PageSize);
 
     Process->AddressSpace->BreakEnd = Process->AddressSpace->BreakStart;
@@ -4132,7 +4132,6 @@ Return Value:
 
 {
 
-    UINTN BaseDifference;
     PLIST_ENTRY CurrentEntry;
     PLOADED_MODULE_ENTRY CurrentModule;
     PKPROCESS CurrentProcess;
@@ -4193,7 +4192,7 @@ Return Value:
                        ANYSIZE_ARRAY) * sizeof(CHAR));
 
         Signature += Image->File.ModificationDate +
-                     (UINTN)(Image->LoadedLowestAddress);
+                     (UINTN)(Image->LoadedImageBuffer);
 
         ModuleCount += 1;
         CurrentEntry = CurrentEntry->Next;
@@ -4252,13 +4251,7 @@ Return Value:
                                        (ANYSIZE_ARRAY * sizeof(CHAR));
 
         CurrentModule->Timestamp = Image->File.ModificationDate;
-        BaseDifference = (UINTN)Image->LoadedLowestAddress -
-                         (UINTN)Image->PreferredLowestAddress;
-
-        CurrentModule->BaseAddress =
-                                   (UINTN)Image->DeclaredBase + BaseDifference;
-
-        CurrentModule->LowestAddress = (UINTN)Image->LoadedLowestAddress;
+        CurrentModule->LowestAddress = (UINTN)Image->LoadedImageBuffer;
         CurrentModule->Size = Image->Size;
         CurrentModule->Process = Command->Process;
         RtlStringCopy(CurrentModule->BinaryName, Image->BinaryName, NameSize);

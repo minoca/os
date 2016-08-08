@@ -98,8 +98,6 @@ Members:
     StructureSize - Stores the size of the structure, including the complete
         binary name string, in bytes.
 
-    BaseAddress - Stores the current base address of the image.
-
     LowestAddress - Stores the lowest valid virtual address in the image. This
         can be above, below, or equal to the base address.
 
@@ -123,8 +121,6 @@ Members:
 typedef struct _DEBUG_MODULE {
     LIST_ENTRY ListEntry;
     ULONG StructureSize;
-    USHORT Checksum;
-    PVOID BaseAddress;
     PVOID LowestAddress;
     ULONGLONG Size;
     ULONGLONG Timestamp;

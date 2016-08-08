@@ -296,7 +296,10 @@ Return Value:
     KSTATUS Status;
 
     ImageSize = 0;
-    *InterpreterPath = NULL;
+    if (InterpreterPath != NULL) {
+        *InterpreterPath = NULL;
+    }
+
     Status = STATUS_UNKNOWN_IMAGE_FORMAT;
 
     //
@@ -356,6 +359,8 @@ Return Value:
         break;
     }
 
+    Image->EntryPoint = (PVOID)(UINTN)(ElfHeader->EntryPoint);
+
     //
     // Loop through the program headers once to get the image size and base
     // address.
@@ -375,6 +380,7 @@ Return Value:
 
         if ((ProgramHeader->Type == ELF_SEGMENT_TYPE_INTERPRETER) &&
             (ProgramHeader->FileSize != 0) &&
+            (InterpreterPath != NULL) &&
             ((Image->LoadFlags & IMAGE_LOAD_FLAG_IGNORE_INTERPRETER) == 0)) {
 
             ASSERT(Image->ImportDepth == 0);
@@ -573,7 +579,7 @@ Return Value:
     //
 
     PreviousSegment = NULL;
-    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
+    BaseDifference = Image->BaseDifference;
     ProgramHeader = FirstProgramHeader;
     for (SegmentIndex = 0; SegmentIndex < SegmentCount; SegmentIndex += 1) {
         Segment = &(Image->Segments[SegmentIndex]);
@@ -649,12 +655,13 @@ Return Value:
             goto LoadImageEnd;
         }
 
-        Status = ImMapImageSegment(Image->AllocatorHandle,
-                                   Image->LoadedLowestAddress,
-                                   &(Image->File),
-                                   ProgramHeader->Offset,
-                                   Segment,
-                                   PreviousSegment);
+        Status = ImMapImageSegment(
+                                Image->AllocatorHandle,
+                                Image->PreferredLowestAddress + BaseDifference,
+                                &(Image->File),
+                                ProgramHeader->Offset,
+                                Segment,
+                                PreviousSegment);
 
         if (!KSUCCESS(Status)) {
             goto LoadImageEnd;
@@ -668,10 +675,11 @@ Return Value:
         if ((PreviousSegment == NULL) &&
             (Image->AllocatorHandle == INVALID_HANDLE)) {
 
-            Image->LoadedLowestAddress = Segment->VirtualAddress;
+            Image->BaseDifference = Segment->VirtualAddress -
+                                    Image->PreferredLowestAddress;
+
             Image->LoadedImageBuffer = Segment->VirtualAddress;
-            BaseDifference = Image->LoadedLowestAddress -
-                             Image->PreferredLowestAddress;
+            BaseDifference = Image->BaseDifference;
         }
 
         Segment->Type = ImageSegmentFileSection;
@@ -847,10 +855,8 @@ Return Value:
     ELF_ADDR SegmentEnd;
     KSTATUS Status;
 
-    ElfHeader = Image->LoadedLowestAddress;
-    Image->LoadedLowestAddress = ImageBuffer->Data;
+    ElfHeader = Image->LoadedImageBuffer;
     Image->Size = ImageBuffer->Size;
-    Image->LoadedImageBuffer = Image->LoadedLowestAddress;
     LoadingImage = ImAllocateMemory(sizeof(ELF_LOADING_IMAGE),
                                     IM_ALLOCATION_TAG);
 
@@ -955,7 +961,8 @@ Return Value:
 
     Image->Size = ImageSize;
     Image->PreferredLowestAddress = (PVOID)(UINTN)LowestVirtualAddress;
-    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
+    BaseDifference = Image->LoadedImageBuffer - Image->PreferredLowestAddress;
+    Image->BaseDifference = BaseDifference;
     if (Image->TlsImage != NULL) {
         Image->TlsImage += BaseDifference;
     }
@@ -1487,8 +1494,8 @@ Return Value:
     Image->File.Size = Image->Size;
     LoadingImage.Buffer.Size = Image->Size;
     LoadingImage.ElfHeader = Buffer->Data;
-    Image->LoadedLowestAddress = Buffer->Data;
-    Image->LoadedImageBuffer = Image->LoadedLowestAddress;
+    Image->BaseDifference = Buffer->Data - Image->PreferredLowestAddress;
+    Image->LoadedImageBuffer = Buffer->Data;
     Image->ImageContext = &LoadingImage;
     Status = ImpElfGatherExportInformation(Image, TRUE);
     if (!KSUCCESS(Status)) {
@@ -1536,7 +1543,6 @@ Return Value:
 
 {
 
-    ELF_ADDR BaseDifference;
     PELF_SYMBOL ElfSymbol;
     ULONG Hash;
     ELF_SYMBOL_TYPE SymbolType;
@@ -1572,10 +1578,7 @@ Return Value:
         Value = ElfSymbol->Value;
 
     } else {
-        BaseDifference = Image->LoadedLowestAddress -
-                         Image->PreferredLowestAddress;
-
-        Value = ElfSymbol->Value + BaseDifference;
+        Value = ElfSymbol->Value + Image->BaseDifference;
     }
 
     Symbol->Address = (PVOID)(UINTN)Value;
@@ -1623,6 +1626,7 @@ Return Value:
     PELF_WORD HashBuckets;
     PELF_WORD HashChains;
     PELF_WORD HashTable;
+    PVOID LoadedLowestAddress;
     ELF_ADDR SymbolAddress;
     ELF_WORD SymbolBase;
     ULONG SymbolHash;
@@ -1635,8 +1639,10 @@ Return Value:
     // be in the symbols.
     //
 
-    if ((Address < Image->LoadedLowestAddress) ||
-        (Address >= (Image->LoadedLowestAddress + Image->Size))) {
+    BaseDifference = Image->BaseDifference;
+    LoadedLowestAddress = Image->PreferredLowestAddress + BaseDifference;
+    if ((Address < LoadedLowestAddress) ||
+        (Address >= (LoadedLowestAddress + Image->Size))) {
 
         return STATUS_NOT_FOUND;
     }
@@ -1658,7 +1664,6 @@ Return Value:
     // preferred lowest address.
     //
 
-    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
     Value = (ELF_ADDR)(UINTN)Address - BaseDifference;
 
     //
@@ -2240,10 +2245,21 @@ Return Value:
         Image->StaticFunctions = StaticFunctions;
     }
 
-    if (UseLoadedAddress != FALSE) {
-        BaseDifference = (UINTN)(Image->LoadedLowestAddress) -
-                         (UINTN)(Image->PreferredLowestAddress);
+    BaseDifference = Image->BaseDifference;
 
+    //
+    // If the loaded image buffer address is the loaded address, then go ahead
+    // and indicate things are live.
+    //
+
+    if (Image->PreferredLowestAddress + BaseDifference ==
+        Image->LoadedImageBuffer) {
+
+        UseLoadedAddress = TRUE;
+    }
+
+    if (UseLoadedAddress != FALSE) {
+        BaseDifference = Image->BaseDifference;
         DynamicEntry = (PVOID)(UINTN)(ProgramHeader->VirtualAddress +
                                       BaseDifference);
 
@@ -2254,6 +2270,7 @@ Return Value:
         DynamicEntry = LoadingImage->Buffer.Data + ProgramHeader->Offset;
     }
 
+    Image->DynamicSection = DynamicEntry;
     MaxDynamic = ProgramHeader->FileSize / sizeof(ELF_DYNAMIC_ENTRY);
 
     //
@@ -2420,6 +2437,18 @@ Return Value:
 
         case ELF_DYNAMIC_TEXT_RELOCATIONS:
             Image->Flags |= IMAGE_FLAG_TEXT_RELOCATIONS;
+            break;
+
+        //
+        // Stick a pointer to the debug structure into the debug dynamic entry.
+        // Don't do this if loading from some alternate address space.
+        //
+
+        case ELF_DYNAMIC_DEBUG:
+            if (UseLoadedAddress != FALSE) {
+                DynamicEntry[DynamicIndex].Value = (ELF_SWORD)&(Image->Debug);
+            }
+
             break;
 
         default:
@@ -2822,7 +2851,7 @@ Return Value:
     PELF_ADDR RelocationPlace;
     ELF_WORD RelocationType;
 
-    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
+    BaseDifference = Image->BaseDifference;
     if (BaseDifference == 0) {
         return;
     }
@@ -2931,7 +2960,7 @@ Return Value:
     ELF_ADDR Value;
 
     CurrentImage = NULL;
-    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
+    BaseDifference = Image->BaseDifference;
     BindType = ELF_GET_SYMBOL_BIND(Symbol->Information);
     if (Symbol->NameOffset != 0) {
         SymbolName = Image->ExportStringTable + Symbol->NameOffset;
@@ -3004,10 +3033,7 @@ Return Value:
                     goto ElfGetSymbolValueEnd;
                 }
 
-                BaseDifference = CurrentImage->LoadedLowestAddress -
-                                 CurrentImage->PreferredLowestAddress;
-
-                Value = Potential->Value + BaseDifference;
+                Value = Potential->Value + CurrentImage->BaseDifference;
                 goto ElfGetSymbolValueEnd;
             }
 
@@ -3322,7 +3348,7 @@ Return Value:
 
     Address = 0;
     LoadingImage = Image->ImageContext;
-    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
+    BaseDifference = Image->BaseDifference;
     Offset = RelocationEntry->Offset;
     Information = RelocationEntry->Information;
     Addend = 0;
@@ -3334,7 +3360,7 @@ Return Value:
     // The place is the actual VA of the relocation.
     //
 
-    Place = Image->LoadedLowestAddress + Offset - Image->PreferredLowestAddress;
+    Place = BaseDifference + Offset;
 
     //
     // The Information field contains both the symbol index to the
@@ -3393,7 +3419,8 @@ Return Value:
 
         case ElfArmRelocationCopy:
 
-            ASSERT(Image->LoadedLowestAddress == Image->LoadedImageBuffer);
+            ASSERT(Image->PreferredLowestAddress + BaseDifference ==
+                   Image->LoadedImageBuffer);
 
             //
             // Find the shared object version, not the executable version.
@@ -3547,7 +3574,8 @@ Return Value:
 
         case Elf386RelocationCopy:
 
-            ASSERT(Image->LoadedLowestAddress == Image->LoadedImageBuffer);
+            ASSERT(Image->PreferredLowestAddress + BaseDifference ==
+                   Image->LoadedImageBuffer);
 
             //
             // Find the shared object version, not the executable version.

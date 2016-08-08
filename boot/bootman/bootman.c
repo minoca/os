@@ -172,7 +172,6 @@ Return Value:
                   Parameters->ApplicationName,
                   ModuleNameLength);
 
-    DebugModule->BaseAddress = Parameters->ApplicationBaseAddress;
     DebugModule->LowestAddress = Parameters->ApplicationLowestAddress;
     DebugModule->Size = Parameters->ApplicationSize;
     BoProductName = BOOT_MANAGER_NAME;
@@ -305,8 +304,7 @@ Return Value:
     LoaderParameters->Flags = Parameters->Flags |
                               BOOT_INITIALIZATION_FLAG_SCREEN_CLEAR;
 
-    BaseDifference = (UINTN)LoaderImage->LoadedLowestAddress -
-                     (UINTN)LoaderImage->PreferredLowestAddress;
+    BaseDifference = LoaderImage->BaseDifference;
 
     //
     // Set the file name and base address of the loader.
@@ -322,11 +320,8 @@ Return Value:
         LoaderParameters->ApplicationName += 1;
     }
 
-    LoaderParameters->ApplicationBaseAddress = LoaderImage->DeclaredBase +
-                                               BaseDifference;
-
     LoaderParameters->ApplicationLowestAddress =
-                                              LoaderImage->LoadedLowestAddress;
+                          LoaderImage->PreferredLowestAddress + BaseDifference;
 
     LoaderParameters->ApplicationSize = LoaderImage->Size;
     LoaderParameters->ApplicationArguments = BootEntry->LoaderArguments;

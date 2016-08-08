@@ -642,7 +642,6 @@ Return Value:
         // Fill out the rest of the kernel module information.
         //
 
-        KernelModule->BaseAddress = CurrentModule->BaseAddress;
         KernelModule->LowestAddress = CurrentModule->LowestAddress;
         KernelModule->Size = CurrentModule->Size;
         KernelModule->Timestamp = CurrentModule->Timestamp;
@@ -2668,11 +2667,6 @@ Return Value:
                                       sizeof(CHAR));
 
         ModuleEntry->Timestamp = CurrentModule->Timestamp;
-        ModuleEntry->BaseAddress = (UINTN)CurrentModule->BaseAddress;
-        if (ModuleEntry->BaseAddress == (UINTN)-1ULL) {
-            ModuleEntry->BaseAddress = -1ULL;
-        }
-
         ModuleEntry->LowestAddress = (UINTN)CurrentModule->LowestAddress;
         ModuleEntry->Size = CurrentModule->Size;
         ModuleEntry->Process = CurrentModule->Process;

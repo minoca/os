@@ -30,6 +30,8 @@ Author:
 
 #define IM_ALLOCATION_TAG 0x67616D49
 
+#define IMAGE_DEBUG_VERSION 1
+
 //
 // Define image load flags.
 //
@@ -141,6 +143,14 @@ typedef enum _IMAGE_SEGMENT_TYPE {
     ImageSegmentFileSection,
     ImageSegmentZeroedMemory
 } IMAGE_SEGMENT_TYPE, *PIMAGE_SEGMENT_TYPE;
+
+typedef enum _IMAGE_LOAD_STATE {
+    ImageLoadConsistent,
+    ImageLoadAdd,
+    ImageLoadDelete,
+} IMAGE_LOAD_STATE, *PIMAGE_LOAD_STATE;
+
+typedef struct _LOADED_IMAGE LOADED_IMAGE, *PLOADED_IMAGE;
 
 typedef
 VOID
@@ -325,16 +335,62 @@ typedef struct _IMAGE_STATIC_FUNCTIONS {
 
 Structure Description:
 
-    This structure stores information about a loaded executable image.
+    This structure stores information used when debugging dynamic images. This
+    structure lines up with the r_debug structure in the C library.
+
+Members:
+
+    Version - Stores the debug structure version information. This is set to
+        IMAGE_DEBUG_VERSION.
+
+    Image - Stores a pointer to the image structure itself.
+
+    ImageChangeFunction - Stores a pointer to a function that is called when
+        an image is loaded or unloaded. A breakpoint can be set on this
+        function. The image load state will inform the debugger the state of
+        the current image.
+
+    ImageLoadState - Stores the loading state of the image. This is of type
+        IMAGE_LOAD_STATE.
+
+    DynamicLinkerBase - Stores the base address of the dynamic linker.
+
+--*/
+
+typedef struct _IMAGE_DEBUG {
+    ULONG Version;
+    PLOADED_IMAGE Image;
+    PVOID ImageChangeFunction;
+    ULONG ImageLoadState;
+    PVOID DynamicLinkerBase;
+} IMAGE_DEBUG, *PIMAGE_DEBUG;
+
+/*++
+
+Structure Description:
+
+    This structure stores information about a loaded executable image. Be
+    careful moving members, as the first few members in this structure line up
+    with the C library link_map structure.
 
 Members:
 
     ListEntry - Stores pointers to the next and previous images. This is not
         used by the Image Library, and can be used by the subsystem managing
-        the image library.
+        the image library. This member lines up with the l_next and l_prev
+        members of the link_map structure.
+
+    BaseDifference - Stores the difference between the image's loaded lowest
+        address and its preferred lowest address. That is, the loaded lowest
+        address minus the preferred lowest address. This member lines up with
+        the l_addr member of the link_map structure.
 
     BinaryName - Stores a pointer to a buffer containing the name of the binary
-        image.
+        image. This member lines up with the l_name member of the link_map
+        structure.
+
+    DynamicSection - Stores a pointer to the dynamic section. This member
+        lines up with the l_ld member of the link_map structure.
 
     ModuleNumber - Stores the module identifier. This is not used by the image
         library, but can be assigned by the consumer of the image library.
@@ -353,13 +409,7 @@ Members:
 
     Size - Stores the size of the image as expanded in memory, in bytes.
 
-    DeclaredBase - Stores the base address as declared in the file. This may
-        not actually be the image's lowest loaded VA. This is always 0 for ELF
-        files.
-
     PreferredLowestAddress - Stores the image's default lowest virtual address.
-
-    LoadedLowestAddress - Stores the image's actual lowest virtual address.
 
     ImageContext - Stores a pointer to context specific to the image backend.
 
@@ -388,7 +438,7 @@ Members:
 
     ExportStringTable - Stores a pointer to the export string table.
 
-    ExportStringTable - Stores the size of the export string table in bytes.
+    ExportStringTableSize - Stores the size of the export string table in bytes.
 
     ExportHashTable - Stores a pointer to the export hash table, not used in
         all image formats.
@@ -437,20 +487,22 @@ Members:
     VisitMarker - Stores space for the address search routine to mark nodes
         as visited so as to avoid cycles.
 
+    Debug - Stores debug information.
+
 --*/
 
-typedef struct _LOADED_IMAGE {
+struct _LOADED_IMAGE {
     LIST_ENTRY ListEntry;
+    UINTN BaseDifference;
     PSTR BinaryName;
+    PVOID DynamicSection;
     UINTN ModuleNumber;
     UINTN TlsOffset;
     IMAGE_FORMAT Format;
     IMAGE_MACHINE_TYPE Machine;
     IMAGE_FILE_INFORMATION File;
     UINTN Size;
-    PVOID DeclaredBase;
     PVOID PreferredLowestAddress;
-    PVOID LoadedLowestAddress;
     PVOID LoadedImageBuffer;
     PVOID ImageContext;
     PVOID SystemContext;
@@ -478,7 +530,8 @@ typedef struct _LOADED_IMAGE {
     ULONG LoadFlags;
     PIMAGE_STATIC_FUNCTIONS StaticFunctions;
     UCHAR VisitMarker;
-} LOADED_IMAGE, *PLOADED_IMAGE;
+    IMAGE_DEBUG Debug;
+};
 
 /*++
 

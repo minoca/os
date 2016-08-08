@@ -113,14 +113,13 @@ Return Value:
 
     BmBootBlock.ApplicationArguments = "";
     if (LoadedImage != NULL) {
-        BmBootBlock.ApplicationBaseAddress = LoadedImage->ImageBase;
+        BmBootBlock.ApplicationLowestAddress = LoadedImage->ImageBase;
         BmBootBlock.ApplicationSize = LoadedImage->ImageSize;
         if (LoadedImage->LoadOptionsSize != 0) {
             BmBootBlock.ApplicationArguments = LoadedImage->LoadOptions;
         }
     }
 
-    BmBootBlock.ApplicationLowestAddress = BmBootBlock.ApplicationBaseAddress;
     BmMain(&BmBootBlock);
     return EFI_LOAD_ERROR;
 }

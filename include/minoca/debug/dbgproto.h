@@ -30,7 +30,7 @@ Author:
 //
 
 #define DEBUG_PROTOCOL_MAJOR_VERSION    1
-#define DEBUG_PROTOCOL_REVISION         2
+#define DEBUG_PROTOCOL_REVISION         3
 
 //
 // Define some size limits.
@@ -648,10 +648,9 @@ Members:
     Timestamp - Stores the modification date of this module in seconds since
         2001.
 
-    BaseAddress - Stores the address where this binary was loaded.
-
     LowestAddress - Stores the lowest address in memory where the binary has
-        memory. Usually this is the same as the BaseAddress, but not always.
+        memory. Subtracting the base difference from this value results in the
+        image's preferred load address.
 
     Size - Stores the size of this module when loaded into memory.
 
@@ -664,7 +663,6 @@ Members:
 typedef struct _LOADED_MODULE_ENTRY {
     ULONG StructureSize;
     ULONGLONG Timestamp;
-    ULONGLONG BaseAddress;
     ULONGLONG LowestAddress;
     ULONGLONG Size;
     ULONG Process;

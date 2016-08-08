@@ -927,9 +927,6 @@ Return Value:
             if (DebuggerModule != NULL) {
                 EfiSetMem(DebuggerModule, AllocationSize, 0);
                 DebuggerModule->StructureSize = AllocationSize;
-                DebuggerModule->BaseAddress =
-                                            (PVOID)(UINTN)Image->ImageBasePage;
-
                 DebuggerModule->LowestAddress =
                                             (PVOID)(UINTN)Image->ImageBasePage;
 

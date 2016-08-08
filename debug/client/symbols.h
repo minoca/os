@@ -1019,9 +1019,6 @@ Members:
     Timestamp - Stores the modification date of this module in seconds since
         2001.
 
-    BaseAddress - Stores the base address the file was loaded at. For ELF
-        images, this is always the same as the base difference.
-
     BaseDifference - Supplies the difference between the preferred load
         address of the module and the actual load address of the module.
 
@@ -1044,7 +1041,6 @@ typedef struct _DEBUGGER_MODULE {
     PSTR Filename;
     PSTR ModuleName;
     ULONGLONG Timestamp;
-    ULONGLONG BaseAddress;
     ULONGLONG BaseDifference;
     ULONGLONG LowestAddress;
     ULONGLONG Size;

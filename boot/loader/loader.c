@@ -307,7 +307,6 @@ Return Value:
                   Parameters->ApplicationName,
                   LoaderModuleNameLength);
 
-    LoaderModule->BaseAddress = Parameters->ApplicationBaseAddress;
     LoaderModule->LowestAddress = Parameters->ApplicationLowestAddress;
     LoaderModule->Size = Parameters->ApplicationSize;
     BoProductName = LOADER_NAME;
