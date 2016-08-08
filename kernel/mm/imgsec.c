@@ -2468,7 +2468,9 @@ Return Value:
     // child section on the second fork needs to inherit the dirty bit.
     //
 
-    if (Section->DirtyPageBitmap != NULL) {
+    if (((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
+        (Section->DirtyPageBitmap != NULL)) {
+
         Section->DirtyPageBitmap[BitmapIndex] |= BitmapMask;
     }
 
