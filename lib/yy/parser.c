@@ -531,8 +531,23 @@ Return Value:
     Status = 0;
 
 ParseGrammarEnd:
-    if ((Status == 0) && (Parser->ErrorCount != 0)) {
-        Status = YyStatusParseError;
+    if (Parser->ErrorCount != 0) {
+        if (Status == 0) {
+            Status = YyStatusParseError;
+        }
+
+    } else {
+
+        //
+        // If there was an error but the parser error count hasn't been
+        // incremented, report the error now.
+        //
+
+        if (Status != 0) {
+            if (Parser->Error != NULL) {
+                Parser->Error(Parser->Context, Status);
+            }
+        }
     }
 
     if (NewValue != NULL) {

@@ -60,6 +60,21 @@ Author:
     CkpFillArray((_Vm), (_Array), &(_Element), 1)
 
 //
+// This macro evaluates to the offset in bytes between two pointers
+// (left - right).
+//
+
+#define CK_POINTER_DIFFERENCE(_Left, _Right) \
+    ((UINTN)(_Left) - (UINTN)(_Right))
+
+//
+// This macro evaluates to a pointer adjusted by the given number of bytes.
+//
+
+#define CK_POINTER_ADD(_Pointer, _Count) \
+    (PVOID)((UINTN)(_Pointer) + (_Count))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -351,3 +366,34 @@ Return Value:
     MAX_UINTN on validation failure. A runtime error will the thrown.
 
 --*/
+
+CK_SYMBOL_INDEX
+CkpGetInitMethodSymbol (
+    PCK_VM Vm,
+    PCK_MODULE Module,
+    CK_ARITY Arity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the string table index for the init method with the
+    given arity.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module the function is defined in.
+
+    Arity - Supplies the number of arguments passed to this init function.
+
+Return Value:
+
+    Returns the index into the module string table for this function signature.
+
+    -1 if no such string exists.
+
+--*/
+

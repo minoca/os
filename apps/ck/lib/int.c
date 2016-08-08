@@ -244,14 +244,6 @@ CkpRangeToString (
     );
 
 CK_VALUE
-CkpRangeCreate (
-    PCK_VM Vm,
-    CK_INTEGER From,
-    CK_INTEGER To,
-    BOOL Inclusive
-    );
-
-CK_VALUE
 CkpIntegerToString (
     PCK_VM Vm,
     CK_INTEGER Integer
@@ -309,6 +301,54 @@ CK_PRIMITIVE_DESCRIPTION CkRangePrimitives[] = {
 //
 // ------------------------------------------------------------------ Functions
 //
+
+CK_VALUE
+CkpRangeCreate (
+    PCK_VM Vm,
+    CK_INTEGER From,
+    CK_INTEGER To,
+    BOOL Inclusive
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a range object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    From - Supplies the starting value.
+
+    To - Supplies the ending value.
+
+    Inclusive - Supplies a boolean indicating whether the range is inclusive
+        or exclusive.
+
+Return Value:
+
+    Returns the range value on success.
+
+    CK_NULL_VALUE on allocation failure.
+
+--*/
+
+{
+
+    PCK_RANGE Range;
+    CK_VALUE Value;
+
+    Range = CkAllocate(Vm, sizeof(CK_RANGE));
+    if (Range == NULL) {
+        return CkNullValue;
+    }
+
+    CkpInitializeObject(Vm, &(Range->Header), CkObjectRange, Vm->Class.Range);
+    CK_OBJECT_VALUE(Value, Range);
+    return Value;
+}
 
 BOOL
 CkpIntFromString (
@@ -1642,54 +1682,6 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
-CK_VALUE
-CkpRangeCreate (
-    PCK_VM Vm,
-    CK_INTEGER From,
-    CK_INTEGER To,
-    BOOL Inclusive
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a range object.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    From - Supplies the starting value.
-
-    To - Supplies the ending value.
-
-    Inclusive - Supplies a boolean indicating whether the range is inclusive
-        or exclusive.
-
-Return Value:
-
-    Returns the range value on success.
-
-    CK_NULL_VALUE on allocation failure.
-
---*/
-
-{
-
-    PCK_RANGE Range;
-    CK_VALUE Value;
-
-    Range = CkAllocate(Vm, sizeof(CK_RANGE));
-    if (Range == NULL) {
-        return CkNullValue;
-    }
-
-    CkpInitializeObject(Vm, &(Range->Header), CkObjectRange, Vm->Class.Range);
-    CK_OBJECT_VALUE(Value, Range);
-    return Value;
-}
 
 CK_VALUE
 CkpIntegerToString (

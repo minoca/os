@@ -220,7 +220,7 @@ Return Value:
     }
 
     CkpPushRoot(Vm, &(Function->Header));
-    Closure = CkpClosureCreate(Vm, Function);
+    Closure = CkpClosureCreate(Vm, Function, NULL);
     if (Closure == NULL) {
         CkpPopRoot(Vm);
         return NULL;
@@ -269,12 +269,11 @@ Return Value:
         return NULL;
     }
 
-    //
-    // TODO: Make a builtin class for modules, since they can be used as
-    // objects.
-    //
+    CkpInitializeObject(Vm,
+                        &(Module->Header),
+                        CkObjectModule,
+                        Vm->Class.Module);
 
-    CkpInitializeObject(Vm, &(Module->Header), CkObjectModule, NULL);
     CkpPushRoot(Vm, &(Module->Header));
     Error = CkpStringTableInitialize(Vm, &(Module->VariableNames));
     if (Error != CkSuccess) {
@@ -290,6 +289,7 @@ Return Value:
 
     CkpInitializeArray(&(Module->Variables));
     Module->Name = Name;
+    Module->Fiber = NULL;
 
 ModuleCreateEnd:
     CkpPopRoot(Vm);

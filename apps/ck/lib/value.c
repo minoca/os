@@ -62,7 +62,8 @@ const CK_VALUE CkOneValue = {CkValueInteger, {1}};
 PCK_CLOSURE
 CkpClosureCreate (
     PCK_VM Vm,
-    PCK_FUNCTION Function
+    PCK_FUNCTION Function,
+    PCK_CLASS Class
     )
 
 /*++
@@ -76,6 +77,8 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     Function - Supplies a pointer to the function the closure encloses.
+
+    Class - Supplies a pointer to the class the closure was defined in.
 
 Return Value:
 
@@ -102,6 +105,7 @@ Return Value:
                         Vm->Class.Function);
 
     Closure->Function = Function;
+    Closure->Class = Class;
     Closure->Upvalues = (PCK_UPVALUE *)(Closure + 1);
     CkZero(Closure->Upvalues, UpvalueSize);
     return Closure;
@@ -146,11 +150,7 @@ Return Value:
     }
 
     CkZero(Function, sizeof(CK_FUNCTION));
-    CkpInitializeObject(Vm,
-                        &(Function->Header),
-                        CkObjectFunction,
-                        Vm->Class.Function);
-
+    CkpInitializeObject(Vm, &(Function->Header), CkObjectFunction, NULL);
     CkpInitializeArray(&(Function->Constants));
     CkpInitializeArray(&(Function->Code));
     Function->Module = Module;
@@ -232,21 +232,10 @@ Return Value:
 {
 
     PCK_FUNCTION Function;
-    PCK_MODULE Module;
 
     switch (Object->Type) {
-    case CkObjectClass:
-        CkpDictClear(Vm, ((PCK_CLASS)Object)->Methods);
-        break;
-
     case CkObjectFiber:
-
-        //
-        // TODO: Destroy fiber.
-        //
-
-        CK_ASSERT(FALSE);
-
+        CkpFiberDestroy(Vm, (PCK_FIBER)Object);
         break;
 
     case CkObjectFunction:
@@ -276,12 +265,7 @@ Return Value:
         break;
 
     case CkObjectModule:
-        Module = (PCK_MODULE)Object;
-        CkpStringTableClear(Vm, &(Module->VariableNames));
-        CkpStringTableClear(Vm, &(Module->Strings));
-        CkpClearArray(Vm, &(Module->Variables));
-        break;
-
+    case CkObjectClass:
     case CkObjectClosure:
     case CkObjectInstance:
     case CkObjectRange:
@@ -555,8 +539,6 @@ Return Value:
         return CK_AS_OBJECT(Value)->Class;
 
     case CkValueUndefined:
-        break;
-
     default:
 
         CK_ASSERT(FALSE);
@@ -570,6 +552,7 @@ Return Value:
 PCK_CLASS
 CkpClassAllocate (
     PCK_VM Vm,
+    PCK_MODULE Module,
     CK_SYMBOL_INDEX FieldCount,
     PCK_STRING Name
     )
@@ -583,6 +566,8 @@ Routine Description:
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module to define the class in.
 
     FieldCount - Supplies the number of fields the class has.
 
@@ -607,6 +592,7 @@ Return Value:
 
     CkpInitializeObject(Vm, &(Class->Header), CkObjectClass, NULL);
     Class->Super = NULL;
+    Class->SuperFieldCount = 0;
     Class->FieldCount = FieldCount;
     Class->Name = Name;
     Class->Methods = CkpDictCreate(Vm);
@@ -614,6 +600,8 @@ Return Value:
         return NULL;
     }
 
+    Class->Module = Module;
+    Class->Flags = 0;
     return Class;
 }
 
@@ -657,6 +645,7 @@ Return Value:
 
 {
 
+    PCK_CLOSURE Closure;
     CK_VALUE KeyValue;
     PCK_METHOD Method;
     PCK_STRING SignatureString;
@@ -673,6 +662,20 @@ Return Value:
     CK_OBJECT_VALUE(KeyValue, SignatureString);
     CK_OBJECT_VALUE(Value, Method);
     CkpDictSet(Vm, Class->Methods, KeyValue, Value);
+
+    //
+    // Bind the closure to the class, so that when it's run it knows 1) where
+    // its fields start and 2) what its superclass is.
+    //
+
+    if (MethodType == CkMethodBound) {
+        Closure = MethodValue;
+
+        CK_ASSERT(Closure->Header.Type == CkObjectClosure);
+
+        Closure->Class = Class;
+    }
+
     return;
 }
 
@@ -709,7 +712,7 @@ Return Value:
     CK_VALUE Key;
 
     Class->Super = Super;
-    Class->SuperFieldCount = Super->SuperFieldCount + Super->FieldCount;
+    Class->SuperFieldCount = Super->FieldCount;
 
     //
     // Copy all the methods in the superclass to this class.
@@ -726,6 +729,103 @@ Return Value:
     }
 
     return;
+}
+
+CK_VALUE
+CkpCreateInstance (
+    PCK_VM Vm,
+    PCK_CLASS Class
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new class instance.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Class - Supplies a pointer to the class.
+
+Return Value:
+
+    Returns an instance of the given class on success.
+
+--*/
+
+{
+
+    UINTN AllocationSize;
+    PCK_DICT Dict;
+    PCK_FIBER Fiber;
+    CK_SYMBOL_INDEX FieldIndex;
+    PCK_INSTANCE Instance;
+    PCK_LIST List;
+    CK_VALUE Value;
+
+    //
+    // Classes with custom structures are created specially.
+    //
+
+    if ((Class->Flags & CK_CLASS_SPECIAL_CREATION) != 0) {
+        Value = CkNullValue;
+        if (Class == Vm->Class.Fiber) {
+            Fiber = CkpFiberCreate(Vm, NULL);
+            if (Fiber != NULL) {
+                CK_OBJECT_VALUE(Value, Fiber);
+            }
+
+        } else if (Class == Vm->Class.List) {
+            List = CkpListCreate(Vm, 0);
+            if (List != NULL) {
+                CK_OBJECT_VALUE(Value, List);
+            }
+
+        } else if (Class == Vm->Class.Dict) {
+            Dict = CkpDictCreate(Vm);
+            if (Dict != NULL) {
+                CK_OBJECT_VALUE(Value, Dict);
+            }
+
+        } else if (Class == Vm->Class.Int) {
+            CK_INT_VALUE(Value, 0);
+
+        } else if (Class == Vm->Class.Range) {
+            Value = CkpRangeCreate(Vm, 0, 0, FALSE);
+
+        } else if (Class == Vm->Class.String) {
+            Value = CkpStringCreate(Vm, "", 0);
+        }
+
+    } else {
+        AllocationSize = sizeof(CK_INSTANCE) +
+                         (Class->FieldCount * sizeof(CK_VALUE));
+
+        Instance = CkAllocate(Vm, AllocationSize);
+        if (Instance == NULL) {
+            Value = CkNullValue;
+
+        } else {
+            CkpInitializeObject(Vm,
+                                &(Instance->Header),
+                                CkObjectInstance,
+                                Class);
+
+            Instance->Fields = (PCK_VALUE)(Instance + 1);
+            for (FieldIndex = 0;
+                 FieldIndex < Class->FieldCount;
+                 FieldIndex += 1) {
+
+                Instance->Fields[FieldIndex] = CkNullValue;
+            }
+
+            CK_OBJECT_VALUE(Value, Instance);
+        }
+    }
+
+    return Value;
 }
 
 //

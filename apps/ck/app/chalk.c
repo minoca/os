@@ -101,7 +101,8 @@ ChalkDestroyContext (
 
 PSTR
 ChalkLoadFile (
-    PSTR FileName
+    PSTR FileName,
+    PUINTN FileSize
     );
 
 INT
@@ -160,6 +161,7 @@ Return Value:
     ULONG ArgumentIndex;
     CK_APP_CONTEXT Context;
     PSTR FileBuffer;
+    UINTN FileSize;
     INT Option;
     int Status;
 
@@ -231,7 +233,7 @@ Return Value:
 
     ArgumentIndex = optind;
     if (ArgumentIndex < ArgumentCount) {
-        FileBuffer = ChalkLoadFile(Arguments[ArgumentIndex]);
+        FileBuffer = ChalkLoadFile(Arguments[ArgumentIndex], &FileSize);
         if (FileBuffer == NULL) {
             fprintf(stderr,
                     "Error: Failed to load file %s: %s\n",
@@ -243,12 +245,7 @@ Return Value:
         }
 
         ArgumentIndex += 1;
-
-        //
-        // TODO: Execute the file here.
-        //
-
-        Status = 2;
+        Status = CkInterpret(Context.Vm, FileBuffer, FileSize);
 
     //
     // With no arguments, run the interactive interpreter.
@@ -349,7 +346,8 @@ Return Value:
 
 PSTR
 ChalkLoadFile (
-    PSTR FileName
+    PSTR FileName,
+    PUINTN FileSize
     )
 
 /*++
@@ -362,18 +360,25 @@ Arguments:
 
     FileName - Supplies a pointer to the file path to load.
 
+    FileSize - Supplies a pointer where the size of the file, not including
+        the null terminator, will be returned on success.
+
 Return Value:
 
     Returns a pointer to the contents of the file, null terminated.
+
+    NULL on failure.
 
 --*/
 
 {
 
     PSTR Buffer;
+    ssize_t BytesRead;
     FILE *File;
     struct stat Stat;
     INT Status;
+    size_t TotalRead;
 
     Status = stat(FileName, &Stat);
     if (Status != 0) {
@@ -405,18 +410,33 @@ Return Value:
         goto LoadFileEnd;
     }
 
-    if (fread(Buffer, 1, Stat.st_size, File) != Stat.st_size) {
-        fprintf(stderr,
-                "chalk: Unable to read %s: %s\n",
-                FileName,
-                strerror(errno));
+    TotalRead = 0;
+    while (TotalRead < Stat.st_size) {
+        BytesRead = fread(Buffer + TotalRead,
+                          1,
+                          Stat.st_size - TotalRead,
+                          File);
 
-        free(Buffer);
-        Buffer = NULL;
-        goto LoadFileEnd;
+        if (BytesRead == 0) {
+            break;
+        }
+
+        if (BytesRead <= 0) {
+            fprintf(stderr,
+                    "chalk: Unable to read %s: %s\n",
+                    FileName,
+                    strerror(errno));
+
+            free(Buffer);
+            Buffer = NULL;
+            goto LoadFileEnd;
+        }
+
+        TotalRead += BytesRead;
     }
 
-    Buffer[Stat.st_size] = '\0';
+    Buffer[TotalRead] = '\0';
+    *FileSize = TotalRead;
 
 LoadFileEnd:
     if (File != NULL) {
@@ -451,7 +471,6 @@ Return Value:
 
 {
 
-    CK_ERROR_TYPE Error;
     INT Status;
 
     printf(" _      _\n|_ |-| /-\\ |_ |<  Chalk %d.%d.%d\n",
@@ -471,29 +490,7 @@ Return Value:
             break;
         }
 
-        Error = CkInterpret(Context->Vm, Context->Line, strlen(Context->Line));
-        if (Error != CkSuccess) {
-            switch (Error) {
-            case CkErrorNoMemory:
-                fprintf(stderr, "Allocation failure\n");
-                break;
-
-            case CkErrorCompile:
-                fprintf(stderr, "Compile error\n");
-                break;
-
-            case CkErrorRuntime:
-                fprintf(stderr, "Runtime error\n");
-                break;
-
-            case CkErrorStackTrace:
-                fprintf(stderr, "Error: Stack trace\n");
-                break;
-
-            default:
-                break;
-            }
-        }
+        CkInterpret(Context->Vm, Context->Line, strlen(Context->Line));
     }
 
     return Status;

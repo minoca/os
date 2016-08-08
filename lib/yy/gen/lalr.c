@@ -1789,7 +1789,7 @@ Return Value:
                Index,
                Context->FromState[Index],
                Destination,
-               Context->Elements[Context->AccessingSymbol[Destination]]);
+               Context->Elements[Context->AccessingSymbol[Destination]].Name);
     }
 
     return;

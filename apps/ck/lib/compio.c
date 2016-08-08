@@ -584,6 +584,10 @@ Return Value:
         return;
     }
 
+    //
+    // Assign can currently only be TRUE with open brackets.
+    //
+
     if (Assign != FALSE) {
         Arguments += 1;
     }
@@ -639,17 +643,6 @@ Return Value:
 
         CkpEmitByteOp(Compiler, Op, Signature->Arity);
         CkpEmitShort(Compiler, Symbol);
-    }
-
-    //
-    // Super calls are statically bound to their superclass. The symbol for
-    // the superclass is emitted directly in the bytecode stream. Since the
-    // superclass isn't yet fully known, emit a constant slot for null here.
-    // That constant slot will be filled in at runtime.
-    //
-
-    if ((Op == CkOpSuperCall0) || (Op == CkOpSuperCall)) {
-        CkpEmitShort(Compiler, CkpAddConstant(Compiler, CK_NULL_VALUE));
     }
 
     return;
@@ -993,6 +986,8 @@ Arguments:
 
     Opcode - Supplies the opcode to emit.
 
+    Line - Supplies the line number corresponding to this opcode.
+
 Return Value:
 
     None.
@@ -1012,10 +1007,7 @@ Return Value:
         Compiler->Function->MaxStack = Compiler->StackSlots;
     }
 
-    CkpEmitLineNumberInformation(Compiler,
-                                 Compiler->Parser->PreviousLine,
-                                 Offset);
-
+    CkpEmitLineNumberInformation(Compiler, Compiler->Line, Offset);
     return;
 }
 
@@ -1428,8 +1420,6 @@ Return Value:
     ULONG Size;
     ULONG Value;
 
-    Offset = Compiler->Function->Code.Count;
-
     //
     // If this is the first thing ever emitted, initialize the first line.
     //
@@ -1439,7 +1429,7 @@ Return Value:
         CK_ASSERT(Line != 0);
 
         Compiler->Function->Debug.FirstLine = Line;
-        Compiler->Line = Line;
+        Compiler->PreviousLine = Line;
     }
 
     //
@@ -1453,7 +1443,7 @@ Return Value:
 
     LineProgram = &(Compiler->Function->Debug.LineProgram);
     if ((Compiler->LastLineOp != NULL) &&
-        (Compiler->Line == Line)) {
+        (Compiler->PreviousLine == Line)) {
 
         //
         // The last operation should always end in updating the address, since
@@ -1523,7 +1513,7 @@ Return Value:
     //
 
     if (Line != 0) {
-        LineAdvance = Line - Compiler->Line;
+        LineAdvance = Line - Compiler->PreviousLine;
         OffsetAdvance = Offset - Compiler->LineOffset;
         if (CK_LINE_IS_SPECIAL_ENCODABLE(LineAdvance, OffsetAdvance)) {
             Op = CK_LINE_ENCODE_SPECIAL(LineAdvance, OffsetAdvance);
@@ -1538,8 +1528,8 @@ Return Value:
         //
 
         } else {
-            if (Line != Compiler->Line) {
-                LineAdvance = Line - Compiler->Line;
+            if (Line != Compiler->PreviousLine) {
+                LineAdvance = Line - Compiler->PreviousLine;
                 if ((LineAdvance > 0) && (LineAdvance < CK_MAX_UTF8)) {
                     Op = CkLineOpAdvanceLine;
                     Value = 0;
@@ -1567,7 +1557,7 @@ Return Value:
                 Op = CkLineOpAdvanceOffset;
                 Value = 0;
                 Size = CkpUtf8EncodeSize(OffsetAdvance);
-                CkpUtf8Encode(OffsetAdvance, (PUCHAR)&Offset);
+                CkpUtf8Encode(OffsetAdvance, (PUCHAR)&Value);
 
             } else {
                 Op = CkLineOpSetOffset;
@@ -1585,10 +1575,10 @@ Return Value:
                          Size);
 
             Compiler->LastLineOp = LineProgram->Data +
-                                   LineProgram->Count - Size;
+                                   LineProgram->Count - (Size + 1);
         }
 
-        Compiler->Line = Line;
+        Compiler->PreviousLine = Line;
     }
 
     Compiler->LineOffset = Offset;

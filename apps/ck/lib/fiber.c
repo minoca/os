@@ -53,6 +53,12 @@ CkpFiberAbort (
     );
 
 BOOL
+CkpFiberInit (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpFiberRun (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -114,6 +120,7 @@ CkpRunFiber (
 //
 
 CK_PRIMITIVE_DESCRIPTION CkFiberPrimitives[] = {
+    {"__init@1", CkpFiberInit},
     {"run@1", CkpFiberRun},
     {"error@0", CkpFiberError},
     {"isDone@0", CkpFiberIsDone},
@@ -204,6 +211,201 @@ Return Value:
     return Fiber;
 }
 
+VOID
+CkpFiberDestroy (
+    PCK_VM Vm,
+    PCK_FIBER Fiber
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a fiber object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the fiber to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Fiber->Stack != NULL) {
+        CkFree(Vm, Fiber->Stack);
+        Fiber->Stack = NULL;
+    }
+
+    if (Fiber->Frames != NULL) {
+        CkFree(Vm, Fiber->Frames);
+        Fiber->Frames = NULL;
+    }
+
+    return;
+}
+
+VOID
+CkpAppendCallFrame (
+    PCK_VM Vm,
+    PCK_FIBER Fiber,
+    PCK_CLOSURE Closure,
+    PCK_VALUE Stack
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds a new call frame onto the given fiber.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the fiber to run on.
+
+    Closure - Supplies a pointer to the closure to execute.
+
+    Stack - Supplies a pointer to the base of the stack. The receiver and
+        arguments should already be set up after this pointer.
+
+Return Value:
+
+    None. On allocation failure, the runtime error will be set.
+
+--*/
+
+{
+
+    PCK_CALL_FRAME Frame;
+    PVOID NewBuffer;
+    UINTN NewCapacity;
+
+    //
+    // Reallocate the frame stack if needed.
+    //
+
+    if (Fiber->FrameCount >= Fiber->FrameCapacity) {
+        NewCapacity = Fiber->FrameCapacity * 2;
+        NewBuffer = CkpReallocate(Vm,
+                                  Fiber->Frames,
+                                  Fiber->FrameCapacity * sizeof(CK_CALL_FRAME),
+                                  NewCapacity * sizeof(CK_CALL_FRAME));
+
+        if (NewBuffer == NULL) {
+            return;
+        }
+
+        Fiber->Frames = NewBuffer;
+        Fiber->FrameCapacity = NewCapacity;
+    }
+
+    Frame = &(Fiber->Frames[Fiber->FrameCount]);
+    Fiber->FrameCount += 1;
+    Frame->Ip = Closure->Function->Code.Data;
+    Frame->Closure = Closure;
+    Frame->StackStart = Stack;
+    return;
+}
+
+VOID
+CkpEnsureStack (
+    PCK_VM Vm,
+    PCK_FIBER Fiber,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine ensures that the stack is at least the given size.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the currently executing fiber.
+
+    Size - Supplies the required size of the stack.
+
+Return Value:
+
+    None. The fiber error will be set on failure.
+
+--*/
+
+{
+
+    UINTN Index;
+    UINTN NewCapacity;
+    PCK_VALUE NewStack;
+    UINTN Offset;
+    PCK_UPVALUE Upvalue;
+
+    if (Fiber->StackCapacity >= Size) {
+        return;
+    }
+
+    if (Size >= CK_MAX_STACK) {
+        CkpRuntimeError(Vm, "Stack overflow");
+        return;
+    }
+
+    NewCapacity = Fiber->StackCapacity * 2;
+    while (NewCapacity < Size) {
+        NewCapacity *= 2;
+    }
+
+    NewStack = CkpReallocate(Vm,
+                             Fiber->Stack,
+                             Fiber->StackCapacity * sizeof(CK_VALUE),
+                             NewCapacity * sizeof(CK_VALUE));
+
+    if (NewStack == NULL) {
+        return;
+    }
+
+    Fiber->StackCapacity = NewCapacity;
+
+    //
+    // If the stack buffer changed, adjust all the pointers into the stack.
+    //
+
+    if (Fiber->Stack != NewStack) {
+        Offset = CK_POINTER_DIFFERENCE(NewStack, Fiber->Stack);
+        Fiber->Stack = NewStack;
+        Fiber->StackTop = CK_POINTER_ADD(Fiber->StackTop, Offset);
+
+        //
+        // Adjust each call frame, which points into the stack.
+        //
+
+        for (Index = 0; Index < Fiber->FrameCount; Index += 1) {
+            Fiber->Frames[Index].StackStart =
+                       CK_POINTER_ADD(Fiber->Frames[Index].StackStart, Offset);
+        }
+
+        //
+        // Adjust the open upvalues.
+        //
+
+        Upvalue = Fiber->OpenUpvalues;
+        while (Upvalue != NULL) {
+            Upvalue->Value = CK_POINTER_ADD(Upvalue->Value, Offset);
+            Upvalue = Upvalue->Next;
+        }
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -242,6 +444,11 @@ Return Value:
     Fiber->Caller = NULL;
     Fiber->Error = CK_NULL_VALUE;
     Fiber->FrameCount = 0;
+    if (Closure != NULL) {
+        CkpEnsureStack(Vm, Fiber, Closure->Function->MaxStack);
+        CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->Stack);
+    }
+
     return;
 }
 
@@ -292,6 +499,70 @@ Return Value:
     //
 
     return FALSE;
+}
+
+BOOL
+CkpFiberInit (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes a new fiber.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+{
+
+    PCK_CLOSURE Closure;
+    PCK_FIBER Fiber;
+
+    if (!CK_IS_CLOSURE(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected a closure");
+        return FALSE;
+    }
+
+    Fiber = CK_AS_FIBER(Arguments[0]);
+    Closure = CK_AS_CLOSURE(Arguments[1]);
+    if (Fiber == Vm->Fiber) {
+        CkpRuntimeError(Vm, "Cannot initialize running fiber");
+        return FALSE;
+    }
+
+    if (Closure->Function->Arity != 1) {
+        CkpRuntimeError(Vm, "Fiber functions take exactly one argument");
+        return FALSE;
+    }
+
+    CkpFiberReset(Vm, Fiber, CK_AS_CLOSURE(Arguments[1]));
+
+    //
+    // The first two stack slots are null for the receiver ("this"), and null
+    // for the argument (which gets filled in later).
+    //
+
+    if (Fiber->StackTop == Fiber->Stack) {
+        Fiber->Stack[0] = CkNullValue;
+        Fiber->Stack[1] = CkNullValue;
+        Fiber->StackTop += 2;
+    }
+
+    return TRUE;
 }
 
 BOOL
@@ -595,7 +866,7 @@ Return Value:
         // value in the return slot.
         //
 
-        Vm->Fiber->StackTop -= 1;
+        CurrentFiber->StackTop -= 1;
     }
 
     return FALSE;
@@ -675,7 +946,9 @@ Return Value:
     Vm->Fiber->StackTop -= 1;
 
     //
-    // If the new fiber had yielded or paused, return the result here to it.
+    // Save the argument into either the primary argument, or the return value
+    // of yield or pause. The only time there is not a slot waiting for the
+    // argument is the first run of a module fiber.
     //
 
     if (Fiber->StackTop > Fiber->Stack) {

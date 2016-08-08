@@ -252,8 +252,11 @@ Return Value:
         fprintf(stderr, "  in %s at %s:%d\n", Message, Module, Line);
         break;
 
-    case CkErrorCompile:
     case CkErrorRuntime:
+        fprintf(stderr, "Error: %s.\n", Message);
+        break;
+
+    case CkErrorCompile:
     default:
         fprintf(stderr, "%s:%d: %s.\n", Module, Line, Message);
         break;

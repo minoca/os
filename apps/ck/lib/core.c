@@ -80,6 +80,12 @@ CkpObjectLogicalNot (
     );
 
 BOOL
+CkpObjectInit (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpObjectIsEqual (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -183,6 +189,7 @@ extern PVOID _binary_ckcore_ck_start;
 extern PVOID _binary_ckcore_ck_end;
 
 CK_PRIMITIVE_DESCRIPTION CkObjectPrimitives[] = {
+    {"__init@0", CkpObjectInit},
     {"__lnot@0", CkpObjectLogicalNot},
     {"__eq@1", CkpObjectIsEqual},
     {"__ne@1", CkpObjectIsNotEqual},
@@ -279,7 +286,7 @@ Return Value:
         return CkErrorNoMemory;
     }
 
-    Classes->Object->Header.Class = Classes->Object;
+    Classes->Object->Super = Classes->Object;
     CkpCoreAddPrimitives(Vm, CoreModule, Classes->Object, CkObjectPrimitives);
 
     //
@@ -352,7 +359,11 @@ Return Value:
 
     Value = CkpFindModuleVariable(Vm, CoreModule, "Function");
     Classes->Function = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->List, CkFunctionPrimitives);
+    CkpCoreAddPrimitives(Vm,
+                         CoreModule,
+                         Classes->Function,
+                         CkFunctionPrimitives);
+
     Value = CkpFindModuleVariable(Vm, CoreModule, "List");
     Classes->List = CK_AS_CLASS(Value);
     CkpCoreAddPrimitives(Vm, CoreModule, Classes->List, CkListPrimitives);
@@ -364,7 +375,11 @@ Return Value:
     CkpCoreAddPrimitives(Vm, CoreModule, Classes->Range, CkRangePrimitives);
     Value = CkpFindModuleVariable(Vm, CoreModule, "Core");
     Classes->Core = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Core, CkCorePrimitives);
+    CkpCoreAddPrimitives(Vm,
+                         CoreModule,
+                         Classes->Core->Header.Class,
+                         CkCorePrimitives);
+
     Value = CkpFindModuleVariable(Vm, CoreModule, "Module");
     Classes->Module = CK_AS_CLASS(Value);
     CkpCoreAddPrimitives(Vm, CoreModule, Classes->Core, CkModulePrimitives);
@@ -383,6 +398,29 @@ Return Value:
         Object = Object->Next;
     }
 
+    CoreModule->Header.Class = Classes->Module;
+
+    //
+    // Set some flags on the special builtin classes.
+    //
+
+    Classes->Class->Flags |= CK_CLASS_SPECIAL_CREATION;
+    Classes->Fiber->Flags |= CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
+    Classes->Function->Flags |= CK_CLASS_UNINHERITABLE |
+                                CK_CLASS_SPECIAL_CREATION;
+
+    Classes->List->Flags |= CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
+    Classes->Dict->Flags |= CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
+    Classes->Null->Flags |= CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
+    Classes->Int->Flags |= CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
+    Classes->Range->Flags |= CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
+    Classes->String->Flags |=
+                            CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
+
+    Classes->Module->Flags |=
+                            CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
+
+    Classes->Core->Flags |= CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
     return CkSuccess;
 }
 
@@ -461,13 +499,23 @@ Return Value:
 
     CK_ASSERT(Vm->Fiber != NULL);
 
-    if ((Vm->Fiber == NULL) || (!CK_IS_UNDEFINED(Vm->Fiber->Error))) {
+    if ((Vm->Fiber == NULL) || (!CK_IS_NULL(Vm->Fiber->Error))) {
         return;
     }
 
     Length = vsnprintf(Message, sizeof(Message), MessageFormat, ArgumentList);
     Message[sizeof(Message) - 1] = '\0';
     Vm->Fiber->Error = CkpStringCreate(Vm, Message, Length);
+
+    //
+    // If string allocation happened to fail, it's important that some sort of
+    // error get set, so just initialize the error to an integer.
+    //
+
+    if (CK_IS_NULL(Vm->Fiber->Error)) {
+        CK_INT_VALUE(Vm->Fiber->Error, 1);
+    }
+
     return;
 }
 
@@ -513,7 +561,7 @@ Return Value:
 
     NameString = CK_AS_STRING(Value);
     CkpPushRoot(Vm, &(NameString->Header));
-    Class = CkpClassAllocate(Vm, 0, NameString);
+    Class = CkpClassAllocate(Vm, Module, 0, NameString);
     if (Class == NULL) {
         CkpPopRoot(Vm);
         return NULL;
@@ -621,6 +669,38 @@ Return Value:
 
     CkpBindMethod(Vm, Module, Class, Index, CkMethodPrimitive, Function);
     return;
+}
+
+BOOL
+CkpObjectInit (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine contains a dummy init function that allows any object to
+    be initialized with zero arguments. In this case all fields are null.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    return TRUE;
 }
 
 BOOL
@@ -1080,9 +1160,13 @@ Return Value:
 
 {
 
+    PCK_CLOSURE Closure;
     PCK_FUNCTION Function;
 
-    Function = CK_AS_FUNCTION(Arguments[0]);
+    CK_ASSERT(CK_IS_CLOSURE(Arguments[0]));
+
+    Closure = CK_AS_CLOSURE(Arguments[0]);
+    Function = Closure->Function;
     CK_INT_VALUE(Arguments[0], Function->Arity);
     return TRUE;
 }
@@ -1115,9 +1199,13 @@ Return Value:
 
 {
 
+    PCK_CLOSURE Closure;
     PCK_FUNCTION Function;
 
-    Function = CK_AS_FUNCTION(Arguments[0]);
+    CK_ASSERT(CK_IS_CLOSURE(Arguments[0]));
+
+    Closure = CK_AS_CLOSURE(Arguments[0]);
+    Function = Closure->Function;
     CK_OBJECT_VALUE(Arguments[0], Function->Module);
     return TRUE;
 }
@@ -1150,9 +1238,13 @@ Return Value:
 
 {
 
+    PCK_CLOSURE Closure;
     PCK_FUNCTION Function;
 
-    Function = CK_AS_FUNCTION(Arguments[0]);
+    CK_ASSERT(CK_IS_CLOSURE(Arguments[0]));
+
+    Closure = CK_AS_CLOSURE(Arguments[0]);
+    Function = Closure->Function;
     CK_INT_VALUE(Arguments[0], Function->MaxStack);
     return TRUE;
 }

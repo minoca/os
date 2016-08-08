@@ -291,8 +291,6 @@ Members:
 
     Upvalues - Stores a pointer to the array of upvalues.
 
-    UpvalueCount - Stores the number of valid upvalues in the array.
-
     UpvalueCapacity - Stores the maximum number of upvalues before the array
         will have to be reallocated.
 
@@ -315,6 +313,8 @@ Members:
     Parent - Stores a pointer to the parent compiler if this is an inner
         function compiler.
 
+    Line - Stores the current line being visited.
+
     PreviousLine - Stores the last line number generated in the line number
         program. An empty line number program starts with this at zero.
 
@@ -331,8 +331,6 @@ Members:
     Assign - Stores a boolean indicating whether the next primary expression
         needs to be an lvalue or not.
 
-    LastPrimaryToken - Stores the most recent primary expression token.
-
 --*/
 
 struct _CK_COMPILER {
@@ -340,7 +338,6 @@ struct _CK_COMPILER {
     ULONG LocalCount;
     ULONG LocalCapacity;
     PCK_COMPILER_UPVALUE Upvalues;
-    ULONG UpvalueCount;
     ULONG UpvalueCapacity;
     LONG ScopeDepth;
     LONG StackSlots;
@@ -350,11 +347,11 @@ struct _CK_COMPILER {
     PCK_PARSER Parser;
     PCK_COMPILER Parent;
     INT Line;
+    INT PreviousLine;
     UINTN LineOffset;
     PUCHAR LastLineOp;
     PCK_FUNCTION_SIGNATURE Signature;
     BOOL Assign;
-    CK_SYMBOL LastPrimaryToken;
 };
 
 //

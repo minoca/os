@@ -1121,14 +1121,14 @@ Return Value:
     UINTN NewCapacity;
     PCK_COMPILER_UPVALUE Upvalue;
 
-    for (Index = 0; Index < Compiler->UpvalueCount; Index += 1) {
+    Count = Compiler->Function->UpvalueCount;
+    for (Index = 0; Index < Count; Index += 1) {
         Upvalue = &(Compiler->Upvalues[Index]);
         if ((Upvalue->Index == Symbol) && (Upvalue->IsLocal == IsLocal)) {
             return Index;
         }
     }
 
-    Count = Compiler->UpvalueCount;
     if (Count >= Compiler->UpvalueCapacity) {
         NewCapacity = Compiler->UpvalueCapacity * 2;
         if (NewCapacity == 0) {
@@ -1151,7 +1151,7 @@ Return Value:
 
     Compiler->Upvalues[Count].IsLocal = IsLocal;
     Compiler->Upvalues[Count].Index = Symbol;
-    Compiler->UpvalueCount += 1;
+    Compiler->Function->UpvalueCount += 1;
     return Count;
 }
 

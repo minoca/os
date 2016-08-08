@@ -33,6 +33,7 @@ Environment:
 #include "compiler.h"
 #include "lang.h"
 #include "compsup.h"
+#include "debug.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -51,14 +52,6 @@ CkpDebugPrint(
     PCK_VM Vm,
     PSTR Message,
     ...
-    );
-
-INTN
-CkpDumpInstruction (
-    PCK_VM Vm,
-    PCK_FUNCTION Function,
-    UINTN Offset,
-    PLONG LastLine
     );
 
 VOID
@@ -80,6 +73,7 @@ CkpDumpObject (
 PSTR CkOpcodeNames[CkOpcodeCount] = {
     "Nop",
     "Constant",
+    "String",
     "Null",
     "Literal0",
     "Literal1",
@@ -169,6 +163,78 @@ PSTR CkObjectTypeNames[CkObjectTypeCount] = {
 //
 
 VOID
+CkpDebugPrintStackTrace (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a stack trace of the current fiber.
+
+Arguments:
+
+    Vm - Supplies a pointer to the VM.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR ErrorString;
+    PCK_FIBER Fiber;
+    PCK_CALL_FRAME Frame;
+    INTN FrameIndex;
+    PCK_FUNCTION Function;
+    INT Line;
+    PSTR ModuleName;
+    PCK_STRING String;
+
+    if (Vm->Configuration.Error == NULL) {
+        return;
+    }
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(Fiber != NULL);
+
+    if (CK_IS_STRING(Fiber->Error)) {
+        String = CK_AS_STRING(Fiber->Error);
+        ErrorString = String->Value;
+
+    } else {
+        ErrorString = "Runtime Error";
+    }
+
+    Vm->Configuration.Error(Vm, CkErrorRuntime, NULL, -1, ErrorString);
+    for (FrameIndex = Fiber->FrameCount - 1; FrameIndex >= 0; FrameIndex -= 1) {
+        Frame = &(Fiber->Frames[FrameIndex]);
+        Function = Frame->Closure->Function;
+        ModuleName = "<builtin>";
+        if (Function->Module->Name != NULL) {
+            ModuleName = Function->Module->Name->Value;
+        }
+
+        CK_ASSERT(Frame->Ip > Function->Code.Data);
+
+        Line = CkpGetLineForOffset(Function,
+                                   Frame->Ip - Function->Code.Data - 1);
+
+        Vm->Configuration.Error(Vm,
+                                CkErrorStackTrace,
+                                ModuleName,
+                                Line,
+                                Function->Debug.Name);
+    }
+
+    return;
+}
+
+VOID
 CkpDumpCode (
     PCK_VM Vm,
     PCK_FUNCTION Function
@@ -199,8 +265,10 @@ Return Value:
     UINTN Offset;
     INTN Size;
 
-    Name = Function->Module->Name->Value;
-    if (Name == NULL) {
+    if (Function->Module->Name != NULL) {
+        Name = Function->Module->Name->Value;
+
+    } else {
         Name = "<core>";
     }
 
@@ -220,112 +288,24 @@ Return Value:
     return;
 }
 
-INT
-CkpGetLineForOffset (
-    PCK_FUNCTION Function,
-    UINTN CodeOffset
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines what line the given bytecode offset is on.
-
-Arguments:
-
-    Function - Supplies a pointer to the function containing the bytecode.
-
-    CodeOffset - Supplies the offset whose line number is desired.
-
-Return Value:
-
-    Returns the line number the offset in question.
-
-    -1 if no line number information could be found.
-
---*/
-
-{
-
-    PUCHAR End;
-    LONG Line;
-    PUCHAR LineProgram;
-    UINTN Offset;
-    CK_LINE_OP Op;
-
-    LineProgram = Function->Debug.LineProgram.Data;
-    End = LineProgram + Function->Debug.LineProgram.Count;
-    Offset = 0;
-    Line = Function->Debug.FirstLine;
-    while (LineProgram < End) {
-        Op = *LineProgram;
-        LineProgram += 1;
-        switch (Op) {
-        case CkLineOpNop:
-            break;
-
-        case CkLineOpSetLine:
-            CkCopy(&Line, LineProgram, sizeof(ULONG));
-            LineProgram += sizeof(ULONG);
-            break;
-
-        case CkLineOpSetOffset:
-            CkCopy(&Offset, LineProgram, sizeof(ULONG));
-            LineProgram += sizeof(ULONG);
-            break;
-
-        case CkLineOpAdvanceLine:
-            Line += CkpUtf8Decode(LineProgram, End - LineProgram);
-            LineProgram += CkpUtf8DecodeSize(*LineProgram);
-            break;
-
-        case CkLineOpAdvanceOffset:
-            Offset += CkpUtf8Decode(LineProgram, End - LineProgram);
-            LineProgram += CkpUtf8DecodeSize(*LineProgram);
-            break;
-
-        case CkLineOpSpecial:
-        default:
-            Line += CK_LINE_ADVANCE(Op);
-            Offset += CK_OFFSET_ADVANCE(Op);
-            break;
-        }
-
-        if (Offset >= CodeOffset) {
-            return Line;
-        }
-    }
-
-    CK_ASSERT(FALSE);
-
-    return -1;
-}
-
-//
-// --------------------------------------------------------- Internal Functions
-//
-
 VOID
-CkpDebugPrint (
+CkpDumpStack (
     PCK_VM Vm,
-    PSTR Message,
-    ...
+    PCK_FIBER Fiber
     )
 
 /*++
 
 Routine Description:
 
-    This routine prints something to the output for the debug code.
+    This routine prints the current contents of the stack for the most recent
+    call frame.
 
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    Message - Supplies the printf-style format message to print.
-
-    ... - Supplies the remainder of the arguments.
+    Fiber - Supplies a pointer to the fiber.
 
 Return Value:
 
@@ -335,17 +315,26 @@ Return Value:
 
 {
 
-    va_list ArgumentList;
-    CHAR Buffer[CK_MAX_ERROR_MESSAGE];
+    PCK_VALUE Base;
+    PCK_VALUE Current;
+    PCK_CALL_FRAME Frame;
 
-    va_start(ArgumentList, Message);
-    vsnprintf(Buffer, sizeof(Buffer), Message, ArgumentList);
-    va_end(ArgumentList);
-    Buffer[sizeof(Buffer) - 1] = '\0';
-    if (Vm->Configuration.Write != NULL) {
-        Vm->Configuration.Write(Vm, Buffer);
+    if (Fiber->FrameCount == 0) {
+        CkpDebugPrint(Vm, "Not running\n");
+        return;
     }
 
+    Frame = &(Fiber->Frames[Fiber->FrameCount - 1]);
+    Base = Frame->StackStart;
+    Current = Fiber->StackTop - 1;
+    while (Current >= Base) {
+        CkpDebugPrint(Vm, "%2d ", Current - Base);
+        CkpDumpValue(Vm, *Current);
+        CkpDebugPrint(Vm, "\n");
+        Current -= 1;
+    }
+
+    CkpDebugPrint(Vm, "========\n");
     return;
 }
 
@@ -572,6 +561,135 @@ Return Value:
     return Offset - Start;
 }
 
+INT
+CkpGetLineForOffset (
+    PCK_FUNCTION Function,
+    UINTN CodeOffset
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines what line the given bytecode offset is on.
+
+Arguments:
+
+    Function - Supplies a pointer to the function containing the bytecode.
+
+    CodeOffset - Supplies the offset whose line number is desired.
+
+Return Value:
+
+    Returns the line number the offset in question.
+
+    -1 if no line number information could be found.
+
+--*/
+
+{
+
+    PUCHAR End;
+    LONG Line;
+    PUCHAR LineProgram;
+    UINTN Offset;
+    CK_LINE_OP Op;
+
+    LineProgram = Function->Debug.LineProgram.Data;
+    End = LineProgram + Function->Debug.LineProgram.Count;
+    Offset = 0;
+    Line = Function->Debug.FirstLine;
+    while (LineProgram < End) {
+        Op = *LineProgram;
+        LineProgram += 1;
+        switch (Op) {
+        case CkLineOpNop:
+            break;
+
+        case CkLineOpSetLine:
+            CkCopy(&Line, LineProgram, sizeof(ULONG));
+            LineProgram += sizeof(ULONG);
+            break;
+
+        case CkLineOpSetOffset:
+            CkCopy(&Offset, LineProgram, sizeof(ULONG));
+            LineProgram += sizeof(ULONG);
+            break;
+
+        case CkLineOpAdvanceLine:
+            Line += CkpUtf8Decode(LineProgram, End - LineProgram);
+            LineProgram += CkpUtf8DecodeSize(*LineProgram);
+            break;
+
+        case CkLineOpAdvanceOffset:
+            Offset += CkpUtf8Decode(LineProgram, End - LineProgram);
+            LineProgram += CkpUtf8DecodeSize(*LineProgram);
+            break;
+
+        case CkLineOpSpecial:
+        default:
+            Line += CK_LINE_ADVANCE(Op);
+            Offset += CK_OFFSET_ADVANCE(Op);
+            break;
+        }
+
+        if (Offset >= CodeOffset) {
+            return Line;
+        }
+    }
+
+    CK_ASSERT(FALSE);
+
+    return -1;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+VOID
+CkpDebugPrint (
+    PCK_VM Vm,
+    PSTR Message,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints something to the output for the debug code.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Message - Supplies the printf-style format message to print.
+
+    ... - Supplies the remainder of the arguments.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    va_list ArgumentList;
+    CHAR Buffer[CK_MAX_ERROR_MESSAGE];
+
+    va_start(ArgumentList, Message);
+    vsnprintf(Buffer, sizeof(Buffer), Message, ArgumentList);
+    va_end(ArgumentList);
+    Buffer[sizeof(Buffer) - 1] = '\0';
+    if (Vm->Configuration.Write != NULL) {
+        Vm->Configuration.Write(Vm, Buffer);
+    }
+
+    return;
+}
+
 VOID
 CkpDumpValue (
     PCK_VM Vm,
@@ -648,9 +766,18 @@ Return Value:
 
 {
 
+    PCK_CLASS Class;
+
     switch (Object->Type) {
     case CkObjectString:
         CkpDebugPrint(Vm, "\"%s\"", ((PCK_STRING)Object)->Value);
+        break;
+
+    case CkObjectClass:
+        Class = (PCK_CLASS)Object;
+        CkpDebugPrint(Vm, "Class(");
+        CkpDumpObject(Vm, &(Class->Name->Header));
+        CkpDebugPrint(Vm, ")");
         break;
 
     default:

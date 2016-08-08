@@ -309,6 +309,7 @@ YY_VALUE CkgVariableDefinition[] = {
 };
 
 YY_VALUE CkgStatement[] = {
+    CkNodeFunctionDefinition, -1,
     CkNodeVariableDefinition, -1,
     CkNodeExpressionStatement, -1,
     CkNodeSelectionStatement, -1,
@@ -444,7 +445,6 @@ YY_VALUE CkgImportStatement[] = {
 };
 
 YY_VALUE CkgExternalDeclaration[] = {
-    CkNodeFunctionDefinition, -1,
     CkNodeClassDefinition, -1,
     CkNodeImportStatement, -1,
     CkNodeStatement, -1,
@@ -460,6 +460,8 @@ YY_VALUE CkgTranslationUnit[] = {
 YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"EndOfFile", 0, 0, NULL},
     {"Error", 0, 0, NULL},
+    {"MultiComment", 0, 0, NULL},
+    {"Comment", 0, 0, NULL},
     {"break", 0, 0, NULL},
     {"continue", 0, 0, NULL},
     {"do", 0, 0, NULL},

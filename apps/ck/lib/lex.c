@@ -60,6 +60,8 @@ Environment:
 //
 
 PSTR CkLexerExpressions[] = {
+    "/\\*.*?\\*/", // Multiline comment
+    "//(\\\\.|[^\n])*", // single line comment
     "break",
     "continue",
     "do",
@@ -253,6 +255,18 @@ Return Value:
     KSTATUS Status;
 
     CkZero(Lexer, sizeof(LEXER));
+
+    //
+    // Ignore a she-bang line at the start.
+    //
+
+    if ((Length >= 2) && (Source[0] == '#') && (Source[1] == '!')) {
+        while ((Length > 0) && (*Source != '\n')) {
+            Source += 1;
+            Length -= 1;
+        }
+    }
+
     Lexer->Input = Source;
     Lexer->InputSize = Length;
     Lexer->Expressions = CkLexerExpressions;
@@ -302,15 +316,25 @@ Return Value:
 
     Parser = PARENT_STRUCTURE(Lexer, CK_PARSER, Lexer);
     Token = (PLEXER_TOKEN)Value;
-    KStatus = YyLexGetToken(Lexer, Token);
-    if (KStatus == STATUS_END_OF_FILE) {
-        Parser->TokenPosition = Parser->SourceLength;
-        Parser->TokenSize = 0;
-        *Value = CkTokenEndOfFile;
-        return 0;
+    while (TRUE) {
+        KStatus = YyLexGetToken(Lexer, Token);
+        if (KStatus == STATUS_END_OF_FILE) {
+            Parser->TokenPosition = Parser->SourceLength;
+            Parser->TokenSize = 0;
+            *Value = CkTokenEndOfFile;
+            return 0;
 
-    } else if (!KSUCCESS(KStatus)) {
-        return YyStatusLexError;
+        } else if (!KSUCCESS(KStatus)) {
+            return YyStatusLexError;
+        }
+
+        if ((Token->Value == CkTokenMultilineComment) ||
+            (Token->Value == CkTokenSingleLineComment)) {
+
+            continue;
+        }
+
+        break;
     }
 
     Parser->PreviousPosition = Parser->TokenPosition;

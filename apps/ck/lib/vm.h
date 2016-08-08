@@ -53,6 +53,13 @@ Author:
 #define CK_MAX_ERROR_MESSAGE (CK_MAX_NAME + 128)
 
 //
+// Define the maximum stack size. Above this, the power of 2 growth starts to
+// run the risk of overflowing.
+//
+
+#define CK_MAX_STACK 0x80000000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

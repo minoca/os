@@ -425,6 +425,20 @@ Return Value:
 
     CkpVisitNode(Compiler, Expression);
     CkpEmitOperatorCall(Compiler, Operator, 0, FALSE);
+
+    //
+    // For pre-increment and pre-decrement, evaluate the expression again to
+    // assign back to it.
+    //
+
+    if ((OperatorToken->Value == CkTokenIncrement) ||
+        (OperatorToken->Value == CkTokenDecrement)) {
+
+        Compiler->Assign = TRUE;
+        CkpVisitNode(Compiler, Expression);
+        Compiler->Assign = FALSE;
+    }
+
     return;
 }
 
@@ -488,13 +502,18 @@ Return Value:
     //
     // For increment and decrement, the expression to return is before the
     // increment/decrement, and it's already on the stack. Evaluate it again,
-    // and then call the operator on it.
+    // and then call the operator on it. Then evaluate it a third time with
+    // assignment.
     //
 
     case CkTokenIncrement:
     case CkTokenDecrement:
+        CkpComplainIfAssigning(Compiler, OperatorToken, "Increment/decrement");
         CkpVisitNode(Compiler, Expression);
         CkpEmitOperatorCall(Compiler, Operator, 0, FALSE);
+        Compiler->Assign = TRUE;
+        CkpVisitNode(Compiler, Expression);
+        Compiler->Assign = Assign;
         CkpEmitOp(Compiler, CkOpPop);
         break;
 
@@ -552,10 +571,17 @@ Return Value:
             Signature.Name = Compiler->Parser->Source + MethodToken->Position;
             Signature.Length = MethodToken->Size;
             Op = CkOpCall0;
-            if (Expression->Symbol == CkNodePrimaryExpression) {
-                SuperToken = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex);
-                if (SuperToken->Value == CkTokenSuper) {
-                    Op = CkOpSuperCall0;
+            if ((Expression->Symbol == CkNodePostfixExpression) &&
+                (Expression->Children == 1)) {
+
+                Expression = CK_GET_AST_NODE(Compiler, Expression->ChildIndex);
+                if (Expression->Symbol == CkNodePrimaryExpression) {
+                    SuperToken = CK_GET_AST_TOKEN(Compiler,
+                                                  Expression->ChildIndex);
+
+                    if (SuperToken->Value == CkTokenSuper) {
+                        Op = CkOpSuperCall0;
+                    }
                 }
             }
 
@@ -644,7 +670,6 @@ Return Value:
         return;
     }
 
-    Compiler->LastPrimaryToken = Token->Value;
     if ((Compiler->Assign != FALSE) && (Token->Value != CkTokenIdentifier)) {
         CkpCompileError(Compiler, Token, "Cannot assign to a constant");
         return;

@@ -24,7 +24,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <stdio.h>
+
 #include "chalkp.h"
+#include "compiler.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -559,6 +562,45 @@ Return Value:
     }
 
     return IndexValue;
+}
+
+CK_SYMBOL_INDEX
+CkpGetInitMethodSymbol (
+    PCK_VM Vm,
+    PCK_MODULE Module,
+    CK_ARITY Arity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the string table index for the init method with the
+    given arity.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module the function is defined in.
+
+    Arity - Supplies the number of arguments passed to this init function.
+
+Return Value:
+
+    Returns the index into the module string table for this function signature.
+
+    -1 if no such string exists.
+
+--*/
+
+{
+
+    UINTN Length;
+    CHAR Name[CK_MAX_METHOD_SIGNATURE];
+
+    Length = snprintf(Name, CK_MAX_METHOD_SIGNATURE - 1, "__init@%d", Arity);
+    return CkpStringTableFind(&(Module->Strings), Name, Length);
 }
 
 //

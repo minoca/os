@@ -37,6 +37,27 @@ Author:
 //
 
 VOID
+CkpDebugPrintStackTrace (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a stack trace of the current fiber.
+
+Arguments:
+
+    Vm - Supplies a pointer to the VM.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
 CkpDumpCode (
     PCK_VM Vm,
     PCK_FUNCTION Function
@@ -57,6 +78,65 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+VOID
+CkpDumpStack (
+    PCK_VM Vm,
+    PCK_FIBER Fiber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints the current contents of the stack for the most recent
+    call frame.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the fiber.
+
+Return Value:
+
+    None.
+
+--*/
+
+INTN
+CkpDumpInstruction (
+    PCK_VM Vm,
+    PCK_FUNCTION Function,
+    UINTN Offset,
+    PLONG LastLine
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints the bytecode for a single instruction.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Function - Supplies a pointer to the function.
+
+    Offset - Supplies the offset into the function code to print from.
+
+    LastLine - Supplies an optional pointer where the last line number printed
+        is given on input. On output, returns the line number of this
+        instruction.
+
+Return Value:
+
+    Returns the length of this instruction.
+
+    -1 if there are no more instructions.
 
 --*/
 

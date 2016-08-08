@@ -193,7 +193,8 @@ variable_definition
     ;
 
 statement
-    : variable_definition
+    : function_definition
+    | variable_definition
     | expression_statement
     | selection_statement
     | iteration_statement
@@ -279,8 +280,7 @@ import_statement
     ;
 
 external_declaration
-    : function_definition
-    | class_definition
+    : class_definition
     | import_statement
     | statement
     ;

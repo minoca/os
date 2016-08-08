@@ -31,6 +31,8 @@ Author:
 typedef enum _CK_SYMBOL {
     CkTokenEndOfFile,
     CkTokenError,
+    CkTokenMultilineComment,
+    CkTokenSingleLineComment,
     CkTokenBreak,
     CkTokenContinue,
     CkTokenDo,
@@ -172,6 +174,8 @@ Members:
 
     Parent - Stores the index of the parent node.
 
+    Line - Stores the line number the node starts on.
+
 --*/
 
 typedef struct _CK_AST_NODE {
@@ -181,6 +185,7 @@ typedef struct _CK_AST_NODE {
     ULONG Depth;
     ULONG ChildIndex;
     ULONG Parent;
+    ULONG Line;
 } CK_AST_NODE, *PCK_AST_NODE;
 
 /*++

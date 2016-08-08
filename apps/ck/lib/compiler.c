@@ -339,6 +339,7 @@ Return Value:
     YyStatus = YyParseGrammar(&(Parser.Parser));
     if (YyStatus != YyStatusSuccess) {
         Error = CkErrorCompile;
+        Parser.Errors += 1;
         goto CompileEnd;
     }
 
@@ -469,6 +470,7 @@ Return Value:
 
     CK_ASSERT((Node->Symbol > CkNodeStart) && (Node->Symbol < CkSymbolCount));
 
+    Compiler->Line = Node->Line;
     Visit = CkCompilerNodeFunctions[Node->Symbol - (CkNodeStart + 1)];
 
     CK_ASSERT(Visit != NULL);
@@ -614,6 +616,7 @@ Return Value:
     // number information to encompass the last valid opcode.
     //
 
+    Compiler->Line += 1;
     CkpEmitOp(Compiler, CkOpEnd);
     CkpFunctionSetDebugName(Compiler->Parser->Vm,
                             Compiler->Function,
@@ -667,7 +670,6 @@ FinalizeCompilerEnd:
         Compiler->LocalCapacity = 0;
     }
 
-    Compiler->UpvalueCount = 0;
     if (Compiler->Upvalues != NULL) {
         CkFree(Compiler->Parser->Vm, Compiler->Upvalues);
         Compiler->Upvalues = NULL;
@@ -1208,6 +1210,8 @@ Return Value:
         return;
     }
 
+    MethodCompiler.Function->Arity = Signature.Arity;
+
     //
     // Parse the parameter list. It's left recursive, so go backwards.
     //
@@ -1469,7 +1473,7 @@ Return Value:
         // {
         //     var seq = expression;
         //     var iter;
-        //     while (iter = seq.iterate(iter)) {
+        //     while ((iter = seq.iterate(iter)) != null) {
         //         var identifier = seq.iteratorValue(iter);
         //         compound_statement;
         //     }
@@ -1489,20 +1493,28 @@ Return Value:
 
             Expression = CK_GET_AST_NODE(Compiler, Node->ChildIndex + 4);
             CkpVisitNode(Compiler, Expression);
+
+            //
+            // The spaces in the local variables make them illegal names, so
+            // they're invisible to the namespace.
+            //
+
             ExpressionSymbol = CkpAddLocal(Compiler, "seq ", 4);
             CkpEmitOp(Compiler, CkOpNull);
             IteratorSymbol = CkpAddLocal(Compiler, "iter ", 5);
             CkpStartLoop(Compiler, &Loop);
 
             //
-            // Emit iter = seq.iterate(iter), and check for exiting the loop if
-            // the iterator becomes null.
+            // Emit null != (iter = seq.iterate(iter)), and check for exiting
+            // the loop if the iterator becomes null.
             //
 
+            CkpEmitOp(Compiler, CkOpNull);
             CkpLoadLocal(Compiler, ExpressionSymbol);
             CkpLoadLocal(Compiler, IteratorSymbol);
             CkpCallMethod(Compiler, 1, "iterate@1", 9);
             CkpEmitByteOp(Compiler, CkOpStoreLocal, IteratorSymbol);
+            CkpEmitOperatorCall(Compiler, CkTokenIsNotEqual, 1, FALSE);
             CkpTestLoopExit(Compiler);
 
             //
@@ -2093,6 +2105,7 @@ Return Value:
 
     INT Length;
     CHAR Message[CK_MAX_ERROR_MESSAGE];
+    PSTR Name;
 
     Parser->Errors += 1;
     if ((Parser->PrintErrors == FALSE) ||
@@ -2112,9 +2125,16 @@ Return Value:
               ArgumentList);
 
     Message[sizeof(Message) - 1] = '\0';
+    if (Parser->Module->Name != NULL) {
+        Name = Parser->Module->Name->Value;
+
+    } else {
+        Name = "<core>";
+    }
+
     Parser->Vm->Configuration.Error(Parser->Vm,
                                     CkErrorCompile,
-                                    Parser->Module->Name->Value,
+                                    Name,
                                     Line,
                                     Message);
 
@@ -2275,6 +2295,20 @@ Return Value:
            ElementCount * sizeof(CK_SYMBOL_UNION));
 
     Child = Parser->Nodes + Parser->NodeCount;
+
+    //
+    // Get the line number for the start of this element.
+    //
+
+    if (ElementCount == 0) {
+        NewNode->Line = Parser->PreviousLine;
+
+    } else if (Child->Symbol >= CkNodeStart) {
+        NewNode->Line = Child->Node.Line;
+
+    } else {
+        NewNode->Line = Child->Token.Line;
+    }
 
     //
     // Sum the descendents.

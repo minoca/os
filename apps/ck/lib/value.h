@@ -101,6 +101,14 @@ Author:
 #define CK_TRUE_VALUE CK_ONE_VALUE
 
 //
+// Define the class special behavior flags.
+//
+
+#define CK_CLASS_UNINHERITABLE 0x00000001
+#define CK_CLASS_SPECIAL_CREATION 0x00000002
+#define CK_CLASS_FOREIGN 0x00000004
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -526,6 +534,8 @@ Members:
 
     Function - Stores a pointer to the function object.
 
+    Class - Stores a pointer to the class the closure is bound to.
+
     Upvalues - Stores a pointer to the array of upvalue objects. Currently this
         points directly after the array since the number of upvalues is static.
 
@@ -534,6 +544,7 @@ Members:
 typedef struct _CK_CLOSURE {
     CK_OBJECT Header;
     PCK_FUNCTION Function;
+    PCK_CLASS Class;
     PCK_UPVALUE *Upvalues;
 } CK_CLOSURE, *PCK_CLOSURE;
 
@@ -614,10 +625,12 @@ Members:
     Super - Stores a pointer to the superclass.
 
     SuperFieldCount - Stores the cumulative number of fields in the hierarchy
-        of super classes up to the root.
+        of super classes up to the root. This is set to -1 if the class cannot
+        be inherited from (as one of the core builtin classes).
 
     FieldCount - Stores the number of fields required for an instance of this
-        class, including all of its superclass fields.
+        class, including all of its superclass fields. Stores -1 if this is a
+        builtin class.
 
     Methods - Stores a dictionary of methods defined by or inherited by this
         class. The keys are the signature strings, and the values are method
@@ -625,6 +638,11 @@ Members:
 
     Name - Stores a pointer to the string object containing the name of the
         class.
+
+    Module - Stores a pointer to the module the class is defined in.
+
+    Flags - Stores flags describing special behaviors of this class. See
+        CK_CLASS_* definitions.
 
 --*/
 
@@ -635,6 +653,8 @@ struct _CK_CLASS {
     CK_SYMBOL_INDEX FieldCount;
     PCK_DICT Methods;
     PCK_STRING Name;
+    PCK_MODULE Module;
+    ULONG Flags;
 };
 
 /*++
@@ -807,7 +827,8 @@ extern const CK_VALUE CkOneValue;
 PCK_CLOSURE
 CkpClosureCreate (
     PCK_VM Vm,
-    PCK_FUNCTION Function
+    PCK_FUNCTION Function,
+    PCK_CLASS Class
     );
 
 /*++
@@ -821,6 +842,8 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     Function - Supplies a pointer to the function the closure encloses.
+
+    Class - Supplies a pointer to the class the closure was defined in.
 
 Return Value:
 
@@ -1049,6 +1072,7 @@ Return Value:
 PCK_CLASS
 CkpClassAllocate (
     PCK_VM Vm,
+    PCK_MODULE Module,
     CK_SYMBOL_INDEX FieldCount,
     PCK_STRING Name
     );
@@ -1062,6 +1086,8 @@ Routine Description:
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module to define the class in.
 
     FieldCount - Supplies the number of fields the class has.
 
@@ -1137,6 +1163,30 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+CK_VALUE
+CkpCreateInstance (
+    PCK_VM Vm,
+    PCK_CLASS Class
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new class instance.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Class - Supplies a pointer to the class.
+
+Return Value:
+
+    Returns an instance of the given class on success.
 
 --*/
 
@@ -1916,6 +1966,125 @@ Return Value:
     Returns a pointer to the new fiber on success.
 
     NULL on allocation failure.
+
+--*/
+
+VOID
+CkpFiberDestroy (
+    PCK_VM Vm,
+    PCK_FIBER Fiber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys a fiber object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the fiber to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+CkpAppendCallFrame (
+    PCK_VM Vm,
+    PCK_FIBER Fiber,
+    PCK_CLOSURE Closure,
+    PCK_VALUE Stack
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds a new call frame onto the given fiber.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the fiber to run on.
+
+    Closure - Supplies a pointer to the closure to execute.
+
+    Stack - Supplies a pointer to the base of the stack. The receiver and
+        arguments should already be set up after this pointer.
+
+Return Value:
+
+    None. On allocation failure, the runtime error will be set.
+
+--*/
+
+VOID
+CkpEnsureStack (
+    PCK_VM Vm,
+    PCK_FIBER Fiber,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine ensures that the stack is at least the given size.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the currently executing fiber.
+
+    Size - Supplies the required size of the stack.
+
+Return Value:
+
+    None. The fiber error will be set on failure.
+
+--*/
+
+//
+// Integer and range functions
+//
+
+CK_VALUE
+CkpRangeCreate (
+    PCK_VM Vm,
+    CK_INTEGER From,
+    CK_INTEGER To,
+    BOOL Inclusive
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a range object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    From - Supplies the starting value.
+
+    To - Supplies the ending value.
+
+    Inclusive - Supplies a boolean indicating whether the range is inclusive
+        or exclusive.
+
+Return Value:
+
+    Returns the range value on success.
+
+    CK_NULL_VALUE on allocation failure.
 
 --*/
 
