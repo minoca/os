@@ -369,6 +369,9 @@ Members:
     OsData - Stores a pointer to the thread control data allocated by the OS
         library.
 
+    SignalMask - Stores the original signal mask to restore once the thread
+        is initialized. The thread starts with all signals blocked.
+
 --*/
 
 typedef struct _PTHREAD {
@@ -388,6 +391,7 @@ typedef struct _PTHREAD {
     BOOL CancelRequested;
     PPTHREAD_KEY_DATA KeyData;
     PVOID OsData;
+    sigset_t SignalMask;
 } PTHREAD, *PPTHREAD;
 
 //

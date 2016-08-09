@@ -218,7 +218,6 @@ Return Value:
     KSTATUS KernelStatus;
     pthread_attr_t LocalAttributes;
     PPTHREAD NewThread;
-    sigset_t OriginalMask;
     int Status;
 
     //
@@ -244,12 +243,11 @@ Return Value:
     pthread_mutex_lock(&(NewThread->StartMutex));
 
     //
-    // Block certain signals in the new thread while it sets itself up.
+    // Block all possible signals in the new thread while it sets itself up.
     //
 
-    sigemptyset(&InternalSignals);
-    sigaddset(&InternalSignals, SIGNAL_PTHREAD);
-    pthread_sigmask(SIG_BLOCK, &InternalSignals, &OriginalMask);
+    sigfillset(&InternalSignals);
+    pthread_sigmask(SIG_SETMASK, &InternalSignals, &(NewThread->SignalMask));
     KernelStatus = OsCreateThread(NULL,
                                   0,
                                   ClpThreadStart,
@@ -259,7 +257,7 @@ Return Value:
                                   NewThread->OsData,
                                   &(NewThread->ThreadId));
 
-    pthread_sigmask(SIG_SETMASK, &OriginalMask, NULL);
+    pthread_sigmask(SIG_SETMASK, &(NewThread->SignalMask), NULL);
     if (!KSUCCESS(KernelStatus)) {
         Status = ClConvertKstatusToErrorNumber(KernelStatus);
         ClpDestroyThreadKeyData(NewThread);
@@ -1127,7 +1125,6 @@ Return Value:
 
 {
 
-    sigset_t InternalSignals;
     PVOID Result;
     PPTHREAD Thread;
 
@@ -1140,9 +1137,7 @@ Return Value:
 
     ClCurrentThread = Thread;
     pthread_mutex_lock(&(Thread->StartMutex));
-    sigemptyset(&InternalSignals);
-    sigaddset(&InternalSignals, SIGNAL_PTHREAD);
-    pthread_sigmask(SIG_UNBLOCK, &InternalSignals, NULL);
+    pthread_sigmask(SIG_SETMASK, &(Thread->SignalMask), NULL);
     pthread_testcancel();
     Result = Thread->ThreadRoutine(Thread->ThreadParameter);
     pthread_exit(Result);
