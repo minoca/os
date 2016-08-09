@@ -1128,7 +1128,7 @@ Return Value:
 
 VOID
 KepPreThreadStartWork (
-    VOID
+    PTRAP_FRAME TrapFrame
     )
 
 /*++
@@ -1140,7 +1140,8 @@ Routine Description:
 
 Arguments:
 
-    None.
+    TrapFrame - Supplies a pointer to the trap frame to be restored to
+        initialize this thread.
 
 Return Value:
 
@@ -1162,6 +1163,16 @@ Return Value:
 
     if (Thread->ThreadIdPointer != NULL) {
         MmUserWrite32(Thread->ThreadIdPointer, Thread->ThreadId);
+    }
+
+    //
+    // The thread may have already got a signal pending on it.
+    //
+
+    if ((Thread->Flags & THREAD_FLAG_USER_MODE) != 0) {
+        ArEnableInterrupts();
+        PsCheckRuntimeTimers(Thread);
+        PsDispatchPendingSignals(Thread, TrapFrame);
     }
 
     return;

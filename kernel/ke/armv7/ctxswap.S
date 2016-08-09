@@ -122,6 +122,7 @@ FUNCTION KepContextSwap
     beq     ContextSwapRestore
 
 ContextSwapFirstRun:
+    mov     %r0, %sp                @ Set the trap frame parameter.
     bl      KepPreThreadStartWork   @ Perform any thread initialization.
 
     ##

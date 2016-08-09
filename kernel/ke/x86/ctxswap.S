@@ -158,7 +158,9 @@ FUNCTION(KepContextSwap)
     je     KepContextSwapRestore    # Special case a first run.
 
 KepContextSwapFirstTime:
+    pushl   %esp                    # Push a pointer to the trap frame.
     call    KepPreThreadStartWork   # Do any thread setup needed.
+    addl    $4, %esp                # Pop the parameter.
     mov     %esp, %ebx              # Set restore trap frame parameter.
     call    ArRestoreTrapFrame      # Set up CPU context.
     addl    $4, %esp                # Pop the error code.
