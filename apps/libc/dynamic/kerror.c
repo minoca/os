@@ -163,7 +163,8 @@ int ClpStatusToErrorNumber[] = {
     EAFNOSUPPORT,
     EPROTONOSUPPORT,
     EDOM,
-    ENODEV
+    ENODEV,
+    EDEADLK
 };
 
 //

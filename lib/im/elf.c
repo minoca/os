@@ -2451,6 +2451,10 @@ Return Value:
 
             break;
 
+        case ELF_DYNAMIC_BIND_NOW:
+            Image->LoadFlags |= IMAGE_LOAD_FLAG_BIND_NOW;
+            break;
+
         default:
             break;
         }

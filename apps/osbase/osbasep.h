@@ -261,7 +261,7 @@ Return Value:
 
 VOID
 OspAcquireImageLock (
-    VOID
+    BOOL Exclusive
     );
 
 /*++
@@ -272,7 +272,8 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Exclusive - Supplies a boolean indicating whether the lock should be
+        held shared (FALSE) or exclusive (TRUE).
 
 Return Value:
 

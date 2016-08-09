@@ -77,6 +77,13 @@ extern "C" {
 #define OS_LIBRARY_NEXT ((HANDLE)-1)
 
 //
+// Set this flag when initializing a read-write lock to indicate the lock
+// should be shared across processes.
+//
+
+#define OS_RWLOCK_SHARED 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -164,6 +171,36 @@ typedef struct _OS_LOCK {
     ULONG Value;
     ULONG SpinCount;
 } OS_LOCK, *POS_LOCK;
+
+/*++
+
+Structure Description:
+
+    This structure stores the internal structure of a read/write lock.
+
+Members:
+
+    State - Stores the state of the lock. 0 is unlocked, -1 is locked for
+        write, and any other value contains a count of readers.
+
+    WriterThreadId - Stores the thread ID of the thread that has this lock for
+        writing, if any.
+
+    PendingReaders - Stores the number of threads waiting to acquire the lock
+        for read access.
+
+    PendingWriters - Stores the number of threads waiting to acquire the lock
+        for write access.
+
+--*/
+
+typedef struct _OS_RWLOCK {
+    ULONG State;
+    UINTN WriterThreadId;
+    ULONG PendingReaders;
+    ULONG PendingWriters;
+    ULONG Attributes;
+} OS_RWLOCK, *POS_RWLOCK;
 
 /*++
 
@@ -3859,6 +3896,211 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+OS_API
+VOID
+OsRwLockInitialize (
+    POS_RWLOCK Lock,
+    ULONG Flags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes a read/write lock.
+
+Arguments:
+
+    Lock - Supplies a pointer to the read/write lock.
+
+    Flags - Supplies a bitfield of flags governing the lock behavior.
+
+Return Value:
+
+    None.
+
+--*/
+
+OS_API
+KSTATUS
+OsRwLockRead (
+    POS_RWLOCK Lock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine acquires the read/write lock for read access. Multiple readers
+    can acquire the lock simultaneously, but any writes that try to acquire
+    the lock while it's held for read will block. Readers that try to
+    acquire the lock while it's held for write will also block.
+
+Arguments:
+
+    Lock - Supplies a pointer to the read/write lock.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+OS_API
+KSTATUS
+OsRwLockReadTimed (
+    POS_RWLOCK Lock,
+    ULONG TimeoutInMilliseconds
+    );
+
+/*++
+
+Routine Description:
+
+    This routine acquires the read/write lock for read access just like the
+    read lock function, except that this function will return after the
+    specified deadline if the lock could not be acquired.
+
+Arguments:
+
+    Lock - Supplies a pointer to the read/write lock.
+
+    TimeoutInMilliseconds - Supplies the duration to wait in milliseconds.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+OS_API
+KSTATUS
+OsRwLockTryRead (
+    POS_RWLOCK Lock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a single attempt at acquiring the lock for read
+    access.
+
+Arguments:
+
+    Lock - Supplies a pointer to the read/write lock.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_RESOURCE_IN_USE if the lock is already held.
+
+--*/
+
+OS_API
+KSTATUS
+OsRwLockWrite (
+    POS_RWLOCK Lock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine acquires the read/write lock for write access. The lock can
+    only be acquired for write access if there are no readers and no other
+    writers.
+
+Arguments:
+
+    Lock - Supplies a pointer to the read/write lock.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+OS_API
+KSTATUS
+OsRwLockWriteTimed (
+    POS_RWLOCK Lock,
+    ULONG TimeoutInMilliseconds
+    );
+
+/*++
+
+Routine Description:
+
+    This routine acquires the read/write lock for write access just like the
+    write lock function, except that this function will return after the
+    specified deadline if the lock could not be acquired.
+
+Arguments:
+
+    Lock - Supplies a pointer to the read/write lock.
+
+    AbsoluteTimeout - Supplies a pointer to the absolute deadline after which
+        this function should give up and return failure.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+OS_API
+KSTATUS
+OsRwLockTryWrite (
+    POS_RWLOCK Lock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a single attempt at acquiring the lock for write
+    access.
+
+Arguments:
+
+    Lock - Supplies a pointer to the read/write lock.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_RESOURCE_IN_USE if the lock is already held.
+
+--*/
+
+OS_API
+KSTATUS
+OsRwLockUnlock (
+    POS_RWLOCK Lock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine unlocks a read/write lock that's been acquired by this thread
+    for either read or write.
+
+Arguments:
+
+    Lock - Supplies a pointer to the read/write lock.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_PERMISSION_DENIED if the lock is not held or was not held by this
+    thread.
 
 --*/
 

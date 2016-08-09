@@ -42,6 +42,7 @@ OBJS = env.o       \
        heap.o      \
        osimag.o    \
        osbase.o    \
+       rwlock.o    \
        socket.o    \
        spinlock.o  \
        time.o      \

@@ -237,7 +237,7 @@ Return Value:
         //
 
         Image = NULL;
-        OspAcquireImageLock();
+        OspAcquireImageLock(FALSE);
         CurrentEntry = OsLoadedImagesHead.Next;
         while (CurrentEntry != &OsLoadedImagesHead) {
             Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);

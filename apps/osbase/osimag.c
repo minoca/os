@@ -218,7 +218,7 @@ OS_API PIM_GET_ENVIRONMENT_VARIABLE OsImGetEnvironmentVariable;
 //
 
 LIST_ENTRY OsLoadedImagesHead;
-OS_LOCK OsLoadedImagesLock;
+OS_RWLOCK OsLoadedImagesLock;
 
 //
 // Define the image library function table.
@@ -508,7 +508,7 @@ Return Value:
     //
 
     OspImGetEnvironmentVariable(LD_BIND_NOW);
-    OspAcquireImageLock();
+    OspAcquireImageLock(TRUE);
     if (OsLoadedImagesHead.Next == NULL) {
         Status = OspLoadInitialImageList(FALSE);
         if (!KSUCCESS(Status)) {
@@ -572,7 +572,7 @@ Return Value:
         return;
     }
 
-    OspAcquireImageLock();
+    OspAcquireImageLock(TRUE);
     ImImageReleaseReference(Library);
     OspReleaseImageLock();
     return;
@@ -627,7 +627,7 @@ Return Value:
     *Address = NULL;
     RtlZeroMemory(&Symbol, sizeof(IMAGE_SYMBOL));
     Symbol.Image = INVALID_HANDLE;
-    OspAcquireImageLock();
+    OspAcquireImageLock(FALSE);
     if (OsLoadedImagesHead.Next == NULL) {
         Status = OspLoadInitialImageList(FALSE);
         if (!KSUCCESS(Status)) {
@@ -750,7 +750,7 @@ Return Value:
     RtlZeroMemory(Symbol, sizeof(OS_LIBRARY_SYMBOL));
     RtlZeroMemory(&ImageSymbol, sizeof(IMAGE_SYMBOL));
     ImageSymbol.Image = INVALID_HANDLE;
-    OspAcquireImageLock();
+    OspAcquireImageLock(FALSE);
     if (OsLoadedImagesHead.Next == NULL) {
         Status = OspLoadInitialImageList(FALSE);
         if (!KSUCCESS(Status)) {
@@ -903,7 +903,7 @@ Return Value:
     // Allocate the initial TLS image and control block for the thread.
     //
 
-    OspAcquireImageLock();
+    OspAcquireImageLock(FALSE);
     Status = OspTlsAllocate(&OsLoadedImagesHead, ThreadData);
     OspReleaseImageLock();
     return Status;
@@ -933,7 +933,7 @@ Return Value:
 
 {
 
-    OspAcquireImageLock();
+    OspAcquireImageLock(FALSE);
     OspTlsDestroy(ThreadData);
     OspReleaseImageLock();
     return;
@@ -970,7 +970,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
 
-    OspAcquireImageLock();
+    OspAcquireImageLock(FALSE);
     CurrentEntry = OsLoadedImagesHead.Next;
     if (CurrentEntry != NULL) {
         while (CurrentEntry != &OsLoadedImagesHead) {
@@ -1008,14 +1008,14 @@ Return Value:
 
 {
 
-    OsInitializeLockDefault(&OsLoadedImagesLock);
+    OsRwLockInitialize(&OsLoadedImagesLock, 0);
     ImInitialize(&OsImageFunctionTable);
     return;
 }
 
 VOID
 OspAcquireImageLock (
-    VOID
+    BOOL Exclusive
     )
 
 /*++
@@ -1026,7 +1026,8 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Exclusive - Supplies a boolean indicating whether the lock should be
+        held shared (FALSE) or exclusive (TRUE).
 
 Return Value:
 
@@ -1036,7 +1037,13 @@ Return Value:
 
 {
 
-    OsAcquireLock(&OsLoadedImagesLock);
+    if (Exclusive != FALSE) {
+        OsRwLockWrite(&OsLoadedImagesLock);
+
+    } else {
+        OsRwLockRead(&OsLoadedImagesLock);
+    }
+
     return;
 }
 
@@ -1063,7 +1070,7 @@ Return Value:
 
 {
 
-    OsReleaseLock(&OsLoadedImagesLock);
+    OsRwLockUnlock(&OsLoadedImagesLock);
     return;
 }
 
@@ -1956,7 +1963,7 @@ Return Value:
     ASSERT(OsLoadedImagesHead.Next != NULL);
 
     if (OsImExecutableLoaded != FALSE) {
-        OspAcquireImageLock();
+        OspAcquireImageLock(TRUE);
     }
 
     //
@@ -2225,7 +2232,7 @@ Return Value:
     // libraries that depend on them.
     //
 
-    OspAcquireImageLock();
+    OspAcquireImageLock(FALSE);
     CurrentEntry = ListHead->Previous;
     while (CurrentEntry != ListHead) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
@@ -2237,7 +2244,7 @@ Return Value:
 
             OspReleaseImageLock();
             OspImInitializeImage(Image);
-            OspAcquireImageLock();
+            OspAcquireImageLock(FALSE);
             Image->Flags |= IMAGE_FLAG_INITIALIZED;
         }
 
@@ -2371,7 +2378,7 @@ Return Value:
 
     PVOID FunctionAddress;
 
-    OspAcquireImageLock();
+    OspAcquireImageLock(FALSE);
     FunctionAddress = ImResolvePltEntry(&OsLoadedImagesHead,
                                         Image,
                                         RelocationOffset);
