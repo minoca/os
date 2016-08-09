@@ -167,26 +167,12 @@ Structure Description:
 
 Members:
 
-    State - Stores the state of the lock. 0 is unlocked, -1 is locked for
-        write, and any other value contains a count of readers.
-
-    WriterThreadId - Stores the thread ID of the thread that has this lock for
-        writing, if any.
-
-    PendingReaders - Stores the number of threads waiting to acquire the lock
-        for read access.
-
-    PendingWriters - Stores the number of threads waiting to acquire the lock
-        for write access.
+    Lock - Stores the OS library RW lock.
 
 --*/
 
 typedef struct _PTHREAD_RWLOCK {
-    ULONG State;
-    UINTN WriterThreadId;
-    ULONG PendingReaders;
-    ULONG PendingWriters;
-    ULONG Attributes;
+    OS_RWLOCK Lock;
 } PTHREAD_RWLOCK, *PPTHREAD_RWLOCK;
 
 /*++

@@ -30,11 +30,6 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define PTHREAD_RWLOCK_SHARED 0x00000001
-
-#define PTHREAD_RWLOCK_UNLOCKED 0
-#define PTHREAD_RWLOCK_WRITE_LOCKED ((ULONG)-1)
-
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -42,18 +37,6 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-int
-ClpAcquireReadWriteLockForRead (
-    PPTHREAD_RWLOCK Lock,
-    const struct timespec *AbsoluteTimeout
-    );
-
-int
-ClpAcquireReadWriteLockForWrite (
-    PPTHREAD_RWLOCK Lock,
-    const struct timespec *AbsoluteTimeout
-    );
 
 //
 // -------------------------------------------------------------------- Globals
@@ -94,17 +77,19 @@ Return Value:
 {
 
     PPTHREAD_RWLOCK_ATTRIBUTE AttributeInternal;
+    ULONG Flags;
     PPTHREAD_RWLOCK LockInternal;
 
     ASSERT(sizeof(PTHREAD_RWLOCK) <= sizeof(pthread_rwlock_t));
 
     LockInternal = (PPTHREAD_RWLOCK)Lock;
-    memset(LockInternal, 0, sizeof(PTHREAD_RWLOCK));
+    Flags = 0;
     if (Attribute != NULL) {
         AttributeInternal = (PPTHREAD_RWLOCK_ATTRIBUTE)Attribute;
-        LockInternal->Attributes = AttributeInternal->Flags;
+        Flags = AttributeInternal->Flags;
     }
 
+    OsRwLockInitialize(&(LockInternal->Lock), Flags);
     return 0;
 }
 
@@ -137,7 +122,7 @@ Return Value:
     PPTHREAD_RWLOCK LockInternal;
 
     LockInternal = (PPTHREAD_RWLOCK)Lock;
-    if (LockInternal->State != PTHREAD_RWLOCK_UNLOCKED) {
+    if (LockInternal->Lock.State != 0) {
         return EBUSY;
     }
 
@@ -145,7 +130,7 @@ Return Value:
     // Set it to some crazy value for debugability sake.
     //
 
-    LockInternal->State = PTHREAD_RWLOCK_WRITE_LOCKED - 1;
+    LockInternal->Lock.State = -2;
     return 0;
 }
 
@@ -178,7 +163,16 @@ Return Value:
 
 {
 
-    return ClpAcquireReadWriteLockForRead((PPTHREAD_RWLOCK)Lock, NULL);
+    PPTHREAD_RWLOCK LockInternal;
+    KSTATUS Status;
+
+    LockInternal = (PPTHREAD_RWLOCK)Lock;
+    Status = OsRwLockRead(&(LockInternal->Lock));
+    if (Status == STATUS_SUCCESS) {
+        return Status;
+    }
+
+    return ClConvertKstatusToErrorNumber(Status);
 }
 
 PTHREAD_API
@@ -215,12 +209,26 @@ Return Value:
 
 {
 
-    int Status;
+    PPTHREAD_RWLOCK LockInternal;
+    KSTATUS Status;
+    ULONG TimeoutInMilliseconds;
 
-    Status = ClpAcquireReadWriteLockForRead((PPTHREAD_RWLOCK)Lock,
-                                            AbsoluteTimeout);
+    LockInternal = (PPTHREAD_RWLOCK)Lock;
+    if (AbsoluteTimeout != NULL) {
+        TimeoutInMilliseconds =
+              ClpConvertAbsoluteTimespecToRelativeMilliseconds(AbsoluteTimeout,
+                                                               CLOCK_REALTIME);
 
-    return Status;
+    } else {
+        TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
+    }
+
+    Status = OsRwLockReadTimed(&(LockInternal->Lock), TimeoutInMilliseconds);
+    if (Status == STATUS_SUCCESS) {
+        return Status;
+    }
+
+    return ClConvertKstatusToErrorNumber(Status);
 }
 
 PTHREAD_API
@@ -251,22 +259,15 @@ Return Value:
 {
 
     PPTHREAD_RWLOCK LockInternal;
-    ULONG NewState;
-    ULONG OldState;
+    KSTATUS Status;
 
     LockInternal = (PPTHREAD_RWLOCK)Lock;
-    OldState = LockInternal->State;
-    if (OldState != PTHREAD_RWLOCK_WRITE_LOCKED) {
-        NewState = RtlAtomicCompareExchange32(&(LockInternal->State),
-                                              OldState + 1,
-                                              OldState);
-
-        if (NewState == OldState) {
-            return 0;
-        }
+    Status = OsRwLockTryRead(&(LockInternal->Lock));
+    if (Status == STATUS_SUCCESS) {
+        return Status;
     }
 
-    return EBUSY;
+    return ClConvertKstatusToErrorNumber(Status);
 }
 
 PTHREAD_API
@@ -297,7 +298,16 @@ Return Value:
 
 {
 
-    return ClpAcquireReadWriteLockForWrite((PPTHREAD_RWLOCK)Lock, NULL);
+    PPTHREAD_RWLOCK LockInternal;
+    KSTATUS Status;
+
+    LockInternal = (PPTHREAD_RWLOCK)Lock;
+    Status = OsRwLockWrite(&(LockInternal->Lock));
+    if (Status == STATUS_SUCCESS) {
+        return Status;
+    }
+
+    return ClConvertKstatusToErrorNumber(Status);
 }
 
 PTHREAD_API
@@ -334,12 +344,26 @@ Return Value:
 
 {
 
-    int Status;
+    PPTHREAD_RWLOCK LockInternal;
+    KSTATUS Status;
+    ULONG TimeoutInMilliseconds;
 
-    Status = ClpAcquireReadWriteLockForWrite((PPTHREAD_RWLOCK)Lock,
-                                             AbsoluteTimeout);
+    LockInternal = (PPTHREAD_RWLOCK)Lock;
+    if (AbsoluteTimeout != NULL) {
+        TimeoutInMilliseconds =
+              ClpConvertAbsoluteTimespecToRelativeMilliseconds(AbsoluteTimeout,
+                                                               CLOCK_REALTIME);
 
-    return Status;
+    } else {
+        TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
+    }
+
+    Status = OsRwLockWriteTimed(&(LockInternal->Lock), TimeoutInMilliseconds);
+    if (Status == STATUS_SUCCESS) {
+        return Status;
+    }
+
+    return ClConvertKstatusToErrorNumber(Status);
 }
 
 PTHREAD_API
@@ -370,22 +394,15 @@ Return Value:
 {
 
     PPTHREAD_RWLOCK LockInternal;
-    ULONG OldState;
+    KSTATUS Status;
 
     LockInternal = (PPTHREAD_RWLOCK)Lock;
-    OldState = LockInternal->State;
-    if (OldState == PTHREAD_RWLOCK_UNLOCKED) {
-        OldState = RtlAtomicCompareExchange32(&(LockInternal->State),
-                                              PTHREAD_RWLOCK_WRITE_LOCKED,
-                                              OldState);
-
-        if (OldState == PTHREAD_RWLOCK_UNLOCKED) {
-            LockInternal->WriterThreadId = OsGetThreadId();
-            return 0;
-        }
+    Status = OsRwLockTryWrite(&(LockInternal->Lock));
+    if (Status == STATUS_SUCCESS) {
+        return Status;
     }
 
-    return EBUSY;
+    return ClConvertKstatusToErrorNumber(Status);
 }
 
 PTHREAD_API
@@ -415,77 +432,16 @@ Return Value:
 
 {
 
-    ULONG Count;
     PPTHREAD_RWLOCK LockInternal;
-    ULONG NewState;
-    ULONG OldState;
-    ULONG Operation;
+    KSTATUS Status;
 
     LockInternal = (PPTHREAD_RWLOCK)Lock;
-    OldState = LockInternal->State;
-    if (OldState == PTHREAD_RWLOCK_UNLOCKED) {
-        return EPERM;
+    Status = OsRwLockUnlock(&(LockInternal->Lock));
+    if (Status == STATUS_SUCCESS) {
+        return Status;
     }
 
-    //
-    // If this lock is held by a writer, make sure that this thread is that
-    // writer, then set it to unlocked.
-    //
-
-    if (OldState == PTHREAD_RWLOCK_WRITE_LOCKED) {
-        if (LockInternal->WriterThreadId != OsGetThreadId()) {
-            return EPERM;
-        }
-
-        LockInternal->WriterThreadId = 0;
-        LockInternal->State = PTHREAD_RWLOCK_UNLOCKED;
-
-    //
-    // The lock is held by a reader.
-    //
-
-    } else {
-        while (OldState > PTHREAD_RWLOCK_UNLOCKED) {
-            NewState = RtlAtomicCompareExchange32(&(LockInternal->State),
-                                                  OldState - 1,
-                                                  OldState);
-
-            if (NewState == OldState) {
-                break;
-            }
-
-            OldState = NewState;
-        }
-
-        if (OldState == 0) {
-            return EPERM;
-
-        //
-        // If there are still other readers, don't release the writers.
-        //
-
-        } else if (OldState > 1) {
-            return 0;
-        }
-    }
-
-    //
-    // Wake anyone blocking (chaos ensues).
-    //
-
-    if ((LockInternal->PendingReaders != 0) ||
-        (LockInternal->PendingWriters != 0)) {
-
-        Count = MAX_ULONG;
-        Operation = UserLockWake;
-        if ((LockInternal->Attributes & PTHREAD_RWLOCK_SHARED) == 0) {
-            Operation |= USER_LOCK_PRIVATE;
-        }
-
-        OsUserLock(&(LockInternal->State), Operation, &Count, 0);
-    }
-
-    return 0;
+    return ClConvertKstatusToErrorNumber(Status);
 }
 
 PTHREAD_API
@@ -589,7 +545,7 @@ Return Value:
 
     AttributeInternal = (PPTHREAD_RWLOCK_ATTRIBUTE)Attribute;
     *Shared = PTHREAD_PROCESS_PRIVATE;
-    if ((AttributeInternal->Flags & PTHREAD_RWLOCK_SHARED) != 0) {
+    if ((AttributeInternal->Flags & OS_RWLOCK_SHARED) != 0) {
         *Shared = PTHREAD_PROCESS_SHARED;
     }
 
@@ -631,10 +587,10 @@ Return Value:
 
     AttributeInternal = (PPTHREAD_RWLOCK_ATTRIBUTE)Attribute;
     if (Shared == PTHREAD_PROCESS_PRIVATE) {
-        AttributeInternal->Flags &= ~PTHREAD_RWLOCK_SHARED;
+        AttributeInternal->Flags &= ~OS_RWLOCK_SHARED;
 
     } else if (Shared == PTHREAD_PROCESS_SHARED) {
-        AttributeInternal->Flags |= PTHREAD_RWLOCK_SHARED;
+        AttributeInternal->Flags |= OS_RWLOCK_SHARED;
 
     } else {
         return EINVAL;
@@ -646,190 +602,4 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
-int
-ClpAcquireReadWriteLockForRead (
-    PPTHREAD_RWLOCK Lock,
-    const struct timespec *AbsoluteTimeout
-    )
-
-/*++
-
-Routine Description:
-
-    This routine acquires the given read/write lock for read access.
-
-Arguments:
-
-    Lock - Supplies a pointer to the lock to acquire.
-
-    AbsoluteTimeout - Supplies a pointer to the absolute deadline after which
-        this function should give up and return failure.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    KSTATUS KernelStatus;
-    ULONG NewState;
-    ULONG OldState;
-    ULONG Operation;
-    UINTN ThreadId;
-    ULONG TimeoutInMilliseconds;
-
-    ThreadId = OsGetThreadId();
-    if (ThreadId == Lock->WriterThreadId) {
-        return EDEADLK;
-    }
-
-    while (TRUE) {
-        OldState = Lock->State;
-        if (OldState != PTHREAD_RWLOCK_WRITE_LOCKED) {
-            NewState = RtlAtomicCompareExchange32(&(Lock->State),
-                                                  OldState + 1,
-                                                  OldState);
-
-            //
-            // If the old value wasn't write locked, then the reader was
-            // successfully added.
-            //
-
-            if (NewState == OldState) {
-                break;
-            }
-
-        //
-        // The lock is already acquired for write access.
-        //
-
-        } else {
-            if (AbsoluteTimeout != NULL) {
-                TimeoutInMilliseconds =
-                            ClpConvertAbsoluteTimespecToRelativeMilliseconds(
-                                                               AbsoluteTimeout,
-                                                               CLOCK_REALTIME);
-
-            } else {
-                TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
-            }
-
-            Operation = UserLockWait;
-            if ((Lock->Attributes & PTHREAD_RWLOCK_SHARED) == 0) {
-                Operation |= USER_LOCK_PRIVATE;
-            }
-
-            RtlAtomicAdd32(&(Lock->PendingReaders), 1);
-            KernelStatus = OsUserLock(&(Lock->State),
-                                      Operation,
-                                      &OldState,
-                                      TimeoutInMilliseconds);
-
-            RtlAtomicAdd32(&(Lock->PendingReaders), -1);
-            if (KernelStatus == STATUS_TIMEOUT) {
-                return ETIMEDOUT;
-            }
-        }
-    }
-
-    return 0;
-}
-
-int
-ClpAcquireReadWriteLockForWrite (
-    PPTHREAD_RWLOCK Lock,
-    const struct timespec *AbsoluteTimeout
-    )
-
-/*++
-
-Routine Description:
-
-    This routine acquires the given read/write lock for write access.
-
-Arguments:
-
-    Lock - Supplies a pointer to the lock to acquire.
-
-    AbsoluteTimeout - Supplies a pointer to the absolute deadline after which
-        this function should give up and return failure.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    KSTATUS KernelStatus;
-    ULONG OldState;
-    ULONG Operation;
-    UINTN ThreadId;
-    ULONG TimeoutInMilliseconds;
-
-    ThreadId = OsGetThreadId();
-    if (ThreadId == Lock->WriterThreadId) {
-        return EDEADLK;
-    }
-
-    while (TRUE) {
-        OldState = Lock->State;
-        if (OldState == PTHREAD_RWLOCK_UNLOCKED) {
-            OldState = RtlAtomicCompareExchange32(&(Lock->State),
-                                                  PTHREAD_RWLOCK_WRITE_LOCKED,
-                                                  OldState);
-
-            //
-            // If the old value was unlocked, then this thread successfully
-            // got the write lock.
-            //
-
-            if (OldState == PTHREAD_RWLOCK_UNLOCKED) {
-                Lock->WriterThreadId = ThreadId;
-                break;
-            }
-
-        //
-        // The lock is already acquired for read or write access.
-        //
-
-        } else {
-            if (AbsoluteTimeout != NULL) {
-                TimeoutInMilliseconds =
-                            ClpConvertAbsoluteTimespecToRelativeMilliseconds(
-                                                               AbsoluteTimeout,
-                                                               CLOCK_REALTIME);
-
-            } else {
-                TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
-            }
-
-            Operation = UserLockWait;
-            if ((Lock->Attributes & PTHREAD_RWLOCK_SHARED) == 0) {
-                Operation |= USER_LOCK_PRIVATE;
-            }
-
-            RtlAtomicAdd32(&(Lock->PendingWriters), 1);
-            KernelStatus = OsUserLock(&(Lock->State),
-                                      Operation,
-                                      &OldState,
-                                      TimeoutInMilliseconds);
-
-            RtlAtomicAdd32(&(Lock->PendingWriters), -1);
-            if (KernelStatus == STATUS_TIMEOUT) {
-                return ETIMEDOUT;
-            }
-        }
-    }
-
-    return 0;
-}
 
