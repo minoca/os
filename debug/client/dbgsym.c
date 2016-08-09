@@ -2974,7 +2974,7 @@ Return Value:
     FullNameLength -= (UINTN)LastSeparator - (UINTN)FullName;
     Period = RtlStringFindCharacterRight(LastSeparator, '.', FullNameLength);
     if (Period == NULL) {
-        FriendlyNameLength = FullNameLength;
+        FriendlyNameLength = FullNameLength - 1;
 
     } else {
         FriendlyNameLength = (UINTN)Period - (UINTN)LastSeparator;

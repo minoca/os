@@ -123,6 +123,7 @@ typedef unsigned short WORD, *PWORD;
 typedef unsigned long DWORD, *PDWORD;
 
 typedef char CHAR, *PCHAR;
+typedef signed char SCHAR, *PSCHAR;
 typedef unsigned char UCHAR, *PUCHAR;
 typedef __WCHAR_TYPE__ WCHAR, *PWCHAR;
 typedef short SHORT, *PSHORT;

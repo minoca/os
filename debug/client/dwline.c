@@ -213,7 +213,7 @@ typedef struct _DWARF_LINE_TABLE_HEADER {
     UCHAR MinimumInstructionLength;
     UCHAR MaximumOperationsPerInstruction;
     UCHAR DefaultIsStatement;
-    CHAR LineBase;
+    SCHAR LineBase;
     UCHAR LineRange;
     UCHAR OpcodeBase;
     UCHAR StandardOpcodeLengths[32];
@@ -1119,7 +1119,7 @@ Return Value:
     }
 
     Header->DefaultIsStatement = DwarfpRead1(Table);
-    Header->LineBase = DwarfpRead1(Table);
+    Header->LineBase = (SCHAR)(DwarfpRead1(Table));
     Header->LineRange = DwarfpRead1(Table);
     Header->OpcodeBase = DwarfpRead1(Table);
 

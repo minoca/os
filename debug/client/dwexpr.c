@@ -492,7 +492,7 @@ Return Value:
                 break;
 
             case DwarfOpConst1S:
-                Operand1 = (signed char)(DwarfpRead1(&Bytes));
+                Operand1 = (SCHAR)(DwarfpRead1(&Bytes));
                 Operand1Signed = TRUE;
                 break;
 
@@ -776,7 +776,7 @@ Return Value:
             break;
 
         case DwarfOpConst1S:
-            Value = (LONGLONG)(signed char)(DwarfpRead1(&Expression));
+            Value = (LONGLONG)(SCHAR)(DwarfpRead1(&Expression));
             DwarfpExpressionPush(LocationContext, Value);
             break;
 
