@@ -319,7 +319,7 @@ Return Value:
 RTL_API
 int
 __aeabi_d2iz (
-    double Value
+    unsigned long long Value
     )
 
 /*++
@@ -330,7 +330,8 @@ Routine Description:
 
 Arguments:
 
-    Value - Supplies the integer to convert.
+    Value - Supplies the double value to convert, passed via integer registers
+        always.
 
 Return Value:
 
@@ -340,13 +341,16 @@ Return Value:
 
 {
 
-    return RtlDoubleConvertToInteger32RoundToZero(Value);
+    DOUBLE_PARTS Parts;
+
+    Parts.Ulonglong = Value;
+    return RtlDoubleConvertToInteger32RoundToZero(Parts.Double);
 }
 
 RTL_API
 long long
 __aeabi_d2lz (
-    double Value
+    unsigned long long Value
     )
 
 /*++
@@ -357,7 +361,8 @@ Routine Description:
 
 Arguments:
 
-    Value - Supplies the integer to convert.
+    Value - Supplies the double value to convert, passed via integer registers
+        always.
 
 Return Value:
 
@@ -367,13 +372,16 @@ Return Value:
 
 {
 
-    return RtlDoubleConvertToInteger64RoundToZero(Value);
+    DOUBLE_PARTS Parts;
+
+    Parts.Ulonglong = Value;
+    return RtlDoubleConvertToInteger64RoundToZero(Parts.Double);
 }
 
 RTL_API
 unsigned int
 __aeabi_d2uiz (
-    double Value
+    unsigned long long Value
     )
 
 /*++
@@ -384,7 +392,8 @@ Routine Description:
 
 Arguments:
 
-    Value - Supplies the integer to convert.
+    Value - Supplies the double value to convert, passed via integer registers
+        always.
 
 Return Value:
 
@@ -394,13 +403,16 @@ Return Value:
 
 {
 
-    return RtlDoubleConvertToInteger32RoundToZero(Value);
+    DOUBLE_PARTS Parts;
+
+    Parts.Ulonglong = Value;
+    return RtlDoubleConvertToInteger32RoundToZero(Parts.Double);
 }
 
 RTL_API
 unsigned long long
 __aeabi_d2ulz (
-    double Value
+    unsigned long long Value
     )
 
 /*++
@@ -411,7 +423,8 @@ Routine Description:
 
 Arguments:
 
-    Value - Supplies the integer to convert.
+    Value - Supplies the double value to convert, passed via integer registers
+        always.
 
 Return Value:
 
@@ -421,5 +434,9 @@ Return Value:
 
 {
 
-    return RtlDoubleConvertToInteger64RoundToZero(Value);
+    DOUBLE_PARTS Parts;
+
+    Parts.Ulonglong = Value;
+    return RtlDoubleConvertToInteger64RoundToZero(Parts.Double);
 }
+
