@@ -262,7 +262,7 @@ Return Value:
     Thread = KeGetCurrentThread();
     Status = MmCopyFromUserMode(&Context, UserContext, sizeof(SIGNAL_CONTEXT));
     if (!KSUCCESS(Status)) {
-        PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL);
+        PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
         return;
     }
 

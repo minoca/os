@@ -123,7 +123,7 @@ Return Value:
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
-        PsSignalThread(Thread, SIGNAL_TRAP, NULL);
+        PsSignalThread(Thread, SIGNAL_TRAP, NULL, FALSE);
         PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
@@ -193,7 +193,7 @@ Return Value:
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
-        PsSignalThread(Thread, SIGNAL_TRAP, NULL);
+        PsSignalThread(Thread, SIGNAL_TRAP, NULL, FALSE);
         PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
@@ -296,7 +296,7 @@ Return Value:
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
-        PsSignalThread(Thread, SIGNAL_TRAP, NULL);
+        PsSignalThread(Thread, SIGNAL_TRAP, NULL, FALSE);
         PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
@@ -342,7 +342,7 @@ Return Value:
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
-        PsSignalThread(Thread, SIGNAL_MATH_ERROR, NULL);
+        PsSignalThread(Thread, SIGNAL_MATH_ERROR, NULL, TRUE);
         PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         KeBeginCycleAccounting(PreviousPeriod);
@@ -411,7 +411,7 @@ Return Value:
                            ArAllocateFpuContext(PS_FPU_CONTEXT_ALLOCATION_TAG);
 
         if (Thread->FpuContext == NULL) {
-            PsSignalThread(Thread, SIGNAL_BUS_ERROR, NULL);
+            PsSignalThread(Thread, SIGNAL_BUS_ERROR, NULL, TRUE);
             goto DispatchFpuAccessTrapEnd;
         }
     }
@@ -538,7 +538,7 @@ Return Value:
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
-        PsSignalThread(Thread, SIGNAL_MATH_ERROR, NULL);
+        PsSignalThread(Thread, SIGNAL_MATH_ERROR, NULL, TRUE);
         PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         KeBeginCycleAccounting(PreviousPeriod);

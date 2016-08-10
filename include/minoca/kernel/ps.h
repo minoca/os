@@ -2788,7 +2788,8 @@ VOID
 PsSignalThread (
     PKTHREAD Thread,
     ULONG SignalNumber,
-    PSIGNAL_QUEUE_ENTRY SignalQueueEntry
+    PSIGNAL_QUEUE_ENTRY SignalQueueEntry,
+    BOOL Force
     );
 
 /*++
@@ -2805,6 +2806,9 @@ Arguments:
 
     SignalQueueEntry - Supplies an optional pointer to a queue entry to place
         on the thread's queue.
+
+    Force - Supplies a boolean that if set indicates the thread cannot block
+        or ignore this signal.
 
 Return Value:
 

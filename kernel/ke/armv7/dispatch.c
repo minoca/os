@@ -278,11 +278,11 @@ Return Value:
             TrapFrame->Pc = (UINTN)Address;
             Handled = ArCheckForVfpException(TrapFrame, Instruction);
             if (Handled == FALSE) {
-                PsSignalThread(Thread, SIGNAL_ILLEGAL_INSTRUCTION, NULL);
+                PsSignalThread(Thread, SIGNAL_ILLEGAL_INSTRUCTION, NULL, TRUE);
             }
 
         } else {
-            PsSignalThread(Thread, SIGNAL_TRAP, NULL);
+            PsSignalThread(Thread, SIGNAL_TRAP, NULL, FALSE);
         }
 
         PsCheckRuntimeTimers(Thread);

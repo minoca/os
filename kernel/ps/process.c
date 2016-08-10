@@ -1702,20 +1702,6 @@ Return Value:
     }
 
     //
-    // If there's already an access violation queued on here, then kill
-    // the process.
-    //
-
-    if (IS_SIGNAL_SET(Thread->RunningSignals, SignalNumber)) {
-        PspSetProcessExitStatus(Process,
-                                CHILD_SIGNAL_REASON_KILLED,
-                                SignalNumber);
-
-        PsSignalProcess(Process, SIGNAL_KILL, NULL);
-        return;
-    }
-
-    //
     // Allocate a signal queue entry. The process dies if the allocation
     // fails.
     //
@@ -1746,7 +1732,7 @@ Return Value:
     Signal->Parameters.FromU.FaultingAddress = VirtualAddress;
     Signal->Parameters.Parameter = (UINTN)ArGetInstructionPointer(TrapFrame);
     Signal->CompletionRoutine = PsDefaultSignalCompletionRoutine;
-    PsSignalThread(Thread, SignalNumber, Signal);
+    PsSignalThread(Thread, SignalNumber, Signal, TRUE);
     return;
 }
 

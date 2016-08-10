@@ -1223,7 +1223,8 @@ Return Value:
     if (Timer->Thread != NULL) {
         PsSignalThread(Timer->Thread,
                        Timer->SignalQueueEntry.Parameters.SignalNumber,
-                       &(Timer->SignalQueueEntry));
+                       &(Timer->SignalQueueEntry),
+                       FALSE);
 
     } else {
         PsSignalProcess(Timer->Process,

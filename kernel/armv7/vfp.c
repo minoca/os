@@ -463,7 +463,7 @@ Return Value:
                            ArAllocateFpuContext(PS_FPU_CONTEXT_ALLOCATION_TAG);
 
         if (Thread->FpuContext == NULL) {
-            PsSignalThread(Thread, SIGNAL_BUS_ERROR, NULL);
+            PsSignalThread(Thread, SIGNAL_BUS_ERROR, NULL, TRUE);
             goto HandleVfpExceptionEnd;
         }
     }

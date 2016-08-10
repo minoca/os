@@ -129,7 +129,8 @@ PspQueueSignal (
     PKPROCESS Process,
     PKTHREAD Thread,
     ULONG SignalNumber,
-    PSIGNAL_QUEUE_ENTRY SignalQueueEntry
+    PSIGNAL_QUEUE_ENTRY SignalQueueEntry,
+    BOOL Force
     );
 
 KSTATUS
@@ -456,7 +457,7 @@ Return Value:
 
         if (Request->SignalNumber < STANDARD_SIGNAL_COUNT) {
             if (Request->SignalNumber != 0) {
-                PsSignalThread(Thread, Request->SignalNumber, NULL);
+                PsSignalThread(Thread, Request->SignalNumber, NULL, FALSE);
             }
 
         } else {
@@ -487,7 +488,8 @@ Return Value:
 
             PsSignalThread(Thread,
                            SignalQueueEntry->Parameters.SignalNumber,
-                           SignalQueueEntry);
+                           SignalQueueEntry,
+                           FALSE);
         }
 
         ObReleaseReference(Thread);
@@ -1149,7 +1151,8 @@ VOID
 PsSignalThread (
     PKTHREAD Thread,
     ULONG SignalNumber,
-    PSIGNAL_QUEUE_ENTRY SignalQueueEntry
+    PSIGNAL_QUEUE_ENTRY SignalQueueEntry,
+    BOOL Force
     )
 
 /*++
@@ -1166,6 +1169,9 @@ Arguments:
 
     SignalQueueEntry - Supplies an optional pointer to a queue entry to place
         on the thread's queue.
+
+    Force - Supplies a boolean that if set indicates the thread cannot block
+        or ignore this signal.
 
 Return Value:
 
@@ -1203,7 +1209,8 @@ Return Value:
     PspQueueSignal(Thread->OwningProcess,
                    Thread,
                    SignalNumber,
-                   SignalQueueEntry);
+                   SignalQueueEntry,
+                   Force);
 
     KeReleaseQueuedLock(Thread->OwningProcess->QueuedLock);
     return;
@@ -1313,7 +1320,7 @@ Return Value:
         SignalQueueEntry->Delivered = FALSE;
     }
 
-    PspQueueSignal(Process, NULL, SignalNumber, SignalQueueEntry);
+    PspQueueSignal(Process, NULL, SignalNumber, SignalQueueEntry, FALSE);
 
 SignalProcessEnd:
     KeReleaseQueuedLock(Process->QueuedLock);
@@ -1642,7 +1649,6 @@ Return Value:
     ULONG SavedSignalMask;
     PSIGNAL_QUEUE_ENTRY SignalEntry;
     BOOL SignalHandled;
-    BOOL SignalIgnored;
     ULONG SignalNumber;
     PKTHREAD Thread;
     SIGNAL_SET ThreadSignalMask;
@@ -1849,9 +1855,6 @@ Return Value:
                 ASSERT((SignalNumber != 0) &&
                        (SignalNumber < SIGNAL_COUNT));
 
-                SignalIgnored = IS_SIGNAL_SET(Process->IgnoredSignals,
-                                              SignalNumber);
-
                 SignalHandled = IS_SIGNAL_SET(Process->HandledSignals,
                                               SignalNumber);
 
@@ -1864,14 +1867,13 @@ Return Value:
                 SignalEntry->ListEntry.Next = NULL;
 
                 //
-                // If the signal is ignored, or it's not handled and the
-                // default action is to ignore it, then delete this signal
-                // now.
+                // If the signal is on the queue, it's assumed to be not
+                // ignored. If it's not handled and the default action is to
+                // ignore it, then delete this signal now.
                 //
 
-                if ((SignalIgnored != FALSE) ||
-                    ((SignalHandled == FALSE) &&
-                     (IS_SIGNAL_DEFAULT_IGNORE(SignalNumber)))) {
+                if ((SignalHandled == FALSE) &&
+                    (IS_SIGNAL_DEFAULT_IGNORE(SignalNumber))) {
 
                     //
                     // Let the debugger have a go a it.
@@ -1909,7 +1911,7 @@ Return Value:
                     }
 
                 //
-                // The signal is not ignored/discarded.
+                // The signal is not discarded.
                 //
 
                 } else {
@@ -2144,15 +2146,7 @@ Return Value:
     }
 
     //
-    // If the signal is set in the ignored mask, then it's easy, just do
-    // nothing.
-    //
-
-    if (IS_SIGNAL_SET(Process->IgnoredSignals, Signal) != FALSE) {
-        return TRUE;
-    }
-
-    //
+    // The signal is assumed not to be ignored if it got this far.
     // If the signal is set to have a handler, then it must go to user mode.
     //
 
@@ -3517,7 +3511,8 @@ PspQueueSignal (
     PKPROCESS Process,
     PKTHREAD Thread,
     ULONG SignalNumber,
-    PSIGNAL_QUEUE_ENTRY SignalQueueEntry
+    PSIGNAL_QUEUE_ENTRY SignalQueueEntry,
+    BOOL Force
     )
 
 /*++
@@ -3538,6 +3533,9 @@ Arguments:
 
     SignalQueueEntry - Supplies an optional pointer to a queue entry to place
         on the thread's queue.
+
+    Force - Supplies a boolean that if set indicates the thread cannot block
+        or ignore this signal.
 
 Return Value:
 
@@ -3561,10 +3559,34 @@ Return Value:
 
     SignalPendingType = ThreadNoSignalPending;
     OnlyWakeSuspendedThreads = FALSE;
-    SignalIgnored = IS_SIGNAL_SET(Process->IgnoredSignals, SignalNumber);
-    SignalBlocked = FALSE;
-    if (Thread != NULL) {
-        SignalBlocked = IS_SIGNAL_BLOCKED(Thread, SignalNumber);
+    if (Force != FALSE) {
+
+        ASSERT(Thread != NULL);
+
+        REMOVE_SIGNAL(Thread->BlockedSignals, SignalNumber);
+        SignalBlocked = FALSE;
+        SignalIgnored = FALSE;
+
+        //
+        // If the thread is already running one of these signals and it gets
+        // another one, just kill it.
+        //
+
+        if (IS_SIGNAL_SET(Thread->RunningSignals, SignalNumber)) {
+            PspSetProcessExitStatus(Process,
+                                    CHILD_SIGNAL_REASON_KILLED,
+                                    SignalNumber);
+
+            PsSignalProcess(Process, SIGNAL_KILL, NULL);
+            return;
+        }
+
+    } else {
+        SignalIgnored = IS_SIGNAL_SET(Process->IgnoredSignals, SignalNumber);
+        SignalBlocked = FALSE;
+        if (Thread != NULL) {
+            SignalBlocked = IS_SIGNAL_BLOCKED(Thread, SignalNumber);
+        }
     }
 
     if (SignalQueueEntry != NULL) {
@@ -3864,7 +3886,8 @@ Return Value:
             PspQueueSignal(Process,
                            SignalQueueEntry->DestinationThread,
                            SignalQueueEntry->Parameters.SignalNumber,
-                           SignalQueueEntry);
+                           SignalQueueEntry,
+                           FALSE);
         }
     }
 
