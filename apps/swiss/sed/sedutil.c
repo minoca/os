@@ -106,7 +106,7 @@ Return Value:
     }
 
     File = fopen(Path, "r");
-    if (File < 0) {
+    if (File == NULL) {
         if (MustSucceed == FALSE) {
             Result = TRUE;
         }

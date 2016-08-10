@@ -1505,6 +1505,7 @@ Return Value:
     Status = ImpElfRelocateImage(&FakeList, Image);
 
 ElfRelocateSelfEnd:
+    Image->ImageContext = NULL;
 
     ASSERT(KSUCCESS(Status));
 

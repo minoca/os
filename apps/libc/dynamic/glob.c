@@ -276,7 +276,7 @@ Return Value:
     char PatternBuffer[MAXPATHLEN];
     char Protection;
 
-    memset(&Limit, 0, sizeof(GLOB_LIMIT));
+    memset(&Limit, 0, sizeof(GLOB_COUNT));
 
     //
     // Initialize the state unless appending.

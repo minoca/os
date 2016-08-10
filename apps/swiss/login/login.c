@@ -493,6 +493,7 @@ MainEnd:
         free(Line);
     }
 
+    SwLoginTerminalSettings = NULL;
     return Status;
 }
 

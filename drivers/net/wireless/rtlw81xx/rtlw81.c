@@ -301,7 +301,7 @@ Return Value:
     switch (UsbVendorId) {
     case RTLW81_VENDOR_DLINK:
         if ((UsbProductId == RTLW81_DLINK_DWA123D1) ||
-            (UsbProductId == RTLW81_DLINK_DWA123D1)) {
+            (UsbProductId == RTLW81_DLINK_DWA125D1)) {
 
             Device->Flags |= RTLW81_FLAG_8188E;
         }

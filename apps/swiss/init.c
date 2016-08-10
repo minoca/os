@@ -693,6 +693,7 @@ MainEnd:
         free(Action);
     }
 
+    InitSignalCounts = NULL;
     return Status;
 }
 

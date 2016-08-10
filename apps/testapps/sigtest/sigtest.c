@@ -1450,7 +1450,7 @@ Return Value:
 
 {
 
-    DEBUG_PRINT("SIGRTMIN+0 %d\n", SignalInformation->si_value);
+    DEBUG_PRINT("SIGRTMIN+0 %d\n", SignalInformation->si_value.sival_int);
     if (SignalInformation->si_signo != SIGRTMIN + 0) {
         PRINT_ERROR("Got si_signo %d when expected %d.\n",
                     SignalInformation->si_signo,

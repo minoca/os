@@ -443,7 +443,7 @@ Return Value:
         CStatePowerObject = StatePackage->U.Package.Array[3];
         if ((CStateRegister->Type != AcpiObjectBuffer) ||
             (CStateTypeObject->Type != AcpiObjectInteger) ||
-            (CStateTypeObject->Type != AcpiObjectInteger) ||
+            (CStateLatencyObject->Type != AcpiObjectInteger) ||
             (CStatePowerObject->Type != AcpiObjectInteger)) {
 
             Status = STATUS_INVALID_CONFIGURATION;
