@@ -327,6 +327,27 @@ Return Value:
 // Thread-Local storage functions
 //
 
+VOID
+OspInitializeThreadSupport (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes thread and TLS support in the OS library.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 KSTATUS
 OspTlsAllocate (
     PLIST_ENTRY ImageList,

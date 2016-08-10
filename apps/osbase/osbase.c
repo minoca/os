@@ -163,6 +163,7 @@ Return Value:
     OspSetUpSystemCalls();
     OspInitializeMemory();
     OspInitializeImageSupport();
+    OspInitializeThreadSupport();
 
     //
     // Register the signal handler to start receiving signals.
@@ -1179,7 +1180,13 @@ Return Value:
     SendSignal.SignalNumber = SignalNumber;
     SendSignal.SignalCode = SignalCode;
     SendSignal.SignalParameter = SignalParameter;
-    OsSystemCall(SystemCallSendSignal, &SendSignal);
+
+    //
+    // Use the full system call because it makes debugging easier when
+    // something like an abort gets forwarded to the kernel mode debugger.
+    //
+
+    OspSystemCallFull(SystemCallSendSignal, &SendSignal);
     return SendSignal.Status;
 }
 

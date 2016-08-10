@@ -101,6 +101,7 @@ OspGetThreadControlBlock (
 //
 
 LIST_ENTRY OsThreadList;
+OS_LOCK OsThreadListLock;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -356,6 +357,34 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+VOID
+OspInitializeThreadSupport (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes thread and TLS support in the OS library.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    INITIALIZE_LIST_HEAD(&OsThreadList);
+    OsInitializeLockDefault(&OsThreadListLock);
+    return;
+}
+
 KSTATUS
 OspTlsAllocate (
     PLIST_ENTRY ImageList,
@@ -524,11 +553,9 @@ Return Value:
     // Stick it on the thread list.
     //
 
-    if (OsThreadList.Next == NULL) {
-        INITIALIZE_LIST_HEAD(&OsThreadList);
-    }
-
+    OsAcquireLock(&OsThreadListLock);
     INSERT_BEFORE(&(ThreadControlBlock->ListEntry), &OsThreadList);
+    OsReleaseLock(&OsThreadListLock);
     Status = STATUS_SUCCESS;
 
 TlsAllocateEnd:
@@ -643,9 +670,11 @@ Return Value:
     PTHREAD_CONTROL_BLOCK ThreadControlBlock;
     PVOID *TlsData;
 
-    if ((Image->TlsSize == 0) || (OsThreadList.Next == NULL)) {
+    if (Image->TlsSize == 0) {
         return;
     }
+
+    OsAcquireLock(&OsThreadListLock);
 
     //
     // Loop through all threads and destroy the TLS block for this image.
@@ -683,6 +712,7 @@ Return Value:
         }
     }
 
+    OsReleaseLock(&OsThreadListLock);
     return;
 }
 
