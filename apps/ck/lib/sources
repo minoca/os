@@ -29,6 +29,7 @@ OBJS = ckcore.o      \
        debug.o       \
        dict.o        \
        fiber.o       \
+       gc.o          \
        gram.o        \
        int.o         \
        lex.o         \

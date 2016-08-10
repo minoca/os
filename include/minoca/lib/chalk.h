@@ -272,7 +272,9 @@ Members:
         collections from occurring too frequently.
 
     HeapGrowthPercent - Stores the percentage the heap has to grow to trigger
-        another garbage collection.
+        another garbage collection. Rather than expressing this as a number
+        over 100, it's expressed as a number over 1024 to avoid the divide.
+        So 50% would be 512 for instance.
 
     Flags - Stores a bitfield of flags governing the operation of the
         interpreter See CK_CONFIGURATION_* definitions.

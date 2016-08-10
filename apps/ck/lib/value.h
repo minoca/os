@@ -126,17 +126,17 @@ typedef enum _CK_OBJECT_TYPE {
     CkObjectInvalid,
     CkObjectClass,
     CkObjectClosure,
+    CkObjectDict,
     CkObjectFiber,
-    CkObjectFunction,
     CkObjectForeign,
+    CkObjectFunction,
     CkObjectInstance,
     CkObjectList,
-    CkObjectDict,
+    CkObjectMethod,
     CkObjectModule,
     CkObjectRange,
     CkObjectString,
     CkObjectUpvalue,
-    CkObjectMethod,
     CkObjectTypeCount
 } CK_OBJECT_TYPE, *PCK_OBJECT_TYPE;
 
@@ -239,8 +239,8 @@ Members:
     Type - Stores the type of the object, which defines the parent type this
         structure is embedded in.
 
-    Mark - Stores the garbage collection mark. Objects that are visible and
-        can't be garbage collected get a mark.
+    NextKiss - Stores a pointer to the next object in the list of kissed
+        objects (objects that will not get garbage collected this time).
 
     Next - Stores a pointer to the next object in the global list of all
         objects.
@@ -251,7 +251,7 @@ Members:
 
 struct _CK_OBJECT {
     CK_OBJECT_TYPE Type;
-    CHAR Mark;
+    PCK_OBJECT NextKiss;
     PCK_OBJECT Next;
     PCK_CLASS Class;
 };
@@ -470,6 +470,9 @@ Members:
 
     Name - Stores a pointer to the heap allocated name of the function.
 
+    NameSize - Stores the size of the function name, not including the null
+        terminator.
+
     FirstLine - Stores the first line of the function.
 
     LineProgram - Stores the line program that converts between line numbers
@@ -480,6 +483,7 @@ Members:
 
 typedef struct _CK_FUNCTION_DEBUG {
     PSTR Name;
+    UINTN NameSize;
     LONG FirstLine;
     CK_BYTE_ARRAY LineProgram;
 } CK_FUNCTION_DEBUG, *PCK_FUNCTION_DEBUG;

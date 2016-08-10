@@ -424,13 +424,6 @@ Return Value:
         Vm->Configuration.Reallocate = Reallocate;
     }
 
-    Vm->GrayCapacity = CK_INITIAL_GRAY_CAPACITY;
-    Vm->Gray = CkRawAllocate(Vm, Vm->GrayCapacity * sizeof(PCK_OBJECT));
-    if (Vm->Gray == NULL) {
-        Status = CkErrorNoMemory;
-        goto CreateVmEnd;
-    }
-
     Vm->NextGarbageCollection = Vm->Configuration.InitialHeapSize;
     Vm->Modules = CkpDictCreate(Vm);
     if (Vm->Modules == NULL) {
@@ -498,10 +491,6 @@ Return Value:
     }
 
     Vm->FirstObject = NULL;
-    if (Vm->Gray != NULL) {
-        CkRawFree(Vm, Vm->Gray);
-        Vm->Gray = NULL;
-    }
 
     CK_ASSERT(Vm->Handles == NULL);
 
@@ -549,40 +538,6 @@ Return Value:
 {
 
     return CkpInterpret(Vm, "__main", Source, Length);
-}
-
-CK_API
-VOID
-CkCollectGarbage (
-    PCK_VM Vm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs garbage collection on the given Chalk instance,
-    freeing up unused dynamic memory as appropriate.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-Return Value:
-
-    Returns a pointer to the newly allocated or reallocated memory on success.
-
-    NULL on allocation failure or for free operations.
-
---*/
-
-{
-
-    //
-    // TODO: Implement CkCollectGarbage.
-    //
-
-    return;
 }
 
 CK_SYMBOL_INDEX
@@ -774,139 +729,6 @@ Return Value:
     CK_ASSERT(Symbol < Module->Variables.Count);
 
     return Module->Variables.Data[Symbol];
-}
-
-VOID
-CkpPushRoot (
-    PCK_VM Vm,
-    PCK_OBJECT Object
-    )
-
-/*++
-
-Routine Description:
-
-    This routine pushes the given object onto a temporary stack to ensure that
-    it will not be garbage collected.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Object - Supplies a pointer to the object to push.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    CK_ASSERT(Object != NULL);
-    CK_ASSERT(Vm->WorkingObjectCount < CK_MAX_WORKING_OBJECTS);
-
-    Vm->WorkingObjects[Vm->WorkingObjectCount] = Object;
-    Vm->WorkingObjectCount += 1;
-    return;
-}
-
-VOID
-CkpPopRoot (
-    PCK_VM Vm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine pops the top working object off of the temporary stack used to
-    ensure that certain objects are not garbage collected.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    CK_ASSERT(Vm->WorkingObjectCount != 0);
-
-    Vm->WorkingObjectCount -= 1;
-    return;
-}
-
-PVOID
-CkpReallocate (
-    PCK_VM Vm,
-    PVOID Memory,
-    UINTN OldSize,
-    UINTN NewSize
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs a Chalk dynamic memory operation.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Memory - Supplies an optional pointer to the memory to resize or free.
-
-    OldSize - Supplies the optional previous size of the allocation.
-
-    NewSize - Supplies the new size of the allocation. Set this to 0 to free
-        the memory.
-
-Return Value:
-
-    Returns a pointer to the newly allocated or reallocated memory on success.
-
-    NULL on allocation failure or for free operations.
-
---*/
-
-{
-
-    PVOID Allocation;
-
-    //
-    // Add the new bytes to the total count. Ignore frees, since those get
-    // handled during garbage collection.
-    //
-
-    Vm->BytesAllocated += NewSize - OldSize;
-
-    //
-    // Potentially perform garbage collection.
-    //
-
-    if ((NewSize > 0) &&
-        ((Vm->BytesAllocated >= Vm->NextGarbageCollection) ||
-         (CK_VM_FLAG_SET(Vm, CK_CONFIGURATION_GC_STRESS)))) {
-
-        CkCollectGarbage(Vm);
-    }
-
-    Allocation = CkRawReallocate(Vm, Memory, NewSize);
-    if ((Allocation == NULL) && (NewSize != 0)) {
-        if (Vm->Compiler != NULL) {
-            CkpCompileError(Vm->Compiler, NULL, "Allocation failure");
-
-        } else {
-            CkpRuntimeError(Vm, "Allocation failure");
-        }
-    }
-
-    return Allocation;
 }
 
 CK_ERROR_TYPE

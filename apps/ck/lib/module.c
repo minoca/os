@@ -269,6 +269,7 @@ Return Value:
         return NULL;
     }
 
+    CkZero(Module, sizeof(CK_MODULE));
     CkpInitializeObject(Vm,
                         &(Module->Header),
                         CkObjectModule,

@@ -30,6 +30,7 @@ Author:
 #include "value.h"
 #include "core.h"
 #include "utils.h"
+#include "gc.h"
 #include "vm.h"
 
 //

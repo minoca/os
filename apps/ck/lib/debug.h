@@ -165,3 +165,30 @@ Return Value:
     -1 if no line number information could be found.
 
 --*/
+
+VOID
+CkpDebugPrint (
+    PCK_VM Vm,
+    PSTR Message,
+    ...
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints something to the output for the debug code.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Message - Supplies the printf-style format message to print.
+
+    ... - Supplies the remainder of the arguments.
+
+Return Value:
+
+    None.
+
+--*/

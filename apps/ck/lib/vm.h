@@ -33,13 +33,6 @@ Author:
 //
 
 //
-// Define the initial capacity of the stack of unprocessed objects stored while
-// garbage collecting.
-//
-
-#define CK_INITIAL_GRAY_CAPACITY 32
-
-//
 // Define the maximum number of objects that can be pushed onto the working
 // object stack.
 //
@@ -374,18 +367,18 @@ Members:
     NextGarbageCollection - Stores the size that the allocated bytes have to
         get to in order to trigger the next garbage collection.
 
+    GarbageRuns - Stores the number of times the garbage collector has run.
+
+    GarbageFreed - Stores the number of objects freed during the most recent
+        garbage collection run.
+
     FirstObject - Stores a pointer to the first object in the massive singly
         linked list of all living objects. This is the list that the garbage
         collector traverses.
 
-    Gray - Stores a pointer to an array of objects that have been marked as
-        not garbage collectable, but whose children and dependencies have not
-        been marked.
-
-    GrayCount - Stores the number of elements in the gray array.
-
-    GrayCapacity - Stores the maximum number of elements that can be put in the
-        gray array before it must be reallocated.
+    KissList - Stores the tail of the list of objects that have been kissed.
+        The list is circular to ensure that the last object has a non-null
+        next pointer.
 
     WorkingObjects - Stores a fixed stack of objects that should not be
         garbage collected but who are not necessarily linked anywhere else.
@@ -409,10 +402,10 @@ struct _CK_VM {
     PCK_DICT Modules;
     UINTN BytesAllocated;
     UINTN NextGarbageCollection;
+    ULONG GarbageRuns;
+    ULONG GarbageFreed;
     PCK_OBJECT FirstObject;
-    PCK_OBJECT *Gray;
-    UINTN GrayCount;
-    UINTN GrayCapacity;
+    PCK_OBJECT KissList;
     PCK_OBJECT WorkingObjects[CK_MAX_WORKING_OBJECTS];
     ULONG WorkingObjectCount;
     PCK_HANDLE Handles;
@@ -529,86 +522,6 @@ Return Value:
     Returns the module variable value on success.
 
     CK_UNDEFINED_VALUE if the variable does not exist.
-
---*/
-
-VOID
-CkpPushRoot (
-    PCK_VM Vm,
-    PCK_OBJECT Object
-    );
-
-/*++
-
-Routine Description:
-
-    This routine pushes the given object onto a temporary stack to ensure that
-    it will not be garbage collected.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Object - Supplies a pointer to the object to push.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-CkpPopRoot (
-    PCK_VM Vm
-    );
-
-/*++
-
-Routine Description:
-
-    This routine pops the top working object off of the temporary stack used to
-    ensure that certain objects are not garbage collected.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-Return Value:
-
-    None.
-
---*/
-
-PVOID
-CkpReallocate (
-    PCK_VM Vm,
-    PVOID Memory,
-    UINTN OldSize,
-    UINTN NewSize
-    );
-
-/*++
-
-Routine Description:
-
-    This routine performs a Chalk dynamic memory operation.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Memory - Supplies an optional pointer to the memory to resize or free.
-
-    OldSize - Supplies the optional previous size of the allocation.
-
-    NewSize - Supplies the new size of the allocation. Set this to 0 to free
-        the memory.
-
-Return Value:
-
-    Returns a pointer to the newly allocated or reallocated memory on success.
-
-    NULL on allocation failure or for free operations.
 
 --*/
 

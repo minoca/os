@@ -40,7 +40,7 @@ Environment:
 
 #define CK_INITIAL_HEAP_DEFAULT (1024 * 1024 * 10)
 #define CK_MINIMUM_HEAP_DEFAULT (1024 * 1024)
-#define CK_HEAP_GROWTH_DEFAULT 50
+#define CK_HEAP_GROWTH_DEFAULT 512
 
 //
 // ------------------------------------------------------ Data Type Definitions

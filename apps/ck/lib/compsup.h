@@ -325,9 +325,6 @@ Members:
         operation. Initially this is NULL. This is used to determine if the
         previous opcode can be updated to accomodate the next bytecode.
 
-    Signature - Stores the current signature of the method or function being
-        compiled.
-
     Assign - Stores a boolean indicating whether the next primary expression
         needs to be an lvalue or not.
 
@@ -350,7 +347,6 @@ struct _CK_COMPILER {
     INT PreviousLine;
     UINTN LineOffset;
     PUCHAR LastLineOp;
-    PCK_FUNCTION_SIGNATURE Signature;
     BOOL Assign;
 };
 

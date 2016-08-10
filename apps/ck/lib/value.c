@@ -202,6 +202,7 @@ Return Value:
         Function->Debug.Name[Length] = '\0';
     }
 
+    Function->Debug.NameSize = Length;
     return;
 }
 
@@ -318,7 +319,7 @@ Return Value:
 {
 
     Object->Type = Type;
-    Object->Mark = FALSE;
+    Object->NextKiss = NULL;
     Object->Class = Class;
     Object->Next = Vm->FirstObject;
     Vm->FirstObject = Object;
@@ -590,18 +591,18 @@ Return Value:
         return NULL;
     }
 
+    CkZero(Class, sizeof(CK_CLASS));
     CkpInitializeObject(Vm, &(Class->Header), CkObjectClass, NULL);
-    Class->Super = NULL;
-    Class->SuperFieldCount = 0;
     Class->FieldCount = FieldCount;
     Class->Name = Name;
+    Class->Module = Module;
+    CkpPushRoot(Vm, &(Class->Header));
     Class->Methods = CkpDictCreate(Vm);
+    CkpPopRoot(Vm);
     if (Class->Methods == NULL) {
         return NULL;
     }
 
-    Class->Module = Module;
-    Class->Flags = 0;
     return Class;
 }
 

@@ -48,13 +48,6 @@ Environment:
 //
 
 VOID
-CkpDebugPrint(
-    PCK_VM Vm,
-    PSTR Message,
-    ...
-    );
-
-VOID
 CkpDumpValue (
     PCK_VM Vm,
     CK_VALUE Value
@@ -643,10 +636,6 @@ Return Value:
     return -1;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
 VOID
 CkpDebugPrint (
     PCK_VM Vm,
@@ -689,6 +678,10 @@ Return Value:
 
     return;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 VOID
 CkpDumpValue (
