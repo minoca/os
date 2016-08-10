@@ -533,6 +533,37 @@ Return Value:
 }
 
 LIBC_API
+long long
+atoll (
+    const char *String
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a string to an integer. This routine is provided for
+    compatibility with existing applications. New applications should use
+    strtoll instead.
+
+Arguments:
+
+    String - Supplies a pointer to the null terminated string to convert to an
+        integer.
+
+Return Value:
+
+    Returns the integer representation of the string. If the value could not be
+    converted, 0 is returned.
+
+--*/
+
+{
+
+    return strtoll(String, NULL, 10);
+}
+
+LIBC_API
 float
 strtof (
     const char *String,
