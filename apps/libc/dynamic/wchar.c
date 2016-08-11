@@ -405,7 +405,7 @@ Return Value:
             return 0;
         }
 
-        return Size;
+        return ByteCount - Size;
     }
 
     if (Status == STATUS_BUFFER_TOO_SMALL) {
