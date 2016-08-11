@@ -499,6 +499,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/boost_1_59_0"
         },
         {
+            "name": "Make mysql",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mysql-5.7.13"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
