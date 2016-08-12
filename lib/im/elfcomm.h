@@ -39,12 +39,12 @@ Author:
 //
 
 KSTATUS
-ImpElfLoadImportWithPath (
-    PLOADED_IMAGE Image,
-    PLIST_ENTRY ListHead,
+ImpElfOpenWithPathList (
+    PLOADED_IMAGE Parent,
     PSTR LibraryName,
-    PSTR Path,
-    PLOADED_IMAGE *Import
+    PSTR PathList,
+    PIMAGE_FILE_INFORMATION File,
+    PSTR *Path
     );
 
 /*++
@@ -55,16 +55,17 @@ Routine Description:
 
 Arguments:
 
-    Image - Supplies a pointer to the image that needs the library.
-
-    ListHead - Supplies a pointer to the head of the list of loaded images.
+    Parent - Supplies a pointer to the image that needs the library.
 
     LibraryName - Supplies the name of the library to load.
 
-    Path - Supplies a colon-separated list of paths to try.
+    PathList - Supplies a colon-separated list of paths to try.
 
-    Import - Supplies a pointer where a pointer to the loaded image will be
-        returned.
+    File - Supplies a pointer where the information for the file including its
+        open handle will be returned.
+
+    Path - Supplies a pointer where the real path to the opened file will be
+        returned. The caller is responsible for freeing this memory.
 
 Return Value:
 

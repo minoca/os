@@ -3504,15 +3504,14 @@ Return Value:
     //
 
     Flags = IMAGE_LOAD_FLAG_LOAD_ONLY;
-    Status = ImLoadExecutable(&(Process->ImageListHead),
-                              OS_BASE_LIBRARY,
-                              NULL,
-                              NULL,
-                              Process,
-                              Flags,
-                              0,
-                              &OsBaseLibrary,
-                              NULL);
+    Status = ImLoad(&(Process->ImageListHead),
+                    OS_BASE_LIBRARY,
+                    NULL,
+                    NULL,
+                    Process,
+                    Flags,
+                    &OsBaseLibrary,
+                    NULL);
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Failed to load %s: %x\n",
@@ -3522,21 +3521,22 @@ Return Value:
         goto LoadExecutableEnd;
     }
 
+    OsBaseLibrary->LibraryName = OsBaseLibrary->FileName;
+
     //
     // Load the image and maybe the interpreter, but do not load any imports
     // or perform any relocations.
     //
 
     Flags = IMAGE_LOAD_FLAG_LOAD_ONLY | IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE;
-    Status = ImLoadExecutable(&(Process->ImageListHead),
-                              BinaryName,
-                              File,
-                              Buffer,
-                              Process,
-                              Flags,
-                              0,
-                              &Executable,
-                              &Interpreter);
+    Status = ImLoad(&(Process->ImageListHead),
+                    BinaryName,
+                    File,
+                    Buffer,
+                    Process,
+                    Flags,
+                    &Executable,
+                    &Interpreter);
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Failed to load %s: %x\n",
@@ -4125,6 +4125,7 @@ Return Value:
     PMODULE_LIST_HEADER List;
     BOOL LockHeld;
     ULONG ModuleCount;
+    PSTR Name;
     ULONG NameSize;
     PKPROCESS Process;
     ULONGLONG Signature;
@@ -4173,8 +4174,16 @@ Return Value:
     CurrentEntry = Process->ImageListHead.Next;
     while (CurrentEntry != &(Process->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+        Name = RtlStringFindCharacterRight(Image->FileName, '/', -1);
+        if (Name != NULL) {
+            Name += 1;
+
+        } else {
+            Name = Image->FileName;
+        }
+
         SizeNeeded += sizeof(LOADED_MODULE_ENTRY) +
-                      ((RtlStringLength(Image->BinaryName) + 1 -
+                      ((RtlStringLength(Name) + 1 -
                        ANYSIZE_ARRAY) * sizeof(CHAR));
 
         Signature += Image->File.ModificationDate +
@@ -4232,7 +4241,15 @@ Return Value:
     CurrentEntry = Process->ImageListHead.Next;
     while (CurrentEntry != &(Process->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
-        NameSize = (RtlStringLength(Image->BinaryName) + 1) * sizeof(CHAR);
+        Name = RtlStringFindCharacterRight(Image->FileName, '/', -1);
+        if (Name != NULL) {
+            Name += 1;
+
+        } else {
+            Name = Image->FileName;
+        }
+
+        NameSize = (RtlStringLength(Name) + 1) * sizeof(CHAR);
         CurrentModule->StructureSize = sizeof(LOADED_MODULE_ENTRY) + NameSize -
                                        (ANYSIZE_ARRAY * sizeof(CHAR));
 
@@ -4240,7 +4257,7 @@ Return Value:
         CurrentModule->LowestAddress = (UINTN)Image->LoadedImageBuffer;
         CurrentModule->Size = Image->Size;
         CurrentModule->Process = Command->Process;
-        RtlStringCopy(CurrentModule->BinaryName, Image->BinaryName, NameSize);
+        RtlStringCopy(CurrentModule->BinaryName, Name, NameSize);
 
         //
         // Move on to the next image.

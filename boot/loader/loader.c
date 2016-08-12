@@ -513,15 +513,14 @@ Return Value:
                 IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS |
                 IMAGE_LOAD_FLAG_BIND_NOW;
 
-    Status = ImLoadExecutable(&BoLoadedImageList,
-                              KernelPath,
-                              NULL,
-                              NULL,
-                              NULL,
-                              LoadFlags,
-                              0,
-                              &KernelImage,
-                              NULL);
+    Status = ImLoad(&BoLoadedImageList,
+                    KernelPath,
+                    NULL,
+                    NULL,
+                    NULL,
+                    LoadFlags,
+                    &KernelImage,
+                    NULL);
 
     if (!KSUCCESS(Status)) {
         goto MainEnd;
@@ -1676,15 +1675,14 @@ Return Value:
                     IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS |
                     IMAGE_LOAD_FLAG_BIND_NOW;
 
-        Status = ImLoadExecutable(&BoLoadedImageList,
-                                  DriverName,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  LoadFlags,
-                                  0,
-                                  NULL,
-                                  NULL);
+        Status = ImLoad(&BoLoadedImageList,
+                        DriverName,
+                        NULL,
+                        NULL,
+                        NULL,
+                        LoadFlags,
+                        NULL,
+                        NULL);
 
         if (!KSUCCESS(Status)) {
             goto LoadDriversEnd;

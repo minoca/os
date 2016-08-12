@@ -130,11 +130,6 @@ Members:
     ElfHeader - Stores a pointer pointing inside the file buffer where the
         main ELF header resides.
 
-    DynamicSection - Stores a pointer pointing inside the loaded image buffer
-        where the dynamic section begins.
-
-    DynamicEntryCount - Stores the number of elements in the dynamic section.
-
     RelocationStart - Stores the lowest address to be modified during image
         relocation.
 
@@ -146,8 +141,6 @@ Members:
 typedef struct _ELF_LOADING_IMAGE {
     IMAGE_BUFFER Buffer;
     PELF_HEADER ElfHeader;
-    PELF_DYNAMIC_ENTRY DynamicSection;
-    ELF_WORD DynamicEntryCount;
     PVOID RelocationStart;
     PVOID RelocationEnd;
 } ELF_LOADING_IMAGE, *PELF_LOADING_IMAGE;
@@ -163,24 +156,15 @@ ImpElfLoadImportsForImage (
     );
 
 KSTATUS
-ImpElfLoadImport (
-    PLOADED_IMAGE Image,
-    PLIST_ENTRY ListHead,
-    PSTR LibraryName,
-    PLOADED_IMAGE *Import
-    );
-
-KSTATUS
 ImpElfGatherExportInformation (
     PLOADED_IMAGE Image,
     BOOL UseLoadedAddress
     );
 
-KSTATUS
+PELF_DYNAMIC_ENTRY
 ImpElfGetDynamicEntry (
-    PELF_LOADING_IMAGE LoadingImage,
-    ELF_SXWORD Tag,
-    PELF_DYNAMIC_ENTRY *FoundEntry
+    PLOADED_IMAGE Image,
+    ELF_SXWORD Tag
     );
 
 KSTATUS
@@ -243,6 +227,172 @@ ImpElfFreeContext (
 //
 // ------------------------------------------------------------------ Functions
 //
+
+KSTATUS
+ImpElfOpenLibrary (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Parent,
+    PSTR LibraryName,
+    PIMAGE_FILE_INFORMATION File,
+    PSTR *Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to open a dynamic library.
+
+Arguments:
+
+    ListHead - Supplies an optional pointer to the head of the list of loaded
+        images.
+
+    Parent - Supplies a pointer to the parent image requiring this image for
+        load.
+
+    LibraryName - Supplies the name of the library to open.
+
+    File - Supplies a pointer where the information for the file including its
+        open handle will be returned.
+
+    Path - Supplies a pointer where the real path to the opened file will be
+        returned. The caller is responsible for freeing this memory.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PSTR PathList;
+    PLOADED_IMAGE PrimaryExecutable;
+    ULONG PrimaryLoad;
+    PELF_DYNAMIC_ENTRY RPath;
+    PLOADED_IMAGE RPathParent;
+    PELF_DYNAMIC_ENTRY RunPath;
+    PSTR Slash;
+    KSTATUS Status;
+
+    //
+    // If there's a slash, then just load the library without paths.
+    //
+
+    Slash = RtlStringFindCharacter(LibraryName, '/', -1);
+    if (Slash != NULL) {
+        Status = ImpElfOpenWithPathList(Parent, LibraryName, "", File, Path);
+        goto OpenLibraryEnd;
+    }
+
+    //
+    // First find a DT_RUNPATH. If both DT_RUNPATH and DT_RPATH are found,
+    // ignore the older DT_RPATH. DT_RPATH goes up the chain of imports.
+    //
+
+    PrimaryLoad = 0;
+    RunPath = ImpElfGetDynamicEntry(Parent, ELF_DYNAMIC_RUN_PATH);
+    if (RunPath == NULL) {
+        RPathParent = Parent;
+        while (RPathParent != NULL) {
+            PrimaryLoad |= RPathParent->LoadFlags;
+            RPath = ImpElfGetDynamicEntry(RPathParent, ELF_DYNAMIC_RPATH);
+            if (RPath != NULL) {
+                PathList = RPathParent->ExportStringTable + RPath->Value;
+                Status = ImpElfOpenWithPathList(Parent,
+                                                LibraryName,
+                                                PathList,
+                                                File,
+                                                Path);
+
+                if (KSUCCESS(Status)) {
+                    goto OpenLibraryEnd;
+                }
+            }
+
+            RPathParent = RPathParent->Parent;
+        }
+
+        //
+        // Try the DT_RPATH of the primary executable if provided and not
+        // already searched.
+        //
+
+        if ((PrimaryLoad & IMAGE_LOAD_FLAG_PRIMARY_LOAD) == 0) {
+            PrimaryExecutable = ImpGetPrimaryExecutable(ListHead);
+            if ((PrimaryExecutable != NULL) &&
+                (PrimaryExecutable != Parent) &&
+                (PrimaryExecutable->DynamicSection != NULL)) {
+
+                RPath = ImpElfGetDynamicEntry(PrimaryExecutable,
+                                              ELF_DYNAMIC_RPATH);
+
+                if (RPath != NULL) {
+                    PathList = PrimaryExecutable->ExportStringTable +
+                               RPath->Value;
+
+                    Status = ImpElfOpenWithPathList(Parent,
+                                                    LibraryName,
+                                                    PathList,
+                                                    File,
+                                                    Path);
+
+                    if (KSUCCESS(Status)) {
+                        goto OpenLibraryEnd;
+                    }
+                }
+            }
+        }
+    }
+
+    //
+    // Get the library search path variable and use that.
+    //
+
+    PathList = ImpElfGetEnvironmentVariable(IMAGE_LOAD_LIBRARY_PATH_VARIABLE);
+    if (PathList != NULL) {
+        Status = ImpElfOpenWithPathList(Parent,
+                                        LibraryName,
+                                        PathList,
+                                        File,
+                                        Path);
+
+        if (KSUCCESS(Status)) {
+            goto OpenLibraryEnd;
+        }
+    }
+
+    //
+    // Try DT_RUNPATH.
+    //
+
+    if (RunPath != NULL) {
+        PathList = Parent->ExportStringTable + RunPath->Value;
+        Status = ImpElfOpenWithPathList(Parent,
+                                        LibraryName,
+                                        PathList,
+                                        File,
+                                        Path);
+
+        if (KSUCCESS(Status)) {
+            goto OpenLibraryEnd;
+        }
+    }
+
+    //
+    // Try some hard coded paths.
+    //
+
+    PathList = ELF_BUILTIN_LIBRARY_PATH;
+    Status = ImpElfOpenWithPathList(Parent, LibraryName, PathList, File, Path);
+    if (KSUCCESS(Status)) {
+        goto OpenLibraryEnd;
+    }
+
+OpenLibraryEnd:
+    return Status;
+}
 
 KSTATUS
 ImpElfGetImageSize (
@@ -448,8 +598,7 @@ KSTATUS
 ImpElfLoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PIMAGE_BUFFER Buffer,
-    ULONG ImportDepth
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
@@ -468,8 +617,6 @@ Arguments:
         fill out many other fields.
 
     Buffer - Supplies a pointer to the image buffer.
-
-    ImportDepth - Supplies the import depth to assign to the image.
 
 Return Value:
 
@@ -724,7 +871,7 @@ Return Value:
     // Do nothing else, as relocations and imports happen at the base level.
     //
 
-    if (ImportDepth != 0) {
+    if (Image->ImportDepth != 0) {
         Status = STATUS_SUCCESS;
         goto LoadImageEnd;
     }
@@ -1856,11 +2003,11 @@ Return Value:
 {
 
     PELF_DYNAMIC_ENTRY DynamicEntry;
-    ELF_WORD DynamicIndex;
     PLOADED_IMAGE Import;
     ULONG ImportCount;
     ULONG ImportIndex;
     PSTR ImportName;
+    ULONG LoadFlags;
     PELF_LOADING_IMAGE LoadingImage;
     KSTATUS Status;
     ELF_OFF StringTableOffset;
@@ -1869,9 +2016,9 @@ Return Value:
 
     ASSERT(LoadingImage != NULL);
 
-    DynamicEntry = LoadingImage->DynamicSection;
+    DynamicEntry = Image->DynamicSection;
     Status = STATUS_SUCCESS;
-    if (LoadingImage->DynamicEntryCount == 0) {
+    if (DynamicEntry == NULL) {
         goto LoadImportsForImageEnd;
     }
 
@@ -1881,25 +2028,17 @@ Return Value:
     //
 
     ImportCount = 0;
-    for (DynamicIndex = 0;
-         DynamicIndex < LoadingImage->DynamicEntryCount;
-         DynamicIndex += 1) {
-
-        //
-        // A null entry indicates the end of the symbol table.
-        //
-
-        if (DynamicEntry[DynamicIndex].Tag == ELF_DYNAMIC_NULL) {
-            break;
-        }
+    while (DynamicEntry->Tag != ELF_DYNAMIC_NULL) {
 
         //
         // A "needed" entry indicates a required import library.
         //
 
-        if (DynamicEntry[DynamicIndex].Tag == ELF_DYNAMIC_NEEDED) {
+        if (DynamicEntry->Tag == ELF_DYNAMIC_NEEDED) {
             ImportCount += 1;
         }
+
+        DynamicEntry += 1;
     }
 
     if (ImportCount == 0) {
@@ -1924,36 +2063,18 @@ Return Value:
     RtlZeroMemory(Image->Imports, ImportCount * sizeof(PLOADED_IMAGE));
     Image->ImportCount = ImportCount;
     ImportIndex = 0;
-    for (DynamicIndex = 0;
-         DynamicIndex < LoadingImage->DynamicEntryCount;
-         DynamicIndex += 1) {
-
-        //
-        // A null entry indicates the end of the symbol table.
-        //
-
-        if (DynamicEntry[DynamicIndex].Tag == ELF_DYNAMIC_NULL) {
-            break;
-        }
+    DynamicEntry = Image->DynamicSection;
+    while (DynamicEntry->Tag != ELF_DYNAMIC_NULL) {
 
         //
         // A "needed" entry indicates a required import library.
         //
 
-        if (DynamicEntry[DynamicIndex].Tag == ELF_DYNAMIC_NEEDED) {
+        if (DynamicEntry->Tag == ELF_DYNAMIC_NEEDED) {
+            StringTableOffset = DynamicEntry->Value;
 
-            //
-            // If no string table was found, the image is crazy.
-            //
-
-            if (Image->ExportStringTable == NULL) {
-                Status = STATUS_FILE_CORRUPT;
-                goto LoadImportsForImageEnd;
-            }
-
-            StringTableOffset = DynamicEntry[DynamicIndex].Value;
-
-            ASSERT(StringTableOffset < Image->ExportStringTableSize);
+            ASSERT((Image->ExportStringTable != NULL) &&
+                   (StringTableOffset < Image->ExportStringTableSize));
 
             ImportName = (PSTR)Image->ExportStringTable + StringTableOffset;
 
@@ -1962,176 +2083,52 @@ Return Value:
             // specified.
             //
 
-            Status = ImpElfLoadImport(Image, ListHead, ImportName, &Import);
+            LoadFlags = Image->LoadFlags | IMAGE_LOAD_FLAG_IGNORE_INTERPRETER;
+            LoadFlags &= ~IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE;
+            Status = ImpLoad(ListHead,
+                             ImportName,
+                             NULL,
+                             NULL,
+                             Image->SystemContext,
+                             LoadFlags,
+                             Image,
+                             &Import,
+                             NULL);
+
             if (!KSUCCESS(Status)) {
+                RtlDebugPrint("%s: Failed to find import '%s'.\n",
+                              Image->FileName,
+                              ImportName);
+
                 goto LoadImportsForImageEnd;
             }
 
             Image->Imports[ImportIndex] = Import;
             ImportIndex += 1;
         }
+
+        DynamicEntry += 1;
     }
 
 LoadImportsForImageEnd:
     if (!KSUCCESS(Status)) {
         if (Image->Imports != NULL) {
+            if (ImportIndex != 0) {
+                ImportCount = ImportIndex - 1;
+                for (ImportIndex = 0;
+                     ImportIndex < ImportCount;
+                     ImportIndex += 1) {
+
+                    ImImageReleaseReference(Image->Imports[ImportIndex]);
+                }
+            }
+
             ImFreeMemory(Image->Imports);
             Image->Imports = NULL;
             Image->ImportCount = 0;
         }
     }
 
-    return Status;
-}
-
-KSTATUS
-ImpElfLoadImport (
-    PLOADED_IMAGE Image,
-    PLIST_ENTRY ListHead,
-    PSTR LibraryName,
-    PLOADED_IMAGE *Import
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to load a needed library for an ELF image.
-
-Arguments:
-
-    Image - Supplies a pointer to the image that needs the library.
-
-    ListHead - Supplies a pointer to the head of the list of loaded images.
-
-    LibraryName - Supplies the name of the library to load.
-
-    Import - Supplies a pointer where a pointer to the loaded image will be
-        returned.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PELF_DYNAMIC_ENTRY Entry;
-    PSTR Path;
-    PELF_DYNAMIC_ENTRY RunPath;
-    PSTR Slash;
-    KSTATUS Status;
-
-    //
-    // If there's a slash, then just load the library without paths.
-    //
-
-    Slash = RtlStringFindCharacter(LibraryName, '/', -1);
-    if (Slash != NULL) {
-        Status = ImpElfLoadImportWithPath(Image,
-                                          ListHead,
-                                          LibraryName,
-                                          "/",
-                                          Import);
-
-        goto ElfLoadImportEnd;
-    }
-
-    //
-    // First find a DT_RUNPATH. If both DT_RUNPATH and DT_RPATH are found,
-    // the spec says that only DT_RUNPATH should be run.
-    //
-
-    RunPath = NULL;
-    if (Image->ImageContext != NULL) {
-        Status = ImpElfGetDynamicEntry(Image->ImageContext,
-                                       ELF_DYNAMIC_RUN_PATH,
-                                       &RunPath);
-
-        if (!KSUCCESS(Status)) {
-
-            //
-            // Search for DT_RPATH, which takes precedences over
-            // LD_LIBRARY_PATH.
-            //
-
-            Status = ImpElfGetDynamicEntry(Image->ImageContext,
-                                           ELF_DYNAMIC_RPATH,
-                                           &Entry);
-
-            if ((KSUCCESS(Status)) &&
-                (Entry->Value < Image->ExportStringTableSize)) {
-
-                Path = Image->ExportStringTable + Entry->Value;
-                Status = ImpElfLoadImportWithPath(Image,
-                                                  ListHead,
-                                                  LibraryName,
-                                                  Path,
-                                                  Import);
-
-                if (KSUCCESS(Status)) {
-                    goto ElfLoadImportEnd;
-                }
-            }
-        }
-    }
-
-    //
-    // Get the library search path and use that.
-    //
-
-    Path = ImpElfGetEnvironmentVariable(IMAGE_DYNAMIC_LIBRARY_PATH_VARIABLE);
-    if (Path != NULL) {
-        Status = ImpElfLoadImportWithPath(Image,
-                                          ListHead,
-                                          LibraryName,
-                                          Path,
-                                          Import);
-
-        if (KSUCCESS(Status)) {
-            goto ElfLoadImportEnd;
-        }
-    }
-
-    //
-    // Try DT_RUNPATH.
-    //
-
-    if ((RunPath != NULL) && (RunPath->Value < Image->ExportStringTableSize)) {
-        Path = Image->ExportStringTable + RunPath->Value;
-        Status = ImpElfLoadImportWithPath(Image,
-                                          ListHead,
-                                          LibraryName,
-                                          Path,
-                                          Import);
-
-        if (KSUCCESS(Status)) {
-            goto ElfLoadImportEnd;
-        }
-    }
-
-    //
-    // Try some hard coded paths.
-    //
-
-    Status = ImpElfLoadImportWithPath(Image,
-                                      ListHead,
-                                      LibraryName,
-                                      ELF_BUILTIN_LIBRARY_PATH,
-                                      Import);
-
-    if (KSUCCESS(Status)) {
-        goto ElfLoadImportEnd;
-    }
-
-    RtlDebugPrint("%s: Failed to find import '%s'.\n",
-                  Image->BinaryName,
-                  LibraryName);
-
-    Status = STATUS_MISSING_IMPORT;
-
-ElfLoadImportEnd:
     return Status;
 }
 
@@ -2166,7 +2163,6 @@ Return Value:
     PVOID Address;
     ELF_ADDR BaseDifference;
     PELF_DYNAMIC_ENTRY DynamicEntry;
-    ELF_WORD DynamicIndex;
     PVOID DynamicSymbols;
     PVOID DynamicSymbolStrings;
     ELF_XWORD DynamicSymbolStringsSize;
@@ -2177,7 +2173,6 @@ Return Value:
     ELF_HALF Index;
     ELF_XWORD LibraryNameOffset;
     PELF_LOADING_IMAGE LoadingImage;
-    ELF_XWORD MaxDynamic;
     PVOID PltRelocations;
     BOOL PltRelocationsAddends;
     PELF_PROGRAM_HEADER ProgramHeader;
@@ -2271,23 +2266,15 @@ Return Value:
         DynamicEntry = LoadingImage->Buffer.Data + ProgramHeader->Offset;
     }
 
-    Image->DynamicSection = DynamicEntry;
-    MaxDynamic = ProgramHeader->FileSize / sizeof(ELF_DYNAMIC_ENTRY);
-
     //
     // Save the pointer to the dynamic section header and dynamic symbol count.
     // This is used by the load import routine.
     //
 
-    LoadingImage->DynamicSection = DynamicEntry;
-    LoadingImage->DynamicEntryCount = MaxDynamic;
-    for (DynamicIndex = 0; DynamicIndex < MaxDynamic; DynamicIndex += 1) {
-        if (DynamicEntry[DynamicIndex].Tag == ELF_DYNAMIC_NULL) {
-            break;
-        }
-
-        Tag = DynamicEntry[DynamicIndex].Tag;
-        Value = DynamicEntry[DynamicIndex].Value;
+    Image->DynamicSection = DynamicEntry;
+    while (DynamicEntry->Tag != ELF_DYNAMIC_NULL) {
+        Tag = DynamicEntry->Tag;
+        Value = DynamicEntry->Value;
         Address = (PVOID)(UINTN)(Value + BaseDifference);
         switch (Tag) {
         case ELF_DYNAMIC_LIBRARY_NAME:
@@ -2447,7 +2434,7 @@ Return Value:
 
         case ELF_DYNAMIC_DEBUG:
             if (UseLoadedAddress != FALSE) {
-                DynamicEntry[DynamicIndex].Value = (ELF_SWORD)&(Image->Debug);
+                DynamicEntry->Value = (ELF_SWORD)&(Image->Debug);
             }
 
             break;
@@ -2459,6 +2446,8 @@ Return Value:
         default:
             break;
         }
+
+        DynamicEntry += 1;
     }
 
     //
@@ -2483,8 +2472,12 @@ Return Value:
         Image->Flags |= IMAGE_FLAG_GNU_HASH;
     }
 
-    if ((Image->BinaryName == NULL) && (LibraryNameOffset != 0)) {
-        Image->BinaryName = DynamicSymbolStrings + LibraryNameOffset;
+    //
+    // Set the library name if there is one.
+    //
+
+    if (LibraryNameOffset != 0) {
+        Image->LibraryName = DynamicSymbolStrings + LibraryNameOffset;
     }
 
     Status = STATUS_SUCCESS;
@@ -2493,11 +2486,10 @@ GatherExportInformationEnd:
     return Status;
 }
 
-KSTATUS
+PELF_DYNAMIC_ENTRY
 ImpElfGetDynamicEntry (
-    PELF_LOADING_IMAGE LoadingImage,
-    ELF_SXWORD Tag,
-    PELF_DYNAMIC_ENTRY *FoundEntry
+    PLOADED_IMAGE Image,
+    ELF_SXWORD Tag
     )
 
 /*++
@@ -2508,39 +2500,34 @@ Routine Description:
 
 Arguments:
 
-    LoadingImage - Supplies a pointer to the loading image context.
+    Image - Supplies a pointer to the image.
 
     Tag - Supplies the desired tag.
 
-    FoundEntry - Supplies a pointer where a pointer to the entry will be
-        returned on success.
-
 Return Value:
 
-    STATUS_SUCCESS on success.
+    Returns a pointer to the requested entry on success.
 
-    STATUS_NOT_FOUND on failure.
+    NULL if the entry could not be found or there is no dynamic section.
 
 --*/
 
 {
 
     PELF_DYNAMIC_ENTRY Entry;
-    UINTN Index;
 
-    Entry = LoadingImage->DynamicSection;
-    for (Index = 0; Index < LoadingImage->DynamicEntryCount; Index += 1) {
-        if (Entry->Tag == Tag) {
-            *FoundEntry = Entry;
-            return STATUS_SUCCESS;
-        }
+    Entry = Image->DynamicSection;
+    if (Entry != NULL) {
+        while (Entry->Tag != ELF_DYNAMIC_NULL) {
+            if (Entry->Tag == Tag) {
+                return Entry;
+            }
 
-        if (Entry->Tag == ELF_DYNAMIC_NULL) {
-            break;
+            Entry += 1;
         }
     }
 
-    return STATUS_NOT_FOUND;
+    return NULL;
 }
 
 KSTATUS
@@ -2572,7 +2559,6 @@ Return Value:
     PVOID Address;
     ELF_ADDR BaseDifference;
     PELF_DYNAMIC_ENTRY DynamicEntry;
-    ELF_XWORD DynamicIndex;
     PELF_LOADING_IMAGE LoadingImage;
     BOOL PltRelocationAddends;
     PVOID PltRelocations;
@@ -2601,16 +2587,13 @@ Return Value:
     BaseDifference = (UINTN)(Image->LoadedImageBuffer -
                              Image->PreferredLowestAddress);
 
-    DynamicEntry = LoadingImage->DynamicSection;
+    DynamicEntry = Image->DynamicSection;
     if (DynamicEntry == NULL) {
         Status = STATUS_SUCCESS;
         goto RelocateImageEnd;
     }
 
-    for (DynamicIndex = 0;
-         DynamicIndex < LoadingImage->DynamicEntryCount;
-         DynamicIndex += 1) {
-
+    while (DynamicEntry->Tag != ELF_DYNAMIC_NULL) {
         Address = (PVOID)(UINTN)(DynamicEntry->Value + BaseDifference);
         switch (DynamicEntry->Tag) {
         case ELF_DYNAMIC_REL_TABLE:

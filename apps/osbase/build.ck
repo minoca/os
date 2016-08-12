@@ -34,6 +34,8 @@ function build() {
         "heap.c",
         "osimag.c",
         "osbase.c",
+        "realpath.c",
+        "rwlock.c",
         "socket.c",
         "spinlock.c",
         "time.c",

@@ -190,6 +190,7 @@ IM_IMPORT_TABLE BmImageFunctionTable = {
     BmpImInvalidateInstructionCacheRegion,
     NULL,
     NULL,
+    NULL,
     NULL
 };
 
@@ -765,11 +766,20 @@ Return Value:
 {
 
     ULONG AllocationSize;
+    PSTR FileName;
     PDEBUG_MODULE LoadedModule;
     ULONG NameSize;
     KSTATUS Status;
 
-    NameSize = RtlStringLength(Image->BinaryName) + 1;
+    FileName = RtlStringFindCharacterRight(Image->FileName, '/', -1);
+    if (FileName != NULL) {
+        FileName += 1;
+
+    } else {
+        FileName = Image->FileName;
+    }
+
+    NameSize = RtlStringLength(FileName) + 1;
     AllocationSize = sizeof(DEBUG_MODULE) +
                      ((NameSize - ANYSIZE_ARRAY) * sizeof(CHAR));
 
@@ -785,7 +795,7 @@ Return Value:
     // Initialize the loaded image parameters.
     //
 
-    RtlStringCopy(LoadedModule->BinaryName, Image->BinaryName, NameSize);
+    RtlStringCopy(LoadedModule->BinaryName, FileName, NameSize);
     LoadedModule->StructureSize = AllocationSize;
     LoadedModule->Timestamp = Image->File.ModificationDate;
     LoadedModule->LowestAddress = Image->PreferredLowestAddress +

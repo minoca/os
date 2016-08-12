@@ -264,15 +264,14 @@ Return Value:
                 IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS |
                 IMAGE_LOAD_FLAG_BIND_NOW;
 
-    Status = ImLoadExecutable(&BmLoadedImageList,
-                              BootEntry->LoaderPath,
-                              NULL,
-                              NULL,
-                              NULL,
-                              LoadFlags,
-                              0,
-                              &LoaderImage,
-                              NULL);
+    Status = ImLoad(&BmLoadedImageList,
+                    BootEntry->LoaderPath,
+                    NULL,
+                    NULL,
+                    NULL,
+                    LoadFlags,
+                    &LoaderImage,
+                    NULL);
 
     if (!KSUCCESS(Status)) {
         FwPrintString(0, 0, "Failed to load OS loader.");

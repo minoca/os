@@ -86,6 +86,7 @@ Author:
 // Define functions
 //
 
+#define ImpElfOpenLibrary ImpElf64OpenLibrary
 #define ImpElfGetImageSize ImpElf64GetImageSize
 #define ImpElfLoadImage ImpElf64LoadImage
 #define ImpElfAddImage ImpElf64AddImage
@@ -160,6 +161,7 @@ Author:
 // Define functions
 //
 
+#define ImpElfOpenLibrary ImpElf32OpenLibrary
 #define ImpElfGetImageSize ImpElf32GetImageSize
 #define ImpElfLoadImage ImpElf32LoadImage
 #define ImpElfAddImage ImpElf32AddImage

@@ -56,6 +56,7 @@ Author:
 
 #define ImGetEnvironmentVariable ImImportTable->GetEnvironmentVariable
 #define ImFinalizeSegments ImImportTable->FinalizeSegments
+#define ImGetRealPath ImImportTable->GetRealPath
 
 //
 // Define the maximum import recursion depth.
@@ -109,3 +110,84 @@ Return Value:
     NULL if the range is invalid or the file could not be fully loaded.
 
 --*/
+
+KSTATUS
+ImpLoad (
+    PLIST_ENTRY ListHead,
+    PSTR BinaryName,
+    PIMAGE_FILE_INFORMATION BinaryFile,
+    PIMAGE_BUFFER ImageBuffer,
+    PVOID SystemContext,
+    ULONG Flags,
+    PLOADED_IMAGE Parent,
+    PLOADED_IMAGE *LoadedImage,
+    PLOADED_IMAGE *Interpreter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads an executable image into memory.
+
+Arguments:
+
+    ListHead - Supplies a pointer to the head of the list of loaded images.
+
+    BinaryName - Supplies the name of the binary executable image to load. If
+        this is NULL, then a pointer to the first (primary) image loaded, with
+        a reference added.
+
+    BinaryFile - Supplies an optional handle to the file information. The
+        handle should be positioned to the beginning of the file. Supply NULL
+        if the caller does not already have an open handle to the binary. On
+        success, the image library takes ownership of the handle.
+
+    ImageBuffer - Supplies an optional pointer to the image buffer. This can
+        be a complete image file buffer, or just a partial load of the file.
+
+    SystemContext - Supplies an opaque token that will be passed to the
+        support functions called by the image support library.
+
+    Flags - Supplies a bitfield of flags governing the load. See
+        IMAGE_LOAD_FLAG_* flags.
+
+    Parent - Supplies an optional pointer to the parent image that imports this
+        image.
+
+    LoadedImage - Supplies an optional pointer where a pointer to the loaded
+        image structure will be returned on success.
+
+    Interpreter - Supplies an optional pointer where a pointer to the loaded
+        interpreter structure will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+PLOADED_IMAGE
+ImpGetPrimaryExecutable (
+    PLIST_ENTRY ListHead
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the primary executable in the list, if there is one.
+
+Arguments:
+
+    ListHead - Supplies a pointer to the head of the list of loaded images.
+
+Return Value:
+
+    Returns a pointer to the primary executable if it exists. This routine does
+    not add a reference on the image.
+
+    NULL if no primary executable is currently loaded in the list.
+
+--*/
+

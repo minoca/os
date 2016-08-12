@@ -845,6 +845,43 @@ typedef struct _ELF64_DYNAMIC_ENTRY {
 //
 
 KSTATUS
+ImpElf32OpenLibrary (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Parent,
+    PSTR LibraryName,
+    PIMAGE_FILE_INFORMATION File,
+    PSTR *Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to open a dynamic library.
+
+Arguments:
+
+    ListHead - Supplies an optional pointer to the head of the list of loaded
+        images.
+
+    Parent - Supplies a pointer to the parent image requiring this image for
+        load.
+
+    LibraryName - Supplies the name of the library to open.
+
+    File - Supplies a pointer where the information for the file including its
+        open handle will be returned.
+
+    Path - Supplies a pointer where the real path to the opened file will be
+        returned. The caller is responsible for freeing this memory.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 ImpElf32GetImageSize (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
@@ -882,8 +919,7 @@ KSTATUS
 ImpElf32LoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PIMAGE_BUFFER Buffer,
-    ULONG ImportDepth
+    PIMAGE_BUFFER Buffer
     );
 
 /*++
@@ -902,8 +938,6 @@ Arguments:
         fill out many other fields.
 
     Buffer - Supplies a pointer to the image buffer.
-
-    ImportDepth - Supplies the import depth to assign to the image.
 
 Return Value:
 
@@ -1200,6 +1234,43 @@ Return Value:
 //
 
 KSTATUS
+ImpElf64OpenLibrary (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Parent,
+    PSTR LibraryName,
+    PIMAGE_FILE_INFORMATION File,
+    PSTR *Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to open a dynamic library.
+
+Arguments:
+
+    ListHead - Supplies an optional pointer to the head of the list of loaded
+        images.
+
+    Parent - Supplies a pointer to the parent image requiring this image for
+        load.
+
+    LibraryName - Supplies the name of the library to open.
+
+    File - Supplies a pointer where the information for the file including its
+        open handle will be returned.
+
+    Path - Supplies a pointer where the real path to the opened file will be
+        returned. The caller is responsible for freeing this memory.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 ImpElf64GetImageSize (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
@@ -1237,8 +1308,7 @@ KSTATUS
 ImpElf64LoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PIMAGE_BUFFER Buffer,
-    ULONG ImportDepth
+    PIMAGE_BUFFER Buffer
     );
 
 /*++
@@ -1257,8 +1327,6 @@ Arguments:
         fill out many other fields.
 
     Buffer - Supplies a pointer to the image buffer.
-
-    ImportDepth - Supplies the import depth to assign to the image.
 
 Return Value:
 

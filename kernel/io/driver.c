@@ -412,15 +412,14 @@ Return Value:
     //
 
     KeAcquireQueuedLock(IoDeviceDatabaseLock);
-    Status = ImLoadExecutable(&(KernelProcess->ImageListHead),
-                              DriverName,
-                              NULL,
-                              NULL,
-                              KernelProcess,
-                              LoadFlags,
-                              0,
-                              &DriverImage,
-                              NULL);
+    Status = ImLoad(&(KernelProcess->ImageListHead),
+                    DriverName,
+                    NULL,
+                    NULL,
+                    KernelProcess,
+                    LoadFlags,
+                    &DriverImage,
+                    NULL);
 
     if (KSUCCESS(Status)) {
         Status = IopInitializeImages(KernelProcess);

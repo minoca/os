@@ -241,7 +241,8 @@ IM_IMPORT_TABLE OsImageFunctionTable = {
     OspImInvalidateInstructionCacheRegion,
     OspImGetEnvironmentVariable,
     OspImFinalizeSegments,
-    OspImArchResolvePltEntry
+    OspImArchResolvePltEntry,
+    OsGetRealPath
 };
 
 //
@@ -377,15 +378,14 @@ Return Value:
         Environment->ImageNameLength =
                                 RtlStringLength(Environment->Arguments[0]) + 1;
 
-        Status = ImLoadExecutable(&OsLoadedImagesHead,
-                                  Environment->ImageName,
-                                  NULL,
-                                  NULL,
-                                  NULL,
-                                  LoadFlags,
-                                  0,
-                                  &Image,
-                                  NULL);
+        Status = ImLoad(&OsLoadedImagesHead,
+                        Environment->ImageName,
+                        NULL,
+                        NULL,
+                        NULL,
+                        LoadFlags,
+                        &Image,
+                        NULL);
     }
 
     if (!KSUCCESS(Status)) {
@@ -520,15 +520,14 @@ Return Value:
     *Handle = INVALID_HANDLE;
     LoadedImage = NULL;
     LoadFlags = 0;
-    Status = ImLoadExecutable(&OsLoadedImagesHead,
-                              LibraryName,
-                              NULL,
-                              NULL,
-                              NULL,
-                              LoadFlags,
-                              0,
-                              &LoadedImage,
-                              NULL);
+    Status = ImLoad(&OsLoadedImagesHead,
+                    LibraryName,
+                    NULL,
+                    NULL,
+                    NULL,
+                    LoadFlags,
+                    &LoadedImage,
+                    NULL);
 
     OspReleaseImageLock();
     if (!KSUCCESS(Status)) {
@@ -813,7 +812,7 @@ Return Value:
         //
 
         Image = ImageSymbol.Image;
-        Symbol->LibraryName = Image->BinaryName;
+        Symbol->LibraryName = Image->FileName;
         if ((Symbol->LibraryName == NULL) &&
             ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0)) {
 
@@ -1861,7 +1860,7 @@ Return Value:
     Notification.Version = PROCESS_DEBUG_MODULE_CHANGE_VERSION;
     Notification.Load = TRUE;
     Notification.Image = Image;
-    Notification.BinaryNameSize = RtlStringLength(Image->BinaryName) + 1;
+    Notification.BinaryNameSize = RtlStringLength(Image->FileName) + 1;
     Status = OsDebug(DebugCommandReportModuleChange,
                      0,
                      NULL,
@@ -1871,7 +1870,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Warning: Failed to notify kernel of module %s: %x\n",
-                      Image->BinaryName,
+                      Image->FileName,
                       Status);
     }
 
@@ -1979,7 +1978,7 @@ Return Value:
     Notification.Version = PROCESS_DEBUG_MODULE_CHANGE_VERSION;
     Notification.Load = FALSE;
     Notification.Image = Image;
-    Notification.BinaryNameSize = RtlStringLength(Image->BinaryName) + 1;
+    Notification.BinaryNameSize = RtlStringLength(Image->FileName) + 1;
     Status = OsDebug(DebugCommandReportModuleChange,
                      0,
                      NULL,
@@ -1989,7 +1988,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Warning: Failed to unload module %s: %x\n",
-                      Image->BinaryName,
+                      Image->FileName,
                       Status);
     }
 
@@ -2068,7 +2067,7 @@ Return Value:
 
     VariableLength = RtlStringLength(Variable);
     Match = RtlAreStringsEqual(Variable,
-                               IMAGE_DYNAMIC_LIBRARY_PATH_VARIABLE,
+                               IMAGE_LOAD_LIBRARY_PATH_VARIABLE,
                                VariableLength + 1);
 
     if (Match != FALSE) {
@@ -2429,7 +2428,7 @@ Return Value:
     StartData = OsEnvironment->StartData;
     ImageBuffer.Size = MAX_UINTN;
     ImageBuffer.Data = StartData->OsLibraryBase;
-    Status = ImAddImage(NULL, &ImageBuffer, &OsLibrary);
+    Status = ImAddImage(&ImageBuffer, &OsLibrary);
     if (!KSUCCESS(Status)) {
         goto LoadInitialImageListEnd;
     }
@@ -2442,7 +2441,7 @@ Return Value:
         (StartData->InterpreterBase != StartData->OsLibraryBase)) {
 
         ImageBuffer.Data = StartData->InterpreterBase;
-        Status = ImAddImage(NULL, &ImageBuffer, &Interpreter);
+        Status = ImAddImage(&ImageBuffer, &Interpreter);
         if (!KSUCCESS(Status)) {
             goto LoadInitialImageListEnd;
         }
@@ -2455,7 +2454,7 @@ Return Value:
 
     if (StartData->ExecutableBase != StartData->OsLibraryBase) {
         ImageBuffer.Data = StartData->ExecutableBase;
-        Status = ImAddImage(NULL, &ImageBuffer, &Executable);
+        Status = ImAddImage(&ImageBuffer, &Executable);
         if (!KSUCCESS(Status)) {
             goto LoadInitialImageListEnd;
         }

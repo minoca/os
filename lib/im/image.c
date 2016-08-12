@@ -54,6 +54,16 @@ Environment:
 //
 
 KSTATUS
+ImpOpenLibrary (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Parent,
+    PVOID SystemContext,
+    PSTR BinaryName,
+    PIMAGE_FILE_INFORMATION File,
+    PSTR *Path
+    );
+
+KSTATUS
 ImpGetImageSize (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
@@ -65,14 +75,23 @@ KSTATUS
 ImpLoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PIMAGE_BUFFER Buffer,
-    ULONG ImportDepth
+    PIMAGE_BUFFER Buffer
     );
 
 KSTATUS
 ImpAddImage (
     PIMAGE_BUFFER ImageBuffer,
     PLOADED_IMAGE Image
+    );
+
+KSTATUS
+ImpOpenImport (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Parent,
+    PVOID SystemContext,
+    PSTR BinaryName,
+    PIMAGE_FILE_INFORMATION File,
+    PSTR *Path
     );
 
 VOID
@@ -105,15 +124,15 @@ ImpRelocateSelf (
     );
 
 PLOADED_IMAGE
-ImpFindImageInList (
+ImpFindImage (
     PLIST_ENTRY ListHead,
-    PSTR ImageName
+    PSTR Name,
+    BOOL IsPath
     );
 
 PLOADED_IMAGE
 ImpAllocateImage (
-    PSTR ImageName,
-    UINTN ImageNameSize
+    VOID
     );
 
 //
@@ -234,7 +253,7 @@ Return Value:
     // Load the file contents into memory.
     //
 
-    Status = ImOpenFile(SystemContext, BinaryName, &File);
+    Status = ImpOpenLibrary(NULL, NULL, SystemContext, BinaryName, &File, NULL);
     if (!KSUCCESS(Status)) {
         goto GetExecutableFormatEnd;
     }
@@ -287,14 +306,13 @@ GetExecutableFormatEnd:
 }
 
 KSTATUS
-ImLoadExecutable (
+ImLoad (
     PLIST_ENTRY ListHead,
     PSTR BinaryName,
     PIMAGE_FILE_INFORMATION BinaryFile,
     PIMAGE_BUFFER ImageBuffer,
     PVOID SystemContext,
     ULONG Flags,
-    ULONG ImportDepth,
     PLOADED_IMAGE *LoadedImage,
     PLOADED_IMAGE *Interpreter
     )
@@ -327,8 +345,6 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the load. See
         IMAGE_LOAD_FLAG_* flags.
 
-    ImportDepth - Supplies the import depth of the image. Supply 0 here.
-
     LoadedImage - Supplies an optional pointer where a pointer to the loaded
         image structure will be returned on success.
 
@@ -343,279 +359,23 @@ Return Value:
 
 {
 
-    ULONG BinaryNameLength;
-    PLIST_ENTRY CurrentEntry;
-    ULONG FileNameSize;
-    PLOADED_IMAGE Image;
-    PLOADED_IMAGE InterpreterImage;
-    PSTR InterpreterPath;
-    IMAGE_BUFFER LocalImageBuffer;
-    ULONG NameIndex;
     KSTATUS Status;
 
-    Image = NULL;
-    InterpreterImage = NULL;
-    RtlZeroMemory(&LocalImageBuffer, sizeof(IMAGE_BUFFER));
-
-    //
-    // If the primary executable flag is set, also set the primary load flag.
-    // The difference is that the primary executable flag is set only on the
-    // executable itself, whereas the primary load flag is set on the primary
-    // executable and any dynamic libraries loaded to satisfy dependencies
-    // during this process.
-    //
-
-    if ((Flags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0) {
-        Flags |= IMAGE_LOAD_FLAG_PRIMARY_LOAD;
-    }
-
-    //
-    // If the name is NULL, return the primary executable.
-    //
-
-    if (BinaryName == NULL) {
-
-        ASSERT((Flags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) == 0);
-
-        CurrentEntry = ListHead->Next;
-        while (CurrentEntry != ListHead) {
-            Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
-            if ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0) {
-                ImImageAddReference(Image);
-                Status = STATUS_SUCCESS;
-                goto LoadExecutableEnd;
-            }
-
-            CurrentEntry = CurrentEntry->Next;
-        }
-
-        Status = STATUS_NOT_READY;
-        goto LoadExecutableEnd;
-    }
-
-    BinaryNameLength = RtlStringLength(BinaryName);
-    if (BinaryNameLength == 0) {
-        Status = STATUS_INVALID_PARAMETER;
-        goto LoadExecutableEnd;
-    }
-
-    //
-    // Chop off everything but the name.
-    //
-
-    NameIndex = BinaryNameLength - 1;
-    while ((NameIndex != 0) && (BinaryName[NameIndex] != '/')) {
-        NameIndex -= 1;
-    }
-
-    if (BinaryName[NameIndex] == '/') {
-        NameIndex += 1;
-    }
-
-    if (NameIndex >= BinaryNameLength) {
-        Status = STATUS_INVALID_PARAMETER;
-        goto LoadExecutableEnd;
-    }
-
-    FileNameSize = BinaryNameLength - NameIndex;
-
-    //
-    // See if the image is already loaded, and return if so.
-    //
-
-    Image = ImpFindImageInList(ListHead, BinaryName + NameIndex);
-    if (Image != NULL) {
-        ImImageAddReference(Image);
-        Status = STATUS_SUCCESS;
-        goto LoadExecutableEnd;
-    }
-
-    //
-    // Allocate space for the loaded image structure.
-    //
-
-    Image = ImpAllocateImage(BinaryName + NameIndex, FileNameSize + 1);
-    if (Image == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto LoadExecutableEnd;
-    }
-
-    Image->SystemContext = SystemContext;
-    Image->ImportDepth = ImportDepth;
-    Image->LoadFlags = Flags;
-
-    //
-    // Load the file contents into memory.
-    //
-
-    if (BinaryFile != NULL) {
-        RtlCopyMemory(&(Image->File),
-                      BinaryFile,
-                      sizeof(IMAGE_FILE_INFORMATION));
-
-    } else {
-        Status = ImOpenFile(SystemContext, BinaryName, &(Image->File));
-        if (!KSUCCESS(Status)) {
-            goto LoadExecutableEnd;
-        }
-    }
-
-    if (ImageBuffer == NULL) {
-
-        //
-        // In a load-only scenario, just try to do a small read of the file
-        // contents. Otherwise, just map the whole file.
-        //
-
-        if ((Flags & IMAGE_LOAD_FLAG_LOAD_ONLY) != 0) {
-            Status = ImReadFile(&(Image->File),
-                                0,
-                                IMAGE_INITIAL_READ_SIZE,
-                                &LocalImageBuffer);
-
-        } else {
-            Status = ImLoadFile(&(Image->File), &LocalImageBuffer);
-        }
-
-        if (!KSUCCESS(Status)) {
-            goto LoadExecutableEnd;
-        }
-
-        ImageBuffer = &LocalImageBuffer;
-    }
-
-    //
-    // Determine the file format.
-    //
-
-    Image->Format = ImGetImageFormat(ImageBuffer);
-    if ((Image->Format == ImageInvalidFormat) ||
-        (Image->Format == ImageUnknownFormat)) {
-
-        Status = STATUS_UNKNOWN_IMAGE_FORMAT;
-        goto LoadExecutableEnd;
-    }
-
-    //
-    // Determine the image size and preferred VA.
-    //
-
-    Status = ImpGetImageSize(ListHead, Image, ImageBuffer, &InterpreterPath);
-    if (!KSUCCESS(Status)) {
-        goto LoadExecutableEnd;
-    }
-
-    //
-    // Load the interpreter if there is one.
-    //
-
-    if (InterpreterPath != NULL) {
-
-        ASSERT((Flags & IMAGE_LOAD_FLAG_IGNORE_INTERPRETER) == 0);
-
-        Status = ImLoadExecutable(ListHead,
-                                  InterpreterPath,
-                                  NULL,
-                                  NULL,
-                                  SystemContext,
-                                  Flags | IMAGE_LOAD_FLAG_IGNORE_INTERPRETER,
-                                  ImportDepth,
-                                  &InterpreterImage,
-                                  NULL);
-
-        if (!KSUCCESS(Status)) {
-            goto LoadExecutableEnd;
-        }
-    }
-
-    if (ImAllocateAddressSpace != NULL) {
-
-        //
-        // Call out to the allocator to get space for the image.
-        //
-
-        Image->BaseDifference = 0;
-        Status = ImAllocateAddressSpace(Image);
-        if (!KSUCCESS(Status)) {
-            goto LoadExecutableEnd;
-        }
-
-        //
-        // If the image is not relocatable and the preferred address could not
-        // be allocated, then this image cannot be loaded.
-        //
-
-        if ((Image->BaseDifference != 0) &&
-            ((Image->Flags & IMAGE_FLAG_RELOCATABLE) == 0)) {
-
-            Status = STATUS_MEMORY_CONFLICT;
-            goto LoadExecutableEnd;
-        }
-
-    //
-    // Just pretend for now it got put at the right spot. This will be adjusted
-    // later.
-    //
-
-    } else {
-        Image->BaseDifference = 0;
-    }
-
-    //
-    // Call the image-specific routine to actually load/map the image into its
-    // allocated space.
-    //
-
-    Status = ImpLoadImage(ListHead, Image, ImageBuffer, ImportDepth);
-    if (!KSUCCESS(Status)) {
-        goto LoadExecutableEnd;
-    }
-
-LoadExecutableEnd:
-
-    //
-    // Tear down the portion of the image loaded so far on failure.
-    //
-
-    if (!KSUCCESS(Status)) {
-        if (InterpreterImage != NULL) {
-            ImImageReleaseReference(InterpreterImage);
-        }
-
-        if (Image != NULL) {
-            if (Image->AllocatorHandle != INVALID_HANDLE) {
-                ImFreeAddressSpace(Image);
-            }
-
-            if (Image->File.Handle != INVALID_HANDLE) {
-                if (LocalImageBuffer.Data != NULL) {
-                    ImUnloadBuffer(&(Image->File), &LocalImageBuffer);
-                }
-
-                if (BinaryFile == NULL) {
-                    ImCloseFile(&(Image->File));
-                }
-            }
-
-            ImFreeMemory(Image);
-            Image = NULL;
-        }
-    }
-
-    if (LoadedImage != NULL) {
-        *LoadedImage = Image;
-    }
-
-    if (Interpreter != NULL) {
-        *Interpreter = InterpreterImage;
-    }
+    Status = ImpLoad(ListHead,
+                     BinaryName,
+                     BinaryFile,
+                     ImageBuffer,
+                     SystemContext,
+                     Flags,
+                     NULL,
+                     LoadedImage,
+                     Interpreter);
 
     return Status;
 }
 
 KSTATUS
 ImAddImage (
-    PSTR BinaryName,
     PIMAGE_BUFFER Buffer,
     PLOADED_IMAGE *LoadedImage
     )
@@ -628,9 +388,6 @@ Routine Description:
     been loaded into memory.
 
 Arguments:
-
-    BinaryName - Supplies an optional pointer to the name of the image to use.
-        If NULL, then the shared object name of the image will be extracted.
 
     Buffer - Supplies the image buffer containing the loaded image.
 
@@ -646,15 +403,9 @@ Return Value:
 {
 
     PLOADED_IMAGE Image;
-    UINTN NameSize;
     KSTATUS Status;
 
-    NameSize = 0;
-    if (BinaryName != NULL) {
-        NameSize = RtlStringLength(BinaryName) + 1;
-    }
-
-    Image = ImpAllocateImage(BinaryName, NameSize);
+    Image = ImpAllocateImage();
     if (Image == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto AddImageEnd;
@@ -664,6 +415,13 @@ Return Value:
     Image->LoadedImageBuffer = Buffer->Data;
     Image->File.Size = Buffer->Size;
     Status = ImpAddImage(Buffer, Image);
+
+    //
+    // Set the file name equal to the library name so there's at least
+    // something to go off of.
+    //
+
+    Image->FileName = Image->LibraryName;
 
 AddImageEnd:
     if (!KSUCCESS(Status)) {
@@ -855,6 +613,10 @@ Return Value:
 
     if (Image->File.Handle != INVALID_HANDLE) {
         ImCloseFile(&(Image->File));
+    }
+
+    if (Image->FileName != NULL) {
+        ImFreeMemory(Image->FileName);
     }
 
     ImFreeMemory(Image);
@@ -1376,9 +1138,495 @@ Return Value:
     return Buffer->Data + Offset;
 }
 
+KSTATUS
+ImpLoad (
+    PLIST_ENTRY ListHead,
+    PSTR BinaryName,
+    PIMAGE_FILE_INFORMATION BinaryFile,
+    PIMAGE_BUFFER ImageBuffer,
+    PVOID SystemContext,
+    ULONG Flags,
+    PLOADED_IMAGE Parent,
+    PLOADED_IMAGE *LoadedImage,
+    PLOADED_IMAGE *Interpreter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine loads an executable image into memory.
+
+Arguments:
+
+    ListHead - Supplies a pointer to the head of the list of loaded images.
+
+    BinaryName - Supplies the name of the binary executable image to load. If
+        this is NULL, then a pointer to the first (primary) image loaded, with
+        a reference added.
+
+    BinaryFile - Supplies an optional handle to the file information. The
+        handle should be positioned to the beginning of the file. Supply NULL
+        if the caller does not already have an open handle to the binary. On
+        success, the image library takes ownership of the handle.
+
+    ImageBuffer - Supplies an optional pointer to the image buffer. This can
+        be a complete image file buffer, or just a partial load of the file.
+
+    SystemContext - Supplies an opaque token that will be passed to the
+        support functions called by the image support library.
+
+    Flags - Supplies a bitfield of flags governing the load. See
+        IMAGE_LOAD_FLAG_* flags.
+
+    Parent - Supplies an optional pointer to the parent image that imports this
+        image.
+
+    LoadedImage - Supplies an optional pointer where a pointer to the loaded
+        image structure will be returned on success.
+
+    Interpreter - Supplies an optional pointer where a pointer to the loaded
+        interpreter structure will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG BinaryNameLength;
+    PLOADED_IMAGE ExistingImage;
+    PLOADED_IMAGE Image;
+    PLOADED_IMAGE InterpreterImage;
+    PSTR InterpreterPath;
+    IMAGE_BUFFER LocalImageBuffer;
+    KSTATUS Status;
+
+    Image = NULL;
+    InterpreterImage = NULL;
+    RtlZeroMemory(&LocalImageBuffer, sizeof(IMAGE_BUFFER));
+
+    //
+    // If the primary executable flag is set, also set the primary load flag.
+    // The difference is that the primary executable flag is set only on the
+    // executable itself, whereas the primary load flag is set on the primary
+    // executable and any dynamic libraries loaded to satisfy dependencies
+    // during this process.
+    //
+
+    if ((Flags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0) {
+        Flags |= IMAGE_LOAD_FLAG_PRIMARY_LOAD;
+    }
+
+    //
+    // If the name is NULL, return the primary executable.
+    //
+
+    if (BinaryName == NULL) {
+
+        ASSERT((Flags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) == 0);
+
+        Image = ImpGetPrimaryExecutable(ListHead);
+        if (Image == NULL) {
+            Status = STATUS_NOT_READY;
+            goto LoadEnd;
+        }
+
+        ImImageAddReference(Image);
+        Status = STATUS_SUCCESS;
+        goto LoadEnd;
+    }
+
+    BinaryNameLength = RtlStringLength(BinaryName);
+    if (BinaryNameLength == 0) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto LoadEnd;
+    }
+
+    //
+    // See if the image is already loaded, and return if so.
+    //
+
+    Image = ImpFindImage(ListHead, BinaryName, FALSE);
+    if (Image != NULL) {
+        ImImageAddReference(Image);
+        Status = STATUS_SUCCESS;
+        goto LoadEnd;
+    }
+
+    //
+    // Allocate space for the loaded image structure.
+    //
+
+    Image = ImpAllocateImage();
+    if (Image == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto LoadEnd;
+    }
+
+    Image->SystemContext = SystemContext;
+    if (Parent != NULL) {
+
+        ASSERT((Flags & IMAGE_LOAD_FLAG_IGNORE_INTERPRETER) != 0);
+
+        Image->Parent = Parent;
+        Image->ImportDepth = Parent->ImportDepth + 1;
+    }
+
+    Image->LoadFlags = Flags;
+
+    //
+    // Open up the file.
+    //
+
+    if (BinaryFile != NULL) {
+        RtlCopyMemory(&(Image->File),
+                      BinaryFile,
+                      sizeof(IMAGE_FILE_INFORMATION));
+
+        Image->FileName = ImAllocateMemory(BinaryNameLength + 1,
+                                           IM_ALLOCATION_TAG);
+
+        if (Image->FileName == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto LoadEnd;
+        }
+
+        RtlCopyMemory(Image->FileName, BinaryName, BinaryNameLength + 1);
+
+    } else {
+        Status = ImpOpenLibrary(ListHead,
+                                Parent,
+                                SystemContext,
+                                BinaryName,
+                                &(Image->File),
+                                &(Image->FileName));
+
+        if (!KSUCCESS(Status)) {
+            goto LoadEnd;
+        }
+
+        //
+        // The library is open, and the real path has been found. Search
+        // for an already loaded library with the same absolute path.
+        //
+
+        ExistingImage = ImpFindImage(ListHead, Image->FileName, TRUE);
+        if (ExistingImage != NULL) {
+            ImCloseFile(&(Image->File));
+            ImFreeMemory(Image->FileName);
+            ImFreeMemory(Image);
+            Image = ExistingImage;
+            ImImageAddReference(Image);
+            Status = STATUS_SUCCESS;
+            goto LoadEnd;
+        }
+    }
+
+    if (ImageBuffer == NULL) {
+
+        //
+        // In a load-only scenario, just try to do a small read of the file
+        // contents. Otherwise, just map the whole file.
+        //
+
+        if ((Flags & IMAGE_LOAD_FLAG_LOAD_ONLY) != 0) {
+            Status = ImReadFile(&(Image->File),
+                                0,
+                                IMAGE_INITIAL_READ_SIZE,
+                                &LocalImageBuffer);
+
+        } else {
+            Status = ImLoadFile(&(Image->File), &LocalImageBuffer);
+        }
+
+        if (!KSUCCESS(Status)) {
+            goto LoadEnd;
+        }
+
+        ImageBuffer = &LocalImageBuffer;
+    }
+
+    //
+    // Determine the file format.
+    //
+
+    Image->Format = ImGetImageFormat(ImageBuffer);
+    if ((Image->Format == ImageInvalidFormat) ||
+        (Image->Format == ImageUnknownFormat)) {
+
+        Status = STATUS_UNKNOWN_IMAGE_FORMAT;
+        goto LoadEnd;
+    }
+
+    //
+    // Determine the image size and preferred VA.
+    //
+
+    Status = ImpGetImageSize(ListHead, Image, ImageBuffer, &InterpreterPath);
+    if (!KSUCCESS(Status)) {
+        goto LoadEnd;
+    }
+
+    //
+    // Load the interpreter if there is one.
+    //
+
+    if (InterpreterPath != NULL) {
+
+        ASSERT(((Flags & IMAGE_LOAD_FLAG_IGNORE_INTERPRETER) == 0) &&
+               (Parent == NULL));
+
+        Status = ImpLoad(ListHead,
+                         InterpreterPath,
+                         NULL,
+                         NULL,
+                         SystemContext,
+                         Flags | IMAGE_LOAD_FLAG_IGNORE_INTERPRETER,
+                         NULL,
+                         &InterpreterImage,
+                         NULL);
+
+        if (!KSUCCESS(Status)) {
+            goto LoadEnd;
+        }
+    }
+
+    if (ImAllocateAddressSpace != NULL) {
+
+        //
+        // Call out to the allocator to get space for the image.
+        //
+
+        Image->BaseDifference = 0;
+        Status = ImAllocateAddressSpace(Image);
+        if (!KSUCCESS(Status)) {
+            goto LoadEnd;
+        }
+
+        //
+        // If the image is not relocatable and the preferred address could not
+        // be allocated, then this image cannot be loaded.
+        //
+
+        if ((Image->BaseDifference != 0) &&
+            ((Image->Flags & IMAGE_FLAG_RELOCATABLE) == 0)) {
+
+            Status = STATUS_MEMORY_CONFLICT;
+            goto LoadEnd;
+        }
+
+    //
+    // Just pretend for now it got put at the right spot. This will be adjusted
+    // later.
+    //
+
+    } else {
+        Image->BaseDifference = 0;
+    }
+
+    //
+    // Call the image-specific routine to actually load/map the image into its
+    // allocated space.
+    //
+
+    Status = ImpLoadImage(ListHead, Image, ImageBuffer);
+    if (!KSUCCESS(Status)) {
+        goto LoadEnd;
+    }
+
+LoadEnd:
+
+    //
+    // Tear down the portion of the image loaded so far on failure.
+    //
+
+    if (!KSUCCESS(Status)) {
+        if (InterpreterImage != NULL) {
+            ImImageReleaseReference(InterpreterImage);
+        }
+
+        if (Image != NULL) {
+            if (Image->AllocatorHandle != INVALID_HANDLE) {
+                ImFreeAddressSpace(Image);
+            }
+
+            if (Image->File.Handle != INVALID_HANDLE) {
+                if (LocalImageBuffer.Data != NULL) {
+                    ImUnloadBuffer(&(Image->File), &LocalImageBuffer);
+                }
+
+                if (BinaryFile == NULL) {
+                    ImCloseFile(&(Image->File));
+                }
+            }
+
+            if (Image->FileName != NULL) {
+                ImFreeMemory(Image->FileName);
+            }
+
+            ImFreeMemory(Image);
+            Image = NULL;
+        }
+    }
+
+    if (LoadedImage != NULL) {
+        *LoadedImage = Image;
+    }
+
+    if (Interpreter != NULL) {
+        *Interpreter = InterpreterImage;
+    }
+
+    return Status;
+}
+
+PLOADED_IMAGE
+ImpGetPrimaryExecutable (
+    PLIST_ENTRY ListHead
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the primary executable in the list, if there is one.
+
+Arguments:
+
+    ListHead - Supplies a pointer to the head of the list of loaded images.
+
+Return Value:
+
+    Returns a pointer to the primary executable if it exists. This routine does
+    not add a reference on the image.
+
+    NULL if no primary executable is currently loaded in the list.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PLOADED_IMAGE Image;
+
+    if (ListHead == NULL) {
+        return NULL;
+    }
+
+    CurrentEntry = ListHead->Next;
+    while (CurrentEntry != ListHead) {
+        Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+        if ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0) {
+            return Image;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    return NULL;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+KSTATUS
+ImpOpenLibrary (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Parent,
+    PVOID SystemContext,
+    PSTR BinaryName,
+    PIMAGE_FILE_INFORMATION File,
+    PSTR *Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to open a file.
+
+Arguments:
+
+    ListHead - Supplies an optional pointer to the head of the list of loaded
+        images.
+
+    Parent - Supplies an optional pointer to the parent image requiring this
+        image for load.
+
+    SystemContext - Supplies the context pointer passed to the load executable
+        function.
+
+    BinaryName - Supplies the name of the executable image to open.
+
+    File - Supplies a pointer where the information for the file including its
+        open handle will be returned.
+
+    Image - Supplies a pointer where an existing image may be returned.
+
+    Path - Supplies a pointer where the real path to the opened file will be
+        returned. The caller is responsible for freeing this memory.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG NameLength;
+    KSTATUS Status;
+
+    if (Parent == NULL) {
+        Parent = ImpGetPrimaryExecutable(ListHead);
+    }
+
+    //
+    // If this is an executable being loaded for the first time, just try to
+    // open the file directly. No extra paths are searched.
+    //
+
+    if (Parent == NULL) {
+        Status = ImOpenFile(SystemContext, BinaryName, File);
+        if (KSUCCESS(Status)) {
+            if (Path == NULL) {
+                Status = STATUS_SUCCESS;
+
+            } else if (ImGetRealPath != NULL) {
+                Status = ImGetRealPath(BinaryName, Path);
+
+            } else {
+                NameLength = RtlStringLength(BinaryName);
+                *Path = ImAllocateMemory(NameLength + 1, IM_ALLOCATION_TAG);
+                if (*Path != NULL) {
+                    RtlCopyMemory(*Path, BinaryName, NameLength + 1);
+
+                } else {
+                    Status = STATUS_INSUFFICIENT_RESOURCES;
+                }
+            }
+
+            if (!KSUCCESS(Status)) {
+                ImCloseFile(File);
+                File->Handle = INVALID_HANDLE;
+            }
+        }
+
+    } else {
+        Status = ImpOpenImport(ListHead,
+                               Parent,
+                               SystemContext,
+                               BinaryName,
+                               File,
+                               Path);
+    }
+
+    return Status;
+}
 
 KSTATUS
 ImpGetImageSize (
@@ -1441,8 +1689,7 @@ KSTATUS
 ImpLoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PIMAGE_BUFFER Buffer,
-    ULONG ImportDepth
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
@@ -1461,8 +1708,6 @@ Arguments:
         fill out many other fields.
 
     Buffer - Supplies a pointer to the image file buffer.
-
-    ImportDepth - Supplies the import tree depth of the image being loaded.
 
 Return Value:
 
@@ -1484,7 +1729,7 @@ Return Value:
         break;
 
     case ImageElf32:
-        Status = ImpElf32LoadImage(ListHead, Image, Buffer, ImportDepth);
+        Status = ImpElf32LoadImage(ListHead, Image, Buffer);
         break;
 
     default:
@@ -1531,6 +1776,71 @@ Return Value:
 
     default:
         Status = STATUS_UNKNOWN_IMAGE_FORMAT;
+        break;
+    }
+
+    return Status;
+}
+
+KSTATUS
+ImpOpenImport (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Parent,
+    PVOID SystemContext,
+    PSTR BinaryName,
+    PIMAGE_FILE_INFORMATION File,
+    PSTR *Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to open a file.
+
+Arguments:
+
+    ListHead - Supplies an optional pointer to the head of the list of loaded
+        images.
+
+    Parent - Supplies an optional pointer to the parent image requiring this
+        image for load.
+
+    SystemContext - Supplies the context pointer passed to the load executable
+        function.
+
+    BinaryName - Supplies the name of the executable image to open.
+
+    File - Supplies a pointer where the information for the file including its
+        open handle will be returned.
+
+    Image - Supplies a pointer where an existing image may be returned.
+
+    Path - Supplies a pointer where the real path to the opened file will be
+        returned. The caller is responsible for freeing this memory.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    ASSERT(Parent->SystemContext == SystemContext);
+
+    switch (Parent->Format) {
+    case ImageElf32:
+        Status = ImpElf32OpenLibrary(ListHead, Parent, BinaryName, File, Path);
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_INVALID_CONFIGURATION;
         break;
     }
 
@@ -1793,9 +2103,10 @@ Return Value:
 }
 
 PLOADED_IMAGE
-ImpFindImageInList (
+ImpFindImage (
     PLIST_ENTRY ListHead,
-    PSTR ImageName
+    PSTR Name,
+    BOOL IsPath
     )
 
 /*++
@@ -1810,7 +2121,10 @@ Arguments:
     ListHead - Supplies a pointer to the head of the list of images to
         search through.
 
-    ImageName - Supplies a pointer to a string containing the name of the image.
+    Name - Supplies a pointer to a string containing the name of the image.
+
+    IsPath - Supplies a boolean indicating whether the given name is a library
+        name (FALSE) or a file name (TRUE).
 
 Return Value:
 
@@ -1825,18 +2139,20 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
     ULONG NameLength;
+    PSTR Potential;
 
-    NameLength = RtlStringLength(ImageName) + 1;
+    NameLength = RtlStringLength(Name) + 1;
     CurrentEntry = ListHead->Next;
     while (CurrentEntry != ListHead) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        if (Image->BinaryName == NULL) {
-            continue;
+        Potential = Image->LibraryName;
+        if (IsPath != FALSE) {
+            Potential = Image->FileName;
         }
 
-        if (RtlAreStringsEqual(Image->BinaryName, ImageName, NameLength) !=
-            FALSE) {
+        if ((Potential != NULL) &&
+            (RtlAreStringsEqual(Potential, Name, NameLength) != FALSE)) {
 
             //
             // This routine is used to load real images, so it would be bad to
@@ -1861,8 +2177,7 @@ Return Value:
 
 PLOADED_IMAGE
 ImpAllocateImage (
-    PSTR ImageName,
-    UINTN ImageNameSize
+    VOID
     )
 
 /*++
@@ -1874,11 +2189,7 @@ Routine Description:
 
 Arguments:
 
-    ImageName - Supplies a pointer to a string containing the name of the image.
-        A copy of this string will be made.
-
-    ImageNameSize - Supplies the number of bytes in the complete image name,
-        including the null terminator.
+    None.
 
 Return Value:
 
@@ -1896,9 +2207,7 @@ Return Value:
     // Allocate space for the loaded image structure.
     //
 
-    Image = ImAllocateMemory(sizeof(LOADED_IMAGE) + ImageNameSize,
-                             IM_ALLOCATION_TAG);
-
+    Image = ImAllocateMemory(sizeof(LOADED_IMAGE), IM_ALLOCATION_TAG);
     if (Image == NULL) {
         return NULL;
     }
@@ -1908,11 +2217,6 @@ Return Value:
     Image->AllocatorHandle = INVALID_HANDLE;
     Image->File.Handle = INVALID_HANDLE;
     Image->TlsOffset = -1;
-    if (ImageNameSize != 0) {
-        Image->BinaryName = (PSTR)(Image + 1);
-        RtlStringCopy(Image->BinaryName, ImageName, ImageNameSize);
-    }
-
     Image->Debug.Version = IMAGE_DEBUG_VERSION;
     Image->Debug.Image = Image;
 

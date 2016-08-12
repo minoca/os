@@ -102,7 +102,7 @@ Author:
 // Define the name of the dynamic library path variable.
 //
 
-#define IMAGE_DYNAMIC_LIBRARY_PATH_VARIABLE "LD_LIBRARY_PATH"
+#define IMAGE_LOAD_LIBRARY_PATH_VARIABLE "LD_LIBRARY_PATH"
 
 //
 // Define image flags.
@@ -380,17 +380,21 @@ Members:
         the image library. This member lines up with the l_next and l_prev
         members of the link_map structure.
 
+    FileName - Stores the complete path to the file. This member lines up with
+        the l_name member of the link_map structure.
+
     BaseDifference - Stores the difference between the image's loaded lowest
         address and its preferred lowest address. That is, the loaded lowest
         address minus the preferred lowest address. This member lines up with
         the l_addr member of the link_map structure.
 
-    BinaryName - Stores a pointer to a buffer containing the name of the binary
-        image. This member lines up with the l_name member of the link_map
-        structure.
-
     DynamicSection - Stores a pointer to the dynamic section. This member
         lines up with the l_ld member of the link_map structure.
+
+    LibraryName - Stores the name of the library, according to itself.
+
+    Parent - Stores an optional pointer to the image that caused this image
+        to need to be loaded.
 
     ModuleNumber - Stores the module identifier. This is not used by the image
         library, but can be assigned by the consumer of the image library.
@@ -494,8 +498,10 @@ Members:
 struct _LOADED_IMAGE {
     LIST_ENTRY ListEntry;
     UINTN BaseDifference;
-    PSTR BinaryName;
+    PSTR FileName;
     PVOID DynamicSection;
+    PSTR LibraryName;
+    PLOADED_IMAGE Parent;
     UINTN ModuleNumber;
     UINTN TlsOffset;
     IMAGE_FORMAT Format;
@@ -1026,6 +1032,33 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PIM_GET_REAL_PATH) (
+    PCSTR Path,
+    PSTR *RealPath
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the absolute path of the given path with no symbolic
+    links, dot, or dot-dot directories.
+
+Arguments:
+
+    Path - Supplies a pointer to the path to convert.
+
+    RealPath - Supplies a pointer where the final real path will be returned.
+        The caller is responsible for freeing this memory.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -1086,6 +1119,9 @@ Members:
     ResolvePltEntry - Stores an optional pointer to an assembly function used
         to resolve procedure linkage table entries on the fly.
 
+    GetRealPath - Stores an optional pointer to a function that can get the
+        complete canonical path for a given path.
+
 --*/
 
 typedef struct _IM_IMPORT_TABLE {
@@ -1106,6 +1142,7 @@ typedef struct _IM_IMPORT_TABLE {
     PIM_GET_ENVIRONMENT_VARIABLE GetEnvironmentVariable;
     PIM_FINALIZE_SEGMENTS FinalizeSegments;
     PIM_RESOLVE_PLT_ENTRY ResolvePltEntry;
+    PIM_GET_REAL_PATH GetRealPath;
 } IM_IMPORT_TABLE, *PIM_IMPORT_TABLE;
 
 //
@@ -1178,14 +1215,13 @@ Return Value:
 --*/
 
 KSTATUS
-ImLoadExecutable (
+ImLoad (
     PLIST_ENTRY ListHead,
     PSTR BinaryName,
     PIMAGE_FILE_INFORMATION BinaryFile,
     PIMAGE_BUFFER ImageBuffer,
     PVOID SystemContext,
     ULONG Flags,
-    ULONG ImportDepth,
     PLOADED_IMAGE *LoadedImage,
     PLOADED_IMAGE *Interpreter
     );
@@ -1218,8 +1254,6 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the load. See
         IMAGE_LOAD_FLAG_* flags.
 
-    ImportDepth - Supplies the import depth of the image. Supply 0 here.
-
     LoadedImage - Supplies an optional pointer where a pointer to the loaded
         image structure will be returned on success.
 
@@ -1234,7 +1268,6 @@ Return Value:
 
 KSTATUS
 ImAddImage (
-    PSTR BinaryName,
     PIMAGE_BUFFER Buffer,
     PLOADED_IMAGE *LoadedImage
     );
@@ -1247,9 +1280,6 @@ Routine Description:
     been loaded into memory.
 
 Arguments:
-
-    BinaryName - Supplies an optional pointer to the name of the image to use.
-        If NULL, then the shared object name of the image will be extracted.
 
     Buffer - Supplies the image buffer containing the loaded image.
 

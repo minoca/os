@@ -154,7 +154,7 @@ Return Value:
 
     Parameters = Context;
     Info.dlpi_addr = Image->BaseDifference;
-    Info.dlpi_name = Image->BinaryName;
+    Info.dlpi_name = Image->FileName;
     ElfHeader = Image->LoadedImageBuffer;
     if (!IS_ELF(*ElfHeader)) {
         return;

@@ -36,6 +36,7 @@ function build() {
         "math/log.c",
         "math/log2.c",
         "math/log10.c",
+        "math/lround.c",
         "math/modf.c",
         "math/pow.c",
         "math/rint.c",

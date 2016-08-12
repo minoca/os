@@ -225,6 +225,7 @@ IM_IMPORT_TABLE PsImFunctionTable = {
     PspImGetEnvironmentVariable,
     PspImFinalizeSegments,
     NULL,
+    NULL
 };
 
 //
@@ -282,7 +283,7 @@ Return Value:
 
         ImageBuffer.Data = LoadedLowestAddress;
         ImageBuffer.Size = Image->Size;
-        Status = ImAddImage(Image->BinaryName, &ImageBuffer, &NewImage);
+        Status = ImAddImage(&ImageBuffer, &NewImage);
         if (!KSUCCESS(Status)) {
 
             ASSERT(FALSE);
@@ -290,6 +291,7 @@ Return Value:
             goto InitializeImageSupportEnd;
         }
 
+        NewImage->SystemContext = KernelProcess;
         NewImage->Flags = Image->Flags | IMAGE_FLAG_INITIALIZED |
                           IMAGE_FLAG_RELOCATED | IMAGE_FLAG_IMPORTS_LOADED;
 
@@ -547,7 +549,6 @@ Return Value:
 
 {
 
-    UINTN AllocationSize;
     PROCESS_DEBUG_MODULE_CHANGE Change;
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE CurrentImage;
@@ -654,24 +655,24 @@ Return Value:
     // Create a faked up image.
     //
 
-    AllocationSize = sizeof(LOADED_IMAGE) + Change.BinaryNameSize;
-    NewImage = PspImAllocateMemory(AllocationSize, PS_IMAGE_ALLOCATION_TAG);
+    NewImage = PspImAllocateMemory(sizeof(LOADED_IMAGE),
+                                   PS_IMAGE_ALLOCATION_TAG);
+
     if (NewImage == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto ProcessUserModeModuleChangeEnd;
     }
 
     RtlZeroMemory(NewImage, sizeof(LOADED_IMAGE));
-    NewImage->BinaryName = (PSTR)(NewImage + 1);
-    Status = MmCopyFromUserMode(NewImage->BinaryName,
-                                Image.BinaryName,
-                                Change.BinaryNameSize);
+    Status = MmCreateCopyOfUserModeString(Image.FileName,
+                                          Change.BinaryNameSize,
+                                          PS_IMAGE_ALLOCATION_TAG,
+                                          &(NewImage->FileName));
 
     if (!KSUCCESS(Status)) {
         goto ProcessUserModeModuleChangeEnd;
     }
 
-    NewImage->BinaryName[Change.BinaryNameSize - 1] = '\0';
     NewImage->File.Handle = INVALID_HANDLE;
     NewImage->AllocatorHandle = INVALID_HANDLE;
     NewImage->Format = Image.Format;
@@ -1965,7 +1966,7 @@ Return Value:
 
     VariableLength = RtlStringLength(Variable);
     Match = RtlAreStringsEqual(Variable,
-                               IMAGE_DYNAMIC_LIBRARY_PATH_VARIABLE,
+                               IMAGE_LOAD_LIBRARY_PATH_VARIABLE,
                                VariableLength + 1);
 
     if (Match != FALSE) {
@@ -2113,7 +2114,7 @@ Return Value:
 
 {
 
-    ULONG AllocationSize;
+    UINTN AllocationSize;
     ULONG NameSize;
     PLOADED_IMAGE NewImage;
     KSTATUS Status;
@@ -2122,9 +2123,7 @@ Return Value:
     // Allocate a new image.
     //
 
-    NameSize = RtlStringLength(SourceImage->BinaryName) + 1;
-    AllocationSize = sizeof(LOADED_IMAGE) + NameSize;
-    NewImage = PspImAllocateMemory(AllocationSize, PS_ALLOCATION_TAG);
+    NewImage = PspImAllocateMemory(sizeof(LOADED_IMAGE), PS_ALLOCATION_TAG);
     if (NewImage == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto ImCloneImageEnd;
@@ -2134,10 +2133,7 @@ Return Value:
     // Initialize the new image.
     //
 
-    ASSERT(SourceImage->BinaryName == (PSTR)(SourceImage + 1));
-
-    RtlCopyMemory(NewImage, SourceImage, AllocationSize);
-    NewImage->BinaryName = (PSTR)(NewImage + 1);
+    RtlCopyMemory(NewImage, SourceImage, sizeof(LOADED_IMAGE));
     NewImage->ListEntry.Next = NULL;
     NewImage->ListEntry.Previous = NULL;
     if (NewImage->File.Handle != INVALID_HANDLE) {
@@ -2151,6 +2147,16 @@ Return Value:
     NewImage->DebuggerModule = NULL;
     NewImage->StaticFunctions = NULL;
     NewImage->ImageContext = NULL;
+    NewImage->FileName = NULL;
+    NewImage->LibraryName = NULL;
+    NameSize = RtlStringLength(SourceImage->FileName) + 1;
+    NewImage->FileName = PspImAllocateMemory(NameSize, PS_ALLOCATION_TAG);
+    if (NewImage->FileName == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto ImCloneImageEnd;
+    }
+
+    RtlCopyMemory(NewImage->FileName, SourceImage->FileName, NameSize);
 
     //
     // Create the image segments.
@@ -2204,6 +2210,10 @@ Return Value:
 ImCloneImageEnd:
     if (!KSUCCESS(Status)) {
         if (NewImage != NULL) {
+            if (NewImage->FileName != NULL) {
+                PspImFreeMemory(NewImage->FileName);
+            }
+
             if (NewImage->Imports != NULL) {
                 PspImFreeMemory(NewImage->Imports);
             }
@@ -2303,6 +2313,7 @@ Return Value:
 
     ULONG AllocationSize;
     PDEBUG_MODULE DebuggerModule;
+    PSTR Name;
     ULONG NameSize;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -2319,7 +2330,7 @@ Return Value:
     // If for some odd reason the image doesn't have a name, skip it.
     //
 
-    if (Image->BinaryName == NULL) {
+    if (Image->FileName == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -2327,7 +2338,15 @@ Return Value:
     // Allocate and initialize the debugger module structure.
     //
 
-    NameSize = ((RtlStringLength(Image->BinaryName) + 1) * sizeof(CHAR));
+    Name = RtlStringFindCharacterRight(Image->FileName, '/', -1);
+    if (Name != NULL) {
+        Name += 1;
+
+    } else {
+        Name = Image->FileName;
+    }
+
+    NameSize = ((RtlStringLength(Name) + 1) * sizeof(CHAR));
     AllocationSize = sizeof(DEBUG_MODULE) + NameSize -
                      (sizeof(CHAR) * ANYSIZE_ARRAY);
 
@@ -2347,7 +2366,7 @@ Return Value:
     DebuggerModule->EntryPoint = Image->EntryPoint;
     DebuggerModule->Size = Image->Size;
     DebuggerModule->Process = Process->Identifiers.ProcessId;
-    RtlStringCopy(DebuggerModule->BinaryName, Image->BinaryName, NameSize);
+    RtlStringCopy(DebuggerModule->BinaryName, Name, NameSize);
 
     //
     // Save the pointer and make the debugger aware of this new module.

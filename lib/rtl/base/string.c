@@ -157,7 +157,7 @@ Return Value:
 RTL_API
 ULONG
 RtlStringLength (
-    PSTR String
+    PCSTR String
     )
 
 /*++
