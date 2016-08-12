@@ -564,6 +564,7 @@ Return Value:
 
         pthread_mutex_lock(&ClThreadListMutex);
         LIST_REMOVE(&(Thread->ListEntry));
+        Thread->ListEntry.Next = NULL;
         pthread_mutex_unlock(&ClThreadListMutex);
         DestroyRegion = Thread->ThreadAllocation;
         DestroyRegionSize = Thread->ThreadAllocationSize;
@@ -572,6 +573,7 @@ Return Value:
     }
 
     OsExitThread(DestroyRegion, DestroyRegionSize);
+    abort();
 }
 
 PTHREAD_API
@@ -1217,6 +1219,16 @@ Return Value:
     sigaction(SIGNAL_PTHREAD, &Action, NULL);
     Action.sa_handler = ClpSetIdSignalHandler;
     sigaction(SIGNAL_SETID, &Action, NULL);
+
+    //
+    // Make sure the PLT entry for the exit thread routine is wired up.
+    // Detached threads carefully tear themselves down, and cannot handle a
+    // PLT lookup by the time they call exit thread.
+    //
+    // This does not actually exit the current thread, it simply returns.
+    //
+
+    OsExitThread(NULL, -1);
     return;
 }
 

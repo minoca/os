@@ -572,7 +572,6 @@ Return Value:
 --*/
 
 OS_API
-NO_RETURN
 VOID
 OsExitThread (
     PVOID UnmapAddress,
@@ -594,11 +593,14 @@ Arguments:
 
     UnmapSize - Supplies the size of the region to unmap in bytes. This must be
         aligned to the page size. If it is not, the unmap simply won't happen.
-        Supply 0 to skip the unmap and just exit the thread.
+        Supply 0 to skip the unmap and just exit the thread. If -1 is supplied,
+        this routine returns. This value can be used to warm up the PLT entry,
+        since lazy binding cannot take place after the thread's control block
+        has been destroyed.
 
 Return Value:
 
-    This routine does not return.
+    This routine does not return, unless the magic size is passed in.
 
 --*/
 
