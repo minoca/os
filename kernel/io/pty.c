@@ -148,7 +148,7 @@ Members:
         this is equal to the start, then the buffer is empty.
 
     OutputLock - Stores a pointer to a lock serializing access to the output
-        buffer.
+        buffer. The lock order is input and then output.
 
     InputBuffer - Stores a pointer to the input buffer.
 
@@ -166,7 +166,8 @@ Members:
     WorkingInputLength - Stores the valid length of the working input buffer.
 
     InputLock - Stores a pointer to a lock serializing access to the
-        working input buffer.
+        working input buffer and the input buffer. The lock order is input and
+        then output.
 
     Settings - Stores the current terminal settings.
 
@@ -704,8 +705,8 @@ Return Value:
     // important.
     //
 
-    KeAcquireQueuedLock(Terminal->OutputLock);
     KeAcquireQueuedLock(Terminal->InputLock);
+    KeAcquireQueuedLock(Terminal->OutputLock);
     Status = IopTerminalValidateGroup(Terminal, FALSE);
     if (!KSUCCESS(Status)) {
         goto SetTerminalSettingsEnd;
@@ -811,8 +812,8 @@ Return Value:
     // Remove the old handle.
     //
 
-    KeAcquireQueuedLock(Terminal->OutputLock);
     KeAcquireQueuedLock(Terminal->InputLock);
+    KeAcquireQueuedLock(Terminal->OutputLock);
     if (Terminal->HardwareHandle != NULL) {
         IoClose(Terminal->HardwareHandle);
     }
@@ -1251,8 +1252,8 @@ Return Value:
     //
 
     TerminalLocksHeld = TRUE;
-    KeAcquireQueuedLock(Terminal->OutputLock);
     KeAcquireQueuedLock(Terminal->InputLock);
+    KeAcquireQueuedLock(Terminal->OutputLock);
 
     //
     // If the terminal is already open in another session, refuse to open.
@@ -1357,8 +1358,8 @@ Return Value:
 
     Terminal = Slave->Master;
     KeAcquireQueuedLock(IoTerminalListLock);
-    KeAcquireQueuedLock(Terminal->OutputLock);
     KeAcquireQueuedLock(Terminal->InputLock);
+    KeAcquireQueuedLock(Terminal->OutputLock);
 
     ASSERT(Terminal->SlaveHandles != 0);
 
@@ -2102,8 +2103,8 @@ Return Value:
 
     case TerminalControlSetExclusive:
     case TerminalControlClearExclusive:
-        KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
         if (CodeNumber == TerminalControlSetExclusive) {
             Terminal->Flags |= TERMINAL_FLAG_FAIL_OPENS;
 
@@ -2111,15 +2112,15 @@ Return Value:
             Terminal->Flags &= ~TERMINAL_FLAG_FAIL_OPENS;
         }
 
-        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(Terminal->InputLock);
         Status = STATUS_SUCCESS;
         break;
 
     case TerminalControlGetOutputQueueSize:
     case TerminalControlGetInputQueueSize:
-        KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
         if (CodeNumber == TerminalControlGetOutputQueueSize) {
             QueueSize = (TERMINAL_OUTPUT_BUFFER_SIZE - 1) -
                         IopTerminalGetOutputBufferSpace(Terminal);
@@ -2129,8 +2130,8 @@ Return Value:
                         IopTerminalGetInputBufferSpace(Terminal);
         }
 
-        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(Terminal->InputLock);
         Status = IopTerminalUserBufferCopy(FromKernelMode,
                                            FALSE,
                                            ContextBuffer,
@@ -2243,8 +2244,8 @@ Return Value:
             break;
         }
 
-        KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
         if (CodeNumber == TerminalControlSetSoftCarrier) {
             Terminal->ModemStatus |= ModemStatus;
             if (Argument != 0) {
@@ -2262,8 +2263,8 @@ Return Value:
             Argument = TRUE;
         }
 
-        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(Terminal->InputLock);
         Status = IopTerminalUserBufferCopy(FromKernelMode,
                                            FALSE,
                                            ContextBuffer,
@@ -2281,8 +2282,8 @@ Return Value:
 
         PsGetProcessGroup(NULL, &CurrentProcessGroupId, &CurrentSessionId);
         Status = STATUS_SUCCESS;
-        KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
         if (Terminal->SessionId != CurrentSessionId) {
             Status = STATUS_NOT_A_TERMINAL;
 
@@ -2290,8 +2291,8 @@ Return Value:
             ProcessGroupId = Terminal->ProcessGroupId;
         }
 
-        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(Terminal->InputLock);
         if (!KSUCCESS(Status)) {
             break;
         }
@@ -2333,8 +2334,8 @@ Return Value:
             break;
         }
 
-        KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
         if (Terminal->SessionId != CurrentSessionId) {
             Status = STATUS_NOT_A_TERMINAL;
 
@@ -2358,8 +2359,8 @@ Return Value:
             Status = STATUS_SUCCESS;
         }
 
-        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(Terminal->InputLock);
         break;
 
     case TerminalControlSetControllingTerminal:
@@ -2416,8 +2417,8 @@ Return Value:
         }
 
         KeAcquireQueuedLock(IoTerminalListLock);
-        KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
 
         //
         // Double check the controlling terminal now that the terminal list
@@ -2446,8 +2447,8 @@ Return Value:
             Terminal->ProcessGroupId = Process->Identifiers.ProcessGroupId;
         }
 
-        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(IoTerminalListLock);
         break;
 
@@ -2463,8 +2464,8 @@ Return Value:
         //
 
         Process = PsGetCurrentProcess();
-        KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
         if (Terminal->SessionId != CurrentSessionId) {
             Status = STATUS_NOT_A_TERMINAL;
 
@@ -2473,8 +2474,8 @@ Return Value:
             Status = STATUS_SUCCESS;
         }
 
-        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(Terminal->InputLock);
         if (!KSUCCESS(Status)) {
             break;
         }
@@ -2495,8 +2496,8 @@ Return Value:
         //
 
         KeAcquireQueuedLock(IoTerminalListLock);
-        KeAcquireQueuedLock(Terminal->OutputLock);
         KeAcquireQueuedLock(Terminal->InputLock);
+        KeAcquireQueuedLock(Terminal->OutputLock);
         if (Process->ControllingTerminal != Terminal->SlaveFileObject) {
             Status = STATUS_NOT_A_TERMINAL;
 
@@ -2513,8 +2514,8 @@ Return Value:
             }
         }
 
-        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(Terminal->OutputLock);
+        KeReleaseQueuedLock(Terminal->InputLock);
         KeReleaseQueuedLock(IoTerminalListLock);
         break;
 
@@ -3091,11 +3092,6 @@ Return Value:
     OutputWritten = FALSE;
     ScreenCursorPosition = Terminal->WorkingInputCursor;
     TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
-    if (EchoFlags != 0) {
-        KeAcquireQueuedLock(Terminal->OutputLock);
-        OutputLockHeld = TRUE;
-    }
-
     KeAcquireQueuedLock(Terminal->InputLock);
     InputLockHeld = TRUE;
 
@@ -3140,13 +3136,10 @@ Return Value:
         }
 
         //
-        // Grab the output lock if it's not already held.
+        // The input lock should be held.
         //
 
-        if ((OutputLockHeld == FALSE) && (EchoFlags != 0)) {
-            KeAcquireQueuedLock(Terminal->OutputLock);
-            OutputLockHeld = TRUE;
-        }
+        ASSERT(InputLockHeld != FALSE);
 
         //
         // Process signal generating characters.
@@ -3206,6 +3199,17 @@ Return Value:
 
         if ((LocalFlags & TERMINAL_LOCAL_CANONICAL) != 0) {
             IsEndOfLine = FALSE;
+
+            //
+            // Always acquire the output lock. The editing function may call
+            // routines that expect the lock to be held, even if echo is not
+            // enabled.
+            //
+
+            if (OutputLockHeld == FALSE) {
+                KeAcquireQueuedLock(Terminal->OutputLock);
+                OutputLockHeld = TRUE;
+            }
 
             //
             // First let an editing function take a look at it.
@@ -3274,11 +3278,6 @@ Return Value:
                 //
 
                 } else {
-                    if (InputLockHeld == FALSE) {
-                        KeAcquireQueuedLock(Terminal->InputLock);
-                        InputLockHeld = TRUE;
-                    }
-
                     InputAdded = FALSE;
                     Terminal->WorkingInputCursor = 0;
                     Terminal->WorkingInputLength = 0;
@@ -3287,9 +3286,6 @@ Return Value:
                     ScreenCursorPosition = 0;
                     Terminal->Flags |= TERMINAL_FLAG_VIRGIN_LINE |
                                        TERMINAL_FLAG_UNEDITED_LINE;
-
-                    KeReleaseQueuedLock(Terminal->InputLock);
-                    InputLockHeld = FALSE;
                 }
             }
 
@@ -3345,10 +3341,7 @@ Return Value:
                 if ((DirtyRegionBegin != DirtyRegionEnd) &&
                     ((EchoFlags & TERMINAL_LOCAL_ECHO) != 0)) {
 
-                    if (OutputLockHeld == FALSE) {
-                        KeAcquireQueuedLock(Terminal->OutputLock);
-                        OutputLockHeld = TRUE;
-                    }
+                    ASSERT(OutputLockHeld != FALSE);
 
                     IopTerminalFixUpCanonicalLine(Terminal,
                                                   TimeoutInMilliseconds,
@@ -3365,11 +3358,6 @@ Return Value:
                 //
 
                 while (TRUE) {
-                    if (InputLockHeld == FALSE) {
-                        KeAcquireQueuedLock(Terminal->InputLock);
-                        InputLockHeld = TRUE;
-                    }
-
                     InputFlags = Terminal->Settings.InputFlags;
                     LocalFlags = Terminal->Settings.LocalFlags;
                     EchoFlags = LocalFlags & EchoMask;
@@ -3381,6 +3369,11 @@ Return Value:
                     IoSetIoObjectState(MasterIoState, POLL_EVENT_OUT, FALSE);
                     IoSetIoObjectState(SlaveIoState, POLL_EVENT_IN, TRUE);
                     InputAdded = FALSE;
+                    if (OutputLockHeld != FALSE) {
+                        KeReleaseQueuedLock(Terminal->OutputLock);
+                        OutputLockHeld = FALSE;
+                    }
+
                     KeReleaseQueuedLock(Terminal->InputLock);
                     InputLockHeld = FALSE;
                     Status = IoWaitForIoObjectState(MasterIoState,
@@ -3397,6 +3390,9 @@ Return Value:
                         Status = STATUS_DEVICE_IO_ERROR;
                         goto TerminalMasterWriteEnd;
                     }
+
+                    KeAcquireQueuedLock(Terminal->InputLock);
+                    InputLockHeld = TRUE;
                 }
 
                 //
@@ -3429,9 +3425,6 @@ Return Value:
                 ScreenCursorPosition = 0;
                 Terminal->Flags |= TERMINAL_FLAG_VIRGIN_LINE |
                                    TERMINAL_FLAG_UNEDITED_LINE;
-
-                KeReleaseQueuedLock(Terminal->InputLock);
-                InputLockHeld = FALSE;
             }
 
         //
@@ -3450,6 +3443,11 @@ Return Value:
             while (IopTerminalGetInputBufferSpace(Terminal) == 0) {
                 IoSetIoObjectState(MasterIoState, POLL_EVENT_OUT, FALSE);
                 IoSetIoObjectState(SlaveIoState, POLL_EVENT_IN, TRUE);
+                if (OutputLockHeld != FALSE) {
+                    KeReleaseQueuedLock(Terminal->OutputLock);
+                    OutputLockHeld = FALSE;
+                }
+
                 KeReleaseQueuedLock(Terminal->InputLock);
                 InputLockHeld = FALSE;
                 InputAdded = FALSE;
@@ -3538,6 +3536,11 @@ Return Value:
                     BytesSize = 2;
                 }
 
+                if (OutputLockHeld == FALSE) {
+                    KeAcquireQueuedLock(Terminal->OutputLock);
+                    OutputLockHeld = TRUE;
+                }
+
                 IopTerminalWriteOutputBuffer(Terminal,
                                              Bytes,
                                              BytesSize,
@@ -3588,10 +3591,8 @@ TerminalMasterWriteEnd:
     }
 
     if (InputAdded != FALSE) {
-        if (InputLockHeld == FALSE) {
-            KeAcquireQueuedLock(Terminal->InputLock);
-            InputLockHeld = TRUE;
-        }
+
+        ASSERT(InputLockHeld != FALSE);
 
         IoSetIoObjectState(SlaveIoState, POLL_EVENT_IN, TRUE);
     }
@@ -3600,12 +3601,12 @@ TerminalMasterWriteEnd:
     // Release the various locks that are held.
     //
 
-    if (InputLockHeld != FALSE) {
-        KeReleaseQueuedLock(Terminal->InputLock);
-    }
-
     if (OutputLockHeld != FALSE) {
         KeReleaseQueuedLock(Terminal->OutputLock);
+    }
+
+    if (InputLockHeld != FALSE) {
+        KeReleaseQueuedLock(Terminal->InputLock);
     }
 
     IoContext->BytesCompleted = ByteIndex;
