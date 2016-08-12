@@ -216,12 +216,18 @@ Members:
     ModificationDate - Stores the modification date of the file in seconds
         since 2001.
 
+    DeviceId - Stores the device identifier this file resides on.
+
+    FileId - Stores the file identifier this device resides on.
+
 --*/
 
 typedef struct _IMAGE_FILE_INFORMATION {
     HANDLE Handle;
     ULONGLONG Size;
     ULONGLONG ModificationDate;
+    ULONGLONG DeviceId;
+    ULONGLONG FileId;
 } IMAGE_FILE_INFORMATION, *PIMAGE_FILE_INFORMATION;
 
 /*++
@@ -535,7 +541,7 @@ struct _LOADED_IMAGE {
     ULONG Flags;
     ULONG LoadFlags;
     PIMAGE_STATIC_FUNCTIONS StaticFunctions;
-    UCHAR VisitMarker;
+    ULONG VisitMarker;
     IMAGE_DEBUG Debug;
 };
 
@@ -1032,33 +1038,6 @@ Return Value:
 
 --*/
 
-typedef
-KSTATUS
-(*PIM_GET_REAL_PATH) (
-    PCSTR Path,
-    PSTR *RealPath
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the absolute path of the given path with no symbolic
-    links, dot, or dot-dot directories.
-
-Arguments:
-
-    Path - Supplies a pointer to the path to convert.
-
-    RealPath - Supplies a pointer where the final real path will be returned.
-        The caller is responsible for freeing this memory.
-
-Return Value:
-
-    Status code.
-
---*/
-
 /*++
 
 Structure Description:
@@ -1119,9 +1098,6 @@ Members:
     ResolvePltEntry - Stores an optional pointer to an assembly function used
         to resolve procedure linkage table entries on the fly.
 
-    GetRealPath - Stores an optional pointer to a function that can get the
-        complete canonical path for a given path.
-
 --*/
 
 typedef struct _IM_IMPORT_TABLE {
@@ -1142,7 +1118,6 @@ typedef struct _IM_IMPORT_TABLE {
     PIM_GET_ENVIRONMENT_VARIABLE GetEnvironmentVariable;
     PIM_FINALIZE_SEGMENTS FinalizeSegments;
     PIM_RESOLVE_PLT_ENTRY ResolvePltEntry;
-    PIM_GET_REAL_PATH GetRealPath;
 } IM_IMPORT_TABLE, *PIM_IMPORT_TABLE;
 
 //

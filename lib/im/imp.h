@@ -56,7 +56,6 @@ Author:
 
 #define ImGetEnvironmentVariable ImImportTable->GetEnvironmentVariable
 #define ImFinalizeSegments ImImportTable->FinalizeSegments
-#define ImGetRealPath ImImportTable->GetRealPath
 
 //
 // Define the maximum import recursion depth.

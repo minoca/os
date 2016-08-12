@@ -87,81 +87,6 @@ Return Value:
 
 {
 
-    PSTR MallocedRealPath;
-    PSTR RealPath;
-    UINTN RealPathSize;
-    KSTATUS Status;
-
-    Status = OsGetRealPath(Path, &RealPath);
-    if (!KSUCCESS(Status)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        return NULL;
-    }
-
-    //
-    // If the caller didn't pass in a buffer, return an allocated one. Create
-    // it with malloc in case the caller took over malloc functionality, as
-    // they are supposed to free it with free(). An imbalance of OsHeapAllocate
-    // and free() in that case would be bad.
-    //
-
-    if (ResolvedPath == NULL) {
-        MallocedRealPath = strdup(RealPath);
-        OsHeapFree(RealPath);
-        return MallocedRealPath;
-    }
-
-    //
-    // The caller only promises to have PATH_MAX bytes.
-    //
-
-    RealPathSize = strlen(RealPath);
-    if (RealPathSize + 1 >= PATH_MAX) {
-        errno = ENAMETOOLONG;
-        OsHeapFree(RealPath);
-        return NULL;
-    }
-
-    strcpy(ResolvedPath, RealPath);
-    OsHeapFree(RealPath);
-    return ResolvedPath;
-}
-
-#if 0
-
-LIBC_API
-char *
-realpath (
-    const char *Path,
-    char *ResolvedPath
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the canonical path for the given file path. This
-    canonical path will include no '.' or '..' components, and will not
-    contain symbolic links in any components of the path. All path components
-    must exist.
-
-Arguments:
-
-    Path - Supplies a pointer to the path to canonicalize.
-
-    ResolvedPath - Supplies an optional pointer to the buffer to place the
-        resolved path in. This must be at least PATH_MAX bytes.
-
-Return Value:
-
-    Returns a pointer to the resolved path on success.
-
-    NULL on failure.
-
---*/
-
-{
-
     PSTR AllocatedPath;
     PSTR AppendedLink;
     UINTN ComponentSize;
@@ -445,8 +370,6 @@ realpathEnd:
 
     return ResolvedPath;
 }
-
-#endif
 
 //
 // --------------------------------------------------------- Internal Functions

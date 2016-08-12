@@ -104,7 +104,7 @@ ImpGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
     ULONG RecursionLevel,
-    UCHAR VisitMarker,
+    ULONG VisitMarker,
     PIMAGE_SYMBOL Symbol
     );
 
@@ -113,7 +113,7 @@ ImpGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
     ULONG RecursionLevel,
-    UCHAR VisitMarker,
+    ULONG VisitMarker,
     PIMAGE_SYMBOL Symbol
     );
 
@@ -124,10 +124,15 @@ ImpRelocateSelf (
     );
 
 PLOADED_IMAGE
-ImpFindImage (
+ImpFindImageByLibraryName (
     PLIST_ENTRY ListHead,
-    PSTR Name,
-    BOOL IsPath
+    PSTR Name
+    );
+
+PLOADED_IMAGE
+ImpFindImageByFile (
+    PLIST_ENTRY ListHead,
+    PIMAGE_FILE_INFORMATION File
     );
 
 PLOADED_IMAGE
@@ -870,16 +875,12 @@ Return Value:
     UCHAR VisitMarker;
 
     //
-    // Toggle between two values that are not the default. This means only one
-    // thread can be in here at a time.
+    // Get a new visitor generation number. This means only one thread can be
+    // in here at a time.
     //
 
-    VisitMarker = 1;
-    if (ImLastVisitMarker == 1) {
-        VisitMarker = 2;
-    }
-
-    ImLastVisitMarker = VisitMarker;
+    ImLastVisitMarker += 1;
+    VisitMarker = ImLastVisitMarker;
     RecursionLevel = 0;
     if (Recursive == FALSE) {
         RecursionLevel = MAX_IMPORT_RECURSION_DEPTH;
@@ -939,12 +940,8 @@ Return Value:
     // thread can be in here at a time.
     //
 
-    VisitMarker = 1;
-    if (ImLastVisitMarker == 1) {
-        VisitMarker = 2;
-    }
-
-    ImLastVisitMarker = VisitMarker;
+    ImLastVisitMarker += 1;
+    VisitMarker = ImLastVisitMarker;
     RecursionLevel = 0;
     if (Recursive == FALSE) {
         RecursionLevel = MAX_IMPORT_RECURSION_DEPTH;
@@ -1249,7 +1246,7 @@ Return Value:
     // See if the image is already loaded, and return if so.
     //
 
-    Image = ImpFindImage(ListHead, BinaryName, FALSE);
+    Image = ImpFindImageByLibraryName(ListHead, BinaryName);
     if (Image != NULL) {
         ImImageAddReference(Image);
         Status = STATUS_SUCCESS;
@@ -1313,7 +1310,7 @@ Return Value:
         // for an already loaded library with the same absolute path.
         //
 
-        ExistingImage = ImpFindImage(ListHead, Image->FileName, TRUE);
+        ExistingImage = ImpFindImageByFile(ListHead, &(Image->File));
         if (ExistingImage != NULL) {
             ImCloseFile(&(Image->File));
             ImFreeMemory(Image->FileName);
@@ -1595,9 +1592,6 @@ Return Value:
         if (KSUCCESS(Status)) {
             if (Path == NULL) {
                 Status = STATUS_SUCCESS;
-
-            } else if (ImGetRealPath != NULL) {
-                Status = ImGetRealPath(BinaryName, Path);
 
             } else {
                 NameLength = RtlStringLength(BinaryName);
@@ -1890,7 +1884,7 @@ ImpGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
     ULONG RecursionLevel,
-    UCHAR VisitMarker,
+    ULONG VisitMarker,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -1978,7 +1972,7 @@ ImpGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
     ULONG RecursionLevel,
-    UCHAR VisitMarker,
+    ULONG VisitMarker,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -2103,18 +2097,17 @@ Return Value:
 }
 
 PLOADED_IMAGE
-ImpFindImage (
+ImpFindImageByLibraryName (
     PLIST_ENTRY ListHead,
-    PSTR Name,
-    BOOL IsPath
+    PSTR Name
     )
 
 /*++
 
 Routine Description:
 
-    This routine attempts to find an image with the given name in the given
-    list.
+    This routine attempts to find an image with the given library name in the
+    given list.
 
 Arguments:
 
@@ -2122,9 +2115,6 @@ Arguments:
         search through.
 
     Name - Supplies a pointer to a string containing the name of the image.
-
-    IsPath - Supplies a boolean indicating whether the given name is a library
-        name (FALSE) or a file name (TRUE).
 
 Return Value:
 
@@ -2147,12 +2137,78 @@ Return Value:
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         Potential = Image->LibraryName;
-        if (IsPath != FALSE) {
-            Potential = Image->FileName;
-        }
-
         if ((Potential != NULL) &&
             (RtlAreStringsEqual(Potential, Name, NameLength) != FALSE)) {
+
+            //
+            // This routine is used to load real images, so it would be bad to
+            // return a placeholder image here.
+            //
+
+            ASSERT((Image->LoadFlags & IMAGE_LOAD_FLAG_PLACEHOLDER) == 0);
+
+            //
+            // Finding the image indicates that an image further along in the
+            // list depends on said images. Move it to be back of the list.
+            //
+
+            LIST_REMOVE(&(Image->ListEntry));
+            INSERT_BEFORE(&(Image->ListEntry), ListHead);
+            return Image;
+        }
+    }
+
+    return NULL;
+}
+
+PLOADED_IMAGE
+ImpFindImageByFile (
+    PLIST_ENTRY ListHead,
+    PIMAGE_FILE_INFORMATION File
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find an image matching the given file and device
+    ID.
+
+Arguments:
+
+    ListHead - Supplies a pointer to the head of the list of images to
+        search through.
+
+    File - Supplies a pointer to the file information.
+
+Return Value:
+
+    Returns a pointer to the image within the list on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PLOADED_IMAGE Image;
+
+    //
+    // If this image doesn't have the file/device ID supported, then don't
+    // match anything.
+    //
+
+    if ((File->DeviceId == 0) && (File->FileId == 0)) {
+        return NULL;
+    }
+
+    CurrentEntry = ListHead->Next;
+    while (CurrentEntry != ListHead) {
+        Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if ((Image->File.DeviceId == File->DeviceId) &&
+            (Image->File.FileId == File->FileId)) {
 
             //
             // This routine is used to load real images, so it would be bad to

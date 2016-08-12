@@ -42,7 +42,6 @@ OBJS = env.o       \
        heap.o      \
        osimag.o    \
        osbase.o    \
-       realpath.o  \
        rwlock.o    \
        socket.o    \
        spinlock.o  \

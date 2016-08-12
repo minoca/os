@@ -4287,35 +4287,6 @@ Return Value:
 
 --*/
 
-OS_API
-KSTATUS
-OsGetRealPath (
-    PCSTR Path,
-    PSTR *RealPath
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the canonical path for the given file path. This
-    canonical path will include no '.' or '..' components, and will not
-    contain symbolic links in any components of the path. All path components
-    must exist.
-
-Arguments:
-
-    Path - Supplies a pointer to the path to convert.
-
-    RealPath - Supplies a pointer where the final real path will be returned.
-        The caller is responsible for freeing this memory.
-
-Return Value:
-
-    Status code.
-
---*/
-
 #ifdef __cplusplus
 
 }

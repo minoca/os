@@ -4187,7 +4187,7 @@ Return Value:
                        ANYSIZE_ARRAY) * sizeof(CHAR));
 
         Signature += Image->File.ModificationDate +
-                     (UINTN)(Image->LoadedImageBuffer);
+                (UINTN)(Image->PreferredLowestAddress + Image->BaseDifference);
 
         ModuleCount += 1;
         CurrentEntry = CurrentEntry->Next;

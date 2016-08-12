@@ -190,7 +190,6 @@ IM_IMPORT_TABLE BmImageFunctionTable = {
     BmpImInvalidateInstructionCacheRegion,
     NULL,
     NULL,
-    NULL,
     NULL
 };
 
@@ -390,6 +389,8 @@ Return Value:
     }
 
     File->Size = BootFileHandle->FileSize;
+    File->DeviceId = 0;
+    File->FileId = 0;
 
 OpenFileEnd:
     if (!KSUCCESS(Status)) {

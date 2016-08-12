@@ -211,13 +211,8 @@ Return Value:
 
     if (KSUCCESS(Status)) {
         if (Path != NULL) {
-            if (ImGetRealPath != NULL) {
-                Status = ImGetRealPath(CompletePath, Path);
-
-            } else {
-                *Path = CompletePath;
-                CompletePath = NULL;
-            }
+            *Path = CompletePath;
+            CompletePath = NULL;
         }
     }
 

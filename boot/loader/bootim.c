@@ -219,7 +219,6 @@ IM_IMPORT_TABLE BoImageFunctionTable = {
     BopImInvalidateInstructionCacheRegion,
     BopImGetEnvironmentVariable,
     BopImFinalizeSegments,
-    NULL,
     NULL
 };
 
@@ -463,6 +462,8 @@ Return Value:
     BootFileHandle->FileSize = (UINTN)LocalFileSize;
     File->Size = LocalFileSize;
     File->ModificationDate = Properties.ModifiedTime.Seconds;
+    File->DeviceId = 0;
+    File->FileId = 0;
 
 OpenFileEnd:
     if (!KSUCCESS(Status)) {

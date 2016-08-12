@@ -8148,7 +8148,7 @@ Return Value:
     NewModule->Process = Process;
     NewModule->Loaded = TRUE;
     INSERT_BEFORE(&(NewModule->ListEntry), &(Context->ModuleList.ModulesHead));
-    NewModule->BaseDifference = 0;
+    NewModule->BaseDifference = LowestAddress;
     if (NewModule->Symbols != NULL) {
         NewModule->BaseDifference = LowestAddress -
                                     NewModule->Symbols->ImageBase;

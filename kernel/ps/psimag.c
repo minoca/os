@@ -207,7 +207,7 @@ PIO_HANDLE PsOsBaseLibrary;
 // Store the image library function table.
 //
 
-IM_IMPORT_TABLE PsImFunctionTable = {
+IM_IMPORT_TABLE PsImageFunctionTable = {
     PspImAllocateMemory,
     PspImFreeMemory,
     PspImOpenFile,
@@ -224,7 +224,6 @@ IM_IMPORT_TABLE PsImFunctionTable = {
     PspImInvalidateInstructionCacheRegion,
     PspImGetEnvironmentVariable,
     PspImFinalizeSegments,
-    NULL,
     NULL
 };
 
@@ -268,7 +267,7 @@ Return Value:
     KSTATUS Status;
 
     RtlZeroMemory(&ImageBuffer, sizeof(IMAGE_BUFFER));
-    Status = ImInitialize(&PsImFunctionTable);
+    Status = ImInitialize(&PsImageFunctionTable);
     if (!KSUCCESS(Status)) {
         goto InitializeImageSupportEnd;
     }
@@ -303,7 +302,9 @@ Return Value:
         INSERT_BEFORE(&(NewImage->ListEntry), &(KernelProcess->ImageListHead));
         KernelProcess->ImageCount += 1;
         KernelProcess->ImageListSignature +=
-                  NewImage->File.ModificationDate + (UINTN)LoadedLowestAddress;
+                                     NewImage->File.ModificationDate +
+                                     (UINTN)(NewImage->PreferredLowestAddress +
+                                             NewImage->BaseDifference);
 
         //
         // Load this image into the kernel debugger, but skip the kernel
@@ -924,6 +925,8 @@ ImOpenFileEnd:
             READ_INT64_SYNC(&(FileProperties.FileSize), &LocalFileSize);
             File->Size = LocalFileSize;
             File->ModificationDate = FileProperties.ModifiedTime.Seconds;
+            File->DeviceId = FileProperties.DeviceId;
+            File->FileId = FileProperties.FileId;
         }
 
     } else {
@@ -1793,7 +1796,8 @@ Return Value:
 
     Process->ImageCount += 1;
     Process->ImageListSignature += Image->File.ModificationDate +
-                                   Image->BaseDifference;
+                                   (UINTN)(Image->PreferredLowestAddress +
+                                           Image->BaseDifference);
 
     //
     // If the debug flag is enabled, then make the kernel debugger aware of
@@ -1869,7 +1873,8 @@ Return Value:
 
     Process->ImageCount -= 1;
     Process->ImageListSignature -= Image->File.ModificationDate +
-                                   Image->BaseDifference;
+                                   (UINTN)(Image->PreferredLowestAddress +
+                                           Image->BaseDifference);
 
     if (Image->DebuggerModule != NULL) {
         KdReportModuleChange(Image->DebuggerModule, FALSE);
@@ -2202,8 +2207,9 @@ Return Value:
         PspLoadProcessImageIntoKernelDebugger(Destination, NewImage);
     }
 
-    Destination->ImageListSignature += NewImage->File.ModificationDate +
-                                       NewImage->BaseDifference;
+    Destination->ImageListSignature +=
+          NewImage->File.ModificationDate +
+          (UINTN)(NewImage->PreferredLowestAddress + NewImage->BaseDifference);
 
     Status = STATUS_SUCCESS;
 

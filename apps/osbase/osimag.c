@@ -241,8 +241,7 @@ IM_IMPORT_TABLE OsImageFunctionTable = {
     OspImInvalidateInstructionCacheRegion,
     OspImGetEnvironmentVariable,
     OspImFinalizeSegments,
-    OspImArchResolvePltEntry,
-    OsGetRealPath
+    OspImArchResolvePltEntry
 };
 
 //
@@ -1202,6 +1201,8 @@ Return Value:
     READ_INT64_SYNC(&(FileProperties->FileSize), &LocalFileSize);
     File->Size = LocalFileSize;
     File->ModificationDate = FileProperties->ModifiedTime.Seconds;
+    File->DeviceId = FileProperties->DeviceId;
+    File->FileId = FileProperties->FileId;
     Status = STATUS_SUCCESS;
 
 OpenFileEnd:
