@@ -633,7 +633,9 @@ Return Value:
         OsHeapFree(ThreadControlBlock->TlsVector);
     }
 
+    OsAcquireLock(&OsThreadListLock);
     LIST_REMOVE(&(ThreadControlBlock->ListEntry));
+    OsReleaseLock(&OsThreadListLock);
     ThreadControlBlock->Self = NULL;
     OsMemoryUnmap(ThreadControlBlock->BaseAllocation,
                   ThreadControlBlock->BaseAllocationSize);
