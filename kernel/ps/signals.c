@@ -3099,15 +3099,19 @@ Return Value:
 
     //
     // If debugging is not enabled or there's no other process debugging this
-    // one, then look to see if the signal is going to be handled by the
-    // process. If it isn't, this is probably unexpected behavior. Forward the
-    // issue onto the kernel debugger first.
+    // one, forward the issue onto the kernel debugger first if it is not
+    // handled and looks unexpected. This used to forward all unhandled signals,
+    // but that caused the kernel to break in even when a user mode process
+    // was expecting the signal during suspended execution.
     //
 
     if ((DebugData == NULL) || (DebugData->TracingProcess == NULL)) {
         if ((Signal->SignalNumber == SIGNAL_ABORT) ||
-            (IS_SIGNAL_SET(Process->HandledSignals, Signal->SignalNumber) ==
-             FALSE)) {
+            (!IS_SIGNAL_SET(Process->HandledSignals, Signal->SignalNumber) &&
+             ((Signal->SignalNumber == SIGNAL_ILLEGAL_INSTRUCTION) ||
+              (Signal->SignalNumber == SIGNAL_BUS_ERROR) ||
+              (Signal->SignalNumber == SIGNAL_MATH_ERROR) ||
+              (Signal->SignalNumber == SIGNAL_ACCESS_VIOLATION)))) {
 
             PspForwardUserModeExceptionToKernel(Signal, TrapFrame);
         }
