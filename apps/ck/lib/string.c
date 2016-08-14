@@ -136,26 +136,26 @@ CkpStringToString (
 //
 
 CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[] = {
-    {"byteAt@1", CkpStringByteAt},
-    {"charAt@1", CkpStringCharacterAt},
-    {"contains@1", CkpStringContains},
-    {"startsWith@1", CkpStringStartsWith},
-    {"endsWith@1", CkpStringEndsWith},
-    {"indexOf@1", CkpStringIndexOf},
-    {"iterate@1", CkpStringIterate},
-    {"iteratorValue@1", CkpStringIteratorValue},
-    {"lower@0", CkpStringLower},
-    {"upper@0", CkpStringUpper},
-    {"length@", CkpStringLength},
-    {"__add@1", CkpStringAdd},
-    {"__slice@1", CkpStringSlice},
-    {"__str@0", CkpStringToString},
-    {NULL, NULL}
+    {"byteAt@1", 1, CkpStringByteAt},
+    {"charAt@1", 1, CkpStringCharacterAt},
+    {"contains@1", 1, CkpStringContains},
+    {"startsWith@1", 1, CkpStringStartsWith},
+    {"endsWith@1", 1, CkpStringEndsWith},
+    {"indexOf@1", 1, CkpStringIndexOf},
+    {"iterate@1", 1, CkpStringIterate},
+    {"iteratorValue@1", 1, CkpStringIteratorValue},
+    {"lower@0", 0, CkpStringLower},
+    {"upper@0", 0, CkpStringUpper},
+    {"length@0", 0, CkpStringLength},
+    {"__add@1", 1, CkpStringAdd},
+    {"__slice@1", 1, CkpStringSlice},
+    {"__str@0", 0, CkpStringToString},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkStringStaticPrimitives[] = {
-    {"fromCharacter@1", CkpStringFromCharacter},
-    {NULL, NULL}
+    {"fromCharacter@1", 1, CkpStringFromCharacter},
+    {NULL, 0, NULL}
 };
 
 //

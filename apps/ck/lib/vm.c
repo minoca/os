@@ -73,7 +73,15 @@ Environment:
     Frame = &(Fiber->Frames[Fiber->FrameCount - 1]);    \
     Stack = Frame->StackStart;                          \
     Ip = Frame->Ip;                                     \
-    Function = Frame->Closure->Function
+    if (Ip == NULL) {                                   \
+        if (!CK_IS_NULL(Vm->Fiber->Error)) {            \
+            return CkErrorRuntime;                      \
+        }                                               \
+                                                        \
+        goto RunInterpreterEnd;                         \
+    }                                                   \
+                                                        \
+    Function = Frame->Closure->U.Block.Function
 
 //
 // This macro dispatches a runtime error, and potentially exits out of the
@@ -492,8 +500,6 @@ Return Value:
 
     Vm->FirstObject = NULL;
 
-    CK_ASSERT(Vm->Handles == NULL);
-
     //
     // Null out the reallocate function to catch double frees.
     //
@@ -833,7 +839,6 @@ Return Value:
     PCK_IP Ip;
     BOOL IsLocal;
     UCHAR Local;
-    PCK_METHOD Method;
     CK_VALUE MethodName;
     PCK_FIBER NextFiber;
     USHORT Offset;
@@ -1077,17 +1082,17 @@ Return Value:
             Closure = CK_AS_CLOSURE(Arguments[0]);
             CKI_STORE_FRAME();
             CkpCallFunction(Vm, Closure, Arity);
+            Fiber = Vm->Fiber;
+            if (Fiber == NULL) {
+                goto RunInterpreterEnd;
+            }
+
             CKI_LOAD_FRAME();
             if (!CK_IS_NULL(Fiber->Error)) {
                 CKI_RUNTIME_ERROR();
             }
 
             CKI_DISPATCH();
-
-        } else if (CK_IS_METHOD(Arguments[0])) {
-            Symbol = -1;
-            Value = Arguments[0];
-            goto RunInterpreterCall;
 
         //
         // Calling a class is the official method of constructing a new object.
@@ -1120,72 +1125,30 @@ Return Value:
         }
 
 RunInterpreterCall:
-        if (Symbol >= 0) {
 
-            CK_ASSERT(CK_IS_STRING(MethodName));
+        CK_ASSERT(CK_IS_STRING(MethodName));
 
-            Value = CkpDictGet(Class->Methods, MethodName);
-            if (CK_IS_UNDEFINED(Value)) {
-                CK_OBJECT_VALUE(Value, Class->Name);
-                Fiber->Error = CkpStringFormat(Vm,
-                                               "@ does not implement '@'",
-                                               Value,
-                                               MethodName);
+        //
+        // Look up the method in the receiver, and call it.
+        //
 
-                CKI_RUNTIME_ERROR();
-            }
+        Value = CkpDictGet(Class->Methods, MethodName);
+        if (CK_IS_UNDEFINED(Value)) {
+            CK_OBJECT_VALUE(Value, Class->Name);
+            Fiber->Error = CkpStringFormat(Vm,
+                                           "@ does not implement '@'",
+                                           Value,
+                                           MethodName);
+
+            CKI_RUNTIME_ERROR();
         }
 
-        Method = CK_AS_METHOD(Value);
+        Closure = CK_AS_CLOSURE(Value);
         CKI_STORE_FRAME();
-        switch (Method->Type) {
-        case CkMethodPrimitive:
-            if (Method->U.Primitive(Vm, Arguments) != FALSE) {
-                Fiber->StackTop -= Arity - 1;
-
-            } else {
-                Fiber = Vm->Fiber;
-                if (Fiber == NULL) {
-                    goto RunInterpreterEnd;
-                }
-            }
-
-            break;
-
-        case CkMethodBound:
-            Closure = Method->U.Closure;
-            CkpCallFunction(Vm, Closure, Arity);
-            break;
-
-        case CkMethodUnbound:
-            Closure = CK_AS_CLOSURE(Arguments[0]);
-            CkpCallFunction(Vm, Closure, Arity);
-
-            //
-            // Replace the receiver slot ("this") with the parent function's
-            // receiver, so unbound functions can float around to whichever
-            // class they're invoked from.
-            //
-
-            Arguments = Fiber->StackTop - Arity;
-            Arguments[0] = *(Frame->StackStart);
-            break;
-
-        case CkMethodForeign:
-
-            //
-            // TODO: Handle foreign methods.
-            //
-
-            CK_ASSERT(FALSE);
-
-            break;
-
-        default:
-
-            CK_ASSERT(FALSE);
-
-            break;
+        CkpCallFunction(Vm, Closure, Arity);
+        Fiber = Vm->Fiber;
+        if (Fiber == NULL) {
+            goto RunInterpreterEnd;
         }
 
         CKI_LOAD_FRAME();
@@ -1335,7 +1298,7 @@ RunInterpreterCall:
             }
         }
 
-        Function = Frame->Closure->Function;
+        Function = Frame->Closure->U.Block.Function;
         CKI_DISPATCH();
 
     CKI_CASE(CkOpConstruct):
@@ -1374,7 +1337,6 @@ RunInterpreterCall:
                       Function->Module,
                       Class,
                       Symbol,
-                      CkMethodBound,
                       CK_AS_CLOSURE(Value));
 
         if (!CK_IS_NULL(Fiber->Error)) {
@@ -1761,7 +1723,11 @@ Return Value:
 
 {
 
+    PCK_VALUE Arguments;
     PCK_FIBER Fiber;
+    UINTN FrameCount;
+    CK_ARITY FunctionArity;
+    PSTR Name;
     UINTN RequiredStackSize;
     UINTN StackSize;
 
@@ -1773,11 +1739,13 @@ Return Value:
     // Check the arity of the function against what it's supposed to be.
     //
 
-    if (Closure->Function->Arity != Arity - 1) {
+    FunctionArity = CkpGetFunctionArity(Closure);
+    Name = CkpGetFunctionName(Closure);
+    if (FunctionArity != Arity - 1) {
         CkpRuntimeError(Vm,
                         "Expected %d arguments for %s, got %d",
-                        Closure->Function->Arity,
-                        Closure->Function->Debug.Name,
+                        FunctionArity,
+                        Name,
                         Arity - 1);
 
         return;
@@ -1788,12 +1756,45 @@ Return Value:
     //
 
     StackSize = Fiber->StackTop - Fiber->Stack;
-    RequiredStackSize = StackSize + Closure->Function->MaxStack;
-    if (RequiredStackSize > Fiber->StackCapacity) {
-        CkpEnsureStack(Vm, Fiber, RequiredStackSize);
+    if (Closure->Type == CkClosurePrimitive) {
+        Arguments = Fiber->StackTop - Arity;
+        if (Closure->U.Primitive.Function(Vm, Arguments) != FALSE) {
+            Fiber->StackTop -= Arity - 1;
+        }
+
+    } else if (Closure->Type == CkClosureBlock) {
+        RequiredStackSize = StackSize + Closure->U.Block.Function->MaxStack;
+        if (RequiredStackSize > Fiber->StackCapacity) {
+            CkpEnsureStack(Vm, Fiber, RequiredStackSize);
+        }
+
+        CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
+
+    } else if (Closure->Type == CkClosureForeign) {
+        CkpEnsureStack(Vm,
+                       Fiber,
+                       (Fiber->StackTop - Fiber->Stack) + CK_MIN_FOREIGN_STACK);
+
+        FrameCount = Fiber->FrameCount;
+        CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
+        if (FrameCount == Fiber->FrameCount) {
+            return;
+        }
+
+        Closure->U.Foreign.Function(Vm);
+
+        //
+        // TODO: What if foreign function switches fibers?
+        //
+
+        Fiber->FrameCount = FrameCount;
+
+    } else {
+
+        CK_ASSERT(FALSE);
+
     }
 
-    CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
     return;
 }
 

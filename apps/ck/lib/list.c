@@ -115,17 +115,17 @@ CkpListSliceAssign (
 //
 
 CK_PRIMITIVE_DESCRIPTION CkListPrimitives[] = {
-    {"append@1", CkpListAppend},
-    {"__add@1", CkpListAdd},
-    {"clear@0", CkpListClearPrimitive},
-    {"length@0", CkpListLength},
-    {"insert@2", CkpListInsertPrimitive},
-    {"removeAt@1", CkpListRemoveIndexPrimitive},
-    {"iterate@1", CkpListIterate},
-    {"iteratorValue@1", CkpListIteratorValue},
-    {"__slice@1", CkpListSlice},
-    {"__sliceAssign@2", CkpListSliceAssign},
-    {NULL, NULL}
+    {"append@1", 1, CkpListAppend},
+    {"__add@1", 1, CkpListAdd},
+    {"clear@0", 0, CkpListClearPrimitive},
+    {"length@0", 0, CkpListLength},
+    {"insert@2", 2, CkpListInsertPrimitive},
+    {"removeAt@1", 1, CkpListRemoveIndexPrimitive},
+    {"iterate@1", 1, CkpListIterate},
+    {"iteratorValue@1", 1, CkpListIteratorValue},
+    {"__slice@1", 1, CkpListSlice},
+    {"__sliceAssign@2", 2, CkpListSliceAssign},
+    {NULL, 0, NULL}
 };
 
 //

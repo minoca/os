@@ -178,12 +178,15 @@ Return Value:
 
 {
 
+    PCK_CLOSURE Closure;
     PSTR ErrorString;
     PCK_FIBER Fiber;
     PCK_CALL_FRAME Frame;
     INTN FrameIndex;
     PCK_FUNCTION Function;
+    PSTR FunctionName;
     INT Line;
+    PCK_MODULE Module;
     PSTR ModuleName;
     PCK_STRING String;
 
@@ -206,22 +209,47 @@ Return Value:
     Vm->Configuration.Error(Vm, CkErrorRuntime, NULL, -1, ErrorString);
     for (FrameIndex = Fiber->FrameCount - 1; FrameIndex >= 0; FrameIndex -= 1) {
         Frame = &(Fiber->Frames[FrameIndex]);
-        Function = Frame->Closure->Function;
-        ModuleName = "<builtin>";
-        if (Function->Module->Name != NULL) {
-            ModuleName = Function->Module->Name->Value;
+        Closure = Frame->Closure;
+        Line = 0;
+        FunctionName = CkpGetFunctionName(Closure);
+        switch (Closure->Type) {
+        case CkClosureBlock:
+            Function = Closure->U.Block.Function;
+            Module = Function->Module;
+
+            CK_ASSERT(Frame->Ip > Function->Code.Data);
+
+            Line = CkpGetLineForOffset(Closure->U.Block.Function,
+                                       Frame->Ip - Function->Code.Data - 1);
+
+            break;
+
+        case CkClosurePrimitive:
+            Module = CkpModuleGet(Vm, CK_NULL_VALUE);
+            break;
+
+        case CkClosureForeign:
+            Module = Closure->U.Foreign.Module;
+            break;
+
+        default:
+
+            CK_ASSERT(FALSE);
+
+            Module = NULL;
+            break;
         }
 
-        CK_ASSERT(Frame->Ip > Function->Code.Data);
-
-        Line = CkpGetLineForOffset(Function,
-                                   Frame->Ip - Function->Code.Data - 1);
+        ModuleName = "<builtin>";
+        if ((Module != NULL) && (Module->Name != NULL)) {
+            ModuleName = Module->Name->Value;
+        }
 
         Vm->Configuration.Error(Vm,
                                 CkErrorStackTrace,
                                 ModuleName,
                                 Line,
-                                Function->Debug.Name);
+                                FunctionName);
     }
 
     return;

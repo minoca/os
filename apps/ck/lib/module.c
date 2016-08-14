@@ -39,12 +39,6 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-PCK_MODULE
-CkpModuleGet (
-    PCK_VM Vm,
-    CK_VALUE Name
-    );
-
 BOOL
 CkpModuleRun (
     PCK_VM Vm,
@@ -62,9 +56,9 @@ CkpModuleGetVariable (
 //
 
 CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[] = {
-    {"run@0", CkpModuleRun},
-    {"get@1", CkpModuleGetVariable},
-    {NULL, NULL}
+    {"run@0", 0, CkpModuleRun},
+    {"get@1", 1, CkpModuleGetVariable},
+    {NULL, 0, NULL}
 };
 
 //
@@ -297,10 +291,6 @@ ModuleCreateEnd:
     return Module;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
 PCK_MODULE
 CkpModuleGet (
     PCK_VM Vm,
@@ -338,6 +328,10 @@ Return Value:
 
     return CK_AS_MODULE(Module);
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 //
 // Module class primitives

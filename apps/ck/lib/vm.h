@@ -53,6 +53,12 @@ Author:
 #define CK_MAX_STACK 0x80000000
 
 //
+// Define the minimum number of stack slots available to foreign functions.
+//
+
+#define CK_MIN_FOREIGN_STACK 20
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -386,9 +392,6 @@ Members:
     WorkingObjectCount - Stores the number of valid objects in the working
         object stack.
 
-    Handles - Stores the head of the list of handles to objects that are being
-        referenced outside of the Chalk VM.
-
     Compiler - Stores an optional pointer to the current compiler. This link is
         needed so the garbage collector can discover its objects.
 
@@ -408,7 +411,6 @@ struct _CK_VM {
     PCK_OBJECT KissList;
     PCK_OBJECT WorkingObjects[CK_MAX_WORKING_OBJECTS];
     ULONG WorkingObjectCount;
-    PCK_HANDLE Handles;
     PCK_COMPILER Compiler;
     PCK_FIBER Fiber;
 };
@@ -645,5 +647,31 @@ Return Value:
     Returns a pointer to the newly allocated module on success.
 
     NULL on allocation failure.
+
+--*/
+
+PCK_MODULE
+CkpModuleGet (
+    PCK_VM Vm,
+    CK_VALUE Name
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find a previously loaded module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Name - Supplies the module name value.
+
+Return Value:
+
+    Returns a pointer to the module with the given name on success.
+
+    NULL if no such module exists.
 
 --*/

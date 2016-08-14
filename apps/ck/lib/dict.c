@@ -155,16 +155,16 @@ CkpHashObject (
 //
 
 CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[] = {
-    {"get@1", CkpDictGetPrimitive},
-    {"set@2", CkpDictSetPrimitive},
-    {"__slice@1", CkpDictSlice},
-    {"__sliceAssign@2", CkpDictSliceAssign},
-    {"clear@0", CkpDictClearPrimitive},
-    {"containsKey@1", CkpDictContainsKey},
-    {"length@0", CkpDictLength},
-    {"iterate@1", CkpDictIteratePrimitive},
-    {"iteratorValue@1", CkpDictIteratorValue},
-    {NULL, NULL}
+    {"get@1", 1, CkpDictGetPrimitive},
+    {"set@2", 2, CkpDictSetPrimitive},
+    {"__slice@1", 1, CkpDictSlice},
+    {"__sliceAssign@2", 2, CkpDictSliceAssign},
+    {"clear@0", 0, CkpDictClearPrimitive},
+    {"containsKey@1", 1, CkpDictContainsKey},
+    {"length@0", 0, CkpDictLength},
+    {"iterate@1", 1, CkpDictIteratePrimitive},
+    {"iteratorValue@1", 1, CkpDictIteratorValue},
+    {NULL, 0, NULL}
 };
 
 //

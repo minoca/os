@@ -38,6 +38,8 @@ Members:
 
     Name - Stores the name string of the function to attach to the class.
 
+    Arity - Stores the number of arguments the function takes.
+
     Primitive - Stores a pointer to the primitive function to call for the
         function
 
@@ -45,7 +47,8 @@ Members:
 
 typedef struct _CK_PRIMITIVE_DESCRIPTION {
     PSTR Name;
-    PCK_PRIMITIVE_METHOD Primitive;
+    CK_ARITY Arity;
+    PCK_PRIMITIVE_FUNCTION Primitive;
 } CK_PRIMITIVE_DESCRIPTION, *PCK_PRIMITIVE_DESCRIPTION;
 
 //
@@ -115,3 +118,47 @@ Return Value:
     None.
 
 --*/
+
+CK_ARITY
+CkpGetFunctionArity (
+    PCK_CLOSURE Closure
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of argument required to pass to the given
+    function.
+
+Arguments:
+
+    Closure - Supplies a pointer to the closure.
+
+Return Value:
+
+    Returns the arity of the function.
+
+--*/
+
+PSTR
+CkpGetFunctionName (
+    PCK_CLOSURE Closure
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the original name for a function.
+
+Arguments:
+
+    Closure - Supplies a pointer to the closure.
+
+Return Value:
+
+    Returns a pointer to a string containing the name of the function.
+
+--*/
+

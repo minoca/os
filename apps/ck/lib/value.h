@@ -47,7 +47,6 @@ Author:
 #define CK_IS_RANGE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectRange)
 #define CK_IS_STRING(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectString)
 #define CK_IS_UPVALUE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectUpvalue)
-#define CK_IS_METHOD(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectMethod)
 
 //
 // This macro evaluates to the object pointer within a given value.
@@ -67,7 +66,6 @@ Author:
 #define CK_AS_RANGE(_Value) ((PCK_RANGE)CK_AS_OBJECT(_Value))
 #define CK_AS_STRING(_Value) ((PCK_STRING)CK_AS_OBJECT(_Value))
 #define CK_AS_UPVALUE(_Value) ((PCK_UPVALUE)CK_AS_OBJECT(_Value))
-#define CK_AS_METHOD(_Value) ((PCK_METHOD)CK_AS_OBJECT(_Value))
 
 //
 // These macros initialize a value with the given object or primitive.
@@ -113,12 +111,13 @@ Author:
 //
 
 typedef struct _CK_CLASS CK_CLASS, *PCK_CLASS;
-typedef struct _CK_UPVALUE CK_UPVALUE, *PCK_UPVALUE;
 typedef struct _CK_FIBER CK_FIBER, *PCK_FIBER;
+typedef struct _CK_OBJECT CK_OBJECT, *PCK_OBJECT;
+typedef struct _CK_UPVALUE CK_UPVALUE, *PCK_UPVALUE;
 typedef struct _CK_VALUE CK_VALUE, *PCK_VALUE;
-typedef struct _CK_METHOD CK_METHOD, *PCK_METHOD;
-typedef LONG CK_SYMBOL_INDEX, *PCK_SYMBOL_INDEX;
+
 typedef LONG CK_ARITY, *PCK_ARITY;
+typedef LONG CK_SYMBOL_INDEX, *PCK_SYMBOL_INDEX;
 typedef LONGLONG CK_INTEGER;
 typedef PUCHAR PCK_IP;
 
@@ -132,7 +131,6 @@ typedef enum _CK_OBJECT_TYPE {
     CkObjectFunction,
     CkObjectInstance,
     CkObjectList,
-    CkObjectMethod,
     CkObjectModule,
     CkObjectRange,
     CkObjectString,
@@ -147,13 +145,42 @@ typedef enum _CK_VALUE_TYPE {
     CkValueObject
 } CK_VALUE_TYPE, *PCK_VALUE_TYPE;
 
-typedef enum _CK_METHOD_TYPE {
-    CkMethodInvalid,
-    CkMethodPrimitive,
-    CkMethodBound,
-    CkMethodUnbound,
-    CkMethodForeign,
-} CK_METHOD_TYPE, *PCK_METHOD_TYPE;
+typedef enum _CK_CLOSURE_TYPE {
+    CkClosureInvalid,
+    CkClosurePrimitive,
+    CkClosureBlock,
+    CkClosureForeign,
+} CK_CLOSURE_TYPE, *PCK_CLOSURE_TYPE;
+
+typedef
+BOOL
+(*PCK_PRIMITIVE_FUNCTION) (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine describes the prototype of a primitive method: a method that
+    is implemented directly in C and interacts intimately with the VM itself.
+    Specifically, it may modify the VM stack directly. The return value should
+    be placed on the stack manually by this function.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
 
 //
 // Define some basic array types.
@@ -280,30 +307,6 @@ struct _CK_VALUE {
         PCK_OBJECT Object;
     } U;
 
-};
-
-/*++
-
-Structure Description:
-
-    This structure contains a handle, which is an object that has been handed
-    out somewhere outside of the Chalk interpreter.
-
-Members:
-
-    Value - Stores the value that is being referenced somewhere.
-
-    Previous - Stores a pointer to the previous handle in the global list of
-        handles.
-
-    Next - Stores a pointer to the next handle in the big list of handles.
-
---*/
-
-struct _CK_HANDLE {
-    CK_VALUE Value;
-    PCK_HANDLE Previous;
-    PCK_HANDLE Next;
 };
 
 /*++
@@ -530,13 +533,100 @@ typedef struct _CK_FUNCTION {
 
 Structure Description:
 
+    This structure defines a closure formed by compiled code.
+
+Members:
+
+    Function - Stores a pointer to the compiled code.
+
+--*/
+
+typedef struct _CK_BLOCK_CLOSURE {
+    PCK_FUNCTION Function;
+} CK_BLOCK_CLOSURE, *PCK_BLOCK_CLOSURE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a closure formed by a builtin primitive function.
+
+Members:
+
+    Function - Stores a pointer to the primitive function to call.
+
+    Arity - Stores the number of arguments the primitive takes.
+
+    Name - Stores a pointer to the name of the function.
+
+--*/
+
+typedef struct _CK_PRIMITIVE_CLOSURE {
+    PCK_PRIMITIVE_FUNCTION Function;
+    CK_ARITY Arity;
+    PCK_STRING Name;
+} CK_PRIMITIVE_CLOSURE, *PCK_PRIMITIVE_CLOSURE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a closure formed by a C function.
+
+Members:
+
+    Function - Stores a pointer to the primitive function to call.
+
+    Arity - Stores the number of arguments the primitive takes.
+
+    Name - Stores a pointer to the name of the function.
+
+    Module - Stores a pointer to the module the function is defined in.
+
+--*/
+
+typedef struct _CK_FOREIGN_CLOSURE {
+    PCK_FOREIGN_FUNCTION Function;
+    CK_ARITY Arity;
+    PCK_STRING Name;
+    PCK_MODULE Module;
+} CK_FOREIGN_CLOSURE, *PCK_FOREIGN_CLOSURE;
+
+/*++
+
+Structure Description:
+
+    This union defines the different closure types.
+
+Members:
+
+    Function - Stores a pointer to the primitive function to call.
+
+    Arity - Stores the number of arguments the primitive takes.
+
+    Name - Stores a pointer to the name of the function.
+
+--*/
+
+typedef union _CK_CLOSURE_UNION {
+    CK_BLOCK_CLOSURE Block;
+    CK_PRIMITIVE_CLOSURE Primitive;
+    CK_FOREIGN_CLOSURE Foreign;
+} CK_CLOSURE_UNION, *PCK_CLOSURE_UNION;
+
+/*++
+
+Structure Description:
+
     This structure defines a closure object.
 
 Members:
 
     Header - Stores the required object header.
 
-    Function - Stores a pointer to the function object.
+    Type - Stores the closure type, defining which union member is valid.
+
+    U - Stores the closure function information, which depends on the type.
 
     Class - Stores a pointer to the class the closure is bound to.
 
@@ -547,74 +637,11 @@ Members:
 
 typedef struct _CK_CLOSURE {
     CK_OBJECT Header;
-    PCK_FUNCTION Function;
+    CK_CLOSURE_TYPE Type;
+    CK_CLOSURE_UNION U;
     PCK_CLASS Class;
     PCK_UPVALUE *Upvalues;
 } CK_CLOSURE, *PCK_CLOSURE;
-
-typedef
-BOOL
-(*PCK_PRIMITIVE_METHOD) (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    );
-
-/*++
-
-Routine Description:
-
-    This routine describes the prototype of a primitive method: a method that
-    is implemented directly in C and interacts intimately with the VM itself.
-    Specifically, it may modify the VM stack directly. The return value should
-    be placed on the stack manually by this function.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Arguments - Supplies the function arguments.
-
-Return Value:
-
-    TRUE on success.
-
-    FALSE if execution caused a runtime error.
-
---*/
-
-/*++
-
-Structure Description:
-
-    This structure defines a method.
-
-Members:
-
-    Header - Stores the required object header.
-
-    Type - Stores the method type, which indicates which member of the union
-        below is valid.
-
-    U - Stores the union of method pointers.
-
-        Primitive - Stores the function pointer for the primitive method.
-
-        Foreign - Stores the function pointer for the foreign method.
-
-        Closure - Stores a pointer to the closure for the regular function.
-
---*/
-
-struct _CK_METHOD {
-    CK_OBJECT Header;
-    CK_METHOD_TYPE Type;
-    union {
-        PCK_PRIMITIVE_METHOD Primitive;
-        PCK_FOREIGN_FUNCTION Foreign;
-        PCK_CLOSURE Closure;
-    } U;
-
-};
 
 /*++
 
@@ -848,6 +875,80 @@ Arguments:
     Function - Supplies a pointer to the function the closure encloses.
 
     Class - Supplies a pointer to the class the closure was defined in.
+
+Return Value:
+
+    Returns a pointer to the new closure on success.
+
+    NULL on allocation failure.
+
+--*/
+
+PCK_CLOSURE
+CkpClosureCreatePrimitive (
+    PCK_VM Vm,
+    PCK_PRIMITIVE_FUNCTION Function,
+    PCK_CLASS Class,
+    PCK_STRING Name,
+    CK_ARITY Arity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new closure object for a primitive function.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Function - Supplies a pointer to the primitive C function.
+
+    Class - Supplies a pointer to the class the closure was defined in.
+
+    Name - Supplies a pointer to the function name string.
+
+    Arity - Supplies the function arity.
+
+Return Value:
+
+    Returns a pointer to the new closure on success.
+
+    NULL on allocation failure.
+
+--*/
+
+PCK_CLOSURE
+CkpClosureCreateForeign (
+    PCK_VM Vm,
+    PCK_FOREIGN_FUNCTION Function,
+    PCK_CLASS Class,
+    PCK_MODULE Module,
+    PCK_STRING Name,
+    CK_ARITY Arity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new closure object for a foreign function.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Function - Supplies a pointer to the foreign C function pointer.
+
+    Class - Supplies an optional pointer to the class the closure was defined
+        in.
+
+    Module - Supplies a pointer to the module the function was defined in.
+
+    Name - Supplies a pointer to the function name string.
+
+    Arity - Supplies the function arity.
 
 Return Value:
 
@@ -1111,8 +1212,7 @@ CkpBindMethod (
     PCK_MODULE Module,
     PCK_CLASS Class,
     CK_SYMBOL_INDEX StringIndex,
-    CK_METHOD_TYPE MethodType,
-    PVOID MethodValue
+    PCK_CLOSURE Closure
     );
 
 /*++
@@ -1132,10 +1232,7 @@ Arguments:
     StringIndex - Supplies the index into the module-level string table of the
         signature string for this method.
 
-    MethodType - Supplies the type of the method value.
-
-    MethodValue - Supplies a pointer to the primitive function, foreign
-        function, or closure, depending on the type.
+    Closure - Supplies a pointer to the closure to bind.
 
 Return Value:
 

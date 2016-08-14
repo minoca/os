@@ -117,12 +117,6 @@ CkpKissList (
     );
 
 VOID
-CkpKissMethod (
-    PCK_VM Vm,
-    PCK_METHOD Method
-    );
-
-VOID
 CkpKissModule (
     PCK_VM Vm,
     PCK_MODULE Module
@@ -605,10 +599,6 @@ Return Value:
             CkpKissUpvalue(Vm, (PCK_UPVALUE)Object);
             break;
 
-        case CkObjectMethod:
-            CkpKissMethod(Vm, (PCK_METHOD)Object);
-            break;
-
         default:
 
             CK_ASSERT(FALSE);
@@ -748,16 +738,38 @@ Return Value:
 {
 
     CK_SYMBOL_INDEX Index;
+    CK_SYMBOL_INDEX UpvalueCount;
 
-    CkpKissObject(Vm, &(Closure->Function->Header));
+    UpvalueCount = 0;
     CkpKissObject(Vm, &(Closure->Class->Header));
-    for (Index = 0; Index < Closure->Function->UpvalueCount; Index += 1) {
-        CkpKissObject(Vm, &(Closure->Upvalues[Index]->Header));
+    switch (Closure->Type) {
+    case CkClosureBlock:
+        CkpKissObject(Vm, &(Closure->U.Block.Function->Header));
+        UpvalueCount = Closure->U.Block.Function->UpvalueCount;
+        for (Index = 0; Index < UpvalueCount; Index += 1) {
+            CkpKissObject(Vm, &(Closure->Upvalues[Index]->Header));
+        }
+
+        break;
+
+    case CkClosurePrimitive:
+        CkpKissObject(Vm, &(Closure->U.Primitive.Name->Header));
+        break;
+
+    case CkClosureForeign:
+        CkpKissObject(Vm, &(Closure->U.Foreign.Name->Header));
+        CkpKissObject(Vm, &(Closure->U.Foreign.Module->Header));
+        break;
+
+    default:
+
+        CK_ASSERT(FALSE);
+
+        break;
     }
 
     Vm->BytesAllocated += sizeof(CK_CLOSURE) +
-                          (Closure->Function->UpvalueCount *
-                           sizeof(PCK_UPVALUE));
+                          (UpvalueCount * sizeof(PCK_UPVALUE));
 
     return;
 }
@@ -981,41 +993,6 @@ Return Value:
 
     CkpKissValueArray(Vm, &(List->Elements));
     Vm->BytesAllocated += sizeof(CK_LIST);
-    return;
-}
-
-VOID
-CkpKissMethod (
-    PCK_VM Vm,
-    PCK_METHOD Method
-    )
-
-/*++
-
-Routine Description:
-
-    This routine kisses a method object, preventing its components from being
-    garbage collected.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Method - Supplies a pointer to the method.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    if ((Method->Type == CkMethodBound) || (Method->Type == CkMethodUnbound)) {
-        CkpKissObject(Vm, &(Method->U.Closure->Header));
-    }
-
-    Vm->BytesAllocated += sizeof(CK_METHOD);
     return;
 }
 

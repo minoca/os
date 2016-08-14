@@ -69,8 +69,6 @@ typedef enum _CK_ERROR_TYPE {
 } CK_ERROR_TYPE, *PCK_ERROR_TYPE;
 
 typedef struct _CK_VM CK_VM, *PCK_VM;
-typedef struct _CK_OBJECT CK_OBJECT, *PCK_OBJECT;
-typedef struct _CK_HANDLE CK_HANDLE, *PCK_HANDLE;
 
 typedef
 PVOID
@@ -104,10 +102,9 @@ Return Value:
 --*/
 
 typedef
-PCK_OBJECT
+VOID
 (*PCK_FOREIGN_FUNCTION) (
-    PCK_VM Vm,
-    PCK_OBJECT *Arguments
+    PCK_VM Vm
     );
 
 /*++
@@ -121,15 +118,9 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    Arguments - Supplies a pointer to the function arguments. The first
-        argument is always the receiver. The remaining arguments are determined
-        by the function signature.
-
 Return Value:
 
-    Returns a pointer to the return value, or NULL if the function does not
-    return a value (in which case an implicit null object will be set as the
-    return value).
+    None. The return value of the function should be in the first stack slot.
 
 --*/
 

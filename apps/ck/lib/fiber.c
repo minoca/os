@@ -120,21 +120,21 @@ CkpRunFiber (
 //
 
 CK_PRIMITIVE_DESCRIPTION CkFiberPrimitives[] = {
-    {"__init@1", CkpFiberInit},
-    {"run@1", CkpFiberRun},
-    {"error@0", CkpFiberError},
-    {"isDone@0", CkpFiberIsDone},
-    {"transfer@1", CkpFiberTransfer},
-    {"transferError@1", CkpFiberTransferError},
-    {NULL, NULL}
+    {"__init@1", 1, CkpFiberInit},
+    {"run@1", 1, CkpFiberRun},
+    {"error@0", 0, CkpFiberError},
+    {"isDone@0", 0, CkpFiberIsDone},
+    {"transfer@1", 1, CkpFiberTransfer},
+    {"transferError@1", 1, CkpFiberTransferError},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkFiberStaticPrimitives[] = {
-    {"abort@1", CkpFiberAbort},
-    {"current@0", CkpFiberCurrent},
-    {"suspend@0", CkpFiberSuspend},
-    {"yield@1", CkpFiberYield},
-    {NULL, NULL}
+    {"abort@1", 1, CkpFiberAbort},
+    {"current@0", 0, CkpFiberCurrent},
+    {"suspend@0", 0, CkpFiberSuspend},
+    {"yield@1", 1, CkpFiberYield},
+    {NULL, 0, NULL}
 };
 
 //
@@ -185,8 +185,10 @@ Return Value:
 
     StackCapacity = CK_INITIAL_CALL_FRAMES;
     if (Closure != NULL) {
-        while (StackCapacity < Closure->Function->MaxStack + 1) {
-            StackCapacity <<= 1;
+        if (Closure->Type == CkClosureBlock) {
+            while (StackCapacity < Closure->U.Block.Function->MaxStack + 1) {
+                StackCapacity <<= 1;
+            }
         }
     }
 
@@ -308,7 +310,13 @@ Return Value:
 
     Frame = &(Fiber->Frames[Fiber->FrameCount]);
     Fiber->FrameCount += 1;
-    Frame->Ip = Closure->Function->Code.Data;
+    if (Closure->Type == CkClosureBlock) {
+        Frame->Ip = Closure->U.Block.Function->Code.Data;
+
+    } else {
+        Frame->Ip = NULL;
+    }
+
     Frame->Closure = Closure;
     Frame->StackStart = Stack;
     return;
@@ -445,7 +453,10 @@ Return Value:
     Fiber->Error = CK_NULL_VALUE;
     Fiber->FrameCount = 0;
     if (Closure != NULL) {
-        CkpEnsureStack(Vm, Fiber, Closure->Function->MaxStack);
+
+        CK_ASSERT(Closure->Type == CkClosureBlock);
+
+        CkpEnsureStack(Vm, Fiber, Closure->U.Block.Function->MaxStack);
         CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->Stack);
     }
 
@@ -544,7 +555,7 @@ Return Value:
         return FALSE;
     }
 
-    if (Closure->Function->Arity != 1) {
+    if (CkpGetFunctionArity(Closure) != 1) {
         CkpRuntimeError(Vm, "Fiber functions take exactly one argument");
         return FALSE;
     }

@@ -39,13 +39,6 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-PCK_METHOD
-CkpMethodCreate (
-    PCK_VM Vm,
-    CK_METHOD_TYPE Type,
-    PVOID Function
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -104,10 +97,132 @@ Return Value:
                         CkObjectClosure,
                         Vm->Class.Function);
 
-    Closure->Function = Function;
+    Closure->Type = CkClosureBlock;
+    Closure->U.Block.Function = Function;
     Closure->Class = Class;
     Closure->Upvalues = (PCK_UPVALUE *)(Closure + 1);
     CkZero(Closure->Upvalues, UpvalueSize);
+    return Closure;
+}
+
+PCK_CLOSURE
+CkpClosureCreatePrimitive (
+    PCK_VM Vm,
+    PCK_PRIMITIVE_FUNCTION Function,
+    PCK_CLASS Class,
+    PCK_STRING Name,
+    CK_ARITY Arity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new closure object for a primitive function.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Function - Supplies a pointer to the primitive C function.
+
+    Class - Supplies a pointer to the class the closure was defined in.
+
+    Name - Supplies a pointer to the function name string.
+
+    Arity - Supplies the function arity.
+
+Return Value:
+
+    Returns a pointer to the new closure on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PCK_CLOSURE Closure;
+
+    Closure = CkAllocate(Vm, sizeof(CK_CLOSURE));
+    if (Closure == NULL) {
+        return NULL;
+    }
+
+    CkpInitializeObject(Vm,
+                        &(Closure->Header),
+                        CkObjectClosure,
+                        Vm->Class.Function);
+
+    Closure->Type = CkClosurePrimitive;
+    Closure->U.Primitive.Function = Function;
+    Closure->U.Primitive.Arity = Arity;
+    Closure->U.Primitive.Name = Name;
+    Closure->Class = Class;
+    Closure->Upvalues = NULL;
+    return Closure;
+}
+
+PCK_CLOSURE
+CkpClosureCreateForeign (
+    PCK_VM Vm,
+    PCK_FOREIGN_FUNCTION Function,
+    PCK_CLASS Class,
+    PCK_MODULE Module,
+    PCK_STRING Name,
+    CK_ARITY Arity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new closure object for a foreign function.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Function - Supplies a pointer to the foreign C function pointer.
+
+    Class - Supplies an optional pointer to the class the closure was defined
+        in.
+
+    Module - Supplies a pointer to the module the function was defined in.
+
+    Name - Supplies a pointer to the function name string.
+
+    Arity - Supplies the function arity.
+
+Return Value:
+
+    Returns a pointer to the new closure on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PCK_CLOSURE Closure;
+
+    Closure = CkAllocate(Vm, sizeof(CK_CLOSURE));
+    if (Closure == NULL) {
+        return NULL;
+    }
+
+    CkpInitializeObject(Vm,
+                        &(Closure->Header),
+                        CkObjectClosure,
+                        Vm->Class.Function);
+
+    Closure->Type = CkClosureForeign;
+    Closure->U.Foreign.Function = Function;
+    Closure->U.Foreign.Arity = Arity;
+    Closure->U.Foreign.Name = Name;
+    Closure->U.Foreign.Module = Module;
+    Closure->Class = Class;
+    Closure->Upvalues = NULL;
     return Closure;
 }
 
@@ -272,7 +387,6 @@ Return Value:
     case CkObjectRange:
     case CkObjectString:
     case CkObjectUpvalue:
-    case CkObjectMethod:
         break;
 
     default:
@@ -612,8 +726,7 @@ CkpBindMethod (
     PCK_MODULE Module,
     PCK_CLASS Class,
     CK_SYMBOL_INDEX StringIndex,
-    CK_METHOD_TYPE MethodType,
-    PVOID MethodValue
+    PCK_CLOSURE Closure
     )
 
 /*++
@@ -633,10 +746,7 @@ Arguments:
     StringIndex - Supplies the index into the module-level string table of the
         signature string for this method.
 
-    MethodType - Supplies the type of the method value.
-
-    MethodValue - Supplies a pointer to the primitive function, foreign
-        function, or closure, depending on the type.
+    Closure - Supplies a pointer to the closure to bind.
 
 Return Value:
 
@@ -646,22 +756,15 @@ Return Value:
 
 {
 
-    PCK_CLOSURE Closure;
     CK_VALUE KeyValue;
-    PCK_METHOD Method;
     PCK_STRING SignatureString;
     CK_VALUE Value;
 
     CK_ASSERT(StringIndex < Module->Strings.List.Count);
 
     SignatureString = CK_AS_STRING(Module->Strings.List.Data[StringIndex]);
-    Method = CkpMethodCreate(Vm, MethodType, MethodValue);
-    if (Method == NULL) {
-        return;
-    }
-
     CK_OBJECT_VALUE(KeyValue, SignatureString);
-    CK_OBJECT_VALUE(Value, Method);
+    CK_OBJECT_VALUE(Value, Closure);
     CkpDictSet(Vm, Class->Methods, KeyValue, Value);
 
     //
@@ -669,14 +772,7 @@ Return Value:
     // its fields start and 2) what its superclass is.
     //
 
-    if (MethodType == CkMethodBound) {
-        Closure = MethodValue;
-
-        CK_ASSERT(Closure->Header.Type == CkObjectClosure);
-
-        Closure->Class = Class;
-    }
-
+    Closure->Class = Class;
     return;
 }
 
@@ -832,49 +928,4 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
-PCK_METHOD
-CkpMethodCreate (
-    PCK_VM Vm,
-    CK_METHOD_TYPE Type,
-    PVOID Function
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a new method object.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Type - Supplies the type of the method object.
-
-    Function - Supplies a pointer to the primitive routine, foreign routine,
-        or function object to call, depending on the type.
-
-Return Value:
-
-    Returns a pointer to a method object on success.
-
-    NULL on allocation failure.
-
---*/
-
-{
-
-    PCK_METHOD Method;
-
-    Method = CkAllocate(Vm, sizeof(CK_METHOD));
-    if (Method == NULL) {
-        return NULL;
-    }
-
-    CkpInitializeObject(Vm, &(Method->Header), CkObjectMethod, NULL);
-    Method->Type = Type;
-    Method->U.Primitive = Function;
-    return Method;
-}
 

@@ -70,7 +70,8 @@ CkpCoreAddPrimitive (
     PCK_MODULE Module,
     PCK_CLASS Class,
     PSTR Name,
-    PCK_PRIMITIVE_METHOD Function
+    CK_ARITY Arity,
+    PCK_PRIMITIVE_FUNCTION Function
     );
 
 BOOL
@@ -189,46 +190,46 @@ extern PVOID _binary_ckcore_ck_start;
 extern PVOID _binary_ckcore_ck_end;
 
 CK_PRIMITIVE_DESCRIPTION CkObjectPrimitives[] = {
-    {"__init@0", CkpObjectInit},
-    {"__lnot@0", CkpObjectLogicalNot},
-    {"__eq@1", CkpObjectIsEqual},
-    {"__ne@1", CkpObjectIsNotEqual},
-    {"__is@1", CkpObjectIs},
-    {"__str@0", CkpObjectToString},
-    {"type@0", CkpObjectType},
-    {NULL, NULL}
+    {"__init@0", 0, CkpObjectInit},
+    {"__lnot@0", 0, CkpObjectLogicalNot},
+    {"__eq@1", 1, CkpObjectIsEqual},
+    {"__ne@1", 1, CkpObjectIsNotEqual},
+    {"__is@1", 1, CkpObjectIs},
+    {"__str@0", 0, CkpObjectToString},
+    {"type@0", 0, CkpObjectType},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkObjectMetaPrimitives[] = {
-    {"same@2", CkpObjectMetaSame},
-    {NULL, NULL}
+    {"same@2", 2, CkpObjectMetaSame},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkClassPrimitives[] = {
-    {"name@0", CkpClassName},
-    {"superType@0", CkpClassSuper},
-    {"__str@0", CkpClassName},
-    {NULL, NULL}
+    {"name@0", 0, CkpClassName},
+    {"superType@0", 0, CkpClassSuper},
+    {"__str@0", 0, CkpClassName},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkNullPrimitives[] = {
-    {"__lnot@0", CkpNullLogicalNot},
-    {"__str@0", CkpNullToString},
-    {NULL, NULL}
+    {"__lnot@0", 0, CkpNullLogicalNot},
+    {"__str@0", 0, CkpNullToString},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkFunctionPrimitives[] = {
-    {"arity@0", CkpFunctionArity},
-    {"module@0", CkpFunctionModule},
-    {"stackUsage@0", CkpFunctionStackUsage},
-    {NULL, NULL}
+    {"arity@0", 0, CkpFunctionArity},
+    {"module@0", 0, CkpFunctionModule},
+    {"stackUsage@0", 0, CkpFunctionStackUsage},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkCorePrimitives[] = {
-    {"gc@0", CkpCoreGarbageCollect},
-    {"importModule@1", CkpCoreImportModule},
-    {"write@1", CkpCoreWrite},
-    {NULL, NULL}
+    {"gc@0", 0, CkpCoreGarbageCollect},
+    {"importModule@1", 1, CkpCoreImportModule},
+    {"write@1", 1, CkpCoreWrite},
+    {NULL, 0, NULL}
 };
 
 //
@@ -461,6 +462,93 @@ Return Value:
     return;
 }
 
+CK_ARITY
+CkpGetFunctionArity (
+    PCK_CLOSURE Closure
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of argument required to pass to the given
+    function.
+
+Arguments:
+
+    Closure - Supplies a pointer to the closure.
+
+Return Value:
+
+    Returns the arity of the function.
+
+--*/
+
+{
+
+    switch (Closure->Type) {
+    case CkClosureBlock:
+        return Closure->U.Block.Function->Arity;
+
+    case CkClosurePrimitive:
+        return Closure->U.Primitive.Arity;
+
+    case CkClosureForeign:
+        return Closure->U.Foreign.Arity;
+
+    default:
+
+        CK_ASSERT(FALSE);
+
+        break;
+    }
+
+    return 0;
+}
+
+PSTR
+CkpGetFunctionName (
+    PCK_CLOSURE Closure
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the original name for a function.
+
+Arguments:
+
+    Closure - Supplies a pointer to the closure.
+
+Return Value:
+
+    Returns a pointer to a string containing the name of the function.
+
+--*/
+
+{
+
+    switch (Closure->Type) {
+    case CkClosureBlock:
+        return Closure->U.Block.Function->Debug.Name;
+
+    case CkClosurePrimitive:
+        return Closure->U.Primitive.Name->Value;
+
+    case CkClosureForeign:
+        return Closure->U.Foreign.Name->Value;
+
+    default:
+
+        CK_ASSERT(FALSE);
+
+        break;
+    }
+
+    return 0;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -617,6 +705,7 @@ Return Value:
                             Module,
                             Class,
                             Primitives->Name,
+                            Primitives->Arity,
                             Primitives->Primitive);
 
         Primitives += 1;
@@ -631,7 +720,8 @@ CkpCoreAddPrimitive (
     PCK_MODULE Module,
     PCK_CLASS Class,
     PSTR Name,
-    PCK_PRIMITIVE_METHOD Function
+    CK_ARITY Arity,
+    PCK_PRIMITIVE_FUNCTION Function
     )
 
 /*++
@@ -650,6 +740,8 @@ Arguments:
 
     Name - Supplies a pointer to the null terminated name of the method.
 
+    Arity - Supplies the number of arguments the function takes.
+
     Function - Supplies a pointer to the C function to attach to this method.
 
 Return Value:
@@ -660,14 +752,23 @@ Return Value:
 
 {
 
+    PCK_CLOSURE Closure;
     CK_SYMBOL_INDEX Index;
+    PCK_STRING NameString;
 
     Index = CkpStringTableEnsure(Vm, &(Module->Strings), Name, strlen(Name));
     if (Index == -1) {
         return;
     }
 
-    CkpBindMethod(Vm, Module, Class, Index, CkMethodPrimitive, Function);
+    NameString = CK_AS_STRING(Module->Strings.List.Data[Index]);
+    Closure = CkpClosureCreatePrimitive(Vm,
+                                        Function,
+                                        Class,
+                                        NameString,
+                                        Arity);
+
+    CkpBindMethod(Vm, Module, Class, Index, Closure);
     return;
 }
 
@@ -1160,14 +1261,14 @@ Return Value:
 
 {
 
+    CK_ARITY Arity;
     PCK_CLOSURE Closure;
-    PCK_FUNCTION Function;
 
     CK_ASSERT(CK_IS_CLOSURE(Arguments[0]));
 
     Closure = CK_AS_CLOSURE(Arguments[0]);
-    Function = Closure->Function;
-    CK_INT_VALUE(Arguments[0], Function->Arity);
+    Arity = CkpGetFunctionArity(Closure);
+    CK_INT_VALUE(Arguments[0], Arity);
     return TRUE;
 }
 
@@ -1200,13 +1301,33 @@ Return Value:
 {
 
     PCK_CLOSURE Closure;
-    PCK_FUNCTION Function;
+    PCK_MODULE Module;
 
     CK_ASSERT(CK_IS_CLOSURE(Arguments[0]));
 
     Closure = CK_AS_CLOSURE(Arguments[0]);
-    Function = Closure->Function;
-    CK_OBJECT_VALUE(Arguments[0], Function->Module);
+    switch (Closure->Type) {
+    case CkClosureBlock:
+        Module = Closure->U.Block.Function->Module;
+        break;
+
+    case CkClosurePrimitive:
+        Module = CkpModuleGet(Vm, CK_NULL_VALUE);
+        break;
+
+    case CkClosureForeign:
+        Module = Closure->U.Foreign.Module;
+        break;
+
+    default:
+
+        CK_ASSERT(FALSE);
+
+        Module = NULL;
+        break;
+    }
+
+    CK_OBJECT_VALUE(Arguments[0], Module);
     return TRUE;
 }
 
@@ -1239,13 +1360,30 @@ Return Value:
 {
 
     PCK_CLOSURE Closure;
-    PCK_FUNCTION Function;
+    CK_SYMBOL_INDEX MaxStack;
 
     CK_ASSERT(CK_IS_CLOSURE(Arguments[0]));
 
     Closure = CK_AS_CLOSURE(Arguments[0]);
-    Function = Closure->Function;
-    CK_INT_VALUE(Arguments[0], Function->MaxStack);
+    switch (Closure->Type) {
+    case CkClosureBlock:
+        MaxStack = Closure->U.Block.Function->MaxStack;
+        break;
+
+    case CkClosurePrimitive:
+    case CkClosureForeign:
+        MaxStack = 0;
+        break;
+
+    default:
+
+        CK_ASSERT(FALSE);
+
+        MaxStack = 0;
+        break;
+    }
+
+    CK_INT_VALUE(Arguments[0], MaxStack);
     return TRUE;
 }
 

@@ -254,48 +254,48 @@ CkpIntegerToString (
 //
 
 CK_PRIMITIVE_DESCRIPTION CkIntPrimitives[] = {
-    {"__add@1", CkpIntAdd},
-    {"__sub@1", CkpIntSubtract},
-    {"__mul@1", CkpIntMultiply},
-    {"__div@1", CkpIntDivide},
-    {"__mod@1", CkpIntModulo},
-    {"__and@1", CkpIntAnd},
-    {"__or@1", CkpIntOr},
-    {"__xor@1", CkpIntXor},
-    {"__leftShift@1", CkpIntLeftShift},
-    {"__rightShift@1", CkpIntRightShift},
-    {"__lt@1", CkpIntLessThan},
-    {"__le@1", CkpIntLessOrEqualTo},
-    {"__gt@1", CkpIntGreaterThan},
-    {"__ge@1", CkpIntGreaterOrEqualTo},
-    {"__eq@1", CkpIntEqualTo},
-    {"__ne@1", CkpIntNotEqualTo},
-    {"__rangeInclusive@1", CkpIntInclusiveRange},
-    {"__rangeExclusive@1", CkpIntExclusiveRange},
-    {"__neg@0", CkpIntNegative},
-    {"__lnot@0", CkpIntLogicalNot},
-    {"__compl@0", CkpIntComplement},
-    {"__inc@0", CkpIntIncrement},
-    {"__dec@0", CkpIntDecrement},
-    {"__str@0", CkpIntToString},
-    {NULL, NULL}
+    {"__add@1", 1, CkpIntAdd},
+    {"__sub@1", 1, CkpIntSubtract},
+    {"__mul@1", 1, CkpIntMultiply},
+    {"__div@1", 1, CkpIntDivide},
+    {"__mod@1", 1, CkpIntModulo},
+    {"__and@1", 1, CkpIntAnd},
+    {"__or@1", 1, CkpIntOr},
+    {"__xor@1", 1, CkpIntXor},
+    {"__leftShift@1", 1, CkpIntLeftShift},
+    {"__rightShift@1", 1, CkpIntRightShift},
+    {"__lt@1", 1, CkpIntLessThan},
+    {"__le@1", 1, CkpIntLessOrEqualTo},
+    {"__gt@1", 1, CkpIntGreaterThan},
+    {"__ge@1", 1, CkpIntGreaterOrEqualTo},
+    {"__eq@1", 1, CkpIntEqualTo},
+    {"__ne@1", 1, CkpIntNotEqualTo},
+    {"__rangeInclusive@1", 1, CkpIntInclusiveRange},
+    {"__rangeExclusive@1", 1, CkpIntExclusiveRange},
+    {"__neg@0", 0, CkpIntNegative},
+    {"__lnot@0", 0, CkpIntLogicalNot},
+    {"__compl@0", 0, CkpIntComplement},
+    {"__inc@0", 0, CkpIntIncrement},
+    {"__dec@0", 0, CkpIntDecrement},
+    {"__str@0", 0, CkpIntToString},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkIntStaticPrimitives[] = {
-    {"fromString@1", CkpIntFromString},
-    {NULL, NULL}
+    {"fromString@1", 1, CkpIntFromString},
+    {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkRangePrimitives[] = {
-    {"from@0", CkpRangeFrom},
-    {"to@0", CkpRangeTo},
-    {"min@0", CkpRangeMin},
-    {"max@0", CkpRangeMax},
-    {"isInclusive@0", CkpRangeIsInclusive},
-    {"iterate@1", CkpRangeIterate},
-    {"iteratorValue@1", CkpRangeIteratorValue},
-    {"__str@0", CkpRangeToString},
-    {NULL, NULL}
+    {"from@0", 0, CkpRangeFrom},
+    {"to@0", 0, CkpRangeTo},
+    {"min@0", 0, CkpRangeMin},
+    {"max@0", 0, CkpRangeMax},
+    {"isInclusive@0", 0, CkpRangeIsInclusive},
+    {"iterate@1", 1, CkpRangeIterate},
+    {"iteratorValue@1", 1, CkpRangeIteratorValue},
+    {"__str@0", 0, CkpRangeToString},
+    {NULL, 0, NULL}
 };
 
 //
