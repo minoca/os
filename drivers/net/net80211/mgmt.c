@@ -313,17 +313,6 @@ Net80211pSendManagementFrame (
     );
 
 KSTATUS
-Net80211pQueueStateTransitionTimer (
-    PNET80211_LINK Link,
-    ULONGLONG Timeout
-    );
-
-VOID
-Net80211pCancelStateTransitionTimer (
-    PNET80211_LINK Link
-    );
-
-KSTATUS
 Net80211pValidateRates (
     PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
@@ -694,6 +683,100 @@ Return Value:
     return;
 }
 
+KSTATUS
+Net80211pQueueStateTransitionTimer (
+    PNET80211_LINK Link,
+    ULONGLONG Timeout
+    )
+
+/*++
+
+Routine Description:
+
+    This routine queues the given network link's state transition timer.
+
+Arguments:
+
+    Link - Supplies a pointer to a 802.11 link.
+
+    Timeout - Supplies the desired timeout in microseconds.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONGLONG DueTime;
+    KSTATUS Status;
+
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
+
+    DueTime = KeGetRecentTimeCounter();
+    DueTime += KeConvertMicrosecondsToTimeTicks(Timeout);
+    Status = KeQueueTimer(Link->StateTimer,
+                          TimerQueueSoft,
+                          DueTime,
+                          0,
+                          0,
+                          Link->TimeoutDpc);
+
+    if (KSUCCESS(Status)) {
+        Link->Flags |= NET80211_LINK_FLAG_TIMER_QUEUED;
+    }
+
+    return Status;
+}
+
+VOID
+Net80211pCancelStateTransitionTimer (
+    PNET80211_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine cancels the given link's state transition timer if it is
+    queued.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose state transition timer
+        shall be canceled.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
+
+    //
+    // Cancel the timer if it is queued. Also make sure the DPC is flushed if
+    // the timer just expired. The timer may be requeued at any time and a DPC
+    // cannot be queued twice.
+    //
+
+    if ((Link->Flags & NET80211_LINK_FLAG_TIMER_QUEUED) != 0) {
+        Status = KeCancelTimer(Link->StateTimer);
+        if (!KSUCCESS(Status)) {
+            KeFlushDpc(Link->TimeoutDpc);
+        }
+
+        Link->Flags &= ~NET80211_LINK_FLAG_TIMER_QUEUED;
+    }
+
+    return;
+}
+
 VOID
 Net80211pStateTimeoutDpcRoutine (
     PDPC Dpc
@@ -718,11 +801,9 @@ Return Value:
 
 {
 
-    PNET_LINK Link;
     PNET80211_LINK Net80211Link;
 
-    Link = (PNET_LINK)Dpc->UserData;
-    Net80211Link = Link->DataLinkContext;
+    Net80211Link = (PNET80211_LINK)Dpc->UserData;
     KeQueueWorkItem(Net80211Link->TimeoutWorkItem);
     return;
 }
@@ -2852,100 +2933,6 @@ SendManagementFrameEnd:
     }
 
     return Status;
-}
-
-KSTATUS
-Net80211pQueueStateTransitionTimer (
-    PNET80211_LINK Link,
-    ULONGLONG Timeout
-    )
-
-/*++
-
-Routine Description:
-
-    This routine queues the given network link's state transition timer.
-
-Arguments:
-
-    Link - Supplies a pointer to a 802.11 link.
-
-    Timeout - Supplies the desired timeout in microseconds.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ULONGLONG DueTime;
-    KSTATUS Status;
-
-    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
-
-    DueTime = KeGetRecentTimeCounter();
-    DueTime += KeConvertMicrosecondsToTimeTicks(Timeout);
-    Status = KeQueueTimer(Link->StateTimer,
-                          TimerQueueSoft,
-                          DueTime,
-                          0,
-                          0,
-                          Link->TimeoutDpc);
-
-    if (KSUCCESS(Status)) {
-        Link->Flags |= NET80211_LINK_FLAG_TIMER_QUEUED;
-    }
-
-    return Status;
-}
-
-VOID
-Net80211pCancelStateTransitionTimer (
-    PNET80211_LINK Link
-    )
-
-/*++
-
-Routine Description:
-
-    This routine cancels the given link's state transition timer if it is
-    queued.
-
-Arguments:
-
-    Link - Supplies a pointer to the 802.11 link whose state transition timer
-        shall be canceled.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    KSTATUS Status;
-
-    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
-
-    //
-    // Cancel the timer if it is queued. Also make sure the DPC is flushed if
-    // the timer just expired. The timer may be requeued at any time and a DPC
-    // cannot be queued twice.
-    //
-
-    if ((Link->Flags & NET80211_LINK_FLAG_TIMER_QUEUED) != 0) {
-        Status = KeCancelTimer(Link->StateTimer);
-        if (!KSUCCESS(Status)) {
-            KeFlushDpc(Link->TimeoutDpc);
-        }
-
-        Link->Flags &= ~NET80211_LINK_FLAG_TIMER_QUEUED;
-    }
-
-    return;
 }
 
 KSTATUS

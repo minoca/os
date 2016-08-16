@@ -713,7 +713,7 @@ Return Value:
     }
 
     Net80211Link->TimeoutDpc = KeCreateDpc(Net80211pStateTimeoutDpcRoutine,
-                                           Link);
+                                           Net80211Link);
 
     if (Net80211Link->TimeoutDpc == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -724,7 +724,7 @@ Return Value:
                                                    NULL,
                                                    WorkPriorityNormal,
                                                    Net80211pStateTimeoutWorker,
-                                                   Link,
+                                                   Net80211Link,
                                                    NET80211_ALLOCATION_TAG);
 
     if (Net80211Link->TimeoutWorkItem == NULL) {
@@ -1164,6 +1164,33 @@ Return Value:
 
 {
 
+    //
+    // Cancel the timer at the 802.11 layer before destroying it. This will
+    // make sure that any lingering state transition worker does not actually
+    // perform a state transition.
+    //
+
+    if (Net80211Link->StateTimer != NULL) {
+        KeAcquireQueuedLock(Net80211Link->Lock);
+        Net80211pCancelStateTransitionTimer(Net80211Link);
+        KeReleaseQueuedLock(Net80211Link->Lock);
+        KeDestroyTimer(Net80211Link->StateTimer);
+    }
+
+    if (Net80211Link->TimeoutDpc != NULL) {
+        KeDestroyDpc(Net80211Link->TimeoutDpc);
+    }
+
+    //
+    // As the timeout work item acquires the link's lock, make sure to flush
+    // out any lingering run of the work item before destroying the lock.
+    //
+
+    if (Net80211Link->TimeoutWorkItem != NULL) {
+        KeFlushWorkItem(Net80211Link->TimeoutWorkItem);
+        KeDestroyWorkItem(Net80211Link->TimeoutWorkItem);
+    }
+
     if (Net80211Link->Properties.SupportedRates != NULL) {
         MmFreePagedPool(Net80211Link->Properties.SupportedRates);
     }
@@ -1174,18 +1201,6 @@ Return Value:
 
     if (Net80211Link->ScanLock != NULL) {
         KeDestroyQueuedLock(Net80211Link->ScanLock);
-    }
-
-    if (Net80211Link->StateTimer != NULL) {
-        KeDestroyTimer(Net80211Link->StateTimer);
-    }
-
-    if (Net80211Link->TimeoutDpc != NULL) {
-        KeDestroyDpc(Net80211Link->TimeoutDpc);
-    }
-
-    if (Net80211Link->TimeoutWorkItem != NULL) {
-        KeDestroyWorkItem(Net80211Link->TimeoutWorkItem);
     }
 
     MmFreePagedPool(Net80211Link);

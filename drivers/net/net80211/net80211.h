@@ -516,6 +516,53 @@ Return Value:
 
 --*/
 
+KSTATUS
+Net80211pQueueStateTransitionTimer (
+    PNET80211_LINK Link,
+    ULONGLONG Timeout
+    );
+
+/*++
+
+Routine Description:
+
+    This routine queues the given network link's state transition timer.
+
+Arguments:
+
+    Link - Supplies a pointer to a 802.11 link.
+
+    Timeout - Supplies the desired timeout in microseconds.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+VOID
+Net80211pCancelStateTransitionTimer (
+    PNET80211_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine cancels the given link's state transition timer if it is
+    queued.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose state transition timer
+        shall be canceled.
+
+Return Value:
+
+    None.
+
+--*/
+
 VOID
 Net80211pStateTimeoutDpcRoutine (
     PDPC Dpc
