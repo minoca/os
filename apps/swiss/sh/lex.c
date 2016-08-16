@@ -1387,7 +1387,7 @@ Return Value:
 
 {
 
-    size_t BytesRead;
+    ssize_t BytesRead;
     size_t BytesToRead;
     PSHELL_LEXER_STATE Lexer;
     PSTR NewInputBuffer;
