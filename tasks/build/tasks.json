@@ -504,6 +504,16 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/mysql-5.7.13"
         },
         {
+            "name": "Make guile",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/guile-2.0.12"
+        },
+        {
+            "name": "Make pkg-config",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/pkg-config-0.29.1"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
