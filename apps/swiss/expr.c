@@ -130,6 +130,11 @@ Return Value:
     INT Index;
     INT Status;
 
+    if ((ArgumentCount > 1) && (strcmp(Arguments[1], "--") == 0)) {
+        Arguments += 1;
+        ArgumentCount -= 1;
+    }
+
     if (ArgumentCount == 1) {
         SwPrintError(0, NULL, "Invalid argument count");
         Status = EINVAL;
