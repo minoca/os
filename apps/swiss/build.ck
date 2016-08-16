@@ -98,6 +98,7 @@ function build() {
         "uname.c",
         "uniq.c",
         "wc.c",
+        "which.c",
         "xargs.c",
     ];
 

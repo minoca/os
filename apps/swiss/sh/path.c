@@ -700,7 +700,7 @@ Return Value:
     CompletePath = NULL;
     ExtendedPath = NULL;
     ShGetExecutableExtensions(&ExtensionList, &ExtensionListCount);
-    ListSeparator = ShGetPathListSeparator();
+    ListSeparator = PATH_LIST_SEPARATOR;
     if (ShExecutableBitSupported == 0) {
         MustBeExecutable = FALSE;
     }
@@ -2099,7 +2099,7 @@ Return Value:
 
     *FullDirectoryPath = NULL;
     *FullDirectoryPathSize = 0;
-    ListSeparator = ShGetPathListSeparator();
+    ListSeparator = PATH_LIST_SEPARATOR;
 
     //
     // Get the CDPATH environment variable.

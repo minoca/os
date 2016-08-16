@@ -608,6 +608,7 @@ Return Value:
                                  "Binary operator used without left argument");
 
                     ReturnValue = TEST_UTILITY_ERROR;
+                    goto EvaluateExpressionEnd;
                 }
             }
         }

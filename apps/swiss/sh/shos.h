@@ -354,27 +354,6 @@ Return Value:
 
 --*/
 
-char
-ShGetPathListSeparator (
-    void
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the path list separator character.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Returns the path list separator character.
-
---*/
-
 int
 ShFixUpPath (
     char **Path,

@@ -99,6 +99,7 @@ COMMON_OBJS = basename.o       \
               uname.o          \
               uniq.o           \
               wc.o             \
+              which.o          \
               xargs.o          \
 
 ##

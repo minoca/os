@@ -1125,7 +1125,7 @@ Return Value:
     }
 
     CurrentPath = PathCopy;
-    Separator = ShGetPathListSeparator();
+    Separator = PATH_LIST_SEPARATOR;
     while (TRUE) {
         NextSeparator = strchr(CurrentPath, Separator);
         if (NextSeparator != NULL) {

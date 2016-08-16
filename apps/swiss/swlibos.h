@@ -49,6 +49,20 @@ Author:
 #define SYSTEM_NAME_STRING_SIZE 80
 
 //
+// Define the PATH list separator character.
+//
+
+#if defined(WIN32)
+
+#define PATH_LIST_SEPARATOR ';'
+
+#else
+
+#define PATH_LIST_SEPARATOR ':'
+
+#endif
+
+//
 // Define some constants that may not be defined in some environments.
 //
 

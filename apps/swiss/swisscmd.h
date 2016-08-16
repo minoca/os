@@ -217,6 +217,8 @@ Author:
 #define SEQ_COMMAND_DESCRIPTION "Print a sequence of numbers"
 #define STTY_COMMAND_NAME "stty"
 #define STTY_COMMAND_DESCRIPTION "Set terminal attributes"
+#define WHICH_COMMAND_NAME "which"
+#define WHICH_COMMAND_DESCRIPTION "Print the full path of an executable"
 
 //
 // Command entry point prototypes.
@@ -2170,6 +2172,31 @@ SttyMain (
 Routine Description:
 
     This routine is the main entry point for the stty utility.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of command line arguments the program
+        was invoked with.
+
+    Arguments - Supplies a tokenized array of command line arguments.
+
+Return Value:
+
+    Returns an integer exit code. 0 for success, nonzero otherwise.
+
+--*/
+
+INT
+WhichMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the main entry point for the which utility.
 
 Arguments:
 
