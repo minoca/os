@@ -28,6 +28,7 @@ Environment:
 #include <osbase.h>
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,7 +70,7 @@ Environment:
     "  -p, --threads <count> -- Set the number of threads to spin up to \n"    \
     "      simultaneously run the test.\n"                                     \
     "  -t, --test -- Set the test to perform. Valid values are all, \n"        \
-    "      waitpid, sigchld, and quickwait.\n"                                 \
+    "      waitpid, sigchld, quickwait, and nested.\n"                         \
     "  --debug -- Print lots of information about what's happening.\n"         \
     "  --quiet -- Print only errors.\n"                                        \
     "  --help -- Print this help text and exit.\n"                             \
@@ -92,6 +93,7 @@ typedef enum _SIGNAL_TEST_TYPE {
     SignalTestWaitpid,
     SignalTestSigchld,
     SignalTestQuickWait,
+    SignalTestNested,
 } SIGNAL_TEST_TYPE, *PSIGNAL_TEST_TYPE;
 
 typedef enum _SIGNAL_TEST_WAIT_TYPE {
@@ -163,6 +165,18 @@ TestThreadSpinForever (
     PVOID Parameter
     );
 
+ULONG
+RunNestedSignalsTest (
+    VOID
+    );
+
+VOID
+TestNestedSignalHandler (
+    int Signal,
+    siginfo_t *Info,
+    void *Ignored
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -193,6 +207,9 @@ volatile ULONG ChildSignalsExpected;
 volatile LONG ChildSignalPid;
 volatile ULONG ChildSignalFailures;
 volatile ULONG ChildProcessesReady;
+
+int SigtestWritePipe;
+volatile int SigtestSignalCount[2];
 
 PSTR SignalTestWaitTypeStrings[SignalTestWaitTypeCount] = {
     "busy spin",
@@ -323,6 +340,9 @@ Return Value:
             } else if (strcasecmp(optarg, "quickwait") == 0) {
                 Test = SignalTestQuickWait;
 
+            } else if (strcasecmp(optarg, "nested") == 0) {
+                Test = SignalTestNested;
+
             } else {
                 PRINT_ERROR("Invalid test: %s.\n", optarg);
                 Status = 1;
@@ -399,6 +419,10 @@ Return Value:
 
     if ((Test == SignalTestAll) || (Test == SignalTestQuickWait)) {
         Failures += RunQuickWaitTest(Iterations, ChildProcessCount);
+    }
+
+    if ((Test == SignalTestAll) || (Test == SignalTestNested)) {
+        Failures += RunNestedSignalsTest();
     }
 
     //
@@ -1490,6 +1514,232 @@ Return Value:
     *((PULONG)Parameter) = 0;
     while (TRUE) {
         sleep(1);
+    }
+
+    return;
+}
+
+ULONG
+RunNestedSignalsTest (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tests nested signal reception.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the number of failures.
+
+--*/
+
+{
+
+    struct sigaction Action;
+    UCHAR Byte;
+    pid_t Child;
+    ULONG Count;
+    FILE *DevNull;
+    ULONG Failures;
+    ULONG Index;
+    int Pipe[2];
+    int Received[2];
+    union sigval SigVal;
+
+    Count = 200;
+    Child = -1;
+    Failures = 0;
+    PRINT("Running nested signals test\n");
+    memset(&Action, 0, sizeof(Action));
+    Action.sa_flags = SA_SIGINFO;
+    Action.sa_sigaction = TestNestedSignalHandler;
+    if (pipe(Pipe) != 0) {
+        PRINT_ERROR("pipe failed.\n");
+        return 1;
+    }
+
+    Child = fork();
+    if (Child == -1) {
+        PRINT_ERROR("fork failed.\n");
+        Failures += 1;
+        goto TestNestedSignalsEnd;
+
+    //
+    // This is the child.
+    //
+
+    } else if (Child == 0) {
+        close(Pipe[0]);
+        Pipe[0] = -1;
+        if ((sigaction(SIGRTMIN, &Action, NULL) != 0) ||
+            (sigaction(SIGRTMIN + 1, &Action, NULL) != 0)) {
+
+            PRINT_ERROR("Sigaction failed.\n");
+            exit(1);
+        }
+
+        DevNull = fopen("/dev/null", "w");
+        if (!DevNull) {
+            PRINT_ERROR("Failed to open /dev/null.");
+        }
+
+        SigtestWritePipe = Pipe[1];
+        Byte = 1;
+        write(Pipe[1], &Byte, 1);
+        while ((SigtestSignalCount[0] < Count) ||
+               (SigtestSignalCount[1] < Count)) {
+
+            fprintf(DevNull,
+                    "This is useless %d %d\n",
+                    SigtestSignalCount[0],
+                    SigtestSignalCount[1]);
+        }
+
+        DEBUG_PRINT("Got %d and %d signals\n",
+                    SigtestSignalCount[0],
+                    SigtestSignalCount[1]);
+
+        exit(0);
+
+    //
+    // This is the parent.
+    //
+
+    } else {
+        close(Pipe[1]);
+        Pipe[1] = -1;
+        if ((read(Pipe[0], &Byte, 1) != 1) || (Byte != 1)) {
+            PRINT_ERROR("Child not read\n");
+            Failures += 1;
+            goto TestNestedSignalsEnd;
+        }
+
+        Received[0] = 0;
+        Received[1] = 0;
+        fcntl(Pipe[0], F_SETFL, O_NONBLOCK);
+        for (Index = 0; Index < Count; Index += 1) {
+            if ((sigqueue(Child, SIGRTMIN, SigVal) != 0) ||
+                (sigqueue(Child, SIGRTMIN + 1, SigVal) != 0)) {
+
+                PRINT_ERROR("Failed to queue signa.\n");
+                Failures += 1;
+                goto TestNestedSignalsEnd;
+            }
+
+            while (read(Pipe[0], &Byte, 1) == 1) {
+                if (Byte == SIGRTMIN) {
+                    Received[0] += 1;
+
+                } else if (Byte == SIGRTMIN + 1) {
+                    Received[1] += 1;
+
+                } else {
+                    PRINT_ERROR("Unknown signal received\n");
+                    Failures += 1;
+                    goto TestNestedSignalsEnd;
+                }
+            }
+        }
+
+        DEBUG_PRINT("Sent %d signals\n", Index);
+        fcntl(Pipe[0], F_SETFL, 0);
+        while ((Received[0] != Count) ||
+               (Received[1] != Count)) {
+
+            if (read(Pipe[0], &Byte, 1) != 1) {
+                perror("Error");
+                PRINT_ERROR("Pipe read failure.\n");
+                Failures += 1;
+                goto TestNestedSignalsEnd;
+            }
+
+            if (Byte == SIGRTMIN) {
+                Received[0] += 1;
+
+            } else if (Byte == SIGRTMIN + 1) {
+                Received[1] += 1;
+
+            } else {
+                PRINT_ERROR("Unknown signal received\n");
+                Failures += 1;
+                goto TestNestedSignalsEnd;
+            }
+        }
+    }
+
+    DEBUG_PRINT("\n");
+
+TestNestedSignalsEnd:
+    if (Pipe[0] >= 0) {
+        close(Pipe[0]);
+    }
+
+    if (Pipe[1] >= 0) {
+        close(Pipe[1]);
+    }
+
+    if (Child > 0) {
+        kill(Child, SIGKILL);
+        waitpid(Child, NULL, 0);
+    }
+
+    return Failures;
+}
+
+VOID
+TestNestedSignalHandler (
+    int Signal,
+    siginfo_t *Info,
+    void *Ignored
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tests nested signal reception.
+
+Arguments:
+
+    Signal - Supplies the signal that occurred.
+
+    Info - Supplies a pointer to the signal information.
+
+    Ignored - Supplies an ignored context pointer.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    assert(Info->si_signo == Signal);
+    assert((Signal == SIGRTMIN) || (Signal == SIGRTMIN + 1));
+
+    if (write(SigtestWritePipe, &(Info->si_signo), 1) != 1) {
+
+        assert(FALSE);
+    }
+
+    if (Signal == SIGRTMIN) {
+        DEBUG_PRINT("A%d ", SigtestSignalCount[0]);
+        SigtestSignalCount[0] += 1;
+
+    } else {
+
+        assert(Signal == SIGRTMIN + 1);
+
+        DEBUG_PRINT("B%d ", SigtestSignalCount[1]);
+        SigtestSignalCount[1] += 1;
     }
 
     return;
