@@ -242,7 +242,8 @@ Net80211pStartProbing (
 
 VOID
 Net80211pStopProbing (
-    PNET80211_LINK Link
+    PNET80211_LINK Link,
+    BOOL LockHeld
     );
 
 KSTATUS
@@ -1322,7 +1323,7 @@ Return Value:
                 }
             }
 
-            Net80211pStopProbing(Link);
+            Net80211pStopProbing(Link, LockHeld);
         }
 
         //
@@ -1369,7 +1370,7 @@ Return Value:
     //
 
     if ((Scan->Flags & NET80211_SCAN_FLAG_BACKGROUND) == 0) {
-        Net80211pStopProbing(Link);
+        Net80211pStopProbing(Link, LockHeld);
     }
 
     //
@@ -1457,10 +1458,17 @@ Return Value:
 
         //
         // Leave the active BSS by setting the state back to initialized.
+        // Protect against leaving and joining an already active BSS, but still
+        // reauthenticate with the active BSS as the scan was issued for some
+        // reason (e.g. maybe the connection is half-baked and the user isn't
+        // seeing an IP address).
         //
 
-        Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
-        Net80211pJoinBss(Link, FoundEntry);
+        if (Link->ActiveBss != FoundEntry) {
+            Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
+            Net80211pJoinBss(Link, FoundEntry);
+        }
+
         Net80211pSetChannel(Link, FoundEntry->State.Channel);
         Net80211pSetStateUnlocked(Link, Net80211StateAuthenticating);
         Status = STATUS_SUCCESS;
@@ -1584,7 +1592,8 @@ StartProbingEnd:
 
 VOID
 Net80211pStopProbing (
-    PNET80211_LINK Link
+    PNET80211_LINK Link,
+    BOOL LockHeld
     )
 
 /*++
@@ -1601,6 +1610,9 @@ Arguments:
     Link - Supplies a pointer to the 802.11 link that is exiting the probing
         state.
 
+    LockHeld - Supplies a boolean indicating whether or not the link's lock is
+        already held.
+
 Return Value:
 
     None.
@@ -1613,7 +1625,9 @@ Return Value:
     PVOID DeviceContext;
     KSTATUS Status;
 
-    KeAcquireQueuedLock(Link->Lock);
+    if (LockHeld == FALSE) {
+        KeAcquireQueuedLock(Link->Lock);
+    }
 
     ASSERT(Link->State == Net80211StateProbing);
 
@@ -1657,7 +1671,10 @@ Return Value:
     Link->ProbeNextState = Net80211StateInvalid;
 
 StopProbingEnd:
-    KeReleaseQueuedLock(Link->Lock);
+    if (LockHeld == FALSE) {
+        KeReleaseQueuedLock(Link->Lock);
+    }
+
     return;
 }
 
