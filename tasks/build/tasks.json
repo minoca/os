@@ -514,6 +514,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/pkg-config-0.29.1"
         },
         {
+            "name": "Make autogen",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/autogen-5.18.10"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
