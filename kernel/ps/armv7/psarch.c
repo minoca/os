@@ -61,6 +61,13 @@ PspArchGetNextPcReadMemory (
 ULONGLONG PsInitialThreadPointer = 0;
 
 //
+// TODO: Remove this.
+//
+
+SIGNAL_CONTEXT PsLastSignalRestore;
+TRAP_FRAME PsLastSignalRestoreTrapFrame;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -259,6 +266,8 @@ Return Value:
     ASSERT((Context.Cpsr & ARM_MODE_MASK) == ARM_MODE_USER);
 
     REMOVE_SIGNAL(Thread->RunningSignals, Context.Signal);
+    RtlCopyMemory(&PsLastSignalRestore, &Context, sizeof(SIGNAL_CONTEXT));
+    RtlCopyMemory(&PsLastSignalRestoreTrapFrame, TrapFrame, sizeof(TRAP_FRAME));
     TrapFrame->R0 = Context.R0;
     TrapFrame->R1 = Context.R1;
     TrapFrame->R2 = Context.R2;
