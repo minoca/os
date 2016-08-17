@@ -33,7 +33,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define PROCESS_USER_MODULE_MAX_NAME 100
+#define PROCESS_USER_MODULE_MAX_NAME 384
 #define PROCESS_USER_MODULE_MAX_COUNT 200
 
 //
