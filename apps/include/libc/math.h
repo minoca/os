@@ -705,6 +705,85 @@ Return Value:
 --*/
 
 LIBC_API
+long
+lrint (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integer value.
+
+    Returns an undefined value if the integer is NaN or out of range.
+
+--*/
+
+LIBC_API
+long long
+llrint (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integer value.
+
+    Returns an undefined value if the integer is NaN or out of range.
+
+--*/
+
+LIBC_API
+double
+nearbyint (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction. This routine does not raise an inexact
+    exception.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integral value in the direction of the current rounding
+    mode.
+
+    NaN if the given value is NaN.
+
+    Returns the value itself for +/- 0 and +/- Infinity.
+
+--*/
+
+LIBC_API
 double
 rint (
     double Value

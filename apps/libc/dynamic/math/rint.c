@@ -34,6 +34,7 @@ Environment:
 
 #include "../libcp.h"
 #include "mathp.h"
+#include <fenv.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -60,6 +61,126 @@ Environment:
 //
 // ------------------------------------------------------------------ Functions
 //
+
+LIBC_API
+long
+lrint (
+    double Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integer value.
+
+    Returns an undefined value if the integer is NaN or out of range.
+
+--*/
+
+{
+
+    fenv_t Environment;
+    long Result;
+
+    feholdexcept(&Environment);
+    Result = (long)rint(Value);
+    if (fetestexcept(FE_INVALID) != 0) {
+        feclearexcept(FE_INEXACT);
+    }
+
+    feupdateenv(&Environment);
+    return Result;
+}
+
+LIBC_API
+long long
+llrint (
+    double Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integer value.
+
+    Returns an undefined value if the integer is NaN or out of range.
+
+--*/
+
+{
+
+    fenv_t Environment;
+    long long Result;
+
+    feholdexcept(&Environment);
+    Result = (long long)rint(Value);
+    if (fetestexcept(FE_INVALID) != 0) {
+        feclearexcept(FE_INEXACT);
+    }
+
+    feupdateenv(&Environment);
+    return Result;
+}
+
+LIBC_API
+double
+nearbyint (
+    double Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction. This routine does not raise an inexact
+    exception.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integral value in the direction of the current rounding
+    mode.
+
+    NaN if the given value is NaN.
+
+    Returns the value itself for +/- 0 and +/- Infinity.
+
+--*/
+
+{
+
+    fenv_t Environment;
+    double Result;
+
+    fegetenv(&Environment);
+    Result = rint(Value);
+    fesetenv(&Environment);
+    return Result;
+}
 
 LIBC_API
 double
