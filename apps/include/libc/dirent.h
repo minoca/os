@@ -382,6 +382,84 @@ Return Value:
 
 --*/
 
+LIBC_API
+int
+alphasort (
+    const struct dirent **Left,
+    const struct dirent **Right
+    );
+
+/*++
+
+Routine Description:
+
+    This routine can be used as the comparison function for the scandir
+    function. It will compare directory names in alphabetical order.
+
+Arguments:
+
+    Left - Supplies a pointer to a pointer to the left directory entry to
+        compare.
+
+    Right - Supplies a pointer to a pointer to the right directory entry to
+        compare.
+
+Return Value:
+
+    < 0 if Left < Right.
+
+    0 if Left == Right.
+
+    > 0 if Left > Right.
+
+--*/
+
+LIBC_API
+int
+scandir (
+    const char *DirectoryPath,
+    struct dirent ***NameList,
+    int (*SelectFunction)(const struct dirent *),
+    int (*CompareFunction)(const struct dirent **, const struct dirent **)
+    );
+
+/*++
+
+Routine Description:
+
+    This routine scans the given directory, and calls the select function for
+    each entry. If the select function returns non-zero, then the entry is
+    added to the list of entries to return. If the compare function is
+    non-zero the resulting entries are sorted via qsort.
+
+Arguments:
+
+    DirectoryPath - Supplies a pointer to a null-terminated string containing
+        the directory path to scan.
+
+    NameList - Supplies a pointer where an array of pointers to selected
+        directory entries will be returned on success. The caller is
+        responsible for freeing both the returned array and each individual
+        element in the array.
+
+    SelectFunction - Supplies an optional pointer to a function used to
+        determine whether or not a particular entry should end up in the
+        final list. If the select function returns non-zero, then the entry
+        is added to the final list. If this parameter is NULL, then all
+        entries are selected.
+
+    CompareFunction - Supplies an optional pointer to a function used to
+        compare two directory entries during the final sorting process. If this
+        is NULL, then the order of the names in the name list is unspecified.
+
+Return Value:
+
+    Returns the number of entries returned in the array on success.
+
+    -1 on failure.
+
+--*/
+
 #ifdef __cplusplus
 
 }
