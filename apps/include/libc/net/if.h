@@ -42,6 +42,7 @@ extern "C" {
 //
 
 #define IF_NAMESIZE 16
+#define IFNAMSIZ IF_NAMESIZE
 
 //
 // ------------------------------------------------------ Data Type Definitions
