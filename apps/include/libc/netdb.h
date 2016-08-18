@@ -219,7 +219,7 @@ extern "C" {
 // An argument buffer overflowed.
 //
 
-#define EAI_OVERFLOW 11
+#define EAI_OVERFLOW 12
 
 //
 // Define errors returned by gethostbyaddr and gethostbyname.
