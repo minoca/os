@@ -254,14 +254,6 @@ extern "C" {
 #define FASYNC O_ASYNC
 
 //
-// The binary and text flags don't mean anything on this OS, but define them
-// anyway.
-//
-
-#define O_BINARY 0x0000
-#define O_TEXT 0x0000
-
-//
 // Set this flag to enable opening files whose offsets cannot be described in
 // off_t types but can be described in off64_t. Since off_t is always 64-bits,
 // this flag is ignored and the definition is provided only for compatibility

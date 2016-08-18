@@ -114,16 +114,17 @@ Return Value:
     int Address;
     char *AfterScan;
     void *Buffer;
-    ssize_t BytesDone;
-    int Input;
-    int Output;
+    FILE *Input;
+    FILE *Output;
+    size_t Read;
     int Result;
     int Size;
     struct stat Stat;
+    size_t Written;
 
     Buffer = NULL;
-    Input = -1;
-    Output = -1;
+    Input = NULL;
+    Output = NULL;
     if (ArgumentCount != 4) {
         printf("Error: usage: <RAMAddress> <InputFile> <OutputFile>\n");
         Result = EINVAL;
@@ -151,11 +152,8 @@ Return Value:
     // Open the destination.
     //
 
-    Output = open(Arguments[3],
-                  O_WRONLY | O_BINARY | O_TRUNC | O_CREAT,
-                  S_IRUSR | S_IWUSR);
-
-    if (Output < 0) {
+    Output = fopen(Arguments[3], "wb");
+    if (Output == NULL) {
         fprintf(stderr,
                 "Error opening file: %s: %s\n",
                 Arguments[3],
@@ -174,7 +172,7 @@ Return Value:
     // address and size).
     //
 
-    Result = lseek(Output, TI_MLO_OFFSET, SEEK_SET);
+    Result = fseek(Output, TI_MLO_OFFSET, SEEK_SET);
     if (Result < 0) {
         goto mainEnd;
     }
@@ -183,8 +181,9 @@ Return Value:
     // Write the header.
     //
 
-    Result = write(Output, TiTocHeader, sizeof(TiTocHeader));
-    if (Result < 0) {
+    Result = -1;
+    Written = fwrite(TiTocHeader, 1, sizeof(TiTocHeader), Output);
+    if (Written != sizeof(TiTocHeader)) {
         goto mainEnd;
     }
 
@@ -193,8 +192,8 @@ Return Value:
     //
 
     Size = Stat.st_size;
-    Result = write(Output, &Size, sizeof(Size));
-    if (Result < 0) {
+    Written = fwrite(&Size, 1, sizeof(Size), Output);
+    if (Written != sizeof(Size)) {
         goto mainEnd;
     }
 
@@ -202,14 +201,13 @@ Return Value:
     // Write the destination address.
     //
 
-    Result = write(Output, &Address, sizeof(Address));
-    if (Result < 0) {
+    Written = fwrite(&Address, 1, sizeof(Address), Output);
+    if (Written != sizeof(Address)) {
         goto mainEnd;
     }
 
-    Result = -1;
-    Input = open(Arguments[2], O_RDONLY | O_BINARY);
-    if (Input < 0) {
+    Input = fopen(Arguments[2], "rb");
+    if (Input == NULL) {
         fprintf(stderr,
                 "Error opening file: %s: %s\n",
                 Arguments[2],
@@ -220,28 +218,29 @@ Return Value:
 
     Buffer = malloc(Size);
     if (Buffer == NULL) {
+        errno = ENOMEM;
         goto mainEnd;
     }
 
-    BytesDone = read(Input, Buffer, Size);
-    if (BytesDone != Size) {
+    Read = fread(Buffer, 1, Size, Input);
+    if (Read != Size) {
         goto mainEnd;
     }
 
-    BytesDone = write(Output, Buffer, Size);
-    if (BytesDone != Size) {
+    Written = fwrite(Buffer, 1, Size, Output);
+    if (Written != Size) {
         goto mainEnd;
     }
 
     Result = 0;
 
 mainEnd:
-    if (Input >= 0) {
-        close(Input);
+    if (Input != NULL) {
+        fclose(Input);
     }
 
-    if (Output >= 0) {
-        close(Output);
+    if (Output != NULL) {
+        fclose(Output);
     }
 
     if (Buffer != NULL) {

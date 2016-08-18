@@ -8685,11 +8685,10 @@ Return Value:
 {
 
     PVOID Buffer;
-    ssize_t BytesRead;
-    int File;
+    FILE *File;
+    size_t Read;
     INT Result;
     struct stat Stat;
-    ULONGLONG TotalBytesRead;
 
     *Contents = NULL;
     *Size = 0;
@@ -8703,37 +8702,22 @@ Return Value:
         return ENOMEM;
     }
 
-    File = open(Path, O_RDONLY | O_BINARY);
-    if (File < 0) {
+    File = fopen(Path, "rb");
+    if (File == NULL) {
         Result = errno;
         goto LoadFileEnd;
     }
 
-    TotalBytesRead = 0;
-    while (TotalBytesRead < Stat.st_size) {
-        BytesRead = read(File,
-                         Buffer + TotalBytesRead,
-                         Stat.st_size - TotalBytesRead);
-
-        if (BytesRead <= 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-
-            Result = errno;
-            goto LoadFileEnd;
-        }
-
-        TotalBytesRead += BytesRead;
+    Read = fread(Buffer, 1, Stat.st_size, File);
+    fclose(File);
+    if (Read != Stat.st_size) {
+        Result = errno;
+        goto LoadFileEnd;
     }
 
     Result = 0;
 
 LoadFileEnd:
-    if (File >= 0) {
-        close(File);
-    }
-
     if (Result != 0) {
         if (Buffer != NULL) {
             free(Buffer);
