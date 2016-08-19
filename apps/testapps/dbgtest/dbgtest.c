@@ -25,7 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <osbase.h>
+#include <minoca/lib/minocaos.h>
 #include <minoca/debug/dbgproto.h>
 #include <stdio.h>
 #include <stdlib.h>

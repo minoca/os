@@ -30,7 +30,7 @@ Environment:
 #include <string.h>
 
 #include "../setup.h"
-#include <mlibc.h>
+#include <minoca/lib/mlibc.h>
 
 //
 // ---------------------------------------------------------------- Definitions

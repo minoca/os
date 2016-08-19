@@ -26,10 +26,6 @@ function build() {
         "crypt.c"
     ];
 
-    includes = [
-        "$//apps/include"
-    ];
-
     dynlibs = [
         "//apps/libc/dynamic:libc"
     ];
@@ -37,7 +33,6 @@ function build() {
     so = {
         "label": "libcrypt",
         "inputs": sources + dynlibs,
-        "includes": includes,
         "major_version": "1"
     };
 

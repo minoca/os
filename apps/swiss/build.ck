@@ -159,12 +159,9 @@ function build() {
         "//lib/rtl/rtlc:build_rtlc"
     ];
 
-    build_includes = [
-        "$//apps/include",
-    ];
-
+    build_includes = [];
     target_includes = build_includes + [
-        "$//apps/include/libc"
+        "$//apps/libc/include"
     ];
 
     target_sources = base_sources + uos_only_commands + minoca_sources;

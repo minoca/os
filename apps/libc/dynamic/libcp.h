@@ -22,9 +22,9 @@ Author:
 
 #define LIBC_API __DLLEXPORT
 
-#include <osbase.h>
+#include <minoca/lib/minocaos.h>
 #include <libcbase.h>
-#include <mlibc.h>
+#include <minoca/lib/mlibc.h>
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sys/types.h>

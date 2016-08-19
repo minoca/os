@@ -27,7 +27,7 @@ BINARYTYPE = library
 
 BUILD = yes
 
-INCLUDES += $(SRCROOT)/os/apps/include;$(SRCDIR)/include;..;
+INCLUDES += $(SRCDIR)/include;..;
 
 VPATH += $(SRCDIR)/..:
 

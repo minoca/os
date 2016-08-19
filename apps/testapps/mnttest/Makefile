@@ -26,7 +26,7 @@ BINPLACE = bin
 
 BINARYTYPE = app
 
-INCLUDES += $(SRCROOT)/os/apps/include/libc;$(SRCROOT)/os/apps/include;
+INCLUDES += $(SRCROOT)/os/apps/libc/include;
 
 OBJS = mnttest.o \
 

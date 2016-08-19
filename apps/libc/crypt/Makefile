@@ -29,7 +29,7 @@ BINPLACE = bin
 
 ENTRY := 0
 
-INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
+INCLUDES += $(SRCROOT)/os/apps/libc/include;
 
 OBJS = crypt.o          \
 

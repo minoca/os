@@ -81,12 +81,11 @@ function build() {
     ];
 
     build_includes = [
-        "$//apps/include",
         "$//apps/lib/chalk"
     ];
 
     target_includes = build_includes + [
-        "$//apps/include/libc",
+        "$//apps/libc/include",
     ];
 
     target_sources = common_sources + minoca_sources + target_libs +

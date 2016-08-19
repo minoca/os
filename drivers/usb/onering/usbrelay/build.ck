@@ -28,10 +28,6 @@ function build() {
         "usbrelay.c"
     ];
 
-    includes = [
-        "$//apps/include"
-    ];
-
     dynlibs = [
         "//apps/osbase:libminocaos"
     ];
@@ -39,7 +35,6 @@ function build() {
     app = {
         "label": name,
         "inputs": sources + dynlibs,
-        "includes": includes
     };
 
     entries = application(app);

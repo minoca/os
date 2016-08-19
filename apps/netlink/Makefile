@@ -30,7 +30,7 @@ BINPLACE = bin
 
 ENTRY = NlInitialize
 
-INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
+INCLUDES += $(SRCROOT)/os/apps/libc/include;
 
 OBJS = generic.o  \
        netlink.o  \

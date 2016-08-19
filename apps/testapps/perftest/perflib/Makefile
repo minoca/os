@@ -29,7 +29,7 @@ BINPLACE = bin
 
 ENTRY := 0
 
-INCLUDES += $(SRCROOT)/os/apps/include/libc;$(SRCROOT)/os/apps/include;
+INCLUDES += $(SRCROOT)/os/apps/libc/include;
 
 OBJS = perflib.o  \
 

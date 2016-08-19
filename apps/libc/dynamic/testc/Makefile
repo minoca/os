@@ -28,7 +28,7 @@ BUILD = yes
 
 BINPLACE = testbin
 
-INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
+INCLUDES += $(SRCROOT)/os/apps/libc/include;
 
 VPATH += $(SRCDIR)/..:$(SRCDIR)/../math:
 

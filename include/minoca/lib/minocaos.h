@@ -4,7 +4,7 @@ Copyright (c) 2013 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    osbase.h
+    minocaos.h
 
 Abstract:
 

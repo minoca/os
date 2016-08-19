@@ -99,7 +99,6 @@ function build() {
     includes = [
         "$//lib/im",
         "$//debug/client",
-        "$//apps/include"
     ];
 
     if (arch == "x86") {

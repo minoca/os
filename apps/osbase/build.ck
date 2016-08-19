@@ -65,10 +65,6 @@ function build() {
         ];
     }
 
-    includes = [
-        "$//apps/include"
-    ];
-
     link_ldflags = [
         "-Wl,-Bsymbolic",
         "-nostdlib",
@@ -91,7 +87,6 @@ function build() {
     so = {
         "label": "libminocaos",
         "inputs": sources + arch_sources + libs,
-        "includes": includes,
         "entry": "OsDynamicLoaderMain",
         "config": link_config,
         "major_version": "1"

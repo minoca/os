@@ -29,8 +29,7 @@ BUILD = yes
 
 BINARYTYPE = ntconsole
 
-INCLUDES += $(SRCROOT)/os/apps/include;         \
-            $(SRCROOT)/os/apps/lib/chalk;       \
+INCLUDES += $(SRCROOT)/os/apps/lib/chalk;       \
 
 VPATH += $(SRCDIR)/..:
 

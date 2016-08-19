@@ -29,8 +29,8 @@ Environment:
 #include <errno.h>
 #include <unistd.h>
 
-#include <osbase.h>
-#include <mlibc.h>
+#include <minoca/lib/minocaos.h>
+#include <minoca/lib/mlibc.h>
 #include "../swlib.h"
 
 //

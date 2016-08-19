@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <osbase.h>
+#include <minoca/lib/minocaos.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -35,7 +35,7 @@ Environment:
 #include <string.h>
 #include <sys/ioctl.h>
 #include <time.h>
-#include <mlibc.h>
+#include <minoca/lib/mlibc.h>
 
 #include "ktestdrv.h"
 

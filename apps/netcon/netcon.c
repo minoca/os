@@ -24,12 +24,12 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <osbase.h>
+#include <minoca/lib/minocaos.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/net80211.h>
 #include <minoca/net/netlink.h>
-#include <mlibc.h>
-#include <netlink.h>
+#include <minoca/lib/mlibc.h>
+#include <minoca/lib/netlink.h>
 
 #include <assert.h>
 #include <errno.h>

@@ -27,8 +27,7 @@ BINPLACE = bin
 
 BINARYTYPE = app
 
-INCLUDES += $(SRCROOT)/os/apps/include;      \
-            $(SRCROOT)/os/apps/include/libc; \
+INCLUDES += $(SRCROOT)/os/apps/libc/include; \
 
 OBJS = efiboot.o \
 

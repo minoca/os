@@ -24,7 +24,7 @@ Author:
 #define OS_API __DLLPROTECTED
 #define RTL_API __DLLPROTECTED
 
-#include <osbase.h>
+#include <minoca/lib/minocaos.h>
 
 //
 // ---------------------------------------------------------------- Definitions

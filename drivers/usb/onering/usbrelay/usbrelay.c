@@ -25,7 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <osbase.h>
+#include <minoca/lib/minocaos.h>
 #include <minoca/devinfo/onering.h>
 
 #include <assert.h>

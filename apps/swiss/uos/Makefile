@@ -30,7 +30,7 @@ BUILD = yes
 
 BINARYTYPE = app
 
-INCLUDES += $(SRCDIR)/..;$(SRCROOT)/os/apps/include;.;
+INCLUDES += $(SRCDIR)/..;.;
 
 VPATH += $(SRCDIR)/..:
 

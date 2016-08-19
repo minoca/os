@@ -31,8 +31,8 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <osbase.h>
-#include <mlibc.h>
+#include <minoca/lib/minocaos.h>
+#include <minoca/lib/mlibc.h>
 #include <minoca/uefi/uefi.h>
 #include <minoca/uefi/guid/globlvar.h>
 

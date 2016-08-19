@@ -22,7 +22,7 @@ Author:
 
 #define RTL_API __DLLEXPORT
 
-#include <osbase.h>
+#include <minoca/lib/minocaos.h>
 #include <minoca/lib/partlib.h>
 #include "chalk.h"
 

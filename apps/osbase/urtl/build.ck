@@ -27,14 +27,9 @@ function build() {
         "uprint.c"
     ];
 
-    includes = [
-        "$//apps/include"
-    ];
-
     lib = {
         "label": "urtl",
         "inputs": sources,
-        "includes": includes,
     };
 
     entries = static_library(lib);

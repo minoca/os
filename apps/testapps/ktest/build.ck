@@ -40,8 +40,7 @@ function build() {
     ];
 
     includes = [
-        "$//apps/include",
-        "$//apps/include/libc"
+        "$//apps/libc/include"
     ];
 
     app = {

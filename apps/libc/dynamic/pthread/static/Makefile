@@ -29,7 +29,7 @@ BINPLACE = bin
 
 OBJS = ptatfork.o \
 
-INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
+INCLUDES += $(SRCROOT)/os/apps/libc/include;
 INCLUDES += $(SRCDIR)/..;$(SRCDIR)/../..;
 
 include $(SRCROOT)/os/minoca.mk

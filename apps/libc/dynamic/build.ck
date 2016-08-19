@@ -170,8 +170,7 @@ function build() {
     }
 
     sources_includes = [
-        "$//apps/include",
-        "$//apps/include/libc"
+        "$//apps/libc/include"
     ];
 
     sources_config = {
@@ -196,7 +195,6 @@ function build() {
     ];
 
     wincsup_includes = [
-        "$//apps/include",
         "$//apps/libc/dynamic/wincsup/include"
     ];
 

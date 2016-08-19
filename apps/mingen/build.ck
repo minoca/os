@@ -59,12 +59,11 @@ function build() {
     ];
 
     build_includes = [
-        "$//apps/include",
         "$//apps/lib/chalk"
     ];
 
     includes = build_includes + [
-        "$//apps/include/libc"
+        "$//apps/libc/include"
     ];
 
     app = {

@@ -24,9 +24,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <osbase.h>
+#include <minoca/lib/minocaos.h>
 #include <minoca/kernel/sp.h>
-#include <mlibc.h>
+#include <minoca/lib/mlibc.h>
 
 #include <assert.h>
 #include <errno.h>
