@@ -783,6 +783,30 @@ Return Value:
 --*/
 
 LIBC_API
+void
+cfmakeraw (
+    struct termios *Settings
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the given settings to "raw" mode, disabling all line
+    processing features and making the terminal as basic as possible.
+
+Arguments:
+
+    Settings - Supplies a pointer to the terminal settings to adjust to raw
+        mode.
+
+Return Value:
+
+    None.
+
+--*/
+
+LIBC_API
 int
 tcflush (
     int FileDescriptor,

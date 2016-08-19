@@ -378,6 +378,44 @@ Return Value:
 }
 
 LIBC_API
+void
+cfmakeraw (
+    struct termios *Settings
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the given settings to "raw" mode, disabling all line
+    processing features and making the terminal as basic as possible.
+
+Arguments:
+
+    Settings - Supplies a pointer to the terminal settings to adjust to raw
+        mode.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    Settings->c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR |
+                           ICRNL | IXON | IMAXBEL);
+
+    Settings->c_oflag &= ~OPOST;
+    Settings->c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    Settings->c_cflag &= ~(CSIZE | PARENB);
+    Settings->c_cflag |= CS8;
+    Settings->c_cc[VMIN] = 1;
+    Settings->c_cc[VTIME] = 0;
+    return;
+}
+
+LIBC_API
 int
 tcflush (
     int FileDescriptor,
