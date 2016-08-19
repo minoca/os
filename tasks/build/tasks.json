@@ -519,6 +519,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/autogen-5.18.10"
         },
         {
+            "name": "Make node",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/node-v4.5.0"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
