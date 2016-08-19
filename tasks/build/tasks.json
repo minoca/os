@@ -524,6 +524,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/node-v4.5.0"
         },
         {
+            "name": "Make ruby",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/ruby-2.3.1"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
