@@ -505,7 +505,7 @@ Return Value:
 
     } else {
         FatVolume = MmAllocatePagedPool(sizeof(FATFS_VOLUME),
-                                           FAT_VOLUME_ALLOCATION_TAG);
+                                        FAT_VOLUME_ALLOCATION_TAG);
     }
 
     if (FatVolume == NULL) {
