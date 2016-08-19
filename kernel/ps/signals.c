@@ -441,7 +441,7 @@ Return Value:
     case SignalTargetThread:
         Process = CurrentProcess;
         if (TargetId == 0) {
-            Thread = KeGetCurrentThread();
+            Thread = CurrentThread;
             ObAddReference(Thread);
 
         } else {
@@ -547,6 +547,7 @@ Return Value:
 
             KernelProcess = PsGetKernelProcess();
             if (Process == KernelProcess) {
+                ObReleaseReference(Process);
                 Status = STATUS_ACCESS_DENIED;
                 goto SendSignalEnd;
             }
@@ -3861,7 +3862,6 @@ Return Value:
                                                PS_ALLOCATION_TAG);
 
         if (SignalQueueEntry == NULL) {
-            ObReleaseReference(Process);
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto SignalProcessEnd;
         }
