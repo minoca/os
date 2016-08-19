@@ -2632,15 +2632,55 @@ Return Value:
 
     BOOL WasSet;
 
-    WasSet = FALSE;
     KeAcquireQueuedLock(Process->QueuedLock);
+    WasSet = PspSetProcessExitStatusUnlocked(Process, ExitReason, ExitStatus);
+    KeReleaseQueuedLock(Process->QueuedLock);
+    return WasSet;
+}
+
+BOOL
+PspSetProcessExitStatusUnlocked (
+    PKPROCESS Process,
+    USHORT ExitReason,
+    UINTN ExitStatus
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the process exit status and flags if they are not already
+    set. It assumes that the process's queued lock is already held.
+
+Arguments:
+
+    Process - Supplies a pointer to the process that is exiting.
+
+    ExitReason - Supplies the reason code for the child exit.
+
+    ExitStatus - Supplies the exit status to set.
+
+Return Value:
+
+    TRUE if the values were set in the process.
+
+    FALSE if an exit status was already set in the process.
+
+--*/
+
+{
+
+    BOOL WasSet;
+
+    ASSERT(KeIsQueuedLockHeld(Process->QueuedLock) != FALSE);
+
+    WasSet = FALSE;
     if (Process->ExitReason == 0) {
         Process->ExitReason = ExitReason;
         Process->ExitStatus = ExitStatus;
         WasSet = TRUE;
     }
 
-    KeReleaseQueuedLock(Process->QueuedLock);
     return WasSet;
 }
 
