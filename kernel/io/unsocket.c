@@ -2390,7 +2390,7 @@ Return Value:
     if (RemoteToSignal != NULL) {
         KeAcquireQueuedLock(RemoteToSignal->Lock);
         IoSetIoObjectState(RemoteToSignal->KernelSocket.IoState,
-                           POLL_EVENT_IN,
+                           POLL_EVENT_IN | POLL_EVENT_DISCONNECTED,
                            TRUE);
 
         KeReleaseQueuedLock(RemoteToSignal->Lock);
