@@ -2081,6 +2081,10 @@ Return Value:
         AlignedSize >>= 1;
         AlignedSize = ALIGN_RANGE_UP(AlignedSize,
                                      Heap->ExpansionGranularity);
+
+        if (AlignedSize < Minimum) {
+            AlignedSize = Minimum;
+        }
     }
 
     if (Memory != NULL) {
