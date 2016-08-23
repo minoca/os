@@ -129,7 +129,9 @@ Return Value:
 --*/
 
 FUNCTION OspSignalHandler
+    mov     %r1, %sp            @ TODO: Remove this.
     mov     %r0, %sp            @ Get the argument at the top of the stack.
+    mov     %r2, %sp            @ TODO: Remove this.
     bl      OspProcessSignal    @ The parameters are already set up. Just call.
     add     %sp, #SIGNAL_PARAMETERS_SIZE    @ Pop the signal parameters.
     mov     %r1, %sp            @ Get stack pointer.

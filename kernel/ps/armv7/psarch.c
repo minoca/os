@@ -66,6 +66,7 @@ ULONGLONG PsInitialThreadPointer = 0;
 
 SIGNAL_CONTEXT PsLastSignalRestore;
 TRAP_FRAME PsLastSignalRestoreTrapFrame;
+TRAP_FRAME PsLastSignalApplyTrapFrame;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -169,6 +170,7 @@ Return Value:
     // call. Volatile registers don't matter in this case.
     //
 
+    RtlCopyMemory(&PsLastSignalApplyTrapFrame, TrapFrame, sizeof(TRAP_FRAME));
     RtlZeroMemory(&Context, sizeof(SIGNAL_CONTEXT));
     Context.Signal = SignalParameters->SignalNumber;
     Context.Pc = TrapFrame->Pc;
@@ -197,6 +199,7 @@ Return Value:
     // TODO: Support an alternate signal stack.
     //
 
+    TrapFrame->UserSp = ALIGN_RANGE_DOWN(TrapFrame->UserSp, STACK_ALIGNMENT);
     TrapFrame->UserSp -= sizeof(SIGNAL_CONTEXT);
     Status = MmCopyToUserMode((PVOID)(TrapFrame->UserSp),
                               &Context,
