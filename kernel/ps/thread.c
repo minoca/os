@@ -292,9 +292,7 @@ Return Value:
         // Copy the signal mask from the current thread.
         //
 
-        RtlCopyMemory(&(NewThread->BlockedSignals),
-                      &(CurrentThread->BlockedSignals),
-                      sizeof(SIGNAL_SET));
+        NewThread->BlockedSignals = CurrentThread->BlockedSignals;
 
         //
         // Set up the environment if there is one.
@@ -1845,11 +1843,9 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
     BOOL DestroyProcess;
     BOOL LastThread;
     PKPROCESS Process;
-    LIST_ENTRY SignalList;
     BOOL SignalQueued;
     PSIGNAL_QUEUE_ENTRY SignalQueueEntry;
     PKTHREAD Thread;
@@ -1954,47 +1950,11 @@ Return Value:
     }
 
     //
-    // If the process is not being destroyed, then blocked signals that had
-    // been sent to this thread need to be cleaned up.
-    //
-
-    if (DestroyProcess == FALSE) {
-        if (LIST_EMPTY(&(Process->BlockedSignalListHead)) == FALSE) {
-            INITIALIZE_LIST_HEAD(&SignalList);
-            KeAcquireQueuedLock(Process->QueuedLock);
-            CurrentEntry = Process->BlockedSignalListHead.Next;
-            while (CurrentEntry != &(Process->BlockedSignalListHead)) {
-                SignalQueueEntry = LIST_VALUE(CurrentEntry,
-                                              SIGNAL_QUEUE_ENTRY,
-                                              ListEntry);
-
-                CurrentEntry = CurrentEntry->Next;
-                if (SignalQueueEntry->DestinationThread == Thread) {
-                    LIST_REMOVE(&(SignalQueueEntry->ListEntry));
-                    INSERT_BEFORE(&(SignalQueueEntry->ListEntry), &SignalList);
-                }
-            }
-
-            KeReleaseQueuedLock(Process->QueuedLock);
-            while (LIST_EMPTY(&SignalList) == FALSE) {
-                SignalQueueEntry = LIST_VALUE(SignalList.Next,
-                                              SIGNAL_QUEUE_ENTRY,
-                                              ListEntry);
-
-                LIST_REMOVE(&(SignalQueueEntry->ListEntry));
-                SignalQueueEntry->ListEntry.Next = NULL;
-                if (SignalQueueEntry->CompletionRoutine != NULL) {
-                    SignalQueueEntry->CompletionRoutine(SignalQueueEntry);
-                }
-            }
-        }
-
-    //
-    // Otherwise, clean up the process if the last thread just exited. This
+    // Potentially clean up the process if the last thread just exited. This
     // will clean up all blocked signals.
     //
 
-    } else {
+    if (DestroyProcess != FALSE) {
 
         //
         // Send the child signal to the parent.
@@ -2036,10 +1996,12 @@ Return Value:
         // Also clean up any blocked signals.
         //
 
-        while (LIST_EMPTY(&(Process->BlockedSignalListHead)) == FALSE) {
-            SignalQueueEntry = LIST_VALUE(Process->BlockedSignalListHead.Next,
+        while (LIST_EMPTY(&(Process->UnreapedChildList)) == FALSE) {
+            SignalQueueEntry = LIST_VALUE(Process->UnreapedChildList.Next,
                                           SIGNAL_QUEUE_ENTRY,
                                           ListEntry);
+
+            ASSERT(IS_CHILD_SIGNAL(SignalQueueEntry));
 
             LIST_REMOVE(&(SignalQueueEntry->ListEntry));
             SignalQueueEntry->ListEntry.Next = NULL;

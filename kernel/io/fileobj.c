@@ -2860,6 +2860,9 @@ Return Value:
     if (QueueEntry != NULL) {
         RtlZeroMemory(QueueEntry, sizeof(SIGNAL_QUEUE_ENTRY));
         QueueEntry->Parameters.SignalNumber = Signal;
+
+        ASSERT(SignalCode > SIGNAL_CODE_USER);
+
         QueueEntry->Parameters.SignalCode = SignalCode;
         QueueEntry->Parameters.FromU.Poll.BandEvent = BandEvent;
         QueueEntry->Parameters.FromU.Poll.Descriptor = Receiver->Descriptor;

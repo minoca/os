@@ -655,7 +655,7 @@ Return Value:
     Status = OsSendSignal(SignalTargetThread,
                           KernelThreadId,
                           Signal,
-                          SIGNAL_CODE_USER,
+                          SIGNAL_CODE_THREAD_KILL,
                           0);
 
     if (!KSUCCESS(Status)) {

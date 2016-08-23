@@ -88,7 +88,7 @@ Author:
 
 #define PsDispatchPendingSignals(_Thread, _TrapFrame)     \
     ((_Thread)->SignalPending == ThreadNoSignalPending) ? \
-    -1 :                                                  \
+    FALSE :                                               \
     PsDispatchPendingSignalsOnCurrentThread(_TrapFrame)
 
 //
@@ -900,13 +900,6 @@ Members:
 
     Parameters - Stores the parameters of the signal to send.
 
-    DestinationThread - Stores a pointer to the thread this signal is aimed at,
-        or NULL if this is a process-wide signal. This is an internal field,
-        callers sending signals should not read or modify this field.
-
-    Delivered - Stores a boolean indicating whether or not the signal has been
-        delivered.
-
     CompletionRoutine - Stores a pointer to a function that gets called by the
         system when the signal is successfully sent to user mode.
 
@@ -915,8 +908,6 @@ Members:
 struct _SIGNAL_QUEUE_ENTRY {
     LIST_ENTRY ListEntry;
     SIGNAL_PARAMETERS Parameters;
-    PKTHREAD DestinationThread;
-    BOOL Delivered;
     PSIGNAL_COMPLETION_ROUTINE CompletionRoutine;
 };
 
@@ -1327,9 +1318,8 @@ Members:
         SIGNAL_QUEUE_ENTRY structures. This list is protected by the process
         lock.
 
-    BlockedSignalListHead - Stores the head of the list of queued but blocked
-        signals. Child signals that have not yet been reaped by wait also live
-        here so they can be consumed by the wait function.
+    UnreapedChildList - Stores the head of the list of child signal entries.
+        that have not yet been waited for.
 
     ChildSignal - Stores the required memory needed for this process to send a
         child signal to the parent and/or tracer process on exits, stops, and
@@ -1402,7 +1392,7 @@ struct _KPROCESS {
     SIGNAL_SET HandledSignals;
     PVOID SignalHandlerRoutine;
     LIST_ENTRY SignalListHead;
-    LIST_ENTRY BlockedSignalListHead;
+    LIST_ENTRY UnreapedChildList;
     SIGNAL_QUEUE_ENTRY ChildSignal;
     PKPROCESS ChildSignalDestination;
     KSPIN_LOCK ChildSignalLock;
@@ -2966,7 +2956,7 @@ Return Value:
 
 --*/
 
-ULONG
+BOOL
 PsDispatchPendingSignalsOnCurrentThread (
     PTRAP_FRAME TrapFrame
     );
@@ -2985,9 +2975,9 @@ Arguments:
 
 Return Value:
 
-    Returns a signal number if a signal was queued.
+    FALSE if no signals are pending.
 
-    -1 if no signal was dispatched.
+    TRUE if a signal was applied.
 
 --*/
 

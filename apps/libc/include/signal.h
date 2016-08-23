@@ -440,20 +440,18 @@ extern "C" {
 #define POLL_HUP 6
 
 //
-// Define signal codes that may come out of queued signals.
-// TODO: Implement signal codes properly (meaning make sure the proper code is
-// making it through), including the kernel one. These line up with
-// SIGNAL_CODE_* definitions.
+// Define signal codes that may come out of queued signals. Positive values
+// are reserved for the kernel. These line up with SIGNAL_CODE_* definitions.
 //
 
-#define SI_USER (-1)
-#define SI_QUEUE (-2)
-#define SI_TIMER (-3)
-#define SI_SIGIO (-4)
-#define SI_TKILL (-5)
-#define SI_KERNEL (-6)
-#define SI_ASYNCIO (-7)
-#define SI_MESGQ (-8)
+#define SI_KERNEL (128)
+#define SI_USER (0)
+#define SI_QUEUE (-1)
+#define SI_TIMER (-2)
+#define SI_SIGIO (-3)
+#define SI_TKILL (-4)
+#define SI_ASYNCIO (-5)
+#define SI_MESGQ (-6)
 
 //
 // Define the minimum and default signal stack size.

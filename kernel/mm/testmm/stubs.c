@@ -161,6 +161,38 @@ Return Value:
 }
 
 BOOL
+MmpZeroUserModeMemory (
+    PVOID Buffer,
+    ULONG ByteCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine zeroes out a section of user mode memory.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to clear.
+
+    ByteCount - Supplies the number of bytes to zero out.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+{
+
+    memset(Buffer, 0, ByteCount);
+    return TRUE;
+}
+
+BOOL
 MmpCleanCacheRegion (
     PVOID Address,
     UINTN Size
@@ -710,7 +742,7 @@ Return Value:
     return;
 }
 
-ULONG
+BOOL
 PsDispatchPendingSignalsOnCurrentThread (
     PTRAP_FRAME TrapFrame
     )
@@ -729,15 +761,15 @@ Arguments:
 
 Return Value:
 
-    Returns a signal number if a signal was queued.
+    FALSE if no signals are pending.
 
-    -1 if no signal was dispatched.
+    TRUE if a signal was applied.
 
 --*/
 
 {
 
-    return -1;
+    return FALSE;
 }
 
 VOID

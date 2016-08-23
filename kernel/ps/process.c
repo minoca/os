@@ -2068,7 +2068,7 @@ Return Value:
     INITIALIZE_LIST_HEAD(&(NewProcess->ImageListHead));
     INITIALIZE_LIST_HEAD(&(NewProcess->ChildListHead));
     INITIALIZE_LIST_HEAD(&(NewProcess->SignalListHead));
-    INITIALIZE_LIST_HEAD(&(NewProcess->BlockedSignalListHead));
+    INITIALIZE_LIST_HEAD(&(NewProcess->UnreapedChildList));
     INITIALIZE_LIST_HEAD(&(NewProcess->TimerList));
     KeInitializeSpinLock(&(NewProcess->ChildSignalLock));
     if (Identifiers != NULL) {
@@ -3263,7 +3263,7 @@ Return Value:
 
     ASSERT(LIST_EMPTY(&(Process->ChildListHead)) != FALSE);
     ASSERT(LIST_EMPTY(&(Process->SignalListHead)) != FALSE);
-    ASSERT(LIST_EMPTY(&(Process->BlockedSignalListHead)) != FALSE);
+    ASSERT(LIST_EMPTY(&(Process->UnreapedChildList)) != FALSE);
     ASSERT(LIST_EMPTY(&(Process->TimerList)) != FALSE);
     ASSERT(LIST_EMPTY(&(Process->ThreadListHead)) != FALSE);
     ASSERT(Process->ThreadCount == 0);

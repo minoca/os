@@ -35,6 +35,16 @@ Author:
      IS_SIGNAL_SET((_Thread)->RunningSignals, (_Signal)))
 
 //
+// This macro evaluates to non-zero if the given signal queue entry is a child
+// signal sent by the kernel.
+//
+
+#define IS_CHILD_SIGNAL(_SignalQueueEntry)              \
+    (((_SignalQueueEntry)->Parameters.SignalNumber ==   \
+     SIGNAL_CHILD_PROCESS_ACTIVITY) &&                  \
+     ((_SignalQueueEntry)->Parameters.SignalCode > SIGNAL_CODE_USER))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 

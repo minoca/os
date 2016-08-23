@@ -406,15 +406,14 @@ Author:
 // Define user signal codes.
 //
 
-#define SIGNAL_CODE_NO_INFORMATION 0
-#define SIGNAL_CODE_USER (-1)
-#define SIGNAL_CODE_QUEUE (-2)
-#define SIGNAL_CODE_TIMER (-3)
-#define SIGNAL_CODE_IO (-4)
-#define SIGNAL_CODE_THREAD_KILL (-5)
-#define SIGNAL_CODE_KERNEL (-6)
-#define SIGNAL_CODE_ASYNC_IO (-7)
-#define SIGNAL_CODE_MESSAGE (-8)
+#define SIGNAL_CODE_KERNEL (128)
+#define SIGNAL_CODE_USER (0)
+#define SIGNAL_CODE_QUEUE (-1)
+#define SIGNAL_CODE_TIMER (-2)
+#define SIGNAL_CODE_IO (-3)
+#define SIGNAL_CODE_THREAD_KILL (-4)
+#define SIGNAL_CODE_ASYNC_IO (-5)
+#define SIGNAL_CODE_MESSAGE (-6)
 
 //
 // ------------------------------------------------------ Data Type Definitions

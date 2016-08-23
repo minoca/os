@@ -331,6 +331,7 @@ Return Value:
         Timer->SignalQueueEntry.Parameters.SignalNumber =
                                                       Parameters->SignalNumber;
 
+        Timer->SignalQueueEntry.Parameters.SignalCode = SIGNAL_CODE_TIMER;
         if ((Parameters->Flags & TIMER_CONTROL_FLAG_USE_TIMER_NUMBER) != 0) {
             Timer->SignalQueueEntry.Parameters.Parameter = Timer->TimerNumber;
 
@@ -529,6 +530,9 @@ Return Value:
             }
 
             RealTimer->SignalQueueEntry.Parameters.SignalNumber = SIGNAL_TIMER;
+            RealTimer->SignalQueueEntry.Parameters.SignalCode =
+                                                             SIGNAL_CODE_TIMER;
+
             Thread->RealTimer = RealTimer;
         }
 
