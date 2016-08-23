@@ -1420,10 +1420,8 @@ Return Value:
     ULONG DescriptorCount;
     ULONG DescriptorIndex;
     PPOLL_DESCRIPTOR Descriptors;
-    BOOL ErrorEventsOccurred;
     PFILE_OBJECT FileObject;
     HANDLE Handle;
-    BOOL HaveRegularFiles;
     PIO_HANDLE IoHandle;
     PIO_OBJECT_STATE IoObjectState;
     ULONG MaskedEvents;
@@ -1442,8 +1440,6 @@ Return Value:
     PVOID *WaitObjects;
 
     Descriptors = NULL;
-    ErrorEventsOccurred = FALSE;
-    HaveRegularFiles = FALSE;
     PollInformation = (PSYSTEM_CALL_POLL)SystemCallParameter;
     DescriptorCount = PollInformation->DescriptorCount;
     Thread = KeGetCurrentThread();
@@ -1520,10 +1516,16 @@ Return Value:
                           ObGetHandleValue(Process->HandleTable, Handle, NULL);
 
         if (Descriptors[DescriptorIndex].Handle == NULL) {
-            Descriptors[DescriptorIndex].ReturnedEvents |=
-                                                     POLL_EVENT_INVALID_HANDLE;
+            Status = MmUserWrite16(
+                            &(UserDescriptors[DescriptorIndex].ReturnedEvents),
+                            POLL_EVENT_INVALID_HANDLE);
 
-            ErrorEventsOccurred = TRUE;
+            if (Status == FALSE) {
+                Status = STATUS_ACCESS_VIOLATION;
+                goto PollEnd;
+            }
+
+            SelectedDescriptors += 1;
         }
     }
 
@@ -1566,7 +1568,7 @@ Return Value:
                    (FileObject->Properties.Type == IoObjectObjectDirectory) ||
                    (FileObject->Properties.Type == IoObjectSharedMemoryObject));
 
-            HaveRegularFiles = TRUE;
+            SelectedDescriptors += 1;
             continue;
         }
 
@@ -1609,7 +1611,7 @@ Return Value:
 
     ASSERT((ULONG)ObjectIndex == ObjectIndex);
 
-    if ((ErrorEventsOccurred == FALSE) && (HaveRegularFiles == FALSE)) {
+    if (SelectedDescriptors == 0) {
         Status = ObWaitOnObjects(
                                WaitObjects,
                                ObjectIndex,
@@ -1663,10 +1665,10 @@ Return Value:
 
             MaskedEvents = IoObjectState->Events &
                            (WaitEvents | POLL_NONMASKABLE_EVENTS);
-        }
 
-        if (MaskedEvents != 0) {
-            SelectedDescriptors += 1;
+            if (MaskedEvents != 0) {
+                SelectedDescriptors += 1;
+            }
         }
 
         Descriptors[DescriptorIndex].ReturnedEvents |= MaskedEvents;
