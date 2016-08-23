@@ -891,6 +891,7 @@ Return Value:
 
 {
 
+    ssize_t BytesRead;
     CHAR Character;
     INT Status;
 
@@ -905,7 +906,12 @@ Return Value:
            " e - Exit telnet.\n\n"
            "telnet> ");
 
-    if (read(STDIN_FILENO, &Character, 1) <= 0) {
+    do {
+        BytesRead = read(STDIN_FILENO, &Character, 1);
+
+    } while ((BytesRead < 0) && (errno == EINTR));
+
+    if (BytesRead <= 0) {
         Status = errno;
         SwPrintError(Status, NULL, "Failed to read");
         return Status;

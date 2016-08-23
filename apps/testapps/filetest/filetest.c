@@ -685,7 +685,11 @@ Return Value:
                 FileBuffer[FillIndex] = FileOffset[FileIndex] + FillIndex;
             }
 
-            BytesComplete = write(File, FileBuffer, FileSize);
+            do {
+                BytesComplete = write(File, FileBuffer, FileSize);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != FileSize) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -732,9 +736,12 @@ Return Value:
 
             TotalBytesComplete = 0;
             while (TotalBytesComplete < FileSize) {
-                BytesComplete = read(File,
-                                     FileBuffer + TotalBytesComplete,
-                                     FileSize - TotalBytesComplete);
+                do {
+                    BytesComplete = read(File,
+                                         FileBuffer + TotalBytesComplete,
+                                         FileSize - TotalBytesComplete);
+
+                } while ((BytesComplete < 0) && (errno == EINTR));
 
                 if (BytesComplete <= 0) {
                     PRINT_ERROR("Read failed. Read %d (%d total) of "
@@ -971,7 +978,11 @@ Return Value:
                 Failures += 1;
             }
 
-            BytesComplete = write(File, &Offset, 1);
+            do {
+                BytesComplete = write(File, &Offset, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != 1) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -1019,7 +1030,11 @@ Return Value:
             //
 
             Value = 0;
-            BytesComplete = read(File, &Value, 1);
+            do {
+                BytesComplete = read(File, &Value, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete < 0) {
                 PRINT_ERROR("Read failed. Read %d of 1 bytes: %s.\n",
                             BytesComplete,
@@ -1307,7 +1322,11 @@ Return Value:
 
             Value = FileOffset[FileIndex];
             FileOffset[FileIndex] += 1;
-            BytesComplete = write(File, &Value, sizeof(INT));
+            do {
+                BytesComplete = write(File, &Value, sizeof(INT));
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != sizeof(INT)) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -1364,9 +1383,12 @@ Return Value:
             Value = 0;
             TotalBytesComplete = 0;
             while (TotalBytesComplete < sizeof(INT)) {
-                BytesComplete = read(File,
-                                     (PVOID)(&Value) + TotalBytesComplete,
-                                     sizeof(INT) - TotalBytesComplete);
+                do {
+                    BytesComplete = read(File,
+                                         (PVOID)(&Value) + TotalBytesComplete,
+                                         sizeof(INT) - TotalBytesComplete);
+
+                } while ((BytesComplete < 0) && (errno == EINTR));
 
                 if (BytesComplete <= 0) {
                     PRINT_ERROR("Read failed. Read %d (%d total) of "
@@ -1640,7 +1662,11 @@ Return Value:
                 FileBuffer[FillIndex] = FileOffset[BlockIndex] + FillIndex;
             }
 
-            BytesComplete = write(File, FileBuffer, BlockSize);
+            do {
+                BytesComplete = write(File, FileBuffer, BlockSize);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != BlockSize) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -1666,9 +1692,12 @@ Return Value:
 
             TotalBytesComplete = 0;
             while (TotalBytesComplete < BlockSize) {
-                BytesComplete = read(File,
-                                     FileBuffer + TotalBytesComplete,
-                                     BlockSize - TotalBytesComplete);
+                do {
+                    BytesComplete = read(File,
+                                         FileBuffer + TotalBytesComplete,
+                                         BlockSize - TotalBytesComplete);
+
+                } while ((BytesComplete < 0) && (errno == EINTR));
 
                 if (BytesComplete <= 0) {
                     PRINT_ERROR("Read failed. Read %d (%d total) of "
@@ -2214,7 +2243,13 @@ Return Value:
     }
 
     DEBUG_PRINT("Writing file %s\n", FileName);
-    BytesComplete = write(File, UninitializedDataBuffer, UninitializedDataSize);
+    do {
+        BytesComplete = write(File,
+                              UninitializedDataBuffer,
+                              UninitializedDataSize);
+
+    } while ((BytesComplete < 0) && (errno == EINTR));
+
     if (BytesComplete != UninitializedDataSize) {
         PRINT_ERROR("Write to %s failed. Wrote %d of %d bytes: %s.\n",
                     FileName,
@@ -2346,7 +2381,11 @@ Return Value:
             }
 
             DEBUG_PRINT("Writing file %s, Offset 0x%I64x\n", FileName, Offset);
-            BytesComplete = write(File, &Offset, 1);
+            do {
+                BytesComplete = write(File, &Offset, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != 1) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -2383,7 +2422,11 @@ Return Value:
             }
 
             DEBUG_PRINT("Writing file %s, Offset 0x%I64x\n", FileName, Offset);
-            BytesComplete = write(File, &Offset, 1);
+            do {
+                BytesComplete = write(File, &Offset, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != 1) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -2405,7 +2448,11 @@ Return Value:
             }
 
             DEBUG_PRINT("Writing file %s, Offset 0x%I64x\n", FileName, Offset);
-            BytesComplete = write(File, &Offset, 1);
+            do {
+                BytesComplete = write(File, &Offset, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != 1) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -2444,7 +2491,11 @@ Return Value:
 
             Value = 0;
             DEBUG_PRINT("Reading file %s, Offset 0x%I64x\n", FileName, Offset);
-            BytesComplete = read(File, &Value, 1);
+            do {
+                BytesComplete = read(File, &Value, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete < 0) {
                 PRINT_ERROR("Read failed. Read %d of 1 bytes: %s.\n",
                             BytesComplete,
@@ -2507,7 +2558,11 @@ Return Value:
             Failures += 1;
         }
 
-        BytesComplete = write(File, &Offset, 1);
+        do {
+            BytesComplete = write(File, &Offset, 1);
+
+        } while ((BytesComplete < 0) && (errno == EINTR));
+
         if (BytesComplete != 1) {
             PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                         BytesComplete,
@@ -2541,7 +2596,11 @@ Return Value:
 
         Value = 0;
         DEBUG_PRINT("Reading file %s, Offset 0x%I64x\n", FileName, Offset);
-        BytesComplete = read(File, &Value, 1);
+        do {
+            BytesComplete = read(File, &Value, 1);
+
+        } while ((BytesComplete < 0) && (errno == EINTR));
+
         if (BytesComplete < 0) {
             PRINT_ERROR("Read failed. Read %d of 1 bytes: %s.\n",
                         BytesComplete,

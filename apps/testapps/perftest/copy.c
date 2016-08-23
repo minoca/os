@@ -180,9 +180,12 @@ Return Value:
          Index < (PT_COPY_TEST_FILE_SIZE / PT_COPY_TEST_BUFFER_SIZE);
          Index += 1) {
 
-        BytesCompleted = write(SourceDescriptor,
-                               Buffer,
-                               PT_COPY_TEST_BUFFER_SIZE);
+        do {
+            BytesCompleted = write(SourceDescriptor,
+                                   Buffer,
+                                   PT_COPY_TEST_BUFFER_SIZE);
+
+        } while ((BytesCompleted < 0) && (errno == EINTR));
 
         if (BytesCompleted < 0) {
             Result->Status = errno;
@@ -199,9 +202,12 @@ Return Value:
          Index < (PT_COPY_TEST_FILE_SIZE / PT_COPY_TEST_BUFFER_SIZE);
          Index += 1) {
 
-        BytesCompleted = write(DestinationDescriptor,
-                               Buffer,
-                               PT_COPY_TEST_BUFFER_SIZE);
+        do {
+            BytesCompleted = write(DestinationDescriptor,
+                                   Buffer,
+                                   PT_COPY_TEST_BUFFER_SIZE);
+
+        } while ((BytesCompleted < 0) && (errno == EINTR));
 
         if (BytesCompleted < 0) {
             Result->Status = errno;
@@ -246,9 +252,12 @@ Return Value:
     //
 
     while (PtIsTimedTestRunning() != 0) {
-        BytesCompleted = read(SourceDescriptor,
-                              Buffer,
-                              PT_COPY_TEST_BUFFER_SIZE);
+        do {
+            BytesCompleted = read(SourceDescriptor,
+                                  Buffer,
+                                  PT_COPY_TEST_BUFFER_SIZE);
+
+        } while ((BytesCompleted < 0) && (errno == EINTR));
 
         if (BytesCompleted < 0) {
             Result->Status = errno;
@@ -274,7 +283,13 @@ Return Value:
             }
         }
 
-        BytesCompleted = write(DestinationDescriptor, Buffer, BytesCompleted);
+        do {
+            BytesCompleted = write(DestinationDescriptor,
+                                   Buffer,
+                                   BytesCompleted);
+
+        } while ((BytesCompleted < 0) && (errno == EINTR));
+
         if (BytesCompleted < 0) {
             Result->Status = errno;
             break;

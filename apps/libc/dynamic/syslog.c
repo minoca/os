@@ -79,6 +79,13 @@ ClpCloseLog (
     VOID
     );
 
+VOID
+ClpSyslogWrite (
+    int FileDescriptor,
+    const void *Buffer,
+    size_t ByteCount
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -340,9 +347,9 @@ Return Value:
     //
 
     if ((ClLogOptions & LOG_PERROR) != 0) {
-        write(STDERR_FILENO, Message + HeaderLength, BodyLength);
+        ClpSyslogWrite(STDERR_FILENO, Message + HeaderLength, BodyLength);
         if (Message[HeaderLength + BodyLength] != '\n') {
-            write(STDERR_FILENO, "\n", 1);
+            ClpSyslogWrite(STDERR_FILENO, "\n", 1);
         }
     }
 
@@ -396,8 +403,8 @@ Return Value:
         if ((ClLogOptions & LOG_CONS) != 0) {
             Console = open(SYSLOG_CONSOLE_PATH, O_WRONLY | O_NOCTTY);
             if (Console >= 0) {
-                write(Console, Message, HeaderLength + BodyLength);
-                write(Console, "\r\n", 2);
+                ClpSyslogWrite(Console, Message, HeaderLength + BodyLength);
+                ClpSyslogWrite(Console, "\r\n", 2);
                 close(Console);
             }
         }
@@ -628,6 +635,62 @@ Return Value:
     if (ClLogSocket >= 0) {
         close(ClLogSocket);
         ClLogSocket = -1;
+    }
+
+    return;
+}
+
+VOID
+ClpSyslogWrite (
+    int FileDescriptor,
+    const void *Buffer,
+    size_t ByteCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to write the specifed number of bytes to the given
+    open file descriptor.
+
+Arguments:
+
+    FileDescriptor - Supplies the file descriptor returned by the open function.
+
+    Buffer - Supplies a pointer to the buffer containing the bytes to be
+        written.
+
+    ByteCount - Supplies the number of bytes to write.
+
+Return Value:
+
+    Returns the number of bytes successfully written to the file.
+
+    -1 on failure, and errno will contain more information.
+
+--*/
+
+{
+
+    ssize_t BytesComplete;
+    size_t TotalComplete;
+
+    TotalComplete = 0;
+    while (TotalComplete != ByteCount) {
+        BytesComplete = write(FileDescriptor,
+                              Buffer + TotalComplete,
+                              ByteCount - TotalComplete);
+
+        if (BytesComplete < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            break;
+        }
+
+        TotalComplete += BytesComplete;
     }
 
     return;

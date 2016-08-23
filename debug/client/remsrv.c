@@ -744,6 +744,7 @@ Return Value:
 
 {
 
+    ssize_t BytesWritten;
     PDEBUGGER_SERVER_CLIENT Client;
     PLIST_ENTRY CurrentEntry;
     char OutputCharacter;
@@ -768,7 +769,10 @@ Return Value:
 
         if ((Client->Pipe[1] != -1) && (Client->Update == 0)) {
             Client->Update = 1;
-            write(Client->Pipe[1], &OutputCharacter, 1);
+            do {
+                BytesWritten = write(Client->Pipe[1], &OutputCharacter, 1);
+
+            } while ((BytesWritten < 0) && (errno == EINTR));
         }
     }
 

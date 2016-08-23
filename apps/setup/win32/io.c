@@ -871,6 +871,7 @@ Return Value:
 
 {
 
+    ssize_t BytesRead;
     BOOL Executable;
     PSETUP_OS_HANDLE IoHandle;
     PSTR LastDot;
@@ -903,7 +904,12 @@ Return Value:
         Offset = lseek(IoHandle->Handle, 0, SEEK_CUR);
         lseek(IoHandle->Handle, 0, SEEK_SET);
         Word = 0;
-        if (read(IoHandle->Handle, &Word, sizeof(Word)) > 0) {
+        do {
+            BytesRead = read(IoHandle->Handle, &Word, sizeof(Word));
+
+        } while ((BytesRead < 0) && (errno == EINTR));
+
+        if (BytesRead > 0) {
             if (Word == ELF_MAGIC) {
                 Executable = TRUE;
 

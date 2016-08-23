@@ -951,6 +951,7 @@ Return Value:
 
 {
 
+    ssize_t BytesComplete;
     int Descriptor;
 
     if (DatabaseFile == NULL) {
@@ -969,7 +970,13 @@ Return Value:
         return -1;
     }
 
-    write(Descriptor, Value, sizeof(*Value));
+    do {
+        BytesComplete = write(Descriptor, Value, sizeof(*Value));
+
+    } while ((BytesComplete < 0) && (errno == EINTR));
+
+    assert((BytesComplete <= 0) || (BytesComplete == sizeof(*Value)));
+
     close(Descriptor);
     return 0;
 }

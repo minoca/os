@@ -1153,7 +1153,11 @@ Return Value:
                 CurrentBuffer = &ResponseLength;
                 BytesSent = 0;
                 while (Length != 0) {
-                    BytesSent = read(State->_sock, CurrentBuffer, Length);
+                    do {
+                        BytesSent = read(State->_sock, CurrentBuffer, Length);
+
+                    } while ((BytesSent < 0) && (errno == EINTR));
+
                     if (BytesSent <= 0) {
                         break;
                     }
@@ -1209,7 +1213,11 @@ Return Value:
 
                 CurrentBuffer = Answer;
                 while (Length != 0) {
-                    BytesSent = read(State->_sock, CurrentBuffer, Length);
+                    do {
+                        BytesSent = read(State->_sock, CurrentBuffer, Length);
+
+                    } while ((BytesSent < 0) && (errno == EINTR));
+
                     if (BytesSent <= 0) {
                         break;
                     }
@@ -1242,7 +1250,11 @@ Return Value:
                             BytesSent = sizeof(Junk);
                         }
 
-                        BytesSent = read(State->_sock, Junk, BytesSent);
+                        do {
+                            BytesSent = read(State->_sock, Junk, BytesSent);
+
+                        } while ((BytesSent < 0) && (errno == EINTR));
+
                         if (BytesSent > 0) {
                             Length -= BytesSent;
 
@@ -1943,7 +1955,11 @@ Return Value:
         goto DnsReadStartFilesEnd;
     }
 
-    Length = read(File, Buffer, DNS_RESOLVER_CONFIGURATION_MAX);
+    do {
+        Length = read(File, Buffer, DNS_RESOLVER_CONFIGURATION_MAX);
+
+    } while ((Length < 0) && (errno == EINTR));
+
     close(File);
     DnsDomainCount = sizeof(ClDnsDomains) / sizeof(ClDnsDomains[0]);
     CurrentBuffer = Buffer;

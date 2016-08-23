@@ -252,7 +252,14 @@ Return Value:
 
 {
 
-    return read((INTN)Handle, Buffer, ByteCount);
+    ssize_t BytesRead;
+
+    do {
+        BytesRead = read((INTN)Handle, Buffer, ByteCount);
+
+    } while ((BytesRead < 0) && (errno == EINTR));
+
+    return BytesRead;
 }
 
 ssize_t
@@ -286,7 +293,14 @@ Return Value:
 
 {
 
-    return write((INTN)Handle, Buffer, ByteCount);
+    ssize_t BytesWritten;
+
+    do {
+        BytesWritten = write((INTN)Handle, Buffer, ByteCount);
+
+    } while ((BytesWritten < 0) && (errno == EINTR));
+
+    return BytesWritten;
 }
 
 LONGLONG

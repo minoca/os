@@ -1305,7 +1305,11 @@ Return Value:
             }
 
             DEBUG_PRINT("Writing to file %s.\n", FileName);
-            BytesComplete = write(File, FileBuffer, FileSize);
+            do {
+                BytesComplete = write(File, FileBuffer, FileSize);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != FileSize) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -1358,9 +1362,12 @@ Return Value:
 
             TotalBytesComplete = 0;
             while (TotalBytesComplete < FileSize) {
-                BytesComplete = read(File,
-                                     FileBuffer + TotalBytesComplete,
-                                     FileSize - TotalBytesComplete);
+                do {
+                    BytesComplete = read(File,
+                                         FileBuffer + TotalBytesComplete,
+                                         FileSize - TotalBytesComplete);
+
+                } while ((BytesComplete < 0) && (errno == EINTR));
 
                 if (BytesComplete <= 0) {
                     PRINT_ERROR("Read failed. Read %d (%d total) of "
@@ -1776,7 +1783,11 @@ Return Value:
             }
 
             DEBUG_PRINT("Writing to file %s at offset %x.\n", FileName, Offset);
-            BytesComplete = write(File, &Offset, 1);
+            do {
+                BytesComplete = write(File, &Offset, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != 1) {
                 PRINT_ERROR("Write failed. Wrote %d of 1 byte: %s.\n",
                             BytesComplete,
@@ -1849,7 +1860,11 @@ Return Value:
                         Offset);
 
             Value = 0;
-            BytesComplete = read(File, &Value, 1);
+            do {
+                BytesComplete = read(File, &Value, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (close(File) != 0) {
                 PRINT_ERROR("Failed to close: %s.\n", strerror(errno));
                 Failures += 1;
@@ -2324,7 +2339,11 @@ Return Value:
             }
 
             DEBUG_PRINT("Writing to shm object %s.\n", FileName);
-            BytesComplete = write(File, FileBuffer, FileSize);
+            do {
+                BytesComplete = write(File, FileBuffer, FileSize);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != FileSize) {
                 PRINT_ERROR("Write failed. Wrote %d of %d bytes: %s.\n",
                             BytesComplete,
@@ -2379,9 +2398,12 @@ Return Value:
 
             TotalBytesComplete = 0;
             while (TotalBytesComplete < FileSize) {
-                BytesComplete = read(File,
-                                     FileBuffer + TotalBytesComplete,
-                                     FileSize - TotalBytesComplete);
+                do {
+                    BytesComplete = read(File,
+                                         FileBuffer + TotalBytesComplete,
+                                         FileSize - TotalBytesComplete);
+
+                } while ((BytesComplete < 0) && (errno == EINTR));
 
                 if (BytesComplete <= 0) {
                     PRINT_ERROR("Read failed. Read %d (%d total) of "
@@ -2808,7 +2830,11 @@ Return Value:
                         FileName,
                         Offset);
 
-            BytesComplete = write(File, &Offset, 1);
+            do {
+                BytesComplete = write(File, &Offset, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (BytesComplete != 1) {
                 PRINT_ERROR("Write failed. Wrote %d of 1 byte: %s.\n",
                             BytesComplete,
@@ -2884,7 +2910,11 @@ Return Value:
                         Offset);
 
             Value = 0;
-            BytesComplete = read(File, &Value, 1);
+            do {
+                BytesComplete = read(File, &Value, 1);
+
+            } while ((BytesComplete < 0) && (errno == EINTR));
+
             if (close(File) != 0) {
                 PRINT_ERROR("Failed to close: %s.\n", strerror(errno));
                 Failures += 1;

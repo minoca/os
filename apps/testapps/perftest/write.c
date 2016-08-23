@@ -147,7 +147,13 @@ Return Value:
          Index < (PT_WRITE_TEST_FILE_SIZE / PT_WRITE_TEST_BUFFER_SIZE);
          Index += 1) {
 
-        BytesWritten = write(FileDescriptor, Buffer, PT_WRITE_TEST_BUFFER_SIZE);
+        do {
+            BytesWritten = write(FileDescriptor,
+                                 Buffer,
+                                 PT_WRITE_TEST_BUFFER_SIZE);
+
+        } while ((BytesWritten < 0) && (errno == EINTR));
+
         if (BytesWritten < 0) {
             Result->Status = errno;
             goto MainEnd;
@@ -186,7 +192,13 @@ Return Value:
 
     Index = 0;
     while (PtIsTimedTestRunning() != 0) {
-        BytesWritten = write(FileDescriptor, Buffer, PT_WRITE_TEST_BUFFER_SIZE);
+        do {
+            BytesWritten = write(FileDescriptor,
+                                 Buffer,
+                                 PT_WRITE_TEST_BUFFER_SIZE);
+
+        } while ((BytesWritten < 0) && (errno == EINTR));
+
         if (BytesWritten < 0) {
             Result->Status = errno;
             break;

@@ -659,7 +659,11 @@ Return Value:
 
             if (FileStat.st_size == 0) {
                 Inode = FileStat.st_ino;
-                Result = write(File, &Inode, sizeof(ino_t));
+                do {
+                    Result = write(File, &Inode, sizeof(ino_t));
+
+                } while ((Result < 0) && (errno == EINTR));
+
                 if (Result != sizeof(ino_t)) {
                     PRINT_ERROR("Write failed. Wrote %d of %d bytes to file "
                                 "%s: %s.\n",
@@ -673,7 +677,11 @@ Return Value:
 
             } else {
                 Inode = 0;
-                Result = read(File, &Inode, sizeof(ino_t));
+                do {
+                    Result = read(File, &Inode, sizeof(ino_t));
+
+                } while ((Result < 0) && (errno == EINTR));
+
                 if (Result != sizeof(ino_t)) {
                     PRINT_ERROR("Read failed. Read %d of %d bytes from file "
                                 "%s: %s\n.",

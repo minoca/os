@@ -229,7 +229,11 @@ Return Value:
     // Collect the results from the child's pipe.
     //
 
-    BytesRead = read(PipeDescriptors[0], Result, sizeof(PT_TEST_RESULT));
+    do {
+        BytesRead = read(PipeDescriptors[0], Result, sizeof(PT_TEST_RESULT));
+
+    } while ((BytesRead < 0) && (errno == EINTR));
+
     if (BytesRead < 0) {
         Result->Status = errno;
         goto MainEnd;
@@ -338,7 +342,13 @@ Return Value:
         memset(&Result, 0, sizeof(PT_TEST_RESULT));
         Result.Type = PtResultIterations;
         Result.Data.Iterations = Iterations;
-        BytesWritten = write(STDOUT_FILENO, &Result, sizeof(PT_TEST_RESULT));
+        do {
+            BytesWritten = write(STDOUT_FILENO,
+                                 &Result,
+                                 sizeof(PT_TEST_RESULT));
+
+        } while ((BytesWritten < 0) && (errno == EINTR));
+
         if (BytesWritten < 0) {
             Status = errno;
             goto LoopEnd;

@@ -305,9 +305,12 @@ Return Value:
             }
         }
 
-        BytesRead = read(Descriptor,
-                         Buffer + BufferSize,
-                         SHELL_OUTPUT_CHUNK_SIZE);
+        do {
+            BytesRead = read(Descriptor,
+                             Buffer + BufferSize,
+                             SHELL_OUTPUT_CHUNK_SIZE);
+
+        } while ((BytesRead < 0) && (errno == EINTR));
 
         if (BytesRead <= 0) {
             break;
@@ -395,9 +398,12 @@ Return Value:
             BytesToWrite = TextSize - TotalBytesWritten;
         }
 
-        BytesWritten = write(Pipe[1],
-                             Text + TotalBytesWritten,
-                             BytesToWrite);
+        do {
+            BytesWritten = write(Pipe[1],
+                                 Text + TotalBytesWritten,
+                                 BytesToWrite);
+
+        } while ((BytesWritten < 0) && (errno == EINTR));
 
         if (BytesWritten <= 0) {
             break;

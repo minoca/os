@@ -494,6 +494,7 @@ Return Value:
 
 {
 
+    ssize_t BytesRead;
     int Character;
     UCHAR ControlKeyValue;
     struct pollfd Events[2];
@@ -558,7 +559,11 @@ Return Value:
             //
 
             } else if ((Events[1].revents & POLLIN) != 0) {
-                read(DbgRemoteInputPipe[1], &Character, 1);
+                do {
+                    BytesRead = read(DbgRemoteInputPipe[1], &Character, 1);
+
+                } while ((BytesRead < 0) && (errno == EINTR));
+
                 Character = 0;
                 ControlKeyValue = KEY_REMOTE;
                 break;
@@ -614,6 +619,7 @@ Return Value:
 
 {
 
+    ssize_t BytesWritten;
     char Character;
 
     //
@@ -622,7 +628,11 @@ Return Value:
     //
 
     Character = 'r';
-    write(DbgRemoteInputPipe[1], &Character, 1);
+    do {
+        BytesWritten = write(DbgRemoteInputPipe[1], &Character, 1);
+
+    } while ((BytesWritten < 0) && (errno == EINTR));
+
     return;
 }
 

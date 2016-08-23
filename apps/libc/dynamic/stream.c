@@ -565,9 +565,12 @@ Return Value:
 
     if (Stream->BufferMode == _IONBF) {
         ClpFlushAllStreams(FALSE, Stream);
-        Result = read(Stream->Descriptor,
-                      Buffer + TotalBytesRead,
-                      TotalBytesToRead - TotalBytesRead);
+        do {
+            Result = read(Stream->Descriptor,
+                          Buffer + TotalBytesRead,
+                          TotalBytesToRead - TotalBytesRead);
+
+        } while ((Result < 0) && (errno == EINTR));
 
         if (Result == 0) {
             Stream->Flags |= FILE_FLAG_END_OF_FILE;

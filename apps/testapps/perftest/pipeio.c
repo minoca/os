@@ -130,9 +130,12 @@ Return Value:
     //
 
     while (PtIsTimedTestRunning() != 0) {
-        BytesCompleted = write(PipeDescriptors[1],
-                               Buffer,
-                               PT_PIPE_IO_BUFFER_SIZE);
+        do {
+            BytesCompleted = write(PipeDescriptors[1],
+                                   Buffer,
+                                   PT_PIPE_IO_BUFFER_SIZE);
+
+        } while ((BytesCompleted < 0) && (errno == EINTR));
 
         if (BytesCompleted != PT_PIPE_IO_BUFFER_SIZE) {
             if (errno == 0) {
@@ -143,9 +146,12 @@ Return Value:
             break;
         }
 
-        BytesCompleted = read(PipeDescriptors[0],
-                              Buffer,
-                              PT_PIPE_IO_BUFFER_SIZE);
+        do {
+            BytesCompleted = read(PipeDescriptors[0],
+                                  Buffer,
+                                  PT_PIPE_IO_BUFFER_SIZE);
+
+        } while ((BytesCompleted < 0) && (errno == EINTR));
 
         if (BytesCompleted != PT_PIPE_IO_BUFFER_SIZE) {
             if (errno == 0) {

@@ -1722,10 +1722,17 @@ Return Value:
 
 {
 
+    ssize_t BytesComplete;
+
     assert(Info->si_signo == Signal);
     assert((Signal == SIGRTMIN) || (Signal == SIGRTMIN + 1));
 
-    if (write(SigtestWritePipe, &(Info->si_signo), 1) != 1) {
+    do {
+        BytesComplete = write(SigtestWritePipe, &(Info->si_signo), 1);
+
+    } while ((BytesComplete < 0) && (errno == EINTR));
+
+    if (BytesComplete != 1) {
 
         assert(FALSE);
     }

@@ -1194,9 +1194,12 @@ Return Value:
 
     ssize_t BytesRead;
 
-    BytesRead = read(Child->PipeDescriptors[0],
-                     &(Child->Result),
-                     sizeof(PT_TEST_RESULT));
+    do {
+        BytesRead = read(Child->PipeDescriptors[0],
+                         &(Child->Result),
+                         sizeof(PT_TEST_RESULT));
+
+    } while ((BytesRead < 0) && (errno == EINTR));
 
     if (BytesRead < 0) {
         return -1;
@@ -1238,9 +1241,12 @@ Return Value:
 
     ssize_t BytesWritten;
 
-    BytesWritten = write(Process->PipeDescriptors[1],
-                         &(Process->Result),
-                         sizeof(PT_TEST_RESULT));
+    do {
+        BytesWritten = write(Process->PipeDescriptors[1],
+                             &(Process->Result),
+                             sizeof(PT_TEST_RESULT));
+
+    } while ((BytesWritten < 0) && (errno == EINTR));
 
     if (BytesWritten < 0) {
         return -1;

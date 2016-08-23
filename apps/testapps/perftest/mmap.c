@@ -197,9 +197,12 @@ Return Value:
                  Index < (PT_MMAP_TEST_REGION_SIZE / PT_MMAP_TEST_BLOCK_SIZE);
                  Index += 1) {
 
-                BytesWritten = write(FileDescriptor,
-                                     Buffer,
-                                     PT_MMAP_TEST_BLOCK_SIZE);
+                do {
+                    BytesWritten = write(FileDescriptor,
+                                         Buffer,
+                                         PT_MMAP_TEST_BLOCK_SIZE);
+
+                } while ((BytesWritten < 0) && (errno == EINTR));
 
                 if (BytesWritten < 0) {
                     Result->Status = errno;

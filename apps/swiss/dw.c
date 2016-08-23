@@ -3800,7 +3800,11 @@ Return Value:
     //
 
     if (DwRandomSource >= 0) {
-        BytesRead = read(DwRandomSource, &Value, 2);
+        do {
+            BytesRead = read(DwRandomSource, &Value, 2);
+
+        } while ((BytesRead < 0) && (errno == EINTR));
+
         if (BytesRead == sizeof(Value)) {
             return Minimum + (Value % (Maximum - Minimum));
         }
