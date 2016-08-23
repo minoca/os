@@ -1548,12 +1548,6 @@ Return Value:
     InternalFlags = IoBuffer->Internal.Flags;
 
     //
-    // Support user mode I/O buffers if this fires and it seems useful to add.
-    //
-
-    ASSERT((InternalFlags & IO_BUFFER_INTERNAL_FLAG_USER_MODE) == 0);
-
-    //
     // If memory can be appended to the buffer and it needs to be, then extend
     // the I/O buffer.
     //
@@ -1611,7 +1605,19 @@ Return Value:
             ZeroSize = ByteCount;
         }
 
-        RtlZeroMemory(Fragment->VirtualAddress + FragmentOffset, ZeroSize);
+        if ((InternalFlags & IO_BUFFER_INTERNAL_FLAG_USER_MODE) != 0) {
+            Status = MmpZeroUserModeMemory(
+                                     Fragment->VirtualAddress + FragmentOffset,
+                                     ZeroSize);
+
+            if (Status == FALSE) {
+                return STATUS_ACCESS_VIOLATION;
+            }
+
+        } else {
+            RtlZeroMemory(Fragment->VirtualAddress + FragmentOffset, ZeroSize);
+        }
+
         ByteCount -= ZeroSize;
         CurrentOffset += Fragment->Size;
     }
