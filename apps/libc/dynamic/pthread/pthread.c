@@ -214,7 +214,7 @@ Return Value:
 
 {
 
-    sigset_t InternalSignals;
+    SIGNAL_SET InternalSignals;
     KSTATUS KernelStatus;
     pthread_attr_t LocalAttributes;
     PPTHREAD NewThread;
@@ -243,11 +243,15 @@ Return Value:
     pthread_mutex_lock(&(NewThread->StartMutex));
 
     //
-    // Block all possible signals in the new thread while it sets itself up.
+    // Block all possible signals in the new thread while it sets itself up,
+    // including the internal signals.
     //
 
-    sigfillset(&InternalSignals);
-    pthread_sigmask(SIG_SETMASK, &InternalSignals, &(NewThread->SignalMask));
+    FILL_SIGNAL_SET(InternalSignals);
+    OsSetSignalBehavior(SignalMaskBlocked,
+                        SignalMaskOperationOverwrite,
+                        &InternalSignals);
+
     KernelStatus = OsCreateThread(NULL,
                                   0,
                                   ClpThreadStart,
@@ -257,7 +261,10 @@ Return Value:
                                   NewThread->OsData,
                                   &(NewThread->ThreadId));
 
-    pthread_sigmask(SIG_SETMASK, &(NewThread->SignalMask), NULL);
+    OsSetSignalBehavior(SignalMaskBlocked,
+                        SignalMaskOperationOverwrite,
+                        &(NewThread->SignalMask));
+
     if (!KSUCCESS(KernelStatus)) {
         Status = ClConvertKstatusToErrorNumber(KernelStatus);
         ClpDestroyThreadKeyData(NewThread);
@@ -509,7 +516,7 @@ Return Value:
     PVOID DestroyRegion;
     UINTN DestroyRegionSize;
     ULONG OldState;
-    sigset_t SignalMask;
+    SIGNAL_SET SignalMask;
     PPTHREAD Thread;
 
     //
@@ -544,8 +551,10 @@ Return Value:
     // is torn down.
     //
 
-    sigfillset(&SignalMask);
-    pthread_sigmask(SIG_SETMASK, &SignalMask, NULL);
+    FILL_SIGNAL_SET(SignalMask);
+    OsSetSignalBehavior(SignalMaskBlocked,
+                        SignalMaskOperationOverwrite,
+                        &SignalMask);
 
     //
     // Indicate that the thread has exited.
@@ -1139,7 +1148,10 @@ Return Value:
 
     ClCurrentThread = Thread;
     pthread_mutex_lock(&(Thread->StartMutex));
-    pthread_sigmask(SIG_SETMASK, &(Thread->SignalMask), NULL);
+    OsSetSignalBehavior(SignalMaskBlocked,
+                        SignalMaskOperationOverwrite,
+                        &(Thread->SignalMask));
+
     pthread_testcancel();
     Result = Thread->ThreadRoutine(Thread->ThreadParameter);
     pthread_exit(Result);
@@ -1216,9 +1228,9 @@ Return Value:
     sigemptyset(&(Action.sa_mask));
     Action.sa_flags = 0;
     Action.sa_handler = ClpThreadSignalHandler;
-    sigaction(SIGNAL_PTHREAD, &Action, NULL);
+    ClpSetSignalAction(SIGNAL_PTHREAD, &Action, NULL);
     Action.sa_handler = ClpSetIdSignalHandler;
-    sigaction(SIGNAL_SETID, &Action, NULL);
+    ClpSetSignalAction(SIGNAL_SETID, &Action, NULL);
 
     //
     // Make sure the PLT entry for the exit thread routine is wired up.

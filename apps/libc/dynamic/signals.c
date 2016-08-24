@@ -170,59 +170,16 @@ Return Value:
 
 {
 
-    struct sigaction OriginalCopy;
-    SIGNAL_SET SignalSet;
-
-    if ((NewAction != NULL) &&
-        ((SignalNumber == SIGKILL) || (SignalNumber == SIGSTOP))) {
-
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (SignalNumber > SIGNAL_COUNT) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    OriginalCopy = ClSignalHandlers[SignalNumber];
-    if (NewAction != NULL) {
-        ClSignalHandlers[SignalNumber].sa_handler = SIG_DFL;
-        RtlMemoryBarrier();
-        ClSignalHandlers[SignalNumber].sa_mask = NewAction->sa_mask;
-        ClSignalHandlers[SignalNumber].sa_flags = NewAction->sa_flags;
-        RtlMemoryBarrier();
-        ClSignalHandlers[SignalNumber].sa_handler = NewAction->sa_handler;
-        RtlMemoryBarrier();
-    }
-
-    if (OriginalAction != NULL) {
-        *OriginalAction = OriginalCopy;
-    }
-
     //
-    // Set this up in the kernel as well.
+    // Just pretend everything is fine, but ignore changes to the signals
+    // needed by the C library.
     //
 
-    INITIALIZE_SIGNAL_SET(SignalSet);
-    ADD_SIGNAL(SignalSet, SignalNumber);
-    if (ClSignalHandlers[SignalNumber].sa_handler == SIG_DFL) {
-        OsSetSignalBehavior(SignalMaskHandled,
-                            SignalMaskOperationClear,
-                            &SignalSet);
-
-    } else if (ClSignalHandlers[SignalNumber].sa_handler == SIG_IGN) {
-        OsSetSignalBehavior(SignalMaskIgnored,
-                            SignalMaskOperationSet,
-                            &SignalSet);
-
-    } else {
-        OsSetSignalBehavior(SignalMaskHandled,
-                            SignalMaskOperationSet,
-                            &SignalSet);
+    if ((SignalNumber == SIGNAL_PTHREAD) || (SignalNumber == SIGNAL_SETID)) {
+        return 0;
     }
 
-    return 0;
+    return ClpSetSignalAction(SignalNumber, NewAction, OriginalAction);
 }
 
 LIBC_API
@@ -508,8 +465,20 @@ Return Value:
 
 {
 
+    SIGNAL_SET NewSet;
     SIGNAL_MASK_OPERATION Operation;
     SIGNAL_SET PreviousSet;
+
+    //
+    // Don't allow the internal signals used by the C library to become blocked.
+    //
+
+    INITIALIZE_SIGNAL_SET(NewSet);
+    if (SignalSet != NULL) {
+        NewSet = *SignalSet;
+        REMOVE_SIGNAL(NewSet, SIGNAL_PTHREAD);
+        REMOVE_SIGNAL(NewSet, SIGNAL_SETID);
+    }
 
     if (SignalSet == NULL) {
         Operation = SignalMaskOperationNone;
@@ -532,7 +501,7 @@ Return Value:
 
     PreviousSet = OsSetSignalBehavior(SignalMaskBlocked,
                                       Operation,
-                                      (PSIGNAL_SET)SignalSet);
+                                      &NewSet);
 
     if (OriginalSignalSet != NULL) {
         *OriginalSignalSet = PreviousSet;
@@ -1668,6 +1637,95 @@ Return Value:
     return;
 }
 
+int
+ClpSetSignalAction (
+    int SignalNumber,
+    struct sigaction *NewAction,
+    struct sigaction *OriginalAction
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets a new signal action for the given signal number.
+
+Arguments:
+
+    SignalNumber - Supplies the signal number that will be affected.
+
+    NewAction - Supplies an optional pointer to the new signal action to
+        perform upon receiving that signal. If this pointer is NULL, then no
+        change will be made to the signal's action.
+
+    OriginalAction - Supplies a pointer where the original signal action will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will contain more information.
+
+--*/
+
+{
+
+    struct sigaction OriginalCopy;
+    SIGNAL_SET SignalSet;
+
+    if ((NewAction != NULL) &&
+        ((SignalNumber == SIGKILL) || (SignalNumber == SIGSTOP))) {
+
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (SignalNumber > SIGNAL_COUNT) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    OriginalCopy = ClSignalHandlers[SignalNumber];
+    if (NewAction != NULL) {
+        ClSignalHandlers[SignalNumber].sa_handler = SIG_DFL;
+        RtlMemoryBarrier();
+        ClSignalHandlers[SignalNumber].sa_mask = NewAction->sa_mask;
+        ClSignalHandlers[SignalNumber].sa_flags = NewAction->sa_flags;
+        RtlMemoryBarrier();
+        ClSignalHandlers[SignalNumber].sa_handler = NewAction->sa_handler;
+        RtlMemoryBarrier();
+    }
+
+    if (OriginalAction != NULL) {
+        *OriginalAction = OriginalCopy;
+    }
+
+    //
+    // Set this up in the kernel as well.
+    //
+
+    INITIALIZE_SIGNAL_SET(SignalSet);
+    ADD_SIGNAL(SignalSet, SignalNumber);
+    if (ClSignalHandlers[SignalNumber].sa_handler == SIG_DFL) {
+        OsSetSignalBehavior(SignalMaskHandled,
+                            SignalMaskOperationClear,
+                            &SignalSet);
+
+    } else if (ClSignalHandlers[SignalNumber].sa_handler == SIG_IGN) {
+        OsSetSignalBehavior(SignalMaskIgnored,
+                            SignalMaskOperationSet,
+                            &SignalSet);
+
+    } else {
+        OsSetSignalBehavior(SignalMaskHandled,
+                            SignalMaskOperationSet,
+                            &SignalSet);
+    }
+
+    return 0;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1736,7 +1794,7 @@ Return Value:
         (Signal != SIGILL) && (Signal != SIGTRAP)) {
 
         RtlZeroMemory(&ResetAction, sizeof(struct sigaction));
-        sigaction(Signal, &ResetAction, &OriginalAction);
+        ClpSetSignalAction(Signal, &ResetAction, &OriginalAction);
         Action = &OriginalAction;
     }
 

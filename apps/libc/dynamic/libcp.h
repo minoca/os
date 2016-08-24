@@ -852,3 +852,34 @@ Return Value:
 
 --*/
 
+int
+ClpSetSignalAction (
+    int SignalNumber,
+    struct sigaction *NewAction,
+    struct sigaction *OriginalAction
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets a new signal action for the given signal number.
+
+Arguments:
+
+    SignalNumber - Supplies the signal number that will be affected.
+
+    NewAction - Supplies an optional pointer to the new signal action to
+        perform upon receiving that signal. If this pointer is NULL, then no
+        change will be made to the signal's action.
+
+    OriginalAction - Supplies a pointer where the original signal action will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will contain more information.
+
+--*/

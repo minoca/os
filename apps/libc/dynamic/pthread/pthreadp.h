@@ -377,7 +377,7 @@ typedef struct _PTHREAD {
     BOOL CancelRequested;
     PPTHREAD_KEY_DATA KeyData;
     PVOID OsData;
-    sigset_t SignalMask;
+    SIGNAL_SET SignalMask;
 } PTHREAD, *PPTHREAD;
 
 //
