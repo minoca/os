@@ -838,14 +838,22 @@ Return Value:
     BOOL LockHeld;
     PIO_HANDLE NewSocketHandle;
     PUNIX_SOCKET NewUnixSocket;
+    ULONG OpenFlags;
     ULONG ReturnedEvents;
     KSTATUS Status;
+    ULONG Timeout;
     PUNIX_SOCKET UnixSocket;
 
     ASSERT(Socket->Domain == NetDomainLocal);
 
     LockHeld = FALSE;
     NewSocketHandle = NULL;
+    Timeout = WAIT_TIME_INDEFINITE;
+    OpenFlags = IoGetIoHandleOpenFlags(Socket->IoHandle);
+    if ((OpenFlags & OPEN_FLAG_NON_BLOCKING) != 0) {
+        Timeout = 0;
+    }
+
     UnixSocket = (PUNIX_SOCKET)Socket;
 
     //
@@ -911,10 +919,14 @@ Return Value:
         Status = IoWaitForIoObjectState(Socket->IoState,
                                         POLL_EVENT_IN,
                                         TRUE,
-                                        WAIT_TIME_INDEFINITE,
+                                        Timeout,
                                         &ReturnedEvents);
 
         if (!KSUCCESS(Status)) {
+            if (Status == STATUS_TIMEOUT) {
+                Status = STATUS_OPERATION_WOULD_BLOCK;
+            }
+
             goto UnixSocketAcceptEnd;
         }
 
@@ -1252,7 +1264,11 @@ Return Value:
         ASSERT(ServerUnixSocket->CurrentBacklog < ServerUnixSocket->MaxBacklog);
 
         IoSetIoObjectState(NewUnixSocket->KernelSocket.IoState,
-                           POLL_EVENT_IN | POLL_EVENT_OUT,
+                           POLL_EVENT_OUT,
+                           TRUE);
+
+        IoSetIoObjectState(UnixSocket->KernelSocket.IoState,
+                           POLL_EVENT_OUT,
                            TRUE);
 
         UnixSocket->Remote = NewUnixSocket;
@@ -2427,7 +2443,9 @@ Return Value:
 
 {
 
+    ULONG Backlog;
     PUNIX_SOCKET Connection;
+    LIST_ENTRY LocalList;
     ULONG ShutdownFlags;
     KSTATUS Status;
     PUNIX_SOCKET UnixSocket;
@@ -2453,20 +2471,18 @@ Return Value:
     }
 
     //
-    // Destroy any incoming connections.
+    // Move the incoming connections over to a list to be destroyed when the
+    // lock is released and the socket is closed.
     //
 
-    while (UnixSocket->CurrentBacklog != 0) {
+    if (UnixSocket->CurrentBacklog != 0) {
+        MOVE_LIST(&(UnixSocket->ConnectionListEntry), &LocalList);
+        Backlog = UnixSocket->CurrentBacklog;
+        UnixSocket->CurrentBacklog = 0;
 
-        ASSERT(LIST_EMPTY(&(UnixSocket->ConnectionListEntry)) == FALSE);
-
-        Connection = LIST_VALUE(UnixSocket->ConnectionListEntry.Next,
-                                UNIX_SOCKET,
-                                ConnectionListEntry);
-
-        LIST_REMOVE(&(Connection->ConnectionListEntry));
-        UnixSocket->CurrentBacklog -= 1;
-        IoClose(UnixSocket->KernelSocket.IoHandle);
+    } else {
+        INITIALIZE_LIST_HEAD(&LocalList);
+        Backlog = 0;
     }
 
     //
@@ -2482,6 +2498,30 @@ Return Value:
 
     UnixSocket->State = UnixSocketStateClosed;
     KeReleaseQueuedLock(UnixSocket->Lock);
+
+    //
+    // Shut down any incoming connections.
+    //
+
+    while (Backlog != 0) {
+
+        ASSERT(LIST_EMPTY(&LocalList));
+
+        Connection = LIST_VALUE(LocalList.Next,
+                                UNIX_SOCKET,
+                                ConnectionListEntry);
+
+        LIST_REMOVE(&(Connection->ConnectionListEntry));
+        Connection->ConnectionListEntry.Next = NULL;
+        Backlog -= 1;
+        Status = IopUnixSocketShutdown(&(Connection->KernelSocket),
+                                       ShutdownFlags);
+
+        ASSERT(KSUCCESS(Status));
+    }
+
+    ASSERT(LIST_EMPTY(&LocalList));
+
     IoSocketReleaseReference(&(UnixSocket->KernelSocket));
     return STATUS_SUCCESS;
 }
