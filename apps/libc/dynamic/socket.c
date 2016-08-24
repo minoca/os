@@ -1117,6 +1117,7 @@ Return Value:
                                        Message->msg_iovlen);
 
     Message->msg_flags = Parameters.SocketIoFlags;
+    Message->msg_controllen = Parameters.ControlDataSize;
     if ((!KSUCCESS(Status)) && (Status != STATUS_END_OF_FILE)) {
         if (Status == STATUS_NOT_SUPPORTED) {
             errno = EOPNOTSUPP;
