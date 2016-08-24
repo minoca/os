@@ -1850,6 +1850,7 @@ Return Value:
     ULONG OldFlags;
     ULONG OriginalPort;
     PNET_PROTOCOL_ENTRY Protocol;
+    BOOL Reinsert;
     NET_SOCKET SearchSocket;
     BOOL SkipValidation;
     KSTATUS Status;
@@ -1862,6 +1863,7 @@ Return Value:
 
     LockHeld = FALSE;
     Protocol = Socket->Protocol;
+    Reinsert = FALSE;
 
     //
     // If the socket is to be fully bound, then a remote address must have been
@@ -1962,6 +1964,7 @@ Return Value:
                               &(Socket->U.TreeEntry));
 
         SkipValidation = TRUE;
+        Reinsert = TRUE;
 
     //
     // If the socket is the forked copy of some listening socket, skip
@@ -2257,7 +2260,10 @@ Return Value:
 
 BindSocketEnd:
     if (!KSUCCESS(Status)) {
-        if (Socket->BindingType != SocketBindingInvalid) {
+        if (Reinsert != FALSE) {
+
+            ASSERT(Socket->BindingType != SocketBindingInvalid);
+
             Tree = &(Protocol->SocketTree[Socket->BindingType]);
             RtlRedBlackTreeInsert(Tree, &(Socket->U.TreeEntry));
         }
