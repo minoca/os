@@ -988,6 +988,7 @@ Return Value:
 
     ssize_t BytesWritten;
     off_t Offset;
+    int PreviousError;
     ssize_t Result;
 
     if (Stream == NULL) {
@@ -1016,7 +1017,9 @@ Return Value:
             Offset += 1;
         }
 
+        PreviousError = errno;
         lseek(Stream->Descriptor, -Offset, SEEK_CUR);
+        errno = PreviousError;
 
     //
     // The buffer is full of dirty data. Write it out.
