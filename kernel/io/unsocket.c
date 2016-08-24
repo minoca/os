@@ -2119,6 +2119,17 @@ Return Value:
             RequiredSize = sizeof(NET_DOMAIN_TYPE);
             break;
 
+        case SocketBasicOptionErrorStatus:
+
+            //
+            // Currently there are no errors in a local socket, so wire it up
+            // to the local status (success).
+            //
+
+            Source = &Status;
+            RequiredSize = sizeof(KSTATUS);
+            break;
+
         //
         // Switch to the remote socket and fall through.
         //
@@ -2505,7 +2516,7 @@ Return Value:
 
     while (Backlog != 0) {
 
-        ASSERT(LIST_EMPTY(&LocalList));
+        ASSERT(!LIST_EMPTY(&LocalList));
 
         Connection = LIST_VALUE(LocalList.Next,
                                 UNIX_SOCKET,
