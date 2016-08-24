@@ -1476,6 +1476,11 @@ Return Value:
 
 {
 
+    if (File < 0) {
+        errno = EBADF;
+        return -1;
+    }
+
     return utimensat(File, NULL, Times, 0);
 }
 
