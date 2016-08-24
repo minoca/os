@@ -1672,6 +1672,7 @@ Return Value:
     INT Status;
 
     Request = NULL;
+    Response = NULL;
     if (ClDebugDns != FALSE) {
         fprintf(stderr, "DNS: Lookup '%s'.\n", Name);
     }
