@@ -228,7 +228,7 @@ Return Value:
     return;
 }
 
-VOID
+INTN
 PspRestorePreSignalTrapFrame (
     PTRAP_FRAME TrapFrame,
     PSIGNAL_CONTEXT UserContext
@@ -249,7 +249,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns the architecture-specific return register from the thread context.
 
 --*/
 
@@ -263,7 +263,7 @@ Return Value:
     Status = MmCopyFromUserMode(&Context, UserContext, sizeof(SIGNAL_CONTEXT));
     if (!KSUCCESS(Status)) {
         PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
-        return;
+        return 0;
     }
 
     REMOVE_SIGNAL(Thread->RunningSignals, Context.Signal);
@@ -273,7 +273,7 @@ Return Value:
     TrapFrame->Eflags = Context.Eflags;
     TrapFrame->Eip = Context.Eip;
     TrapFrame->Esp = Context.Esp;
-    return;
+    return TrapFrame->Eax;
 }
 
 VOID
@@ -427,7 +427,7 @@ Return Value:
     return;
 }
 
-VOID
+INTN
 PspArchResetThreadContext (
     PKTHREAD Thread,
     PTRAP_FRAME TrapFrame
@@ -449,7 +449,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    The value that the thread should return when exiting back to user mode.
 
 --*/
 
@@ -483,7 +483,7 @@ Return Value:
         ArDisableFpu();
     }
 
-    return;
+    return 0;
 }
 
 KSTATUS

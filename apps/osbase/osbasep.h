@@ -46,7 +46,7 @@ Author:
 //
 
 typedef
-VOID
+INTN
 (*POS_SYSTEM_CALL) (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter
@@ -66,7 +66,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 
@@ -115,7 +117,7 @@ extern UINTN OsPageSize;
 // -------------------------------------------------------- Function Prototypes
 //
 
-VOID
+INTN
 OspSystemCallFull (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter
@@ -138,13 +140,15 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 
 #if defined (__arm__)
 
-VOID
+INTN
 OsSystemCall (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter
@@ -164,7 +168,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 

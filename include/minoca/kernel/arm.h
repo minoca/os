@@ -1268,7 +1268,7 @@ Return Value:
 
 --*/
 
-VOID
+INTN
 ArpSoftwareInterruptEntry (
     VOID
     );
@@ -1286,7 +1286,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 

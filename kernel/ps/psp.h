@@ -204,7 +204,8 @@ Return Value:
 KSTATUS
 PspResetThread (
     PKTHREAD Thread,
-    PTRAP_FRAME TrapFrame
+    PTRAP_FRAME TrapFrame,
+    PINTN ReturnValue
     );
 
 /*++
@@ -223,6 +224,9 @@ Arguments:
 
     TrapFrame - Supplies a pointer to the initial trap frame to reset the thread
         to.
+
+    ReturnValue - Supplies a pointer that receives the value that the reset
+        user mode thread should return when exiting back to user mode.
 
 Return Value:
 
@@ -857,7 +861,7 @@ Return Value:
 
 --*/
 
-VOID
+INTN
 PspRestorePreSignalTrapFrame (
     PTRAP_FRAME TrapFrame,
     PSIGNAL_CONTEXT UserContext
@@ -878,7 +882,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns the architecture-specific return register from the thread context.
 
 --*/
 
@@ -912,7 +916,7 @@ Return Value:
 
 --*/
 
-VOID
+INTN
 PspArchResetThreadContext (
     PKTHREAD Thread,
     PTRAP_FRAME TrapFrame
@@ -934,7 +938,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    The value that the thread should return when exiting back to user mode.
 
 --*/
 

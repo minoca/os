@@ -39,7 +39,7 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-VOID
+INTN
 OspSysenterSystemCall (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter

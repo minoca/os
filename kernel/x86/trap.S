@@ -471,7 +471,7 @@ FUNCTION(ArTrapSystemCallHandlerAsm)
 END_FUNCTION(ArTrapSystemCallHandlerAsm)
 
 ##
-## VOID
+## INTN
 ## ArSystemCallHandlerAsm (
 ##     ULONG ReturnEip,
 ##     ULONG ReturnCodeSelector,
@@ -497,7 +497,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 
@@ -513,6 +515,7 @@ ArSystemCallHandlerAfterTrapSave:
     pushl   %ecx                    # Push system call number.
     call    KeSystemCallHandler     # Call the main exception handler.
     addl    $0xc, %esp              # Pop the parameters.
+    movl    %eax, TRAP_EAX(%ebx)    # Save the return value in the trap frame.
     call    ArRestoreTrapFrame      # Restore the trap frame
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
@@ -520,7 +523,7 @@ ArSystemCallHandlerAfterTrapSave:
 END_FUNCTION(ArSystemCallHandlerAsm)
 
 ##
-## VOID
+## INTN
 ## ArSysenterHandlerAsm (
 ##     VOID
 ##     )
@@ -539,7 +542,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 
@@ -580,12 +585,12 @@ FUNCTION(ArSysenterHandlerAsm)
     addl    $0xC, %esp              # Pop the parameters.
 
     ##
-    ## Restore some portions of the pseudo trap frame.
+    ## Restore some portions of the pseudo trap frame. Do not zero EAX as it
+    ## holds the return value from the system call.
     ##
 
     movl    TRAP_ESP(%esp), %ecx    # Sysexit moves ECX to ESP.
     movl    TRAP_EIP(%esp), %edx    # Sysexit moves EDX to EIP.
-    xorl    %eax, %eax              # Zero eax to avoid leaking kernel state.
 
     ##
     ## Reset the segment registers to user mode and return.

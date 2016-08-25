@@ -744,8 +744,7 @@ Return Value:
                   Environment,
                   sizeof(PROCESS_ENVIRONMENT));
 
-    OspSystemCallFull(SystemCallExecuteImage, &Parameters);
-    return Parameters.Status;
+    return OspSystemCallFull(SystemCallExecuteImage, &Parameters);
 }
 
 OS_API

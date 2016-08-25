@@ -1159,7 +1159,7 @@ Return Value:
 
 --*/
 
-VOID
+INTN
 ArSystemCallHandlerAsm (
     ULONG ReturnEip,
     ULONG ReturnCodeSelector,
@@ -1184,11 +1184,13 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 
-VOID
+INTN
 ArSysenterHandlerAsm (
     VOID
     );
@@ -1206,7 +1208,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 

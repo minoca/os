@@ -44,7 +44,7 @@ Environment:
 .code32
 
 ##
-## VOID
+## INTN
 ## OspSystemCallFull (
 ##     ULONG SystemCallNumber,
 ##     PVOID SystemCallParameter
@@ -66,7 +66,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 
@@ -79,7 +81,7 @@ FUNCTION(OspSystemCallFull)
 END_FUNCTION(OspSystemCallFull)
 
 ##
-## VOID
+## INTN
 ## OspSysenterSystemCall (
 ##     ULONG SystemCallNumber,
 ##     PVOID SystemCallParameter
@@ -101,7 +103,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 

@@ -177,7 +177,7 @@ FUNCTION ArpUndefinedInstructionEntry
 END_FUNCTION ArpUndefinedInstructionEntry
 
 ##
-## VOID
+## INTN
 ## ArpSoftwareInterruptEntry (
 ##     VOID
 ##     )
@@ -196,7 +196,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
 
 --*/
 
@@ -229,18 +231,18 @@ FUNCTION ArpSoftwareInterruptEntry
 
     mov     %r2, %sp                            @ Set trap frame parameter.
     bl      KeSystemCallHandler                 @ Handle system call.
-    mov     %r0, %sp                            @ Get SVC stack pointer.
+    mov     %r1, %sp                            @ Get SVC stack pointer.
     cpsid   i, #ARM_MODE_SYSTEM                 @ Switch to system mode.
-    ldr     %sp, [%r0, #TRAP_USERSP]            @ Restore usermode SP.
-    ldr     %lr, [%r0, #TRAP_USERLR]            @ Restore usermode LR.
+    ldr     %sp, [%r1, #TRAP_USERSP]            @ Restore usermode SP.
+    ldr     %lr, [%r1, #TRAP_USERLR]            @ Restore usermode LR.
     cpsid   i, #ARM_MODE_SVC                    @ Switch back to svc mode.
     add     %sp, #(TRAP_FRAME_SIZE - 8)         @ Pop up to PC/Cpsr.
 
     ##
-    ## Clear the volatile registers to avoid leaking kernel state.
+    ## Clear the volatile registers to avoid leaking kernel state. Do not clear
+    ## R0 as it holds the system call's return value.
     ##
 
-    eor     %r0, %r0
     eor     %r1, %r1
     eor     %r2, %r2
     eor     %r3, %r3
@@ -275,10 +277,26 @@ ArpSoftwareInterruptEntrySlow:
     bl      KeSystemCallHandler
 
     ##
-    ## Restore state and return.
+    ## Restore the stack pointer. The rest of the context better be at the new
+    ## stack location. Then restore the user mode sp and lr.
     ##
 
-    ARM_EXIT_INTERRUPT
+    ldr     %sp, [%sp]                          @ Restore stack pointer.
+    add     %sp, %sp, #4                        @ Pop stack pointer.
+
+    ##
+    ## Restore the user mode stack and link registers. Do not restore or
+    ## clobber R0 as it holds the system call's return value.
+    ##
+
+    mov     %r1, %sp                            @ Get SVC stack pointer.
+    cpsid   i, #ARM_MODE_SYSTEM                 @ Switch to system mode.
+    ldr     %sp, [%r1]                          @ Restore usermode SP.
+    ldr     %lr, [%r1, #4]                      @ Resotre usermode LR.
+    cpsid   i, #ARM_MODE_SVC                    @ Switch back to svc mode.
+    add     %sp, %sp, #16                       @ Pop up to R1.
+    ldmia   %sp!, {%r1-%r12, %lr}               @ Restore general registers.
+    rfeia   %sp!                                @ Restore PC and CPSR.
 
 END_FUNCTION ArpSoftwareInterruptEntry
 
