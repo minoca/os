@@ -1207,7 +1207,8 @@ Return Value:
     FileObject = Handle->PathPoint.PathEntry->FileObject;
     if (FromKernelMode == FALSE) {
         FileOwner = FALSE;
-        if ((FileProperties->UserId == Thread->Identity.EffectiveUserId) ||
+        if ((FileObject->Properties.UserId ==
+             Thread->Identity.EffectiveUserId) ||
             (KSUCCESS(PsCheckPermission(PERMISSION_FILE_OWNER)))) {
 
             FileOwner = TRUE;
@@ -1243,7 +1244,7 @@ Return Value:
                     goto SetFileInformationEnd;
                 }
 
-                if (PsIsUserInGroup(FileProperties->GroupId) == FALSE) {
+                if (PsIsUserInGroup(FileObject->Properties.GroupId) == FALSE) {
                     goto SetFileInformationEnd;
                 }
             }
