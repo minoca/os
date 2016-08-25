@@ -3355,51 +3355,6 @@ Return Value:
     return Parameters.Status;
 }
 
-//
-// TODO: Remove the ARM specific handler once the signal issue is debugged.
-//
-
-#if defined(__arm__)
-
-VOID
-OspProcessSignal (
-    PSIGNAL_PARAMETERS Parameters,
-    PSIGNAL_PARAMETERS Parameters2,
-    PSIGNAL_PARAMETERS Parameters3
-    )
-
-/*++
-
-Routine Description:
-
-    This routine processes a signal sent via the kernel.
-
-Arguments:
-
-    Parameters - Supplies a pointer to the signal parameters from the kernel.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PSIGNAL_HANDLER_ROUTINE SignalHandler;
-
-    ASSERT((Parameters == Parameters2) && (Parameters == Parameters3));
-
-    SignalHandler = OsSignalHandler;
-    if (SignalHandler != NULL) {
-        SignalHandler(Parameters);
-    }
-
-    return;
-}
-
-#else
-
 VOID
 OspProcessSignal (
     PSIGNAL_PARAMETERS Parameters
@@ -3432,8 +3387,6 @@ Return Value:
 
     return;
 }
-
-#endif
 
 //
 // --------------------------------------------------------- Internal Functions
