@@ -130,7 +130,8 @@ Author:
 
 #define IMAGE_SECTION_COPY_MASK                             \
     (IMAGE_SECTION_ACCESS_MASK | IMAGE_SECTION_NON_PAGED |  \
-     IMAGE_SECTION_SHARED | IMAGE_SECTION_MAP_SYSTEM_CALL)
+     IMAGE_SECTION_SHARED | IMAGE_SECTION_MAP_SYSTEM_CALL | \
+     IMAGE_SECTION_WAS_WRITABLE)
 
 //
 // Define a mask of image section access flags.

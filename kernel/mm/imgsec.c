@@ -1314,13 +1314,6 @@ Return Value:
     RtlSetMemory(NewSection->InheritPageBitmap, MAX_UCHAR, BitmapSize);
     NewSection->ReferenceCount = 1;
     NewSection->Flags = SectionToCopy->Flags;
-    if ((NewSection->Flags & IMAGE_SECTION_WRITABLE) != 0) {
-        NewSection->Flags |= IMAGE_SECTION_WAS_WRITABLE;
-
-    } else {
-        NewSection->Flags &= ~IMAGE_SECTION_WAS_WRITABLE;
-    }
-
     INITIALIZE_LIST_HEAD(&(NewSection->ChildList));
     NewSection->AddressSpace = DestinationAddressSpace;
     NewSection->VirtualAddress = SectionToCopy->VirtualAddress;
@@ -3542,15 +3535,15 @@ Return Value:
     }
 
     //
-    // Keep score of whether or not this section was ever writable.
+    // If the flags are different and it used to be writable, it must be
+    // becoming read only.
     //
 
     BecomingReadOnly = FALSE;
-    if ((Section->Flags & IMAGE_SECTION_WRITABLE) != 0) {
-        Section->Flags |= IMAGE_SECTION_WAS_WRITABLE;
-        if ((NewAccess & IMAGE_SECTION_WRITABLE) == 0) {
-            BecomingReadOnly = TRUE;
-        }
+    if ((((Section->Flags ^ NewAccess) & Section->Flags) &
+         IMAGE_SECTION_WRITABLE) != 0) {
+
+        BecomingReadOnly = TRUE;
     }
 
     //
