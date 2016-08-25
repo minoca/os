@@ -26,6 +26,8 @@ Author:
 #include <libcbase.h>
 #include <stddef.h>
 #include <wchar.h>
+#include <sys/select.h>
+#include <sys/types.h>
 
 //
 // ---------------------------------------------------------------- Definitions
