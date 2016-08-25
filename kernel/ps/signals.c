@@ -2957,7 +2957,8 @@ Return Value:
              ((Signal->SignalNumber == SIGNAL_ILLEGAL_INSTRUCTION) ||
               (Signal->SignalNumber == SIGNAL_BUS_ERROR) ||
               (Signal->SignalNumber == SIGNAL_MATH_ERROR) ||
-              (Signal->SignalNumber == SIGNAL_ACCESS_VIOLATION)))) {
+              (Signal->SignalNumber == SIGNAL_ACCESS_VIOLATION) ||
+              (Signal->SignalNumber == SIGNAL_TRAP)))) {
 
             PspForwardUserModeExceptionToKernel(Signal, TrapFrame);
         }
