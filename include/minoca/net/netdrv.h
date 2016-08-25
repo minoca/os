@@ -48,15 +48,16 @@ Author:
 // This macro gets and clears a network sockets last error.
 //
 
-#define NET_SOCKET_GET_AND_CLEAR_LAST_ERROR(_Socket) \
-    RtlAtomicExchange32(&((_Socket)->LastError), STATUS_SUCCESS);
+#define NET_SOCKET_GET_AND_CLEAR_LAST_ERROR(_Socket)               \
+    RtlAtomicExchange32((volatile ULONG *)&((_Socket)->LastError), \
+                        STATUS_SUCCESS);
 
 //
 // This macro sets the network sockets last error state.
 //
 
 #define NET_SOCKET_SET_LAST_ERROR(_Socket, _Error) \
-    RtlAtomicExchange32(&((_Socket)->LastError), (_Error));
+    RtlAtomicExchange32((volatile ULONG *)&((_Socket)->LastError), (_Error));
 
 //
 // This macro initializes a network packet list.
