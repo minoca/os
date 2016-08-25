@@ -32,6 +32,52 @@ Author:
 //
 
 //
+// These macros read 16 and 32 bit values from a pointer value. The pointer is
+// updated.
+//
+
+#define NS_GET16(_Short, _Pointer)                                           \
+    do {                                                                     \
+        const u_char *_Pointer8 = (const u_char *)(_Pointer);                \
+        (_Short) = ((uint16_t)_Pointer8[0] << 8) | ((uint16_t)_Pointer8[1]); \
+        (_Pointer) += NS_INT16SZ;                                            \
+    } while (0)
+
+#define NS_GET32(_Long, _Pointer)                               \
+    do {                                                        \
+        const u_char *_Pointer8 = (const u_char *)(_Pointer);   \
+        (_Long) = ((uint32_t)_Pointer8[0] << 24) |              \
+                  ((uint32_t)_Pointer8[1] << 16) |              \
+                  ((uint32_t)_Pointer8[2] << 8) |               \
+                  ((uint32_t)_Pointer8[3]);                     \
+        (_Pointer) += NS_INT32SZ;                               \
+    } while (0)
+
+//
+// These macros write 16 and 32 bit values to a pointer, updating the pointer.
+//
+
+#define NS_PUT16(_Short, _Pointer)                  \
+    do {                                            \
+        uint16_t _ShortValue = (uint16_t)(_Short);  \
+        u_char *_Pointer8 = (u_char *)(_Pointer);   \
+        _Pointer8[0] = _ShortValue >> 8;            \
+        _Pointer8[1] = _ShortValue;                 \
+        _Pointer += NS_INT16SZ;                     \
+    } while (0)
+
+#define NS_PUT32(_Long, _Pointer)                   \
+    do {                                            \
+        uint32_t _LongValue = (uint32_t)(_Long);    \
+        u_char *_Pointer8 = (u_char *)(_Pointer);   \
+        _Pointer8[0] = _LongValue >> 24;            \
+        _Pointer8[1] = _LongValue >> 16;            \
+        _Pointer8[2] = _LongValue >> 8;             \
+        _Pointer8[3] = _LongValue;                  \
+        (_Pointer) += NS_INT32SZ;                   \
+    } while (0)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 

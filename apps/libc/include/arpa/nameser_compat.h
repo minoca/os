@@ -35,38 +35,15 @@ Author:
 // updated.
 //
 
-#define GETSHORT(_Short, _Pointer)                                          \
-    u_char *_Pointer8 = (u_char *)(_Pointer);                               \
-    (_Short) = ((uint16_t)_Pointer8[0] << 8) | ((uint16_t)_Pointer8[1]);    \
-    (_Pointer) += INT16SZ;
-
-#define GETLONG(_Long, _Pointer)                \
-    u_char *_Pointer8 = (u_char *)(_Pointer);   \
-    (_Long) = ((uint32_t)_Pointer8[0] << 24) |  \
-              ((uint32_t)_Pointer8[1] << 16) |  \
-              ((uint32_t)_Pointer8[2] << 8) |   \
-              ((uint32_t)_Pointer8[3]);         \
-    (_Pointer) += INT32SZ;
+#define GETSHORT(_Short, _Pointer) NS_GET16((_Short), (_Pointer))
+#define GETLONG(_Long, _Pointer) NS_GET32((_Long), (_Pointer))
 
 //
 // These macros write 16 and 32 bit values to a pointer, updating the pointer.
 //
 
-#define PUTSHORT(_Short, _Pointer)              \
-    uint16_t _ShortValue = (uint16_t)(_Short);  \
-    u_char *_Pointer8 = (u_char *)(_Pointer);   \
-    _Pointer8[0] = _ShortValue >> 8;            \
-    _Pointer8[1] = _ShortValue;                 \
-    _Pointer += INT16SZ;
-
-#define PUTLONG(_Long, _Pointer)                \
-    uint32_t _LongValue = (uint32_t)(_Long);    \
-    u_char *_Pointer8 = (u_char *)(_Pointer);   \
-    _Pointer8[0] = _LongValue >> 24;            \
-    _Pointer8[1] = _LongValue >> 16;            \
-    _Pointer8[2] = _LongValue >> 8;             \
-    _Pointer8[3] = _LongValue;                  \
-    (_Pointer) += INT32SZ;
+#define PUTSHORT(_Short, _Pointer) NS_PUT16((_Short), (_Pointer))
+#define PUTLONG(_Long, _Pointer) NS_PUT32((_Long), (_Pointer))
 
 //
 // ---------------------------------------------------------------- Definitions
