@@ -2782,7 +2782,7 @@ Return Value:
     // TODO: Add support for creating a hard link.
     //
 
-    Parameters->Status = STATUS_NOT_IMPLEMENTED;
+    Parameters->Status = STATUS_NOT_SUPPORTED;
     return;
 }
 
