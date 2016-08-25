@@ -221,6 +221,7 @@ Return Value:
     }
 
     TrapFrame->Pc = (ULONG)(Thread->OwningProcess->SignalHandlerRoutine);
+    TrapFrame->Cpsr = ARM_MODE_USER;
     if ((TrapFrame->Pc & ARM_THUMB_BIT) != 0) {
         TrapFrame->Cpsr |= PSR_FLAG_THUMB;
     }
