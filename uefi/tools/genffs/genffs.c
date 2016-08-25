@@ -56,9 +56,9 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define STATUS_SUCCESS  0
-#define STATUS_WARNING  1
-#define STATUS_ERROR    2
+#define GFFS_STATUS_SUCCESS  0
+#define GFFS_STATUS_WARNING  1
+#define GFFS_STATUS_ERROR    2
 
 #define UTILITY_NAME            "GenFfs"
 #define UTILITY_MAJOR_VERSION 0
@@ -245,9 +245,9 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS - Utility exits successfully.
+    GFFS_STATUS_SUCCESS - Utility exits successfully.
 
-    STATUS_ERROR- Some error occurred during execution.
+    GFFS_STATUS_ERROR - Some error occurred during execution.
 
 --*/
 
@@ -298,7 +298,7 @@ Return Value:
     if (ArgumentCount == 1) {
         GFFS_LOG_ERROR("Missing options.\n");
         GffsPrintUsage();
-        return STATUS_ERROR;
+        return GFFS_STATUS_ERROR;
     }
 
     //
@@ -312,12 +312,12 @@ Return Value:
 
         GffsPrintVersion();
         GffsPrintUsage();
-        return STATUS_SUCCESS;
+        return GFFS_STATUS_SUCCESS;
     }
 
     if (strcasecmp(Arguments[0], "--version") == 0) {
         GffsPrintVersion();
-        return STATUS_SUCCESS;
+        return GFFS_STATUS_SUCCESS;
     }
 
     while (ArgumentCount > 0) {
