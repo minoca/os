@@ -245,7 +245,7 @@ BOOL ClDebugCustomTimeZoneParsing;
 // Store the global time zone lock.
 //
 
-volatile ULONG ClTimeZoneLock;
+OS_LOCK ClTimeZoneLock;
 
 //
 // Store the timer backing the alarm function.
@@ -2567,6 +2567,7 @@ Return Value:
 
 {
 
+    OsInitializeLockDefault(&ClTimeZoneLock);
     RtlInitializeTimeZoneSupport(ClpAcquireTimeZoneLock,
                                  ClpReleaseTimeZoneLock,
                                  (PTIME_ZONE_REALLOCATE_FUNCTION)realloc);
@@ -3842,14 +3843,7 @@ Return Value:
 
 {
 
-    //
-    // Implement a crudimentary (TM) spin lock.
-    //
-
-    while (RtlAtomicCompareExchange32(&ClTimeZoneLock, 1, 0) == 0) {
-        NOTHING;
-    }
-
+    OsAcquireLock(&ClTimeZoneLock);
     return;
 }
 
@@ -3876,12 +3870,7 @@ Return Value:
 
 {
 
-    ULONG OldValue;
-
-    OldValue = RtlAtomicExchange32(&ClTimeZoneLock, 0);
-
-    ASSERT(OldValue != 0);
-
+    OsReleaseLock(&ClTimeZoneLock);
     return;
 }
 
