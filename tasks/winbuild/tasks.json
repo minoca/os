@@ -475,6 +475,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/pkg-config-0.29.1"
         },
         {
+            "name": "Make postgresql",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/postgresql-9.5.4"
+        },
+        {
             "name": "Make OS",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os test"

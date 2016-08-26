@@ -529,6 +529,16 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/ruby-2.3.1"
         },
         {
+            "name": "Make postgresql",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/postgresql-9.5.4"
+        },
+        {
+            "name": "Make php",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/php-7.0.9"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
