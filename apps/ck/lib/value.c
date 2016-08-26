@@ -206,7 +206,19 @@ Return Value:
 
     PCK_CLOSURE Closure;
 
+    if (Class != NULL) {
+        CkpPushRoot(Vm, &(Class->Header));
+    }
+
+    CkpPushRoot(Vm, &(Module->Header));
+    CkpPushRoot(Vm, &(Name->Header));
     Closure = CkAllocate(Vm, sizeof(CK_CLOSURE));
+    CkpPopRoot(Vm);
+    CkpPopRoot(Vm);
+    if (Class != NULL) {
+        CkpPopRoot(Vm);
+    }
+
     if (Closure == NULL) {
         return NULL;
     }
@@ -381,6 +393,9 @@ Return Value:
         break;
 
     case CkObjectModule:
+        CkpModuleDestroy(Vm, (PCK_MODULE)Object);
+        break;
+
     case CkObjectClass:
     case CkObjectClosure:
     case CkObjectInstance:
@@ -805,9 +820,6 @@ Return Value:
 
 {
 
-    CK_DICT_ITERATOR Iterator;
-    CK_VALUE Key;
-
     Class->Super = Super;
     Class->SuperFieldCount = Super->FieldCount;
 
@@ -815,16 +827,7 @@ Return Value:
     // Copy all the methods in the superclass to this class.
     //
 
-    CkpDictInitializeIterator(Vm, Super->Methods, &Iterator);
-    while (TRUE) {
-        Key = CkpDictIterate(Super->Methods, &Iterator);
-        if (CK_IS_UNDEFINED(Key)) {
-            break;
-        }
-
-        CkpDictSet(Vm, Class->Methods, Key, CkpDictGet(Super->Methods, Key));
-    }
-
+    CkpDictCombine(Vm, Class->Methods, Super->Methods);
     return;
 }
 

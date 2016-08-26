@@ -425,25 +425,27 @@ Return Value:
 }
 
 VOID
-CkpDictInitializeIterator (
+CkpDictCombine (
     PCK_VM Vm,
-    PCK_DICT Dict,
-    PCK_DICT_ITERATOR Iterator
+    PCK_DICT Destination,
+    PCK_DICT Source
     )
 
 /*++
 
 Routine Description:
 
-    This routine initializes a dictionary iterator.
+    This routine adds all entries from the source dictionary into the
+    destination dictionary, clobbering any existing entries of the same key.
 
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    Dict - Supplies a pointer to the dictionary object.
+    Destination - Supplies a pointer to the dictionary where the entries will
+        be copied to.
 
-    Iterator - Supplies a pointer to the dictionary iterator.
+    Source - Supplies the dictionary to make a copy of.
 
 Return Value:
 
@@ -453,49 +455,21 @@ Return Value:
 
 {
 
-    *Iterator = 0;
-    return;
-}
+    PCK_DICT_ENTRY Entry;
+    UINTN Index;
 
-CK_VALUE
-CkpDictIterate (
-    PCK_DICT Dict,
-    PCK_DICT_ITERATOR Iterator
-    )
+    CK_ASSERT(Source != Destination);
 
-/*++
-
-Routine Description:
-
-    This routine returns the next key in a dictionary iteration.
-
-Arguments:
-
-    Dict - Supplies a pointer to the dictionary object.
-
-    Iterator - Supplies a pointer to the dictionary iterator.
-
-Return Value:
-
-    Returns the next key on success.
-
-    Returns an undefined value if there are no more keys.
-
---*/
-
-{
-
-    CK_VALUE Key;
-
-    while (*Iterator < Dict->Capacity) {
-        Key = Dict->Entries[*Iterator].Key;
-        *Iterator += 1;
-        if (!CK_IS_UNDEFINED(Key)) {
-            return Key;
+    Entry = Source->Entries;
+    for (Index = 0; Index < Source->Capacity; Index += 1) {
+        if (!CK_IS_UNDEFINED(Entry->Key)) {
+            CkpDictSet(Vm, Destination, Entry->Key, Entry->Value);
         }
+
+        Entry += 1;
     }
 
-    return CkUndefinedValue;
+    return;
 }
 
 //
@@ -828,7 +802,7 @@ Return Value:
             return TRUE;
         }
 
-        Index = Integer;
+        Index = Integer + 1;
     }
 
     //

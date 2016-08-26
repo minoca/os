@@ -118,7 +118,6 @@ typedef struct _CK_VALUE CK_VALUE, *PCK_VALUE;
 
 typedef LONG CK_ARITY, *PCK_ARITY;
 typedef LONG CK_SYMBOL_INDEX, *PCK_SYMBOL_INDEX;
-typedef LONGLONG CK_INTEGER;
 typedef PUCHAR PCK_IP;
 
 typedef enum _CK_OBJECT_TYPE {
@@ -409,8 +408,6 @@ typedef struct _CK_DICT {
     PCK_DICT_ENTRY Entries;
 } CK_DICT, *PCK_DICT;
 
-typedef UINTN CK_DICT_ITERATOR, *PCK_DICT_ITERATOR;
-
 /*++
 
 Structure Description:
@@ -449,8 +446,14 @@ Members:
 
     Name - Stores a pointer to the string containing the name of the module.
 
+    Path - Stores an optional pointer to the string containing the full path
+        to the module.
+
     Fiber - Stores a pointer to the fiber used to load the module contents.
         Once loaded, this becomes NULL.
+
+    Handle - Stores a pointer to the dynamic library handle if this is a
+        foreign module.
 
 --*/
 
@@ -460,7 +463,9 @@ typedef struct _CK_MODULE {
     CK_STRING_TABLE VariableNames;
     CK_STRING_TABLE Strings;
     PCK_STRING Name;
+    PCK_STRING Path;
     PCK_FIBER Fiber;
+    PVOID Handle;
 } CK_MODULE, *PCK_MODULE;
 
 /*++
@@ -1427,55 +1432,31 @@ Return Value:
 --*/
 
 VOID
-CkpDictInitializeIterator (
+CkpDictCombine (
     PCK_VM Vm,
-    PCK_DICT Dict,
-    PCK_DICT_ITERATOR Iterator
+    PCK_DICT Destination,
+    PCK_DICT Source
     );
 
 /*++
 
 Routine Description:
 
-    This routine initializes a dictionary iterator.
+    This routine adds all entries from the source dictionary into the
+    destination dictionary, clobbering any existing entries of the same key.
 
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    Dict - Supplies a pointer to the dictionary object.
+    Destination - Supplies a pointer to the dictionary where the entries will
+        be copied to.
 
-    Iterator - Supplies a pointer to the dictionary iterator.
+    Source - Supplies the dictionary to make a copy of.
 
 Return Value:
 
     None.
-
---*/
-
-CK_VALUE
-CkpDictIterate (
-    PCK_DICT Dict,
-    PCK_DICT_ITERATOR Iterator
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the next key in a dictionary iteration.
-
-Arguments:
-
-    Dict - Supplies a pointer to the dictionary object.
-
-    Iterator - Supplies a pointer to the dictionary iterator.
-
-Return Value:
-
-    Returns the next key on success.
-
-    Returns an undefined value if there are no more keys.
 
 --*/
 
@@ -1658,7 +1639,7 @@ Return Value:
 CK_VALUE
 CkpStringCreate (
     PCK_VM Vm,
-    PSTR Text,
+    PCSTR Text,
     UINTN Length
     );
 

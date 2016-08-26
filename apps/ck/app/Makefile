@@ -37,5 +37,15 @@ TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
 
 OBJS = chalk.o \
 
+ifeq ($(OS),Windows_NT)
+
+OBJS += ckwin32.o \
+
+else
+
+OBJS += ckunix.o \
+
+endif
+
 include $(SRCROOT)/os/minoca.mk
 

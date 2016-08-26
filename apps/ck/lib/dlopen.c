@@ -4,22 +4,29 @@ Copyright (c) 2016 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    vmsys.h
+    dlopen.c
 
 Abstract:
 
-    This header contains definitions for the default configuration that wires
-    Chalk up to the rest of the system.
+    This module implements support for dynamic libraries via dlopen, dlsym,
+    and dlclose.
 
 Author:
 
-    Evan Green 28-May-2016
+    Evan Green 14-Aug-2016
+
+Environment:
+
+    Win32
 
 --*/
 
 //
 // ------------------------------------------------------------------- Includes
 //
+
+#include <dlfcn.h>
+#include <minoca/lib/types.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -30,20 +37,27 @@ Author:
 //
 
 //
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+//
 // -------------------------------------------------------------------- Globals
 //
 
-extern CK_CONFIGURATION CkDefaultConfiguration;
-extern PCSTR CkSharedLibraryExtension;
+//
+// Define the shared library extension.
+//
+
+PCSTR CkSharedLibraryExtension = ".so";
 
 //
-// -------------------------------------------------------- Function Prototypes
+// ------------------------------------------------------------------ Functions
 //
 
 PVOID
 CkpLoadLibrary (
     PSTR BinaryName
-    );
+    )
 
 /*++
 
@@ -63,10 +77,18 @@ Return Value:
 
 --*/
 
+{
+
+    PVOID NewHandle;
+
+    NewHandle = dlopen(BinaryName, RTLD_GLOBAL | RTLD_LAZY);
+    return NewHandle;
+}
+
 VOID
 CkpFreeLibrary (
     PVOID Handle
-    );
+    )
 
 /*++
 
@@ -84,11 +106,21 @@ Return Value:
 
 --*/
 
+{
+
+    if (Handle == NULL) {
+        return;
+    }
+
+    dlclose(Handle);
+    return;
+}
+
 PVOID
 CkpGetLibrarySymbol (
     PVOID Handle,
     PSTR SymbolName
-    );
+    )
 
 /*++
 
@@ -109,4 +141,13 @@ Return Value:
     NULL on failure.
 
 --*/
+
+{
+
+    return dlsym(Handle, SymbolName);
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 

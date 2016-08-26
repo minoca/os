@@ -205,6 +205,7 @@ Return Value:
     KissHead.NextKiss = &KissHead;
     Vm->KissList = &KissHead;
     CkpKissObject(Vm, &(Vm->Modules->Header));
+    CkpKissObject(Vm, &(Vm->ModulePath->Header));
     for (Index = 0; Index < Vm->WorkingObjectCount; Index += 1) {
         CkpKissObject(Vm, Vm->WorkingObjects[Index]);
     }
@@ -1029,6 +1030,7 @@ Return Value:
     CkpKissObject(Vm, &(Module->Strings.Dict->Header));
     CkpKissValueArray(Vm, &(Module->Strings.List));
     CkpKissObject(Vm, &(Module->Name->Header));
+    CkpKissObject(Vm, &(Module->Path->Header));
     CkpKissObject(Vm, &(Module->Fiber->Header));
     Vm->BytesAllocated = sizeof(CK_MODULE);
     return;

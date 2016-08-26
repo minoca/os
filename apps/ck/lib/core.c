@@ -182,6 +182,18 @@ CkpCoreWrite (
     PCK_VALUE Arguments
     );
 
+BOOL
+CkpCoreGetModulePath (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpCoreSetModulePath (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -229,6 +241,8 @@ CK_PRIMITIVE_DESCRIPTION CkCorePrimitives[] = {
     {"gc@0", 0, CkpCoreGarbageCollect},
     {"importModule@1", 1, CkpCoreImportModule},
     {"write@1", 1, CkpCoreWrite},
+    {"modulePath@0", 0, CkpCoreGetModulePath},
+    {"setModulePath@1", 1, CkpCoreSetModulePath},
     {NULL, 0, NULL}
 };
 
@@ -268,7 +282,7 @@ Return Value:
     UINTN Size;
     CK_VALUE Value;
 
-    CoreModule = CkpModuleCreate(Vm, NULL);
+    CoreModule = CkpModuleAllocate(Vm, NULL, NULL);
     if (CoreModule == NULL) {
         return CkErrorNoMemory;
     }
@@ -383,7 +397,7 @@ Return Value:
 
     Value = CkpFindModuleVariable(Vm, CoreModule, "Module");
     Classes->Module = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Core, CkModulePrimitives);
+    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Module, CkModulePrimitives);
 
     //
     // Some strings may have been created without being assigned to string
@@ -1501,6 +1515,85 @@ Return Value:
         Vm->Configuration.Write(Vm, String->Value);
     }
 
+    return TRUE;
+}
+
+BOOL
+CkpCoreGetModulePath (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current module path.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    if (Vm->ModulePath == NULL) {
+        Vm->ModulePath = CkpListCreate(Vm, 0);
+    }
+
+    if (Vm->ModulePath != NULL) {
+        CK_OBJECT_VALUE(Arguments[0], Vm->ModulePath);
+
+    } else {
+        Arguments[0] = CkNullValue;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpCoreSetModulePath (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the current module path.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    if (!CK_IS_LIST(Arguments[1])) {
+        CkpRuntimeError(Vm, "Expected a list");
+        return FALSE;
+    }
+
+    Vm->ModulePath = CK_AS_LIST(Arguments[1]);
     return TRUE;
 }
 

@@ -33,6 +33,16 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
+ifeq ($(OS),Windows_NT)
+
+OBJS += dynwin32.o \
+
+else
+
+OBJS += dlopen.o \
+
+endif
+
 include $(SRCROOT)/os/minoca.mk
 
 gram.c:

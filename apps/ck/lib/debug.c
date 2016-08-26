@@ -788,6 +788,7 @@ Return Value:
 {
 
     PCK_CLASS Class;
+    PCK_MODULE Module;
 
     switch (Object->Type) {
     case CkObjectString:
@@ -799,6 +800,24 @@ Return Value:
         CkpDebugPrint(Vm, "Class(");
         CkpDumpObject(Vm, &(Class->Name->Header));
         CkpDebugPrint(Vm, ")");
+        break;
+
+    case CkObjectModule:
+        Module = (PCK_MODULE)Object;
+        CkpDebugPrint(Vm, "<module ");
+        if (Module->Name != NULL) {
+            CkpDumpObject(Vm, &(Module->Name->Header));
+
+        } else {
+            CkpDebugPrint(Vm, "builtin");
+        }
+
+        if (Module->Path != NULL) {
+            CkpDebugPrint(Vm, " at ");
+            CkpDumpObject(Vm, &(Module->Path->Header));
+        }
+
+        CkpDebugPrint(Vm, ">");
         break;
 
     default:

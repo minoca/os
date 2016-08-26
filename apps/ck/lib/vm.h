@@ -397,6 +397,8 @@ Members:
 
     Fiber - Stores a pointer to the currently running fiber.
 
+    ModulePath - Stores the list of paths to search when loading a new module.
+
 --*/
 
 struct _CK_VM {
@@ -413,6 +415,7 @@ struct _CK_VM {
     ULONG WorkingObjectCount;
     PCK_COMPILER Compiler;
     PCK_FIBER Fiber;
+    PCK_LIST ModulePath;
 };
 
 //
@@ -594,6 +597,7 @@ PCK_MODULE
 CkpModuleLoadSource (
     PCK_VM Vm,
     CK_VALUE ModuleName,
+    CK_VALUE Path,
     PSTR Source,
     UINTN Length
     );
@@ -610,6 +614,8 @@ Arguments:
 
     ModuleName - Supplies the module name value.
 
+    Path - Supplies an optional value that is the full path to the module.
+
     Source - Supplies a pointer to the null terminated string containing the
         source to interpret.
 
@@ -625,22 +631,90 @@ Return Value:
 --*/
 
 PCK_MODULE
-CkpModuleCreate (
+CkpModuleLoadForeign (
     PCK_VM Vm,
-    PCK_STRING Name
+    CK_VALUE ModuleName,
+    CK_VALUE Path,
+    PVOID Handle,
+    PCK_FOREIGN_FUNCTION EntryPoint
     );
 
 /*++
 
 Routine Description:
 
-    This routine creates a new module object.
+    This routine loads a new foreign module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies the module name value.
+
+    Path - Supplies an optional value that is the full path to the module.
+
+    Handle - Supplies a handle to the opened dynamic library.
+
+    EntryPoint - Supplies a pointer to the C function to call to load the
+        module.
+
+Return Value:
+
+    Returns a pointer to the newly loaded module on success.
+
+    NULL on failure.
+
+--*/
+
+PCK_MODULE
+CkpModuleCreate (
+    PCK_VM Vm,
+    PCK_STRING Name,
+    PCK_STRING Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates and initializes new module object.
 
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
     Name - Supplies a pointer to the module name.
+
+    Path - Supplies an optional pointer to the complete module path.
+
+Return Value:
+
+    Returns a pointer to the newly created module on success.
+
+    NULL on allocation failure.
+
+--*/
+
+PCK_MODULE
+CkpModuleAllocate (
+    PCK_VM Vm,
+    PCK_STRING Name,
+    PCK_STRING Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates a new module object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Name - Supplies a pointer to the module name.
+
+    Path - Supplies an optional pointer to the complete module path.
 
 Return Value:
 
@@ -673,5 +747,29 @@ Return Value:
     Returns a pointer to the module with the given name on success.
 
     NULL if no such module exists.
+
+--*/
+
+VOID
+CkpModuleDestroy (
+    PCK_VM Vm,
+    PCK_MODULE Module
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when a module object is being destroyed.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the dying module.
+
+Return Value:
+
+    None.
 
 --*/

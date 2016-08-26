@@ -20,7 +20,9 @@
 #
 ################################################################################
 
-OBJS = ckcore.o      \
+OBJS = capi.o        \
+       capilib.o     \
+       ckcore.o      \
        compexpr.o    \
        compiler.o    \
        compio.o      \

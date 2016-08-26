@@ -27,6 +27,38 @@ Author:
 #define CK_ASSERT(_Condition) assert(_Condition)
 
 //
+// This macro pops the top value off the stack and discards it.
+//
+
+#define CkStackPop(_Vm) CkStackRemove((_Vm), -1)
+
+//
+// These macros evaluate to non-zero if the value at the given stack index is
+// of the named type.
+//
+
+#define CkIsNull(_Vm, _StackIndex) \
+    (CkGetType((_Vm), (_StackIndex)) == CkTypeNull)
+
+#define CkIsInteger(_Vm, _StackIndex) \
+    (CkGetType((_Vm), (_StackIndex)) == CkTypeInteger)
+
+#define CkIsString(_Vm, _StackIndex) \
+    (CkGetType((_Vm), (_StackIndex)) == CkTypeString)
+
+#define CkIsDict(_Vm, _StackIndex) \
+    (CkGetType((_Vm), (_StackIndex)) == CkTypeDict)
+
+#define CkIsList(_Vm, _StackIndex) \
+    (CkGetType((_Vm), (_StackIndex)) == CkTypeList)
+
+#define CkIsFunction(_Vm, _StackIndex) \
+    (CkGetType((_Vm), (_StackIndex)) == CkTypeFunction)
+
+#define CkIsObject(_Vm, _StackIndex) \
+    (CkGetType((_Vm), (_StackIndex)) == CkTypeObject)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -39,6 +71,9 @@ Author:
 #define CHALK_VERSION ((CHALK_VERSION_MAJOR << 24) | \
                        (CHALK_VERSION_MINOR << 16) | \
                        CHALK_VERSION_REVISION)
+
+#define CK_SOURCE_EXTENSION ".ck"
+#define CK_MODULE_ENTRY_NAME "CkModuleInit"
 
 //
 // Define Chalk configuration flags.
@@ -68,7 +103,34 @@ typedef enum _CK_ERROR_TYPE {
     CkErrorStackTrace
 } CK_ERROR_TYPE, *PCK_ERROR_TYPE;
 
+typedef enum _CK_LOAD_MODULE_RESULT {
+    CkLoadModuleSource,
+    CkLoadModuleForeign,
+    CkLoadModuleNotFound,
+    CkLoadModuleNoMemory,
+    CkLoadModuleNotSupported,
+    CkLoadModuleStaticError,
+    CkLoadModuleFreeError
+} CK_LOAD_MODULE_RESULT, *PCK_LOAD_MODULE_RESULT;
+
+//
+// Define the data types to the C API.
+//
+
+typedef enum _CK_API_TYPE {
+    CkTypeInvalid,
+    CkTypeNull,
+    CkTypeInteger,
+    CkTypeString,
+    CkTypeDict,
+    CkTypeList,
+    CkTypeFunction,
+    CkTypeObject,
+    CkTypeCount
+} CK_API_TYPE, *PCK_API_TYPE;
+
 typedef struct _CK_VM CK_VM, *PCK_VM;
+typedef LONGLONG CK_INTEGER;
 
 typedef
 PVOID
@@ -126,7 +188,7 @@ Return Value:
 
 typedef
 VOID
-(*PCK_DESTROY_OBJECT) (
+(*PCK_DESTROY_DATA) (
     PVOID Data
     );
 
@@ -134,7 +196,7 @@ VOID
 
 Routine Description:
 
-    This routine is called to destroy a foreign object previously created.
+    This routine is called to destroy a foreign data object previously created.
 
 Arguments:
 
@@ -146,12 +208,95 @@ Return Value:
 
 --*/
 
+/*++
+
+Structure Description:
+
+    This structure stores a loaded module in the form of source code.
+
+Members:
+
+    Path - Stores a pointer to the full path of the file containing the source.
+        The VM will free this memory when finished with this memory.
+
+    PathLength - Stores the length of the full path, not including the null
+        terminator.
+
+    Text - Stores a pointer to the heap allocated source for the module. The
+        VM will call its free function when it's through with this memory.
+
+    Length - Stores the size of the source in bytes, not including a null
+        terminator that is expected to be at the end.
+
+--*/
+
+typedef struct _CK_MODULE_SOURCE {
+    PSTR Path;
+    UINTN PathLength;
+    PSTR Text;
+    UINTN Length;
+} CK_MODULE_SOURCE, *PCK_MODULE_SOURCE;
+
+/*++
+
+Structure Description:
+
+    This structure stores a loaded foreign module.
+
+Members:
+
+    Path - Stores a pointer to the full path of the file containing the library.
+        The VM will free this memory when finished with this memory.
+
+    PathLength - Stores the length of the full path, not including the null
+        terminator.
+
+    Handle - Stores a context pointer often used to store the dynamic library
+        handle.
+
+    Entry - Stores a pointer to a function used to load the module. More
+        precisely, it is the foreign function called when the module's fiber is
+        run. It will be called with a single argument, the module object.
+
+--*/
+
+typedef struct _CK_FOREIGN_MODULE {
+    PSTR Path;
+    UINTN PathLength;
+    PVOID Handle;
+    PCK_FOREIGN_FUNCTION Entry;
+} CK_FOREIGN_MODULE, *PCK_FOREIGN_MODULE;
+
+/*++
+
+Union Description:
+
+    This union stores the data resulting from an attempt to load a module.
+
+Members:
+
+    Source - Stores the loaded module in source form.
+
+    Foreign - Stores the loaded foreign module.
+
+    Error - Stores a pointer to an error string describing why the module could
+        not be loaded. If the error type is static, this string will not be
+        freed. Otherwise it will be.
+
+--*/
+
+typedef union _CK_MODULE_HANDLE {
+    CK_MODULE_SOURCE Source;
+    CK_FOREIGN_MODULE Foreign;
+    PSTR Error;
+} CK_MODULE_HANDLE, *PCK_MODULE_HANDLE;
+
 typedef
-PSTR
+CK_LOAD_MODULE_RESULT
 (*PCK_LOAD_MODULE) (
     PCK_VM Vm,
-    PSTR ModuleName,
-    PUINTN Size
+    PCSTR ModulePath,
+    PCK_MODULE_HANDLE ModuleData
     );
 
 /*++
@@ -164,15 +309,15 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    ModuleName - Supplies the name of the module to load.
+    ModulePath - Supplies a pointer to the module path to load. Directories
+        will be separated with dots.
 
-    Size - Supplies a pointer where the size of the module string will be
-        returned, not including the null terminator.
+    ModuleData - Supplies a pointer where the loaded module information will
+        be returned on success.
 
 Return Value:
 
-    Returns a pointer to a string containing the source code of the module.
-    This memory should be allocated from the heap, and will be freed by Chalk.
+    Returns a load module error code.
 
 --*/
 
@@ -250,6 +395,9 @@ Members:
     LoadModule - Stores an optional pointer to a function used to load a Chalk
         module.
 
+    UnloadForeignModule - Stores an optional pointer to a function called when
+        a foreign module is being destroyed.
+
     Write - Stores an optional pointer to a function used to write output to
         the console. If this is NULL, output is simply discarded.
 
@@ -275,6 +423,7 @@ Members:
 typedef struct _CK_CONFIGURATION {
     PCK_REALLOCATE Reallocate;
     PCK_LOAD_MODULE LoadModule;
+    PCK_DESTROY_DATA UnloadForeignModule;
     PCK_WRITE Write;
     PCK_ERROR Error;
     UINTN InitialHeapSize;
@@ -415,6 +564,789 @@ Return Value:
     Returns a pointer to the newly allocated or reallocated memory on success.
 
     NULL on allocation failure or for free operations.
+
+--*/
+
+CK_API
+BOOL
+CkPreloadForeignModule (
+    PCK_VM Vm,
+    PSTR ModuleName,
+    PSTR Path,
+    PVOID Handle,
+    PCK_FOREIGN_FUNCTION LoadFunction
+    );
+
+/*++
+
+Routine Description:
+
+    This routine registers the availability of a foreign module that might not
+    otherwise be reachable via the standard module load methods. This is often
+    used for adding specialized modules in an embedded interpreter. The load
+    function isn't called until someone actually imports the module from the
+    interpreter. The loaded module is pushed onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies a pointer to the full "dotted.module.name". A copy of
+        this memory will be made.
+
+    Path - Supplies an optional pointer to the full path of the module. A copy
+        of this memory will be made.
+
+    Handle - Supplies an optional pointer to a handle (usually a dynamic
+        library handle) that is used if the module is unloaded.
+
+    LoadFunction - Supplies a pointer to a C function to call to load the
+        module symbols. The function will be called on a new fiber, with the
+        module itself in slot zero.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure (usually allocation failure).
+
+--*/
+
+CK_API
+UINTN
+CkGetStackSize (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the current stack size.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    Returns the number of stack slots available to the C API.
+
+--*/
+
+CK_API
+BOOL
+CkEnsureStack (
+    PCK_VM Vm,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine ensures that there are at least the given number of
+    stack slots currently available for the C API.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Size - Supplies the number of additional stack slots needed by the C API.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on allocation failure.
+
+--*/
+
+CK_API
+VOID
+CkPushValue (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes a value already on the stack to the top of the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the existing value to push.
+        Negative values reference stack indices from the end of the stack.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkStackRemove (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes a value from the stack, and shifts all the other
+    values down.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the value to remove. Negative
+        values reference stack indices from the end of the stack.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkStackInsert (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds the element at the top of the stack into the given
+    stack position, and shifts all remaining elements over.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index location to insert at. Negative
+        values reference stack indices from the end of the stack.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkStackReplace (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops the value from the top of the stack and replaces the
+    value at the given stack index with it.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index to replace with the top of the stack.
+        Negative values reference stack indices from the end of the stack. This
+        is the stack index before the value is popped.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+CK_API_TYPE
+CkGetType (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the type of the value at the given stack index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the object to query. Negative
+        values reference stack indices from the end of the stack.
+
+Return Value:
+
+    Returns the stack type.
+
+--*/
+
+CK_API
+VOID
+CkPushNull (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes a null value on the top of the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkPushInteger (
+    PCK_VM Vm,
+    CK_INTEGER Integer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes an integer value on the top of the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Integer - Supplies the integer to push.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+CK_INTEGER
+CkGetInteger (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns an integer at the given stack index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the object to get. Negative
+        values reference stack indices from the end of the stack.
+
+Return Value:
+
+    Returns the integer value.
+
+    0 if the value at the stack is not an integer.
+
+--*/
+
+CK_API
+VOID
+CkPushString (
+    PCK_VM Vm,
+    PCSTR String,
+    UINTN Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes a string value on the top of the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    String - Supplies a pointer to the string data to push. A copy of this
+        string will be made.
+
+    Length - Supplies the length of the string in bytes, not including the
+        null terminator.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+PCSTR
+CkGetString (
+    PCK_VM Vm,
+    UINTN StackIndex,
+    PUINTN Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a string at the given stack index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the object to get. Negative
+        values reference stack indices from the end of the stack.
+
+    Length - Supplies an optional pointer where the length of the string will
+        be returned, not including a null terminator. If the value at the stack
+        index is not a string, 0 is returned here.
+
+Return Value:
+
+    Returns a pointer to the string. The caller must not modify or free this
+    value.
+
+    NULL if the value at the specified stack index is not a string.
+
+--*/
+
+CK_API
+VOID
+CkPushSubstring (
+    PCK_VM Vm,
+    INTN StackIndex,
+    INTN Start,
+    INTN End
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new string consisting of a portion of the string
+    at the given stack index, and pushes it on the stack. If the value at the
+    given stack index is not a string, then an empty string is pushed as the
+    result. If either the start or end indices are out of range, they are
+    adjusted to be in range.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the string to slice. Negative
+        values reference stack indices from the end of the stack.
+
+    Start - Supplies the starting index of the substring, inclusive. Negative
+        values reference from the end of the string, with -1 being after the
+        last character of the string.
+
+    End - Supplies the ending index of the substring, exclusive. Negative
+        values reference from the end of the string, with -1 being after the
+        last character of the string.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkStringConcatenate (
+    PCK_VM Vm,
+    UINTN Count
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops a given number of strings off the stack and concatenates
+    them. The resulting string is then pushed on the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Count - Supplies the number of strings to pop off the stack.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkPushDict (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new empty dictionary and pushes it onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkDictGet (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops a key value off the stack, and uses it to get the
+    corresponding value for the dictionary stored at the given stack index.
+    The resulting value is pushed onto the stack. If no value exists for the
+    given key, then null is pushed.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the dictionary (before the key is
+        popped off). Negative values reference stack indices from the end of
+        the stack.
+
+Return Value:
+
+    Returns the integer value.
+
+    0 if the value at the stack is not an integer.
+
+--*/
+
+CK_API
+VOID
+CkDictSet (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops a key and then a value off the stack, then sets that
+    key-value pair in the dictionary at the given stack index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the dictionary (before anything is
+        popped off). Negative values reference stack indices from the end of
+        the stack.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+UINTN
+CkDictSize (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the size of the dictionary at the given stack index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the dictionary. Negative values
+        reference stack indices from the end of the stack.
+
+Return Value:
+
+    Returns the number of elements in the dictionary.
+
+    0 if the list is empty or the referenced item is not a dictionary.
+
+--*/
+
+CK_API
+BOOL
+CkDictIterate (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine advances a dictionary iterator at the top of the stack. It
+    pushes the next key and then the next value onto the stack, if there are
+    more elements in the dictionary. Callers should pull a null values onto
+    the stack as the initial iterator before calling this routine for the first
+    time. Callers are responsible for popping the value, key, and potentially
+    finished iterator off the stack. Callers should not modify a dictionary
+    during iteration, as the results are undefined.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the dictionary. Negative values
+        reference stack indices from the end of the stack.
+
+Return Value:
+
+    TRUE if the next key and value were pushed on.
+
+    FALSE if there are no more elements, the iterator value is invalid, or the
+    item at the given stack index is not a dictionary.
+
+--*/
+
+CK_API
+VOID
+CkPushList (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new empty list and pushes it onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkListGet (
+    PCK_VM Vm,
+    INTN StackIndex,
+    INTN ListIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the value at the given list index, and pushes it on the
+    stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the list. Negative values
+        reference stack indices from the end of the stack.
+
+    ListIndex - Supplies the list index to get. If this index is out of bounds,
+        the null will be pushed.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkListSet (
+    PCK_VM Vm,
+    INTN StackIndex,
+    INTN ListIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops the top value off the stack, and saves it to a specific
+    index in a list.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the list. Negative values
+        reference stack indices from the end of the stack.
+
+    ListIndex - Supplies the list index to set. If this index is one beyond the
+        end, then the value will be appended. If this index is otherwise out of
+        bounds, the item at the top of the stack will simply be discarded.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+UINTN
+CkListSize (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the size of the list at the given stack index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the list. Negative values
+        reference stack indices from the end of the stack.
+
+Return Value:
+
+    Returns the number of elements in the list.
+
+    0 if the list is empty or the referenced item is not a list.
+
+--*/
+
+CK_API
+VOID
+CkPushModulePath (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes the module path onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+//
+// Higher level support functions
+//
+
+CK_API
+BOOL
+CkCheckArguments (
+    PCK_VM Vm,
+    UINTN Count,
+    ...
+    );
+
+/*++
+
+Routine Description:
+
+    This routine validates that the given arguments are of the correct type. If
+    any of them are not, it throws a nicely formatted error.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Count - Supplies the number of arguments coming next.
+
+    ... - Supplies the remaining type arguments.
+
+Return Value:
+
+    TRUE if the given arguments match the required type.
+
+    FALSE if an argument is not of the right type. In that case, an error
+    will be created.
+
+--*/
+
+CK_API
+BOOL
+CkCheckArgument (
+    PCK_VM Vm,
+    INTN StackIndex,
+    CK_API_TYPE Type
+    );
+
+/*++
+
+Routine Description:
+
+    This routine validates that the given argument is of the correct type. If
+    it is not, it throws a nicely formatted error.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index to check. Remember that 1 is the
+        first argument index.
+
+    Type - Supplies the type to check.
+
+Return Value:
+
+    TRUE if the given argument matches the required type.
+
+    FALSE if the argument is not of the right type. In that case, an error
+    will be created.
 
 --*/
 

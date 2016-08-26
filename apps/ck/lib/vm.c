@@ -43,8 +43,8 @@ Environment:
 // These macros manipulate the interpreter stack.
 //
 
-#define CKI_PUSH(_Value) *(Fiber->StackTop) = (_Value); Fiber->StackTop += 1
-#define CKI_POP() (Fiber->StackTop -= 1, *(Fiber->StackTop))
+#define CKI_PUSH(_Value) CK_PUSH(Fiber, _Value)
+#define CKI_POP() CK_POP(Fiber)
 #define CKI_DROP() Fiber->StackTop -= 1
 #define CKI_STACK_TOP() *(Fiber->StackTop - 1)
 #define CKI_STACK_TOP2() *(Fiber->StackTop - 2)
@@ -782,7 +782,7 @@ Return Value:
         CkpPushRoot(Vm, CK_AS_OBJECT(NameValue));
     }
 
-    Module = CkpModuleLoadSource(Vm, NameValue, Source, Length);
+    Module = CkpModuleLoadSource(Vm, NameValue, CkNullValue, Source, Length);
     if (ModuleName != NULL) {
         CkpPopRoot(Vm);
     }
@@ -850,7 +850,7 @@ Return Value:
 
     CKI_DEFINE_GOTO_TABLE();
 
-    CK_ASSERT(Vm->Fiber == NULL);
+    CK_ASSERT((Vm->Fiber == NULL) || (Vm->Fiber->FrameCount == 0));
 
     Vm->Fiber = Fiber;
     CKI_LOAD_FRAME();

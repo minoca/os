@@ -27,6 +27,8 @@ BINARYTYPE = library
 
 include $(SRCDIR)/sources
 
+OBJS += dlopen.o
+
 DIRS = build \
        gram
 

@@ -70,11 +70,21 @@ Author:
 #define CkCompareMemory(_Left, _Right, _Size) memcmp(_Left, _Right, _Size)
 
 //
-// This flag determines if a configuration flag is set.
+// This macro determines if a configuration flag is set.
 //
 
 #define CK_VM_FLAG_SET(_Vm, _Flag) \
     (((_Vm)->Configuration.Flags & (_Flag)) != 0)
+
+//
+// These macros manipulate the stack.
+//
+
+#define CK_PUSH(_Fiber, _Value) \
+    *((_Fiber)->StackTop) = (_Value); \
+    (_Fiber)->StackTop += 1
+
+#define CK_POP(_Fiber) ((_Fiber)->StackTop -= 1, *((_Fiber)->StackTop))
 
 //
 // ---------------------------------------------------------------- Definitions

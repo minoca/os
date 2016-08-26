@@ -165,7 +165,7 @@ CK_PRIMITIVE_DESCRIPTION CkStringStaticPrimitives[] = {
 CK_VALUE
 CkpStringCreate (
     PCK_VM Vm,
-    PSTR Text,
+    PCSTR Text,
     UINTN Length
     )
 

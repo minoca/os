@@ -4,22 +4,27 @@ Copyright (c) 2016 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    vmsys.h
+    dynwin32.c
 
 Abstract:
 
-    This header contains definitions for the default configuration that wires
-    Chalk up to the rest of the system.
+    This module implements support for dynamic libraries on Windows platforms.
 
 Author:
 
-    Evan Green 28-May-2016
+    Evan Green 14-Aug-2016
+
+Environment:
+
+    Win32
 
 --*/
 
 //
 // ------------------------------------------------------------------- Includes
 //
+
+#include <windows.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -30,20 +35,27 @@ Author:
 //
 
 //
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+//
 // -------------------------------------------------------------------- Globals
 //
 
-extern CK_CONFIGURATION CkDefaultConfiguration;
-extern PCSTR CkSharedLibraryExtension;
+//
+// Define the shared library extension.
+//
+
+PCSTR CkSharedLibraryExtension = ".dll";
 
 //
-// -------------------------------------------------------- Function Prototypes
+// ------------------------------------------------------------------ Functions
 //
 
 PVOID
 CkpLoadLibrary (
     PSTR BinaryName
-    );
+    )
 
 /*++
 
@@ -63,10 +75,22 @@ Return Value:
 
 --*/
 
+{
+
+    HMODULE NewHandle;
+
+    //
+    // Attempt to load the library. Bail on failure.
+    //
+
+    NewHandle = LoadLibrary(BinaryName);
+    return NewHandle;
+}
+
 VOID
 CkpFreeLibrary (
     PVOID Handle
-    );
+    )
 
 /*++
 
@@ -84,11 +108,21 @@ Return Value:
 
 --*/
 
+{
+
+    if (Handle == NULL) {
+        return;
+    }
+
+    FreeLibrary(Handle);
+    return;
+}
+
 PVOID
 CkpGetLibrarySymbol (
     PVOID Handle,
     PSTR SymbolName
-    );
+    )
 
 /*++
 
@@ -109,4 +143,13 @@ Return Value:
     NULL on failure.
 
 --*/
+
+{
+
+    return GetProcAddress(Handle, SymbolName);
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 

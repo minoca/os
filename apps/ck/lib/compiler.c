@@ -778,12 +778,6 @@ Return Value:
     CkpCallMethod(Compiler, 1, "importModule@1", 14);
 
     //
-    // Run the module contents to get everything actually loaded.
-    //
-
-    CkpCallMethod(Compiler, 0, "run@0", 5);
-
-    //
     // Create a variable to store the resulting module.
     //
 
@@ -796,6 +790,14 @@ Return Value:
 
     ModuleVariable.Index = CkpDeclareVariable(Compiler, ModuleNameToken);
     CkpDefineVariable(Compiler, ModuleVariable.Index);
+
+    //
+    // Run the module contents to get everything actually loaded.
+    //
+
+    CkpLoadVariable(Compiler, ModuleVariable);
+    CkpCallMethod(Compiler, 0, "run@0", 5);
+    CkpEmitOp(Compiler, CkOpPop);
 
     //
     // If it was just import mymodule ; then finish.

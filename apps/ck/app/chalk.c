@@ -30,6 +30,7 @@ Environment:
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,6 +89,12 @@ typedef struct _CK_APP_CONTEXT {
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+ChalkSetupModulePath (
+    PVOID Vm,
+    PSTR Script
+    );
 
 INT
 ChalkInitializeContext (
@@ -163,6 +170,7 @@ Return Value:
     PSTR FileBuffer;
     UINTN FileSize;
     INT Option;
+    PSTR ScriptPath;
     int Status;
 
     FileBuffer = NULL;
@@ -232,7 +240,31 @@ Return Value:
     }
 
     ArgumentIndex = optind;
+    ScriptPath = NULL;
     if (ArgumentIndex < ArgumentCount) {
+        ScriptPath = Arguments[ArgumentIndex];
+    }
+
+    //
+    // Set up the module search path. Two stack slots are needed: one for the
+    // module search list, and one for a new string being appended.
+    //
+
+    if (!CkEnsureStack(Context.Vm, 2)) {
+        fprintf(stderr, "Warning: Failed to initialize module search path.\n");
+        Status = 2;
+        goto MainEnd;
+    }
+
+    CkPushModulePath(Context.Vm);
+    ChalkSetupModulePath(Context.Vm, ScriptPath);
+    CkStackPop(Context.Vm);
+
+    //
+    // Run the script if there was one.
+    //
+
+    if (ScriptPath != NULL) {
         FileBuffer = ChalkLoadFile(Arguments[ArgumentIndex], &FileSize);
         if (FileBuffer == NULL) {
             fprintf(stderr,
@@ -262,6 +294,63 @@ MainEnd:
     }
 
     return Status;
+}
+
+VOID
+ChalkAddSearchPath (
+    PVOID Vm,
+    PSTR Directory,
+    PSTR ChalkDirectory
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds a library search path. It assumes the module list is
+    already pushed at the top of the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Directory - Supplies the base directory path to add.
+
+    ChalkDirectory - Supplies the directory to tack on to the base. If this
+        is supplied, the major version number will be appended to it.
+
+    MajorVersion - Supplies the major version number to tack on the end.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CHAR NewPath[PATH_MAX];
+    INT NewPathSize;
+
+    if (ChalkDirectory != NULL) {
+        NewPathSize = snprintf(NewPath,
+                               PATH_MAX,
+                               "%s/%s%d",
+                               Directory,
+                               ChalkDirectory,
+                               CHALK_VERSION_MAJOR);
+
+    } else {
+        NewPathSize = snprintf(NewPath, PATH_MAX, "%s", Directory);
+    }
+
+    if (NewPathSize <= 0) {
+        return;
+    }
+
+    CkPushString(Vm, NewPath, NewPathSize);
+    CkListSet(Vm, -2, CkListSize(Vm, -2));
+    return;
 }
 
 //

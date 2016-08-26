@@ -25,10 +25,14 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include "chalkp.h"
+#include "vmsys.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -56,11 +60,16 @@ CkpDefaultReallocate (
     UINTN NewSize
     );
 
-PSTR
+CK_LOAD_MODULE_RESULT
 CkpDefaultLoadModule (
     PCK_VM Vm,
-    PSTR ModuleName,
-    PUINTN Size
+    PCSTR ModulePath,
+    PCK_MODULE_HANDLE ModuleData
+    );
+
+VOID
+CkpDefaultUnloadForeignModule (
+    PVOID Data
     );
 
 VOID
@@ -78,6 +87,22 @@ CkpDefaultError (
     PSTR Message
     );
 
+CK_LOAD_MODULE_RESULT
+CkpLoadSourceFile (
+    PCK_VM Vm,
+    PCSTR Directory,
+    PCSTR ModulePath,
+    PCK_MODULE_HANDLE ModuleData
+    );
+
+CK_LOAD_MODULE_RESULT
+CkpLoadDynamicModule (
+    PCK_VM Vm,
+    PCSTR Directory,
+    PCSTR ModulePath,
+    PCK_MODULE_HANDLE ModuleData
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -85,6 +110,7 @@ CkpDefaultError (
 CK_CONFIGURATION CkDefaultConfiguration = {
     CkpDefaultReallocate,
     CkpDefaultLoadModule,
+    CkpDefaultUnloadForeignModule,
     CkpDefaultWrite,
     CkpDefaultError,
     CK_INITIAL_HEAP_DEFAULT,
@@ -131,11 +157,11 @@ Return Value:
     return realloc(Allocation, NewSize);
 }
 
-PSTR
+CK_LOAD_MODULE_RESULT
 CkpDefaultLoadModule (
     PCK_VM Vm,
-    PSTR ModuleName,
-    PUINTN Size
+    PCSTR ModulePath,
+    PCK_MODULE_HANDLE ModuleData
     )
 
 /*++
@@ -148,25 +174,110 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    ModuleName - Supplies the name of the module to load.
+    ModulePath - Supplies a pointer to the module path to load. Directories
+        will be separated with dots.
 
-    Size - Supplies a pointer where the size of the module string will be
-        returned, not including the null terminator.
+    ModuleData - Supplies a pointer where the loaded module information will
+        be returned on success.
 
 Return Value:
 
-    Returns a pointer to a string containing the source code of the module.
-    This memory should be allocated from the heap, and will be freed by Chalk.
+    Returns a load module error code.
 
 --*/
 
 {
 
+    PSTR Character;
+    PCSTR Directory;
+    PSTR ModuleCopy;
+    UINTN PathCount;
+    UINTN PathIndex;
+    CK_LOAD_MODULE_RESULT Result;
+
+    if (!CkEnsureStack(Vm, 2)) {
+        return CkLoadModuleNoMemory;
+    }
+
     //
-    // TODO: Implement LoadModule.
+    // Copy the module path, and convert mydir.mymod into mydir/mymod.
     //
 
-    return NULL;
+    ModuleCopy = strdup(ModulePath);
+    if (ModuleCopy == NULL) {
+        return CkLoadModuleNoMemory;
+    }
+
+    Character = ModuleCopy;
+    while (*Character != '\0') {
+        if (*Character == '.') {
+            *Character = '/';
+        }
+
+        Character += 1;
+    }
+
+    CkPushModulePath(Vm);
+    PathCount = CkListSize(Vm, -1);
+    Result = CkLoadModuleNotFound;
+    if (PathCount == 0) {
+        CkStackPop(Vm);
+        return Result;
+    }
+
+    for (PathIndex = 0; PathIndex < PathCount; PathIndex += 1) {
+        CkListGet(Vm, -1, PathIndex);
+        Directory = CkGetString(Vm, -1, NULL);
+        Result = CkpLoadSourceFile(Vm, Directory, ModulePath, ModuleData);
+        if (Result != CkLoadModuleNotFound) {
+            break;
+        }
+
+        Result = CkpLoadDynamicModule(Vm, Directory, ModulePath, ModuleData);
+        if (Result != CkLoadModuleNotFound) {
+            break;
+        }
+
+        CkStackPop(Vm);
+    }
+
+    //
+    // Pop the last list entry and the module path list.
+    //
+
+    CkStackPop(Vm);
+    CkStackPop(Vm);
+    return Result;
+}
+
+VOID
+CkpDefaultUnloadForeignModule (
+    PVOID Data
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when a foreign module is being destroyed.
+
+Arguments:
+
+    Data - Supplies a pointer to the handle returned when the foreign module
+        was loaded. This is usually a dynamic library handle.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CK_ASSERT(Data != NULL);
+
+    CkpFreeLibrary(Data);
+    return;
 }
 
 VOID
@@ -268,4 +379,250 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+CK_LOAD_MODULE_RESULT
+CkpLoadSourceFile (
+    PCK_VM Vm,
+    PCSTR Directory,
+    PCSTR ModulePath,
+    PCK_MODULE_HANDLE ModuleData
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to load a new Chalk source file.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Directory - Supplies a pointer to the directory to find the module in.
+
+    ModulePath - Supplies a pointer to the module path to load. Directories
+        will be separated with dots.
+
+    ModuleData - Supplies a pointer where the loaded module information will
+        be returned on success.
+
+Return Value:
+
+    Returns a load module error code.
+
+--*/
+
+{
+
+    FILE *File;
+    CK_LOAD_MODULE_RESULT LoadStatus;
+    CHAR Path[PATH_MAX];
+    INT PathLength;
+    PSTR Source;
+    struct stat Stat;
+
+    File = NULL;
+    LoadStatus = CkLoadModuleStaticError;
+    Source = NULL;
+    if ((Directory == NULL) || (*Directory == '\0')) {
+        PathLength = snprintf(Path,
+                              PATH_MAX,
+                              "%s%s",
+                              ModulePath,
+                              CK_SOURCE_EXTENSION);
+
+    } else {
+        PathLength = snprintf(Path,
+                              PATH_MAX,
+                              "%s/%s%s",
+                              Directory,
+                              ModulePath,
+                              CK_SOURCE_EXTENSION);
+    }
+
+    if ((PathLength < 0) || (PathLength > PATH_MAX)) {
+        ModuleData->Error = "Max path length exceeded";
+        return CkLoadModuleStaticError;
+    }
+
+    Path[PATH_MAX - 1] = '\0';
+    if (stat(Path, &Stat) != 0) {
+        goto LoadSourceFileEnd;
+    }
+
+    if (!S_ISREG(Stat.st_mode)) {
+        return CkLoadModuleNotFound;
+    }
+
+    File = fopen(Path, "rb");
+    if (File == NULL) {
+        goto LoadSourceFileEnd;
+    }
+
+    Source = CkAllocate(Vm, Stat.st_size + 1);
+    if (Source == NULL) {
+        LoadStatus = CkLoadModuleNoMemory;
+        goto LoadSourceFileEnd;
+    }
+
+    if (fread(Source, 1, Stat.st_size, File) != Stat.st_size) {
+        goto LoadSourceFileEnd;
+    }
+
+    Source[Stat.st_size] = '\0';
+    ModuleData->Source.Path = CkAllocate(Vm, PathLength + 1);
+    if (ModuleData->Source.Path == NULL) {
+        LoadStatus = CkLoadModuleNoMemory;
+        goto LoadSourceFileEnd;
+    }
+
+    CkCopy(ModuleData->Source.Path, Path, PathLength + 1);
+    ModuleData->Source.PathLength = PathLength;
+    ModuleData->Source.Text = Source;
+    Source = NULL;
+    ModuleData->Source.Length = Stat.st_size;
+    LoadStatus = CkLoadModuleSource;
+
+LoadSourceFileEnd:
+    if (LoadStatus == CkLoadModuleStaticError) {
+        if ((errno == ENOENT) || (errno == EACCES) || (errno == EPERM)) {
+            return CkLoadModuleNotFound;
+        }
+
+        ModuleData->Error = strerror(errno);
+    }
+
+    if (Source != NULL) {
+        CkFree(Vm, Source);
+    }
+
+    if (File != NULL) {
+        fclose(File);
+    }
+
+    return LoadStatus;
+}
+
+CK_LOAD_MODULE_RESULT
+CkpLoadDynamicModule (
+    PCK_VM Vm,
+    PCSTR Directory,
+    PCSTR ModulePath,
+    PCK_MODULE_HANDLE ModuleData
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to load a new Chalk dynamic library module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Directory - Supplies a pointer to the directory to find the module in.
+
+    ModulePath - Supplies a pointer to the module path to load. Directories
+        will be separated with dots.
+
+    ModuleData - Supplies a pointer where the loaded module information will
+        be returned on success.
+
+Return Value:
+
+    Returns a load module error code.
+
+--*/
+
+{
+
+    PCK_FOREIGN_FUNCTION EntryPoint;
+    PVOID Handle;
+    CK_LOAD_MODULE_RESULT LoadStatus;
+    CHAR Path[PATH_MAX];
+    INT PathLength;
+    struct stat Stat;
+
+    Handle = NULL;
+    LoadStatus = CkLoadModuleStaticError;
+    ModuleData->Error = NULL;
+    if ((Directory == NULL) || (*Directory == '\0')) {
+        PathLength = snprintf(Path,
+                              PATH_MAX,
+                              "%s%s",
+                              ModulePath,
+                              CkSharedLibraryExtension);
+
+    } else {
+        PathLength = snprintf(Path,
+                              PATH_MAX,
+                              "%s/%s%s",
+                              Directory,
+                              ModulePath,
+                              CkSharedLibraryExtension);
+    }
+
+    if ((PathLength < 0) || (PathLength > PATH_MAX)) {
+        ModuleData->Error = "Max path length exceeded";
+        return CkLoadModuleStaticError;
+    }
+
+    Path[PATH_MAX - 1] = '\0';
+
+    //
+    // Validate that this path points to a regular file before trying to open
+    // a dynamic library.
+    //
+
+    if (stat(Path, &Stat) != 0) {
+        if ((errno == ENOENT) || (errno == EACCES) || (errno == EPERM)) {
+            LoadStatus = CkLoadModuleNotFound;
+
+        } else {
+            ModuleData->Error = strerror(errno);
+        }
+
+        goto LoadDynamicModuleEnd;
+    }
+
+    if (!S_ISREG(Stat.st_mode)) {
+        return CkLoadModuleNotFound;
+    }
+
+    //
+    // Open up the dynamic library.
+    //
+
+    Handle = CkpLoadLibrary(Path);
+    if (Handle == NULL) {
+        return CkLoadModuleNotFound;
+    }
+
+    EntryPoint = CkpGetLibrarySymbol(Handle, CK_MODULE_ENTRY_NAME);
+    if (EntryPoint == NULL) {
+        LoadStatus = CkLoadModuleNotFound;
+        goto LoadDynamicModuleEnd;
+    }
+
+    ModuleData->Foreign.Path = CkAllocate(Vm, PathLength + 1);
+    if (ModuleData->Source.Path == NULL) {
+        LoadStatus = CkLoadModuleNoMemory;
+        goto LoadDynamicModuleEnd;
+    }
+
+    CkCopy(ModuleData->Foreign.Path, Path, PathLength + 1);
+    ModuleData->Foreign.PathLength = PathLength;
+    ModuleData->Foreign.Handle = Handle;
+    Handle = NULL;
+    ModuleData->Foreign.Entry = EntryPoint;
+    LoadStatus = CkLoadModuleSource;
+
+LoadDynamicModuleEnd:
+    if (Handle != NULL) {
+        CkpFreeLibrary(Handle);
+    }
+
+    return LoadStatus;
+}
 
