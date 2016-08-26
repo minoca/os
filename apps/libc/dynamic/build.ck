@@ -30,6 +30,7 @@ function build() {
         "math/ceil.c",
         "math/div.c",
         "math/exp.c",
+        "math/expm1.c",
         "math/floor.c",
         "math/fmod.c",
         "math/hypot.c",

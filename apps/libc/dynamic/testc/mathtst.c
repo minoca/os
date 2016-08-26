@@ -83,6 +83,7 @@ typedef struct _MATH_ARC_TANGENT_DOUBLE {
 typedef struct _MATH_EXP_DOUBLE {
     double Argument;
     double Exponentiation;
+    double ExponentiationMinusOne;
 } MATH_EXP_DOUBLE, *PMATH_EXP_DOUBLE;
 
 typedef struct _MATH_POWER_DOUBLE {
@@ -1215,22 +1216,22 @@ MATH_ARC_TANGENT_DOUBLE TestArcTangentDoubles[] = {
 };
 
 MATH_EXP_DOUBLE TestExpDoubles[] = {
-    {INFINITY, INFINITY},
-    {-INFINITY, 0x0.0000000000000p+0},
-    {NAN, NAN},
-    {0x1.6300000000000p+9, INFINITY},
-    {0x1.9000000000000p+9, INFINITY},
-    {-0x1.6300000000000p+9, 0x0.33802fd28b3c3p-1022},
-    {-0x1.9000000000000p+9, 0x0.0000000000000p+0},
-    {0x1.6353f7ced9168p-2, 0x1.6a316dcd4cc00p+0},
-    {0x1.0a3d70a3d70a4p+0, 0x1.6a23c87af69e8p+1},
-    {0x1.4000000000000p+3, 0x1.5829dcf950560p+14},
-    {0x1.9000000000000p+6, 0x1.3494a9b171bf5p+144},
-    {-0x1.7333333333334p+1, 0x1.c2c00e553650ap-5},
-    {0x1.921fb54442d18p+1, 0x1.724046eb09339p+4},
-    {0x1.921fb54442d18p+0, 0x1.33dedc855935fp+2},
-    {-0x1.921fb54442d18p+1, 0x1.620227b598efap-5},
-    {-0x1.921fb54442d18p+0, 0x1.a9bcc46f767e0p-3},
+    {INFINITY, INFINITY, INFINITY},
+    {-INFINITY, 0x0.0000000000000p+0, -0x1.0000000000000p+0},
+    {NAN, NAN, NAN},
+    {0x1.6300000000000p+9, INFINITY, INFINITY},
+    {0x1.9000000000000p+9, INFINITY, INFINITY},
+    {-0x1.6300000000000p+9, 0x0.33802fd28b3c3p-1022, -0x1.0000000000000p+0},
+    {-0x1.9000000000000p+9, 0x0.0000000000000p+0, -0x1.0000000000000p+0},
+    {0x1.6353f7ced9168p-2, 0x1.6a316dcd4cc00p+0, 0x1.a8c5b73532fffp-2},
+    {0x1.0a3d70a3d70a4p+0, 0x1.6a23c87af69e8p+1, 0x1.d44790f5ed3cfp+0},
+    {0x1.4000000000000p+3, 0x1.5829dcf950560p+14, 0x1.5825dcf950560p+14},
+    {0x1.9000000000000p+6, 0x1.3494a9b171bf5p+144, 0x1.3494a9b171bf5p+144},
+    {-0x1.7333333333334p+1, 0x1.c2c00e553650ap-5, -0x1.e3d3ff1aac9afp-1},
+    {0x1.921fb54442d18p+1, 0x1.724046eb09339p+4, 0x1.624046eb09339p+4},
+    {0x1.921fb54442d18p+0, 0x1.33dedc855935fp+2, 0x1.e7bdb90ab26bep+1},
+    {-0x1.921fb54442d18p+1, 0x1.620227b598efap-5, -0x1.e9dfdd84a6710p-1},
+    {-0x1.921fb54442d18p+0, 0x1.a9bcc46f767e0p-3, -0x1.9590cee422608p-1},
 };
 
 MATH_POWER_DOUBLE TestPowerDoubles[] = {
@@ -2314,7 +2315,9 @@ Return Value:
 
 {
 
+    BOOL Equal;
     volatile double Exponentiation;
+    volatile double ExponentiationMinusOne;
     ULONG Failures;
     PMATH_EXP_DOUBLE Test;
     ULONG TestIndex;
@@ -2332,6 +2335,19 @@ Return Value:
                    Test->Argument,
                    Exponentiation,
                    Test->Exponentiation);
+
+            Failures += 1;
+        }
+
+        ExponentiationMinusOne = expm1(Test->Argument);
+        Equal = TestCompareResults(ExponentiationMinusOne,
+                                   Test->ExponentiationMinusOne);
+
+        if (Equal == FALSE) {
+            printf("expm1(%.13a) was %.13a, should have been %.13a.\n",
+                   Test->Argument,
+                   ExponentiationMinusOne,
+                   Test->ExponentiationMinusOne);
 
             Failures += 1;
         }

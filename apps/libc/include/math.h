@@ -911,6 +911,28 @@ Return Value:
 
 LIBC_API
 double
+expm1 (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the base e exponential of the given value, minus one.
+
+Arguments:
+
+    Value - Supplies the value to raise e to.
+
+Return Value:
+
+    Returns e to the given value, minus one.
+
+--*/
+
+LIBC_API
+double
 pow (
     double Value,
     double Power

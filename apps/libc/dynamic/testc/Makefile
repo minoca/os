@@ -39,6 +39,7 @@ OBJS = bsearch.o           \
        abs.o               \
        ceil.o              \
        exp.o               \
+       expm1.o             \
        floor.o             \
        fmod.o              \
        hypot.o             \

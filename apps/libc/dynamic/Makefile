@@ -78,6 +78,7 @@ OBJS = assert.o             \
        math/ceil.o          \
        math/div.o           \
        math/exp.o           \
+       math/expm1.o         \
        math/floor.o         \
        math/fmod.o          \
        math/hypot.o         \
