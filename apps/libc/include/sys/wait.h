@@ -87,6 +87,13 @@ extern "C" {
 #define WTERMSIG(_Status) ((_Status) & 0x7F)
 
 //
+// This macro evaluates to nonzero if the child process terminated and produced
+// a core dump file.
+//
+
+#define WCOREDUMP(_Status) ((_Status) & 0x80)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
