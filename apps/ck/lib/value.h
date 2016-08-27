@@ -39,6 +39,7 @@ Author:
 #define CK_IS_CLASS(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectClass)
 #define CK_IS_CLOSURE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectClosure)
 #define CK_IS_FIBER(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectFiber)
+#define CK_IS_FOREIGN(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectForeign)
 #define CK_IS_FUNCTION(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectFunction)
 #define CK_IS_INSTANCE(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectInstance)
 #define CK_IS_LIST(_Value) CK_IS_OBJECT_TYPE(_Value, CkObjectList)
@@ -58,6 +59,7 @@ Author:
 #define CK_AS_CLASS(_Value) ((PCK_CLASS)CK_AS_OBJECT(_Value))
 #define CK_AS_CLOSURE(_Value) ((PCK_CLOSURE)CK_AS_OBJECT(_Value))
 #define CK_AS_FIBER(_Value) ((PCK_FIBER)CK_AS_OBJECT(_Value))
+#define CK_AS_FOREIGN(_Value) ((PCK_FOREIGN_DATA)CK_AS_OBJECT(_Value))
 #define CK_AS_FUNCTION(_Value) ((PCK_FUNCTION)CK_AS_OBJECT(_Value))
 #define CK_AS_INSTANCE(_Value) ((PCK_INSTANCE)CK_AS_OBJECT(_Value))
 #define CK_AS_LIST(_Value) ((PCK_LIST)CK_AS_OBJECT(_Value))
@@ -843,6 +845,30 @@ struct _CK_FIBER {
     CK_VALUE Error;
 };
 
+/*++
+
+Structure Description:
+
+    This structure stores a foreign data object. This object type encapsulates
+    an opaque pointer whose destriction is wired up to the garbage collector.
+
+Members:
+
+    Header - Stores the required object header.
+
+    Data - Stores the opaque data pointer.
+
+    Destroy - Stores a pointer to a function called when the object is garbage
+        collected.
+
+--*/
+
+typedef struct _CK_FOREIGN_DATA {
+    CK_OBJECT Header;
+    PVOID Data;
+    PCK_DESTROY_DATA Destroy;
+} CK_FOREIGN_DATA, *PCK_FOREIGN_DATA;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -928,7 +954,6 @@ PCK_CLOSURE
 CkpClosureCreateForeign (
     PCK_VM Vm,
     PCK_FOREIGN_FUNCTION Function,
-    PCK_CLASS Class,
     PCK_MODULE Module,
     PCK_STRING Name,
     CK_ARITY Arity
@@ -945,9 +970,6 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     Function - Supplies a pointer to the foreign C function pointer.
-
-    Class - Supplies an optional pointer to the class the closure was defined
-        in.
 
     Module - Supplies a pointer to the module the function was defined in.
 
@@ -1214,9 +1236,8 @@ Return Value:
 VOID
 CkpBindMethod (
     PCK_VM Vm,
-    PCK_MODULE Module,
     PCK_CLASS Class,
-    CK_SYMBOL_INDEX StringIndex,
+    CK_VALUE Signature,
     PCK_CLOSURE Closure
     );
 
@@ -1230,12 +1251,10 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    Module - Supplies a pointer to the module the class is defined in.
-
     Class - Supplies a pointer to the class to bind the method to.
 
-    StringIndex - Supplies the index into the module-level string table of the
-        signature string for this method.
+    Signature - Supplies a name string value of the function signature to bind
+        to the class.
 
     Closure - Supplies a pointer to the closure to bind.
 

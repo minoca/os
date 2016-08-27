@@ -58,6 +58,9 @@ Author:
 #define CkIsObject(_Vm, _StackIndex) \
     (CkGetType((_Vm), (_StackIndex)) == CkTypeObject)
 
+#define CkIsData(_Vm, _StackIndex) \
+    (CkGetType((_Vm), (_StackIndex)) == CkTypeData)
+
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -126,6 +129,7 @@ typedef enum _CK_API_TYPE {
     CkTypeList,
     CkTypeFunction,
     CkTypeObject,
+    CkTypeData,
     CkTypeCount
 } CK_API_TYPE, *PCK_API_TYPE;
 
@@ -1256,6 +1260,337 @@ Return Value:
     Returns the number of elements in the list.
 
     0 if the list is empty or the referenced item is not a list.
+
+--*/
+
+CK_API
+BOOL
+CkPushData (
+    PCK_VM Vm,
+    PVOID Data,
+    PCK_DESTROY_DATA DestroyRoutine
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes an opaque pointer onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Data - Supplies the pointer to encapsulate.
+
+    DestroyRoutine - Supplies an optional pointer to a function to call if this
+        value is garbage collected.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on allocation failure.
+
+--*/
+
+CK_API
+PVOID
+CkGetData (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a data pointer that is stored the given stack index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the object to get. Negative
+        values reference stack indices from the end of the stack.
+
+Return Value:
+
+    Returns the opaque pointer passed in when the object was created.
+
+    NULL if the value at the stack was not a foreign data object.
+
+--*/
+
+CK_API
+VOID
+CkPushClass (
+    PCK_VM Vm,
+    INTN ModuleIndex,
+    ULONG FieldCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops a class and a string off the stack, creates a new class,
+    and pushes it onto the stack. The popped class is the superclass of the
+    new class, and the popped string is the name of the class.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleIndex - Supplies the stack index of the module to create the class in,
+        before any items are popped from the stack.
+
+    FieldCount - Supplies the number of fields to allocate for each instance of
+        the class. When a new class is created, these fields start out as null.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkPushFunction (
+    PCK_VM Vm,
+    PCK_FOREIGN_FUNCTION Function,
+    PSTR Name,
+    ULONG ArgumentCount,
+    INTN ModuleIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes a C function onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Function - Supplies a pointer to the C function.
+
+    Name - Supplies a pointer to a null terminated string containing the name
+        of the function, used for debugging purposes. This name is not actually
+        assigned in the Chalk namespace.
+
+    ArgumentCount - Supplies the number of arguments the function takes, not
+        including the receiver slot.
+
+    ModuleIndex - Supplies the index of the module this function should be
+        defined within. Functions must be tied to modules to ensure that the
+        module containing the C function is not garbage collected and unloaded.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkBindMethod (
+    PCK_VM Vm,
+    INTN ClassIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops a string and then a function off the stack. It binds the
+    function as a class method. The class is indicated by the given stack index
+    (before either of the pops). The function may be either a C or Chalk
+    function.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ClassIndex - Supplies the stack index of the class to bind the function to.
+        Negative values reference stack indices from the end of the stack.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkGetField (
+    PCK_VM Vm,
+    UINTN FieldIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the value from the instance field with the given index,
+    and pushes it on the stack. This only applies to bound methods, and
+    operates on the receiver ("this"). If the current method is not a bound
+    method, or the field is out of bounds, null is pushed.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldIndex - Supplies the field index of the intance to get.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkSetField (
+    PCK_VM Vm,
+    UINTN FieldIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops the top value off the stack, and saves it to a specific
+    field index in the function receiver. This function only applies to bound
+    methods. If the current function is unbound or the field index is out of
+    bounds, the value is popped and discarded.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldIndex - Supplies the field index of the intance to get.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkGetVariable (
+    PCK_VM Vm,
+    INTN StackIndex,
+    PSTR Name
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets a global variable and pushes it on the stack. If the
+    variable does not exist in the given module, or the given stack index is
+    not a module, then null is pushed.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the module to look in. Negative
+        values reference stack indices from the end of the stack.
+
+    Name - Supplies a pointer to the null terminated string containing the
+        name of the variable to get.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkSetVariable (
+    PCK_VM Vm,
+    INTN StackIndex,
+    PSTR Name
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops the top value off the stack, and saves it to a global
+    variable with the given name in the given module. If the variable did not
+    exist previously, it is created.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the module to look in. Negative
+        values reference stack indices from the end of the stack.
+
+    Name - Supplies a pointer to the null terminated string containing the
+        name of the variable to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkCall (
+    PCK_VM Vm,
+    UINTN ArgumentCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops the given number of arguments off the stack, then pops
+    a callable object or class, and executes that call. The return value is
+    pushed onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ArgumentCount - Supplies the number of arguments to the call. The callable
+        object (either a function or a class) will also be popped after these
+        arguments.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkPushCurrentModule (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes the module that the running function was defined in
+    onto the stack. If no function is currently running, then null is pushed.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
 
 --*/
 

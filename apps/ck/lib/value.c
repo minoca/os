@@ -167,7 +167,6 @@ PCK_CLOSURE
 CkpClosureCreateForeign (
     PCK_VM Vm,
     PCK_FOREIGN_FUNCTION Function,
-    PCK_CLASS Class,
     PCK_MODULE Module,
     PCK_STRING Name,
     CK_ARITY Arity
@@ -184,9 +183,6 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     Function - Supplies a pointer to the foreign C function pointer.
-
-    Class - Supplies an optional pointer to the class the closure was defined
-        in.
 
     Module - Supplies a pointer to the module the function was defined in.
 
@@ -206,19 +202,11 @@ Return Value:
 
     PCK_CLOSURE Closure;
 
-    if (Class != NULL) {
-        CkpPushRoot(Vm, &(Class->Header));
-    }
-
     CkpPushRoot(Vm, &(Module->Header));
     CkpPushRoot(Vm, &(Name->Header));
     Closure = CkAllocate(Vm, sizeof(CK_CLOSURE));
     CkpPopRoot(Vm);
     CkpPopRoot(Vm);
-    if (Class != NULL) {
-        CkpPopRoot(Vm);
-    }
-
     if (Closure == NULL) {
         return NULL;
     }
@@ -233,7 +221,7 @@ Return Value:
     Closure->U.Foreign.Arity = Arity;
     Closure->U.Foreign.Name = Name;
     Closure->U.Foreign.Module = Module;
-    Closure->Class = Class;
+    Closure->Class = NULL;
     Closure->Upvalues = NULL;
     return Closure;
 }
@@ -359,6 +347,7 @@ Return Value:
 
 {
 
+    PCK_FOREIGN_DATA Foreign;
     PCK_FUNCTION Function;
 
     switch (Object->Type) {
@@ -375,12 +364,15 @@ Return Value:
         break;
 
     case CkObjectForeign:
+        Foreign = (PCK_FOREIGN_DATA)Object;
 
         //
-        // TODO: Destroy foreign object.
+        // The object's going down, call the callback.
         //
 
-        CK_ASSERT(FALSE);
+        if (Foreign->Destroy != NULL) {
+            Foreign->Destroy(Foreign->Data);
+        }
 
         break;
 
@@ -738,9 +730,8 @@ Return Value:
 VOID
 CkpBindMethod (
     PCK_VM Vm,
-    PCK_MODULE Module,
     PCK_CLASS Class,
-    CK_SYMBOL_INDEX StringIndex,
+    CK_VALUE Signature,
     PCK_CLOSURE Closure
     )
 
@@ -754,12 +745,10 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    Module - Supplies a pointer to the module the class is defined in.
-
     Class - Supplies a pointer to the class to bind the method to.
 
-    StringIndex - Supplies the index into the module-level string table of the
-        signature string for this method.
+    Signature - Supplies a name string value of the function signature to bind
+        to the class.
 
     Closure - Supplies a pointer to the closure to bind.
 
@@ -771,16 +760,10 @@ Return Value:
 
 {
 
-    CK_VALUE KeyValue;
-    PCK_STRING SignatureString;
     CK_VALUE Value;
 
-    CK_ASSERT(StringIndex < Module->Strings.List.Count);
-
-    SignatureString = CK_AS_STRING(Module->Strings.List.Data[StringIndex]);
-    CK_OBJECT_VALUE(KeyValue, SignatureString);
     CK_OBJECT_VALUE(Value, Closure);
-    CkpDictSet(Vm, Class->Methods, KeyValue, Value);
+    CkpDictSet(Vm, Class->Methods, Signature, Value);
 
     //
     // Bind the closure to the class, so that when it's run it knows 1) where

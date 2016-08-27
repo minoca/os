@@ -378,7 +378,6 @@ Return Value:
 
     Closure = CkpClosureCreateForeign(Vm,
                                       EntryPoint,
-                                      NULL,
                                       Module,
                                       FunctionName,
                                       0);
@@ -713,6 +712,7 @@ Return Value:
 
     PCK_MODULE Module;
     PCK_STRING Name;
+    PCK_VALUE Variable;
 
     Module = CK_AS_MODULE(Arguments[0]);
     if (!CK_IS_STRING(Arguments[1])) {
@@ -721,8 +721,8 @@ Return Value:
     }
 
     Name = CK_AS_STRING(Arguments[1]);
-    Arguments[0] = CkpFindModuleVariable(Vm, Module, Name->Value);
-    if (CK_IS_UNDEFINED(Arguments[0])) {
+    Variable = CkpFindModuleVariable(Vm, Module, Name->Value, FALSE);
+    if (Variable == NULL) {
         CkpRuntimeError(Vm,
                         "No such variable '%s' in module '%s'",
                         Name->Value,
@@ -731,6 +731,7 @@ Return Value:
         return FALSE;
     }
 
+    Arguments[0] = *Variable;
     return TRUE;
 }
 

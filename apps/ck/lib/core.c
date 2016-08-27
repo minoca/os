@@ -59,7 +59,6 @@ CkpDefineCoreClass (
 VOID
 CkpCoreAddPrimitives (
     PCK_VM Vm,
-    PCK_MODULE Module,
     PCK_CLASS Class,
     PCK_PRIMITIVE_DESCRIPTION Primitives
     );
@@ -67,7 +66,6 @@ CkpCoreAddPrimitives (
 VOID
 CkpCoreAddPrimitive (
     PCK_VM Vm,
-    PCK_MODULE Module,
     PCK_CLASS Class,
     PSTR Name,
     CK_ARITY Arity,
@@ -302,7 +300,7 @@ Return Value:
     }
 
     Classes->Object->Super = Classes->Object;
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Object, CkObjectPrimitives);
+    CkpCoreAddPrimitives(Vm, Classes->Object, CkObjectPrimitives);
 
     //
     // Create the root Class class, which inherits from Object (like everything
@@ -315,7 +313,7 @@ Return Value:
     }
 
     CkpBindSuperclass(Vm, Classes->Class, Classes->Object);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Class, CkClassPrimitives);
+    CkpCoreAddPrimitives(Vm, Classes->Class, CkClassPrimitives);
 
     //
     // Create the Object metaclass, which inherits from Class.
@@ -345,59 +343,45 @@ Return Value:
     // Wire up the primitives to the core classes.
     //
 
-    Value = CkpFindModuleVariable(Vm, CoreModule, "Fiber");
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Fiber", FALSE));
     Classes->Fiber = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Fiber, CkFiberPrimitives);
+    CkpCoreAddPrimitives(Vm, Classes->Fiber, CkFiberPrimitives);
     CkpCoreAddPrimitives(Vm,
-                         CoreModule,
                          Classes->Fiber->Header.Class,
                          CkFiberStaticPrimitives);
 
-    Value = CkpFindModuleVariable(Vm, CoreModule, "Null");
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Null", FALSE));
     Classes->Null = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Null, CkNullPrimitives);
-    Value = CkpFindModuleVariable(Vm, CoreModule, "Int");
+    CkpCoreAddPrimitives(Vm, Classes->Null, CkNullPrimitives);
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Int", FALSE));
     Classes->Int = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Int, CkIntPrimitives);
-    CkpCoreAddPrimitives(Vm,
-                         CoreModule,
-                         Classes->Int->Header.Class,
-                         CkIntStaticPrimitives);
-
-    Value = CkpFindModuleVariable(Vm, CoreModule, "String");
+    CkpCoreAddPrimitives(Vm, Classes->Int, CkIntPrimitives);
+    CkpCoreAddPrimitives(Vm, Classes->Int->Header.Class, CkIntStaticPrimitives);
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "String", FALSE));
     Classes->String = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->String, CkStringPrimitives);
+    CkpCoreAddPrimitives(Vm, Classes->String, CkStringPrimitives);
     CkpCoreAddPrimitives(Vm,
-                         CoreModule,
                          Classes->String->Header.Class,
                          CkStringStaticPrimitives);
 
-    Value = CkpFindModuleVariable(Vm, CoreModule, "Function");
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Function", FALSE));
     Classes->Function = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm,
-                         CoreModule,
-                         Classes->Function,
-                         CkFunctionPrimitives);
-
-    Value = CkpFindModuleVariable(Vm, CoreModule, "List");
+    CkpCoreAddPrimitives(Vm, Classes->Function, CkFunctionPrimitives);
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "List", FALSE));
     Classes->List = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->List, CkListPrimitives);
-    Value = CkpFindModuleVariable(Vm, CoreModule, "Dict");
+    CkpCoreAddPrimitives(Vm, Classes->List, CkListPrimitives);
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Dict", FALSE));
     Classes->Dict = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Dict, CkDictPrimitives);
-    Value = CkpFindModuleVariable(Vm, CoreModule, "Range");
+    CkpCoreAddPrimitives(Vm, Classes->Dict, CkDictPrimitives);
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Range", FALSE));
     Classes->Range = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Range, CkRangePrimitives);
-    Value = CkpFindModuleVariable(Vm, CoreModule, "Core");
+    CkpCoreAddPrimitives(Vm, Classes->Range, CkRangePrimitives);
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Core", FALSE));
     Classes->Core = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm,
-                         CoreModule,
-                         Classes->Core->Header.Class,
-                         CkCorePrimitives);
-
-    Value = CkpFindModuleVariable(Vm, CoreModule, "Module");
+    CkpCoreAddPrimitives(Vm, Classes->Core->Header.Class, CkCorePrimitives);
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Module", FALSE));
     Classes->Module = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, CoreModule, Classes->Module, CkModulePrimitives);
+    CkpCoreAddPrimitives(Vm, Classes->Module, CkModulePrimitives);
 
     //
     // Some strings may have been created without being assigned to string
@@ -683,7 +667,6 @@ Return Value:
 VOID
 CkpCoreAddPrimitives (
     PCK_VM Vm,
-    PCK_MODULE Module,
     PCK_CLASS Class,
     PCK_PRIMITIVE_DESCRIPTION Primitives
     )
@@ -698,8 +681,6 @@ Routine Description:
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
-
-    Module - Supplies a pointer to the module the class lives in.
 
     Class - Supplies a pointer to the class to add a method to.
 
@@ -716,7 +697,6 @@ Return Value:
 
     while (Primitives->Name != NULL) {
         CkpCoreAddPrimitive(Vm,
-                            Module,
                             Class,
                             Primitives->Name,
                             Primitives->Arity,
@@ -731,7 +711,6 @@ Return Value:
 VOID
 CkpCoreAddPrimitive (
     PCK_VM Vm,
-    PCK_MODULE Module,
     PCK_CLASS Class,
     PSTR Name,
     CK_ARITY Arity,
@@ -768,21 +747,23 @@ Return Value:
 
     PCK_CLOSURE Closure;
     CK_SYMBOL_INDEX Index;
-    PCK_STRING NameString;
+    PCK_MODULE Module;
+    CK_VALUE NameString;
 
+    Module = Class->Module;
     Index = CkpStringTableEnsure(Vm, &(Module->Strings), Name, strlen(Name));
     if (Index == -1) {
         return;
     }
 
-    NameString = CK_AS_STRING(Module->Strings.List.Data[Index]);
+    NameString = Module->Strings.List.Data[Index];
     Closure = CkpClosureCreatePrimitive(Vm,
                                         Function,
                                         Class,
-                                        NameString,
+                                        CK_AS_STRING(NameString),
                                         Arity);
 
-    CkpBindMethod(Vm, Module, Class, Index, Closure);
+    CkpBindMethod(Vm, Class, NameString, Closure);
     return;
 }
 

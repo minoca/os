@@ -125,6 +125,12 @@ Author:
 #define CK_INITIAL_CALL_FRAMES 8
 
 //
+// Define the maximum size of a method signature string.
+//
+
+#define CK_MAX_METHOD_SIGNATURE (CK_MAX_NAME + 8)
+
+//
 // Define the maximum UTF-8 value that can be encoded.
 //
 

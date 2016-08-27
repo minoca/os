@@ -53,6 +53,7 @@ PCSTR CkApiTypeNames[CkTypeCount] = {
     "list",     // CkTypeList
     "function", // CkTypeFunction
     "object",   // CkTypeObject
+    "data",     // CkTypeData
 };
 
 //

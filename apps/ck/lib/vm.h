@@ -501,11 +501,12 @@ Return Value:
 
 --*/
 
-CK_VALUE
+PCK_VALUE
 CkpFindModuleVariable (
     PCK_VM Vm,
     PCK_MODULE Module,
-    PSTR Name
+    PSTR Name,
+    BOOL Create
     );
 
 /*++
@@ -522,11 +523,16 @@ Arguments:
 
     Name - Supplies a pointer to the name.
 
+    Create - Supplies a boolean indicating if the variable should be defined if
+        it did not exist previously.
+
 Return Value:
 
-    Returns the module variable value on success.
+    Returns a pointer to the variable slot on success.
 
-    CK_UNDEFINED_VALUE if the variable does not exist.
+    NULL if the variable did not exist and the caller did not wish to define it.
+
+    NULL on allocation failure or if the symbol table is full.
 
 --*/
 
@@ -556,6 +562,118 @@ Arguments:
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+Return Value:
+
+    Chalk status.
+
+--*/
+
+VOID
+CkpClassCreate (
+    PCK_VM Vm,
+    CK_SYMBOL_INDEX FieldCount,
+    PCK_MODULE Module
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new class in response to executing a class opcode.
+    The superclass should be on the top of the stack, followed by the name of
+    the class.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldCount - Supplies the number of fields in the new class.
+
+    Module - Supplies a pointer to the module that owns the class.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+CkpCallMethod (
+    PCK_VM Vm,
+    PCK_CLASS Class,
+    CK_VALUE MethodName,
+    CK_ARITY Arity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine invokes a class instance method for execution.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Class - Supplies a pointer to the class that owns the method.
+
+    MethodName - Supplies the name of the method to look up on the class.
+
+    Arity - Supplies the number of arguments the method was called with in
+        code (plus one for the receiver).
+
+Return Value:
+
+    None. The fiber error will be set on failure.
+
+--*/
+
+VOID
+CkpCallFunction (
+    PCK_VM Vm,
+    PCK_CLOSURE Closure,
+    CK_ARITY Arity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine invokes the given closure for execution.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Closure - Supplies a pointer to the closure to execute.
+
+    Arity - Supplies the number of arguments the method was called with in
+        code (plus one for the receiver).
+
+Return Value:
+
+    None. The fiber error will be set on failure.
+
+--*/
+
+CK_ERROR_TYPE
+CkpRunInterpreter (
+    PCK_VM Vm,
+    PCK_FIBER Fiber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the heart of Chalk: the main execution loop.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the execution context to run.
 
 Return Value:
 

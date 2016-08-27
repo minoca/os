@@ -603,6 +603,59 @@ Return Value:
     return CkpStringTableFind(&(Module->Strings), Name, Length);
 }
 
+VOID
+CkpPrintSignature (
+    PCK_FUNCTION_SIGNATURE Signature,
+    PSTR Name,
+    PUINTN Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts function signature information into a single string
+    that contains the equivalent signature information.
+
+Arguments:
+
+    Signature - Supplies a pointer to the signature information.
+
+    Name - Supplies a pointer to the function name.
+
+    Length - Supplies a pointer that on input contains the size of the buffer.
+        On output, this will contain the size of the signature string, not
+        including the null terminator.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN CopySize;
+
+    if (*Length == 0) {
+        return;
+    }
+
+    CopySize = Signature->Length;
+    if (*Length < CopySize) {
+        CopySize = *Length - 1;
+    }
+
+    CkCopy(Name, Signature->Name, CopySize);
+    *Length = snprintf(Name + CopySize,
+                       *Length - CopySize,
+                       "@%d",
+                       (INT)(Signature->Arity));
+
+    *Length += CopySize;
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

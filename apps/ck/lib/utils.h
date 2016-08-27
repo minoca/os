@@ -82,6 +82,29 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure describes a function signature.
+
+Members:
+
+    Name - Stores a pointer to the name of the function.
+
+    Length - Stores the length of the function name, not including the null
+        terminator.
+
+    Arity - Stores the number of arguments the function takes.
+
+--*/
+
+typedef struct _CK_FUNCTION_SIGNATURE {
+    PSTR Name;
+    UINTN Length;
+    CK_ARITY Arity;
+} CK_FUNCTION_SIGNATURE, *PCK_FUNCTION_SIGNATURE;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -394,6 +417,36 @@ Return Value:
     Returns the index into the module string table for this function signature.
 
     -1 if no such string exists.
+
+--*/
+
+VOID
+CkpPrintSignature (
+    PCK_FUNCTION_SIGNATURE Signature,
+    PSTR Name,
+    PUINTN Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts function signature information into a single string
+    that contains the equivalent signature information.
+
+Arguments:
+
+    Signature - Supplies a pointer to the signature information.
+
+    Name - Supplies a pointer to the function name.
+
+    Length - Supplies a pointer that on input contains the size of the buffer.
+        On output, this will contain the size of the signature string, not
+        including the null terminator.
+
+Return Value:
+
+    None.
 
 --*/
 

@@ -775,7 +775,7 @@ Return Value:
     // Call the import function, which returns a pointer to the module.
     //
 
-    CkpCallMethod(Compiler, 1, "importModule@1", 14);
+    CkpEmitMethodCall(Compiler, 1, "importModule@1", 14);
 
     //
     // Create a variable to store the resulting module.
@@ -796,7 +796,7 @@ Return Value:
     //
 
     CkpLoadVariable(Compiler, ModuleVariable);
-    CkpCallMethod(Compiler, 0, "run@0", 5);
+    CkpEmitMethodCall(Compiler, 0, "run@0", 5);
     CkpEmitOp(Compiler, CkOpPop);
 
     //
@@ -819,7 +819,7 @@ Return Value:
     if (Token->Value == CkTokenAsterisk) {
         CkpLoadCoreVariable(Compiler, "Core");
         CkpLoadVariable(Compiler, ModuleVariable);
-        CkpCallMethod(Compiler, 1, "importAllSymbols@1", 18);
+        CkpEmitMethodCall(Compiler, 1, "importAllSymbols@1", 18);
         CkpEmitOp(Compiler, CkOpPop);
         return;
     }
@@ -845,7 +845,7 @@ Return Value:
                                      Token->Size);
 
         CkpEmitConstant(Compiler, NameString);
-        CkpCallMethod(Compiler, 1, "get@1", 21);
+        CkpEmitMethodCall(Compiler, 1, "get@1", 21);
         if (IdentifierList->Children > 1) {
             IdentifierList = CK_GET_AST_NODE(Compiler,
                                              IdentifierList->ChildIndex);
@@ -1514,7 +1514,7 @@ Return Value:
             CkpEmitOp(Compiler, CkOpNull);
             CkpLoadLocal(Compiler, ExpressionSymbol);
             CkpLoadLocal(Compiler, IteratorSymbol);
-            CkpCallMethod(Compiler, 1, "iterate@1", 9);
+            CkpEmitMethodCall(Compiler, 1, "iterate@1", 9);
             CkpEmitByteOp(Compiler, CkOpStoreLocal, IteratorSymbol);
             CkpEmitOperatorCall(Compiler, CkTokenIsNotEqual, 1, FALSE);
             CkpTestLoopExit(Compiler);
@@ -1526,7 +1526,7 @@ Return Value:
 
             CkpLoadLocal(Compiler, ExpressionSymbol);
             CkpLoadLocal(Compiler, IteratorSymbol);
-            CkpCallMethod(Compiler, 1, "iteratorValue@1", 15);
+            CkpEmitMethodCall(Compiler, 1, "iteratorValue@1", 15);
             CkpPushScope(Compiler);
             CkpAddLocal(Compiler,
                         Compiler->Parser->Source + IteratorToken->Position,

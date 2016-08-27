@@ -53,12 +53,6 @@ Author:
 #define CK_MAX_CONSTANTS 0x10000
 
 //
-// Define the maximum size of a method signature string.
-//
-
-#define CK_MAX_METHOD_SIGNATURE (CK_MAX_NAME + 8)
-
-//
 // Define the maximum jump distance. This limitation also exists in the
 // bytecode because of the argument size to the jump ops.
 //

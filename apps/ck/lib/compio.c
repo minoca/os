@@ -592,7 +592,7 @@ Return Value:
         Arguments += 1;
     }
 
-    CkpCallMethod(Compiler, Arguments, Method, strlen(Method));
+    CkpEmitMethodCall(Compiler, Arguments, Method, strlen(Method));
     return;
 }
 
@@ -649,7 +649,7 @@ Return Value:
 }
 
 VOID
-CkpCallMethod (
+CkpEmitMethodCall (
     PCK_COMPILER Compiler,
     CK_ARITY ArgumentCount,
     PSTR Name,

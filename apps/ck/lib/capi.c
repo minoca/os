@@ -61,6 +61,12 @@ CkpGetStackIndex (
     INTN Index
     );
 
+PCK_VALUE
+CkpGetFieldIndex (
+    PCK_VM Vm,
+    UINTN FieldIndex
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -75,7 +81,7 @@ const CK_API_TYPE CkApiObjectTypes[CkObjectTypeCount] = {
     CkTypeFunction, // CkObjectClosure
     CkTypeDict,     // CkObjectDict
     CkTypeObject,   // CkObjectFiber
-    CkTypeObject,   // CkObjectForeign
+    CkTypeData,     // CkObjectForeign
     CkTypeObject,   // CkObjectFunction
     CkTypeObject,   // CkObjectInstance
     CkTypeList,     // CkObjectList
@@ -1428,6 +1434,701 @@ Return Value:
 }
 
 CK_API
+BOOL
+CkPushData (
+    PCK_VM Vm,
+    PVOID Data,
+    PCK_DESTROY_DATA DestroyRoutine
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pushes an opaque pointer onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Data - Supplies the pointer to encapsulate.
+
+    DestroyRoutine - Supplies an optional pointer to a function to call if this
+        value is garbage collected.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on allocation failure.
+
+--*/
+
+{
+
+    PCK_FOREIGN_DATA DataObject;
+    PCK_FIBER Fiber;
+    CK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_PUSH(Fiber, 1));
+
+    DataObject = CkAllocate(Vm, sizeof(CK_FOREIGN_DATA));
+    if (DataObject == NULL) {
+        return FALSE;
+    }
+
+    CkpInitializeObject(Vm,
+                        &(DataObject->Header),
+                        CkObjectForeign,
+                        Vm->Class.Null);
+
+    DataObject->Data = Data;
+    DataObject->Destroy = DestroyRoutine;
+    CK_OBJECT_VALUE(Value, DataObject);
+    CK_PUSH(Fiber, Value);
+    return TRUE;
+}
+
+CK_API
+PVOID
+CkGetData (
+    PCK_VM Vm,
+    INTN StackIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a data pointer that is stored the given stack index.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the object to get. Negative
+        values reference stack indices from the end of the stack.
+
+Return Value:
+
+    Returns the opaque pointer passed in when the object was created.
+
+    NULL if the value at the stack was not a foreign data object.
+
+--*/
+
+{
+
+    PCK_FOREIGN_DATA DataObject;
+    PCK_VALUE Value;
+
+    Value = CkpGetStackIndex(Vm, StackIndex);
+    if (!CK_IS_FOREIGN(*Value)) {
+        return NULL;
+    }
+
+    DataObject = CK_AS_FOREIGN(*Value);
+    return DataObject->Data;
+}
+
+CK_API
+VOID
+CkPushClass (
+    PCK_VM Vm,
+    INTN ModuleIndex,
+    ULONG FieldCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pops a class and a string off the stack, creates a new class,
+    and pushes it onto the stack. The popped class is the superclass of the
+    new class, and the popped string is the name of the class.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleIndex - Supplies the stack index of the module to create the class in,
+        before any items are popped from the stack.
+
+    FieldCount - Supplies the number of fields to allocate for each instance of
+        the class. When a new class is created, these fields start out as null.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_MODULE Module;
+    PCK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_POP(Fiber, 2));
+
+    Value = CkpGetStackIndex(Vm, ModuleIndex);
+    if (!CK_IS_MODULE(*Value)) {
+        Fiber->StackTop -= 2;
+        CK_PUSH(Fiber, CkNullValue);
+        return;
+    }
+
+    Module = CK_AS_MODULE(*Value);
+    CkpClassCreate(Vm, FieldCount, Module);
+    return;
+}
+
+CK_API
+VOID
+CkPushFunction (
+    PCK_VM Vm,
+    PCK_FOREIGN_FUNCTION Function,
+    PSTR Name,
+    ULONG ArgumentCount,
+    INTN ModuleIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pushes a C function onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Function - Supplies a pointer to the C function.
+
+    Name - Supplies a pointer to a null terminated string containing the name
+        of the function, used for debugging purposes. This name is not actually
+        assigned in the Chalk namespace.
+
+    ArgumentCount - Supplies the number of arguments the function takes, not
+        including the receiver slot.
+
+    ModuleIndex - Supplies the index of the module this function should be
+        defined within. Functions must be tied to modules to ensure that the
+        module containing the C function is not garbage collected and unloaded.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_CLOSURE Closure;
+    CK_VALUE ClosureValue;
+    PCK_FIBER Fiber;
+    PCK_MODULE Module;
+    CK_VALUE NameValue;
+    PCK_VALUE Value;
+
+    Value = CkpGetStackIndex(Vm, ModuleIndex);
+    if (!CK_IS_MODULE(*Value)) {
+        return;
+    }
+
+    Module = CK_AS_MODULE(*Value);
+    NameValue = CkpStringCreate(Vm, Name, strlen(Name));
+    if (CK_IS_NULL(NameValue)) {
+        return;
+    }
+
+    Closure = CkpClosureCreateForeign(Vm,
+                                      Function,
+                                      Module,
+                                      CK_AS_STRING(NameValue),
+                                      ArgumentCount);
+
+    if (Closure == NULL) {
+        return;
+    }
+
+    CK_OBJECT_VALUE(ClosureValue, Closure);
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_PUSH(Fiber, 1));
+
+    CK_PUSH(Fiber, ClosureValue);
+    return;
+}
+
+CK_API
+VOID
+CkBindMethod (
+    PCK_VM Vm,
+    INTN ClassIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pops a string and then a function off the stack. It binds the
+    function as a class method. The class is indicated by the given stack index
+    (before either of the pops). The function may be either a C or Chalk
+    function.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ClassIndex - Supplies the stack index of the class to bind the function to.
+        Negative values reference stack indices from the end of the stack.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_CLASS Class;
+    PCK_VALUE ClassValue;
+    PCK_CLOSURE Closure;
+    CK_VALUE ClosureValue;
+    PCK_FIBER Fiber;
+    CHAR Name[CK_MAX_METHOD_SIGNATURE];
+    UINTN NameSize;
+    PCK_STRING NameString;
+    CK_VALUE NameValue;
+    CK_FUNCTION_SIGNATURE Signature;
+    CK_SYMBOL_INDEX Symbol;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_POP(Fiber, 2));
+
+    //
+    // Get the class, name, and function.
+    //
+
+    ClassValue = CkpGetStackIndex(Vm, ClassIndex);
+    if (!CK_IS_CLASS(*ClassValue)) {
+        goto BindMethodEnd;
+    }
+
+    Class = CK_AS_CLASS(*ClassValue);
+    NameValue = *(Fiber->StackTop - 1);
+    ClosureValue = *(Fiber->StackTop - 2);
+    if ((!CK_IS_STRING(NameValue)) || (!CK_IS_STRING(ClosureValue))) {
+        goto BindMethodEnd;
+    }
+
+    //
+    // Convert the name string into a signature string.
+    //
+
+    NameString = CK_AS_STRING(NameValue);
+    Closure = CK_AS_CLOSURE(ClosureValue);
+    Signature.Name = NameString->Value;
+    Signature.Length = NameString->Length;
+    Signature.Arity = CkpGetFunctionArity(Closure);
+    NameSize = sizeof(Name);
+    CkpPrintSignature(&Signature, Name, &NameSize);
+    Symbol = CkpStringTableEnsure(Vm,
+                                  &(Class->Module->Strings),
+                                  Name,
+                                  NameSize);
+
+    if (Symbol < 0) {
+        goto BindMethodEnd;
+    }
+
+    NameValue = Class->Module->Strings.List.Data[Symbol];
+    CkpBindMethod(Vm, Class, NameValue, Closure);
+
+BindMethodEnd:
+    Fiber->StackTop -= 2;
+    return;
+}
+
+CK_API
+VOID
+CkGetField (
+    PCK_VM Vm,
+    UINTN FieldIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the value from the instance field with the given index,
+    and pushes it on the stack. This only applies to bound methods, and
+    operates on the receiver ("this"). If the current method is not a bound
+    method, or the field is out of bounds, null is pushed.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldIndex - Supplies the field index of the intance to get.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_PUSH(Fiber, 1));
+
+    Value = CkpGetFieldIndex(Vm, FieldIndex);
+    if (Value == NULL) {
+        CK_PUSH(Fiber, CkNullValue);
+        return;
+    }
+
+    CK_PUSH(Fiber, *Value);
+    return;
+}
+
+CK_API
+VOID
+CkSetField (
+    PCK_VM Vm,
+    UINTN FieldIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pops the top value off the stack, and saves it to a specific
+    field index in the function receiver. This function only applies to bound
+    methods. If the current function is unbound or the field index is out of
+    bounds, the value is popped and discarded.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldIndex - Supplies the field index of the intance to get.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_POP(Fiber, 1));
+
+    Value = CkpGetFieldIndex(Vm, FieldIndex);
+    if (Value == NULL) {
+        Fiber->StackTop -= 1;
+        return;
+    }
+
+    *Value = CK_POP(Fiber);
+    return;
+}
+
+CK_API
+VOID
+CkGetVariable (
+    PCK_VM Vm,
+    INTN StackIndex,
+    PSTR Name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets a global variable and pushes it on the stack. If the
+    variable does not exist in the given module, or the given stack index is
+    not a module, then null is pushed.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the module to look in. Negative
+        values reference stack indices from the end of the stack.
+
+    Name - Supplies a pointer to the null terminated string containing the
+        name of the variable to get.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_MODULE Module;
+    PCK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_PUSH(Fiber, 1));
+
+    Value = CkpGetStackIndex(Vm, StackIndex);
+    if (!CK_IS_MODULE(*Value)) {
+        CK_PUSH(Fiber, CkNullValue);
+        return;
+    }
+
+    Module = CK_AS_MODULE(*Value);
+    Value = CkpFindModuleVariable(Vm, Module, Name, FALSE);
+    if (Value != NULL) {
+        CK_PUSH(Fiber, *Value);
+
+    } else {
+        CK_PUSH(Fiber, CkNullValue);
+    }
+
+    return;
+}
+
+CK_API
+VOID
+CkSetVariable (
+    PCK_VM Vm,
+    INTN StackIndex,
+    PSTR Name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pops the top value off the stack, and saves it to a global
+    variable with the given name in the given module. If the variable did not
+    exist previously, it is created.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the module to look in. Negative
+        values reference stack indices from the end of the stack.
+
+    Name - Supplies a pointer to the null terminated string containing the
+        name of the variable to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_MODULE Module;
+    PCK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_POP(Fiber, 1));
+
+    Value = CkpGetStackIndex(Vm, StackIndex);
+    if (!CK_IS_MODULE(*Value)) {
+        Fiber->StackTop -= 1;
+        return;
+    }
+
+    Module = CK_AS_MODULE(*Value);
+    Value = CkpFindModuleVariable(Vm, Module, Name, TRUE);
+    if (Value != NULL) {
+        *Value = CK_POP(Fiber);
+
+    } else {
+        Fiber->StackTop -= 1;
+    }
+
+    return;
+}
+
+CK_API
+VOID
+CkCall (
+    PCK_VM Vm,
+    UINTN ArgumentCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pops the given number of arguments off the stack, then pops
+    a callable object or class, and executes that call. The return value is
+    pushed onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ArgumentCount - Supplies the number of arguments to the call. The callable
+        object (either a function or a class) will also be popped after these
+        arguments.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CK_VALUE Callable;
+    PCK_CLASS Class;
+    PCK_CLOSURE Closure;
+    PCK_FIBER Fiber;
+    CK_VALUE Instance;
+    CK_VALUE MethodName;
+    PCK_VALUE OriginalTop;
+    CK_SYMBOL_INDEX Symbol;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_POP(Fiber, ArgumentCount + 1));
+
+    OriginalTop = Fiber->StackTop;
+    Callable = *(Fiber->StackTop - 1 - ArgumentCount);
+    if (CK_IS_CLOSURE(Callable)) {
+        Closure = CK_AS_CLOSURE(Callable);
+
+    //
+    // Calling a class is the official method of constructing a new object.
+    // Get the init symbol from the strings in the module where the class
+    // is defined, since the module running might never have the proper
+    // __init string anywhere.
+    //
+
+    } else if (CK_IS_CLASS(Callable)) {
+        Class = CK_AS_CLASS(Callable);
+        Instance = CkpCreateInstance(Vm, Class);
+        if (!CK_IS_NULL(Fiber->Error)) {
+            goto CallEnd;
+        }
+
+        *(Fiber->StackTop - 1 - ArgumentCount) = Instance;
+        Symbol = CkpGetInitMethodSymbol(Vm, Class->Module, ArgumentCount);
+        if (Symbol < 0) {
+            CkpRuntimeError(Vm,
+                            "No __init function for argument count %d",
+                            ArgumentCount);
+
+            goto CallEnd;
+        }
+
+        MethodName = Class->Module->Strings.List.Data[Symbol];
+        CkpCallMethod(Vm, Class, MethodName, ArgumentCount + 1);
+        goto CallEnd;
+
+    } else {
+        CkpRuntimeError(Vm, "Object is not callable");
+        goto CallEnd;
+    }
+
+    CkpCallFunction(Vm, Closure, ArgumentCount + 1);
+    if (!CK_IS_NULL(Fiber->Error)) {
+        goto CallEnd;
+    }
+
+    CkpRunInterpreter(Vm, Fiber);
+
+CallEnd:
+
+    //
+    // The VM should not have allowed a fiber switch while the Fiber stack
+    // is tied with the C stack.
+    //
+
+    CK_ASSERT((Vm->Fiber == Fiber) || (Vm->Fiber == NULL));
+
+    //
+    // If the call attempt failed, adjust the stack as promised, and push null
+    // as the return value.
+    //
+
+    if ((Vm->Fiber == Fiber) && (Fiber->StackTop == OriginalTop)) {
+        Fiber->StackTop -= ArgumentCount + 1;
+        CK_PUSH(Fiber, CkNullValue);
+    }
+
+    return;
+}
+
+CK_API
+VOID
+CkPushCurrentModule (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pushes the module that the running function was defined in
+    onto the stack. If no function is currently running, then null is pushed.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_CALL_FRAME Frame;
+    CK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_PUSH(Fiber, 1));
+
+    if (Fiber->FrameCount == 0) {
+        CK_PUSH(Fiber, CkNullValue);
+        return;
+    }
+
+    Frame = &(Fiber->Frames[Fiber->FrameCount - 1]);
+
+    CK_ASSERT(Frame->Closure->Type == CkClosureForeign);
+
+    CK_OBJECT_VALUE(Value, Frame->Closure->U.Foreign.Module);
+    CK_PUSH(Fiber, Value);
+    return;
+}
+
+CK_API
 VOID
 CkPushModulePath (
     PCK_VM Vm
@@ -1526,5 +2227,63 @@ Return Value:
     CK_ASSERT((Value >= Stack) && (Value < Fiber->StackTop));
 
     return Value;
+}
+
+PCK_VALUE
+CkpGetFieldIndex (
+    PCK_VM Vm,
+    UINTN FieldIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a pointer to the given field in the receiver.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldIndex - Supplies the field index to get.
+
+Return Value:
+
+    Returns a pointer to the field on success.
+
+    NULL if the current function is not a bound function or the field index is
+    out of bounds.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_CALL_FRAME Frame;
+    PCK_INSTANCE Instance;
+    CK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+    if (Fiber->FrameCount == 0) {
+        return NULL;
+    }
+
+    Frame = &(Fiber->Frames[Fiber->FrameCount - 1]);
+
+    CK_ASSERT(Frame->Closure->Type == CkClosureForeign);
+
+    if ((Frame->Closure->Class == NULL) ||
+        (FieldIndex >= Frame->Closure->Class->FieldCount)) {
+
+        return NULL;
+    }
+
+    Value = Frame->StackStart[0];
+
+    CK_ASSERT(CK_IS_INSTANCE(Value));
+
+    Instance = CK_AS_INSTANCE(Value);
+    FieldIndex += Frame->Closure->Class->SuperFieldCount;
+    return &(Instance->Fields[FieldIndex]);
 }
 

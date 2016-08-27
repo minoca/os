@@ -99,6 +99,12 @@ CkpKissFiber (
     );
 
 VOID
+CkpKissForeignData (
+    PCK_VM Vm,
+    PCK_FOREIGN_DATA ForeignData
+    );
+
+VOID
 CkpKissFunction (
     PCK_VM Vm,
     PCK_FUNCTION Function
@@ -567,9 +573,7 @@ Return Value:
             break;
 
         case CkObjectForeign:
-
-            CK_ASSERT(FALSE);
-
+            CkpKissForeignData(Vm, (PCK_FOREIGN_DATA)Object);
             break;
 
         case CkObjectInstance:
@@ -884,6 +888,37 @@ Return Value:
                           (Fiber->FrameCapacity * sizeof(CK_CALL_FRAME)) +
                           (Fiber->StackCapacity * sizeof(CK_VALUE));
 
+    return;
+}
+
+VOID
+CkpKissForeignData (
+    PCK_VM Vm,
+    PCK_FOREIGN_DATA ForeignData
+    )
+
+/*++
+
+Routine Description:
+
+    This routine kisses a foreign data object, preventing its components from
+    being garbage collected.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ForeignData - Supplies a pointer to the foreign data object.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    Vm->BytesAllocated += sizeof(CK_FOREIGN_DATA);
     return;
 }
 
