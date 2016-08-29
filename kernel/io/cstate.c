@@ -304,7 +304,7 @@ Return Value:
 
     EndTime = HlQueryTimeCounter();
     if (EndTime < StartTime) {
-        RtlDebugPrint("CSTATE: Time went backwards from %I64x to %I64x\n",
+        RtlDebugPrint("CSTATE: Time went backwards from 0x%I64x to 0x%I64x\n",
                       StartTime,
                       EndTime);
     }

@@ -1179,7 +1179,7 @@ Return Value:
             // That's odd, there was some other descriptor there.
             //
 
-            RtlDebugPrint("CPPI: Reaped unexpected queue %x\n", PoppedQueue);
+            RtlDebugPrint("CPPI: Reaped unexpected queue 0x%x\n", PoppedQueue);
 
             ASSERT(FALSE);
         }

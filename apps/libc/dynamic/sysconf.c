@@ -106,7 +106,7 @@ Return Value:
                                            FALSE);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Get MmStatistics failed: %x\n", Status);
+            RtlDebugPrint("Get MmStatistics failed: %d\n", Status);
             errno = ClConvertKstatusToErrorNumber(Status);
             return -1;
         }

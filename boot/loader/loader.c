@@ -772,7 +772,7 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 MainEnd:
-    RtlDebugPrint("Loader Failed: Step 0x%x, Status %x\n", LoaderStep, Status);
+    RtlDebugPrint("Loader Failed: Step 0x%x, Status %d\n", LoaderStep, Status);
     FwPrintString(0, 0, "Loader Failed: ");
     FwPrintHexInteger(15, 0, Status);
     FwPrintString(0, 1, "Step: ");
@@ -1663,9 +1663,7 @@ Return Value:
             }
         }
 
-        RtlDebugPrint("Driver: ");
-        RtlDebugPrint(DriverName);
-        RtlDebugPrint("\n");
+        RtlDebugPrint("Driver: %s\n", DriverName);
 
         //
         // Load the driver.
@@ -1710,7 +1708,7 @@ Return Value:
 
 LoadDriversEnd:
     if (!KSUCCESS(Status) && DriverName != NULL) {
-        RtlDebugPrint("Error: Failed to load driver %s (Error 0x%08x).\n",
+        RtlDebugPrint("Error: Failed to load driver %s (Status %d).\n",
                       DriverName,
                       Status);
 

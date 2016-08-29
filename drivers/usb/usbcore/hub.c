@@ -1045,7 +1045,7 @@ ResetHubPortEnd:
     if (((UsbDebugFlags & (USB_DEBUG_HUB | USB_DEBUG_ENUMERATION)) != 0) ||
         ((!KSUCCESS(Status)) && ((UsbDebugFlags & USB_DEBUG_ERRORS) != 0))) {
 
-        RtlDebugPrint("USB: Hub %x reset port %d, status %x.\n",
+        RtlDebugPrint("USB: Hub 0x%x reset port %d, status %d.\n",
                       Hub,
                       PortIndex,
                       Status);
@@ -1195,8 +1195,8 @@ Return Value:
         for (PortIndex = 0; PortIndex < RootHub->PortCount; PortIndex += 1) {
             PortStatus = &(RootHub->HubStatus.PortStatus[PortIndex]);
             RtlDebugPrint(
-                 "USB: Root Hub %x Port %d SoftwareStatus %x, SoftwareChange "
-                 "%x Status %x.\n"
+                 "USB: Root Hub 0x%x Port %d SoftwareStatus 0x%x, "
+                 "SoftwareChange 0x%x Status %d.\n"
                  "USB: Speed %d Enabled %d Suspended %d OverCurrent %d "
                  "Present %d\n",
                  RootHub,
@@ -1464,7 +1464,7 @@ Return Value:
 
     if ((UsbDebugFlags & USB_DEBUG_HUB) != 0) {
         RtlDebugPrint(
-                 "USB: Hub %x Port %d HardwareStatus 0x%x, SoftwareStatus "
+                 "USB: Hub 0x%x Port %d HardwareStatus 0x%x, SoftwareStatus "
                  "0x%x, SoftwareChange 0x%x\n"
                  "USB: Speed %d Enabled %d Suspended %d OverCurrent %d "
                  "Present %d\n",
@@ -2214,7 +2214,7 @@ Return Value:
                         RtlDebugPrint("USB HUB: status change transfer "
                                       "(0x%08x) on hub 0x%08x stalled. Failed "
                                       "to clear HALT feature on endpoint with "
-                                      "status 0x%08x.\n",
+                                      "status %d.\n",
                                       Transfer,
                                       Hub,
                                       Status);
@@ -2238,8 +2238,7 @@ Return Value:
 
         } else {
             RtlDebugPrint("USB HUB: Unexpected error for hub (0x%08x) status "
-                          "change transfer (0x%08x): status 0x%08x, error "
-                          "%d.\n",
+                          "change transfer (0x%08x): status %d, error %d.\n",
                           Hub,
                           Transfer,
                           Transfer->Status,
@@ -2455,7 +2454,7 @@ Return Value:
 
         UsbpHubUpdatePortStatus(Hub, PortIndex, HardwareStatus);
         if ((UsbDebugFlags & USB_DEBUG_HUB) != 0) {
-            RtlDebugPrint("USB: Hub %x Port %d Hardware Status %x.\n",
+            RtlDebugPrint("USB: Hub 0x%x Port %d Hardware Status 0x%x.\n",
                           Hub,
                           PortIndex,
                           HardwareStatus);

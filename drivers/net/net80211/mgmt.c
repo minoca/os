@@ -982,10 +982,7 @@ Return Value:
                                                  BssState);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
-                      State,
-                      Status);
-
+        RtlDebugPrint("802.11: Failed to set state %d: %d\n", State, Status);
         goto SetStateUnlockedEnd;
     }
 
@@ -1567,7 +1564,7 @@ Return Value:
                                                  BssState);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
+        RtlDebugPrint("802.11: Failed to set state %d: %d\n",
                       Net80211StateProbing,
                       Status);
 
@@ -1647,7 +1644,7 @@ Return Value:
                                                  BssState);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
+        RtlDebugPrint("802.11: Failed to set state %d: %d\n",
                       Link->ProbePreviousState,
                       Status);
 

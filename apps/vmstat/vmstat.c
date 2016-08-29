@@ -286,7 +286,7 @@ Return Value:
     if (!KSUCCESS(Status)) {
         ReturnValue = ClConvertKstatusToErrorNumber(Status);
         fprintf(stderr,
-                "Error: failed to get I/O cache information: status 0x%08x: "
+                "Error: failed to get I/O cache information: status %d: "
                 "%s.\n",
                 Status,
                 strerror(ReturnValue));

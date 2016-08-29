@@ -471,7 +471,7 @@ Return Value:
                                              &Information);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("GPIO: Failed to create interrupt controller: %x\n",
+            RtlDebugPrint("GPIO: Failed to create interrupt controller: %d\n",
                           Status);
 
             goto StartControllerEnd;

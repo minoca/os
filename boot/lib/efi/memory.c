@@ -562,7 +562,7 @@ Return Value:
 
                 if (!KSUCCESS(Status)) {
                     RtlDebugPrint("Failed to add memory descriptor type %d, "
-                                  "%I64x - %I64x: Status %x\n",
+                                  "0x%I64x - 0x%I64x: Status %d\n",
                                   NewDescriptor.Type,
                                   NewDescriptor.BaseAddress,
                                   NewDescriptor.Size,
@@ -584,9 +584,9 @@ Return Value:
 
                 if (Agree == FALSE) {
                     RtlDebugPrint("Error: Memory conflict!\nEFI Descriptor "
-                                  "type %d, PA %I64x, %I64d pages, %I64x.\n"
-                                  "Boot Descriptor type %d, PA %I64x, size "
-                                  "%I64x.\n",
+                                  "type %d, PA 0x%I64x, %I64d pages, 0x%I64x.\n"
+                                  "Boot Descriptor type %d, PA 0x%I64x, size "
+                                  "0x%I64x.\n",
                                   EfiDescriptor->Type,
                                   EfiDescriptor->PhysicalStart,
                                   EfiDescriptor->NumberOfPages,

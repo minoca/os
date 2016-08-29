@@ -224,7 +224,7 @@ Return Value:
         (ControllerInterface->Identifier == UsbDebugHandoffData->Identifier)) {
 
         if ((UsbDebugFlags & USB_DEBUG_DEBUGGER_HANDOFF) != 0) {
-            RtlDebugPrint("USB: Handoff data matches host %x\n", Controller);
+            RtlDebugPrint("USB: Handoff data matches host 0x%x\n", Controller);
         }
 
         Controller->HandoffData = UsbDebugHandoffData;
@@ -366,7 +366,7 @@ Return Value:
             ASSERT(Transfer->Public.Error < UsbErrorCount);
 
             RtlDebugPrint(
-                       "USB: Transfer (0x%08x) %s dev %x EP%x status %x (%s), "
+                       "USB: Transfer (0x%08x) %s dev %d EP%x status %d (%s), "
                        "len 0x%x of 0x%x\n",
                        Transfer,
                        UsbTransferDirectionStrings[Transfer->Public.Direction],

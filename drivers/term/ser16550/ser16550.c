@@ -1679,7 +1679,7 @@ Return Value:
 
                 MmFreeIoBuffer(IoBuffer);
                 if (!KSUCCESS(Status)) {
-                    RtlDebugPrint("Ser16550: Failed terminal write: %x\n",
+                    RtlDebugPrint("Ser16550: Failed terminal write: %d\n",
                                   Status);
                 }
             }

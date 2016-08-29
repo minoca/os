@@ -731,7 +731,7 @@ Return Value:
     }
 
     if ((InDebugFlags & USER_INPUT_DEBUG_EVENT) != 0) {
-        RtlDebugPrint("USIN: %s %s event processed with status 0x%08x: event "
+        RtlDebugPrint("USIN: %s %s event processed with status %d: event "
                       "0x%08x, device 0x%08x, ",
                       InDeviceTypeStrings[Event->DeviceType],
                       InEventTypeStrings[Event->EventType],
@@ -1299,7 +1299,7 @@ Return Value:
     //
 
     if ((InDebugFlags & USER_INPUT_DEBUG_REPEAT_EVENT) != 0) {
-        RtlDebugPrint("USIN: REPEAT %s %s event processed with status 0x%08x: "
+        RtlDebugPrint("USIN: REPEAT %s %s event processed with status %d: "
                       "event 0x%08x, device 0x%08x, ",
                       InDeviceTypeStrings[RepeatEvent->DeviceType],
                       InEventTypeStrings[RepeatEvent->EventType],

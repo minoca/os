@@ -298,7 +298,7 @@ Return Value:
                                        FALSE);
 
     if (!KSUCCESS(Status)) {
-        fprintf(stderr, "Failed to get partition information: %x\n", Status);
+        fprintf(stderr, "Failed to get partition information: %d\n", Status);
         return ClConvertKstatusToErrorNumber(Status);
     }
 

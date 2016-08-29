@@ -1113,7 +1113,7 @@ Return Value:
         } while (KeGetRecentTimeCounter() <= Timeout);
 
         if (TimedOut != FALSE) {
-            RtlDebugPrint("EHCI: BIOS failed to relinquish control: %x\n",
+            RtlDebugPrint("EHCI: BIOS failed to relinquish control: 0x%I64x\n",
                           LegacyControl);
 
             Status = STATUS_TIMEOUT;

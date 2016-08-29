@@ -250,7 +250,7 @@ Return Value:
 
                 if (EFI_ERROR(Status)) {
                     RtlDebugPrint("Warning: Driver failed load with status "
-                                  "%x\n",
+                                  "0x%x.\n",
                                   Status);
 
                     EfiCoreAcquireLock(&EfiDispatcherLock);
@@ -288,7 +288,7 @@ Return Value:
 
                 if (EFI_ERROR(Status)) {
                     RtlDebugPrint("Warning: Driver start failed with "
-                                  "status %x\n",
+                                  "status 0x%x.\n",
                                   Status);
                 }
             }

@@ -182,7 +182,7 @@ Return Value:
 
         if (Status != 0) {
             DbgOut("Failed to evaluate address at \"%s\".\n",
-                          ArgumentValues[ArgumentIndex]);
+                   ArgumentValues[ArgumentIndex]);
         }
 
         ExtpHandleObjectCommand(Context, Command, ObjectAddress);

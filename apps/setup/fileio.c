@@ -249,7 +249,7 @@ Return Value:
             if (!KSUCCESS(Status)) {
                 printf("Error: Failed to format ");
                 SetupPrintDestination(Destination);
-                printf(": %x\n", Status);
+                printf(": %d\n", Status);
                 Result = -1;
                 goto OpenVolumeEnd;
             }
@@ -259,7 +259,7 @@ Return Value:
         if (!KSUCCESS(Status)) {
             printf("Error: Failed to mount ");
             SetupPrintDestination(Destination);
-            printf(": %x\n", Status);
+            printf(": %d\n", Status);
             Result = -1;
             goto OpenVolumeEnd;
         }
@@ -797,7 +797,7 @@ Return Value:
 
     File->CurrentOffset += BytesComplete;
     if ((!KSUCCESS(Status)) && (Status != STATUS_END_OF_FILE)) {
-        fprintf(stderr, "FatReadFile Error: %x\n", Status);
+        fprintf(stderr, "FatReadFile Error: %d\n", Status);
         BytesComplete = 0;
     }
 
@@ -896,7 +896,7 @@ Return Value:
     }
 
     if (!KSUCCESS(Status)) {
-        fprintf(stderr, "FatWriteFile Error: %x\n", Status);
+        fprintf(stderr, "FatWriteFile Error: %d\n", Status);
         if (Status == STATUS_VOLUME_FULL) {
             errno = ENOSPC;
         }
@@ -969,7 +969,7 @@ Return Value:
                          &(File->SeekInformation));
 
     if (!KSUCCESS(Status)) {
-        fprintf(stderr, "FatFileSeek Error: %x\n", Status);
+        fprintf(stderr, "FatFileSeek Error: %d\n", Status);
         Offset = -1;
 
     } else {
@@ -1105,7 +1105,7 @@ Return Value:
     }
 
     if (!KSUCCESS(Status)) {
-        fprintf(stderr, "FatTruncate Error: %x\n", Status);
+        fprintf(stderr, "FatTruncate Error: %d\n", Status);
         return -1;
     }
 
@@ -1230,7 +1230,7 @@ Return Value:
                                        &ElementsRead);
 
         if ((!KSUCCESS(Status)) && (Status != STATUS_END_OF_FILE)) {
-            fprintf(stderr, "FatEnumerateDirectory Error: %x\n", Status);
+            fprintf(stderr, "FatEnumerateDirectory Error: %d\n", Status);
             Result = -1;
             goto EnumerateFileDirectoryEnd;
         }
@@ -1868,7 +1868,7 @@ FatOpenEnd:
         if ((Status != STATUS_NOT_FOUND) &&
             (Status != STATUS_UNEXPECTED_TYPE)) {
 
-            fprintf(stderr, "FatOpenFile Error %s: %x\n", Path, Status);
+            fprintf(stderr, "FatOpenFile Error %s: %d\n", Path, Status);
             errno = EINVAL;
         }
 

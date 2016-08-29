@@ -672,7 +672,7 @@ Return Value:
         }
 
         fprintf(stderr,
-                "Parsing script %s failed at line %d:%d: %x\n",
+                "Parsing script %s failed at line %d:%d: %d\n",
                 Script->Path,
                 Line,
                 Column,

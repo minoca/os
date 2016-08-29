@@ -1353,7 +1353,7 @@ Return Value:
     KStatus = YyParse(&Parser, &TranslationUnit);
     if (!KSUCCESS(KStatus)) {
         fprintf(stderr,
-                "Parser error %s:%d:%d: %x\n",
+                "Parser error %s:%d:%d: %d\n",
                 Path,
                 Parser.NextToken->Line,
                 Parser.NextToken->Column,

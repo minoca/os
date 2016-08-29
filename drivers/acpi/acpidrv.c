@@ -189,7 +189,7 @@ Return Value:
 
     Status = AcpipEnableAcpiMode();
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("ACPI: Failed to enable ACPI mode: %x.\n", Status);
+        RtlDebugPrint("ACPI: Failed to enable ACPI mode: %d.\n", Status);
         goto DriverEntryEnd;
     }
 
@@ -392,7 +392,7 @@ Return Value:
                 if (!KSUCCESS(Status)) {
                     if (Status != STATUS_NOT_READY) {
                         RtlDebugPrint("ACPI: Failed to get device resources."
-                                      "Device 0x%08x, Status: 0x%08x\n",
+                                      "Device 0x%08x, Status: %d\n",
                                       Irp->Device,
                                       Status);
                     }
@@ -435,7 +435,7 @@ Return Value:
             Status = AcpipEnumerateDeviceChildren(Irp->Device, Device, Irp);
             if (!KSUCCESS(Status)) {
                 RtlDebugPrint("ACPI: Failed to enumerate device children. "
-                              "Device 0x%08x, Status: 0x%08x\n",
+                              "Device 0x%08x, Status: %d\n",
                               Irp->Device,
                               Status);
 

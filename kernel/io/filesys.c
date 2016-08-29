@@ -895,7 +895,7 @@ Return Value:
                         &VolumeHandle);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to open system volume: %x\n", Status);
+            RtlDebugPrint("Failed to open system volume: %d\n", Status);
             goto VolumeArrivalEnd;
         }
 
@@ -913,7 +913,7 @@ Return Value:
                         &SystemDirectoryHandle);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to open system directory '%s': %x\n",
+            RtlDebugPrint("Failed to open system directory '%s': %d\n",
                           IoSystemDirectoryPath,
                           Status);
 
@@ -934,7 +934,7 @@ Return Value:
                         &DriversDirectoryHandle);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to open driver directory '%s/%s': %x\n",
+            RtlDebugPrint("Failed to open driver directory '%s/%s': %d\n",
                           IoSystemDirectoryPath,
                           SYSTEM_DRIVERS_DIRECTORY,
                           Status);

@@ -676,7 +676,7 @@ Return Value:
                                                       Load->DesiredState);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to set p-state on core %d: %x\n",
+            RtlDebugPrint("Failed to set p-state on core %d: %d\n",
                           CurrentProcessor,
                           Status);
 
@@ -775,7 +775,7 @@ Return Value:
 
         OldRunLevel = PmpAcquirePerformanceStateLock();
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to set p-state on core %d: %x\n", -1, Status);
+            RtlDebugPrint("Failed to set p-state on core %d: %d\n", -1, Status);
 
         } else {
             Data->CurrentState = DesiredState;

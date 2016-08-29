@@ -1189,7 +1189,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PRESOURCE_REQUIREMENT_LIST RequirementList;
 
-    RtlDebugPrint("Resource Configuration List at %x:\n", ConfigurationList);
+    RtlDebugPrint("Resource Configuration List at 0x%x:\n", ConfigurationList);
     CurrentEntry = ConfigurationList->RequirementListListHead.Next;
     while (CurrentEntry != &(ConfigurationList->RequirementListListHead)) {
         RequirementList = LIST_VALUE(CurrentEntry,
@@ -1243,7 +1243,7 @@ Return Value:
         RtlDebugPrint("  ");
     }
 
-    RtlDebugPrint("Resource Requirement List at %x:\n", RequirementList);
+    RtlDebugPrint("Resource Requirement List at 0x%x:\n", RequirementList);
     CurrentEntry = RequirementList->RequirementListHead.Next;
     while (CurrentEntry != &(RequirementList->RequirementListHead)) {
         Requirement = LIST_VALUE(CurrentEntry, RESOURCE_REQUIREMENT, ListEntry);
@@ -1299,8 +1299,9 @@ Return Value:
     //
 
     ResourceType = IopGetResourceTypeString(Requirement->Type);
-    RtlDebugPrint("%x %16s: From %08I64x to %08I64x, Len %I64x, Align %08I64x, "
-                  "Char: %I64x, Flags: %I64x, Owner: %08x\n",
+    RtlDebugPrint("0x%x %16s: From 0x%08I64x to 0x%08I64x, Len 0x%I64x, "
+                  "Align 0x%08I64x, Char: 0x%I64x, Flags: 0x%I64x, "
+                  "Owner: 0x%08x\n",
                   Requirement,
                   ResourceType,
                   Requirement->Minimum,
@@ -1377,7 +1378,7 @@ Return Value:
         RtlDebugPrint("  ");
     }
 
-    RtlDebugPrint("Resource Allocation List at %x:\n", AllocationList);
+    RtlDebugPrint("Resource Allocation List at 0x%x:\n", AllocationList);
     CurrentEntry = AllocationList->AllocationListHead.Next;
     while (CurrentEntry != &(AllocationList->AllocationListHead)) {
         Allocation = LIST_VALUE(CurrentEntry, RESOURCE_ALLOCATION, ListEntry);
@@ -1427,8 +1428,8 @@ Return Value:
     }
 
     ResourceType = IopGetResourceTypeString(Allocation->Type);
-    RtlDebugPrint("%08x %16s: %08I64x, Len %08I64x, Char %I64x, Flags %I64x "
-                  "Owner %08x ",
+    RtlDebugPrint("0x%08x %16s: 0x%08I64x, Len 0x%08I64x, Char 0x%I64x, "
+                  "Flags 0x%I64x Owner 0x%08x ",
                   Allocation,
                   ResourceType,
                   Allocation->Allocation,

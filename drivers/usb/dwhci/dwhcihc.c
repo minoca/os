@@ -2328,7 +2328,7 @@ Return Value:
 
     if ((DwhciDebugFlags & DWHCI_DEBUG_FLAG_PORTS) != 0) {
         RtlDebugPrint(
-                 "DWHCI: Controller %x Port %d Status %x. Connected %d, "
+                 "DWHCI: Controller 0x%x Port %d Status 0x%x. Connected %d, "
                  "Enabled %d, Reset %d, Changed %d.\n",
                  Controller,
                  0,

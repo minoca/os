@@ -1932,7 +1932,7 @@ Return Value:
     FreePercentage = Heap->Statistics.FreeListSize * 100 /
                      Heap->Statistics.TotalHeapSize;
 
-    RtlDebugPrint("Heap %x, Size %I64d, %d%% free, %I64d allocation calls, "
+    RtlDebugPrint("Heap 0x%x, Size %I64d, %d%% free, %I64d allocation calls, "
                   "%I64d free calls %I64d failed.\n",
                   Heap,
                   (ULONGLONG)Heap->Statistics.TotalHeapSize,
@@ -5013,7 +5013,7 @@ Return Value:
     PMEMORY_HEAP_TAG_STATISTIC Statistic;
 
     Statistic = RED_BLACK_TREE_VALUE(Node, MEMORY_HEAP_TAG_STATISTIC, Node);
-    RtlDebugPrint("%c%c%c%c %8x %16I64d %16I64d %8d %8d %16I64d\n",
+    RtlDebugPrint("%c%c%c%c 0x%8x %16I64d %16I64d %8d %8d %16I64d\n",
                   (UCHAR)(Statistic->Tag),
                   (UCHAR)(Statistic->Tag >> 8),
                   (UCHAR)(Statistic->Tag >> 16),

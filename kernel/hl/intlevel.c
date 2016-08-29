@@ -870,7 +870,7 @@ Return Value:
                 (Seconds < INTERRUPT_STORM_DELTA_SECONDS)) {
 
                 RtlDebugPrint("ISR: Possible storm on vector 0x%x, "
-                              "KINTERRUPT %x\n",
+                              "KINTERRUPT 0x%x\n",
                               Vector,
                               Interrupt);
             }

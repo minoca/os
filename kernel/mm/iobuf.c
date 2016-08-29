@@ -378,7 +378,7 @@ Return Value:
 
 AllocateIoBufferEnd:
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("MmAllocateNonPagedIoBuffer(%x): %x\n", Size, Status);
+        RtlDebugPrint("MmAllocateNonPagedIoBuffer(0x%x): %d\n", Size, Status);
         if (VaRequest.Address != NULL) {
             UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;

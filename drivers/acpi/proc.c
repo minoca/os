@@ -530,7 +530,7 @@ Return Value:
 ProcessorInitializeCStatesEnd:
     if (!KSUCCESS(Status)) {
         if (AcpiDebugProcessorPowerEnumeration != FALSE) {
-            RtlDebugPrint("ACPI: C-State init failed on P%d: %x\n",
+            RtlDebugPrint("ACPI: C-State init failed on P%d: %d\n",
                           Device->AcpiId,
                           Status);
         }

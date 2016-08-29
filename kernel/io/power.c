@@ -294,7 +294,7 @@ Return Value:
                               State->IdleTimerDpc);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("PM: Cannot queue idle timer: device %x: %x\n",
+            RtlDebugPrint("PM: Cannot queue idle timer: device 0x%x: %d\n",
                           Device,
                           Status);
         }
@@ -849,7 +849,7 @@ Return Value:
         RtlAtomicExchange32(&(State->TimerQueued), 0);
         Status = PmpDeviceQueuePowerTransition(Device, DevicePowerRequestIdle);
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("PM: Failed to queue idle work: %x %x\n",
+            RtlDebugPrint("PM: Failed to queue idle work: 0x%x %d\n",
                           Device,
                           Status);
         }
@@ -1297,7 +1297,7 @@ Return Value:
     }
 
     if (PmDebugPowerTransitions != FALSE) {
-        RtlDebugPrint("PM: 0x%08x Active: 0x%08x\n", Device, Status);
+        RtlDebugPrint("PM: 0x%08x Active: %d\n", Device, Status);
     }
 
     if (KSUCCESS(Status)) {
@@ -1372,7 +1372,7 @@ DeviceResumeEnd:
     //
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("PM: Failed to resume 0x%08x: 0x%08x\n", Device, Status);
+        RtlDebugPrint("PM: Failed to resume 0x%08x: %d\n", Device, Status);
         PmpDeviceDecrementActiveChildren(Parent);
     }
 
@@ -1463,7 +1463,7 @@ Return Value:
         Milliseconds = (Irp->U.Idle.ExpectedDuration * 1000ULL) /
                        HlQueryTimeCounterFrequency();
 
-        RtlDebugPrint("PM: %x Idle (%d ms): %x\n",
+        RtlDebugPrint("PM: 0x%x Idle (%d ms): %d\n",
                       Device,
                       Milliseconds,
                       Status);
@@ -1571,7 +1571,7 @@ Return Value:
     }
 
     if (PmDebugPowerTransitions != FALSE) {
-        RtlDebugPrint("PM: %x Suspend: %x\n", Device, Status);
+        RtlDebugPrint("PM: 0x%x Suspend: %d\n", Device, Status);
     }
 
     ASSERT((State->PreviousState == DevicePowerStateActive) ||

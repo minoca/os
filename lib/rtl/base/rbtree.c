@@ -894,8 +894,9 @@ Return Value:
     //
 
     if (Tree->Root.LeftChild->Parent != &(Tree->Root)) {
-        RtlDebugPrint("Error: Tree %x root %x (NullNode %x) LeftChild %x "
-                      "Parent was %x instead of pointing back to root.\n",
+        RtlDebugPrint("Error: Tree 0x%x root 0x%x (NullNode 0x%x) "
+                      "LeftChild 0x%x Parent was 0x%x instead of pointing "
+                      "back to root.\n",
                       Tree,
                       &(Tree->Root),
                       &(Tree->NullNode),
@@ -1529,8 +1530,8 @@ Return Value:
         if ((Node->LeftChild->Red != FALSE) ||
             (Node->RightChild->Red != FALSE)) {
 
-            RtlDebugPrint("Error: Red-Black Tree %x has a red node %x with a "
-                          "red Left child %x\n",
+            RtlDebugPrint("Error: Red-Black Tree 0x%x has a red node 0x%x "
+                          "with a red Left child 0x%x\n",
                           Tree,
                           Node,
                           Node->LeftChild);
@@ -1551,8 +1552,9 @@ Return Value:
         if ((CompareResult != ComparisonResultSame) &&
             (CompareResult != ComparisonResultAscending)) {
 
-            RtlDebugPrint("Error: Red-Black Tree %x has a node %x whose left "
-                          "child %x is not less than it. Compare was %x\n",
+            RtlDebugPrint("Error: Red-Black Tree 0x%x has a node 0x%x whose "
+                          "left child 0x%x is not less than it. Compare was "
+                          "%d\n",
                           Tree,
                           Node,
                           Node->LeftChild,
@@ -1566,8 +1568,8 @@ Return Value:
         //
 
         if (Node->LeftChild->Parent != Node) {
-            RtlDebugPrint("Error: Node %x LeftChild %x Parent is %x insteaf of "
-                          "pointing back to node.\n",
+            RtlDebugPrint("Error: Node 0x%x LeftChild 0x%x Parent is 0x%x "
+                          "insteaf of pointing back to node.\n",
                           Node,
                           Node->LeftChild,
                           Node->LeftChild->Parent);
@@ -1579,8 +1581,9 @@ Return Value:
         if ((CompareResult != ComparisonResultSame) &&
             (CompareResult != ComparisonResultDescending)) {
 
-            RtlDebugPrint("Error: Red-Black Tree %x has a node %x whose right "
-                          "child %x is not greater than it. Compare was %x\n",
+            RtlDebugPrint("Error: Red-Black Tree 0x%x has a node 0x%x whose "
+                          "right child 0x%x is not greater than it. Compare "
+                          "was %d\n",
                           Tree,
                           Node,
                           Node->RightChild,
@@ -1594,8 +1597,8 @@ Return Value:
         //
 
         if (Node->RightChild->Parent != Node) {
-            RtlDebugPrint("Error: Node %x LeftChild %x Parent is %x insteaf of "
-                          "pointing back to node.\n",
+            RtlDebugPrint("Error: Node 0x%x LeftChild 0x%x Parent is 0x%x "
+                          "insteaf of pointing back to node.\n",
                           Node,
                           Node->LeftChild,
                           Node->LeftChild->Parent);
@@ -1621,8 +1624,8 @@ Return Value:
                                              &RightBlackCount);
 
     if (LeftBlackCount != RightBlackCount) {
-        RtlDebugPrint("Error: Red-Black Tree %x has a node %x with a left "
-                      "black count of %x and a right black count of %x, "
+        RtlDebugPrint("Error: Red-Black Tree 0x%x has a node 0x%x with a left "
+                      "black count of 0x%x and a right black count of 0x%x, "
                       "which should be equal!\n",
                       Tree,
                       Node,

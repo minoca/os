@@ -145,7 +145,7 @@ Return Value:
         KdDisconnect();
         Status = HlResetSystem(SystemResetWarm);
         KdConnect();
-        RtlDebugPrint("System reset unsuccessful: 0x%08x\n", Status);
+        RtlDebugPrint("System reset unsuccessful: %d\n", Status);
     }
 
     //

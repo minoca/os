@@ -970,7 +970,7 @@ Return Value:
                                         NULL);
 
                 if (!KSUCCESS(Status)) {
-                    PRINT_ERROR("Child %d failed to create thread: %x.\n",
+                    PRINT_ERROR("Child %d failed to create thread: %d.\n",
                                 getpid(),
                                 Status);
                 }

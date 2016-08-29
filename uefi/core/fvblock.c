@@ -373,7 +373,7 @@ Return Value:
 
         if (((UINTN)BaseAddress % Alignment) != 0) {
             RtlDebugPrint("Firmware Volume Base Address 0x%I64x is not "
-                          "aligned to %x.\n",
+                          "aligned to 0x%x.\n",
                           BaseAddress,
                           Alignment);
 

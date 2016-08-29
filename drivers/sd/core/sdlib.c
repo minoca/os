@@ -926,7 +926,7 @@ Return Value:
     Removed = FALSE;
     Status = SdInitializeController(Controller, FALSE);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD: Card gone: %x\n", Status);
+        RtlDebugPrint("SD: Card gone: %d\n", Status);
         Removed = TRUE;
     }
 
@@ -1482,7 +1482,7 @@ Return Value:
         //
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("SD: Failed to set 1.8V CMD11: %x.\n", Status);
+            RtlDebugPrint("SD: Failed to set 1.8V CMD11: %d.\n", Status);
             Controller->FunctionTable.ResetController(
                                                Controller,
                                                Controller->ConsumerContext,
@@ -1503,7 +1503,7 @@ Return Value:
                                                    TRUE);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("SD: Failed to set 1.8V: %x\n", Status);
+            RtlDebugPrint("SD: Failed to set 1.8V: %d\n", Status);
             goto WaitForCardToInitializeEnd;
         }
     }
@@ -3025,7 +3025,7 @@ Return Value:
 
 AsynchronousAbortEnd:
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD: Error Recovery failed: %x\n", Status);
+        RtlDebugPrint("SD: Error Recovery failed: %d\n", Status);
     }
 
     return Status;

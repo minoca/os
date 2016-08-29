@@ -132,7 +132,7 @@ Return Value:
 
     if ((!KSUCCESS(Status)) && (Status != STATUS_BUFFER_TOO_SMALL)) {
         fprintf(stderr,
-                "usbrelay: Failed to get device information: %x.\n",
+                "usbrelay: Failed to get device information: %d.\n",
                 Status);
 
         goto mainEnd;
@@ -164,7 +164,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         fprintf(stderr,
-                "usbrelay: Failed to get device information: %x.\n",
+                "usbrelay: Failed to get device information: %d.\n",
                 Status);
 
         goto mainEnd;
@@ -200,7 +200,7 @@ Return Value:
                          &BytesCompleted);
 
     if (!KSUCCESS(Status)) {
-        fprintf(stderr, "usbrelay: I/O error: %x\n", Status);
+        fprintf(stderr, "usbrelay: I/O error: %d\n", Status);
         goto mainEnd;
     }
 
@@ -216,7 +216,7 @@ mainEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        fprintf(stderr, "usbrelay: Failed: %x\n", Status);
+        fprintf(stderr, "usbrelay: Failed: %d\n", Status);
         return 2;
     }
 

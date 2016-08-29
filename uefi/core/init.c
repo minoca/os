@@ -614,7 +614,7 @@ InitializeEnd:
     // Never return.
     //
 
-    RtlDebugPrint("EFI firmware failed. Status %x, EFI Status %x, Step %d\n",
+    RtlDebugPrint("EFI firmware failed. Status %d, EFI Status 0x%x, Step %d\n",
                   Status,
                   EfiStatus,
                   Step);

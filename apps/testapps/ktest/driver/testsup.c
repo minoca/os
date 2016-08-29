@@ -424,7 +424,7 @@ Return Value:
 
             KeYield();
             if (KeGetRecentTimeCounter() > Timeout) {
-                RtlDebugPrint("KTest: KTEST_ACTIVE_TEST %x hung.\n",
+                RtlDebugPrint("KTest: KTEST_ACTIVE_TEST 0x%x hung.\n",
                               ActiveTest);
 
                 ASSERT(FALSE);

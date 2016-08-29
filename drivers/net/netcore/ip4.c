@@ -1239,7 +1239,7 @@ Ip4SendEnd:
         NetDebugPrintAddress(Source);
         RtlDebugPrint(" to ");
         NetDebugPrintAddress(Destination);
-        RtlDebugPrint(" : %x.\n", Status);
+        RtlDebugPrint(" : %d.\n", Status);
     }
 
     return Status;

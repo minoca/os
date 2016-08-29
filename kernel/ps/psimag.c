@@ -1538,7 +1538,7 @@ Return Value:
                                       Reservation);
 
             if (!KSUCCESS(Status)) {
-                RtlDebugPrint("Failed to map %x bytes at %x: %x\n",
+                RtlDebugPrint("Failed to map 0x%x bytes at 0x%x: %d\n",
                               FileRegionSize,
                               FileRegion,
                               Status);
@@ -1562,7 +1562,7 @@ Return Value:
                                       Reservation);
 
             if (!KSUCCESS(Status)) {
-                RtlDebugPrint("Failed to map %x bytes at %x: %x\n",
+                RtlDebugPrint("Failed to map 0x%x bytes at 0x%x: %d\n",
                               FileRegionSize,
                               FileRegion,
                               Status);

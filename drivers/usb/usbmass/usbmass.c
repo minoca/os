@@ -5385,7 +5385,7 @@ PerformPolledIoEnd:
 
     Status = UsbMasspEvaluateCommandStatus(Disk, TRUE, TRUE, BytesCompleted);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("USBMASS: Polled I/O failed 0x%08x.\n", Status);
+        RtlDebugPrint("USBMASS: Polled I/O failed %d.\n", Status);
     }
 
     return Status;

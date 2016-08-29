@@ -2218,7 +2218,7 @@ Return Value:
 
         if ((UhciDebugFlags & UHCI_DEBUG_PORTS) != 0) {
             RtlDebugPrint(
-                     "UHCI: Controller %x Port %d Status %x. "
+                     "UHCI: Controller 0x%x Port %d Status 0x%x. "
                      "Connected %d, LowSpeed %d, Enabled %d, Reset %d, "
                      "Changed %d.\n",
                      Controller,
@@ -3380,8 +3380,8 @@ Return Value:
         if ((HardwareStatus & UHCI_PORT_CONNECT_STATUS_CHANGED) != 0) {
             Changed = TRUE;
             if ((UhciDebugFlags & UHCI_DEBUG_PORTS) != 0) {
-                RtlDebugPrint("UHCI: Controller %x, Port %d changed. "
-                              "Status %x\n.",
+                RtlDebugPrint("UHCI: Controller 0x%x, Port %d changed. "
+                              "Status 0x%x\n.",
                               Controller,
                               PortIndex,
                               HardwareStatus);
@@ -3474,8 +3474,8 @@ Return Value:
     }
 
     if ((UhciDebugFlags & UHCI_DEBUG_TRANSFERS) != 0) {
-        RtlDebugPrint("UHCI: Fixing data toggles for Endpoint %x 0x%x, "
-                      "RemovingQueue 0x%x, Toggle %x\n",
+        RtlDebugPrint("UHCI: Fixing data toggles for Endpoint 0x%x 0x%x, "
+                      "RemovingQueue 0x%x, Toggle 0x%x\n",
                       Endpoint->EndpointNumber,
                       Endpoint,
                       RemovingQueue,

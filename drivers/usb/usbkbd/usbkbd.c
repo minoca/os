@@ -1105,7 +1105,7 @@ Return Value:
 
         } else {
             RtlDebugPrint("USB KBD: Unexpected error for IN transfer (0x%08x) "
-                          "on device 0x%08x: Status 0x%08x, Error %d.\n",
+                          "on device 0x%08x: Status %d, Error %d.\n",
                           Transfer,
                           Device,
                           Transfer->Status,

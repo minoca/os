@@ -205,7 +205,7 @@ Return Value:
     }
 
     if (IoDebugPrintOpens != FALSE) {
-        RtlDebugPrint("Open %s: %x\n", Path, Status);
+        RtlDebugPrint("Open %s: %d\n", Path, Status);
     }
 
     return Status;

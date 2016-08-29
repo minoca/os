@@ -1477,7 +1477,7 @@ CreateSocketEnd:
     }
 
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Create socket (%d, %d, %d): %x: %x\n",
+        RtlDebugPrint("Net: Create socket (%d, %d, %d): 0x%x: %d\n",
                       Domain,
                       Type,
                       Protocol,
@@ -1522,7 +1522,7 @@ Return Value:
 
     NetSocket = (PNET_SOCKET)Socket;
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Destroy socket %x\n", NetSocket);
+        RtlDebugPrint("Net: Destroy socket 0x%x\n", NetSocket);
     }
 
     if (NetSocket->Link != NULL) {
@@ -1580,9 +1580,9 @@ Return Value:
 
 BindToAddressEnd:
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Bind socket %x to ", NetSocket);
+        RtlDebugPrint("Net: Bind socket 0x%x to ", NetSocket);
         NetDebugPrintAddress(Address);
-        RtlDebugPrint(" on link %08x: %x.\n", Link, Status);
+        RtlDebugPrint(" on link 0x%08x: %d.\n", Link, Status);
     }
 
     return Status;
@@ -1638,8 +1638,9 @@ Return Value:
         Status = NetBindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
             if (NetGlobalDebug != FALSE) {
-                RtlDebugPrint("Net: Socket %x "
-                              "Implicit bind in listen failed: %x\n",
+                RtlDebugPrint("Net: Socket 0x%x implicit bind in listen "
+                              "failed: %d\n",
+                              NetSocket,
                               Status);
             }
 
@@ -1649,7 +1650,7 @@ Return Value:
 
     Status = NetSocket->Protocol->Interface.Listen(NetSocket);
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Socket %x Listen %d: %x\n",
+        RtlDebugPrint("Net: Socket 0x%x listen %d: %d\n",
                       NetSocket,
                       BacklogCount,
                       Status);
@@ -1696,7 +1697,7 @@ Return Value:
 
     NetSocket = (PNET_SOCKET)Socket;
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Socket %x accept...\n", NetSocket);
+        RtlDebugPrint("Net: Socket 0x%x accept...\n", NetSocket);
     }
 
     Status = NetSocket->Protocol->Interface.Accept(NetSocket,
@@ -1704,7 +1705,7 @@ Return Value:
                                                    RemoteAddress);
 
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Socket %x accepted ", NetSocket);
+        RtlDebugPrint("Net: Socket 0x%x accepted ", NetSocket);
         if (RemoteAddress != NULL) {
             NetDebugPrintAddress(RemoteAddress);
         }
@@ -1746,16 +1747,16 @@ Return Value:
 
     NetSocket = (PNET_SOCKET)Socket;
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Connecting socket %x to ", NetSocket);
+        RtlDebugPrint("Net: Connecting socket 0x%x to ", NetSocket);
         NetDebugPrintAddress(Address);
         RtlDebugPrint("...\n");
     }
 
     Status = NetSocket->Protocol->Interface.Connect(NetSocket, Address);
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Connect socket %x to ", NetSocket);
+        RtlDebugPrint("Net: Connect socket 0x%x to ", NetSocket);
         NetDebugPrintAddress(Address);
-        RtlDebugPrint(" : %x\n", Status);
+        RtlDebugPrint(" : %d\n", Status);
     }
 
     return Status;
@@ -1788,7 +1789,7 @@ Return Value:
 
     NetSocket = (PNET_SOCKET)Socket;
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Close %x\n", NetSocket);
+        RtlDebugPrint("Net: Close 0x%x\n", NetSocket);
     }
 
     return NetSocket->Protocol->Interface.Close(NetSocket);
@@ -1834,7 +1835,7 @@ Return Value:
 
     NetSocket = (PNET_SOCKET)Socket;
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Sending %ld on socket %x...\n",
+        RtlDebugPrint("Net: Sending %ld on socket 0x%x...\n",
                       Parameters->Size,
                       NetSocket);
     }
@@ -1845,7 +1846,7 @@ Return Value:
                                                  IoBuffer);
 
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Sent %ld on socket %x: %x.\n",
+        RtlDebugPrint("Net: Sent %ld on socket 0x%x: %d.\n",
                       Parameters->Size,
                       NetSocket,
                       Status);
@@ -1900,7 +1901,7 @@ Return Value:
 
     NetSocket = (PNET_SOCKET)Socket;
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Receiving %ld on socket %x...\n",
+        RtlDebugPrint("Net: Receiving %ld on socket 0x%x...\n",
                       Parameters->Size,
                       NetSocket);
     }
@@ -1911,7 +1912,7 @@ Return Value:
                                                     IoBuffer);
 
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Received %ld on socket %x: %x.\n",
+        RtlDebugPrint("Net: Received %ld on socket 0x%x: %d.\n",
                       Parameters->Size,
                       NetSocket,
                       Status);
@@ -2302,7 +2303,7 @@ Return Value:
 
 GetSetSocketInformationEnd:
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: GetSetSocketInformation on socket %x: %x.\n",
+        RtlDebugPrint("Net: GetSetSocketInformation on socket 0x%x: %d.\n",
                       NetSocket,
                       Status);
     }
@@ -2342,14 +2343,14 @@ Return Value:
 
     NetSocket = (PNET_SOCKET)Socket;
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Shutdown socket %x, %d...\n",
+        RtlDebugPrint("Net: Shutdown socket 0x%x, %d...\n",
                       NetSocket,
                       ShutdownType);
     }
 
     Status = NetSocket->Protocol->Interface.Shutdown(NetSocket, ShutdownType);
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: Shutdown socket %x, %d: %x\n",
+        RtlDebugPrint("Net: Shutdown socket 0x%x, %d: %d\n",
                       NetSocket,
                       ShutdownType,
                       Status);
@@ -2407,7 +2408,7 @@ Return Value:
                                                         ContextBufferSize);
 
     if (NetGlobalDebug != FALSE) {
-        RtlDebugPrint("Net: UserControl socket %x, %d: %x\n",
+        RtlDebugPrint("Net: UserControl socket 0x%x, %d: %d\n",
                       NetSocket,
                       CodeNumber,
                       Status);

@@ -403,7 +403,7 @@ Return Value:
                             &NewProcess);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to fork %x\n", Status);
+        RtlDebugPrint("Failed to fork %d\n", Status);
         goto SysForkProcessEnd;
     }
 
@@ -619,7 +619,7 @@ Return Value:
                                &StartData);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to exec %s: %x.\n",
+        RtlDebugPrint("Failed to exec %s: %d.\n",
                       Process->Environment->ImageName,
                       Status);
 
@@ -3483,10 +3483,7 @@ Return Value:
                     NULL);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to load %s: %x\n",
-                      OS_BASE_LIBRARY,
-                      Status);
-
+        RtlDebugPrint("Failed to load %s: %d\n", OS_BASE_LIBRARY, Status);
         goto LoadExecutableEnd;
     }
 
@@ -3508,10 +3505,7 @@ Return Value:
                     &Interpreter);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to load %s: %x\n",
-                      BinaryName,
-                      Status);
-
+        RtlDebugPrint("Failed to load %s: %d\n", BinaryName, Status);
         goto LoadExecutableEnd;
     }
 

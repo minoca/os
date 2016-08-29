@@ -2914,7 +2914,7 @@ Return Value:
 
     RtlDebugPrint("\n\n*** ACPI Fatal Error ***\n"
                   "Type: 0x%x, Code: 0x%x, Argument: 0x%I64x\n"
-                  "Execution Context: %x\n",
+                  "Execution Context: 0x%x\n",
                   FatalType,
                   FatalCode,
                   FatalArgument,
@@ -4359,7 +4359,7 @@ Return Value:
 
     Status = AcpiLoadDefinitionBlock(Buffer, DdbHandle);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("ACPI: Failed to execute Load: %x\n", Status);
+        RtlDebugPrint("ACPI: Failed to execute Load: %d\n", Status);
         goto EvaluateLoadStatementEnd;
     }
 

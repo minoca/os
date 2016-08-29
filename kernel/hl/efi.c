@@ -229,7 +229,7 @@ Return Value:
         return STATUS_SUCCESS;
     }
 
-    RtlDebugPrint("EFI SetTime Failed: %x\n", EfiStatus);
+    RtlDebugPrint("EFI SetTime Failed: 0x%x\n", EfiStatus);
     if (EfiStatus == EFI_INVALID_PARAMETER) {
         return STATUS_INVALID_PARAMETER;
 
@@ -336,7 +336,7 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    RtlDebugPrint("EFI GetVariable Failed: %x\n", EfiStatus);
+    RtlDebugPrint("EFI GetVariable Failed: 0x%x\n", EfiStatus);
     if (EfiStatus == EFI_DEVICE_ERROR) {
         return STATUS_DEVICE_IO_ERROR;
     }
@@ -451,7 +451,7 @@ Return Value:
         return STATUS_ACCESS_DENIED;
     }
 
-    RtlDebugPrint("EFI GetVariable Failed: %x\n", EfiStatus);
+    RtlDebugPrint("EFI GetVariable Failed: 0x%x\n", EfiStatus);
     if (EfiStatus == EFI_DEVICE_ERROR) {
         return STATUS_DEVICE_IO_ERROR;
     }

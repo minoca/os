@@ -1096,7 +1096,7 @@ Return Value:
         Status = OsDebug(DebugCommandEnableDebugging, 0, NULL, NULL, 0, 0);
         if (!KSUCCESS(Status)) {
             DbgOut("Error: Failed to enable debugging on child process. "
-                   "Status %x\n",
+                   "Status %d\n",
                    Status);
 
             exit(1);
@@ -1180,7 +1180,7 @@ Return Value:
                      SignalToDeliver);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Failed to continue process %x. Status %x\n",
+        DbgOut("Error: Failed to continue process %x. Status %d\n",
                DbgTargetProcessId,
                Status);
 
@@ -1229,7 +1229,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Failed to get break information. Status %x\n", Status);
+        DbgOut("Error: Failed to get break information. Status %d\n", Status);
         return FALSE;
     }
 
@@ -1246,7 +1246,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Failed to set break information. Status %x\n", Status);
+        DbgOut("Error: Failed to set break information. Status %d\n", Status);
         return FALSE;
     }
 
@@ -1287,7 +1287,7 @@ Return Value:
                      SignalToDeliver);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Failed to continue process %x. Status %x\n",
+        DbgOut("Error: Failed to continue process %x. Status %d\n",
                DbgTargetProcessId,
                Status);
 
@@ -1370,7 +1370,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Failed to get break information. Status %x\n", Status);
+        DbgOut("Error: Failed to get break information. Status %d\n", Status);
         return FALSE;
     }
 
@@ -1388,7 +1388,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Failed to get signal information. Status %x\n", Status);
+        DbgOut("Error: Failed to get signal information. Status %d\n", Status);
         return FALSE;
     }
 
@@ -1440,7 +1440,7 @@ Return Value:
                      SignalToDeliver);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Failed to range step process %x. Status %x.\n",
+        DbgOut("Error: Failed to range step process %x. Status %d.\n",
                DbgTargetProcessId,
                Status);
 
@@ -1519,7 +1519,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Unable to read memory at %I64x. Status %x\n",
+        DbgOut("Error: Unable to read memory at %I64x. Status %d\n",
                Address,
                Status);
 
@@ -1646,7 +1646,7 @@ Return Value:
         // Some other error occurred.
         //
 
-        DbgOut("Error: Unable to get module list for process %x. Status %x\n",
+        DbgOut("Error: Unable to get module list for process %x. Status %d\n",
                DbgTargetProcessId,
                Status);
 
@@ -1727,7 +1727,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        DbgOut("Error: Unable to switch to thread %x. Status %x\n",
+        DbgOut("Error: Unable to switch to thread %x. Status %d\n",
                ThreadId,
                Status);
 
@@ -1747,7 +1747,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         DbgOut("Error: Unable to get break information after thread switch. "
-               "Status %x\n",
+               "Status %d\n",
                Status);
     }
 
@@ -1826,7 +1826,7 @@ Return Value:
         // Some other error occurred.
         //
 
-        DbgOut("Error: Unable to get module list for process %x. Status %x\n",
+        DbgOut("Error: Unable to get module list for process %x. Status %d\n",
                DbgTargetProcessId,
                Status);
 

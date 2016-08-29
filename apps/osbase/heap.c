@@ -455,7 +455,7 @@ Return Value:
 {
 
     RtlDebugPrint("\n\n *** Exiting due to heap corruption: code %d "
-                  "Parameter %x***\n\n",
+                  "Parameter 0x%x***\n\n",
                   Code,
                   Parameter);
 

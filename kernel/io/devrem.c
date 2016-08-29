@@ -842,7 +842,7 @@ Return Value:
     Status = IoGetIrpStatus(RemovalIrp);
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("IO: Remove IRP failed for device 0x%08x with status "
-                      "0x%08x\n",
+                      "%d\n",
                       Device,
                       Status);
 

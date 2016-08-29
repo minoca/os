@@ -1981,7 +1981,7 @@ Return Value:
     UINTN Offset;
     UINT64 TotalPages;
 
-    RtlDebugPrint("EFI Memory map at %08I64x\n", Map);
+    RtlDebugPrint("EFI Memory map at 0x%08I64x\n", Map);
     TotalPages = 0;
     Offset = 0;
     while (Offset < MapSize) {
@@ -1992,7 +1992,7 @@ Return Value:
     }
 
     Megabytes = (TotalPages << EFI_PAGE_SHIFT) / (1024ULL * 1024ULL);
-    RtlDebugPrint("Total Pages: %I64x (%I64dMB)\n\n", TotalPages, Megabytes);
+    RtlDebugPrint("Total Pages: 0x%I64x (%I64dMB)\n\n", TotalPages, Megabytes);
     return;
 }
 
@@ -2083,7 +2083,8 @@ Return Value:
         break;
     }
 
-    RtlDebugPrint("%24s PA %8I64x (VA %I64x) PageCount %8I64x Attr %x\n",
+    RtlDebugPrint("%24s PA 0x%8I64x (VA 0x%I64x) PageCount 0x%8I64x "
+                  "Attr 0x%x\n",
                   TypeString,
                   Descriptor->PhysicalStart,
                   Descriptor->VirtualStart,

@@ -1110,9 +1110,7 @@ Return Value:
                                 &(Device->Children[ChildIndex]));
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("IoCreateDevice failed with status 0x%08x.\n",
-                          Status);
-
+            RtlDebugPrint("IoCreateDevice failed with status %d.\n", Status);
             DeviceRemovalDeleteTreeEntry(ChildEntry);
             MmFreeNonPagedPool(NewContext);
             RtlAtomicAdd32(&FunctionDeviceCount, (ULONG)-1);
@@ -2341,7 +2339,7 @@ Return Value:
     //
 
     if ((ChildEntry->RemovalIrp == FALSE) || (ChildEntry->Attached != FALSE)) {
-        RtlDebugPrint("RemoveChild 1: Failed to properly remove child\n");
+        RtlDebugPrint("RemoveChild 1: Failed to properly remove child.\n");
 
     } else {
         RtlDebugPrint("RemoveChild 1: Succeeded!\n");
@@ -3703,7 +3701,7 @@ Return Value:
                             &(NewChildren[ChildCount - 1]));
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("IoCreateDevice failed with status 0x%08x.\n", Status);
+        RtlDebugPrint("IoCreateDevice failed with status %d.\n", Status);
         goto AttachChildDeviceEnd;
     }
 

@@ -585,7 +585,7 @@ Return Value:
 
 LoadBootConfigurationEnd:
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to load Boot Configuration: %x.\n", Status);
+        RtlDebugPrint("Failed to load Boot Configuration: %d.\n", Status);
         if (FileData != NULL) {
             BoFreeMemory(FileData);
         }

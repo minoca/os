@@ -513,8 +513,8 @@ Return Value:
                                                                ReturnType);
 
                 if (ConvertedReturnObject == NULL) {
-                    RtlDebugPrint("ACPI: Failed to convert object %x (type %d) "
-                                  "to return type %d.\n",
+                    RtlDebugPrint("ACPI: Failed to convert object 0x%x "
+                                  "(type %d) to return type %d.\n",
                                   ReturnObject,
                                   ReturnObject->Type,
                                   ReturnType);
@@ -1445,7 +1445,7 @@ Return Value:
     Status = CreateNextStatementRoutine(Context, Statement);
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("\nACPI: Failed to create statement. "
-                      "Status %x, Routine %x, Context %x\n",
+                      "Status %d, Routine 0x%x, Context 0x%x\n",
                       Status,
                       CreateNextStatementRoutine,
                       Context);
@@ -1546,8 +1546,8 @@ Return Value:
 
     Status = EvaluateRoutine(Context, Statement);
     if ((!KSUCCESS(Status)) && (Status != STATUS_MORE_PROCESSING_REQUIRED)) {
-        RtlDebugPrint("\nACPI: Failed to evaluate AML statement. Status: %x, "
-                      "Context %x, Statement %x\n",
+        RtlDebugPrint("\nACPI: Failed to evaluate AML statement. Status: %d, "
+                      "Context 0x%x, Statement 0x%x\n",
                       Status,
                       Context,
                       Statement);

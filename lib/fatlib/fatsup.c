@@ -401,8 +401,8 @@ Return Value:
         if ((EncodedProperties.Owner != FileProperties->UserId) ||
             (EncodedProperties.Group != FileProperties->GroupId)) {
 
-            RtlDebugPrint("FAT: Truncated UID/GID: FILE_PROPERTIES %x "
-                          "(ID %I64x UID %x GID %x)\n",
+            RtlDebugPrint("FAT: Truncated UID/GID: FILE_PROPERTIES 0x%x "
+                          "(ID 0x%I64x UID 0x%x GID 0x%x)\n",
                           FileProperties,
                           FileProperties->FileId,
                           FileProperties->UserId,
@@ -1610,7 +1610,7 @@ Return Value:
                 RtlDebugPrint("FAT: Freeing cluster 0.\n");
 
             } else {
-                RtlDebugPrint("FAT: Freeing invalid cluster %x, total %x\n",
+                RtlDebugPrint("FAT: Freeing invalid cluster 0x%x, total 0x%x\n",
                               Cluster,
                               TotalClusters);
             }

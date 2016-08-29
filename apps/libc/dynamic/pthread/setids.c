@@ -310,7 +310,7 @@ Return Value:
 
         if (!KSUCCESS(KernelStatus)) {
             fprintf(stderr,
-                    "Error: Failed to signal thread %x: %x\n",
+                    "Error: Failed to signal thread %x: %d\n",
                     Thread,
                     KernelStatus);
 

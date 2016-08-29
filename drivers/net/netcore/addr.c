@@ -2024,7 +2024,7 @@ Return Value:
             break;
 
         case SocketLocallyBound:
-            RtlDebugPrint("Net: Binding locally bound socket %x: ");
+            RtlDebugPrint("Net: Binding locally bound socket %x: ", Socket);
             NetpDebugPrintNetworkAddress(Socket->Network, LocalAddress);
             RtlDebugPrint("\n");
             break;
@@ -3913,7 +3913,7 @@ Return Value:
             break;
 
         case SocketLocallyBound:
-            RtlDebugPrint("Net: Binding locally bound raw socket %x: ");
+            RtlDebugPrint("Net: Binding locally bound raw socket %x: ", Socket);
             NetDebugPrintAddress(&(LocalInformation->LocalAddress));
             RtlDebugPrint("\n");
             break;

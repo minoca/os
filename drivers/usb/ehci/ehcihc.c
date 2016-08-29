@@ -3061,7 +3061,7 @@ Return Value:
 
         if ((EhciDebugFlags & EHCI_DEBUG_PORTS) != 0) {
             RtlDebugPrint(
-                     "EHCI: Controller %x Port %d Status %x. "
+                     "EHCI: Controller 0x%x Port %d Status 0x%x. "
                      "Connected %d, Owner %d, Enabled %d, Reset %d, "
                      "Changed %d.\n",
                      Controller,
@@ -3638,7 +3638,7 @@ Return Value:
 
     HardwareTransfer->Token = Token;
     if ((EhciDebugFlags & EHCI_DEBUG_TRANSFERS) != 0) {
-        RtlDebugPrint("EHCI: Adding transfer (0x%08x) PA %I64x to endpoint "
+        RtlDebugPrint("EHCI: Adding transfer (0x%08x) PA 0x%I64x to endpoint "
                       "(0x%08x): Token 0x%08x.\n",
                       EhciTransfer,
                       EhciTransfer->PhysicalAddress,
@@ -3895,7 +3895,7 @@ Return Value:
     HardwareStatus = Transfer->HardwareTransfer->Token;
     if ((HardwareStatus & EHCI_TRANSFER_STATUS_ACTIVE) == 0) {
         if ((EhciDebugFlags & EHCI_DEBUG_TRANSFERS) != 0) {
-            RtlDebugPrint("EHCI: Transfer (0x%08x) PA %I64x completed with "
+            RtlDebugPrint("EHCI: Transfer (0x%08x) PA 0x%I64x completed with "
                           "token 0x%08x\n",
                           Transfer,
                           Transfer->PhysicalAddress,
@@ -3925,8 +3925,8 @@ Return Value:
             if (((EhciDebugFlags & EHCI_DEBUG_ERRORS) != 0) &&
                 ((EhciDebugFlags & EHCI_DEBUG_TRANSFERS) == 0)) {
 
-                RtlDebugPrint("EHCI: Transfer (0x%08x) PA %I64x completed with "
-                              "token 0x%08x\n",
+                RtlDebugPrint("EHCI: Transfer (0x%08x) PA 0x%I64x completed "
+                              "with token 0x%08x\n",
                               Transfer,
                               Transfer->PhysicalAddress,
                               HardwareStatus);

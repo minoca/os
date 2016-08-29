@@ -6775,7 +6775,7 @@ Return Value:
                                             &PacketList);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("TCP segments failed to send 0x%08x.\n", Status);
+        RtlDebugPrint("TCP segments failed to send %d.\n", Status);
         goto TcpSendPendingSegmentsEnd;
     }
 
@@ -6855,7 +6855,7 @@ Return Value:
                                             &PacketList);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("TCP segment failed to send 0x%08x.\n", Status);
+        RtlDebugPrint("TCP segment failed to send %d.\n", Status);
         goto TcpSendSegmentEnd;
     }
 
@@ -8439,7 +8439,7 @@ Return Value:
                           NULL);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Error: Failed to queue TCP timer: %x\n", Status);
+        RtlDebugPrint("Error: Failed to queue TCP timer: %d\n", Status);
     }
 
     return;
@@ -8496,7 +8496,7 @@ Return Value:
                               NULL);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Error: Failed to queue TCP keep alive timer: %x\n",
+            RtlDebugPrint("Error: Failed to queue TCP keep alive timer: %d\n",
                           Status);
         }
     }

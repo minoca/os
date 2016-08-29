@@ -387,7 +387,7 @@ Return Value:
                     &Volume);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to open system volume: %x\n", Status);
+        RtlDebugPrint("Failed to open system volume: %d\n", Status);
         goto VolumeArrivalEnd;
     }
 
@@ -405,7 +405,7 @@ Return Value:
                     &SystemDirectory);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to open system directory '%s': %x\n",
+        RtlDebugPrint("Failed to open system directory '%s': %d\n",
                       PsSystemDirectoryPath,
                       Status);
 
@@ -426,7 +426,7 @@ Return Value:
                     &PsOsBaseLibrary);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to open OS base library '%s/%s': %x\n",
+        RtlDebugPrint("Failed to open OS base library '%s/%s': %d\n",
                       PsSystemDirectoryPath,
                       SYSTEM_OS_BASE_LIBRARY_PATH,
                       Status);

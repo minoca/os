@@ -188,7 +188,7 @@ Return Value:
 
 DriverEntryEnd:
     if (KSUCCESS(Status)) {
-        RtlDebugPrint("KTest driver loaded.\n", Status);
+        RtlDebugPrint("KTest driver loaded.\n");
     }
 
     return Status;

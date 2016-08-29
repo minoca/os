@@ -321,7 +321,7 @@ Return Value:
     OsImExecutableLoaded = FALSE;
     Status = OspLoadInitialImageList(TRUE);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to populate initial image list: %x.\n", Status);
+        RtlDebugPrint("Failed to populate initial image list: %d.\n", Status);
         goto DynamicLoaderMainEnd;
     }
 
@@ -388,7 +388,7 @@ Return Value:
     }
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to load %s: %x\n",
+        RtlDebugPrint("Failed to load %s: %d\n",
                       Environment->ImageName,
                       Status);
 
@@ -432,7 +432,7 @@ Return Value:
 
     Status = ImRelocateImages(&OsLoadedImagesHead);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to relocate: %x\n", Status);
+        RtlDebugPrint("Failed to relocate: %d\n", Status);
         goto DynamicLoaderMainEnd;
     }
 
@@ -1639,7 +1639,7 @@ Return Value:
                                      &FileRegion);
 
                 if (!KSUCCESS(Status)) {
-                    RtlDebugPrint("Failed to map %x bytes at %x: %x\n",
+                    RtlDebugPrint("Failed to map 0x%x bytes at 0x%x: %d\n",
                                   FileRegionSize,
                                   FileRegion,
                                   Status);
@@ -1663,7 +1663,7 @@ Return Value:
                                  &FileRegion);
 
             if (!KSUCCESS(Status)) {
-                RtlDebugPrint("Failed to map %x bytes at %x: %x\n",
+                RtlDebugPrint("Failed to map 0x%x bytes at 0x%x: %d\n",
                               FileRegionSize,
                               FileRegion,
                               Status);
@@ -1769,7 +1769,7 @@ Return Value:
                          &Address);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to map %x bytes at %x: %x\n",
+        RtlDebugPrint("Failed to map 0x%x bytes at 0x%x: %d\n",
                       MemorySize + PageOffset,
                       Address,
                       Status);
@@ -1870,7 +1870,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Warning: Failed to notify kernel of module %s: %x\n",
+        RtlDebugPrint("Warning: Failed to notify kernel of module %s: %d\n",
                       Image->FileName,
                       Status);
     }
@@ -1988,7 +1988,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Warning: Failed to unload module %s: %x\n",
+        RtlDebugPrint("Warning: Failed to unload module %s: %d\n",
                       Image->FileName,
                       Status);
     }
@@ -2483,7 +2483,7 @@ Return Value:
     if (Relocate != FALSE) {
         Status = ImLoadImports(&OsLoadedImagesHead);
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to load initial imports: %x\n", Status);
+            RtlDebugPrint("Failed to load initial imports: %d\n", Status);
             goto LoadInitialImageListEnd;
         }
 

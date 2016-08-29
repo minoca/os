@@ -927,7 +927,7 @@ Return Value:
 
         KeReleaseQueuedLock(Device->Lock);
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("GOEC: Open SPB Failed: %x\n", Status);
+            RtlDebugPrint("GOEC: Open SPB Failed: %d\n", Status);
             goto StartDeviceEnd;
         }
     }
@@ -1148,7 +1148,7 @@ Return Value:
 
     Status = GoecSayHello(Controller);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("GOEC: Hello returned %x\n", Status);
+        RtlDebugPrint("GOEC: Hello returned %d\n", Status);
         goto InitializeEnd;
     }
 
@@ -1206,12 +1206,13 @@ Return Value:
     Command.DeviceIndex = 0;
     Status = GoecExecuteCommand(Controller, &Command);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("GOEC: Failed to execute hello command: %x\n", Status);
+        RtlDebugPrint("GOEC: Failed to execute hello command: %d\n", Status);
         return Status;
     }
 
     if (Response.OutData != CommandHello.InData + 0x01020304) {
-        RtlDebugPrint("GOEC: Embedded controller responsed to hello with %x!\n",
+        RtlDebugPrint("GOEC: Embedded controller responsed to hello with "
+                      "0x%x!\n",
                       Response.OutData);
 
         Status = STATUS_NOT_READY;
@@ -1257,7 +1258,7 @@ Return Value:
     Command.DeviceIndex = 0;
     Status = GoecExecuteCommand(Controller, &Command);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("GOEC: Failed to get version: %x\n", Status);
+        RtlDebugPrint("GOEC: Failed to get version: %d\n", Status);
         return Status;
     }
 
@@ -1312,7 +1313,7 @@ Return Value:
     Command.DeviceIndex = 0;
     Status = GoecExecuteCommand(Controller, &Command);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("GOEC: Failed to read NVRAM: %x\n", Status);
+        RtlDebugPrint("GOEC: Failed to read NVRAM: %d\n", Status);
         return Status;
     }
 
@@ -1504,7 +1505,7 @@ Return Value:
 
     Status = GoecGetKeyboardState(Controller, NewKeys);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("GOEC: Failed to get keyboard state: %x\n", Status);
+        RtlDebugPrint("GOEC: Failed to get keyboard state: %d\n", Status);
         return;
     }
 
@@ -1805,7 +1806,7 @@ Return Value:
     InBytes = sizeof(GOEC_RESPONSE_HEADER) + Header->DataLength;
     Checksum = GoecComputeChecksum((PUCHAR)Response, InBytes);
     if (Checksum != 0) {
-        RtlDebugPrint("GOEC: Bad Checksum %x\n", Checksum);
+        RtlDebugPrint("GOEC: Bad Checksum 0x%x\n", Checksum);
         return STATUS_CHECKSUM_MISMATCH;
     }
 
@@ -1813,7 +1814,7 @@ Return Value:
     Command->SizeOut = Header->DataLength;
     RtlCopyMemory(Command->DataOut, Response->Data, Header->DataLength);
     if (Header->Result != 0) {
-        RtlDebugPrint("GOEC: Error response %x\n", Header->Result);
+        RtlDebugPrint("GOEC: Error response 0x%x\n", Header->Result);
         return STATUS_UNSUCCESSFUL;
     }
 
@@ -1949,7 +1950,7 @@ Return Value:
         } else if ((*Byte != GoecSpiProcessing) &&
                    (*Byte != GoecSpiReceiving)) {
 
-            RtlDebugPrint("GOEC: Got bad status %x\n", *Byte);
+            RtlDebugPrint("GOEC: Got bad status 0x%x\n", *Byte);
             Status = STATUS_DEVICE_IO_ERROR;
             goto PerformSpiIoEnd;
         }

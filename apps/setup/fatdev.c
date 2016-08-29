@@ -759,7 +759,7 @@ Return Value:
 
 ReadDeviceEnd:
     if (!KSUCCESS(Status)) {
-        printf("Failed to read FAT device: %x\n", Status);
+        printf("Failed to read FAT device: %d\n", Status);
     }
 
     return Status;
@@ -847,7 +847,7 @@ Return Value:
 
 WriteDeviceEnd:
     if (!KSUCCESS(Status)) {
-        printf("Failed to write FAT device: %x\n", Status);
+        printf("Failed to write FAT device: %d\n", Status);
     }
 
     return Status;

@@ -675,13 +675,13 @@ ProcessResourceRequirementsEnd:
     } else {
         if ((IoArbiterDebugOptions & ARBITER_DEBUG_PRINT_RESOURCES) != 0) {
             if (Deferred != FALSE) {
-                RtlDebugPrint("Deferring resource allocation for %s (%x).\n",
+                RtlDebugPrint("Deferring resource allocation for %s (0x%x).\n",
                               Device->Header.Name,
                               Device);
 
             } else {
-                RtlDebugPrint("Failed to allocate resource for %s (%x). "
-                              "Status = %x\n\n",
+                RtlDebugPrint("Failed to allocate resource for %s (0x%x). "
+                              "Status = %d\n\n",
                               Device->Header.Name,
                               Device,
                               Status);

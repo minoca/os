@@ -650,7 +650,7 @@ Return Value:
                  (USB_DEBUG_ENUMERATION | USB_DEBUG_ERRORS)) != 0) {
 
                 RtlDebugPrint("USB: Failed to read (small) string %d "
-                              "(language 0x%x) from device 0x%x: status %x,"
+                              "(language 0x%x) from device 0x%x: status %d,"
                               "try %d.\n",
                               StringNumber,
                               Language,
@@ -700,7 +700,7 @@ Return Value:
                  (USB_DEBUG_ENUMERATION | USB_DEBUG_ERRORS)) != 0) {
 
                 RtlDebugPrint("USB: Failed to read string %d (language 0x%x) "
-                              "from device 0x%x: status %x, try %d\n",
+                              "from device 0x%x: status %d, try %d\n",
                               StringNumber,
                               Language,
                               Device,
@@ -891,8 +891,8 @@ Return Value:
             ((!KSUCCESS(Status)) &&
              ((UsbDebugFlags & USB_DEBUG_ERRORS) != 0))) {
 
-            RtlDebugPrint("USB: GetDeviceDescriptor try %d on device %x, "
-                          "Status %x.\n",
+            RtlDebugPrint("USB: GetDeviceDescriptor try %d on device 0x%x, "
+                          "Status %d.\n",
                           Try + 1,
                           Device,
                           Status);
@@ -916,7 +916,7 @@ Return Value:
     Status = UsbpResetHubPort(ParentHub, PortNumber - 1);
     if (!KSUCCESS(Status)) {
         if ((UsbDebugFlags & (USB_DEBUG_ENUMERATION | USB_DEBUG_ERRORS)) != 0) {
-            RtlDebugPrint("USB: Hub %x Port %x failed to reset.\n",
+            RtlDebugPrint("USB: Hub 0x%x Port %d failed to reset.\n",
                           ParentHubDevice,
                           PortNumber);
         }
@@ -942,7 +942,7 @@ Return Value:
              ((UsbDebugFlags & USB_DEBUG_ERRORS) != 0))) {
 
             RtlDebugPrint("USB: GetDeviceDescriptor2 Try %d on device %x, "
-                          "Status %x.\n",
+                          "Status %d.\n",
                           Try + 1,
                           Device,
                           Status);
@@ -966,7 +966,7 @@ Return Value:
         ((!KSUCCESS(Status)) &&
          ((UsbDebugFlags & USB_DEBUG_ERRORS) != 0))) {
 
-        RtlDebugPrint("USB: AssignDeviceAddress on device %x, Status %x.\n",
+        RtlDebugPrint("USB: AssignDeviceAddress on device 0x%x, Status %d.\n",
                       Device,
                       Status);
     }
@@ -994,7 +994,7 @@ Return Value:
         ((!KSUCCESS(Status)) &&
          ((UsbDebugFlags & USB_DEBUG_ERRORS) != 0))) {
 
-        RtlDebugPrint("USB: ReadDeviceStrings on device %x, Status %x.\n",
+        RtlDebugPrint("USB: ReadDeviceStrings on device 0x%x, Status %d.\n",
                       Device,
                       Status);
     }
@@ -1013,8 +1013,8 @@ Return Value:
             ((!KSUCCESS(Status)) &&
              ((UsbDebugFlags & USB_DEBUG_ERRORS) != 0))) {
 
-            RtlDebugPrint("USB: ReadConfigurationDescriptors on device %x, "
-                          "Status %x.\n",
+            RtlDebugPrint("USB: ReadConfigurationDescriptors on device 0x%x, "
+                          "Status %d.\n",
                           Device,
                           Status);
         }
@@ -1040,8 +1040,8 @@ Return Value:
             ((!KSUCCESS(Status)) &&
              ((UsbDebugFlags & USB_DEBUG_ERRORS) != 0))) {
 
-            RtlDebugPrint("USB: Set configuration %d for debug device %x: "
-                          "%x.\n",
+            RtlDebugPrint("USB: Set configuration %d for debug device 0x%x: "
+                          "%d.\n",
                           Configuration,
                           Device,
                           Status);
@@ -1077,7 +1077,7 @@ Return Value:
             ((!KSUCCESS(Status)) &&
              ((UsbDebugFlags & USB_DEBUG_ERRORS) != 0))) {
 
-            RtlDebugPrint("USB: CreateOsDevice on device %x, Status %x.\n",
+            RtlDebugPrint("USB: CreateOsDevice on device 0x%x, Status %d.\n",
                           Device,
                           Status);
         }
@@ -1094,7 +1094,7 @@ Return Value:
     INSERT_BEFORE(&(Device->ListEntry), &(ParentHubDevice->ChildList));
     Status = STATUS_SUCCESS;
     if ((UsbDebugFlags & USB_DEBUG_ENUMERATION) != 0) {
-        RtlDebugPrint("USB: Enumeration complete for device %x.\n", Device);
+        RtlDebugPrint("USB: Enumeration complete for device 0x%x.\n", Device);
     }
 
 EnumerateDeviceEnd:
@@ -2086,10 +2086,11 @@ Return Value:
 
     if (UsEnglishSupported == FALSE) {
         if ((UsbDebugFlags & USB_DEBUG_ENUMERATION) != 0) {
-            RtlDebugPrint("USB: Device %x supports %d languages but US "
+            RtlDebugPrint("USB: Device 0x%x supports %d languages but US "
                           "English (0x0409) is not one of them. Skipping "
                           "device strings.\n",
-                          Device);
+                          Device,
+                          LanguageCount);
 
             Status = STATUS_SUCCESS;
             goto ReadDeviceStringsEnd;
@@ -2592,8 +2593,8 @@ Return Value:
 
     if (PathIndex == HandoffData->DevicePathSize - 1) {
         if ((UsbDebugFlags & USB_DEBUG_DEBUGGER_HANDOFF) != 0) {
-            RtlDebugPrint("USB: Found debugger device %x! Assigning "
-                          "address %x\n",
+            RtlDebugPrint("USB: Found debugger device 0x%x! Assigning "
+                          "address 0x%x\n",
                           Device,
                           HandoffData->DeviceAddress);
         }
@@ -2620,8 +2621,8 @@ Return Value:
     //
 
     if ((UsbDebugFlags & USB_DEBUG_DEBUGGER_HANDOFF) != 0) {
-        RtlDebugPrint("USB: Found debugger hub %x. Assigning "
-                      "address %x\n",
+        RtlDebugPrint("USB: Found debugger hub 0x%x. Assigning "
+                      "address 0x%x\n",
                       Device,
                       HandoffData->HubAddress);
     }

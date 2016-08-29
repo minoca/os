@@ -1032,7 +1032,7 @@ Return Value:
 
 DhcpAssignmentThreadEnd:
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Net: DHCP assignment failed at step '%s': %x.\n",
+        RtlDebugPrint("Net: DHCP assignment failed at step '%s': %d.\n",
                       Step,
                       Status);
 
@@ -1345,7 +1345,7 @@ DhcpLeaseExtensionThreadEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Net: DHCP lease extension failed at step '%s': %x.\n",
+        RtlDebugPrint("Net: DHCP lease extension failed at step '%s': %d.\n",
                       Step,
                       Status);
 
@@ -1526,7 +1526,7 @@ DhcpLeaseReleaseThreadEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Net: DHCP lease release failed at step '%s': %x.\n",
+        RtlDebugPrint("Net: DHCP lease release failed at step '%s': %d.\n",
                       Step,
                       Status);
     }
@@ -2335,7 +2335,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("NetpDhcpReceiveReply skipping packet because receive "
-                      "status was %x.\n",
+                      "status was %d.\n",
                       Status);
 
         goto DhcpReceiveReplyEnd;
@@ -2367,7 +2367,7 @@ Return Value:
          DHCP_ETHERNET_HARDWARE_ADDRESS_LENGTH)) {
 
         RtlDebugPrint("DHCP packet skipped because hardware type or "
-                      "length didn't match standard ethernet.");
+                      "length didn't match standard ethernet.\n");
 
         Status = STATUS_UNSUCCESSFUL;
         goto DhcpReceiveReplyEnd;
@@ -3120,9 +3120,9 @@ Return Value:
         (Reply->LeaseTime == 0)) {
 
         RtlDebugPrint("DHCP: A required parameter was missing from the "
-                      "reply:\n ServerIp: %x\n OfferedIpAddress: %x,\n "
-                      "Router: %x\n SubnetMask: %x\n "
-                      "DomainNameServerCount: %x\n LeaseTime: %x\n",
+                      "reply:\n ServerIp: 0x%x\n OfferedIpAddress: 0x%x,\n "
+                      "Router: 0x%x\n SubnetMask: 0x%x\n "
+                      "DomainNameServerCount: 0x%x\n LeaseTime: 0x%x\n",
                       Reply->ServerIpAddress,
                       Reply->OfferedIpAddress,
                       Reply->RouterIpAddress,

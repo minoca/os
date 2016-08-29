@@ -2861,7 +2861,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         RtlAtomicAdd32(&(Disk->RemainingInterrupts), -1);
-        RtlDebugPrint("SD BCM2709 Failed: %x\n", Status);
+        RtlDebugPrint("SD BCM2709 Failed: %d\n", Status);
         SdAbortTransaction(Controller, FALSE);
         IoCompleteIrp(SdBcm2709Driver, Irp, Status);
         return;

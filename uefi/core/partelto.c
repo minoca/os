@@ -182,7 +182,7 @@ Return Value:
                                   Catalog);
 
         if (EFI_ERROR(Status)) {
-            RtlDebugPrint("ElTorito: Error reading catalog at lba %I64x.\n",
+            RtlDebugPrint("ElTorito: Error reading catalog at lba 0x%I64x.\n",
                           Lba);
 
             continue;
@@ -245,7 +245,7 @@ Return Value:
                 break;
 
             default:
-                RtlDebugPrint("ElTorito: Unsupported boot media type %x.\n",
+                RtlDebugPrint("ElTorito: Unsupported boot media type 0x%x.\n",
                               Catalog->Boot.MediaType);
 
                 break;

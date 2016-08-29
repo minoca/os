@@ -478,13 +478,13 @@ Return Value:
     Control = ArGetVfpExceptionRegister();
     if ((Control & ARM_FPEXC_ENABLE) != 0) {
         if ((Control & ARM_FPEXC_EXCEPTION) != 0) {
-            RtlDebugPrint("VFP Exception: %x\n", Control);
+            RtlDebugPrint("VFP Exception: 0x%x\n", Control);
 
         } else {
             RtlDebugPrint("Unsupported VFP instruction.\n");
         }
 
-        RtlDebugPrint("FPINST %x FPSCR %x\n",
+        RtlDebugPrint("FPINST 0x%x FPSCR 0x%x\n",
                       ArGetVfpInstructionRegister(),
                       ArGetFpscr());
 

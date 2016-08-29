@@ -681,7 +681,7 @@ Return Value:
     //
 
     if ((MwaitSubstates & ~CStateMask) != 0) {
-        RtlDebugPrint("Intel Model 0x%x had extra C-States: %08x.\n",
+        RtlDebugPrint("Intel Model 0x%x had extra C-States: 0x%08x.\n",
                       Model,
                       MwaitSubstates & ~CStateMask);
     }
@@ -707,7 +707,7 @@ Return Value:
                                        TRUE);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Intel: C-state registration failed: %x\n", Status);
+        RtlDebugPrint("Intel: C-state registration failed: %d\n", Status);
         MmFreeNonPagedPool(Data);
     }
 

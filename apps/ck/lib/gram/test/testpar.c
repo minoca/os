@@ -501,7 +501,7 @@ Return Value:
         return 0;
 
     } else if (!KSUCCESS(KStatus)) {
-        printf("LexError %x\n", KStatus);
+        printf("LexError %d\n", KStatus);
         return EINVAL;
     }
 

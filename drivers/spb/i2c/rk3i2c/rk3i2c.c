@@ -678,7 +678,7 @@ Return Value:
     //
 
     if ((InterruptBits & RK32_I2C_INTERRUPT_NAK) != 0) {
-        RtlDebugPrint("RK3 I2C: Error %08x\n", InterruptBits);
+        RtlDebugPrint("RK3 I2C: Error 0x%08x\n", InterruptBits);
         Status = STATUS_DEVICE_IO_ERROR;
 
     //

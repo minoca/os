@@ -285,7 +285,7 @@ Return Value:
 
     EfiSetWatchdogTimer(EFI_DEFAULT_WATCHDOG_DURATION, 0, 0, NULL);
     Status = EfiStartImage(ImageHandle, ExitDataSize, ExitData);
-    RtlDebugPrint("EFI Image Returned: %x\n", Status);
+    RtlDebugPrint("EFI Image Returned: 0x%x\n", Status);
 
     //
     // Disable the watchdog timer.

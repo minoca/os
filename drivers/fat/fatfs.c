@@ -1383,7 +1383,7 @@ Return Value:
 
         if (!KSUCCESS(Status)) {
             RtlDebugPrint("Fat: failed to delete file blocks for file "
-                          "%I64d on volume 0x%08x. Status: 0x%08x\n",
+                          "%I64d on volume 0x%08x. Status: %d\n",
                           FileOperation->FileProperties->FileId,
                           Volume->VolumeToken,
                           Status);

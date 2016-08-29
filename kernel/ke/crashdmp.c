@@ -410,7 +410,7 @@ Return Value:
         //
 
         if (CrashFile->DiskInterface == NULL) {
-            RtlDebugPrint("Skipping dump file %x without interface.\n",
+            RtlDebugPrint("Skipping dump file 0x%x without interface.\n",
                           CrashFile);
 
             continue;
@@ -506,7 +506,7 @@ Return Value:
                                    &BytesCompleted);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to write crash dump to file %x: %x\n",
+            RtlDebugPrint("Failed to write crash dump to file 0x%x: %d\n",
                           CrashFile,
                           Status);
 

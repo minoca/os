@@ -1458,7 +1458,7 @@ Return Value:
 
     Status = SdRk32InitializeVendorResource(Device, VendorResource);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SdRk32InitializeVendorResource Failed: %x\n", Status);
+        RtlDebugPrint("SdRk32InitializeVendorResource Failed: %d\n", Status);
         goto StartDeviceEnd;
     }
 
@@ -1468,7 +1468,7 @@ Return Value:
         goto StartDeviceEnd;
 
     } else if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SdRk32ResetController Failed: %x\n", Status);
+        RtlDebugPrint("SdRk32ResetController Failed: %d\n", Status);
         goto StartDeviceEnd;
     }
 
@@ -1644,7 +1644,7 @@ Return Value:
                 Status = STATUS_SUCCESS;
 
             } else {
-                RtlDebugPrint("SdInitializeController failed: %x\n", Status);
+                RtlDebugPrint("SdInitializeController failed: %d\n", Status);
             }
 
             goto ParentQueryChildrenEnd;
@@ -2235,7 +2235,7 @@ Return Value:
     ASSERT(Irp != NULL);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD RK32xx Failed %x %I64x %x: %x\n",
+        RtlDebugPrint("SD RK32xx Failed 0x%x 0x%I64x 0x%x: %d\n",
                       Irp->MinorCode,
                       Irp->U.ReadWrite.IoOffset,
                       Irp->U.ReadWrite.IoSizeInBytes,

@@ -849,7 +849,7 @@ Return Value:
 
         DWE_WRITE(Device, DweRegisterStatus, PendingBits);
         if ((PendingBits & DWE_STATUS_ERROR_MASK) != 0) {
-            RtlDebugPrint("DWE Error: %08x\n", PendingBits);
+            RtlDebugPrint("DWE Error: 0x%08x\n", PendingBits);
         }
     }
 
@@ -1156,7 +1156,7 @@ Return Value:
         }
 
         if ((Descriptor->Control & DWE_TX_CONTROL_ERROR_MASK) != 0) {
-            RtlDebugPrint("DWE: TX Error %x\n", Descriptor->Control);
+            RtlDebugPrint("DWE: TX Error 0x%x\n", Descriptor->Control);
         }
 
         //
@@ -1459,7 +1459,7 @@ Return Value:
             NetProcessReceivedPacket(Device->NetworkLink, &Packet);
 
         } else {
-            RtlDebugPrint("DWE: RX Error %08x\n", Descriptor->Control);
+            RtlDebugPrint("DWE: RX Error 0x%08x\n", Descriptor->Control);
         }
 
         //

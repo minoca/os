@@ -746,7 +746,7 @@ Return Value:
 
 {
 
-    RtlDebugPrint("ACPI: OS Notify %I64x!\n", NotificationValue);
+    RtlDebugPrint("ACPI: OS Notify 0x%I64x!\n", NotificationValue);
 
     ASSERT(FALSE);
 

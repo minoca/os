@@ -619,7 +619,7 @@ Return Value:
     KStatus = CyRsaAddPemFile(&RsaContext, KeyFileBuffer, KeyFileSize, NULL);
     if (!KSUCCESS(KStatus)) {
         fprintf(stderr,
-                "Failed to load PEM: %s: %x\n",
+                "Failed to load PEM: %s: %d\n",
                 PrivateKeyFilePath,
                 KStatus);
 
@@ -651,7 +651,7 @@ Return Value:
 
     if (SignatureDataSize == -1) {
         Result = ENOMEM;
-        fprintf(stderr, "Failed to sign data: %x\n", KStatus);
+        fprintf(stderr, "Failed to sign data: %d\n", KStatus);
         goto SignDataEnd;
     }
 

@@ -935,7 +935,7 @@ Return Value:
 
         KeReleaseQueuedLock(Device->Lock);
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("TPS65217: Open SPB Failed: %x\n", Status);
+            RtlDebugPrint("TPS65217: Open SPB Failed: %d\n", Status);
             goto StartDeviceEnd;
         }
     }
@@ -1185,7 +1185,7 @@ Return Value:
         goto InterruptThreadEnd;
     }
 
-    RtlDebugPrint("TPS65217 Interrupt %x\n", InterruptRegister);
+    RtlDebugPrint("TPS65217 Interrupt 0x%x\n", InterruptRegister);
     if ((InterruptRegister & TPS65217_INTERRUPT_STATUS_MASK) != 0) {
         InterruptStatus = InterruptStatusClaimed;
     }

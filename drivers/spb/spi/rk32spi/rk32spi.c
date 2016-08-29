@@ -765,7 +765,7 @@ Return Value:
         //
 
         if ((InterruptBits & RK32_SPI_INTERRUPT_ERROR_MASK) != 0) {
-            RtlDebugPrint("RK32 SPI: Error %08x\n", InterruptBits);
+            RtlDebugPrint("RK32 SPI: Error 0x%08x\n", InterruptBits);
             Status = STATUS_DEVICE_IO_ERROR;
 
         //

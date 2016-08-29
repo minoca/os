@@ -3947,7 +3947,7 @@ Return Value:
                           IoContext.BytesCompleted);
 
         } else {
-            RtlDebugPrint("PAGE CACHE: Flushed FILE_OBJECT %x "
+            RtlDebugPrint("PAGE CACHE: Flushed FILE_OBJECT 0x%x "
                           "Offset 0x%I64x Size 0x%x\n",
                           FileObject,
                           FileOffset,
@@ -4890,7 +4890,7 @@ Return Value:
     PageCacheEntry->Node.Parent = NULL;
     IoPageCacheEntryCount -= 1;
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
-        RtlDebugPrint("PAGE CACHE: Remove entry 0x%08x: file object "
+        RtlDebugPrint("PAGE CACHE: Remove PAGE_CACHE_ENTRY 0x%08x: FILE_OBJECT "
                       "0x%08x, offset 0x%I64x, physical address "
                       "0x%I64x, reference count %d, flags 0x%08x.\n",
                       PageCacheEntry,

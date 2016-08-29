@@ -1836,7 +1836,7 @@ Return Value:
 
 SetPerformanceStateThreadEnd:
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("AM3SOC: Could not set p-state %d: %x\n",
+        RtlDebugPrint("AM3SOC: Could not set p-state %d: %d\n",
                       DesiredState,
                       Status);
     }
@@ -2006,7 +2006,7 @@ Return Value:
         return STATUS_TIMEOUT;
     }
 
-    RtlDebugPrint("Am3: CM3 Firmware version %x\n", Version);
+    RtlDebugPrint("Am3: CM3 Firmware version 0x%x\n", Version);
     return STATUS_SUCCESS;
 }
 
@@ -2396,8 +2396,7 @@ Return Value:
     Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
     Status = Am3SocWaitForIpcResult(Device);
     if (Status != STATUS_MORE_PROCESSING_REQUIRED) {
-        RtlDebugPrint("Am3: Failed to request power transition: %x\n",
-                      Status);
+        RtlDebugPrint("Am3: Failed to request power transition: %d\n", Status);
 
         ASSERT(IpcData->Command == Am3Cm3CommandStandby);
 
@@ -2505,7 +2504,7 @@ Return Value:
     Status = Am3SocWaitForIpcResult(Device);
     Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Cortex M3 reset failure: %x\n", Status);
+        RtlDebugPrint("Cortex M3 reset failure: %d\n", Status);
     }
 
     Device->M3State = Am3M3StateReset;
@@ -2597,7 +2596,7 @@ Return Value:
              (SpinCount < AM335_IPC_MAX_SPIN_COUNT));
 
     if ((Value & 0x0000FFFF) != Device->M3Ipc.Command) {
-        RtlDebugPrint("Am3: Got response %x for other command %x\n",
+        RtlDebugPrint("Am3: Got response 0x%x for other command 0x%x\n",
                       Value,
                       Device->M3Ipc.Command);
     }

@@ -862,7 +862,7 @@ Return Value:
     }
 
     if (Status == InterruptStatusClaimed) {
-        RtlDebugPrint("EDMA: Error %x %x %x %x\n",
+        RtlDebugPrint("EDMA: Error 0x%x 0x%x 0x%x 0x%x\n",
                       Controller->Pending.MissedLow,
                       Controller->Pending.MissedHigh,
                       Controller->Pending.MissedQuick,

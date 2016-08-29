@@ -162,7 +162,7 @@ Return Value:
 
         Status = MmMdAddDescriptorToList(&Mdl, &NewDescriptor);
         if (!KSUCCESS(Status)) {
-            printf("Error adding standard descriptor to MDL: Status = 0x%x.\n",
+            printf("Error adding standard descriptor to MDL: Status = %d.\n",
                    Status);
 
             TestsFailed += 1;
@@ -309,7 +309,7 @@ Return Value:
 
     Status = MmMdAddDescriptorToList(&Mdl, &NewDescriptor);
     if (!KSUCCESS(Status)) {
-        printf("Error: Failed to force add a basic descriptor: Status = 0x%x\n",
+        printf("Error: Failed to force add a basic descriptor: Status = %d\n",
                Status);
 
         TestsFailed += 1;
@@ -331,7 +331,7 @@ Return Value:
     Status = MmMdAddDescriptorToList(&Mdl, &NewDescriptor);
     if (!KSUCCESS(Status)) {
         printf("Error: Failed to force add a descriptor that splits an "
-               "existing descriptor: Status = 0x%x\n",
+               "existing descriptor: Status = %d\n",
                Status);
 
         TestsFailed += 1;
@@ -354,7 +354,7 @@ Return Value:
     Status = MmMdAddDescriptorToList(&Mdl, &NewDescriptor);
     if (!KSUCCESS(Status)) {
         printf("Error: Failed to force add a descriptor that splits an "
-               "existing descriptor: Status = 0x%x\n",
+               "existing descriptor: Status = %d\n",
                Status);
 
         TestsFailed += 1;
@@ -377,7 +377,7 @@ Return Value:
     Status = MmMdAddDescriptorToList(&Mdl, &NewDescriptor);
     if (!KSUCCESS(Status)) {
         printf("Error: Failed to force add a descriptor that splits an "
-               "existing descriptor: Status = 0x%x\n",
+               "existing descriptor: Status = %d\n",
                Status);
 
         TestsFailed += 1;
@@ -402,7 +402,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         printf("Error: Failed to allocate a page with no alignment: "
-               "Status = 0x%x.\n",
+               "Status = %d.\n",
                Status);
 
         TestsFailed += 1;
@@ -428,7 +428,7 @@ Return Value:
 
     if ((!KSUCCESS(Status)) || ((Address & 0x1FFF) != 0)) {
         printf("Error: Failed to allocate a page with no alignment: "
-               "Status = 0x%x. Address = 0x%x\n",
+               "Status = %d. Address = 0x%x\n",
                Status,
                Address);
 
@@ -455,7 +455,7 @@ Return Value:
 
     if ((!KSUCCESS(Status)) || ((Address & 0x3FFF) != 0)) {
         printf("Error: Failed to allocate 1 4-page aligned page. "
-               "Status = 0x%x, Address = 0x%x.\n",
+               "Status = %d, Address = 0x%x.\n",
                Status,
                Address);
 
@@ -481,7 +481,7 @@ Return Value:
 
     if ((!KSUCCESS(Status)) || ((Address & 0xFFFF) != 0)) {
         printf("Error: Failed to allocate 4 10-page aligned pages. "
-               "Status = 0x%x, Address = 0x%x.\n",
+               "Status = %d, Address = 0x%x.\n",
                Status,
                Address);
 
@@ -514,7 +514,7 @@ Return Value:
 
         Status = MmMdAddDescriptorToList(&Mdl, &NewDescriptor);
         if (!KSUCCESS(Status)) {
-            printf("Failed to add %I64x %I64x %d to MDL: %x\n",
+            printf("Failed to add %I64x %I64x %d to MDL: %d\n",
                    NewDescriptor.BaseAddress,
                    NewDescriptor.Size,
                    Type,

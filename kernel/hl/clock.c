@@ -166,7 +166,7 @@ Return Value:
 
     ProcessorNumber = KeGetCurrentProcessorNumber();
     if (HlDebugClockChanges != FALSE) {
-        RtlDebugPrint("P%d: %s %I64x (%I64x)\n",
+        RtlDebugPrint("P%d: %s 0x%I64x (0x%I64x)\n",
                       ProcessorNumber,
                       HlClockTimerModeStrings[Mode],
                       DueTime,

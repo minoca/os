@@ -629,7 +629,7 @@ Return Value:
 
 ParseNodeEnd:
     if ((Parser->Flags & YY_PARSE_FLAG_DEBUG) != 0) {
-        RtlDebugPrint("%*s %s %x Done: %x\n",
+        RtlDebugPrint("%*s %s %x Done: %d\n",
                       Parser->RecursionDepth,
                       "",
                       GrammarElement->Name,

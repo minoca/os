@@ -728,7 +728,7 @@ Return Value:
     BootConfiguration.FreeFunction = (PBOOT_CONFIGURATION_FREE)free;
     Status = BcInitializeContext(&BootConfiguration);
     if (!KSUCCESS(Status)) {
-        fprintf(stderr, "BcInitializeContext Error: %x\n", Status);
+        fprintf(stderr, "BcInitializeContext Error: %d\n", Status);
         Result = -1;
         goto UpdateBootVolumeEnd;
     }
@@ -788,7 +788,7 @@ Return Value:
             Status = BcReadBootConfigurationFile(&BootConfiguration);
             if (!KSUCCESS(Status)) {
                 fprintf(stderr,
-                        "Failed to read boot configuration data: %x.\n",
+                        "Failed to read boot configuration data: %d.\n",
                         Status);
             }
         }
@@ -806,8 +806,7 @@ Return Value:
 
             if (!KSUCCESS(Status)) {
                 fprintf(stderr,
-                        "Failed to create default boot configuration: "
-                        "%x\n",
+                        "Failed to create default boot configuration: %d\n",
                         Status);
 
                 Result = -1;
@@ -970,7 +969,7 @@ Return Value:
     Status = BcWriteBootConfigurationFile(&BootConfiguration);
     if (!KSUCCESS(Status)) {
         fprintf(stderr,
-                "Error: Failed to serialize boot configuration data: %x.\n",
+                "Error: Failed to serialize boot configuration data: %d.\n",
                 Status);
 
         Result = -1;

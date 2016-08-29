@@ -2191,7 +2191,7 @@ Return Value:
 
                     if (Status != STATUS_NOT_READY) {
                         RtlDebugPrint("ACPI: Failed to apply bus address "
-                                      "%I64x to PCI routing table %x: %x\n",
+                                      "0x%I64x to PCI routing table 0x%x: %d\n",
                                       BusAddress,
                                       CurrentParentContext->PciRoutingTable,
                                       Status);
@@ -2228,9 +2228,11 @@ Return Value:
                     *InterruptLine += 1;
                     if (AcpiDebugInterruptRouting != FALSE) {
                         RtlDebugPrint("Swizzling line %I64d through PCI bridge "
-                                      "%x, Address %I64x, New line %I64d.\n",
+                                      "0x%x, Address 0x%I64x, New line "
+                                      "%I64d.\n",
                                       PreviousInterrupt,
                                       CurrentParentContext,
+                                      BusAddress,
                                       *InterruptLine);
                     }
 
@@ -2323,7 +2325,8 @@ Return Value:
     Slot = (USHORT)(BusAddress >> 16);
     Line = *Interrupt;
     if (AcpiDebugInterruptRouting != FALSE) {
-        RtlDebugPrint("Applying BusAddress %I64x Line %x through PRT %x\n",
+        RtlDebugPrint("Applying BusAddress 0x%I64x Line 0x%x through PRT "
+                      "0x%x\n",
                       BusAddress,
                       Line,
                       RoutingTable);
@@ -2365,7 +2368,7 @@ Return Value:
     if (Entry->RoutingDevice == NULL) {
         *Interrupt = Entry->GlobalSystemInterruptNumber;
         if (AcpiDebugInterruptRouting != FALSE) {
-            RtlDebugPrint("Routes to GSI %I64x\n", *Interrupt);
+            RtlDebugPrint("Routes to GSI 0x%I64x\n", *Interrupt);
         }
 
         return STATUS_SUCCESS;
@@ -2380,7 +2383,7 @@ Return Value:
 
     if (Entry->RoutingDevice->U.Device.IsDeviceStarted == FALSE) {
         if (AcpiDebugInterruptRouting != FALSE) {
-            RtlDebugPrint("Delaying because routing device %x is not "
+            RtlDebugPrint("Delaying because routing device 0x%x is not "
                           "started.\n",
                           Entry->RoutingDevice);
         }
@@ -2431,7 +2434,7 @@ Return Value:
     *InterruptCharacteristics = Allocation->Characteristics;
     *InterruptFlags = Allocation->Flags;
     if (AcpiDebugInterruptRouting != FALSE) {
-        RtlDebugPrint("Routes to %I64x %I64x %I64x\n",
+        RtlDebugPrint("Routes to 0x%I64x 0x%I64x 0x%I64x\n",
                       *Interrupt,
                       *InterruptCharacteristics,
                       *InterruptFlags);

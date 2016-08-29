@@ -1126,7 +1126,7 @@ Return Value:
 
     Status = ImLoadFile(File, Buffer);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to load file: %x\n", Status);
+        RtlDebugPrint("Failed to load file: %d\n", Status);
         return NULL;
     }
 

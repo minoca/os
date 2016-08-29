@@ -1267,7 +1267,7 @@ Return Value:
 
 LocalTerminalRedrawThread:
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("VideoCon: TerminalRedrawThread failure: %x\n", Status);
+        RtlDebugPrint("VideoCon: TerminalRedrawThread failure: %d\n", Status);
     }
 
     if (IoBuffer != NULL) {

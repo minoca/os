@@ -1610,7 +1610,7 @@ Return Value:
             NetProcessReceivedPacket(Device->NetworkLink, &Packet);
 
         } else {
-            RtlDebugPrint("A3E: RX Error %04x\n", Flags);
+            RtlDebugPrint("A3E: RX Error 0x%04x\n", Flags);
         }
 
         //

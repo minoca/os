@@ -250,7 +250,7 @@ Return Value:
     if (!KSUCCESS(Status)) {
         Result = ClConvertKstatusToErrorNumber(Status);
         fprintf(stderr,
-                "efiboot: Error: Failed to set BootOrder: %x: %s.\n",
+                "efiboot: Error: Failed to set BootOrder: %d: %s.\n",
                 Status,
                 strerror(Result));
 
@@ -311,7 +311,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         fprintf(stderr,
-                "efiboot: Failed to determine if firmware type is EFI: %x.\n",
+                "efiboot: Failed to determine if firmware type is EFI: %d.\n",
                 Status);
 
         return FALSE;
@@ -363,7 +363,7 @@ Return Value:
     if (Status != STATUS_NOT_FOUND) {
         if (!KSUCCESS(Status)) {
             fprintf(stderr,
-                    "efiboot: Error: Failed to get BootOrder: %x\n",
+                    "efiboot: Error: Failed to get BootOrder: %d\n",
                     Status);
 
         } else {

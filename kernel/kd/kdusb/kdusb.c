@@ -226,7 +226,7 @@ Return Value:
                 HubAddress = Hub->DeviceAddress;
             }
 
-            RtlDebugPrint("Enumerating Hub %x, Port %d\n",
+            RtlDebugPrint("Enumerating Hub 0x%x, Port %d\n",
                           HubAddress,
                           PortNumber);
         }
@@ -259,7 +259,7 @@ Return Value:
 
                 Status = KdpUsbEnumerateDevice(CurrentDevice);
                 if ((!KSUCCESS(Status)) && (KdUsbDebug != FALSE)) {
-                    RtlDebugPrint("Failed to enumerate: %x\n", Status);
+                    RtlDebugPrint("Failed to enumerate: %d\n", Status);
                 }
             }
         }
@@ -277,8 +277,8 @@ Return Value:
             }
 
             if (KdUsbDebug != FALSE) {
-                RtlDebugPrint("Found Device %04X:%04X, speed %d, address %x, "
-                              "port count %d, Supported %d\n",
+                RtlDebugPrint("Found Device %04X:%04X, speed %d, address "
+                              "0x%x, port count %d, Supported %d\n",
                               CurrentDevice->VendorId,
                               CurrentDevice->ProductId,
                               CurrentDevice->Speed,
@@ -306,7 +306,7 @@ Return Value:
                 Status = KdpUsbHubReset(CurrentDevice);
                 if (KSUCCESS(Status)) {
                     if (KdUsbDebug != FALSE) {
-                        RtlDebugPrint("Moving into hub %x, %d ports.\n",
+                        RtlDebugPrint("Moving into hub 0x%x, %d ports.\n",
                                       CurrentDevice->DeviceAddress,
                                       CurrentDevice->PortCount);
                     }
@@ -520,7 +520,7 @@ Return Value:
     ExitSize = sizeof(KD_TEST_EXIT_STRING) - 1;
     Status = Interface->FunctionTable.Reset(Interface->Context, 115200);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to reset: %x\n", Status);
+        RtlDebugPrint("Failed to reset: %d\n", Status);
         return Status;
     }
 
@@ -529,7 +529,7 @@ Return Value:
                                                sizeof(KD_TEST_WELCOME_STRING));
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to transmit: %x\n", Status);
+        RtlDebugPrint("Failed to transmit: %d\n", Status);
         return Status;
     }
 
@@ -543,7 +543,7 @@ Return Value:
                                                     &ReceiveDataAvailable);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to get status: %x\n", Status);
+            RtlDebugPrint("Failed to get status: %d\n", Status);
             return Status;
         }
 
@@ -561,7 +561,7 @@ Return Value:
         }
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to recieve: %x\n", Status);
+            RtlDebugPrint("Failed to recieve: %d\n", Status);
         }
 
         if (Size > KD_TEST_RECEIVE_BUFFER_SIZE) {
@@ -594,7 +594,7 @@ Return Value:
                                                sizeof(KD_TEST_GOODBYE_STRING));
 
                     if (!KSUCCESS(Status)) {
-                        RtlDebugPrint("Failed to transmit: %x\n", Status);
+                        RtlDebugPrint("Failed to transmit: %d\n", Status);
                         return Status;
                     }
 
@@ -636,13 +636,13 @@ Return Value:
                                                    Size);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to transmit: %x\n", Status);
+            RtlDebugPrint("Failed to transmit: %d\n", Status);
             return Status;
         }
     }
 
 KdpTestInterfaceEnd:
-    RtlDebugPrint("Exiting KD Test: %x\n", Status);
+    RtlDebugPrint("Exiting KD Test: %d\n", Status);
     return Status;
 }
 
@@ -827,7 +827,7 @@ UsbControlTransferEnd:
     }
 
     if (KdUsbDebugAllTransfers != FALSE) {
-        RtlDebugPrint("%04X %X\n", BufferLength, Status);
+        RtlDebugPrint("%04X %d\n", BufferLength, Status);
     }
 
     return Status;

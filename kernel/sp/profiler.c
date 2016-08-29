@@ -2155,7 +2155,7 @@ SendInitialProcessesEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Profiler: Failed to send initial processes: %x.\n",
+        RtlDebugPrint("Profiler: Failed to send initial processes: %d.\n",
                       Status);
     }
 

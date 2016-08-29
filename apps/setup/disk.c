@@ -210,7 +210,7 @@ Return Value:
     Status = PartInitialize(PartitionContext);
     if (!KSUCCESS(Status)) {
         fprintf(stderr,
-                "Error: Failed to initialize partition library: %x\n",
+                "Error: Failed to initialize partition library: %d\n",
                 Status);
 
         Result = -1;
@@ -422,7 +422,7 @@ Return Value:
     if (!KSUCCESS(Status)) {
         Result = -1;
         fprintf(stderr,
-                "Error: Failed to write partition layout: %x\n",
+                "Error: Failed to write partition layout: %d\n",
                 Status);
 
         goto FormatDiskEnd;
@@ -436,7 +436,7 @@ Return Value:
     Status = PartEnumeratePartitions(PartitionContext);
     if (!KSUCCESS(Status)) {
         fprintf(stderr,
-                "Error: Failed to reenumerate partitions: %x\n",
+                "Error: Failed to reenumerate partitions: %d\n",
                 Status);
 
         Result = -1;
@@ -469,7 +469,7 @@ Return Value:
 
         if (!KSUCCESS(Status)) {
             fprintf(stderr,
-                    "Error: Failed to clear %I64x: %x\n",
+                    "Error: Failed to clear %I64x: %d\n",
                     Partitions[PartitionIndex].StartOffset + BlockIndex,
                     Status);
 
@@ -504,7 +504,7 @@ Return Value:
 
             if (!KSUCCESS(Status)) {
                 fprintf(stderr,
-                        "Error: Failed to clear %I64x: %x\n",
+                        "Error: Failed to clear %I64x: %d\n",
                         Partitions[PartitionIndex].StartOffset + BlockIndex,
                         Status);
 

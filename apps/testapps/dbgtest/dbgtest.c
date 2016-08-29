@@ -323,7 +323,7 @@ Return Value:
 
         Status = OsDebug(DebugCommandEnableDebugging, 0, NULL, NULL, 0, 0);
         if (!KSUCCESS(Status)) {
-            DBGTEST_ERROR("DbgTest: Failed to enable debugging. Status %x\n",
+            DBGTEST_ERROR("DbgTest: Failed to enable debugging. Status %d\n",
                           Status);
 
             exit(1);
@@ -371,7 +371,7 @@ Return Value:
                                     NULL);
 
             if (!KSUCCESS(Status)) {
-                DBGTEST_ERROR("Child %d failed to create thread: %x.\n",
+                DBGTEST_ERROR("Child %d failed to create thread: %d.\n",
                               getpid(),
                               Status);
             }
@@ -530,7 +530,7 @@ Return Value:
 
                     if (!KSUCCESS(Status)) {
                         DBGTEST_ERROR("DbgTest: Failed to write to child "
-                                      "memory. Status %x\n",
+                                      "memory. Status %d\n",
                                       Status);
 
                         Failures += 1;
@@ -551,7 +551,7 @@ Return Value:
 
                 if (!KSUCCESS(Status)) {
                     DBGTEST_ERROR("DbgTest: Failed to get registers for "
-                                  "child %d. Status %x\n",
+                                  "child %d. Status %d\n",
                                   Child,
                                   Status);
 
@@ -568,7 +568,7 @@ Return Value:
 
                 if (!KSUCCESS(Status)) {
                     DBGTEST_ERROR("DbgTest: Failed to set registers for child "
-                                  "%d. Status %x\n",
+                                  "%d. Status %d\n",
                                   Child,
                                   Status);
 
@@ -589,7 +589,7 @@ Return Value:
 
                 if (!KSUCCESS(Status)) {
                     DBGTEST_ERROR("DbgTest: Failed to get signal parameters "
-                                  "for child %d. Status %x\n",
+                                  "for child %d. Status %d\n",
                                   Child,
                                   Status);
 
@@ -606,7 +606,7 @@ Return Value:
 
                 if (!KSUCCESS(Status)) {
                     DBGTEST_ERROR("DbgTest: Failed to set signal parameters "
-                                  "for child %d. Status %x\n",
+                                  "for child %d. Status %d\n",
                                   Child,
                                   Status);
 
@@ -627,7 +627,7 @@ Return Value:
                                  WSTOPSIG(ExitStatus));
 
                 if (!KSUCCESS(Status)) {
-                    DBGTEST_ERROR("DbgTest: Failed to continue. Status %x\n",
+                    DBGTEST_ERROR("DbgTest: Failed to continue. Status %d\n",
                                   Status);
 
                     Failures += 1;
@@ -950,7 +950,7 @@ Return Value:
 
     Status = OsDebug(DebugCommandSingleStep, Child, NULL, NULL, 0, 0);
     if (!KSUCCESS(Status)) {
-        DBGTEST_ERROR("DbgTest: Failed to single step child %x: %x\n",
+        DBGTEST_ERROR("DbgTest: Failed to single step child %x: %d\n",
                       Child,
                       Status);
     }
@@ -1014,7 +1014,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         DBGTEST_ERROR("DbgTest: Failed to get registers for "
-                      "child %d. Status %x\n",
+                      "child %d. Status %d\n",
                       Child,
                       Status);
 
@@ -1074,7 +1074,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        DBGTEST_ERROR("DbgTest: Failed to range step child %x: %x\n",
+        DBGTEST_ERROR("DbgTest: Failed to range step child %x: %d\n",
                       Child,
                       Status);
     }
@@ -1138,7 +1138,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         DBGTEST_ERROR("DbgTest: Failed to get registers for "
-                      "child %d (RS). Status %x\n",
+                      "child %d (RS). Status %d\n",
                       Child,
                       Status);
 
@@ -1255,7 +1255,7 @@ Return Value:
                      0);
 
     if (!KSUCCESS(Status)) {
-        DBGTEST_ERROR("Error: Failed to get loaded module list. Status %x\n",
+        DBGTEST_ERROR("Error: Failed to get loaded module list. Status %d\n",
                       Status);
 
         Failures += 1;

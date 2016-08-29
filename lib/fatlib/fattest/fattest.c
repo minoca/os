@@ -220,7 +220,7 @@ Return Value:
     VPRINT("Formatting disk of size %d.\n", DiskSize * 512);
     Status = FormatDisk(OutputFile, 512, DiskSize, &VolumeToken);
     if (!KSUCCESS(Status)) {
-        printf("Error: Could not format image. Status = 0x%x.\n", Status);
+        printf("Error: Could not format image. Status = %d.\n", Status);
         goto MainEnd;
     }
 
@@ -232,7 +232,7 @@ Return Value:
     RtlZeroMemory(&DirectoryProperties, sizeof(FILE_PROPERTIES));
     Status = FatLookup(VolumeToken, TRUE, 0, NULL, 0, &DirectoryProperties);
     if (!KSUCCESS(Status)) {
-        printf("Error: Could not look up root directory. Status = 0x%x.\n",
+        printf("Error: Could not look up root directory. Status = %d.\n",
                Status);
 
         goto MainEnd;
@@ -257,7 +257,7 @@ Return Value:
                        &Properties);
 
     if (!KSUCCESS(Status)) {
-        printf("Error: Unable to create file %s. Status %x.\n",
+        printf("Error: Unable to create file %s. Status %d.\n",
                TEST_FILE_NAME,
                Status);
 
@@ -284,7 +284,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         printf("Error: Unable to open %s (ID %I64d) in the output image."
-               "Status %x\n",
+               "Status %d\n",
                TEST_FILE_NAME,
                Properties.FileId,
                Status);
@@ -320,7 +320,7 @@ Return Value:
 
     if ((!KSUCCESS(Status)) || (BytesWritten != TEST_FILE_SIZE)) {
         printf("Error: %d bytes were written to file \"%s\", but the "
-               "original file size is %d. Status = 0x%08x.\n",
+               "original file size is %d. Status = %d.\n",
                BytesWritten,
                TEST_FILE_NAME,
                TEST_FILE_SIZE,
@@ -398,7 +398,7 @@ Return Value:
 
         if ((!KSUCCESS(Status)) || (BytesWritten != BLOCK_SIZE)) {
             printf("Error: %d bytes were written to file \"%s\", but the "
-                   "block size is %d. Status = 0x%08x.\n",
+                   "block size is %d. Status = %d.\n",
                    BytesWritten,
                    TEST_FILE_NAME,
                    BLOCK_SIZE,
@@ -435,7 +435,7 @@ Return Value:
 
         if ((!KSUCCESS(Status)) || (BytesRead != BLOCK_SIZE)) {
             printf("Attempting to read block %x immediately after writing it "
-                   "read %d bytes, status %x.\n",
+                   "read %d bytes, status %d.\n",
                    BlockIndex,
                    BytesRead,
                    Status);
@@ -549,7 +549,7 @@ Return Value:
 
     Status = FatFormat(&BlockParameters, 0, 0);
     if (!KSUCCESS(Status)) {
-        printf("Error: Unable to format image. Status = 0x%08x.\n", Status);
+        printf("Error: Unable to format image. Status = %d.\n", Status);
         return Status;
     }
 
@@ -559,8 +559,7 @@ Return Value:
 
     Status = FatMount(&BlockParameters, 0, VolumeToken);
     if (!KSUCCESS(Status)) {
-        printf("Error: Unable to mount freshly formatted image. "
-               "Status = 0x%08x.\n",
+        printf("Error: Unable to mount freshly formatted image. Status = %d.\n",
                Status);
     }
 

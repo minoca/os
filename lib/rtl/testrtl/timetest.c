@@ -2413,7 +2413,7 @@ Return Value:
                                 NULL);
 
     if (!KSUCCESS(Status)) {
-        printf("Timetest: Failed to set timezone data %x.\n", Status);
+        printf("Timetest: Failed to set timezone data %d.\n", Status);
         Failures += 1;
     }
 

@@ -2093,7 +2093,7 @@ Return Value:
     ASSERT(Irp != NULL);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD Failed: %x %I64x %x %x\n",
+        RtlDebugPrint("SD Failed: %d 0x%I64x 0x%x 0x%x\n",
                       Status,
                       Irp->U.ReadWrite.IoOffset,
                       Irp->U.ReadWrite.IoSizeInBytes,

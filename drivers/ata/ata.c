@@ -1051,7 +1051,7 @@ Return Value:
         if (((PendingBits & IDE_STATUS_ERROR) != 0) ||
             ((StatusRegister & ATA_STATUS_ERROR_MASK) != 0)) {
 
-            RtlDebugPrint("ATA: I/O Error: Status %x, BMStatus %x.\n",
+            RtlDebugPrint("ATA: I/O Error: Status 0x%x, BMStatus 0x%x.\n",
                           StatusRegister,
                           PendingBits);
 
@@ -3270,7 +3270,7 @@ Return Value:
     }
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("ATA_CHILD %x failed cache flush: %x\n", Child, Status);
+        RtlDebugPrint("ATA_CHILD 0x%x failed cache flush: %d\n", Child, Status);
     }
 
     return Status;

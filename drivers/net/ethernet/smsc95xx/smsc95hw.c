@@ -311,7 +311,7 @@ Return Value:
         RtlAtomicAdd32(&(Device->BulkOutTransferCount), 1);
         Status = UsbSubmitTransfer(UsbTransfer);
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("SM95: Failed to submit transmit packet: %x\n",
+            RtlDebugPrint("SM95: Failed to submit transmit packet: %d\n",
                           Status);
 
             Sm95Transfer->Packet = NULL;
@@ -547,7 +547,7 @@ InterruptTransferCompletionEnd:
 
     Status = UsbSubmitTransfer(Transfer);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SM95: Failed to resubmit interrupt transfer: %x.\n",
+        RtlDebugPrint("SM95: Failed to resubmit interrupt transfer: %d.\n",
                       Status);
     }
 

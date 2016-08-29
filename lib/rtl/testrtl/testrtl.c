@@ -1491,7 +1491,7 @@ Return Value:
         Color = 'R';
     }
 
-    RtlDebugPrint("%d %c (%x)\n", TestNode->Value, Color, TestNode);
+    RtlDebugPrint("%d %c (0x%x)\n", TestNode->Value, Color, TestNode);
 
     ASSERT(Node != &(Tree->NullNode));
     ASSERT(Node != &(Tree->Root));
@@ -2101,7 +2101,7 @@ Return Value:
                            &(Result[27]));
 
     if (!KSUCCESS(Status)) {
-        printf("ScanDouble: Failed to scan, status %x\n", Status);
+        printf("ScanDouble: Failed to scan, status %d\n", Status);
         Failures += 1;
     }
 
@@ -2878,7 +2878,7 @@ Return Value:
                                &(Result[27]));
 
     if (!KSUCCESS(Status)) {
-        printf("ScanDoubleWide: Failed to scan, status %x\n", Status);
+        printf("ScanDoubleWide: Failed to scan, status %d\n", Status);
         Failures += 1;
     }
 

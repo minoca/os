@@ -1332,7 +1332,7 @@ Return Value:
         goto StartDeviceEnd;
 
     } else if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SdOmap4ResetController Failed: %x\n", Status);
+        RtlDebugPrint("SdOmap4ResetController Failed: %d\n", Status);
         goto StartDeviceEnd;
     }
 
@@ -1490,7 +1490,7 @@ Return Value:
                 Status = STATUS_SUCCESS;
 
             } else {
-                RtlDebugPrint("SdInitializeController failed: %x\n", Status);
+                RtlDebugPrint("SdInitializeController failed: %d\n", Status);
             }
 
             goto ParentQueryChildrenEnd;
@@ -2932,7 +2932,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         RtlAtomicAdd32(&(Child->RemainingInterrupts), -1);
-        RtlDebugPrint("SD OMAP4 Failed: %x\n", Status);
+        RtlDebugPrint("SD OMAP4 Failed: %d\n", Status);
         SdAbortTransaction(Controller, FALSE);
         IoCompleteIrp(SdOmap4Driver, Irp, Status);
         return;

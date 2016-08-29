@@ -166,7 +166,7 @@ Return Value:
                                           MEMORY_ACCOUNTING_FLAG_SYSTEM);
 
     if (!KSUCCESS(Status)) {
-        printf("Error: Unable to initialize memory accounting. Status: 0x%x\n",
+        printf("Error: Unable to initialize memory accounting. Status: %d\n",
                Status);
 
         Failures += 1;
@@ -195,7 +195,7 @@ Return Value:
     MmMdInitDescriptor(&Descriptor, StartAddress, EndAddress, MemoryTypeFree);
     Status = MmpAddAccountingDescriptor(&MmKernelVirtualSpace, &Descriptor);
     if (!KSUCCESS(Status)) {
-        printf("Error: Failed to add accounting descriptor. Status: 0x%08x\n",
+        printf("Error: Failed to add accounting descriptor. Status: %d\n",
                Status);
 
         Failures += 1;
@@ -256,7 +256,7 @@ Return Value:
     MmMdInitDescriptor(&Descriptor, StartAddress, EndAddress, MemoryTypeFree);
     Status = MmpAddAccountingDescriptor(&MmKernelVirtualSpace, &Descriptor);
     if (!KSUCCESS(Status)) {
-        printf("Error: Failed to add accounting descriptor. Status: 0x%08x\n",
+        printf("Error: Failed to add accounting descriptor. Status: %d\n",
                Status);
 
         Failures += 1;
@@ -307,8 +307,7 @@ Return Value:
                                           MEMORY_ACCOUNTING_FLAG_NO_MAP);
 
     if (!KSUCCESS(Status)) {
-        printf("Error: Unable to initialize User VA accountant. Status = "
-               "0x%x.\n",
+        printf("Error: Unable to initialize User VA accountant. Status = %d.\n",
                Status);
 
         Failures += 1;
@@ -325,7 +324,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         printf("Error: Unable to add initial descriptor to user VA accountant. "
-               "Status = 0x%08x.\n",
+               "Status = %d.\n",
                Status);
 
         Failures += 1;
@@ -424,7 +423,7 @@ Return Value:
                                         0);
 
         if (!KSUCCESS(Status)) {
-            printf("Error freeing allocation 0x%x. Status = 0x%08x.\n",
+            printf("Error freeing allocation 0x%x. Status = %d.\n",
                    TestAllocation,
                    Status);
 
@@ -452,7 +451,7 @@ Return Value:
                                             0);
 
             if (!KSUCCESS(Status)) {
-                printf("Error freeing allocation 0x%x. Status = 0x%08x.\n",
+                printf("Error freeing allocation 0x%x. Status = %d.\n",
                        PreviousAllocation,
                        Status);
 
@@ -475,7 +474,7 @@ Return Value:
                                         0);
 
         if (!KSUCCESS(Status)) {
-            printf("Error freeing allocation 0x%x. Status = 0x%08x.\n",
+            printf("Error freeing allocation 0x%x. Status = %d.\n",
                    PreviousAllocation,
                    Status);
 
@@ -574,7 +573,7 @@ Return Value:
     Allocation = VaRequest.Address;
     if ((!KSUCCESS(Status)) && (ExpectedSuccess != FALSE)) {
         printf("Error: Allocation Failed: size %d, Requested address: "
-               "0x%08x, Status = 0x%x.\n",
+               "0x%08x, Status = %d.\n",
                Size,
                RequestedAddress,
                Status);

@@ -217,8 +217,8 @@ Return Value:
         if ((ExistingMapping->DirectoryCluster != DirectoryCluster) ||
             (ExistingMapping->DirectoryOffset != DirectoryOffset)) {
 
-            RtlDebugPrint("FAT: Error: Cluster at directory/offset %x/%I64x "
-                          "also at %x/%I64x.\n",
+            RtlDebugPrint("FAT: Error: Cluster at directory/offset "
+                          "0x%x/0x%I64x also at 0x%x/0x%I64x.\n",
                           DirectoryCluster,
                           DirectoryOffset,
                           ExistingMapping->DirectoryCluster,

@@ -882,7 +882,7 @@ Return Value:
 
         KeReleaseQueuedLock(Device->Lock);
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("RK808: Open SPB Failed: %x\n", Status);
+            RtlDebugPrint("RK808: Open SPB Failed: %d\n", Status);
             goto StartDeviceEnd;
         }
     }

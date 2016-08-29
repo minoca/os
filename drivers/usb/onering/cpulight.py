@@ -136,7 +136,7 @@ def minoca_get_usb_device_id(uuid):
                                           size)
                                           
     if result != STATUS_SUCCESS:
-        print("Failed to get USB Device: %x" % result)
+        print("Failed to get USB Device: %d" % result)
         return None
         
     if size.value < 1:
@@ -162,7 +162,7 @@ def minoca_open_usb_device(uuid):
     handle = ctypes.c_int(-1)
     result = minoca_open_device_id(device_id, flags, handle)
     if result != STATUS_SUCCESS:
-        print("Failed to open device ID %x: %x\n" % (device_id, result))
+        print("Failed to open device ID %x: %d\n" % (device_id, result))
         
     file_handle = os.fdopen(handle.value, 'wb+', 0)
     if file_handle is None:
@@ -181,7 +181,7 @@ def minoca_get_processor_usage(processor=-1):
                                                0)
                                                
     if status != STATUS_SUCCESS:
-        print("Failed to get processor usage: %x" % status)
+        print("Failed to get processor usage: %d" % status)
         return None
         
     return information

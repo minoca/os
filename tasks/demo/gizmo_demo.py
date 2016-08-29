@@ -378,7 +378,7 @@ def minoca_set_profiling(enable):
                                                1)
 
     if result != STATUS_SUCCESS:
-        print("Failed to get profiling: %x" % result)
+        print("Failed to get profiling: %d" % result)
         
     return
         

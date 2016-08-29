@@ -261,7 +261,7 @@ Return Value:
     }
 
     if ((UsbDebugFlags & USB_DEBUG_DEBUGGER_HANDOFF) != 0) {
-        RtlDebugPrint("USB: Debug handoff data: %x\n", UsbDebugHandoffData);
+        RtlDebugPrint("USB: Debug handoff data: 0x%x\n", UsbDebugHandoffData);
         if (UsbDebugHandoffData != NULL) {
             RtlDebugPrint("USB: Debug device %04X:%04X is at path ",
                           UsbDebugHandoffData->U.Usb.VendorId,
@@ -3198,8 +3198,8 @@ Return Value:
             ASSERT(CompleteTransfer->Protected.Type < UsbTransferTypeCount);
 
             RtlDebugPrint(
-                     "USB: Transfer (0x%08x) %s dev %x, EP%x, %s, "
-                     "Buffer %x, Length 0x%x\n",
+                     "USB: Transfer (0x%08x) %s dev %d, EP%x, %s, "
+                     "Buffer 0x%x, Length 0x%x\n",
                      Transfer,
                      UsbTransferDirectionStrings[Transfer->Direction],
                      CompleteTransfer->Protected.DeviceAddress,
@@ -3351,7 +3351,7 @@ SubmitTransferEnd:
 
             RtlDebugPrint(
                      "USB: Submit failed, transfer (0x%08x) %s "
-                     "dev %d, EP%x, %s, Buffer %x, Len %x. Status 0x%x\n",
+                     "dev %d, EP%x, %s, Buffer 0x%x, Len 0x%x. Status %d\n",
                      Transfer,
                      UsbTransferDirectionStrings[Transfer->Direction],
                      CompleteTransfer->Protected.DeviceAddress,

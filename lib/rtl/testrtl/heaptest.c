@@ -211,7 +211,7 @@ Return Value:
                                                     TEST_HEAP_TAG);
 
                     if (!KSUCCESS(Status)) {
-                        printf("Aligned heap allocation failure: Status 0x%x, "
+                        printf("Aligned heap allocation failure: Status %d, "
                                "Alignment 0x%x, Size 0x%x\n",
                                Status,
                                Alignment,

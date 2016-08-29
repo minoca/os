@@ -1468,7 +1468,7 @@ Return Value:
         RtlAtomicAdd32(&(Device->BulkOutTransferCount), 1);
         Status = UsbSubmitTransfer(UsbTransfer);
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("RTLW81: Failed to submit transmit packet: %x\n",
+            RtlDebugPrint("RTLW81: Failed to submit transmit packet: %d\n",
                           Status);
 
             Rtlw81Transfer->Packet = NULL;
@@ -2064,7 +2064,7 @@ Return Value:
             Status = Rtlw81pGetRssi(Device, PhyStatus, InfoSize, Rate, &Rssi);
             if (!KSUCCESS(Status)) {
                 RtlDebugPrint("RTLW81: Failed to get RSSI information from "
-                              "packet with status 0x%08x\n",
+                              "packet with status %d\n",
                               Status);
 
                 break;
@@ -2243,7 +2243,7 @@ Return Value:
 
         Status = Rtlw81pInitializeDma(Device);
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("RTWL: DMA init failed: 0x%08x\n", Status);
+            RtlDebugPrint("RTWL: DMA init failed: %d\n", Status);
             goto InitializeEnd;
         }
 
@@ -4337,7 +4337,7 @@ InitializeFirmwareEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("RTLW: Initailize firmware failed 0x%08x\n", Status);
+        RtlDebugPrint("RTLW: Initailize firmware failed %d\n", Status);
     }
 
     return Status;
@@ -5031,8 +5031,7 @@ Return Value:
     ControlTransfer->Length = sizeof(USB_SETUP_PACKET) + DataLength;
     Status = UsbSubmitSynchronousTransfer(ControlTransfer);
     if (!KSUCCESS(Status) && KSUCCESS(Device->InitializationStatus)) {
-        RtlDebugPrint("RTLW81: Write to address 0x%04x failed with status "
-                      "0x%08x\n",
+        RtlDebugPrint("RTLW81: Write to address 0x%04x failed with status %d\n",
                       Address,
                       Status);
 
@@ -5098,7 +5097,7 @@ Return Value:
 
     } else if (KSUCCESS(Device->InitializationStatus)) {
         RtlDebugPrint("RTLW81: Read from address 0x%04x failed with status "
-                      "0x%08x\n",
+                      "%d\n",
                       Address,
                       Status);
 

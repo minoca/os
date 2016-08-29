@@ -258,7 +258,8 @@ Return Value:
 
 {
 
-    RtlDebugPrint(" *** Page Fault: Faulting Address %08x, Instruction %08x",
+    RtlDebugPrint(" *** Page Fault: Faulting Address 0x%08x, "
+                  "Instruction 0x%08x",
                   FaultingAddress,
                   TrapFrame->Eip);
 

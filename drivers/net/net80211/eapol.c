@@ -1487,8 +1487,7 @@ Return Value:
                                                      KeyReplayCounter);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("EAPOL: Failed to send supplicant message 2: "
-                          "0x%08x.\n",
+            RtlDebugPrint("EAPOL: Failed to send supplicant message 2: %d.\n",
                           Status);
 
             goto SupplicantProcessKeyFrameEnd;

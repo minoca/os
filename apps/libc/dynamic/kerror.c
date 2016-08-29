@@ -204,7 +204,7 @@ Return Value:
 
     Index = KSTATUS_CODE(Status);
     if (Index >= ElementCount) {
-        RtlDebugPrint("Error: Could not convert status %X to error number. A "
+        RtlDebugPrint("Error: Could not convert status %d to error number. A "
                       "developer needs to update the errno table.\n",
                       Status);
 

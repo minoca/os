@@ -1091,7 +1091,7 @@ Return Value:
         (DeviceId == PCI_DEVICE_ID_INTEL_QUARK_UART)) {
 
         if (BoDebugDebugDeviceExploration != FALSE) {
-            RtlDebugPrint("Found Quark UART at %I64x\n", Address->Address);
+            RtlDebugPrint("Found Quark UART at 0x%I64x\n", Address->Address);
         }
 
         OemData = &(GeneratedOemData.Uart16550);
@@ -1112,7 +1112,7 @@ Return Value:
     Subclass = (DeviceClassCode >> 8) & 0xFFFF;
     if (Subclass == PCI_CLASS_SIMPLE_COMMUNICATION_16550) {
         if (BoDebugDebugDeviceExploration != FALSE) {
-            RtlDebugPrint("Found Generic 16550 %04X:%04X at %I64x\n",
+            RtlDebugPrint("Found Generic 16550 %04X:%04X at 0x%I64x\n",
                           VendorId,
                           DeviceId,
                           Address->Address);

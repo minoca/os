@@ -357,7 +357,7 @@ Return Value:
 
     StatusCode = KTestLoadDriver();
     if (!KSUCCESS(StatusCode)) {
-        PRINT_ERROR("Error: Failed to load driver: %x.\n", StatusCode);
+        PRINT_ERROR("Error: Failed to load driver: %d.\n", StatusCode);
         Status = ClConvertKstatusToErrorNumber(StatusCode);
         goto MainEnd;
     }
@@ -374,7 +374,7 @@ Return Value:
 
     StatusCode = KTestOpenDriver(&DriverHandle);
     if (!KSUCCESS(StatusCode)) {
-        PRINT_ERROR("Error: Failed to open driver: %x.\n", StatusCode);
+        PRINT_ERROR("Error: Failed to open driver: %d.\n", StatusCode);
         Status = ClConvertKstatusToErrorNumber(StatusCode);
         goto MainEnd;
     }
@@ -511,7 +511,7 @@ Return Value:
             }
 
             if (!KSUCCESS(Poll.Status)) {
-                PRINT_ERROR("Error: Poll returned %x.\n", Poll.Status);
+                PRINT_ERROR("Error: Poll returned %d.\n", Poll.Status);
                 Failures += 1;
                 continue;
             }
@@ -543,7 +543,7 @@ Return Value:
                 PRINT("\n");
                 if (Poll.Results.Failures != 0) {
                     Failures += Poll.Results.Failures;
-                    PRINT_ERROR("Test %s finished with %d errors. Status %x.\n",
+                    PRINT_ERROR("Test %s finished with %d errors. Status %d.\n",
                                 TestName,
                                 Poll.Results.Failures,
                                 Poll.Results.Status);
@@ -627,7 +627,7 @@ MainEnd:
             }
 
             if (!KSUCCESS(Cancel.Status)) {
-                PRINT_ERROR("Error: Cancel returned %x.\n", Cancel.Status);
+                PRINT_ERROR("Error: Cancel returned %d.\n", Cancel.Status);
                 Failures += 1;
                 continue;
             }
@@ -923,7 +923,7 @@ Return Value:
     assert(*HandleCount < KTestCount);
 
     if (!KSUCCESS(Request->Status)) {
-        PRINT_ERROR("Start ioctl failed: %x\n", Status);
+        PRINT_ERROR("Start ioctl failed: %d\n", Request->Status);
         return 1;
     }
 

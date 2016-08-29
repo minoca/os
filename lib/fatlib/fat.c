@@ -1268,7 +1268,7 @@ Return Value:
 
         if (FirstCluster != FatVolume->RootDirectoryCluster) {
             RtlDebugPrint("FAT: Tried to open invalid cluster 0x%I64x "
-                          "(total %x)\n",
+                          "(total 0x%x)\n",
                           FileId,
                           FatVolume->ClusterCount);
 
@@ -3269,8 +3269,8 @@ Return Value:
                 (((NewProperties->UserId & ~MAX_USHORT) != 0) ||
                  ((NewProperties->GroupId & ~MAX_USHORT) != 0))) {
 
-                RtlDebugPrint("FAT: Truncated UID/GID: FILE_PROPERTIES %x "
-                              "(ID %I64x UID %x GID %x)\n",
+                RtlDebugPrint("FAT: Truncated UID/GID: FILE_PROPERTIES 0x%x "
+                              "(ID 0x%I64x UID 0x%x GID 0x%x)\n",
                               NewProperties,
                               NewProperties->FileId,
                               NewProperties->UserId,
@@ -3493,7 +3493,7 @@ Return Value:
         //
 
         if (NextCluster == FAT_CLUSTER_FREE) {
-            RtlDebugPrint("FAT: DeleteFileBlocks: Free cluster after %x\n",
+            RtlDebugPrint("FAT: DeleteFileBlocks: Free cluster after 0x%x\n",
                           StartingCluster);
         }
 

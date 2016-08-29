@@ -1223,7 +1223,7 @@ Return Value:
     Link = (PNET80211_LINK)Context;
     State = Net80211StateEncrypted;
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("802.11: EAPOL failed with status 0x%08x\n", Status);
+        RtlDebugPrint("802.11: EAPOL failed with status %d\n", Status);
         State = Net80211StateInitialized;
     }
 

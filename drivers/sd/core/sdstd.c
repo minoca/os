@@ -205,7 +205,7 @@ Return Value:
     //
 
     if ((PendingBits & SD_INTERRUPT_ENABLE_ERROR_MASK) != 0) {
-        RtlDebugPrint("SD: Error status %x\n", PendingBits);
+        RtlDebugPrint("SD: Error status 0x%x\n", PendingBits);
         Status = STATUS_DEVICE_IO_ERROR;
 
     } else if ((PendingBits & SD_INTERRUPT_STATUS_TRANSFER_COMPLETE) != 0) {
@@ -977,7 +977,7 @@ Return Value:
     } while (SdQueryTimeCounter(Controller) <= Timeout);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Data or commands inhibited: %x\n", Value);
+        RtlDebugPrint("Data or commands inhibited: 0x%x\n", Value);
         goto SendCommandEnd;
     }
 
@@ -1133,7 +1133,7 @@ Return Value:
         goto SendCommandEnd;
 
     } else if ((Value & SD_INTERRUPT_STATUS_ERROR_INTERRUPT) != 0) {
-        RtlDebugPrint("SD: Error sending command %d: Status %x.\n",
+        RtlDebugPrint("SD: Error sending command %d: Status 0x%x.\n",
                       Command->Command,
                       Value);
 
@@ -1784,7 +1784,7 @@ Return Value:
         }
 
         if ((Value & SD_INTERRUPT_STATUS_ERROR_INTERRUPT) != 0) {
-            RtlDebugPrint("SD: Data error on read: Status %x\n", Value);
+            RtlDebugPrint("SD: Data error on read: Status 0x%x\n", Value);
             return STATUS_DEVICE_IO_ERROR;
         }
 
@@ -1903,7 +1903,7 @@ Return Value:
         }
 
         if ((Value & SD_INTERRUPT_STATUS_ERROR_INTERRUPT) != 0) {
-            RtlDebugPrint("SD : Data error on write: Status %x\n", Value);
+            RtlDebugPrint("SD : Data error on write: Status 0x%x\n", Value);
             return STATUS_DEVICE_IO_ERROR;
         }
 
