@@ -314,15 +314,15 @@ Return Value:
 
     PDEBUG_MODULE DebugModule;
     EFI_STATUS EfiStatus;
+    KSTATUS KStatus;
     UINTN ModuleNameLength;
     ULONG OriginalTimeout;
-    KSTATUS Status;
     UINTN Step;
     EFI_TIME Time;
 
     EfiStatus = EFI_SUCCESS;
     OriginalTimeout = 0;
-    Status = STATUS_SUCCESS;
+    KStatus = STATUS_SUCCESS;
     Step = 0;
 
     //
@@ -360,8 +360,8 @@ Return Value:
         //
 
         OriginalTimeout = KdSetConnectionTimeout(MAX_ULONG);
-        Status = KdInitialize(&EfiDebugDevice, DebugModule);
-        if (!KSUCCESS(Status)) {
+        KStatus = KdInitialize(&EfiDebugDevice, DebugModule);
+        if (!KSUCCESS(KStatus)) {
             goto InitializeEnd;
         }
     }
@@ -469,33 +469,33 @@ Return Value:
         KdSetConnectionTimeout(OriginalTimeout);
     }
 
-    Status = EfiCoreInitializeImageServices(FirmwareBaseAddress,
-                                            FirmwareLowestAddress,
-                                            FirmwareSize);
+    EfiStatus = EfiCoreInitializeImageServices(FirmwareBaseAddress,
+                                               FirmwareLowestAddress,
+                                               FirmwareSize);
 
-    if (EFI_ERROR(Status)) {
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
     Step += 1;
-    Status = EfipCoreRegisterForInterestingNotifies();
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfipCoreRegisterForInterestingNotifies();
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
     Step += 1;
-    Status = EfiFvInitializeSectionExtraction(EfiFirmwareImageHandle,
-                                              EfiSystemTable);
+    EfiStatus = EfiFvInitializeSectionExtraction(EfiFirmwareImageHandle,
+                                                 EfiSystemTable);
 
-    if (EFI_ERROR(Status)) {
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
     Step += 1;
-    Status = EfiFvInitializeBlockSupport(EfiFirmwareImageHandle,
-                                         EfiSystemTable);
+    EfiStatus = EfiFvInitializeBlockSupport(EfiFirmwareImageHandle,
+                                            EfiSystemTable);
 
-    if (EFI_ERROR(Status)) {
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
@@ -506,8 +506,8 @@ Return Value:
     }
 
     Step += 1;
-    Status = EfiFvDriverInit(EfiFirmwareImageHandle, EfiSystemTable);
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiFvDriverInit(EfiFirmwareImageHandle, EfiSystemTable);
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
@@ -516,26 +516,26 @@ Return Value:
     //
 
     Step += 1;
-    Status = EfiDiskIoDriverEntry(NULL, EfiSystemTable);
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiDiskIoDriverEntry(NULL, EfiSystemTable);
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
     Step += 1;
-    Status = EfiPartitionDriverEntry(NULL, EfiSystemTable);
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiPartitionDriverEntry(NULL, EfiSystemTable);
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
     Step += 1;
-    Status = EfiFatDriverEntry(NULL, EfiSystemTable);
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiFatDriverEntry(NULL, EfiSystemTable);
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
     Step += 1;
-    Status = EfiGraphicsTextDriverEntry(NULL, EfiSystemTable);
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiGraphicsTextDriverEntry(NULL, EfiSystemTable);
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
@@ -545,8 +545,8 @@ Return Value:
     //
 
     Step += 1;
-    Status = EfiPlatformEnumerateFirmwareVolumes();
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiPlatformEnumerateFirmwareVolumes();
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
@@ -559,14 +559,14 @@ Return Value:
     //
 
     Step += 1;
-    Status = EfiAcpiDriverEntry(NULL, EfiSystemTable);
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiAcpiDriverEntry(NULL, EfiSystemTable);
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
     Step += 1;
-    Status = EfiSmbiosDriverEntry(NULL, EfiSystemTable);
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiSmbiosDriverEntry(NULL, EfiSystemTable);
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
@@ -575,8 +575,8 @@ Return Value:
     //
 
     Step += 1;
-    Status = EfiPlatformEnumerateDevices();
-    if (EFI_ERROR(Status)) {
+    EfiStatus = EfiPlatformEnumerateDevices();
+    if (EFI_ERROR(EfiStatus)) {
         goto InitializeEnd;
     }
 
@@ -590,8 +590,8 @@ Return Value:
     // Let's get the time, just for kicks.
     //
 
-    Status = EfiGetTime(&Time, NULL);
-    if (!EFI_ERROR(Status)) {
+    EfiStatus = EfiGetTime(&Time, NULL);
+    if (!EFI_ERROR(EfiStatus)) {
         RtlDebugPrint("%d/%d/%d %02d:%02d:%02d\n",
                       Time.Month,
                       Time.Day,
@@ -614,8 +614,8 @@ InitializeEnd:
     // Never return.
     //
 
-    RtlDebugPrint("EFI firmware failed. Status %d, EFI Status 0x%x, Step %d\n",
-                  Status,
+    RtlDebugPrint("EFI firmware failed. KStatus %d, EFI Status 0x%x, Step %d\n",
+                  KStatus,
                   EfiStatus,
                   Step);
 
