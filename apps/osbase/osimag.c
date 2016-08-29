@@ -308,7 +308,7 @@ Return Value:
     PLOADED_IMAGE Image;
     ULONG LoadFlags;
     PIMAGE_ENTRY_POINT Start;
-    INT Status;
+    KSTATUS Status;
     PVOID ThreadData;
 
     //
@@ -362,7 +362,7 @@ Return Value:
 
         if (ArgumentIndex >= Environment->ArgumentCount) {
             RtlDebugPrint(OS_DYNAMIC_LOADER_USAGE);
-            Status = 1;
+            Status = STATUS_UNSUCCESSFUL;
             goto DynamicLoaderMainEnd;
         }
 
@@ -459,7 +459,7 @@ Return Value:
     Start = Image->EntryPoint;
     Start(Environment);
     RtlDebugPrint("Warning: Image returned to interpreter!\n");
-    Status = 1;
+    Status = STATUS_UNSUCCESSFUL;
 
 DynamicLoaderMainEnd:
     OsExitProcess(Status);
