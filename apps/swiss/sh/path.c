@@ -1506,9 +1506,6 @@ Return Value:
 
             while (*Prefix != '\0') {
                 if (*Prefix == '\\') {
-
-                    assert(*(Prefix + 1) != '\0');
-
                     memmove(Prefix,
                             Prefix + 1,
                             &(FieldCopy[FieldCopySize]) - (Prefix + 1));
@@ -2475,10 +2472,10 @@ Return Value:
             if ((*Field == '*') || (*Field == '?') || (*Field == '[')) {
                 FoundMeta = TRUE;
             }
+        }
 
-            if (*Field == '/') {
-                FoundSeparator = TRUE;
-            }
+        if (*Field == '/') {
+            FoundSeparator = TRUE;
         }
 
         if (*Field == '\\') {
