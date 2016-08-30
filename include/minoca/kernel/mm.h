@@ -141,13 +141,12 @@ Author:
     (IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE | IMAGE_SECTION_EXECUTABLE)
 
 //
-// Define the mask of flags that is internal and should be specified by
+// Define the mask of flags that is internal and should not be specified by
 // outside callers.
 //
 
-#define IMAGE_SECTION_INTERNAL_MASK                                         \
-    (IMAGE_SECTION_PAGE_CACHE_BACKED | IMAGE_SECTION_NO_IMAGE_BACKING |     \
-     IMAGE_SECTION_WAS_WRITABLE)
+#define IMAGE_SECTION_INTERNAL_MASK \
+    (IMAGE_SECTION_PAGE_CACHE_BACKED | IMAGE_SECTION_NO_IMAGE_BACKING)
 
 //
 // Define flags used for unmapping image sections.

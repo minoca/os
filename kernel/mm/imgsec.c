@@ -1074,7 +1074,7 @@ Return Value:
     PageCount = Size >> PageShift;
 
     //
-    // The caller should not be supplying the cache-backed or anonymous flags.
+    // The caller should not be supplying certain flags.
     //
 
     ASSERT((Flags & IMAGE_SECTION_INTERNAL_MASK) == 0);
