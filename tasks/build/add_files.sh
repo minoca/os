@@ -85,14 +85,14 @@ cp -v "$SRCROOT/os/tasks/build/autoclient.sh" "$BINROOT/apps/etc/init.d/"
 chmod 0755 "$BINROOT/apps/etc/init.d/autoclient.sh"
 for level in 2 3 4 5; do
     mkdir -p "$BINROOT/apps/etc/rc$level.d/"
-    ln -s "../init.d/autoclient.sh" \
+    ln -sf "../init.d/autoclient.sh" \
         "$BINROOT/apps/etc/rc$level.d/S46autoclient.sh"
 
 done
 
 for level in 0 1 6; do
     mkdir -p "$BINROOT/apps/etc/rc$level.d/"
-    ln -s "../init.d/autoclient.sh" \
+    ln -sf "../init.d/autoclient.sh" \
         "$BINROOT/apps/etc/rc$level.d/K64autoclient.sh"
 done
 
