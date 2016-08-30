@@ -539,6 +539,16 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/php-7.0.9"
         },
         {
+            "name": "Make gettext",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gettext-0.19.8.1"
+        },
+        {
+            "name": "Make glib",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/glib-2.49.6"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
