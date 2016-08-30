@@ -103,7 +103,7 @@ typedef unsigned long long ino_t;
 // Define a type used for file mode bits.
 //
 
-typedef unsigned long mode_t;
+typedef unsigned int mode_t;
 
 //
 // Define a type used for link count (both hard and symbolic).
