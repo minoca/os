@@ -901,6 +901,20 @@ Return Value:
                 continue;
             }
 
+            //
+            // If the timeout is zero, return immediately, no need to even
+            // queue the timer.
+            //
+
+            Queue = &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue);
+            WaitEntry->Queue = Queue;
+            if (TimeoutInMilliseconds == 0) {
+                Block = FALSE;
+                WaitBlock->SignalingQueue = Queue;
+                Status = STATUS_TIMEOUT;
+                break;
+            }
+
             DueTime = HlQueryTimeCounter() +
                       KeConvertMicrosecondsToTimeTicks(
                          TimeoutInMilliseconds * MICROSECONDS_PER_MILLISECOND);
@@ -917,8 +931,6 @@ Return Value:
             }
 
             TimerQueued = TRUE;
-            Queue = &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue);
-            WaitEntry->Queue = Queue;
 
         } else {
             WaitEntry = &(WaitBlock->Entry[Index + 1]);
