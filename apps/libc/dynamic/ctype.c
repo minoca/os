@@ -193,7 +193,7 @@ Return Value:
 
 {
 
-    return (Character < ' ');
+    return ((Character < ' ') || (Character == 0x7F));
 }
 
 LIBC_API
@@ -346,7 +346,7 @@ Return Value:
 {
 
     if ((isprint(Character)) &&
-        (!isalnum(Character)) && (!isspace(Character))) {
+        (!isalnum(Character)) && (Character != ' ')) {
 
         return 1;
     }

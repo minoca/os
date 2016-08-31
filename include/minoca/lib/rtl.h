@@ -123,7 +123,8 @@ Author:
 // This macro returns non-zero if the given character is a control character.
 //
 
-#define RtlIsCharacterControl(_Character) ((_Character) < ' ')
+#define RtlIsCharacterControl(_Character) \
+    (((_Character) < ' ') || ((_Character) == 0x7F))
 
 //
 // This macro returns non-zero if the given character is whitespace.
@@ -148,9 +149,9 @@ Author:
 //
 
 #define RtlIsCharacterPunctuation(_Character)                \
-    ((!(RtlIsCharacterAlphabetic(_Character))) &&            \
-     (!(RtlIsCharacterDigit(_Character))) &&                 \
-     (!(RtlIsCharacterControl(_Character))) && ((_Character) != ' '))
+    ((RtlIsCharacterPrintable(_Character)) &&                \
+     (!RtlIsCharacterAlphanumeric(_Character)) &&            \
+     ((_Character) != ' '))
 
 //
 // This macro returns non-zero if the given character is a graphical character.
@@ -250,7 +251,8 @@ Author:
 // This macro returns non-zero if the given character is a control character.
 //
 
-#define RtlIsCharacterControlWide(_Character) ((_Character) < L' ')
+#define RtlIsCharacterControlWide(_Character) \
+    (((_Character) < L' ') || ((_Character) == 0x7F))
 
 //
 // This macro returns non-zero if the given character is whitespace.
@@ -275,9 +277,9 @@ Author:
 //
 
 #define RtlIsCharacterPunctuationWide(_Character)                \
-    ((!(RtlIsCharacterAlphabeticWide(_Character))) &&            \
-     (!(RtlIsCharacterDigitWide(_Character))) &&                 \
-     (!(RtlIsCharacterControlWide(_Character))) && ((_Character) != L' '))
+    ((RtlIsCharacterPrintableWide(_Character)) &&                \
+     (!RtlIsCharacterAlphanumericWide(_Character)) &&            \
+     ((_Character) != L' '))
 
 //
 // This macro returns non-zero if the given character is a graphical character.
