@@ -922,6 +922,32 @@ Return Value:
     }
 
     //
+    // Test zero length precision.
+    //
+
+    StringLength = RtlPrintToString(PrintOutput,
+                                    MAX_OUTPUT,
+                                    CharacterEncodingDefault,
+                                    "s%.0ds",
+                                    0);
+
+    if ((StringLength != 3) || (strcmp(PrintOutput, "ss") != 0)) {
+        printf("Error: Print zero precision failed.\n");
+        TestsFailed += 1;
+    }
+
+    StringLength = RtlPrintToString(PrintOutput,
+                                    MAX_OUTPUT,
+                                    CharacterEncodingDefault,
+                                    "s% .0ds",
+                                    0);
+
+    if ((StringLength != 4) || (strcmp(PrintOutput, "s s") != 0)) {
+        printf("Error: Print zero precision failed 2.\n");
+        TestsFailed += 1;
+    }
+
+    //
     // Test wide basic print, no formatting, with output.
     //
 

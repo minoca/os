@@ -835,6 +835,7 @@ Return Value:
         Properties.IntegerSize = sizeof(UINTN);
         Properties.Radix = 16;
         Properties.PrintUpperCase = TRUE;
+        Properties.PrintRadix = TRUE;
         break;
 
     case FORMAT_HEX_CAPITAL:
@@ -1218,72 +1219,70 @@ Return Value:
         }
     }
 
-    //
-    // If the integer is zero and a zero length precision was explicitly
-    // asked for, print no characters.
-    //
-
-    if ((Integer == 0) && (Precision == 0)) {
-        return TRUE;
+    if (Integer == 0) {
+        Properties->PrintRadix = FALSE;
     }
 
-    //
-    // If the integer is signed and negative, make it positive.
-    //
-
-    if ((Properties->Unsigned == FALSE) && ((LONGLONG)Integer < 0)) {
-        Negative = TRUE;
-        Integer = -Integer;
-    }
-
-    //
-    // Convert the integer into a reversed string.
-    //
-
-    RtlZeroMemory(LocalBuffer, sizeof(LocalBuffer));
-    do {
+    if ((Integer != 0) || (Precision != 0)) {
 
         //
-        // Get the least significant digit.
+        // If the integer is signed and negative, make it positive.
         //
 
-        NextInteger = RtlDivideUnsigned64(Integer,
-                                          Properties->Radix,
-                                          &Remainder);
-
-        Character = (UCHAR)Remainder;
-        if (Character > 9) {
-            if (Properties->PrintUpperCase != FALSE) {
-                Character = Character - 10 + 'A';
-
-            } else {
-                Character = Character - 10 + 'a';
-            }
-
-        } else {
-            Character += '0';
+        if ((Properties->Unsigned == FALSE) && ((LONGLONG)Integer < 0)) {
+            Negative = TRUE;
+            Integer = -Integer;
         }
 
         //
-        // Write out the character.
+        // Convert the integer into a reversed string.
         //
 
-        LocalBuffer[IntegerLength] = Character;
-        IntegerLength += 1;
+        RtlZeroMemory(LocalBuffer, sizeof(LocalBuffer));
+        do {
+
+            //
+            // Get the least significant digit.
+            //
+
+            NextInteger = RtlDivideUnsigned64(Integer,
+                                              Properties->Radix,
+                                              &Remainder);
+
+            Character = (UCHAR)Remainder;
+            if (Character > 9) {
+                if (Properties->PrintUpperCase != FALSE) {
+                    Character = Character - 10 + 'A';
+
+                } else {
+                    Character = Character - 10 + 'a';
+                }
+
+            } else {
+                Character += '0';
+            }
+
+            //
+            // Write out the character.
+            //
+
+            LocalBuffer[IntegerLength] = Character;
+            IntegerLength += 1;
+
+            //
+            // Use the divided integer to get the next least significant digit.
+            //
+
+            Integer = NextInteger;
+
+        } while (Integer > 0);
 
         //
-        // Use the divided integer to get the next least significant digit.
+        // Reverse the integer string.
         //
 
-        Integer = NextInteger;
-
-    } while (Integer > 0);
-
-    //
-    // Reverse the integer string.
-    //
-
-    RtlStringReverse(LocalBuffer, LocalBuffer + IntegerLength);
+        RtlStringReverse(LocalBuffer, LocalBuffer + IntegerLength);
+    }
 
     //
     // Figure out what kind of decorations can go on the integer. There could
