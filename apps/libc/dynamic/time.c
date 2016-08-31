@@ -532,6 +532,8 @@ Return Value:
 
 {
 
+    ULONGLONG Frequency;
+
     //
     // All supported clocks have a resolution of 1 nanosecond, in that the
     // nanosecond field returns is valid down to the last digit.
@@ -540,6 +542,36 @@ Return Value:
     switch (ClockId) {
     case CLOCK_REALTIME:
     case CLOCK_MONOTONIC:
+    case CLOCK_BOOTTIME:
+    case CLOCK_MONOTONIC_RAW:
+        Frequency = OsGetTimeCounterFrequency();
+        if (Frequency <= 1) {
+            Resolution->tv_sec = 1;
+            Resolution->tv_nsec = 0;
+
+        } else {
+            Resolution->tv_sec = 0;
+            Resolution->tv_nsec = NANOSECONDS_PER_SECOND / Frequency;
+            if (Resolution->tv_nsec == 0) {
+                Resolution->tv_nsec = 1;
+            }
+        }
+
+        break;
+
+    case CLOCK_REALTIME_COARSE:
+    case CLOCK_MONOTONIC_COARSE:
+
+        //
+        // This is a bit of a lie because 1) the periodic frequency of the
+        // clock can be changed and 2) dynamic tick varies this wildly from
+        // moment to moment. But it's an okay guess.
+        //
+
+        Resolution->tv_sec = 0;
+        Resolution->tv_nsec = (15625 * NANOSECONDS_PER_MICROSECOND);
+        break;
+
     case CLOCK_PROCESS_CPUTIME_ID:
     case CLOCK_THREAD_CPUTIME_ID:
         Resolution->tv_sec = 0;
@@ -614,14 +646,15 @@ Return Value:
 
     switch (ClockId) {
     case CLOCK_REALTIME:
-        OsGetSystemTime(&SystemTime);
-        Seconds = ClpConvertSystemTimeToUnixTime(&SystemTime);
-        Time->tv_sec = Seconds;
+        OsGetHighPrecisionSystemTime(&SystemTime);
+        Time->tv_sec = ClpConvertSystemTimeToUnixTime(&SystemTime);
         Time->tv_nsec = SystemTime.Nanoseconds;
         break;
 
     case CLOCK_MONOTONIC:
-        TimeCounter = OsGetRecentTimeCounter();
+    case CLOCK_BOOTTIME:
+    case CLOCK_MONOTONIC_RAW:
+        TimeCounter = OsQueryTimeCounter();
         Frequency = OsGetTimeCounterFrequency();
         ClpConvertCounterToSpecificTime(TimeCounter, Frequency, Time);
         break;
@@ -658,6 +691,19 @@ Return Value:
 
         Cycles = Usage.UserCycles + Usage.KernelCycles;
         ClpConvertCounterToSpecificTime(Cycles, Frequency, Time);
+        break;
+
+    case CLOCK_REALTIME_COARSE:
+        OsGetSystemTime(&SystemTime);
+        Seconds = ClpConvertSystemTimeToUnixTime(&SystemTime);
+        Time->tv_sec = Seconds;
+        Time->tv_nsec = SystemTime.Nanoseconds;
+        break;
+
+    case CLOCK_MONOTONIC_COARSE:
+        TimeCounter = OsGetRecentTimeCounter();
+        Frequency = OsGetTimeCounterFrequency();
+        ClpConvertCounterToSpecificTime(TimeCounter, Frequency, Time);
         break;
 
     default:
@@ -735,6 +781,7 @@ Return Value:
 
     switch (ClockId) {
     case CLOCK_REALTIME:
+    case CLOCK_REALTIME_COARSE:
 
         //
         // Invalid nanoseconds are not allowed.
@@ -3007,7 +3054,9 @@ Return Value:
     } else {
         *TimeoutInMilliseconds =
                       (SpecificTimeout->tv_sec * MILLISECONDS_PER_SECOND) +
-                      (SpecificTimeout->tv_nsec / NANOSECONDS_PER_MILLISECOND);
+                      ((SpecificTimeout->tv_nsec +
+                        (NANOSECONDS_PER_MILLISECOND - 1)) /
+                       NANOSECONDS_PER_MILLISECOND);
     }
 
     return 0;

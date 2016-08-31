@@ -512,8 +512,7 @@ Arguments:
     Attribute - Supplies a pointer to the condition variable attribute
         structure.
 
-    Clock - Supplies the clock to use when performing timed waits. Currently
-        the only valid values are CLOCK_MONOTONIC and CLOCK_REALTIME.
+    Clock - Supplies the clock to use when performing timed waits.
 
 Return Value:
 
@@ -528,10 +527,12 @@ Return Value:
     PPTHREAD_CONDITION_ATTRIBUTE AttributeInternal;
 
     AttributeInternal = (PPTHREAD_CONDITION_ATTRIBUTE)Attribute;
-    if (Clock == CLOCK_REALTIME) {
+    if ((Clock == CLOCK_REALTIME) || (Clock == CLOCK_REALTIME_COARSE)) {
         AttributeInternal->Flags &= ~PTHREAD_CONDITION_CLOCK_MONOTONIC;
 
-    } else if (Clock == CLOCK_MONOTONIC) {
+    } else if ((Clock == CLOCK_MONOTONIC) ||
+               (Clock == CLOCK_MONOTONIC_COARSE)) {
+
         AttributeInternal->Flags |= PTHREAD_CONDITION_CLOCK_MONOTONIC;
 
     } else {

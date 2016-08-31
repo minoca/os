@@ -317,7 +317,7 @@ Return Value:
             abort();
         }
 
-        clock_gettime(CLOCK_REALTIME, &Timeout);
+        clock_gettime(CLOCK_REALTIME_COARSE, &Timeout);
         Timeout.tv_sec += PTHREAD_SETID_TIMEOUT;
         while (Request->Thread == (pthread_t)Thread) {
             Status = pthread_cond_timedwait(&(Request->Condition),

@@ -993,8 +993,7 @@ Arguments:
     Attribute - Supplies a pointer to the condition variable attribute
         structure.
 
-    Clock - Supplies the clock to use when performing timed waits. Currently
-        the only valid values are CLOCK_MONOTONIC and CLOCK_REALTIME.
+    Clock - Supplies the clock to use when performing timed waits.
 
 Return Value:
 
