@@ -897,6 +897,7 @@ Return Value:
 {
 
     BOOL ApplySignal;
+    KSTATUS CopyStatus;
     ULONGLONG CurrentTime;
     ULONGLONG Frequency;
     SIGNAL_SET OriginalMask;
@@ -904,6 +905,7 @@ Return Value:
     ULONGLONG PreviousDelayStart;
     PKPROCESS Process;
     BOOL RestoreOriginalMask;
+    BOOL SignalHandled;
     ULONG SignalNumber;
     SIGNAL_PARAMETERS SignalParameters;
     KSTATUS Status;
@@ -991,8 +993,39 @@ Return Value:
     TimeoutInMilliseconds = Parameters->TimeoutInMilliseconds;
     while (TRUE) {
         PsCheckRuntimeTimers(Thread);
-        SignalNumber = PsDequeuePendingSignal(&SignalParameters,
-                                              Thread->TrapFrame);
+
+        //
+        // Call the dequene pending signal helper routine directly. This
+        // routine does not always want to do the default processing on a
+        // signal.
+        //
+
+        do {
+            SignalNumber = PspDequeuePendingSignal(&SignalParameters,
+                                                   Thread->TrapFrame);
+
+            if (SignalNumber == -1) {
+                break;
+            }
+
+            //
+            // If the operation temporarily unblocked some signals and one of
+            // those signals is firing, then skip the default processing.
+            //
+
+            if ((Parameters->SignalOperation == SignalMaskOperationClear) &&
+                (IS_SIGNAL_SET(Parameters->SignalSet, SignalNumber) != FALSE)) {
+
+                break;
+            }
+
+            SignalHandled = PspSignalAttemptDefaultProcessing(SignalNumber);
+
+        } while (SignalHandled != FALSE);
+
+        //
+        // If a signal was dequeued, then break out to handle it.
+        //
 
         if (SignalNumber != -1) {
             break;
@@ -1064,11 +1097,12 @@ Return Value:
         }
 
         if (Parameters->SignalParameters != NULL) {
-            Status = MmCopyToUserMode(Parameters->SignalParameters,
-                                      &SignalParameters,
-                                      sizeof(SIGNAL_PARAMETERS));
+            CopyStatus = MmCopyToUserMode(Parameters->SignalParameters,
+                                          &SignalParameters,
+                                          sizeof(SIGNAL_PARAMETERS));
 
-            if (!KSUCCESS(Status)) {
+            if (!KSUCCESS(CopyStatus)) {
+                Status = CopyStatus;
                 goto SysSuspendExecutionEnd;
             }
         }
