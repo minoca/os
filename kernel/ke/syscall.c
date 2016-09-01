@@ -312,6 +312,7 @@ Return Value:
 
 {
 
+    KSTATUS CopyStatus;
     PSYSTEM_CALL_TABLE_ENTRY Handler;
     SYSTEM_CALL_PARAMETER_UNION LocalParameters;
     KSTATUS Status;
@@ -350,6 +351,7 @@ Return Value:
                                     Handler->CopyInSize);
 
         if (!KSUCCESS(Status)) {
+            PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
             goto SystemCallHandlerEnd;
         }
 
@@ -367,11 +369,13 @@ Return Value:
 
             ASSERT(Handler->CopyOutSize <= Handler->CopyInSize);
 
-            Status = MmCopyToUserMode(SystemCallParameter,
-                                      &LocalParameters,
-                                      Handler->CopyOutSize);
+            CopyStatus = MmCopyToUserMode(SystemCallParameter,
+                                          &LocalParameters,
+                                          Handler->CopyOutSize);
 
-            if (!KSUCCESS(Status)) {
+            if (!KSUCCESS(CopyStatus)) {
+                PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
+                Status = CopyStatus;
                 goto SystemCallHandlerEnd;
             }
         }
