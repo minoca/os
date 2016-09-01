@@ -1769,7 +1769,7 @@ Return Value:
     Flags = Action->sa_flags;
 
     //
-    // Set a new signal mask if desired. SA_RESETHAND behaves like SA_NODEFER.
+    // Add to the signal mask if desired. SA_RESETHAND behaves like SA_NODEFER.
     //
 
     if ((IS_SIGNAL_SET_EMPTY(Action->sa_mask) == FALSE) ||
@@ -1782,7 +1782,7 @@ Return Value:
         }
 
         SignalMask = OsSetSignalBehavior(SignalMaskBlocked,
-                                         SignalMaskOperationOverwrite,
+                                         SignalMaskOperationSet,
                                          &SignalMask);
     }
 
