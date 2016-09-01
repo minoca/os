@@ -585,23 +585,23 @@ FUNCTION(ArSysenterHandlerAsm)
     addl    $0xC, %esp              # Pop the parameters.
 
     ##
+    ## Reset the segment registers to user mode and return.
+    ##
+
+    mov     $USER_DS, %cx           # Get the user mode DS.
+    mov     %cx, %ds                # Move to DS.
+    mov     %cx, %es                # Move to ES.
+    mov     $GDT_THREAD, %cx        # Get the user-mode GS.
+    mov     %cx, %fs                # Move to FS.
+    mov     %cx, %gs                # Move to GS.
+
+    ##
     ## Restore some portions of the pseudo trap frame. Do not zero EAX as it
     ## holds the return value from the system call.
     ##
 
     movl    TRAP_ESP(%esp), %ecx    # Sysexit moves ECX to ESP.
     movl    TRAP_EIP(%esp), %edx    # Sysexit moves EDX to EIP.
-
-    ##
-    ## Reset the segment registers to user mode and return.
-    ##
-
-    mov     $USER_DS, %ax           # Get the user mode DS.
-    mov     %ax, %ds                # Move to DS.
-    mov     %ax, %es                # Move to ES.
-    mov     $GDT_THREAD, %ax        # Get the user-mode GS.
-    mov     %ax, %fs                # Move to FS.
-    mov     %ax, %gs                # Move to GS.
     sysexit                         # Return to user mode, slickly.
 
 END_FUNCTION(ArSysenterHandlerAsm)
