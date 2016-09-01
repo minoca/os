@@ -136,7 +136,7 @@ Return Value:
     //
 
     sigemptyset(&(NewAction.sa_mask));
-    NewAction.sa_flags = SA_SIGINFO;
+    NewAction.sa_flags = 0;
     NewAction.sa_handler = ClpGetpassSignalHandler;
     sigaction(SIGALRM, &NewAction, &SaveAlarm);
     sigaction(SIGHUP, &NewAction, &SaveHup);
