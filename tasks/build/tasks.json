@@ -549,6 +549,21 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/glib-2.49.6"
         },
         {
+            "name": "Make libcroco",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libcroco-0.6.11"
+        },
+        {
+            "name": "Make gdbm",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gdbm-1.12"
+        },
+        {
+            "name": "Make zsh",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/zsh-5.2"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"

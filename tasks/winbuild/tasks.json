@@ -485,6 +485,16 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gettext-0.19.8.1"
         },
         {
+            "name": "Make gdbm",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gdbm-1.12"
+        },
+        {
+            "name": "Make zsh",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/zsh-5.2"
+        },
+        {
             "name": "Make OS",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os test"
