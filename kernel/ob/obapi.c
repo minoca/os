@@ -907,7 +907,6 @@ Return Value:
             //
 
             Queue = &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue);
-            WaitEntry->Queue = Queue;
             if (TimeoutInMilliseconds == 0) {
                 Block = FALSE;
                 WaitBlock->SignalingQueue = Queue;
@@ -931,6 +930,7 @@ Return Value:
             }
 
             TimerQueued = TRUE;
+            WaitEntry->Queue = Queue;
 
         } else {
             WaitEntry = &(WaitBlock->Entry[Index + 1]);
