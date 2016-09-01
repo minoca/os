@@ -89,9 +89,10 @@ Author:
 // to ignore it.
 //
 
-#define IS_SIGNAL_DEFAULT_IGNORE(_SignalNumber)             \
-    (((_SignalNumber) == SIGNAL_CHILD_PROCESS_ACTIVITY) ||  \
-     ((_SignalNumber) == SIGNAL_URGENT_DATA_AVAILABLE))
+#define IS_SIGNAL_DEFAULT_IGNORE(_SignalNumber)            \
+    (((_SignalNumber) == SIGNAL_CHILD_PROCESS_ACTIVITY) || \
+     ((_SignalNumber) == SIGNAL_URGENT_DATA_AVAILABLE) ||  \
+     ((_SignalNumber) == SIGNAL_TERMINAL_WINDOW_CHANGE))
 
 //
 // ---------------------------------------------------------------- Definitions
