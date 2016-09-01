@@ -248,9 +248,9 @@ Return Value:
     //
 
     FILL_SIGNAL_SET(InternalSignals);
-    OsSetSignalBehavior(SignalMaskBlocked,
-                        SignalMaskOperationOverwrite,
-                        &InternalSignals);
+    NewThread->SignalMask = OsSetSignalBehavior(SignalMaskBlocked,
+                                                SignalMaskOperationOverwrite,
+                                                &InternalSignals);
 
     KernelStatus = OsCreateThread(NULL,
                                   0,
