@@ -495,6 +495,81 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/zsh-5.2"
         },
         {
+            "name": "Make libgpg-error",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/libgpg-error-1.24"
+        },
+        {
+            "name": "Make libassuan-2.4.3",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/libassuan-2.4.3"
+        },
+        {
+            "name": "Make pinentry",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/pinentry-0.9.7"
+        },
+        {
+            "name": "Make libgcrypt",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/libgcrypt-1.7.3"
+        },
+        {
+            "name": "Make libksba",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/libksba-1.3.5"
+        },
+        {
+            "name": "Make npth",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/npth-1.2"
+        },
+        {
+            "name": "Make nettle",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/nettle-3.2"
+        },
+        {
+            "name": "Make libtasn1",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/libtasn1-4.9"
+        },
+        {
+            "name": "Make p11kit",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/p11-kit-0.23.2"
+        },
+        {
+            "name": "Make libidn",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/libidn-1.33"
+        },
+        {
+            "name": "Make unbound",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/unbound-1.5.9"
+        },
+        {
+            "name": "Make gnutls",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/gnutls-3.5.3"
+        },
+        {
+            "name": "Make openldap",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/openldap-2.4.44"
+        },
+        {
+            "name": "Make gnupg",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/gnupg-2.1.15"
+        },
+        {
+            "name": "Make gpgme",
+            "type": "execute",
+            "parameter": "src/os/tasks/winbuild/make.sh third-party/build/gpgme-1.6.0"
+        },
+        {
             "name": "Make OS",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os test"
