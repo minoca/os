@@ -23,6 +23,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <paths.h>
 #include <sys/time.h>
 #include <sys/types.h>
 
@@ -44,8 +45,6 @@ extern "C" {
 #define UTMP_FILENAME _PATH_UTMP
 #define WTMP_FILE _PATH_WTMP
 #define WTMP_FILENAME _PATH_WTMP
-#define _PATH_UTMP "/var/run/utmp"
-#define _PATH_WTMP "/var/log/wtmp"
 
 //
 // Define the sizes of various arrays.

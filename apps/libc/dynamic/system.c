@@ -29,6 +29,7 @@ Environment:
 #include "libcp.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <paths.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,11 +42,9 @@ Environment:
 
 //
 // Define the parameters used when running the command interpreter.
-// TODO: Change this to /bin/sh (merge with exec define).
 //
 
-#define SHELL_BINARY "sh"
-#define SHELL_ARGUMENT0 SHELL_BINARY
+#define SHELL_ARGUMENT0 _PATH_BSHELL
 #define SHELL_ARGUMENT1 "-c"
 #define SHELL_NOT_FOUND_STATUS 127
 
@@ -148,7 +147,7 @@ Return Value:
         Arguments[1] = SHELL_ARGUMENT1;
         Arguments[2] = (char *)Command;
         Arguments[3] = NULL;
-        execvp(SHELL_BINARY, Arguments);
+        execvp(_PATH_BSHELL, Arguments);
         exit(SHELL_NOT_FOUND_STATUS);
 
     //
@@ -276,7 +275,7 @@ Return Value:
             close(Pipe[0]);
         }
 
-        execvpe(SHELL_BINARY, Arguments, (char *const *)environ);
+        execvpe(_PATH_BSHELL, Arguments, (char *const *)environ);
         exit(SHELL_NOT_FOUND_STATUS);
     }
 

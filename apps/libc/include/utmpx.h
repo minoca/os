@@ -23,6 +23,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <paths.h>
 #include <sys/time.h>
 #include <sys/types.h>
 
@@ -40,7 +41,6 @@ extern "C" {
 // Define the path to the utmpx file.
 //
 
-#define _PATH_UTMPX "/var/run/utmp"
 #define UTMPX_FILE _PATH_UTMPX
 
 //

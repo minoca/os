@@ -26,6 +26,7 @@ Environment:
 
 #include "libcp.h"
 #include <assert.h>
+#include <paths.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -33,7 +34,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define USER_SHELLS_PATH "/etc/shells"
+#define USER_SHELLS_PATH _PATH_SHELLS
 
 //
 // ------------------------------------------------------ Data Type Definitions

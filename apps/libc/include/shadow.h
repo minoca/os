@@ -23,6 +23,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <paths.h>
 #include <stdio.h>
 #include <stddef.h>
 
@@ -41,7 +42,6 @@ extern "C" {
 //
 
 #define SHADOW _PATH_SHADOW
-#define _PATH_SHADOW "/etc/shadow"
 
 //
 // ------------------------------------------------------ Data Type Definitions

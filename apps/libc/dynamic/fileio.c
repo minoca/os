@@ -29,6 +29,7 @@ Environment:
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <paths.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -3243,7 +3244,7 @@ Return Value:
         return NULL;
     }
 
-    snprintf(Buffer, L_ctermid, "/dev/tty");
+    snprintf(Buffer, L_ctermid, _PATH_TTY);
     return Buffer;
 }
 
