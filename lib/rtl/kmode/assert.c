@@ -52,8 +52,8 @@ Environment:
 RTL_API
 VOID
 RtlRaiseAssertion (
-    PSTR Expression,
-    PSTR SourceFile,
+    PCSTR Expression,
+    PCSTR SourceFile,
     ULONG SourceLine
     )
 

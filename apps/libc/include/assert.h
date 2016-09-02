@@ -60,8 +60,8 @@ extern "C" {
 LIBC_API
 void
 _assert (
-    char *Expression,
-    char *File,
+    const char *Expression,
+    const char *File,
     int Line
     );
 

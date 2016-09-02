@@ -96,8 +96,8 @@ BOOLEAN EfiAtRuntime;
 // debugging.
 //
 
-CHAR8 *EfiRuntimeAssertExpression;
-CHAR8 *EfiRuntimeAssertFile;
+CONST CHAR8 *EfiRuntimeAssertExpression;
+CONST CHAR8 *EfiRuntimeAssertFile;
 UINTN EfiRuntimeAssertLine;
 
 //
@@ -464,8 +464,8 @@ Return Value:
 
 VOID
 RtlRaiseAssertion (
-    CHAR8 *Expression,
-    CHAR8 *SourceFile,
+    CONST CHAR8 *Expression,
+    CONST CHAR8 *SourceFile,
     UINTN SourceLine
     )
 
