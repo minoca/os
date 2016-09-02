@@ -630,6 +630,37 @@ LIBC_API extern const char *sys_siglist[];
 
 LIBC_API
 int
+siginterrupt (
+    int Signal,
+    int Flag
+    );
+
+/*++
+
+Routine Description:
+
+    This routine modifies the behavior of system calls interrupted by a given
+    signal.
+
+Arguments:
+
+    Signal - Supplies the signal number to change restart behavior of.
+
+    Flag - Supplies a boolean that if zero, will mean that system calls
+        interrupted by this signal will be restarted if no data is transferred.
+        This is the default. If non-zero, system calls interrupted by the given
+        signal that have not transferred any data yet will return with EINTR.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will contain more information.
+
+--*/
+
+LIBC_API
+int
 sigaction (
     int SignalNumber,
     struct sigaction *NewAction,

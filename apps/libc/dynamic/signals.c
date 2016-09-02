@@ -137,6 +137,57 @@ char *ClSignalDescriptionBuffer = NULL;
 
 LIBC_API
 int
+siginterrupt (
+    int Signal,
+    int Flag
+    )
+
+/*++
+
+Routine Description:
+
+    This routine modifies the behavior of system calls interrupted by a given
+    signal.
+
+Arguments:
+
+    Signal - Supplies the signal number to change restart behavior of.
+
+    Flag - Supplies a boolean that if zero, will mean that system calls
+        interrupted by this signal will be restarted if no data is transferred.
+        This is the default. If non-zero, system calls interrupted by the given
+        signal that have not transferred any data yet will return with EINTR.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will contain more information.
+
+--*/
+
+{
+
+    struct sigaction Action;
+    int Result;
+
+    Result = sigaction(Signal, NULL, &Action);
+    if (Result != 0) {
+        return Result;
+    }
+
+    if (Flag != 0) {
+        Action.sa_flags &= ~SA_RESTART;
+
+    } else {
+        Action.sa_flags |= SA_RESTART;
+    }
+
+    return Result;
+}
+
+LIBC_API
+int
 sigaction (
     int SignalNumber,
     struct sigaction *NewAction,
