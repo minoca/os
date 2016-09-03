@@ -730,8 +730,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This is a pointer to the actual parameters passed from
+        user mode.
 
 Return Value:
 
@@ -744,7 +744,9 @@ Return Value:
 {
 
     PKPROCESS ChildProcess;
-    PSYSTEM_CALL_WAIT_FOR_CHILD Parameters;
+    KSTATUS CopyStatus;
+    SYSTEM_CALL_WAIT_FOR_CHILD Parameters;
+    BOOL SignalApplied;
     PSIGNAL_PARAMETERS SignalParameters;
     PSIGNAL_QUEUE_ENTRY SignalQueueEntry;
     KSTATUS Status;
@@ -752,13 +754,23 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    Parameters = (PSYSTEM_CALL_WAIT_FOR_CHILD)SystemCallParameter;
+    //
+    // Copy the parameters in from user mode.
+    //
+
+    Status = MmCopyFromUserMode(&Parameters,
+                                SystemCallParameter,
+                                sizeof(SYSTEM_CALL_WAIT_FOR_CHILD));
+
+    if (!KSUCCESS(Status)) {
+        goto SysWaitForChildProcessEnd;
+    }
 
     //
     // The caller must have specified one of the three required wait flags.
     //
 
-    if ((Parameters->Flags & SYSTEM_CALL_WAIT_FLAG_CHILD_MASK) == 0) {
+    if ((Parameters.Flags & SYSTEM_CALL_WAIT_FLAG_CHILD_MASK) == 0) {
         Status = STATUS_INVALID_PARAMETER;
         goto SysWaitForChildProcessEnd;
     }
@@ -777,7 +789,7 @@ Return Value:
         //
 
         Status = PspValidateWaitParameters(Thread->OwningProcess,
-                                           Parameters->ChildPid);
+                                           Parameters.ChildPid);
 
         if (!KSUCCESS(Status)) {
             goto SysWaitForChildProcessEnd;
@@ -787,8 +799,8 @@ Return Value:
         // Attempt to pull a child signal off one of the queues.
         //
 
-        SignalQueueEntry = PspGetChildSignalEntry(Parameters->ChildPid,
-                                                  Parameters->Flags);
+        SignalQueueEntry = PspGetChildSignalEntry(Parameters.ChildPid,
+                                                  Parameters.Flags);
 
         if (SignalQueueEntry != NULL) {
             SignalParameters = &(SignalQueueEntry->Parameters);
@@ -796,19 +808,19 @@ Return Value:
             ASSERT(SignalParameters->SignalNumber ==
                    SIGNAL_CHILD_PROCESS_ACTIVITY);
 
-            Parameters->ChildPid = SignalParameters->FromU.SendingProcess;
-            Parameters->Reason = SignalParameters->SignalCode;
+            Parameters.ChildPid = SignalParameters->FromU.SendingProcess;
+            Parameters.Reason = SignalParameters->SignalCode;
 
-            ASSERT(Parameters->Reason != 0);
+            ASSERT(Parameters.Reason != 0);
 
-            Parameters->ChildExitValue = SignalParameters->Parameter;
+            Parameters.ChildExitValue = SignalParameters->Parameter;
             Status = STATUS_SUCCESS;
-            if (Parameters->ResourceUsage != NULL) {
+            if (Parameters.ResourceUsage != NULL) {
                 ChildProcess = PARENT_STRUCTURE(SignalQueueEntry,
                                                 KPROCESS,
                                                 ChildSignal);
 
-                Status = MmCopyToUserMode(Parameters->ResourceUsage,
+                Status = MmCopyToUserMode(Parameters.ResourceUsage,
                                           &(ChildProcess->ResourceUsage),
                                           sizeof(RESOURCE_USAGE));
             }
@@ -832,7 +844,7 @@ Return Value:
         // then bail out now.
         //
 
-        if ((Parameters->Flags &
+        if ((Parameters.Flags &
              SYSTEM_CALL_WAIT_FLAG_RETURN_IMMEDIATELY) != 0) {
 
             Status = STATUS_NO_DATA_AVAILABLE;
@@ -853,7 +865,21 @@ Return Value:
         //
 
         PsCheckRuntimeTimers(Thread);
-        if (PsDispatchPendingSignals(Thread, Thread->TrapFrame) != FALSE) {
+        SignalApplied = PsDispatchPendingSignalsForSystemCall(
+                                                Thread,
+                                                Thread->TrapFrame,
+                                                STATUS_RESTART_SYSTEM_CALL,
+                                                SystemCallParameter,
+                                                SystemCallWaitForChildProcess);
+
+        if (SignalApplied != FALSE) {
+
+            //
+            // The system call handler also attempts to dispatch signals.
+            // Prevent a second restart attempt from coming in on top of the
+            // one initiated above.
+            //
+
             Status = STATUS_INTERRUPTED;
             break;
         }
@@ -861,10 +887,18 @@ Return Value:
 
 SysWaitForChildProcessEnd:
     if (!KSUCCESS(Status)) {
-        Parameters->ChildPid = -1;
+        Parameters.ChildPid = -1;
     }
 
-    Parameters->Status = Status;
+    Parameters.Status = Status;
+    CopyStatus = MmCopyToUserMode(SystemCallParameter,
+                                  &Parameters,
+                                  sizeof(SYSTEM_CALL_WAIT_FOR_CHILD));
+
+    if (!KSUCCESS(CopyStatus) && KSUCCESS(Status)) {
+        Status = CopyStatus;
+    }
+
     return Status;
 }
 
@@ -1092,10 +1126,6 @@ Return Value:
             }
         }
 
-        if (ApplySignal != FALSE) {
-            PsApplySynchronousSignal(Thread->TrapFrame, &SignalParameters);
-        }
-
         if (Parameters->SignalParameters != NULL) {
             CopyStatus = MmCopyToUserMode(Parameters->SignalParameters,
                                           &SignalParameters,
@@ -1103,8 +1133,18 @@ Return Value:
 
             if (!KSUCCESS(CopyStatus)) {
                 Status = CopyStatus;
-                goto SysSuspendExecutionEnd;
             }
+        }
+
+        if (ApplySignal != FALSE) {
+
+            ASSERT(Status != STATUS_RESTART_SYSTEM_CALL);
+
+            PsApplySynchronousSignal(Thread->TrapFrame,
+                                     &SignalParameters,
+                                     Status,
+                                     NULL,
+                                     SystemCallSuspendExecution);
         }
     }
 
@@ -1490,7 +1530,10 @@ Return Value:
 
 BOOL
 PsDispatchPendingSignalsOnCurrentThread (
-    PTRAP_FRAME TrapFrame
+    PTRAP_FRAME TrapFrame,
+    INTN SystemCallResult,
+    PVOID SystemCallParameter,
+    ULONG SystemCallNumber
     )
 
 /*++
@@ -1504,6 +1547,18 @@ Arguments:
 
     TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
         is not destined for user mode, this function exits immediately.
+
+    SystemCallResult - Supplies the result of the system call that is
+        attempting to dispatch a pending signal. This is only valid if the
+        system call number is valid.
+
+    SystemCallParameter - Supplies a pointer to the parameters of the system
+        call that is attempting to dispatch a pending signal. This is a pointer
+        to user mode. This is only valid if the system call number if valid.
+
+    SystemCallNumber - Supplies the number of the system call that is
+        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
+        the caller is not a system call.
 
 Return Value:
 
@@ -1527,7 +1582,11 @@ Return Value:
         }
 
         Applied = TRUE;
-        PsApplySynchronousSignal(TrapFrame, &SignalParameters);
+        PsApplySynchronousSignal(TrapFrame,
+                                 &SignalParameters,
+                                 SystemCallResult,
+                                 SystemCallParameter,
+                                 SystemCallNumber);
     }
 
     return Applied;

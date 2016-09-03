@@ -1574,11 +1574,21 @@ PollEnd:
     if (RestoreSignalMask != FALSE) {
 
         //
-        // Queue up signals before resetting the mask.
+        // Queue up signals before resetting the mask. The poll system call
+        // cannot be restarted, so there is no need to provide the system call
+        // parameters.
         //
 
         PsCheckRuntimeTimers(Thread);
-        PsDispatchPendingSignals(Thread, Thread->TrapFrame);
+
+        ASSERT(Status != STATUS_RESTART_SYSTEM_CALL);
+
+        PsDispatchPendingSignalsForSystemCall(Thread,
+                                              Thread->TrapFrame,
+                                              Status,
+                                              NULL,
+                                              SystemCallPoll);
+
         PsSetSignalMask(&OldSignalSet, NULL);
     }
 

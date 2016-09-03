@@ -66,7 +66,7 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-VOID
+BOOL
 ClpHandleSignal (
     PSIGNAL_PARAMETERS SignalInformation
     );
@@ -1781,7 +1781,7 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
-VOID
+BOOL
 ClpHandleSignal (
     PSIGNAL_PARAMETERS SignalInformation
     )
@@ -1799,7 +1799,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    TRUE if an interrupted function can restart.
+
+    FALSE otherwise.
 
 --*/
 
@@ -1901,7 +1903,16 @@ Return Value:
                             &SignalMask);
     }
 
-    return;
+    //
+    // Report whether or not the restart flag was set so that the system can
+    // restart a function if required.
+    //
+
+    if ((Flags & SA_RESTART) != 0) {
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 int

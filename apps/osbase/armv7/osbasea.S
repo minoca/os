@@ -111,6 +111,7 @@ END_FUNCTION OsSystemCall
 ## VOID
 ## OspSignalHandler (
 ##     PSIGNAL_PARAMETERS Parameters
+##     PSIGNAL_CONTEXT Context
 ##     )
 ##
 
@@ -120,11 +121,14 @@ Routine Description:
 
     This routine is called directly by the kernel when a signal occurs. It
     marshals the parameters and calls the C routine for handling the signal.
+    The parameters are stored on the stack with the signal parameters followed
+    by the signal context.
 
 Arguments:
 
-    Parameters - Supplies a pointer to the signal parameters. Beyond that on
-        the stack is the restore structure.
+    Parameters - Supplies a pointer to the signal parameters.
+
+    Context - Supplies a pointer to the signal context from the kernel.
 
 Return Value:
 
@@ -133,7 +137,8 @@ Return Value:
 --*/
 
 FUNCTION OspSignalHandler
-    mov     %r0, %sp            @ Get the argument at the top of the stack.
+    mov     %r0, %sp            @ Get the signal parameters.
+    add     %r1, %sp, #SIGNAL_PARAMETERS_SIZE @ Get the signal context.
     bl      OspProcessSignal    @ The parameters are already set up. Just call.
     add     %sp, #SIGNAL_PARAMETERS_SIZE    @ Pop the signal parameters.
     mov     %r1, %sp            @ Get stack pointer.

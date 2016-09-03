@@ -114,9 +114,7 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
     {PsSysSetSignalBehavior,
         sizeof(SYSTEM_CALL_SET_SIGNAL_BEHAVIOR),
         sizeof(SYSTEM_CALL_SET_SIGNAL_BEHAVIOR)},
-    {PsSysWaitForChildProcess,
-        sizeof(SYSTEM_CALL_WAIT_FOR_CHILD),
-        sizeof(SYSTEM_CALL_WAIT_FOR_CHILD)},
+    {PsSysWaitForChildProcess, 0, 0},
     {PsSysSuspendExecution,
         sizeof(SYSTEM_CALL_SUSPEND_EXECUTION),
         sizeof(SYSTEM_CALL_SUSPEND_EXECUTION)},
@@ -291,6 +289,9 @@ KeSystemCallHandler (
 Routine Description:
 
     This routine responds to requests from user mode entered via a system call.
+    It may also be called by the restore system call in order to restart a
+    system call. This should not be seen as a general way to invoke system call
+    behavior from inside the kernel.
 
 Arguments:
 
@@ -312,9 +313,11 @@ Return Value:
 
 {
 
-    KSTATUS CopyStatus;
     PSYSTEM_CALL_TABLE_ENTRY Handler;
     SYSTEM_CALL_PARAMETER_UNION LocalParameters;
+    USHORT OriginalThreadFlags;
+    CYCLE_ACCOUNT PreviousCycleAccount;
+    INTN Result;
     KSTATUS Status;
     PKTHREAD Thread;
 
@@ -322,8 +325,10 @@ Return Value:
     // Begin charging kernel mode for cycles.
     //
 
-    KeBeginCycleAccounting(CycleAccountKernel);
+    Status = STATUS_SUCCESS;
+    PreviousCycleAccount = KeBeginCycleAccounting(CycleAccountKernel);
     Thread = KeGetCurrentThread();
+    OriginalThreadFlags = Thread->Flags;
     Thread->Flags |= THREAD_FLAG_IN_SYSTEM_CALL;
     Thread->TrapFrame = TrapFrame;
 
@@ -359,7 +364,7 @@ Return Value:
         // Call the handler.
         //
 
-        Status = Handler->HandlerRoutine(&LocalParameters);
+        Result = Handler->HandlerRoutine(&LocalParameters);
 
         //
         // Copy the local parameters back into user mode.
@@ -369,32 +374,49 @@ Return Value:
 
             ASSERT(Handler->CopyOutSize <= Handler->CopyInSize);
 
-            CopyStatus = MmCopyToUserMode(SystemCallParameter,
-                                          &LocalParameters,
-                                          Handler->CopyOutSize);
+            Status = MmCopyToUserMode(SystemCallParameter,
+                                      &LocalParameters,
+                                      Handler->CopyOutSize);
 
-            if (!KSUCCESS(CopyStatus)) {
+            if (!KSUCCESS(Status)) {
                 PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
-                Status = CopyStatus;
                 goto SystemCallHandlerEnd;
             }
         }
 
+    //
+    // Even if there is no data to copy in, still pass the system call
+    // parameters along. The handler may be doing something special with them.
+    //
+
     } else {
-        Status = Handler->HandlerRoutine(NULL);
+        Result = Handler->HandlerRoutine(SystemCallParameter);
     }
 
 SystemCallHandlerEnd:
+    if (!KSUCCESS(Status)) {
+        Result = Status;
+    }
+
     PsCheckRuntimeTimers(Thread);
-    PsDispatchPendingSignals(Thread, TrapFrame);
-    Thread->Flags &= ~THREAD_FLAG_IN_SYSTEM_CALL;
+    PsDispatchPendingSignalsForSystemCall(Thread,
+                                          TrapFrame,
+                                          Result,
+                                          SystemCallParameter,
+                                          SystemCallNumber);
 
     //
-    // Return to charging user mode for cycles.
+    // Return to the previous thread state and cycle account. A restarted
+    // system call can come in on top of the context restore system call after
+    // a signal is handled.
     //
 
-    KeBeginCycleAccounting(CycleAccountUser);
-    return Status;
+    if ((OriginalThreadFlags & THREAD_FLAG_IN_SYSTEM_CALL) == 0) {
+        Thread->Flags &= ~THREAD_FLAG_IN_SYSTEM_CALL;
+    }
+
+    KeBeginCycleAccounting(PreviousCycleAccount);
+    return Result;
 }
 
 //

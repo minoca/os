@@ -122,7 +122,10 @@ Return Value:
 VOID
 PsApplySynchronousSignal (
     PTRAP_FRAME TrapFrame,
-    PSIGNAL_PARAMETERS SignalParameters
+    PSIGNAL_PARAMETERS SignalParameters,
+    INTN SystemCallResult,
+    PVOID SystemCallParameter,
+    ULONG SystemCallNumber
     )
 
 /*++
@@ -140,6 +143,18 @@ Arguments:
 
     SignalParameters - Supplies a pointer to the signal information to apply.
 
+    SystemCallResult - Supplies the result of the system call that is
+        attempting to dispatch a pending signal. This is only valid if the
+        system call number is valid.
+
+    SystemCallParameter - Supplies a pointer to the parameters of the system
+        call that is attempting to dispatch a pending signal. This is a pointer
+        to user mode. This is only valid if the system call number if valid.
+
+    SystemCallNumber - Supplies the number of the system call that is
+        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
+        the caller is not a system call.
+
 Return Value:
 
     None.
@@ -148,7 +163,7 @@ Return Value:
 
 {
 
-    SIGNAL_CONTEXT Context;
+    SIGNAL_CONTEXT_ARM Context;
     KSTATUS Status;
     KSTATUS Status2;
     PKTHREAD Thread;
@@ -162,8 +177,8 @@ Return Value:
     // call. Volatile registers don't matter in this case.
     //
 
-    RtlZeroMemory(&Context, sizeof(SIGNAL_CONTEXT));
-    Context.Signal = SignalParameters->SignalNumber;
+    RtlZeroMemory(&Context, sizeof(SIGNAL_CONTEXT_ARM));
+    Context.Common.Signal = SignalParameters->SignalNumber;
     Context.Pc = TrapFrame->Pc;
     Context.Sp = TrapFrame->UserSp;
     Context.Lr = TrapFrame->UserLink;
@@ -177,13 +192,46 @@ Return Value:
     }
 
     //
+    // If this signal is being applied in the middle of a system call, preserve
+    // the system call's return value.
+    //
+
+    if (SystemCallNumber != SystemCallInvalid) {
+
+        //
+        // If the result indicates that the system call is restartable, then
+        // let user mode know by setting the restart flag in the context and
+        // save the system call number and parameters in volatile registers.
+        // This should not be done for restore context or execute image, as
+        // their result values are unsigned and may overlap with the restart
+        // system call status. Convert the system call restart return value
+        // into an interrupted status in case the signal call handler does not
+        // allow restarting.
+        //
+
+        if (IS_SYSTEM_CALL_RESTARTABLE(SystemCallNumber, SystemCallResult)) {
+            Context.R0 = STATUS_INTERRUPTED;
+            Context.R1 = SystemCallNumber;
+            Context.R2 = (ULONG)SystemCallParameter;
+            Context.Common.Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
+
+        //
+        // Otherwise just preserve the system call result.
+        //
+
+        } else {
+            Context.R0 = SystemCallResult;
+        }
+    }
+
+    //
     // Mark the signal as running so that more don't come down on the thread
     // while it's servicing this one.
     //
 
-    ASSERT(!IS_SIGNAL_SET(Thread->RunningSignals, Context.Signal));
+    ASSERT(!IS_SIGNAL_SET(Thread->RunningSignals, Context.Common.Signal));
 
-    ADD_SIGNAL(Thread->RunningSignals, Context.Signal);
+    ADD_SIGNAL(Thread->RunningSignals, Context.Common.Signal);
 
     //
     // Copy the signal frame onto the stack.
@@ -191,10 +239,10 @@ Return Value:
     //
 
     TrapFrame->UserSp = ALIGN_RANGE_DOWN(TrapFrame->UserSp, STACK_ALIGNMENT);
-    TrapFrame->UserSp -= sizeof(SIGNAL_CONTEXT);
+    TrapFrame->UserSp -= sizeof(SIGNAL_CONTEXT_ARM);
     Status = MmCopyToUserMode((PVOID)(TrapFrame->UserSp),
                               &Context,
-                              sizeof(SIGNAL_CONTEXT));
+                              sizeof(SIGNAL_CONTEXT_ARM));
 
     TrapFrame->UserSp -= sizeof(SIGNAL_PARAMETERS);
     Status2 = MmCopyToUserMode((PVOID)(TrapFrame->UserSp),
@@ -207,7 +255,11 @@ Return Value:
                               TrapFrame,
                               Thread->OwningProcess);
 
-        PsDispatchPendingSignalsOnCurrentThread(TrapFrame);
+        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
+                                                SystemCallResult,
+                                                SystemCallParameter,
+                                                SystemCallNumber);
+
         return;
     }
 
@@ -247,12 +299,16 @@ Return Value:
 
 {
 
-    SIGNAL_CONTEXT Context;
+    SIGNAL_CONTEXT_ARM Context;
+    INTN Result;
     KSTATUS Status;
     PKTHREAD Thread;
 
     Thread = KeGetCurrentThread();
-    Status = MmCopyFromUserMode(&Context, UserContext, sizeof(SIGNAL_CONTEXT));
+    Status = MmCopyFromUserMode(&Context,
+                                (PSIGNAL_CONTEXT_ARM)UserContext,
+                                sizeof(SIGNAL_CONTEXT_ARM));
+
     if (!KSUCCESS(Status)) {
         PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
         return 0;
@@ -260,7 +316,7 @@ Return Value:
 
     ASSERT((Context.Cpsr & ARM_MODE_MASK) == ARM_MODE_USER);
 
-    REMOVE_SIGNAL(Thread->RunningSignals, Context.Signal);
+    REMOVE_SIGNAL(Thread->RunningSignals, Context.Common.Signal);
     TrapFrame->R0 = Context.R0;
     TrapFrame->R1 = Context.R1;
     TrapFrame->R2 = Context.R2;
@@ -270,7 +326,20 @@ Return Value:
     TrapFrame->UserLink = Context.Lr;
     TrapFrame->Pc = Context.Pc;
     TrapFrame->Cpsr = Context.Cpsr;
-    return TrapFrame->R0;
+    Result = TrapFrame->R0;
+
+    //
+    // If the signal context indicates that a restart is necessary, then fire
+    // off the system call again. The trap frame must be restored before the
+    // restart or else the context saved on application of another signal would
+    // cause the next restore to return to the signal handler.
+    //
+
+    if ((Context.Common.Flags & SIGNAL_CONTEXT_FLAG_RESTART) != 0) {
+        Result = KeSystemCallHandler(Context.R1, (PVOID)Context.R2, TrapFrame);
+    }
+
+    return Result;
 }
 
 VOID

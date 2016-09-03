@@ -102,7 +102,7 @@ typedef enum _OS_X86_PROCESSOR_FEATURE {
 } OS_X86_PROCESSOR_FEATURE, *POS_X86_PROCESSOR_FEATURE;
 
 typedef
-VOID
+BOOL
 (*PSIGNAL_HANDLER_ROUTINE) (
     PSIGNAL_PARAMETERS SignalInformation
     );
@@ -122,7 +122,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    TRUE if an interrupted function can restart.
+
+    FALSE otherwise.
 
 --*/
 

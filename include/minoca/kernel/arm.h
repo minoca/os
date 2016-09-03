@@ -704,14 +704,14 @@ Structure Description:
 
 Members:
 
-    Signal - Stores the signal number that fired.
+    Common - Stores the common signal context information.
 
     Registers - Stores the previous state of the thread's registers.
 
 --*/
 
-struct _SIGNAL_CONTEXT {
-    ULONG Signal;
+typedef struct _SIGNAL_CONTEXT_ARM {
+    SIGNAL_CONTEXT Common;
     ULONG R0;
     ULONG R1;
     ULONG R2;
@@ -721,7 +721,7 @@ struct _SIGNAL_CONTEXT {
     ULONG Lr;
     ULONG Pc;
     ULONG Cpsr;
-} PACKED;
+} PACKED SIGNAL_CONTEXT_ARM, *PSIGNAL_CONTEXT_ARM;
 
 /*++
 

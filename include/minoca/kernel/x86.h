@@ -635,21 +635,21 @@ Structure Description:
 
 Members:
 
-    Signal - Stores the signal number that fired.
+    Common - Stores the common signal context information.
 
     Registers - Stores the previous state of the thread's registers.
 
 --*/
 
-struct _SIGNAL_CONTEXT {
-    ULONG Signal;
+typedef struct _SIGNAL_CONTEXT_X86 {
+    SIGNAL_CONTEXT Common;
     ULONG Eax;
     ULONG Ecx;
     ULONG Edx;
     ULONG Eflags;
     ULONG Eip;
     ULONG Esp;
-} PACKED;
+} PACKED SIGNAL_CONTEXT_X86, *PSIGNAL_CONTEXT_X86;
 
 /*++
 

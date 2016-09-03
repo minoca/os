@@ -209,12 +209,14 @@ Routine Description:
 
     This routine is called directly by the kernel when a signal occurs. It
     marshals the parameters and calls the C routine for handling the signal.
+    The parameters are stored on the stack with the signal parameters followed
+    by the signal context.
 
 Arguments:
 
-    SignalNumber - Supplies the index of the signal that occurred.
+    Parameters - Supplies a pointer to the signal parameters.
 
-    SignalParameter - Supplies the optional signal parameter.
+    Context - Supplies a pointer to the signal context from the kernel.
 
 Return Value:
 

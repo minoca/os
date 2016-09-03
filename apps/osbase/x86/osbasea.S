@@ -132,7 +132,8 @@ END_FUNCTION(OspSysenterSystemCall)
 ##
 ## VOID
 ## OspSignalHandler (
-##     PSIGNAL_PARAMETERS Parameters
+##     PSIGNAL_PARAMETERS Parameters,
+##     PSIGNAL_CONTEXT Context
 ##     )
 ##
 
@@ -142,11 +143,15 @@ Routine Description:
 
     This routine is called directly by the kernel when a signal occurs. It
     marshals the parameters and calls the C routine for handling the signal.
+    The parameters are stored on the stack with the signal parameters followed
+    by the signal context.
 
 Arguments:
 
     Parameters - Supplies a pointer to the signal parameters. Beyond that on
         the stack is the restore structure.
+
+    Context - Supplies a pointer to the signal context from the kernel.
 
 Return Value:
 
@@ -161,9 +166,12 @@ FUNCTION(OspSignalHandler)
     ## be saved and restored by any C routine called.
     ##
 
-    pushl   %esp                # Push a pointer to the signal parameters.
+    movl    %esp, %eax          # Get a pointer to the signal parameters.
+    leal    SIGNAL_PARAMETERS_SIZE(%eax), %ecx # Get a pointer to the context.
+    pushl   %ecx                # Push a pointer to the signal context.
+    pushl   %eax                # Push a pointer to the signal parameters.
     call    OspProcessSignal    # Call out to the C routine to handle it.
-    addl    $(SIGNAL_PARAMETERS_SIZE + 4), %esp # Pop argument + signal params.
+    addl    $(SIGNAL_PARAMETERS_SIZE + 8), %esp # Pop arguments + signal params.
     pushl   %esp                # Push system call parameter.
     pushl   %esp                # It's a pointer to a pointer.
     pushl   $SystemCallRestoreContext # Push system call number.

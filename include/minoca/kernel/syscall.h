@@ -21,6 +21,20 @@ Author:
 //
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro determines whether or not a system call is eligible for being
+// restarted.
+//
+
+#define IS_SYSTEM_CALL_RESTARTABLE(_SystemCallNumber, _SystemCallResult) \
+    (((_SystemCallResult) == STATUS_RESTART_SYSTEM_CALL) &&              \
+     ((_SystemCallNumber) != SystemCallRestoreContext) &&                \
+     ((_SystemCallNumber) != SystemCallExecuteImage))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 

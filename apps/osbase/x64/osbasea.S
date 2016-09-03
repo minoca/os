@@ -83,6 +83,8 @@ Routine Description:
 
     This routine is called directly by the kernel when a signal occurs. It
     marshals the parameters and calls the C routine for handling the signal.
+    The parameters are stored on the stack with the signal parameters followed
+    by the signal context.
 
 Arguments:
 

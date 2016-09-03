@@ -3356,7 +3356,8 @@ Return Value:
 
 VOID
 OspProcessSignal (
-    PSIGNAL_PARAMETERS Parameters
+    PSIGNAL_PARAMETERS Parameters,
+    PSIGNAL_CONTEXT Context
     )
 
 /*++
@@ -3369,6 +3370,8 @@ Arguments:
 
     Parameters - Supplies a pointer to the signal parameters from the kernel.
 
+    Context - Supplies a pointer to the signal context from the kernel.
+
 Return Value:
 
     None.
@@ -3377,11 +3380,24 @@ Return Value:
 
 {
 
+    BOOL RestartAllowed;
     PSIGNAL_HANDLER_ROUTINE SignalHandler;
 
+    RestartAllowed = FALSE;
     SignalHandler = OsSignalHandler;
     if (SignalHandler != NULL) {
-        SignalHandler(Parameters);
+        RestartAllowed = SignalHandler(Parameters);
+    }
+
+    //
+    // Clear the restart flag if it's set but the handler does not allow
+    // restarts.
+    //
+
+    if (((Context->Flags & SIGNAL_CONTEXT_FLAG_RESTART) != 0) &&
+        (RestartAllowed == FALSE)) {
+
+        Context->Flags &= ~SIGNAL_CONTEXT_FLAG_RESTART;
     }
 
     return;
