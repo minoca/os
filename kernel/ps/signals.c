@@ -646,14 +646,18 @@ Return Value:
     KeAcquireQueuedLock(Process->QueuedLock);
 
     //
-    // If this is the pending mask, just get the current pending mask and
-    // return, ignoring the operation.
+    // If this is the pending mask, just get the set of blocked pending signals
+    // and return, ignoring the operation.
     //
 
     if (Parameters->MaskType == SignalMaskPending) {
         OR_SIGNAL_SETS(Parameters->SignalSet,
                        Thread->PendingSignals,
                        Process->PendingSignals);
+
+        AND_SIGNAL_SETS(Parameters->SignalSet,
+                        Parameters->SignalSet,
+                        Thread->BlockedSignals);
 
         CurrentEntry = Process->SignalListHead.Next;
         while (CurrentEntry != &(Process->SignalListHead)) {
