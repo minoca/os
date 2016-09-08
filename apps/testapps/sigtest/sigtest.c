@@ -1215,7 +1215,7 @@ Return Value:
     //
 
     WaitPid = waitpid(-1, &Status, WUNTRACED | WCONTINUED | WNOHANG);
-    if (WaitPid != -1) {
+    if (WaitPid > 0) {
         PRINT_ERROR("Error: waitpid unexpectedly gave up a %d\n",
                     WaitPid);
 
@@ -1427,7 +1427,7 @@ Return Value:
 
     if (ChildSignalsExpected == 0) {
         WaitPidResult = waitpid(-1, NULL, WNOHANG);
-        if (WaitPidResult != -1) {
+        if (WaitPidResult > 0) {
             PRINT_ERROR("Error: waitpid got another child %x unexpectedly.\n",
                         WaitPidResult);
 
