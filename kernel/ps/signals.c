@@ -3584,11 +3584,12 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    BOOL HasDebugger;
+    BOOL OnlyWakeSuspendedThreads;
     BOOL SignalBlocked;
     BOOL SignalHandled;
     BOOL SignalIgnored;
     THREAD_SIGNAL_PENDING_TYPE SignalPendingType;
+    THREAD_SIGNAL_PENDING_TYPE ThreadSignalPendingType;
     BOOL WokeThread;
 
     ASSERT(KeIsQueuedLockHeld(Process->QueuedLock) != FALSE);
@@ -3613,7 +3614,33 @@ Return Value:
         SignalIgnored = FALSE;
 
     } else {
+
+        //
+        // If the process is being debugged, then no signals are ignored.
+        //
+
         SignalIgnored = IS_SIGNAL_SET(Process->IgnoredSignals, SignalNumber);
+        if ((Process->DebugData != NULL) &&
+            (Process->DebugData->TracingProcess != NULL)) {
+
+            SignalIgnored = FALSE;
+
+        //
+        // A signal can also be ignored if it is not handled and is set to be
+        // ignored by default.
+        //
+
+        } else if (SignalIgnored == FALSE) {
+            SignalHandled = IS_SIGNAL_SET(Process->HandledSignals,
+                                          SignalNumber);
+
+            if ((SignalHandled == FALSE) &&
+                (IS_SIGNAL_DEFAULT_IGNORE(SignalNumber))) {
+
+                SignalIgnored = TRUE;
+            }
+        }
+
         SignalBlocked = FALSE;
         if (Thread != NULL) {
             SignalBlocked = IS_SIGNAL_BLOCKED(Thread, SignalNumber);
@@ -3623,13 +3650,6 @@ Return Value:
     if (SignalQueueEntry != NULL) {
 
         ASSERT(SignalNumber == SignalQueueEntry->Parameters.SignalNumber);
-
-        HasDebugger = FALSE;
-        if ((Process->DebugData != NULL) &&
-            (Process->DebugData->TracingProcess != NULL)) {
-
-            HasDebugger = TRUE;
-        }
 
         //
         // If this is a child signal, then suspended threads should be woken
@@ -3643,17 +3663,10 @@ Return Value:
 
         //
         // If the signal is ignored, then discard it now (except for child
-        // signals, so they can get picked up by wait). Don't do that if
-        // there's a debugger present, as the debugger picks up even ignored
-        // signals.
+        // signals, so they can get picked up by wait).
         //
 
-        SignalHandled = IS_SIGNAL_SET(Process->HandledSignals, SignalNumber);
-        if (((SignalIgnored != FALSE) ||
-             ((SignalHandled == FALSE) &&
-              (IS_SIGNAL_DEFAULT_IGNORE(SignalNumber)))) &&
-            (HasDebugger == FALSE)) {
-
+        if (SignalIgnored != FALSE) {
             if (IS_CHILD_SIGNAL(SignalQueueEntry)) {
                 INSERT_BEFORE(&(SignalQueueEntry->ListEntry),
                               &(Process->UnreapedChildList));
@@ -3749,57 +3762,71 @@ Return Value:
                 }
 
                 //
-                // All threads get woken for kill. Otherwise only the first
-                // thread that does not block the signal gets woken.
+                // Handle the case where a non-child signal was queued. To
+                // reach this point it must not have been ignored. The goal
+                // here is to wake the first thread that does not have the
+                // signal blocked. The exception is the kill signal, which
+                // wakes all threads (and should never be blocked).
                 //
 
-                if ((SignalNumber == SIGNAL_KILL) ||
-                    ((WokeThread == FALSE) &&
-                     !IS_SIGNAL_BLOCKED(Thread, SignalNumber))) {
+                if (SignalPendingType != ThreadChildSignalPending) {
 
-                    if (Thread->SignalPending < ThreadSignalPending) {
-                        Thread->SignalPending = ThreadSignalPending;
+                    ASSERT(SignalIgnored == FALSE);
+
+                    if (!IS_SIGNAL_BLOCKED(Thread, SignalNumber)) {
+                        if (Thread->SignalPending < ThreadSignalPending) {
+                            Thread->SignalPending = ThreadSignalPending;
+
+                            //
+                            // Ensure that this added signal and new signal
+                            // pending state are visible to the new process
+                            // before trying to wake it up.
+                            //
+
+                            RtlMemoryBarrier();
+                            ObWakeBlockedThread(Thread, FALSE);
+                        }
+
+                        //
+                        // Kill is the only signal that wakes all threads.
+                        //
+
+                        if (SignalNumber != SIGNAL_KILL) {
+                            break;
+                        }
+                    }
+
+                //
+                // Child signals are a bit different. All suspended threads
+                // will be woken up, even if they block or ignore (the default)
+                // the child signal. The exception here is if the child signal
+                // is not ignored - one thread that does not block the signal
+                // will be woken up, regardless of the thread state.
+                //
+
+                } else {
+                    ThreadSignalPendingType = ThreadChildSignalPending;
+                    OnlyWakeSuspendedThreads = TRUE;
+                    if ((SignalIgnored == FALSE) &&
+                        (WokeThread == FALSE) &&
+                        (!IS_SIGNAL_BLOCKED(Thread, SignalNumber))) {
+
+                        ThreadSignalPendingType = ThreadSignalPending;
+                        OnlyWakeSuspendedThreads = FALSE;
+                        WokeThread = TRUE;
+                    }
+
+                    if (Thread->SignalPending < ThreadSignalPendingType) {
+                        Thread->SignalPending = ThreadSignalPendingType;
 
                         //
                         // Ensure that this added signal and new signal pending
-                        // state is visible to the new process before trying to
-                        // wake it up.
+                        // state are visible to the new process before trying
+                        // to wake it up.
                         //
 
                         RtlMemoryBarrier();
-                        ObWakeBlockedThread(Thread, FALSE);
-                    }
-
-                    WokeThread = TRUE;
-
-                    //
-                    // If this is not a child signal or a kill signal, then
-                    // waking one thread is good enough.
-                    //
-
-                    if ((SignalPendingType != ThreadChildSignalPending) &&
-                        (SignalNumber != SIGNAL_KILL)) {
-
-                        break;
-                    }
-
-                //
-                // Otherwise if it is a child signal, continue to wake all
-                // suspended threads.
-                //
-
-                } else if (SignalPendingType == ThreadChildSignalPending) {
-                    if (Thread->SignalPending < ThreadChildSignalPending) {
-                        Thread->SignalPending = ThreadChildSignalPending;
-
-                        //
-                        // Ensure that this added signal and new signal pending
-                        // state is visible to the new process before trying to
-                        // wake it up.
-                        //
-
-                        RtlMemoryBarrier();
-                        ObWakeBlockedThread(Thread, TRUE);
+                        ObWakeBlockedThread(Thread, OnlyWakeSuspendedThreads);
                     }
                 }
             }
