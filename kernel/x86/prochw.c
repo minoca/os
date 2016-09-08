@@ -253,7 +253,7 @@ Return Value:
             //
             // The main TSS is at the end of the double fault stack so that
             // sysenter can get to its thread stack in a single SS: dereference.
-            // The double fault TSS is after th processor block.
+            // The double fault TSS is after the processor block.
             //
 
             Tss = (PVOID)(Address + ALTERNATE_STACK_SIZE - sizeof(TSS));

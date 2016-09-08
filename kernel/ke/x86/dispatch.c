@@ -231,6 +231,7 @@ Return Value:
 
 {
 
+    PTSS KernelTask;
     CYCLE_ACCOUNT PreviousPeriod;
     PPROCESSOR_BLOCK Processor;
     TRAP_FRAME TrapFrame;
@@ -251,6 +252,16 @@ Return Value:
     ArGetKernelTssTrapFrame(&TrapFrame);
     if (IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(&TrapFrame) == FALSE) {
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
+    }
+
+    //
+    // Switch to the kernel task's CR3 in order to allow peeking at user mode
+    // addresses if this NMI is for a debugger freeze.
+    //
+
+    KernelTask = Processor->Tss;
+    if (KernelTask != NULL) {
+        ArSetCurrentPageDirectory(KernelTask->Cr3);
     }
 
     KdNmiHandler(&TrapFrame);
