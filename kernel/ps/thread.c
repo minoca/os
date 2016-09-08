@@ -1314,11 +1314,11 @@ Return Value:
     Process = Thread->OwningProcess;
 
     //
-    // This thread is going down. Ignore any already pending signals (like the
-    // kill signal that possibly caused the termination).
+    // Mark that the thread is exiting so that it does not get chosen for any
+    // new signals.
     //
 
-    Thread->SignalPending = ThreadNoSignalPending;
+    Thread->Flags |= THREAD_FLAG_EXITING;
 
     //
     // Free the user mode stack before decrementing the thread count.
@@ -1361,6 +1361,12 @@ Return Value:
                       SignalOptionSignalAll);
     }
 
+    //
+    // The thread may have been responsible for dispatching some signals. Pass
+    // those on to other threads.
+    //
+
+    PspCleanupThreadSignals();
     KeReleaseQueuedLock(Process->QueuedLock);
 
     //

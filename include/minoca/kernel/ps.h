@@ -445,6 +445,7 @@ Author:
 #define THREAD_FLAG_USER_MODE       0x0001
 #define THREAD_FLAG_IN_SYSTEM_CALL  0x0002
 #define THREAD_FLAG_FREE_USER_STACK 0x0004
+#define THREAD_FLAG_EXITING         0x0008
 
 //
 // Define thread FPU flags.

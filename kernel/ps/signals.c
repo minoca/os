@@ -161,6 +161,11 @@ PspCheckSendSignalPermission (
     ULONG Signal
     );
 
+VOID
+PspMoveSignalSet (
+    SIGNAL_SET SignalSet
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -230,6 +235,7 @@ Return Value:
 
 {
 
+    SIGNAL_SET NewBlockedSet;
     SIGNAL_SET NewMaskLocal;
     PKPROCESS Process;
     PKTHREAD Thread;
@@ -248,8 +254,16 @@ Return Value:
         *OriginalMask = Thread->BlockedSignals;
     }
 
+    NewBlockedSet = NewMaskLocal;
+    REMOVE_SIGNALS_FROM_SET(NewBlockedSet, Thread->BlockedSignals);
     Thread->BlockedSignals = NewMaskLocal;
     Thread->SignalPending = ThreadSignalPendingStateUnknown;
+
+    //
+    // Move the newly blocked signals off to other threads.
+    //
+
+    PspMoveSignalSet(NewBlockedSet);
     KeReleaseQueuedLock(Process->QueuedLock);
     return;
 }
@@ -572,6 +586,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PSIGNAL_SET DestinationSet;
     BOOL IsBlocked;
+    SIGNAL_SET NewBlockedSet;
     SIGNAL_SET NewMask;
     PSYSTEM_CALL_SET_SIGNAL_BEHAVIOR Parameters;
     PKPROCESS Process;
@@ -706,8 +721,20 @@ Return Value:
     // if they might be deliverable now.
     //
 
-    if (Parameters->Operation != SignalMaskOperationNone) {
+    if ((Parameters->MaskType == SignalMaskBlocked) &&
+        (Parameters->Operation != SignalMaskOperationNone)) {
+
         Thread->SignalPending = ThreadSignalPendingStateUnknown;
+
+        //
+        // Move any newly blocked signals to other threads.
+        //
+
+        if (Parameters->Operation != SignalMaskOperationClear) {
+            NewBlockedSet = NewMask;
+            REMOVE_SIGNALS_FROM_SET(NewBlockedSet, Parameters->SignalSet);
+            PspMoveSignalSet(NewBlockedSet);
+        }
     }
 
 SetSignalBehaviorEnd:
@@ -934,6 +961,7 @@ Return Value:
     KSTATUS CopyStatus;
     ULONGLONG CurrentTime;
     ULONGLONG Frequency;
+    SIGNAL_SET NewBlockedSet;
     SIGNAL_SET OriginalMask;
     PSYSTEM_CALL_SUSPEND_EXECUTION Parameters;
     ULONGLONG PreviousDelayStart;
@@ -1010,6 +1038,11 @@ Return Value:
         if (OriginalMask != Thread->BlockedSignals) {
             Thread->SignalPending = ThreadSignalPendingStateUnknown;
             RestoreOriginalMask = TRUE;
+            if (Parameters->SignalOperation != SignalMaskOperationClear) {
+                NewBlockedSet = Parameters->SignalSet;
+                REMOVE_SIGNALS_FROM_SET(NewBlockedSet, OriginalMask);
+                PspMoveSignalSet(NewBlockedSet);
+            }
         }
 
         KeReleaseQueuedLock(Process->QueuedLock);
@@ -1156,8 +1189,11 @@ SysSuspendExecutionEnd:
 
     if (RestoreOriginalMask != FALSE) {
         KeAcquireQueuedLock(Process->QueuedLock);
+        NewBlockedSet = OriginalMask;
+        REMOVE_SIGNALS_FROM_SET(NewBlockedSet, Thread->BlockedSignals);
         Thread->BlockedSignals = OriginalMask;
         Thread->SignalPending = ThreadSignalPendingStateUnknown;
+        PspMoveSignalSet(NewBlockedSet);
         KeReleaseQueuedLock(Process->QueuedLock);
     }
 
@@ -2183,6 +2219,61 @@ Return Value:
     }
 
     return Result;
+}
+
+VOID
+PspCleanupThreadSignals (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine cleans up the current thread's signal state, potentially
+    waking up other threads if it was on the hook for handling a signal. This
+    should only be called during thread termination in the context of the thead
+    whose signal state needs to be cleaned up.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PKTHREAD CurrentThread;
+    SIGNAL_SET PendingSignals;
+    PKPROCESS Process;
+
+    CurrentThread = KeGetCurrentThread();
+    Process = CurrentThread->OwningProcess;
+
+    ASSERT(KeIsQueuedLockHeld(Process->QueuedLock) != FALSE);
+    ASSERT((CurrentThread->Flags & THREAD_FLAG_EXITING) != 0);
+
+    //
+    // If no signals are pending, then this thread is not responsible for
+    // making sure other threads are awake to handle process-wide signals.
+    //
+
+    if (CurrentThread->SignalPending == ThreadNoSignalPending) {
+        return;
+    }
+
+    //
+    // Move the set of process-wide signals that this thread does not block.
+    //
+
+    PendingSignals = Process->PendingSignals;
+    REMOVE_SIGNALS_FROM_SET(PendingSignals, CurrentThread->BlockedSignals);
+    PspMoveSignalSet(PendingSignals);
+    return;
 }
 
 //
@@ -3494,6 +3585,7 @@ Return Value:
     BOOL SignalHandled;
     BOOL SignalIgnored;
     THREAD_SIGNAL_PENDING_TYPE SignalPendingType;
+    BOOL WokeThread;
 
     ASSERT(KeIsQueuedLockHeld(Process->QueuedLock) != FALSE);
 
@@ -3617,59 +3709,94 @@ Return Value:
 
             if (Thread->SignalPending < ThreadSignalPending) {
                 Thread->SignalPending = ThreadSignalPending;
+
+                //
+                // Ensure that this added signal and new signal pending state
+                // is visible to the new process before trying to wake it up.
+                //
+
+                RtlMemoryBarrier();
+                ObWakeBlockedThread(Thread, FALSE);
             }
-
-            //
-            // Ensure that this added signal and new signal pending state is
-            // visible to the new process before trying to wake it up.
-            //
-
-            RtlMemoryBarrier();
-            ObWakeBlockedThread(Thread, FALSE);
 
         } else {
 
             //
-            // Wake up all threads that don't block this signal. Child signals
-            // are an exception. Suspended threads get woken up even if they
-            // are blocking the signal.
+            // Wake up the first thread that doesn't block this signal. Child
+            // signals and kill signals are an exception. Kill signals wake up
+            // everyone as the process is going down. Child signals wake up
+            // everyone, including suspended threads that block the child
+            // signal.
             //
 
+            WokeThread = FALSE;
             CurrentEntry = Process->ThreadListHead.Next;
             while (CurrentEntry != &(Process->ThreadListHead)) {
                 Thread = LIST_VALUE(CurrentEntry, KTHREAD, ProcessEntry);
                 CurrentEntry = CurrentEntry->Next;
 
                 //
-                // If the thread's not blocking the signal, wake the thread up.
+                // Do not wake an exiting thread. It will never dispatch the
+                // signal.
                 //
 
-                if (!IS_SIGNAL_BLOCKED(Thread, SignalNumber)) {
+                if ((Thread->Flags & THREAD_FLAG_EXITING) != 0) {
+                    continue;
+                }
+
+                //
+                // All threads get woken for kill. Otherwise only the first
+                // thread that does not block the signal gets woken.
+                //
+
+                if ((SignalNumber == SIGNAL_KILL) ||
+                    ((WokeThread == FALSE) &&
+                     !IS_SIGNAL_BLOCKED(Thread, SignalNumber))) {
+
                     if (Thread->SignalPending < ThreadSignalPending) {
                         Thread->SignalPending = ThreadSignalPending;
+
+                        //
+                        // Ensure that this added signal and new signal pending
+                        // state is visible to the new process before trying to
+                        // wake it up.
+                        //
+
+                        RtlMemoryBarrier();
+                        ObWakeBlockedThread(Thread, FALSE);
                     }
 
+                    WokeThread = TRUE;
+
                     //
-                    // Ensure that this added signal and new signal pending
-                    // state is visible to the new process before trying to
-                    // wake it up.
+                    // If this is not a child signal or a kill signal, then
+                    // waking one thread is good enough.
                     //
 
-                    RtlMemoryBarrier();
-                    ObWakeBlockedThread(Thread, FALSE);
+                    if ((SignalPendingType != ThreadChildSignalPending) &&
+                        (SignalNumber != SIGNAL_KILL)) {
+
+                        break;
+                    }
 
                 //
-                // If the thread is blocking the signal, but it's a child
-                // signal, then wake up suspended threads.
+                // Otherwise if it is a child signal, continue to wake all
+                // suspended threads.
                 //
 
                 } else if (SignalPendingType == ThreadChildSignalPending) {
                     if (Thread->SignalPending < ThreadChildSignalPending) {
                         Thread->SignalPending = ThreadChildSignalPending;
-                    }
 
-                    RtlMemoryBarrier();
-                    ObWakeBlockedThread(Thread, TRUE);
+                        //
+                        // Ensure that this added signal and new signal pending
+                        // state is visible to the new process before trying to
+                        // wake it up.
+                        //
+
+                        RtlMemoryBarrier();
+                        ObWakeBlockedThread(Thread, TRUE);
+                    }
                 }
             }
         }
@@ -3990,5 +4117,148 @@ Return Value:
 
     Status = PsCheckPermission(PERMISSION_KILL);
     return Status;
+}
+
+VOID
+PspMoveSignalSet (
+    SIGNAL_SET SignalSet
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to "move" the given set of signals to other threads
+    in the process. Moving simply consists of finding a thread that does not
+    block the signal and making sure it is awake. There is no protection
+    against rewaking the current thread, but it is assume that the current
+    thread is marked as exiting or has the given signal set blocked.
+
+Arguments:
+
+    SignalSet - Supplies a set of signals that need to moved to other threads
+        in the current process.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    SIGNAL_SET PendingSignals;
+    PKPROCESS Process;
+    PLIST_ENTRY SignalEntry;
+    ULONG SignalNumber;
+    PSIGNAL_QUEUE_ENTRY SignalQueueEntry;
+    PKTHREAD Thread;
+    PLIST_ENTRY ThreadEntry;
+    SIGNAL_SET ThreadPendingSignals;
+
+    Process = PsGetCurrentProcess();
+
+    ASSERT(KeIsQueuedLockHeld(Process->QueuedLock) != FALSE);
+
+    //
+    // If the set is empty, there is no work to do.
+    //
+
+    if (IS_SIGNAL_SET_EMPTY(SignalSet) != FALSE) {
+        return;
+    }
+
+    //
+    // Wake up threads until all the process-wide pending signals in the signal
+    // set are accounted for.
+    //
+
+    AND_SIGNAL_SETS(PendingSignals, Process->PendingSignals, SignalSet);
+    ThreadEntry = Process->ThreadListHead.Next;
+    while ((IS_SIGNAL_SET_EMPTY(PendingSignals) == FALSE) &&
+           (ThreadEntry != &(Process->ThreadListHead))) {
+
+        Thread = LIST_VALUE(ThreadEntry, KTHREAD, ProcessEntry);
+        ThreadEntry = ThreadEntry->Next;
+        if ((Thread->Flags & THREAD_FLAG_EXITING) != 0) {
+            continue;
+        }
+
+        //
+        // Determine if this thread has any of the pending signals unblocked.
+        //
+
+        ThreadPendingSignals = PendingSignals;
+        REMOVE_SIGNALS_FROM_SET(ThreadPendingSignals, Thread->BlockedSignals);
+        if (IS_SIGNAL_SET_EMPTY(ThreadPendingSignals) != FALSE) {
+            continue;
+        }
+
+        //
+        // Wake this thread up for this batch of signals. It is now responsible
+        // for dispatching them.
+        //
+
+        if (Thread->SignalPending < ThreadSignalPending) {
+            Thread->SignalPending = ThreadSignalPending;
+            RtlMemoryBarrier();
+            ObWakeBlockedThread(Thread, FALSE);
+        }
+
+        //
+        // Remove the batch of signals from the set of pending signals.
+        //
+
+        REMOVE_SIGNALS_FROM_SET(PendingSignals, ThreadPendingSignals);
+    }
+
+    //
+    // Check the process signal list as well.
+    //
+
+    SignalEntry = Process->SignalListHead.Next;
+    while (SignalEntry != &(Process->SignalListHead)) {
+        SignalQueueEntry = LIST_VALUE(SignalEntry,
+                                      SIGNAL_QUEUE_ENTRY,
+                                      ListEntry);
+
+        SignalEntry = SignalEntry->Next;
+        SignalNumber = SignalQueueEntry->Parameters.SignalNumber;
+        if (IS_SIGNAL_SET(SignalSet, SignalNumber) == FALSE) {
+            continue;
+        }
+
+        //
+        // The signal is in the set, find a thread to take the signal.
+        //
+
+        ThreadEntry = Process->ThreadListHead.Next;
+        while (ThreadEntry != &(Process->ThreadListHead)) {
+            Thread = LIST_VALUE(ThreadEntry, KTHREAD, ProcessEntry);
+            ThreadEntry = ThreadEntry->Next;
+            if ((Thread->Flags & THREAD_FLAG_EXITING) != 0) {
+                continue;
+            }
+
+            if (IS_SIGNAL_BLOCKED(Thread, SignalNumber) != FALSE) {
+                continue;
+            }
+
+            //
+            // Wake this thread up for this signal. It is now responsible for
+            // dispatching it.
+            //
+
+            if (Thread->SignalPending < ThreadSignalPending) {
+                Thread->SignalPending = ThreadSignalPending;
+                RtlMemoryBarrier();
+                ObWakeBlockedThread(Thread, FALSE);
+            }
+
+            break;
+        }
+    }
+
+    return;
 }
 

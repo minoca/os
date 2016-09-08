@@ -1153,6 +1153,30 @@ Return Value:
 
 --*/
 
+VOID
+PspCleanupThreadSignals (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine cleans up the current thread's signal state, potentially
+    waking up other threads if it was on the hook for handling a signal. This
+    should only be called during thread termination in the context of the thead
+    whose signal state needs to be cleaned up.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 KSTATUS
 PspInitializeProcessGroupSupport (
     VOID

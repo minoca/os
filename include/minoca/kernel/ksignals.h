@@ -65,6 +65,14 @@ Author:
     ((_ResultSet) = (_Set1) | (_Set2))
 
 //
+// This macro ANDs together two signal masks into a third. The result is where
+// the combination is written to, and the two sets are the inputs to combine.
+//
+
+#define AND_SIGNAL_SETS(_ResultSet, _Set1, _Set2) \
+    ((_ResultSet) = (_Set1) & (_Set2))
+
+//
 // This macro removes the signals in the second set from the signals in the
 // first, and writes the result back to the first set.
 //
