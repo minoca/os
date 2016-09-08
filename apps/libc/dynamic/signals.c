@@ -1808,7 +1808,6 @@ Return Value:
 {
 
     struct sigaction *Action;
-    BOOL ChangedMask;
     int Flags;
     siginfo_t HandlerInformation;
     struct sigaction OriginalAction;
@@ -1816,7 +1815,6 @@ Return Value:
     ULONG Signal;
     SIGNAL_SET SignalMask;
 
-    ChangedMask = FALSE;
     Signal = SignalInformation->SignalNumber;
     Action = &(ClSignalHandlers[Signal]);
     Flags = Action->sa_flags;
@@ -1828,7 +1826,6 @@ Return Value:
     if ((IS_SIGNAL_SET_EMPTY(Action->sa_mask) == FALSE) ||
         ((Flags & (SA_NODEFER | SA_RESETHAND)) == 0)) {
 
-        ChangedMask = TRUE;
         SignalMask = Action->sa_mask;
         if ((Flags & (SA_NODEFER | SA_RESETHAND)) == 0) {
             ADD_SIGNAL(SignalMask, Signal);
@@ -1891,16 +1888,6 @@ Return Value:
         } else {
             Action->sa_handler(Signal);
         }
-    }
-
-    //
-    // Restore the signal mask if it was changed.
-    //
-
-    if (ChangedMask != FALSE) {
-        OsSetSignalBehavior(SignalMaskBlocked,
-                            SignalMaskOperationOverwrite,
-                            &SignalMask);
     }
 
     //

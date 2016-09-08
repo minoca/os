@@ -96,7 +96,7 @@ Author:
 // the if-then state is active in any form..
 //
 
-#define PSR_IS_IT_ACTIVE(_Cpsr) (((_Cpsr) & 0x06000C00) != 0)
+#define PSR_IS_IT_ACTIVE(_Cpsr) (((_Cpsr) & PSR_FLAG_IT_STATE) != 0)
 
 //
 // This macro determines if the given if-then state is active.
@@ -188,8 +188,11 @@ Author:
 #define PSR_FLAG_SATURATION 0x08000000
 #define PSR_FLAG_JAZELLE    0x01000000
 #define PSR_FLAG_THUMB      0x00000020
-#define PSR_FLAG_IRQ        0x00000080
 #define PSR_FLAG_FIQ        0x00000040
+#define PSR_FLAG_IRQ        0x00000080
+#define PSR_FLAG_ALIGNMENT  0x00000100
+
+#define PSR_FLAG_IT_STATE   0x06000C00
 
 //
 // Interrupt vector ranges.
@@ -706,21 +709,16 @@ Members:
 
     Common - Stores the common signal context information.
 
-    Registers - Stores the previous state of the thread's registers.
+    TrapFrame - Stores the general register state.
+
+    FpuContext - Stores the FPU state.
 
 --*/
 
 typedef struct _SIGNAL_CONTEXT_ARM {
     SIGNAL_CONTEXT Common;
-    ULONG R0;
-    ULONG R1;
-    ULONG R2;
-    ULONG R3;
-    ULONG R12;
-    ULONG Sp;
-    ULONG Lr;
-    ULONG Pc;
-    ULONG Cpsr;
+    TRAP_FRAME TrapFrame;
+    FPU_CONTEXT FpuContext;
 } PACKED SIGNAL_CONTEXT_ARM, *PSIGNAL_CONTEXT_ARM;
 
 /*++

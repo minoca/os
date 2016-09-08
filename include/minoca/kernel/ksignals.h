@@ -303,6 +303,23 @@ Author:
 #define SIGNAL_BAD_SYSTEM_CALL 29
 
 //
+// Define the signal context flags.
+//
+
+//
+// This flag is set if the system call the signal interrupted should be
+// restarted.
+//
+
+#define SIGNAL_CONTEXT_FLAG_RESTART 0x00000001
+
+//
+// This flag is set if the FPU context in the signal context is valid.
+//
+
+#define SIGNAL_CONTEXT_FLAG_FPU_VALID 0x00000002
+
+//
 // Define the child process signal reason codes.
 //
 
@@ -480,6 +497,57 @@ typedef struct _SIGNAL_PARAMETERS {
     ULONG SendingUserId;
     UINTN Parameter;
 } SIGNAL_PARAMETERS, *PSIGNAL_PARAMETERS;
+
+/*++
+
+Structure Description:
+
+    This structure defines signal stack information.
+
+Members:
+
+    Base - Stores the base of the stack.
+
+    Flags - Stores a bitfield of flags about the stack. See SIGNAL_STACK_*
+        definitions.
+
+    Size - Stores the size of the stack in bytes.
+
+--*/
+
+typedef struct _SIGNAL_STACK {
+    PVOID Base;
+    ULONG Flags;
+    UINTN Size;
+} SIGNAL_STACK, *PSIGNAL_STACK;
+
+/*++
+
+Structure Description:
+
+    This structure outlines the state saved by the kernel when a user mode
+    signal is dispatched. This is usually embedded within an architecture
+    specific version of the signal context.
+
+Members:
+
+    Flags - Stores a bitmask of signal context flags. See SIGNAL_CONTEXT_FLAG_*
+        for definitions.
+
+    Next - Stores a pointer to the next signal context.
+
+    Stack - Stores the alternate signal stack information.
+
+    Mask - Stores the original signal mask when this signal was applied.
+
+--*/
+
+typedef struct _SIGNAL_CONTEXT {
+    ULONG Flags;
+    PVOID Next;
+    SIGNAL_STACK Stack;
+    SIGNAL_SET Mask;
+} PACKED SIGNAL_CONTEXT, *PSIGNAL_CONTEXT;
 
 //
 // -------------------------------------------------------------------- Globals

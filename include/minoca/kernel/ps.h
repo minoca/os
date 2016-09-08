@@ -1589,9 +1589,6 @@ Members:
     BlockedSignals - Stores a bitfield of signals that are blocked by the
         thread.
 
-    RunningSignals - Stores a bitfield of signals that are currently in progress
-        on the thread.
-
     SignalListHead - Stores the head of the list of signals that are currently
         queued for the process. The type of elements on this list will be
         SIGNAL_QUEUE_ENTRY structures. This list is protected by the process
@@ -1663,7 +1660,6 @@ struct _KTHREAD {
     PWAIT_BLOCK WaitBlock;
     SIGNAL_SET PendingSignals;
     SIGNAL_SET BlockedSignals;
-    SIGNAL_SET RunningSignals;
     LIST_ENTRY SignalListHead;
     RESOURCE_USAGE ResourceUsage;
     PFPU_CONTEXT FpuContext;

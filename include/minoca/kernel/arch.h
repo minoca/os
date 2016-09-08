@@ -28,40 +28,12 @@ Author:
 #define ARCH_POOL_TAG 0x68637241 // 'hcrA'
 
 //
-// Define the signal context flags.
-//
-
-#define SIGNAL_CONTEXT_FLAG_RESTART 0x00000001
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
 typedef struct _TRAP_FRAME TRAP_FRAME, *PTRAP_FRAME;
 typedef struct _PROCESSOR_CONTEXT PROCESSOR_CONTEXT, *PPROCESSOR_CONTEXT;
 typedef struct _FPU_CONTEXT FPU_CONTEXT, *PFPU_CONTEXT;
-
-/*++
-
-Structure Description:
-
-    This structure outlines the state saved by the kernel when a user mode
-    signal is dispatched. This is usually embedded within an architecture
-    specific version of the signal context.
-
-Members:
-
-    Signal - Stores the signal number that fired.
-
-    Flags - Stores a bitmask of signal context flags. See SIGNAL_CONTEXT_FLAG_*
-        for definitions.
-
---*/
-
-typedef struct _SIGNAL_CONTEXT {
-    ULONG Signal;
-    ULONG Flags;
-} PACKED SIGNAL_CONTEXT, *PSIGNAL_CONTEXT;
 
 //
 // -------------------------------------------------------------------- Globals

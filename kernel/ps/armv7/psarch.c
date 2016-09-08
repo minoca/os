@@ -163,33 +163,49 @@ Return Value:
 
 {
 
-    SIGNAL_CONTEXT_ARM Context;
+    PSIGNAL_CONTEXT_ARM Context;
+    ULONG ContextSp;
+    ULONG Flags;
+    BOOL Result;
     KSTATUS Status;
-    KSTATUS Status2;
     PKTHREAD Thread;
 
-    ASSERT(!IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(TrapFrame));
-
     Thread = KeGetCurrentThread();
+    ContextSp = ALIGN_RANGE_DOWN(TrapFrame->UserSp - sizeof(SIGNAL_CONTEXT_ARM),
+                                 STACK_ALIGNMENT);
+
+    Context = (PVOID)ContextSp;
+    Flags = 0;
+    Result = MmUserWrite(&(Context->Common.Next), 0);
+    Status = MmCopyToUserMode(&(Context->Common.Mask),
+                              &(Thread->BlockedSignals),
+                              sizeof(SIGNAL_SET));
 
     //
-    // The trap frame may be incomplete if the thread is currently in a system
-    // call. Volatile registers don't matter in this case.
+    // TODO: Support alternate signal stacks.
     //
 
-    RtlZeroMemory(&Context, sizeof(SIGNAL_CONTEXT_ARM));
-    Context.Common.Signal = SignalParameters->SignalNumber;
-    Context.Pc = TrapFrame->Pc;
-    Context.Sp = TrapFrame->UserSp;
-    Context.Lr = TrapFrame->UserLink;
-    Context.Cpsr = TrapFrame->Cpsr;
-    if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
-        Context.R0 = TrapFrame->R0;
-        Context.R1 = TrapFrame->R1;
-        Context.R2 = TrapFrame->R2;
-        Context.R3 = TrapFrame->R3;
-        Context.R12 = TrapFrame->R12;
+    Result &= MmUserWrite(&(Context->Common.Stack.Base), 0);
+    Result &= MmUserWrite(&(Context->Common.Stack.Size), 0);
+    Result &= MmUserWrite32(&(Context->Common.Stack.Flags), 0);
+    Status |= MmCopyToUserMode(&(Context->TrapFrame),
+                               TrapFrame,
+                               sizeof(TRAP_FRAME));
+
+    TrapFrame->UserSp = ContextSp;
+    if ((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
+        Flags |= SIGNAL_CONTEXT_FLAG_FPU_VALID;
+        if ((Thread->FpuFlags & THREAD_FPU_FLAG_OWNER) != 0) {
+            ArSaveFpuState(Thread->FpuContext);
+        }
+
+        Status |= MmCopyToUserMode(&(Context->FpuContext),
+                                   Thread->FpuContext,
+                                   sizeof(FPU_CONTEXT));
     }
+
+    Result &= MmUserWrite32(&(Context->TrapFrame.SvcSp), 0);
+    Result &= MmUserWrite32(&(Context->TrapFrame.SvcLink), 0);
 
     //
     // If this signal is being applied in the middle of a system call, preserve
@@ -210,46 +226,29 @@ Return Value:
         //
 
         if (IS_SYSTEM_CALL_RESTARTABLE(SystemCallNumber, SystemCallResult)) {
-            Context.R0 = STATUS_INTERRUPTED;
-            Context.R1 = SystemCallNumber;
-            Context.R2 = (ULONG)SystemCallParameter;
-            Context.Common.Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
+            Result &= MmUserWrite(&(Context->TrapFrame.R0), STATUS_INTERRUPTED);
+            Result &= MmUserWrite(&(Context->TrapFrame.R1), SystemCallNumber);
+            Result &= MmUserWrite(&(Context->TrapFrame.R2),
+                                  (UINTN)SystemCallParameter);
+
+            Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
 
         //
         // Otherwise just preserve the system call result.
         //
 
         } else {
-            Context.R0 = SystemCallResult;
+            Result &= MmUserWrite(&(Context->TrapFrame.R0), SystemCallResult);
         }
     }
 
-    //
-    // Mark the signal as running so that more don't come down on the thread
-    // while it's servicing this one.
-    //
-
-    ASSERT(!IS_SIGNAL_SET(Thread->RunningSignals, Context.Common.Signal));
-
-    ADD_SIGNAL(Thread->RunningSignals, Context.Common.Signal);
-
-    //
-    // Copy the signal frame onto the stack.
-    // TODO: Support an alternate signal stack.
-    //
-
-    TrapFrame->UserSp = ALIGN_RANGE_DOWN(TrapFrame->UserSp, STACK_ALIGNMENT);
-    TrapFrame->UserSp -= sizeof(SIGNAL_CONTEXT_ARM);
-    Status = MmCopyToUserMode((PVOID)(TrapFrame->UserSp),
-                              &Context,
-                              sizeof(SIGNAL_CONTEXT_ARM));
-
+    Result &= MmUserWrite32(&(Context->Common.Flags), Flags);
     TrapFrame->UserSp -= sizeof(SIGNAL_PARAMETERS);
-    Status2 = MmCopyToUserMode((PVOID)(TrapFrame->UserSp),
+    Status |= MmCopyToUserMode((PVOID)(TrapFrame->UserSp),
                                SignalParameters,
                                sizeof(SIGNAL_PARAMETERS));
 
-    if ((!KSUCCESS(Status)) || (!KSUCCESS(Status2))) {
+    if ((Status != STATUS_SUCCESS) || (Result == FALSE)) {
         PsHandleUserModeFault((PVOID)(TrapFrame->UserSp),
                               FAULT_FLAG_WRITE | FAULT_FLAG_PAGE_NOT_PRESENT,
                               TrapFrame,
@@ -259,8 +258,6 @@ Return Value:
                                                 SystemCallResult,
                                                 SystemCallParameter,
                                                 SystemCallNumber);
-
-        return;
     }
 
     TrapFrame->Pc = (ULONG)(Thread->OwningProcess->SignalHandlerRoutine);
@@ -269,6 +266,7 @@ Return Value:
         TrapFrame->Cpsr |= PSR_FLAG_THUMB;
     }
 
+    ADD_SIGNAL(Thread->BlockedSignals, SignalParameters->SignalNumber);
     return;
 }
 
@@ -299,34 +297,74 @@ Return Value:
 
 {
 
-    SIGNAL_CONTEXT_ARM Context;
+    PSIGNAL_CONTEXT_ARM Context;
+    ULONG Flags;
+    TRAP_FRAME Frame;
     INTN Result;
+    SIGNAL_SET SignalMask;
     KSTATUS Status;
     PKTHREAD Thread;
 
+    Context = (PSIGNAL_CONTEXT_ARM)UserContext;
+    Result = 0;
     Thread = KeGetCurrentThread();
-    Status = MmCopyFromUserMode(&Context,
-                                (PSIGNAL_CONTEXT_ARM)UserContext,
-                                sizeof(SIGNAL_CONTEXT_ARM));
+    Status = MmCopyFromUserMode(&Frame,
+                                &(Context->TrapFrame),
+                                sizeof(TRAP_FRAME));
 
-    if (!KSUCCESS(Status)) {
-        PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
-        return 0;
+    Status |= MmCopyFromUserMode(&SignalMask,
+                                 &(Context->Common.Mask),
+                                 sizeof(SIGNAL_SET));
+
+    if (!MmUserRead32(&(UserContext->Flags), &Flags)) {
+        Status = STATUS_ACCESS_VIOLATION;
     }
 
-    ASSERT((Context.Cpsr & ARM_MODE_MASK) == ARM_MODE_USER);
+    if (!KSUCCESS(Status)) {
+        goto RestorePreSignalTrapFrameEnd;
+    }
 
-    REMOVE_SIGNAL(Thread->RunningSignals, Context.Common.Signal);
-    TrapFrame->R0 = Context.R0;
-    TrapFrame->R1 = Context.R1;
-    TrapFrame->R2 = Context.R2;
-    TrapFrame->R3 = Context.R3;
-    TrapFrame->R12 = Context.R12;
-    TrapFrame->UserSp = Context.Sp;
-    TrapFrame->UserLink = Context.Lr;
-    TrapFrame->Pc = Context.Pc;
-    TrapFrame->Cpsr = Context.Cpsr;
-    Result = TrapFrame->R0;
+    PsSetSignalMask(&SignalMask, NULL);
+    Frame.Cpsr &= ~(ARM_MODE_MASK | PSR_FLAG_IRQ | PSR_FLAG_FIQ |
+                    PSR_FLAG_ALIGNMENT);
+
+    Frame.Cpsr |= ARM_MODE_USER;
+    Frame.SvcSp = 0;
+    Frame.SvcLink = 0;
+    Frame.ExceptionCpsr = 0;
+    Result = Frame.R0;
+
+    //
+    // TODO: Restore the whole trap frame with just a copy when the system call
+    // handler can save a complete trap frame.
+    //
+
+    TrapFrame->R0 = Frame.R0;
+    TrapFrame->R1 = Frame.R1;
+    TrapFrame->R2 = Frame.R2;
+    TrapFrame->R3 = Frame.R3;
+    TrapFrame->R12 = Frame.R12;
+    TrapFrame->Cpsr = Frame.Cpsr;
+    TrapFrame->Pc = Frame.Pc;
+    TrapFrame->UserLink = Frame.UserLink;
+    TrapFrame->UserSp = Frame.UserSp;
+    if (((Flags & SIGNAL_CONTEXT_FLAG_FPU_VALID) != 0) &&
+        (Thread->FpuContext != NULL)) {
+
+        Status = MmCopyFromUserMode(Thread->FpuContext,
+                                    &(Context->FpuContext),
+                                    sizeof(FPU_CONTEXT));
+
+        if (!KSUCCESS(Status)) {
+            goto RestorePreSignalTrapFrameEnd;
+        }
+
+        Thread->FpuFlags |= THREAD_FPU_FLAG_IN_USE;
+        if ((Thread->FpuFlags & THREAD_FPU_FLAG_OWNER) != 0) {
+            ArDisableFpu();
+            Thread->FpuFlags &= ~THREAD_FPU_FLAG_OWNER;
+        }
+    }
 
     //
     // If the signal context indicates that a restart is necessary, then fire
@@ -335,8 +373,15 @@ Return Value:
     // cause the next restore to return to the signal handler.
     //
 
-    if ((Context.Common.Flags & SIGNAL_CONTEXT_FLAG_RESTART) != 0) {
-        Result = KeSystemCallHandler(Context.R1, (PVOID)Context.R2, TrapFrame);
+    if ((Flags & SIGNAL_CONTEXT_FLAG_RESTART) != 0) {
+        Result = KeSystemCallHandler(TrapFrame->R1,
+                                     (PVOID)(TrapFrame->R2),
+                                     TrapFrame);
+    }
+
+RestorePreSignalTrapFrameEnd:
+    if (!KSUCCESS(Status)) {
+        PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
     }
 
     return Result;

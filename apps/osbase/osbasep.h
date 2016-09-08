@@ -199,8 +199,8 @@ Return Value:
 
 VOID
 OspSignalHandler (
-    UINTN SignalNumber,
-    UINTN SignalParameter
+    PSIGNAL_PARAMETERS Parameters,
+    PSIGNAL_CONTEXT Context
     );
 
 /*++

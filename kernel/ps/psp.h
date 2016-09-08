@@ -31,8 +31,7 @@ Author:
 //
 
 #define IS_SIGNAL_BLOCKED(_Thread, _Signal) \
-    (IS_SIGNAL_SET((_Thread)->BlockedSignals, (_Signal)) || \
-     IS_SIGNAL_SET((_Thread)->RunningSignals, (_Signal)))
+    (IS_SIGNAL_SET((_Thread)->BlockedSignals, (_Signal)))
 
 //
 // This macro evaluates to non-zero if the given signal queue entry is a child

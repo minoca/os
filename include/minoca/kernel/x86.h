@@ -104,6 +104,14 @@ Author:
 #define IA32_EFLAG_ID 0x00200000
 #define IA32_EFLAG_ALWAYS_0 0xFFC08028
 #define IA32_EFLAG_ALWAYS_1 0x00000002
+
+#define IA32_EFLAG_STATUS \
+    (IA32_EFLAG_CF | IA32_EFLAG_PF | IA32_EFLAG_AF | IA32_EFLAG_ZF | \
+     IA32_EFLAG_SF | IA32_EFLAG_OF)
+
+#define IA32_EFLAG_USER \
+    (IA32_EFLAG_STATUS | IA32_EFLAG_DF | IA32_EFLAG_TF | IA32_EFLAG_RF)
+
 #define CR0_PAGING_ENABLE 0x80000000
 #define CR0_WRITE_PROTECT_ENABLE 0x00010000
 #define CR0_TASK_SWITCHED 0x00000008
@@ -637,18 +645,16 @@ Members:
 
     Common - Stores the common signal context information.
 
-    Registers - Stores the previous state of the thread's registers.
+    TrapFrame - Stores the general register state.
+
+    FpuContext - Stores the FPU state.
 
 --*/
 
 typedef struct _SIGNAL_CONTEXT_X86 {
     SIGNAL_CONTEXT Common;
-    ULONG Eax;
-    ULONG Ecx;
-    ULONG Edx;
-    ULONG Eflags;
-    ULONG Eip;
-    ULONG Esp;
+    TRAP_FRAME TrapFrame;
+    FPU_CONTEXT FpuContext;
 } PACKED SIGNAL_CONTEXT_X86, *PSIGNAL_CONTEXT_X86;
 
 /*++

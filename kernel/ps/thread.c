@@ -1122,7 +1122,6 @@ Return Value:
     //
 
     NewThread->BlockedSignals = Thread->BlockedSignals;
-    NewThread->RunningSignals = Thread->RunningSignals;
     NewThread->UserStack = Thread->UserStack;
     NewThread->UserStackSize = Thread->UserStackSize;
     PspPrepareThreadForFirstRun(NewThread, TrapFrame, FALSE);

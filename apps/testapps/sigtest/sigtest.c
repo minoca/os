@@ -30,6 +30,7 @@ Environment:
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -160,7 +161,7 @@ TestSigchldRealtime1SignalHandler (
     void *Context
     );
 
-VOID
+PVOID
 TestThreadSpinForever (
     PVOID Parameter
     );
@@ -889,6 +890,7 @@ Return Value:
     int SignalNumber;
     union sigval SignalValue;
     int Status;
+    pthread_t Thread;
     ULONG ThreadIndex;
     struct timespec Timeout;
     pid_t WaitPid;
@@ -960,16 +962,12 @@ Return Value:
                  ThreadIndex += 1) {
 
                 ChildInitializing = 1;
-                Status = OsCreateThread(NULL,
-                                        0,
+                Status = pthread_create(&Thread,
+                                        NULL,
                                         TestThreadSpinForever,
-                                        (PVOID)&ChildInitializing,
-                                        NULL,
-                                        0,
-                                        NULL,
-                                        NULL);
+                                        (PVOID)&ChildInitializing);
 
-                if (!KSUCCESS(Status)) {
+                if (Status != 0) {
                     PRINT_ERROR("Child %d failed to create thread: %d.\n",
                                 getpid(),
                                 Status);
@@ -1487,7 +1485,7 @@ Return Value:
     return;
 }
 
-VOID
+PVOID
 TestThreadSpinForever (
     PVOID Parameter
     )
@@ -1516,7 +1514,7 @@ Return Value:
         sleep(1);
     }
 
-    return;
+    return NULL;
 }
 
 ULONG

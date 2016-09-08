@@ -110,7 +110,7 @@ END_FUNCTION OsSystemCall
 ##
 ## VOID
 ## OspSignalHandler (
-##     PSIGNAL_PARAMETERS Parameters
+##     PSIGNAL_PARAMETERS Parameters,
 ##     PSIGNAL_CONTEXT Context
 ##     )
 ##

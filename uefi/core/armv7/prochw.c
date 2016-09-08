@@ -29,6 +29,7 @@ Environment:
 #include <minoca/kernel/mm.h>
 #include <minoca/kernel/hmod.h>
 #include <minoca/kernel/kdebug.h>
+#include <minoca/kernel/ksignals.h>
 #include <minoca/kernel/arm.h>
 
 //

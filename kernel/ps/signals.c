@@ -1683,7 +1683,6 @@ Return Value:
         ProcessSignalMask = Process->PendingSignals;
         OR_SIGNAL_SETS(CombinedSignalMask, ThreadSignalMask, ProcessSignalMask);
         REMOVE_SIGNALS_FROM_SET(CombinedSignalMask, Thread->BlockedSignals);
-        REMOVE_SIGNALS_FROM_SET(CombinedSignalMask, Thread->RunningSignals);
         if ((IS_SIGNAL_SET(CombinedSignalMask, SIGNAL_STOP)) ||
             (IS_SIGNAL_SET(CombinedSignalMask, SIGNAL_KILL))) {
 
@@ -3503,23 +3502,19 @@ Return Value:
 
         ASSERT(Thread != NULL);
 
-        REMOVE_SIGNAL(Thread->BlockedSignals, SignalNumber);
+        //
+        // If the signal is blocked, that's the indication that it's already
+        // running. Set it back to its default disposition, which will kill
+        // the process when delivered.
+        //
+
+        if (IS_SIGNAL_SET(Thread->BlockedSignals, SignalNumber)) {
+            REMOVE_SIGNAL(Thread->BlockedSignals, SignalNumber);
+            REMOVE_SIGNAL(Process->HandledSignals, SignalNumber);
+        }
+
         SignalBlocked = FALSE;
         SignalIgnored = FALSE;
-
-        //
-        // If the thread is already running one of these signals and it gets
-        // another one, just kill it.
-        //
-
-        if (IS_SIGNAL_SET(Thread->RunningSignals, SignalNumber)) {
-            PspSetProcessExitStatusUnlocked(Process,
-                                            CHILD_SIGNAL_REASON_KILLED,
-                                            SignalNumber);
-
-            PspQueueSignalToProcess(Process, SIGNAL_KILL, NULL);
-            return;
-        }
 
     } else {
         SignalIgnored = IS_SIGNAL_SET(Process->IgnoredSignals, SignalNumber);
