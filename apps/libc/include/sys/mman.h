@@ -111,6 +111,17 @@ extern "C" {
 #define MS_SYNC 0x0002
 
 //
+// Set this flag to invalidate all cached copies of mapped data that are
+// inconsistent with the permanent storage locations such that subsequent
+// references obtain data consistent with permanent storage sometime between
+// the call to msync and its first subsequent memory reference.
+//
+// In practice this flag does nothing.
+//
+
+#define MS_INVALIDATE 0x0004
+
+//
 // Define the value used to indicate a failed mapping.
 //
 
