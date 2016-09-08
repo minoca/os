@@ -1575,7 +1575,6 @@ Return Value:
     UCHAR Byte;
     pid_t Child;
     ULONG Count;
-    FILE *DevNull;
     ULONG Failures;
     ULONG Index;
     int Pipe[2];
@@ -1614,21 +1613,13 @@ Return Value:
             exit(1);
         }
 
-        DevNull = fopen("/dev/null", "w");
-        if (!DevNull) {
-            PRINT_ERROR("Failed to open /dev/null.");
-        }
-
         SigtestWritePipe = Pipe[1];
         Byte = 1;
         write(Pipe[1], &Byte, 1);
         while ((SigtestSignalCount[0] < Count) ||
                (SigtestSignalCount[1] < Count)) {
 
-            fprintf(DevNull,
-                    "This is useless %d %d\n",
-                    SigtestSignalCount[0],
-                    SigtestSignalCount[1]);
+            pause();
         }
 
         DEBUG_PRINT("Got %d and %d signals\n",
