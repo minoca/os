@@ -399,6 +399,9 @@ Members:
 
     ModulePath - Stores the list of paths to search when loading a new module.
 
+    ForeignCalls - Stores the number of active foreign calls running
+        in any fibers that are not the currently running one.
+
 --*/
 
 struct _CK_VM {
@@ -416,6 +419,7 @@ struct _CK_VM {
     PCK_COMPILER Compiler;
     PCK_FIBER Fiber;
     PCK_LIST ModulePath;
+    LONG ForeignCalls;
 };
 
 //
@@ -569,6 +573,30 @@ Return Value:
 
 --*/
 
+CK_ERROR_TYPE
+CkpRunInterpreter (
+    PCK_VM Vm,
+    PCK_FIBER Fiber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the heart of Chalk: the main execution loop.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Fiber - Supplies a pointer to the execution context to run.
+
+Return Value:
+
+    Chalk status.
+
+--*/
+
 VOID
 CkpClassCreate (
     PCK_VM Vm,
@@ -595,6 +623,35 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+VOID
+CkpInstantiateClass (
+    PCK_VM Vm,
+    PCK_CLASS Class,
+    CK_ARITY Arity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new class instance on the stack and invokes its
+    initialization routine.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Class - Supplies a pointer to the class that owns the method.
+
+    Arity - Supplies the number of arguments the method was called with in
+        code (plus one for the receiver).
+
+Return Value:
+
+    None. The fiber error will be set on failure.
 
 --*/
 
@@ -654,30 +711,6 @@ Arguments:
 Return Value:
 
     None. The fiber error will be set on failure.
-
---*/
-
-CK_ERROR_TYPE
-CkpRunInterpreter (
-    PCK_VM Vm,
-    PCK_FIBER Fiber
-    );
-
-/*++
-
-Routine Description:
-
-    This routine implements the heart of Chalk: the main execution loop.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Fiber - Supplies a pointer to the execution context to run.
-
-Return Value:
-
-    Chalk status.
 
 --*/
 

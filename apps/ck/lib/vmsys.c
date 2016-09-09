@@ -616,7 +616,7 @@ Return Value:
     ModuleData->Foreign.Handle = Handle;
     Handle = NULL;
     ModuleData->Foreign.Entry = EntryPoint;
-    LoadStatus = CkLoadModuleSource;
+    LoadStatus = CkLoadModuleForeign;
 
 LoadDynamicModuleEnd:
     if (Handle != NULL) {

@@ -21,18 +21,26 @@
 #
 ################################################################################
 
-BINARY = chalk.a
+BINARY = libchalk.so.1
 
-BINARYTYPE = library
+BINARYTYPE = so
+
+BINPLACE = bin
 
 include $(SRCDIR)/sources
 
-OBJS += dlopen.o
+OBJS += $(POSIX_OBJS)
 
 DIRS = build \
        gram
 
+ENTRY := 0
+
 include $(SRCROOT)/os/minoca.mk
+
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/basertl.a          \
+             $(OBJROOT)/os/lib/rtl/rtlc/rtlc.a             \
+             $(OBJROOT)/os/lib/yy/yy.a                     \
 
 build: gram
 gram.c: gram/gramgen.c
@@ -50,3 +58,4 @@ gram.c: gram/gramgen.c
 	       .data=.rodata,alloc,load,data,contents,readonly -I binary \
 	       -O $(OBJ_FORMAT) -B $(BFD_ARCH) $(notdir $<) $@ && \
 	   rm $(notdir $<)
+

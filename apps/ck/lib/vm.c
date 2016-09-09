@@ -724,6 +724,7 @@ Return Value:
 
     UINTN NameSize;
     CK_SYMBOL_INDEX Symbol;
+    CK_VALUE Value;
 
     NameSize = strlen(Name);
     if (Create != FALSE) {
@@ -731,6 +732,14 @@ Return Value:
                                       &(Module->VariableNames),
                                       Name,
                                       NameSize);
+
+        if (Symbol >= Module->Variables.Count) {
+
+            CK_ASSERT(Symbol == Module->Variables.Count);
+
+            Value = CkNullValue;
+            CkpArrayAppend(Vm, &(Module->Variables), Value);
+        }
 
     } else {
         Symbol = CkpStringTableFind(&(Module->VariableNames), Name, NameSize);
@@ -802,276 +811,6 @@ Return Value:
     Fiber = Module->Fiber;
     Module->Fiber = NULL;
     return CkpRunInterpreter(Vm, Fiber);
-}
-
-VOID
-CkpClassCreate (
-    PCK_VM Vm,
-    CK_SYMBOL_INDEX FieldCount,
-    PCK_MODULE Module
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a new class in response to executing a class opcode.
-    The superclass should be on the top of the stack, followed by the name of
-    the class.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    FieldCount - Supplies the number of fields in the new class.
-
-    Module - Supplies a pointer to the module that owns the class.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PCK_CLASS Class;
-    PCK_CLASS Metaclass;
-    CK_VALUE MetaclassName;
-    CK_VALUE Name;
-    PCK_CLASS Super;
-    CK_VALUE Superclass;
-
-    CK_ASSERT(Vm->Fiber->StackTop >= Vm->Fiber->Stack + 2);
-
-    Class = NULL;
-    Superclass = *(Vm->Fiber->StackTop - 1);
-    Name = *(Vm->Fiber->StackTop - 2);
-    if (CkpValidateSuperclass(Vm, Name, Superclass, FieldCount) == FALSE) {
-        goto ClassCreateEnd;
-    }
-
-    Super = CK_AS_CLASS(Superclass);
-
-    //
-    // Create the metaclass. This inherits directly from Class.
-    //
-
-    MetaclassName = CkpStringFormat(Vm, "@Meta", Name);
-    if (CK_IS_NULL(MetaclassName)) {
-        goto ClassCreateEnd;
-    }
-
-    CkpPushRoot(Vm, CK_AS_OBJECT(MetaclassName));
-    Metaclass = CkpClassAllocate(Vm, Module, 0, CK_AS_STRING(MetaclassName));
-    CkpPopRoot(Vm);
-    if (Metaclass == NULL) {
-        goto ClassCreateEnd;
-    }
-
-    CkpPushRoot(Vm, &(Metaclass->Header));
-    CkpBindSuperclass(Vm, Metaclass, Vm->Class.Class);
-
-    //
-    // Create the actual class.
-    //
-
-    Class = CkpClassAllocate(Vm,
-                             Module,
-                             FieldCount + Super->FieldCount,
-                             CK_AS_STRING(Name));
-
-    if (Class == NULL) {
-        CkpPopRoot(Vm);
-        return;
-    }
-
-    CkpPushRoot(Vm, &(Class->Header));
-    Class->Header.Class = Metaclass;
-    CkpBindSuperclass(Vm, Class, Super);
-    CkpPopRoot(Vm);
-    CkpPopRoot(Vm);
-
-ClassCreateEnd:
-
-    //
-    // Pop the name and superclass, but push the resulting class, for a net
-    // effect of -1.
-    //
-
-    Vm->Fiber->StackTop -= 1;
-    if (Class != NULL) {
-        CK_OBJECT_VALUE(*(Vm->Fiber->StackTop - 1), Class);
-
-    } else {
-        *(Vm->Fiber->StackTop - 1) = CkNullValue;
-    }
-
-    return;
-}
-
-VOID
-CkpCallMethod (
-    PCK_VM Vm,
-    PCK_CLASS Class,
-    CK_VALUE MethodName,
-    CK_ARITY Arity
-    )
-
-/*++
-
-Routine Description:
-
-    This routine invokes a class instance method for execution.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Class - Supplies a pointer to the class that owns the method.
-
-    MethodName - Supplies the name of the method to look up on the class.
-
-    Arity - Supplies the number of arguments the method was called with in
-        code (plus one for the receiver).
-
-Return Value:
-
-    None. The fiber error will be set on failure.
-
---*/
-
-{
-
-    CK_VALUE ClassName;
-    PCK_CLOSURE Closure;
-    CK_VALUE Method;
-
-    CK_ASSERT(CK_IS_STRING(MethodName));
-
-    //
-    // Look up the method in the receiver, and call it.
-    //
-
-    Method = CkpDictGet(Class->Methods, MethodName);
-    if (CK_IS_UNDEFINED(Method)) {
-        CK_OBJECT_VALUE(ClassName, Class->Name);
-        Vm->Fiber->Error = CkpStringFormat(Vm,
-                                           "@ does not implement '@'",
-                                           ClassName,
-                                           MethodName);
-
-        return;
-    }
-
-    Closure = CK_AS_CLOSURE(Method);
-    CkpCallFunction(Vm, Closure, Arity);
-    return;
-}
-
-VOID
-CkpCallFunction (
-    PCK_VM Vm,
-    PCK_CLOSURE Closure,
-    CK_ARITY Arity
-    )
-
-/*++
-
-Routine Description:
-
-    This routine invokes the given closure for execution.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Closure - Supplies a pointer to the closure to execute.
-
-    Arity - Supplies the number of arguments the method was called with in
-        code (plus one for the receiver).
-
-Return Value:
-
-    None. The fiber error will be set on failure.
-
---*/
-
-{
-
-    PCK_VALUE Arguments;
-    PCK_FIBER Fiber;
-    UINTN FrameCount;
-    CK_ARITY FunctionArity;
-    PSTR Name;
-    UINTN RequiredStackSize;
-    UINTN StackSize;
-
-    Fiber = Vm->Fiber;
-
-    CK_ASSERT(Closure->Header.Type == CkObjectClosure);
-
-    //
-    // Check the arity of the function against what it's supposed to be.
-    //
-
-    FunctionArity = CkpGetFunctionArity(Closure);
-    Name = CkpGetFunctionName(Closure);
-    if (FunctionArity != Arity - 1) {
-        CkpRuntimeError(Vm,
-                        "Expected %d arguments for %s, got %d",
-                        FunctionArity,
-                        Name,
-                        Arity - 1);
-
-        return;
-    }
-
-    //
-    // Reallocate the stack if needed.
-    //
-
-    StackSize = Fiber->StackTop - Fiber->Stack;
-    if (Closure->Type == CkClosurePrimitive) {
-        Arguments = Fiber->StackTop - Arity;
-        if (Closure->U.Primitive.Function(Vm, Arguments) != FALSE) {
-            Fiber->StackTop -= Arity - 1;
-        }
-
-    } else if (Closure->Type == CkClosureBlock) {
-        RequiredStackSize = StackSize + Closure->U.Block.Function->MaxStack;
-        if (RequiredStackSize > Fiber->StackCapacity) {
-            CkpEnsureStack(Vm, Fiber, RequiredStackSize);
-        }
-
-        CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
-
-    } else if (Closure->Type == CkClosureForeign) {
-        CkpEnsureStack(Vm,
-                       Fiber,
-                       (Fiber->StackTop - Fiber->Stack) + CK_MIN_FOREIGN_STACK);
-
-        FrameCount = Fiber->FrameCount;
-        CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
-        if (FrameCount == Fiber->FrameCount) {
-            return;
-        }
-
-        Closure->U.Foreign.Function(Vm);
-
-        //
-        // TODO: What if foreign function switches fibers?
-        //
-
-        Fiber->FrameCount = FrameCount;
-
-    } else {
-
-        CK_ASSERT(FALSE);
-
-    }
-
-    return;
 }
 
 CK_ERROR_TYPE
@@ -1399,30 +1138,12 @@ Return Value:
 
         //
         // Calling a class is the official method of constructing a new object.
-        // Get the init symbol from the strings in the module where the class
-        // is defined, since the module running might never have the proper
-        // __init string anywhere.
         //
 
         } else if (CK_IS_CLASS(Arguments[0])) {
             Class = CK_AS_CLASS(Arguments[0]);
-            Arguments[0] = CkpCreateInstance(Vm, Class);
-            if (!CK_IS_NULL(Fiber->Error)) {
-                CKI_RUNTIME_ERROR();
-            }
-
-            Symbol = CkpGetInitMethodSymbol(Vm, Class->Module, Arity - 1);
-            if (Symbol < 0) {
-                CkpRuntimeError(Vm,
-                                "No __init function for argument count %d",
-                                Arity);
-
-                CKI_RUNTIME_ERROR();
-            }
-
-            MethodName = Class->Module->Strings.List.Data[Symbol];
             CKI_STORE_FRAME();
-            CkpCallMethod(Vm, Class, MethodName, Arity);
+            CkpInstantiateClass(Vm, Class, Arity);
             CKI_LOAD_FIBER();
             CKI_LOAD_FRAME();
             if (!CK_IS_NULL(Fiber->Error)) {
@@ -1504,7 +1225,13 @@ Return Value:
         //
 
         if (Fiber->FrameCount == 0) {
+
+            CK_ASSERT(Fiber->ForeignCalls == 0);
+
             if (Fiber->Caller == NULL) {
+
+                CK_ASSERT(Vm->ForeignCalls == 0);
+
                 Fiber->Stack[0] = Value;
                 Fiber->StackTop = Fiber->Stack + 1;
                 goto RunInterpreterEnd;
@@ -1514,6 +1241,7 @@ Return Value:
             Fiber->Caller = NULL;
             Fiber = NextFiber;
             Vm->Fiber = NextFiber;
+            Vm->ForeignCalls -= NextFiber->ForeignCalls;
 
             CK_ASSERT(Fiber->StackTop > Fiber->Stack);
 
@@ -1636,6 +1364,350 @@ Return Value:
 
 RunInterpreterEnd:
     return CkSuccess;
+}
+
+VOID
+CkpClassCreate (
+    PCK_VM Vm,
+    CK_SYMBOL_INDEX FieldCount,
+    PCK_MODULE Module
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new class in response to executing a class opcode.
+    The superclass should be on the top of the stack, followed by the name of
+    the class.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    FieldCount - Supplies the number of fields in the new class.
+
+    Module - Supplies a pointer to the module that owns the class.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_CLASS Class;
+    PCK_CLASS Metaclass;
+    CK_VALUE MetaclassName;
+    CK_VALUE Name;
+    PCK_CLASS Super;
+    CK_VALUE Superclass;
+
+    CK_ASSERT(Vm->Fiber->StackTop >= Vm->Fiber->Stack + 2);
+
+    Class = NULL;
+    Superclass = *(Vm->Fiber->StackTop - 1);
+    Name = *(Vm->Fiber->StackTop - 2);
+    if (CkpValidateSuperclass(Vm, Name, Superclass, FieldCount) == FALSE) {
+        goto ClassCreateEnd;
+    }
+
+    Super = CK_AS_CLASS(Superclass);
+
+    //
+    // Create the metaclass. This inherits directly from Class.
+    //
+
+    MetaclassName = CkpStringFormat(Vm, "@Meta", Name);
+    if (CK_IS_NULL(MetaclassName)) {
+        goto ClassCreateEnd;
+    }
+
+    CkpPushRoot(Vm, CK_AS_OBJECT(MetaclassName));
+    Metaclass = CkpClassAllocate(Vm, Module, 0, CK_AS_STRING(MetaclassName));
+    CkpPopRoot(Vm);
+    if (Metaclass == NULL) {
+        goto ClassCreateEnd;
+    }
+
+    CkpPushRoot(Vm, &(Metaclass->Header));
+    CkpBindSuperclass(Vm, Metaclass, Vm->Class.Class);
+
+    //
+    // Create the actual class.
+    //
+
+    Class = CkpClassAllocate(Vm,
+                             Module,
+                             FieldCount + Super->FieldCount,
+                             CK_AS_STRING(Name));
+
+    if (Class == NULL) {
+        CkpPopRoot(Vm);
+        return;
+    }
+
+    CkpPushRoot(Vm, &(Class->Header));
+    Class->Header.Class = Metaclass;
+    CkpBindSuperclass(Vm, Class, Super);
+    CkpPopRoot(Vm);
+    CkpPopRoot(Vm);
+
+ClassCreateEnd:
+
+    //
+    // Pop the name and superclass, but push the resulting class, for a net
+    // effect of -1.
+    //
+
+    Vm->Fiber->StackTop -= 1;
+    if (Class != NULL) {
+        CK_OBJECT_VALUE(*(Vm->Fiber->StackTop - 1), Class);
+
+    } else {
+        *(Vm->Fiber->StackTop - 1) = CkNullValue;
+    }
+
+    return;
+}
+
+VOID
+CkpInstantiateClass (
+    PCK_VM Vm,
+    PCK_CLASS Class,
+    CK_ARITY Arity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new class instance on the stack and invokes its
+    initialization routine.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Class - Supplies a pointer to the class that owns the method.
+
+    Arity - Supplies the number of arguments the method was called with in
+        code (plus one for the receiver).
+
+Return Value:
+
+    None. The fiber error will be set on failure.
+
+--*/
+
+{
+
+    PCK_VALUE Arguments;
+    CK_STRING FakeString;
+    PCK_FIBER Fiber;
+    UINTN Length;
+    CHAR Name[CK_MAX_METHOD_SIGNATURE];
+    CK_VALUE NameValue;
+    CK_FUNCTION_SIGNATURE Signature;
+
+    Fiber = Vm->Fiber;
+    Arguments = Fiber->StackTop - Arity;
+
+    //
+    // Create the uninitialized class instance.
+    //
+
+    Arguments[0] = CkpCreateInstance(Vm, Class);
+    if (!CK_IS_NULL(Fiber->Error)) {
+        return;
+    }
+
+    //
+    // Create the init method signature function signature and invoke the
+    // init method.
+    //
+
+    Signature.Name = "__init";
+    Signature.Length = 6;
+    Signature.Arity = Arity - 1;
+    Length = sizeof(Name);
+    CkpPrintSignature(&Signature, Name, &Length);
+    CkpStringFake(&FakeString, Name, Length);
+    CK_OBJECT_VALUE(NameValue, &FakeString);
+    CkpCallMethod(Vm, Class, NameValue, Arity);
+    return;
+}
+
+VOID
+CkpCallMethod (
+    PCK_VM Vm,
+    PCK_CLASS Class,
+    CK_VALUE MethodName,
+    CK_ARITY Arity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine invokes a class instance method for execution.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Class - Supplies a pointer to the class that owns the method.
+
+    MethodName - Supplies the name of the method to look up on the class.
+
+    Arity - Supplies the number of arguments the method was called with in
+        code (plus one for the receiver).
+
+Return Value:
+
+    None. The fiber error will be set on failure.
+
+--*/
+
+{
+
+    CK_VALUE ClassName;
+    PCK_CLOSURE Closure;
+    CK_VALUE Method;
+
+    CK_ASSERT(CK_IS_STRING(MethodName));
+
+    //
+    // Look up the method in the receiver, and call it.
+    //
+
+    Method = CkpDictGet(Class->Methods, MethodName);
+    if (CK_IS_UNDEFINED(Method)) {
+        CK_OBJECT_VALUE(ClassName, Class->Name);
+        Vm->Fiber->Error = CkpStringFormat(Vm,
+                                           "@ does not implement '@'",
+                                           ClassName,
+                                           MethodName);
+
+        return;
+    }
+
+    Closure = CK_AS_CLOSURE(Method);
+    CkpCallFunction(Vm, Closure, Arity);
+    return;
+}
+
+VOID
+CkpCallFunction (
+    PCK_VM Vm,
+    PCK_CLOSURE Closure,
+    CK_ARITY Arity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine invokes the given closure for execution.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Closure - Supplies a pointer to the closure to execute.
+
+    Arity - Supplies the number of arguments the method was called with in
+        code (plus one for the receiver).
+
+Return Value:
+
+    None. The fiber error will be set on failure.
+
+--*/
+
+{
+
+    PCK_VALUE Arguments;
+    PCK_FIBER Fiber;
+    UINTN FrameCount;
+    CK_ARITY FunctionArity;
+    PSTR Name;
+    UINTN RequiredStackSize;
+    UINTN StackSize;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(Closure->Header.Type == CkObjectClosure);
+
+    //
+    // Check the arity of the function against what it's supposed to be.
+    //
+
+    FunctionArity = CkpGetFunctionArity(Closure);
+    Name = CkpGetFunctionName(Closure);
+    if (FunctionArity != Arity - 1) {
+        CkpRuntimeError(Vm,
+                        "Expected %d arguments for %s, got %d",
+                        FunctionArity,
+                        Name,
+                        Arity - 1);
+
+        return;
+    }
+
+    //
+    // Reallocate the stack if needed.
+    //
+
+    StackSize = Fiber->StackTop - Fiber->Stack;
+    if (Closure->Type == CkClosurePrimitive) {
+        Arguments = Fiber->StackTop - Arity;
+        if (Closure->U.Primitive.Function(Vm, Arguments) != FALSE) {
+            Fiber->StackTop -= Arity - 1;
+        }
+
+    } else if (Closure->Type == CkClosureBlock) {
+        CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
+        RequiredStackSize = StackSize + Closure->U.Block.Function->MaxStack;
+        if (RequiredStackSize > Fiber->StackCapacity) {
+            CkpEnsureStack(Vm, Fiber, RequiredStackSize);
+        }
+
+    } else if (Closure->Type == CkClosureForeign) {
+        FrameCount = Fiber->FrameCount;
+        CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
+        if (FrameCount == Fiber->FrameCount) {
+            return;
+        }
+
+        CkpEnsureStack(Vm,
+                       Fiber,
+                       (Fiber->StackTop - Fiber->Stack) + CK_MIN_FOREIGN_STACK);
+
+        if (!CK_IS_NULL(Fiber->Error)) {
+            return;
+        }
+
+        //
+        // Increment the foreign call count to prevent fiber switches from
+        // happening while the VM call stack is somewhat linked with the C
+        // stack.
+        //
+
+        Fiber->ForeignCalls += 1;
+        Closure->U.Foreign.Function(Vm);
+        Fiber->ForeignCalls -= 1;
+        Fiber->FrameCount = FrameCount;
+        Fiber->StackTop -= Arity - 1;
+
+    } else {
+
+        CK_ASSERT(FALSE);
+
+    }
+
+    return;
 }
 
 //

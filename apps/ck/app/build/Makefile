@@ -12,7 +12,7 @@
 #
 #   Author:
 #
-#       Evan Green 26-May-2016
+#       Evan Green 28-Aug-2016
 #
 #   Environment:
 #
@@ -22,17 +22,33 @@
 
 BINARY = chalk
 
-BINARYTYPE = app
+BINARYTYPE = build
+
+BUILD = yes
+
+BINARYTYPE = build
 
 BINPLACE = bin
 
-DYNLIBS = $(OBJROOT)/os/apps/ck/lib/libchalk.so.1
+INCLUDES += $(SRCDIR)/..;
 
-include $(SRCDIR)/sources
+VPATH += $(SRCDIR)/..:
+
+include $(SRCDIR)/../sources
+
+ifeq ($(OS),Windows_NT)
+
+OBJS += $(WIN32_OBJS)
+
+DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/chalk.dll
+
+else
 
 OBJS += $(POSIX_OBJS)
 
-DIRS = build
+DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/libchalk.so.1
+
+endif
 
 include $(SRCROOT)/os/minoca.mk
 

@@ -21,6 +21,19 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+//
+// Chalk API functions are all exported from the library.
+//
+
+#define CK_API __DLLEXPORT
+
+//
+// The parser and Rtl libraries are statically linked in.
+//
+
+#define YY_API
+#define RTL_API
+
 #include <minoca/lib/types.h>
 #include <minoca/lib/chalk.h>
 

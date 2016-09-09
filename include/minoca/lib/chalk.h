@@ -65,7 +65,11 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define CK_API
+#ifndef CK_API
+
+#define CK_API __DLLIMPORT
+
+#endif
 
 #define CHALK_VERSION_MAJOR 1
 #define CHALK_VERSION_MINOR 0
@@ -435,6 +439,32 @@ typedef struct _CK_CONFIGURATION {
     ULONG HeapGrowthPercent;
     ULONG Flags;
 } CK_CONFIGURATION, *PCK_CONFIGURATION;
+
+/*++
+
+Structure Description:
+
+    This structure describes a variable or other data object in Chalk.
+
+Members:
+
+    Type - Stores the type of object to register.
+
+    Name - Stores the name used to access the object in Chalk.
+
+    Value - Stores the value of the object
+
+    Integer - Stores the integer value of the object. For many types, this
+        member is ignored.
+
+--*/
+
+typedef struct _CK_VARIABLE_DESCRIPTION {
+    CK_API_TYPE Type;
+    PSTR Name;
+    PVOID Value;
+    CK_INTEGER Integer;
+} CK_VARIABLE_DESCRIPTION, *PCK_VARIABLE_DESCRIPTION;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -1006,6 +1036,68 @@ Return Value:
 --*/
 
 CK_API
+PVOID
+CkPushStringBuffer (
+    PCK_VM Vm,
+    UINTN MaxLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates an uninitialized string and pushes it on the top of
+    the stack. The string must be finalized before use in the Chalk environment.
+    Once finalized, the string buffer must not be modified.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    MaxLength - Supplies the maximum length of the string buffer, not including
+        a null terminator.
+
+Return Value:
+
+    Returns a pointer to the string buffer on success.
+
+    NULL on allocation failure.
+
+--*/
+
+CK_API
+VOID
+CkFinalizeString (
+    PCK_VM Vm,
+    INTN StackIndex,
+    UINTN Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine finalizes a string that was previously created as a buffer.
+    The string must not be modified after finalization.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the string to slice. Negative
+        values reference stack indices from the end of the stack.
+
+    Length - Supplies the final length of the string, not including the null
+        terminator. This must not be greater than the initial maximum length
+        provided when the string buffer was pushed.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
 VOID
 CkPushDict (
     PCK_VM Vm
@@ -1543,7 +1635,7 @@ Return Value:
 --*/
 
 CK_API
-VOID
+BOOL
 CkCall (
     PCK_VM Vm,
     UINTN ArgumentCount
@@ -1567,7 +1659,43 @@ Arguments:
 
 Return Value:
 
-    None.
+    TRUE on success.
+
+    FALSE if an error occurred.
+
+--*/
+
+CK_API
+BOOL
+CkCallMethod (
+    PCK_VM Vm,
+    PSTR MethodName,
+    UINTN ArgumentCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pops the given number of arguments off the stack, then pops
+    an object, and executes the method with the given name on that object. The
+    return value is pushed onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    MethodName - Supplies a pointer to the null terminated string containing
+        the name of the method to call.
+
+    ArgumentCount - Supplies the number of arguments to the call. The class
+        instance will also be popped after these arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if an error occurred.
 
 --*/
 
@@ -1682,6 +1810,113 @@ Return Value:
 
     FALSE if the argument is not of the right type. In that case, an error
     will be created.
+
+--*/
+
+CK_API
+VOID
+CkDeclareVariables (
+    PCK_VM Vm,
+    INTN ModuleIndex,
+    PCK_VARIABLE_DESCRIPTION Variables
+    );
+
+/*++
+
+Routine Description:
+
+    This routine registers an array of Chalk objects in the given module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleIndex - Supplies the stack index of the module to add the variables
+        to.
+
+    Variables - Supplies a pointer to an array of variables. The array should
+        be NULL terminated.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkReturnNull (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets null as the return value.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkReturnInteger (
+    PCK_VM Vm,
+    CK_INTEGER Integer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets an integer as the return value.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Integer - Supplies the integer to set as the foreign function return.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkReturnString (
+    PCK_VM Vm,
+    PCSTR String,
+    UINTN Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new string and sets it as the return value.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    String - Supplies a pointer to the buffer containing the string. A copy of
+        this buffer will be made.
+
+    Length - Supplies the length of the buffer, in bytes, not including the
+        null terminator.
+
+Return Value:
+
+    None.
 
 --*/
 

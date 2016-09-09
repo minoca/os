@@ -1067,6 +1067,7 @@ Return Value:
     CkpKissObject(Vm, &(Module->Name->Header));
     CkpKissObject(Vm, &(Module->Path->Header));
     CkpKissObject(Vm, &(Module->Fiber->Header));
+    CkpKissObject(Vm, &(Module->EntryFunction->Header));
     Vm->BytesAllocated = sizeof(CK_MODULE);
     return;
 }

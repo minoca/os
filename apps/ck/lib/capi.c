@@ -928,6 +928,111 @@ Return Value:
 }
 
 CK_API
+PVOID
+CkPushStringBuffer (
+    PCK_VM Vm,
+    UINTN MaxLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates an uninitialized string and pushes it on the top of
+    the stack. The string must be finalized before use in the Chalk environment.
+    Once finalized, the string buffer must not be modified.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    MaxLength - Supplies the maximum length of the string buffer, not including
+        a null terminator.
+
+Return Value:
+
+    Returns a pointer to the string buffer on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_STRING String;
+    CK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_PUSH(Fiber, 1));
+
+    String = CkpStringAllocate(Vm, MaxLength);
+    if (String == NULL) {
+        return NULL;
+    }
+
+    CK_OBJECT_VALUE(Value, String);
+    CK_PUSH(Fiber, Value);
+    return String->Value;
+}
+
+CK_API
+VOID
+CkFinalizeString (
+    PCK_VM Vm,
+    INTN StackIndex,
+    UINTN Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine finalizes a string that was previously created as a buffer.
+    The string must not be modified after finalization.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the string to slice. Negative
+        values reference stack indices from the end of the stack.
+
+    Length - Supplies the final length of the string, not including the null
+        terminator. This must not be greater than the initial maximum length
+        provided when the string buffer was pushed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_STRING String;
+    PCK_VALUE Value;
+
+    Value = CkpGetStackIndex(Vm, StackIndex);
+    if (!CK_IS_STRING(*Value)) {
+
+        CK_ASSERT(FALSE);
+
+        return;
+    }
+
+    String = CK_AS_STRING(*Value);
+
+    CK_ASSERT(Length <= String->Length);
+
+    String->Value[Length] = '\0';
+    String->Length = Length;
+    CkpStringHash(String);
+    return;
+}
+
+CK_API
 VOID
 CkPushDict (
     PCK_VM Vm
@@ -1304,8 +1409,8 @@ Return Value:
     }
 
     List = CK_AS_LIST(*ListValue);
-    if ((ListIndex >= List->Elements.Count) ||
-        (-ListIndex > List->Elements.Count)) {
+    if ((ListIndex >= (INTN)List->Elements.Count) ||
+        (-ListIndex > (INTN)List->Elements.Count)) {
 
         CK_PUSH(Fiber, CkNullValue);
         return;
@@ -1377,7 +1482,7 @@ Return Value:
         CkpArrayAppend(Vm, &(List->Elements), Value);
 
     } else if ((ListIndex < List->Elements.Count) ||
-               (-ListIndex <= List->Elements.Count)) {
+               (-ListIndex <= (INTN)List->Elements.Count)) {
 
         CK_INT_VALUE(IndexValue, ListIndex);
         Index = CkpGetIndex(Vm, IndexValue, List->Elements.Count);
@@ -1971,7 +2076,7 @@ Return Value:
 }
 
 CK_API
-VOID
+BOOL
 CkCall (
     PCK_VM Vm,
     UINTN ArgumentCount
@@ -1995,7 +2100,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    TRUE on success.
+
+    FALSE if an error occurred.
 
 --*/
 
@@ -2005,54 +2112,30 @@ Return Value:
     PCK_CLASS Class;
     PCK_CLOSURE Closure;
     PCK_FIBER Fiber;
-    CK_VALUE Instance;
-    CK_VALUE MethodName;
-    PCK_VALUE OriginalTop;
-    CK_SYMBOL_INDEX Symbol;
 
     Fiber = Vm->Fiber;
 
     CK_ASSERT(CK_CAN_POP(Fiber, ArgumentCount + 1));
 
-    OriginalTop = Fiber->StackTop;
     Callable = *(Fiber->StackTop - 1 - ArgumentCount);
     if (CK_IS_CLOSURE(Callable)) {
         Closure = CK_AS_CLOSURE(Callable);
+        CkpCallFunction(Vm, Closure, ArgumentCount + 1);
 
     //
     // Calling a class is the official method of constructing a new object.
-    // Get the init symbol from the strings in the module where the class
-    // is defined, since the module running might never have the proper
-    // __init string anywhere.
+    // Run the interpreter to run the __init method that got pushed on.
     //
 
     } else if (CK_IS_CLASS(Callable)) {
         Class = CK_AS_CLASS(Callable);
-        Instance = CkpCreateInstance(Vm, Class);
-        if (!CK_IS_NULL(Fiber->Error)) {
-            goto CallEnd;
-        }
-
-        *(Fiber->StackTop - 1 - ArgumentCount) = Instance;
-        Symbol = CkpGetInitMethodSymbol(Vm, Class->Module, ArgumentCount);
-        if (Symbol < 0) {
-            CkpRuntimeError(Vm,
-                            "No __init function for argument count %d",
-                            ArgumentCount);
-
-            goto CallEnd;
-        }
-
-        MethodName = Class->Module->Strings.List.Data[Symbol];
-        CkpCallMethod(Vm, Class, MethodName, ArgumentCount + 1);
-        goto CallEnd;
+        CkpInstantiateClass(Vm, Class, ArgumentCount + 1);
 
     } else {
         CkpRuntimeError(Vm, "Object is not callable");
         goto CallEnd;
     }
 
-    CkpCallFunction(Vm, Closure, ArgumentCount + 1);
     if (!CK_IS_NULL(Fiber->Error)) {
         goto CallEnd;
     }
@@ -2068,17 +2151,110 @@ CallEnd:
 
     CK_ASSERT((Vm->Fiber == Fiber) || (Vm->Fiber == NULL));
 
-    //
-    // If the call attempt failed, adjust the stack as promised, and push null
-    // as the return value.
-    //
-
-    if ((Vm->Fiber == Fiber) && (Fiber->StackTop == OriginalTop)) {
-        Fiber->StackTop -= ArgumentCount + 1;
-        CK_PUSH(Fiber, CkNullValue);
+    if ((Vm->Fiber == NULL) || (!CK_IS_NULL(Vm->Fiber->Error))) {
+        return FALSE;
     }
 
-    return;
+    return TRUE;
+}
+
+CK_API
+BOOL
+CkCallMethod (
+    PCK_VM Vm,
+    PSTR MethodName,
+    UINTN ArgumentCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pops the given number of arguments off the stack, then pops
+    an object, and executes the method with the given name on that object. The
+    return value is pushed onto the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    MethodName - Supplies a pointer to the null terminated string containing
+        the name of the method to call.
+
+    ArgumentCount - Supplies the number of arguments to the call. The class
+        instance will also be popped after these arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if an error occurred.
+
+--*/
+
+{
+
+    PCK_CLASS Class;
+    PCK_CLOSURE Closure;
+    CK_STRING FakeString;
+    PCK_FIBER Fiber;
+    UINTN Length;
+    CK_VALUE Method;
+    CHAR Name[CK_MAX_METHOD_SIGNATURE];
+    CK_VALUE NameValue;
+    CK_FUNCTION_SIGNATURE Signature;
+    CK_VALUE Value;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_POP(Fiber, ArgumentCount + 1));
+
+    Value = *(Fiber->StackTop - 1 - ArgumentCount);
+
+    //
+    // Create the init method signature function signature and invoke the
+    // init method.
+    //
+
+    Signature.Name = MethodName;
+    Signature.Length = strlen(MethodName);
+    Signature.Arity = ArgumentCount;
+    Length = sizeof(Name);
+    CkpPrintSignature(&Signature, Name, &Length);
+    CkpStringFake(&FakeString, Name, Length);
+    CK_OBJECT_VALUE(NameValue, &FakeString);
+    Class = CkpGetClass(Vm, Value);
+    Method = CkpDictGet(Class->Methods, NameValue);
+    if (CK_IS_UNDEFINED(Method)) {
+        CkpRuntimeError(Vm,
+                        "Object of type %s does not implement method %s with "
+                        "%d arguments",
+                        Class->Name->Value,
+                        MethodName,
+                        ArgumentCount);
+
+        goto CallMethodEnd;
+    }
+
+    CK_ASSERT(CK_IS_CLOSURE(Method));
+
+    Closure = CK_AS_CLOSURE(Method);
+    CkpCallFunction(Vm, Closure, ArgumentCount + 1);
+
+CallMethodEnd:
+
+    //
+    // The VM should not have allowed a fiber switch while the Fiber stack
+    // is tied with the C stack.
+    //
+
+    CK_ASSERT((Vm->Fiber == Fiber) || (Vm->Fiber == NULL));
+
+    if ((Vm->Fiber == NULL) || (!CK_IS_NULL(Vm->Fiber->Error))) {
+        return FALSE;
+    }
+
+    return TRUE;
 }
 
 CK_API

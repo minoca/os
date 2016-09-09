@@ -209,7 +209,10 @@ Return Value:
     Fiber->FrameCapacity = CK_INITIAL_CALL_FRAMES;
     Fiber->Stack = Stack;
     Fiber->StackCapacity = StackCapacity;
+    Fiber->ForeignCalls = 0;
+    CkpPushRoot(Vm, &(Fiber->Header));
     CkpFiberReset(Vm, Fiber, Closure);
+    CkpPopRoot(Vm);
     return Fiber;
 }
 
@@ -294,12 +297,14 @@ Return Value:
     //
 
     if (Fiber->FrameCount >= Fiber->FrameCapacity) {
+        CkpPushRoot(Vm, &(Closure->Header));
         NewCapacity = Fiber->FrameCapacity * 2;
         NewBuffer = CkpReallocate(Vm,
                                   Fiber->Frames,
                                   Fiber->FrameCapacity * sizeof(CK_CALL_FRAME),
                                   NewCapacity * sizeof(CK_CALL_FRAME));
 
+        CkpPopRoot(Vm);
         if (NewBuffer == NULL) {
             return;
         }
@@ -447,6 +452,8 @@ Return Value:
 
 {
 
+    CK_ASSERT(Fiber->ForeignCalls == 0);
+
     Fiber->StackTop = Fiber->Stack;
     Fiber->OpenUpvalues = NULL;
     Fiber->Caller = NULL;
@@ -456,8 +463,8 @@ Return Value:
 
         CK_ASSERT(Closure->Type == CkClosureBlock);
 
-        CkpEnsureStack(Vm, Fiber, Closure->U.Block.Function->MaxStack);
         CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->Stack);
+        CkpEnsureStack(Vm, Fiber, Closure->U.Block.Function->MaxStack);
     }
 
     return;
@@ -741,6 +748,17 @@ Return Value:
 
 {
 
+    //
+    // If the fiber call stack and the C call stack are linked, then it is
+    // not possible to suspend the current fiber (since it would return from
+    // the C stack but not the Fiber stack).
+    //
+
+    if (Vm->Fiber->ForeignCalls + Vm->ForeignCalls > 0) {
+        CkpRuntimeError(Vm, "Cannot suspend with foreign calls on stack");
+        return FALSE;
+    }
+
     Vm->Fiber = NULL;
     return FALSE;
 }
@@ -773,6 +791,17 @@ Return Value:
 {
 
     PCK_FIBER Fiber;
+
+    //
+    // If the fiber call stack and the C call stack are linked, then it is
+    // not possible to transfer to a new fiber (since the C stack cannot also
+    // simply be put on ice and restored later).
+    //
+
+    if (Vm->Fiber->ForeignCalls + Vm->ForeignCalls > 0) {
+        CkpRuntimeError(Vm, "Cannot transfer with foreign calls on stack");
+        return FALSE;
+    }
 
     Fiber = CK_AS_FIBER(Arguments[0]);
     CkpRunFiber(Vm, Fiber, Arguments, FALSE, "transfer to");
@@ -808,6 +837,16 @@ Return Value:
 
     CK_VALUE Error;
     PCK_FIBER Fiber;
+
+    //
+    // For the same reason as the main transfer function, fiber transfers
+    // cannot happen if a foreign function is on the call stack.
+    //
+
+    if (Vm->Fiber->ForeignCalls + Vm->ForeignCalls > 0) {
+        CkpRuntimeError(Vm, "Cannot transfer with foreign calls on stack");
+        return FALSE;
+    }
 
     Fiber = CK_AS_FIBER(Arguments[0]);
     Error = Arguments[1];
@@ -857,9 +896,29 @@ Return Value:
     PCK_FIBER CurrentFiber;
 
     CurrentFiber = Vm->Fiber;
+
+    //
+    // The current fiber cannot yield if there is a foreign function on the
+    // stack, since it would get the C stack and the fiber stack out of sync.
+    //
+
+    if (CurrentFiber->ForeignCalls != 0) {
+        CkpRuntimeError(Vm,
+                        "Cannot yield with a foreign function on the stack");
+
+        return FALSE;
+    }
+
     Vm->Fiber = CurrentFiber->Caller;
     CurrentFiber->Caller = NULL;
     if (Vm->Fiber != NULL) {
+
+        //
+        // If the caller had foreign functions in progress that were added to
+        // the VM total when it was switched, subtract those out now.
+        //
+
+        Vm->ForeignCalls -= Vm->Fiber->ForeignCalls;
 
         //
         // Yield the result value to the caller in its return slot.
@@ -926,6 +985,13 @@ Return Value:
 
 {
 
+    //
+    // It should not be possible to run a fiber that already has foreign calls
+    // in progress.
+    //
+
+    CK_ASSERT(Fiber->ForeignCalls == 0);
+
     if (IsCall != FALSE) {
         if (Fiber->Caller != NULL) {
             CkpRuntimeError(Vm, "Fiber is already running");
@@ -937,6 +1003,13 @@ Return Value:
         //
 
         Fiber->Caller = Vm->Fiber;
+
+        //
+        // Remember if this fiber, which is now no longer the running fiber,
+        // has foreign functions on the call stack.
+        //
+
+        Vm->ForeignCalls += Vm->Fiber->ForeignCalls;
     }
 
     if (Fiber->FrameCount == 0) {

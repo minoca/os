@@ -24,7 +24,8 @@
 ## Add apps that are dependent on the C library here.
 ##
 
-APPS = efiboot  \
+APPS = ck       \
+       efiboot  \
        mingen   \
        mount    \
        netcon   \

@@ -27,6 +27,8 @@ Environment:
 #include <assert.h>
 #include <libgen.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include <minoca/lib/types.h>
 
@@ -118,7 +120,7 @@ Return Value:
 
     Path = getenv("CK_LIBRARY_PATH");
     if (Path != NULL) {
-        ChalkAddSearchPath(Vm, Path, NULL, MajorVersion);
+        ChalkAddSearchPath(Vm, Path, NULL);
 
     } else {
 

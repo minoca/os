@@ -43,3 +43,7 @@ OBJS = capi.o        \
        vm.o          \
        vmsys.o       \
 
+WIN32_OBJS = dynwin32.o \
+
+POSIX_OBJS = dlopen.o \
+

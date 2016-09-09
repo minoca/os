@@ -21,27 +21,43 @@
 #
 ################################################################################
 
-BINARY = chalk.a
+BINARY := libchalk.so.1
 
-BINARYTYPE = library
+BINARYTYPE = so
 
 BUILD = yes
+
+##
+## TODO: The build and native versions of these libraries collide in the bin
+## directory. The new build infrastructure should address this.
+##
+
+BINPLACE = bin
 
 INCLUDES += $(SRCDIR)/..;
 
 VPATH += $(SRCDIR)/..:
 
+ENTRY := 0
+
 include $(SRCDIR)/../sources
 
 ifeq ($(OS),Windows_NT)
 
-OBJS += dynwin32.o \
+BINARY := chalk.dll
+BINARYTYPE := dll
+
+OBJS += $(WIN32_OBJS)
 
 else
 
-OBJS += dlopen.o \
+OBJS += $(POSIX_OBJS)
 
 endif
+
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
+             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a             \
+             $(OBJROOT)/os/lib/yy/build/yy.a                     \
 
 include $(SRCROOT)/os/minoca.mk
 

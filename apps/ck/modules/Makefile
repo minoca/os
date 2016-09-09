@@ -4,16 +4,15 @@
 #
 #   Module Name:
 #
-#       Chalk
+#       Chalk Modules
 #
 #   Abstract:
 #
-#       This directory builds the Chalk language library and command line
-#       app.
+#       This directory builds the Chalk modules.
 #
 #   Author:
 #
-#       Evan Green 9-Jun-2016
+#       Evan Green 28-Aug-2016
 #
 #   Environment:
 #
@@ -21,11 +20,7 @@
 #
 ################################################################################
 
-DIRS = app       \
-       lib       \
-       modules   \
+DIRS = os        \
 
 include $(SRCROOT)/os/minoca.mk
-
-app modules: lib
 

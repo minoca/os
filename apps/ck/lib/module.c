@@ -386,9 +386,7 @@ Return Value:
         return NULL;
     }
 
-    CkpPushRoot(Vm, &(Closure->Header));
-    Module->Fiber = CkpFiberCreate(Vm, Closure);
-    CkpPopRoot(Vm);
+    Module->EntryFunction = Closure;
     return Module;
 }
 
@@ -655,13 +653,27 @@ Return Value:
 
 {
 
+    PCK_CLOSURE EntryFunction;
     PCK_FIBER Fiber;
     PCK_MODULE Module;
 
     Module = CK_AS_MODULE(Arguments[0]);
     Fiber = Module->Fiber;
     if (Fiber == NULL) {
-        Arguments[0] = CkNullValue;
+
+        //
+        // See if there's an entry function, and run that (once) if so.
+        //
+
+        EntryFunction = Module->EntryFunction;
+        if (EntryFunction != NULL) {
+            Module->EntryFunction = NULL;
+            CkpCallFunction(Vm, EntryFunction, 1);
+
+        } else {
+            Arguments[0] = CkNullValue;
+        }
+
         return TRUE;
     }
 

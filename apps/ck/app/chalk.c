@@ -469,6 +469,7 @@ Return Value:
     INT Status;
     size_t TotalRead;
 
+    Buffer = NULL;
     Status = stat(FileName, &Stat);
     if (Status != 0) {
         fprintf(stderr,

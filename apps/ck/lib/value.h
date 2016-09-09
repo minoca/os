@@ -116,6 +116,7 @@ typedef struct _CK_CLASS CK_CLASS, *PCK_CLASS;
 typedef struct _CK_FIBER CK_FIBER, *PCK_FIBER;
 typedef struct _CK_OBJECT CK_OBJECT, *PCK_OBJECT;
 typedef struct _CK_UPVALUE CK_UPVALUE, *PCK_UPVALUE;
+typedef struct _CK_MODULE CK_MODULE, *PCK_MODULE;
 typedef struct _CK_VALUE CK_VALUE, *PCK_VALUE;
 
 typedef LONG CK_ARITY, *PCK_ARITY;
@@ -434,46 +435,6 @@ typedef struct _CK_STRING_TABLE {
 
 Structure Description:
 
-    This structure defines a module object.
-
-Members:
-
-    Header - Stores the required object header.
-
-    Variables - Stores the array of module level variables.
-
-    VariableNames - Stores the array of module level symbol names.
-
-    Strings - Stores the table of string constants in the module.
-
-    Name - Stores a pointer to the string containing the name of the module.
-
-    Path - Stores an optional pointer to the string containing the full path
-        to the module.
-
-    Fiber - Stores a pointer to the fiber used to load the module contents.
-        Once loaded, this becomes NULL.
-
-    Handle - Stores a pointer to the dynamic library handle if this is a
-        foreign module.
-
---*/
-
-typedef struct _CK_MODULE {
-    CK_OBJECT Header;
-    CK_VALUE_ARRAY Variables;
-    CK_STRING_TABLE VariableNames;
-    CK_STRING_TABLE Strings;
-    PCK_STRING Name;
-    PCK_STRING Path;
-    PCK_FIBER Fiber;
-    PVOID Handle;
-} CK_MODULE, *PCK_MODULE;
-
-/*++
-
-Structure Description:
-
     This structure defines debug information about a function object.
 
 Members:
@@ -649,6 +610,50 @@ typedef struct _CK_CLOSURE {
     PCK_CLASS Class;
     PCK_UPVALUE *Upvalues;
 } CK_CLOSURE, *PCK_CLOSURE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a module object.
+
+Members:
+
+    Header - Stores the required object header.
+
+    Variables - Stores the array of module level variables.
+
+    VariableNames - Stores the array of module level symbol names.
+
+    Strings - Stores the table of string constants in the module.
+
+    Name - Stores a pointer to the string containing the name of the module.
+
+    Path - Stores an optional pointer to the string containing the full path
+        to the module.
+
+    Fiber - Stores a pointer to the fiber used to load the module contents.
+        Once loaded, this becomes NULL.
+
+    Handle - Stores a pointer to the dynamic library handle if this is a
+        foreign module.
+
+    EntryFunction - Stores a pointer to the module entry point if this is a
+        foreign module.
+
+--*/
+
+struct _CK_MODULE {
+    CK_OBJECT Header;
+    CK_VALUE_ARRAY Variables;
+    CK_STRING_TABLE VariableNames;
+    CK_STRING_TABLE Strings;
+    PCK_STRING Name;
+    PCK_STRING Path;
+    PCK_FIBER Fiber;
+    PVOID Handle;
+    PCK_CLOSURE EntryFunction;
+};
 
 /*++
 
@@ -830,6 +835,10 @@ Members:
 
     Error - Stores an error value if a runtime error occurred.
 
+    ForeignCalls - Stores the number of foreign calls happening in the current
+        fiber. The current fiber cannot transfer or yield if there are foreign
+        calls happening.
+
 --*/
 
 struct _CK_FIBER {
@@ -843,6 +852,7 @@ struct _CK_FIBER {
     PCK_UPVALUE OpenUpvalues;
     PCK_FIBER Caller;
     CK_VALUE Error;
+    LONG ForeignCalls;
 };
 
 /*++
