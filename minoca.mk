@@ -425,7 +425,7 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
     endif
     ifeq ($(BINARYTYPE),so)
 	@echo Linking - $@
-	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -shared -Wl,-soname=$(BINARY) -o $@ $^ $(TARGETLIBS) -Bdynamic $(DYNLIBS)
+	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -shared -Wl,-soname=$(BINARY) -o $@ $^ -Bdynamic $(DYNLIBS)
     endif
     ifeq ($(BINARYTYPE),build)
 	@echo Linking - $@

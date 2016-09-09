@@ -36,11 +36,11 @@ DIRS = build \
 
 ENTRY := 0
 
-include $(SRCROOT)/os/minoca.mk
-
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/basertl.a          \
              $(OBJROOT)/os/lib/rtl/rtlc/rtlc.a             \
              $(OBJROOT)/os/lib/yy/yy.a                     \
+
+include $(SRCROOT)/os/minoca.mk
 
 build: gram
 gram.c: gram/gramgen.c
