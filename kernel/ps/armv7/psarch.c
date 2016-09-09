@@ -172,7 +172,7 @@ Return Value:
 
     Thread = KeGetCurrentThread();
     ContextSp = ALIGN_RANGE_DOWN(TrapFrame->UserSp - sizeof(SIGNAL_CONTEXT_ARM),
-                                 STACK_ALIGNMENT);
+                                 FPU_CONTEXT_ALIGNMENT);
 
     Context = (PVOID)ContextSp;
     Flags = 0;

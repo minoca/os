@@ -67,6 +67,8 @@ extern "C" {
 
 #define __PACKED __attribute__((__packed__))
 #define __NO_RETURN __attribute__((__noreturn__))
+#define __ALIGNED(_Alignment) __attribute__((aligned(_Alignment)))
+#define __ALIGNED16 __ALIGNED(16)
 #define __THREAD __thread
 
 #ifdef __ELF__

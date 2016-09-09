@@ -42,6 +42,13 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
+ULONG OsProcessorFeatureMasks[OsX86FeatureCount] = {
+    0,
+    X86_FEATURE_SYSENTER,
+    X86_FEATURE_I686,
+    X86_FEATURE_FXSAVE
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -77,20 +84,11 @@ Return Value:
     ULONG Mask;
 
     Data = OspGetUserSharedData();
-    switch (Feature) {
-    case OsX86Sysenter:
-        Mask = X86_FEATURE_SYSENTER;
-        break;
-
-    case OsX86I686:
-        Mask = X86_FEATURE_I686;
-        break;
-
-    default:
-        Mask = 0;
-        break;
+    if (Feature >= OsX86FeatureCount) {
+        return FALSE;
     }
 
+    Mask = OsProcessorFeatureMasks[Feature];
     if ((Data->ProcessorFeatures & Mask) != 0) {
         return TRUE;
     }

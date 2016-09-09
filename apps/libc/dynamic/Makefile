@@ -141,6 +141,7 @@ OBJS = assert.o             \
        time.o               \
        times.o              \
        tmpfile.o            \
+       ucontext.o           \
        uio.o                \
        uname.o              \
        usershel.o           \
@@ -151,21 +152,27 @@ OBJS = assert.o             \
        wstream.o            \
        wstring.o            \
 
-ARMV7_OBJS = armv7/fenva.o    \
+ARMV7_OBJS = armv7/contexta.o \
+             armv7/contextc.o \
+             armv7/fenva.o    \
              armv7/fenvc.o    \
              armv7/setjmpa.o  \
              armv7/tlsaddr.o  \
 
 ARMV6_OBJS = $(ARMV7_OBJS)
 
-X86_OBJS = x86/fenv.o    \
-           x86/fenvc.o   \
-           x86/setjmpa.o \
-           x86/tlsaddr.o \
+X86_OBJS = x86/contexta.o \
+           x86/contextc.o \
+           x86/fenv.o     \
+           x86/fenvc.o    \
+           x86/setjmpa.o  \
+           x86/tlsaddr.o  \
 
-X64_OBJS = x64/fenv.o    \
-           x64/setjmpa.o \
-           x86/fenvc.o   \
+X64_OBJS = x64/contexta.o \
+           x64/contextc.o \
+           x64/fenv.o     \
+           x64/setjmpa.o  \
+           x86/fenvc.o    \
 
 EXTRA_SRC_DIRS = x86 x64 armv7 math pthread
 

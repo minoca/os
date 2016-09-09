@@ -26,6 +26,7 @@ Environment:
 //
 
 #include <minoca/lib/minocaos.h>
+#include <alloca.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -34,6 +35,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <ucontext.h>
 #include <unistd.h>
 
 //
@@ -56,6 +58,8 @@ Environment:
 #define DEFAULT_CHILD_PROCESS_COUNT 3
 #define DEFAULT_THREAD_COUNT 1
 
+#define SIGNAL_TEST_CONTEXT_STACK_SIZE 16384
+
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -71,7 +75,7 @@ Environment:
     "  -p, --threads <count> -- Set the number of threads to spin up to \n"    \
     "      simultaneously run the test.\n"                                     \
     "  -t, --test -- Set the test to perform. Valid values are all, \n"        \
-    "      waitpid, sigchld, quickwait, and nested.\n"                         \
+    "      waitpid, sigchld, quickwait, nested, and context.\n"                \
     "  --debug -- Print lots of information about what's happening.\n"         \
     "  --quiet -- Print only errors.\n"                                        \
     "  --help -- Print this help text and exit.\n"                             \
@@ -95,6 +99,7 @@ typedef enum _SIGNAL_TEST_TYPE {
     SignalTestSigchld,
     SignalTestQuickWait,
     SignalTestNested,
+    SignalTestContext,
 } SIGNAL_TEST_TYPE, *PSIGNAL_TEST_TYPE;
 
 typedef enum _SIGNAL_TEST_WAIT_TYPE {
@@ -178,6 +183,23 @@ TestNestedSignalHandler (
     void *Ignored
     );
 
+ULONG
+RunSetContextTest (
+    VOID
+    );
+
+ULONG
+TestContextSwap (
+    BOOL Exit
+    );
+
+VOID
+TestMakecontext (
+    ucontext_t *OldContext,
+    ucontext_t *NextContext,
+    INT Identifier
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -219,6 +241,8 @@ PSTR SignalTestWaitTypeStrings[SignalTestWaitTypeCount] = {
     "sigwaitinfo",
     "sigtimedwait"
 };
+
+int SigtestContextHits;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -344,6 +368,9 @@ Return Value:
             } else if (strcasecmp(optarg, "nested") == 0) {
                 Test = SignalTestNested;
 
+            } else if (strcasecmp(optarg, "context") == 0) {
+                Test = SignalTestContext;
+
             } else {
                 PRINT_ERROR("Invalid test: %s.\n", optarg);
                 Status = 1;
@@ -424,6 +451,10 @@ Return Value:
 
     if ((Test == SignalTestAll) || (Test == SignalTestNested)) {
         Failures += RunNestedSignalsTest();
+    }
+
+    if ((Test == SignalTestAll) || (Test == SignalTestContext)) {
+        Failures += RunSetContextTest();
     }
 
     //
@@ -1747,6 +1778,188 @@ Return Value:
         SigtestSignalCount[1] += 1;
     }
 
+    return;
+}
+
+ULONG
+RunSetContextTest (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tests the ucontext related functions.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the number of failures.
+
+--*/
+
+{
+
+    ULONG Failures;
+
+    Failures = TestContextSwap(TRUE);
+    Failures += TestContextSwap(FALSE);
+    return Failures;
+}
+
+ULONG
+TestContextSwap (
+    BOOL Exit
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tests the ucontext related functions.
+
+Arguments:
+
+    Exit - Supplies a boolean indicating whether to test a context swap that
+        exits or returns.
+
+Return Value:
+
+    Returns the number of failures.
+
+--*/
+
+{
+
+    pid_t Child;
+    ucontext_t Context1;
+    ucontext_t Context2;
+    ucontext_t MainContext;
+    int Status;
+
+    Child = fork();
+    if (Child < 0) {
+        PRINT_ERROR("Failed to fork\n");
+        return 1;
+
+    } else if (Child > 0) {
+        if (waitpid(Child, &Status, 0) != Child) {
+            PRINT_ERROR("Failed to wait\n");
+            return 1;
+        }
+
+        if ((!WIFEXITED(Status)) || (WEXITSTATUS(Status) != 0)) {
+            PRINT_ERROR("Child exited with %x\n", Status);
+            return 1;
+        }
+
+        return 0;
+    }
+
+    //
+    // This is the child.
+    //
+
+    SigtestContextHits = 0;
+    if (getcontext(&Context1) != 0) {
+        PRINT_ERROR("getcontext failed");
+        exit(1);
+    }
+
+    Context1.uc_stack.ss_sp = alloca(SIGNAL_TEST_CONTEXT_STACK_SIZE);
+    Context1.uc_stack.ss_size = SIGNAL_TEST_CONTEXT_STACK_SIZE;
+    Context1.uc_link = &MainContext;
+    makecontext(&Context1,
+                TestMakecontext,
+                3,
+                &Context1,
+                &Context2,
+                5);
+
+    if (getcontext(&Context2) != 0) {
+        PRINT_ERROR("getcontext failed");
+        exit(1);
+    }
+
+    Context2.uc_stack.ss_sp = alloca(SIGNAL_TEST_CONTEXT_STACK_SIZE);
+    Context2.uc_stack.ss_size = SIGNAL_TEST_CONTEXT_STACK_SIZE;
+    Context2.uc_link = NULL;
+    if (Exit == FALSE) {
+        Context2.uc_link = &Context1;
+    }
+
+    makecontext(&Context2,
+                TestMakecontext,
+                3,
+                &Context2,
+                &Context1,
+                10);
+
+    DEBUG_PRINT("MainContext swapping\n");
+    SigtestContextHits += 1;
+    if (swapcontext(&MainContext, &Context2) != 0) {
+        PRINT_ERROR("swapcontext failed.\n");
+        exit(1);
+    }
+
+    SigtestContextHits += 1;
+    if (Exit != FALSE) {
+        PRINT_ERROR("Main context returned instead of exited!\n");
+        exit(1);
+    }
+
+    if (SigtestContextHits != ((5 * 2) + (10 * 2) + 2)) {
+        PRINT_ERROR("Context hits were %d.\n", SigtestContextHits);
+        exit(1);
+    }
+
+    DEBUG_PRINT("MainContext exiting\n");
+    exit(0);
+    return 0;
+}
+
+VOID
+TestMakecontext (
+    ucontext_t *OldContext,
+    ucontext_t *NextContext,
+    INT Identifier
+    )
+
+/*++
+
+Routine Description:
+
+    This routine swaps contexts.
+
+Arguments:
+
+    OldContext - Supplies a pointer to the previous context.
+
+    NextContext - Supplies a pointer to the next context.
+
+    Identifier - Supplies an identifier for this context.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    DEBUG_PRINT("Context %d: Swapping\n", Identifier);
+    SigtestContextHits += Identifier;
+    if (swapcontext(OldContext, NextContext) != 0) {
+        PRINT_ERROR("Swapcontext failed from %d\n", Identifier);
+        exit(1);
+    }
+
+    DEBUG_PRINT("Context %d: Exiting\n", Identifier);
+    SigtestContextHits += Identifier;
     return;
 }
 

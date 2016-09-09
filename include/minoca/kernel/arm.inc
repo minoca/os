@@ -186,6 +186,12 @@ Environment:
 #define TRAP_FRAME_SIZE 80
 
 ##
+## Define the size of the common SIGNAL_CONTEXT structure.
+##
+
+#define SIGNAL_CONTEXT_SIZE 32
+
+##
 ## Define the size of the PROCESSOR_CONTEXT structure.
 ##
 

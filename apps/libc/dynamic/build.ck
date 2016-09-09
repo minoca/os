@@ -121,6 +121,7 @@ function build() {
         "time.c",
         "times.c",
         "tmpfile.c",
+        "ucontext.c",
         "uio.c",
         "uname.c",
         "usershel.c",
@@ -148,6 +149,8 @@ function build() {
 
     if ((arch == "armv7") || (arch == "armv6")) {
         arch_sources = [
+            "armv7/contexta.S",
+            "armv7/contextc.c",
             "armv7/fenva.S",
             "armv7/fenvc.c",
             "armv7/setjmpa.S",
@@ -156,6 +159,8 @@ function build() {
 
     } else if (arch == "x86") {
         arch_sources = [
+            "x86/contexta.S",
+            "x86/contextc.c",
             "x86/fenv.S",
             "x86/fenvc.c",
             "x86/setjmpa.S",
@@ -164,6 +169,8 @@ function build() {
 
     } else if (arch == "x64") {
         arch_sources = [
+            "x64/contexta.S",
+            "x64/contextc.c",
             "x64/fenv.S",
             "x64/fenvc.c",
             "x64/setjmpa.S",

@@ -1766,6 +1766,35 @@ Return Value:
 --*/
 
 PTHREAD_API
+int
+pthread_getattr_np (
+    pthread_t ThreadId,
+    pthread_attr_t *Attribute
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the current attributes for a given thread.
+
+Arguments:
+
+    ThreadId - Supplies the thread to get attributes for.
+
+    Attribute - Supplies a pointer where the attributes will be returned. The
+        detach state, stack size, stack base, and guard size may be different
+        from when the thread was created to reflect their actual values.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PTHREAD_API
 void
 __pthread_cleanup_push (
     __pthread_cleanup_t *CleanupItem,

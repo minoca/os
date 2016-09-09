@@ -491,6 +491,28 @@ struct timespec {
     long tv_nsec;
 };
 
+/*++
+
+Structure Description:
+
+    This structure stores information about a C stack.
+
+Members:
+
+    ss_sp - Stores the stack pointer.
+
+    ss_flags - Stores a bitfield of flags. See SS_* definitions.
+
+    ss_size - Stores the size of the stack.
+
+--*/
+
+typedef struct sigaltstack {
+    void *ss_sp;
+    int ss_flags;
+    size_t ss_size;
+} stack_t;
+
 //
 // Define the type that is sent as a parameter with real time signals. It's
 // always at least as big as the larger of an integer and a pointer.

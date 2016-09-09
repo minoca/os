@@ -130,6 +130,12 @@ Author:
 #define X86_FEATURE_I686     0x00000004
 
 //
+// This bit is set if the processor supports fxsave/fxrstor instructions.
+//
+
+#define X86_FEATURE_FXSAVE   0x00000008
+
+//
 // This bit is set if the kernel is ARMv7.
 //
 

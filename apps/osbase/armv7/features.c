@@ -42,6 +42,14 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
+ULONG OsProcessorFeatureMasks[OsArmFeatureCount] = {
+    0,
+    ARM_FEATURE_V7,
+    ARM_FEATURE_VFP2,
+    ARM_FEATURE_VFP3,
+    ARM_FEATURE_NEON32
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -77,28 +85,11 @@ Return Value:
     ULONG Mask;
 
     Data = OspGetUserSharedData();
-    switch (Feature) {
-    case OsArmArmv7:
-        Mask = ARM_FEATURE_V7;
-        break;
-
-    case OsArmVfp:
-        Mask = ARM_FEATURE_VFP2;
-        break;
-
-    case OsArmVfp3:
-        Mask = ARM_FEATURE_VFP3;
-        break;
-
-    case OsArmNeon32:
-        Mask = ARM_FEATURE_NEON32;
-        break;
-
-    default:
-        Mask = 0;
-        break;
+    if (Feature >= OsArmFeatureCount) {
+        return FALSE;
     }
 
+    Mask = OsProcessorFeatureMasks[Feature];
     if ((Data->ProcessorFeatures & Mask) != 0) {
         return TRUE;
     }

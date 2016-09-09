@@ -973,6 +973,66 @@ Return Value:
 }
 
 PTHREAD_API
+int
+pthread_getattr_np (
+    pthread_t ThreadId,
+    pthread_attr_t *Attribute
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current attributes for a given thread.
+
+Arguments:
+
+    ThreadId - Supplies the thread to get attributes for.
+
+    Attribute - Supplies a pointer where the attributes will be returned. The
+        detach state, stack size, stack base, and guard size may be different
+        from when the thread was created to reflect their actual values.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    int Error;
+    struct rlimit Limit;
+    int OldError;
+    PPTHREAD Thread;
+
+    Thread = (PPTHREAD)ThreadId;
+    if (Thread->State == PthreadStateDetached) {
+        Thread->Attribute.Flags |= PTHREAD_FLAG_DETACHED;
+    }
+
+    //
+    // For the main thread, try to get the stack size.
+    //
+
+    if (Thread->Attribute.StackSize == 0) {
+        OldError = errno;
+        if (getrlimit(RLIMIT_STACK, &Limit) < 0) {
+            Error = errno;
+            errno = OldError;
+            return Error;
+        }
+
+        Thread->Attribute.StackSize = Limit.rlim_cur;
+    }
+
+    memcpy(Attribute, &(Thread->Attribute), sizeof(PTHREAD_ATTRIBUTE));
+    return 0;
+}
+
+PTHREAD_API
 void
 __pthread_cleanup_push (
     __pthread_cleanup_t *CleanupItem,

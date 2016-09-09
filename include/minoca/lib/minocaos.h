@@ -93,12 +93,15 @@ typedef enum _OS_ARM_PROCESSOR_FEATURE {
     OsArmVfp,
     OsArmVfp3,
     OsArmNeon32,
+    OsArmFeatureCount
 } OS_ARM_PROCESSOR_FEATURE, *POS_ARM_PROCESSOR_FEATURE;
 
 typedef enum _OS_X86_PROCESSOR_FEATURE {
     OsX86FeatureInvalid,
     OsX86Sysenter,
     OsX86I686,
+    OsX86FxSave,
+    OsX86FeatureCount
 } OS_X86_PROCESSOR_FEATURE, *POS_X86_PROCESSOR_FEATURE;
 
 typedef

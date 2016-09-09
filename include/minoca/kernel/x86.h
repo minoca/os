@@ -204,7 +204,7 @@ Author:
 // Define the required alignment for FPU context.
 //
 
-#define FPU_CONTEXT_ALIGNMENT 16
+#define FPU_CONTEXT_ALIGNMENT 64
 
 //
 // Define MSR values.
@@ -596,7 +596,7 @@ struct _FPU_CONTEXT {
     UCHAR Xmm6[16];
     UCHAR Xmm7[16];
     UCHAR Padding[224];
-} PACKED;
+} PACKED ALIGNED64;
 
 /*++
 

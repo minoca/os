@@ -56,6 +56,43 @@ Environment:
 #define CONTEXT_SWAP_MAGIC 0x9A8A7A6A5A4A3A2A
 
 //
+// Definition for the TRAP_FRAME structure and the exception stack directly
+// above it.
+//
+
+#define TRAP_DS             0
+#define TRAP_ES             4
+#define TRAP_FS             8
+#define TRAP_GS             12
+#define TRAP_SS             16
+
+#define TRAP_RAX            24
+#define TRAP_RBX            32
+#define TRAP_RCX            40
+#define TRAP_RDX            48
+#define TRAP_RSI            56
+#define TRAP_RDI            64
+#define TRAP_RBP            72
+#define TRAP_R8             80
+#define TRAP_R9             88
+#define TRAP_R10            96
+#define TRAP_R11            104
+#define TRAP_R12            112
+#define TRAP_R13            120
+#define TRAP_R14            128
+#define TRAP_R15            136
+#define TRAP_ERRORCODE      144
+#define TRAP_RIP            152
+#define TRAP_CS             160
+#define TRAP_EFLAGS         168
+#define TRAP_RSP            176
+
+#define TRAP_FRAME_SIZE     184
+
+#define PROCESSOR_CONTEXT_SIZE 0x60
+#define SIGNAL_CONTEXT_SIZE 28
+
+//
 // Define the minimum and maximum external interrupt vectors.
 //
 

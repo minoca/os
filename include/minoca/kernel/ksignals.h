@@ -328,6 +328,13 @@ Author:
 #define SIGNAL_CONTEXT_FLAG_FPU_VALID 0x00000002
 
 //
+// This flag is set by user mode if the given context has already been swapped
+// in.
+//
+
+#define SIGNAL_CONTEXT_FLAG_SWAPPED 0x00000004
+
+//
 // Define the child process signal reason codes.
 //
 
@@ -535,7 +542,8 @@ Structure Description:
 
     This structure outlines the state saved by the kernel when a user mode
     signal is dispatched. This is usually embedded within an architecture
-    specific version of the signal context.
+    specific version of the signal context. This lines up with the ucontext
+    structure in the C library.
 
 Members:
 
@@ -555,7 +563,7 @@ typedef struct _SIGNAL_CONTEXT {
     PVOID Next;
     SIGNAL_STACK Stack;
     SIGNAL_SET Mask;
-} PACKED SIGNAL_CONTEXT, *PSIGNAL_CONTEXT;
+} SIGNAL_CONTEXT, *PSIGNAL_CONTEXT;
 
 //
 // -------------------------------------------------------------------- Globals

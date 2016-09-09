@@ -152,6 +152,14 @@ Return Value:
         }
     }
 
+    //
+    // Remember if the processor supports the fxsave instruction.
+    //
+
+    if ((Edx & X86_CPUID_BASIC_EDX_FX_SAVE_RESTORE) != 0) {
+        Data->ProcessorFeatures |= X86_FEATURE_FXSAVE;
+    }
+
     return;
 }
 
@@ -185,6 +193,15 @@ Return Value:
 
     AllocationSize = sizeof(FPU_CONTEXT) + FPU_CONTEXT_ALIGNMENT;
     Context = MmAllocateNonPagedPool(AllocationSize, AllocationTag);
+    if (Context == NULL) {
+        return NULL;
+    }
+
+    //
+    // Zero out the buffer to avoid leaking kernel pool to user mode.
+    //
+
+    RtlZeroMemory(Context, AllocationSize);
     return Context;
 }
 

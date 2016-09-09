@@ -657,7 +657,7 @@ Members:
 struct _FPU_CONTEXT {
     ULONGLONG Registers[32];
     ULONG Fpscr;
-} PACKED;
+} PACKED ALIGNED16;
 
 /*++
 
