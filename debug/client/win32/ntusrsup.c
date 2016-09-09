@@ -928,7 +928,7 @@ Return Value:
     SizeNeeded = 0;
     Result = EnumProcessModules(ProcessHandle,
                                 ModuleHandles,
-                                sizeof(ModuleHandles),
+                                NT_MAX_MODULE_COUNT * sizeof(HMODULE),
                                 &SizeNeeded);
 
     if (Result == FALSE) {
