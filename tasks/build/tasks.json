@@ -639,6 +639,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/gpgme-1.6.0"
         },
         {
+            "name": "Make pth",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/pth-2.0.7"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
