@@ -1061,7 +1061,7 @@ Return Value:
     // This is the parent process, wait for all processes to be ready.
     //
 
-    EndTime = time(NULL) + 10;
+    EndTime = time(NULL) + 30;
     while (time(NULL) <= EndTime) {
         if (ChildProcessesReady == ChildCount) {
             break;
@@ -1104,7 +1104,7 @@ Return Value:
     DEBUG_PRINT("Parent waiting for children via %s.\n",
                 SignalTestWaitTypeStrings[WaitType]);
 
-    EndTime = time(NULL) + 10;
+    EndTime = time(NULL) + 30;
     Status = 0;
     switch (WaitType) {
     case SignalTestWaitSigsuspend:
@@ -1165,7 +1165,7 @@ Return Value:
             DEBUG_PRINT("Returned from sigwaitinfo.\n");
             if (SignalNumber == -1) {
                 if (errno != EINTR) {
-                    PRINT_ERROR("Failed sigwaitinfo: %s.\n", strerror(Status));
+                    PRINT_ERROR("Failed sigwaitinfo: %s.\n", strerror(errno));
                     Errors += 1;
                 }
 
@@ -1199,13 +1199,12 @@ Return Value:
 
             DEBUG_PRINT("Returned from sigtimedwait.\n");
             if (SignalNumber == -1) {
-                if (errno != EINTR) {
-                    PRINT_ERROR("Failed sigtimedwait: %s.\n", strerror(Status));
-                    Errors += 1;
-                }
-
                 if (errno == EAGAIN) {
                     DEBUG_PRINT("sigtimedwait timed out. Retrying.\n");
+
+                } else if (errno != EINTR) {
+                    PRINT_ERROR("Failed sigtimedwait: %s.\n", strerror(errno));
+                    Errors += 1;
                 }
 
                 continue;
@@ -1223,7 +1222,6 @@ Return Value:
     case SignalTestWaitBusy:
     default:
         sigprocmask(SIG_UNBLOCK, &ChildSignalMask, NULL);
-        EndTime = time(NULL) + 10;
         while (time(NULL) <= EndTime) {
             if (ChildSignalsExpected == 0) {
                 break;
@@ -1247,9 +1245,7 @@ Return Value:
 
     WaitPid = waitpid(-1, &Status, WUNTRACED | WCONTINUED | WNOHANG);
     if (WaitPid > 0) {
-        PRINT_ERROR("Error: waitpid unexpectedly gave up a %d\n",
-                    WaitPid);
-
+        PRINT_ERROR("Error: waitpid unexpectedly gave up a %d\n", WaitPid);
         Errors += 1;
     }
 
@@ -1390,8 +1386,8 @@ Return Value:
             (WaitPidResult != SignalInformation->si_pid)) {
 
             SignaledPidFound = FALSE;
-            PRINT_ERROR("Error: SignalInformation->si_pid = %x but "
-                        "waitpid() = %x\n.",
+            PRINT_ERROR("Error: SignalInformation->si_pid = %d but "
+                        "waitpid() = %d\n.",
                         SignalInformation->si_pid,
                         WaitPidResult);
 
@@ -1459,7 +1455,7 @@ Return Value:
     if (ChildSignalsExpected == 0) {
         WaitPidResult = waitpid(-1, NULL, WNOHANG);
         if (WaitPidResult > 0) {
-            PRINT_ERROR("Error: waitpid got another child %x unexpectedly.\n",
+            PRINT_ERROR("Error: waitpid got another child %d unexpectedly.\n",
                         WaitPidResult);
 
             ChildSignalFailures += 1;
