@@ -133,13 +133,6 @@ PspQueueSignal (
     BOOL Force
     );
 
-BOOL
-PspQueueSignalToProcess (
-    PKPROCESS Process,
-    ULONG SignalNumber,
-    PSIGNAL_QUEUE_ENTRY SignalQueueEntry
-    );
-
 KSTATUS
 PspSignalProcess (
     PKPROCESS Process,
@@ -1302,6 +1295,8 @@ Return Value:
 
     BOOL ExecuteCompletionRoutine;
 
+    ExecuteCompletionRoutine = FALSE;
+
     //
     // If a kill signal is being set, the exit flags had better be correctly
     // prepared.
@@ -1319,10 +1314,58 @@ Return Value:
     }
 
     KeAcquireQueuedLock(Process->QueuedLock);
-    ExecuteCompletionRoutine = PspQueueSignalToProcess(Process,
-                                                       SignalNumber,
-                                                       SignalQueueEntry);
 
+    //
+    // If there are no more threads in the process to service signals, then
+    // just complete the signal now. If it's a child signal, execute the
+    // completion routine outside the lock.
+    //
+
+    if (Process->ThreadCount == 0) {
+        if ((SignalQueueEntry != NULL) &&
+            (SignalQueueEntry->CompletionRoutine != NULL)) {
+
+            SignalQueueEntry->ListEntry.Next = NULL;
+            if (SignalNumber != SIGNAL_CHILD_PROCESS_ACTIVITY) {
+                SignalQueueEntry->CompletionRoutine(SignalQueueEntry);
+
+            } else {
+                ExecuteCompletionRoutine = TRUE;
+            }
+        }
+
+        goto SignalProcessEnd;
+    }
+
+    if ((SignalNumber == SIGNAL_STOP) ||
+        (SignalNumber == SIGNAL_KILL) ||
+        (SignalNumber == SIGNAL_CONTINUE)) {
+
+        if (SignalNumber == SIGNAL_STOP) {
+
+            //
+            // Don't allow a process to stop if it has already been killed.
+            //
+
+            if (IS_SIGNAL_SET(Process->PendingSignals, SIGNAL_KILL) == FALSE) {
+                REMOVE_SIGNAL(Process->PendingSignals, SIGNAL_CONTINUE);
+                KeSignalEvent(Process->StopEvent, SignalOptionUnsignal);
+            }
+
+        } else if (SignalNumber == SIGNAL_CONTINUE) {
+            REMOVE_SIGNAL(Process->PendingSignals, SIGNAL_STOP);
+            KeSignalEvent(Process->StopEvent, SignalOptionSignalAll);
+
+        } else if (SignalNumber == SIGNAL_KILL) {
+            REMOVE_SIGNAL(Process->PendingSignals, SIGNAL_STOP);
+            REMOVE_SIGNAL(Process->PendingSignals, SIGNAL_CONTINUE);
+            KeSignalEvent(Process->StopEvent, SignalOptionSignalAll);
+        }
+    }
+
+    PspQueueSignal(Process, NULL, SignalNumber, SignalQueueEntry, FALSE);
+
+SignalProcessEnd:
     KeReleaseQueuedLock(Process->QueuedLock);
     if (ExecuteCompletionRoutine != FALSE) {
         SignalQueueEntry->CompletionRoutine(SignalQueueEntry);
@@ -3834,98 +3877,6 @@ Return Value:
     }
 
     return;
-}
-
-BOOL
-PspQueueSignalToProcess (
-    PKPROCESS Process,
-    ULONG SignalNumber,
-    PSIGNAL_QUEUE_ENTRY SignalQueueEntry
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sends a signal to the given process. It assumes that the
-    process queued lock is already held.
-
-Arguments:
-
-    Process - Supplies a pointer to the process to send the signal to.
-
-    SignalNumber - Supplies the signal number to send.
-
-    SignalQueueEntry - Supplies an optional pointer to a queue entry to place
-        on the process' queue.
-
-Return Value:
-
-    TRUE if the signal queue entry's completion routine needs to be executed
-    once the process queued lock is released. This will never be the case if
-    the signal queue entry is NULL.
-
-    FALSE otherwise.
-
---*/
-
-{
-
-    BOOL ExecuteCompletionRoutine;
-
-    ASSERT(KeIsQueuedLockHeld(Process->QueuedLock) != FALSE);
-
-    //
-    // If there are no more threads in the process to service signals, then
-    // just complete the signal now. If it's a child signal, execute the
-    // completion routine outside the lock. This is the caller's responsibility.
-    //
-
-    if (Process->ThreadCount == 0) {
-        ExecuteCompletionRoutine = FALSE;
-        if ((SignalQueueEntry != NULL) &&
-            (SignalQueueEntry->CompletionRoutine != NULL)) {
-
-            SignalQueueEntry->ListEntry.Next = NULL;
-            if (SignalNumber != SIGNAL_CHILD_PROCESS_ACTIVITY) {
-                SignalQueueEntry->CompletionRoutine(SignalQueueEntry);
-
-            } else {
-                ExecuteCompletionRoutine = TRUE;
-            }
-        }
-
-        return ExecuteCompletionRoutine;
-    }
-
-    if ((SignalNumber == SIGNAL_STOP) ||
-        (SignalNumber == SIGNAL_KILL) ||
-        (SignalNumber == SIGNAL_CONTINUE)) {
-
-        if (SignalNumber == SIGNAL_STOP) {
-
-            //
-            // Don't allow a process to stop if it has already been killed.
-            //
-
-            if (IS_SIGNAL_SET(Process->PendingSignals, SIGNAL_KILL) == FALSE) {
-                REMOVE_SIGNAL(Process->PendingSignals, SIGNAL_CONTINUE);
-                KeSignalEvent(Process->StopEvent, SignalOptionUnsignal);
-            }
-
-        } else if (SignalNumber == SIGNAL_CONTINUE) {
-            REMOVE_SIGNAL(Process->PendingSignals, SIGNAL_STOP);
-            KeSignalEvent(Process->StopEvent, SignalOptionSignalAll);
-
-        } else if (SignalNumber == SIGNAL_KILL) {
-            REMOVE_SIGNAL(Process->PendingSignals, SIGNAL_STOP);
-            REMOVE_SIGNAL(Process->PendingSignals, SIGNAL_CONTINUE);
-            KeSignalEvent(Process->StopEvent, SignalOptionSignalAll);
-        }
-    }
-
-    PspQueueSignal(Process, NULL, SignalNumber, SignalQueueEntry, FALSE);
-    return FALSE;
 }
 
 KSTATUS

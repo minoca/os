@@ -592,36 +592,6 @@ Return Value:
 
 --*/
 
-BOOL
-PspSetProcessExitStatusUnlocked (
-    PKPROCESS Process,
-    USHORT ExitReason,
-    UINTN ExitStatus
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sets the process exit status and flags if they are not already
-    set. It assumes that the process's queued lock is already held.
-
-Arguments:
-
-    Process - Supplies a pointer to the process that is exiting.
-
-    ExitReason - Supplies the reason code for the child exit.
-
-    ExitStatus - Supplies the exit status to set.
-
-Return Value:
-
-    TRUE if the values were set in the process.
-
-    FALSE if an exit status was already set in the process.
-
---*/
-
 KSTATUS
 PspGetProcessList (
     PKPROCESS **Array,
