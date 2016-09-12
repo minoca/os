@@ -179,10 +179,6 @@ Return Value:
     PYYGEN_SHIFTS Shift;
     PYYGEN_STATE State;
 
-    if (Context->Elements != NULL) {
-        YypFree(Context->Elements);
-    }
-
     if (Context->Nullable != NULL) {
         YypFree(Context->Nullable);
     }
