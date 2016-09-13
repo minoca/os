@@ -155,6 +155,11 @@ PspCheckSendSignalPermission (
     );
 
 VOID
+PspUpdateSignalPending (
+    VOID
+    );
+
+VOID
 PspMoveSignalSet (
     SIGNAL_SET SignalSet
     );
@@ -250,7 +255,13 @@ Return Value:
     NewBlockedSet = NewMaskLocal;
     REMOVE_SIGNALS_FROM_SET(NewBlockedSet, Thread->BlockedSignals);
     Thread->BlockedSignals = NewMaskLocal;
-    Thread->SignalPending = ThreadSignalPendingStateUnknown;
+
+    //
+    // Determine if the pending signal state needs to be changed now that the
+    // blocked mask has been updated.
+    //
+
+    PspUpdateSignalPending();
 
     //
     // Move the newly blocked signals off to other threads.
@@ -335,17 +346,11 @@ Return Value:
 {
 
     PSYSTEM_CALL_RESTORE_CONTEXT Parameters;
-    INTN ReturnValue;
     PKTHREAD Thread;
 
     Thread = KeGetCurrentThread();
     Parameters = SystemCallParameter;
-    ReturnValue = PspRestorePreSignalTrapFrame(Thread->TrapFrame,
-                                               Parameters->Context);
-
-    Thread = KeGetCurrentThread();
-    Thread->SignalPending = ThreadSignalPendingStateUnknown;
-    return ReturnValue;
+    return PspRestorePreSignalTrapFrame(Thread->TrapFrame, Parameters->Context);
 }
 
 INTN
@@ -684,7 +689,7 @@ Return Value:
     if ((Parameters->MaskType == SignalMaskBlocked) &&
         (Parameters->Operation != SignalMaskOperationNone)) {
 
-        Thread->SignalPending = ThreadSignalPendingStateUnknown;
+        PspUpdateSignalPending();
 
         //
         // Move any newly blocked signals to other threads.
@@ -996,7 +1001,7 @@ Return Value:
         //
 
         if (OriginalMask != Thread->BlockedSignals) {
-            Thread->SignalPending = ThreadSignalPendingStateUnknown;
+            PspUpdateSignalPending();
             RestoreOriginalMask = TRUE;
             if (Parameters->SignalOperation != SignalMaskOperationClear) {
                 NewBlockedSet = Parameters->SignalSet;
@@ -1152,7 +1157,7 @@ SysSuspendExecutionEnd:
         NewBlockedSet = OriginalMask;
         REMOVE_SIGNALS_FROM_SET(NewBlockedSet, Thread->BlockedSignals);
         Thread->BlockedSignals = OriginalMask;
-        Thread->SignalPending = ThreadSignalPendingStateUnknown;
+        PspUpdateSignalPending();
         PspMoveSignalSet(NewBlockedSet);
         KeReleaseQueuedLock(Process->QueuedLock);
     }
@@ -1732,12 +1737,21 @@ Return Value:
         if ((IS_SIGNAL_SET(CombinedSignalMask, SIGNAL_STOP)) ||
             (IS_SIGNAL_SET(CombinedSignalMask, SIGNAL_KILL))) {
 
-            Thread->SignalPending = ThreadSignalPendingStateUnknown;
             KeReleaseQueuedLock(Process->QueuedLock);
             DequeuedSignal = PspCheckForNonMaskableSignals(SignalParameters,
                                                            TrapFrame);
 
             if (DequeuedSignal != -1) {
+
+                //
+                // A stop signal was likely removed. Update the pending signal
+                // state to make sure the next attempt to dequeue a signal does
+                // the correct work.
+                //
+
+                KeAcquireQueuedLock(Process->QueuedLock);
+                PspUpdateSignalPending();
+                KeReleaseQueuedLock(Process->QueuedLock);
                 return DequeuedSignal;
             }
 
@@ -1885,20 +1899,21 @@ Return Value:
                 REMOVE_SIGNAL(ThreadSignalMask, SignalNumber);
                 REMOVE_SIGNAL(Thread->PendingSignals, SignalNumber);
 
-            } else if (IS_SIGNAL_SET(ProcessSignalMask, SignalNumber)) {
+            } else {
+
+                ASSERT(IS_SIGNAL_SET(ProcessSignalMask, SignalNumber));
+
                 REMOVE_SIGNAL(ProcessSignalMask, SignalNumber);
                 REMOVE_SIGNAL(Process->PendingSignals, SignalNumber);
             }
         }
 
         //
-        // A signal was pulled off, but there could be more behind it. Next
-        // time a thorough check will need to be done.
+        // The pending signal masks were changed. Update the signal pending
+        // state.
         //
 
-        if (Thread->SignalPending == ThreadNoSignalPending) {
-            Thread->SignalPending = ThreadSignalPendingStateUnknown;
-        }
+        PspUpdateSignalPending();
 
         //
         // Release the process lock and hopefully dequeue the signal.
@@ -1980,6 +1995,12 @@ Return Value:
         REMOVE_SIGNALS_FROM_SET(CombinedSignalMask, Thread->BlockedSignals);
     }
 
+    //
+    // Make sure the signal pending status is up to date. It could be out of
+    // date if a stop signal got passed over by the tracer above.
+    //
+
+    PspUpdateSignalPending();
     KeReleaseQueuedLock(Process->QueuedLock);
 
 DequeuePendingSignalEnd:
@@ -4056,6 +4077,52 @@ Return Value:
 
     Status = PsCheckPermission(PERMISSION_KILL);
     return Status;
+}
+
+VOID
+PspUpdateSignalPending (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the signal pending state for the current thread based
+    on the current pending signal masks and the blocked signal mask.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    SIGNAL_SET PendingSignals;
+    PKTHREAD Thread;
+
+    Thread = KeGetCurrentThread();
+
+    ASSERT(KeIsQueuedLockHeld(Thread->OwningProcess->QueuedLock) != FALSE);
+
+    OR_SIGNAL_SETS(PendingSignals,
+                   Thread->PendingSignals,
+                   Thread->OwningProcess->PendingSignals);
+
+    REMOVE_SIGNALS_FROM_SET(PendingSignals, Thread->BlockedSignals);
+    if (IS_SIGNAL_SET_EMPTY(PendingSignals) != FALSE) {
+        Thread->SignalPending = ThreadNoSignalPending;
+
+    } else {
+        Thread->SignalPending = ThreadSignalPending;
+    }
+
+    return;
 }
 
 VOID

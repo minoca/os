@@ -572,7 +572,6 @@ typedef enum _DEBUG_COMMAND_TYPE {
 
 typedef enum _THREAD_SIGNAL_PENDING_TYPE {
     ThreadNoSignalPending,
-    ThreadSignalPendingStateUnknown,
     ThreadChildSignalPending,
     ThreadSignalPending,
 } THREAD_SIGNAL_PENDING_TYPE, *PTHREAD_SIGNAL_PENDING_TYPE;

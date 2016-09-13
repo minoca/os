@@ -1544,7 +1544,7 @@ Return Value:
     NewThread->ThreadRoutine = ThreadRoutine;
     NewThread->ThreadParameter = ThreadParameter;
     NewThread->Flags = Flags;
-    NewThread->SignalPending = ThreadSignalPendingStateUnknown;
+    NewThread->SignalPending = ThreadNoSignalPending;
     NewThread->SchedulerEntry.Type = SchedulerEntryThread;
     NewThread->SchedulerEntry.Parent = CurrentThread->SchedulerEntry.Parent;
     NewThread->ThreadPointer = PsInitialThreadPointer;
