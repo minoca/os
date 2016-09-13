@@ -576,14 +576,11 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
     PSIGNAL_SET DestinationSet;
-    BOOL IsBlocked;
     SIGNAL_SET NewBlockedSet;
     SIGNAL_SET NewMask;
     PSYSTEM_CALL_SET_SIGNAL_BEHAVIOR Parameters;
     PKPROCESS Process;
-    PSIGNAL_QUEUE_ENTRY SignalQueueEntry;
     PKTHREAD Thread;
 
     Parameters = (PSYSTEM_CALL_SET_SIGNAL_BEHAVIOR)SystemCallParameter;
@@ -651,40 +648,6 @@ Return Value:
         AND_SIGNAL_SETS(Parameters->SignalSet,
                         Parameters->SignalSet,
                         Thread->BlockedSignals);
-
-        CurrentEntry = Process->SignalListHead.Next;
-        while (CurrentEntry != &(Process->SignalListHead)) {
-            SignalQueueEntry = LIST_VALUE(CurrentEntry,
-                                          SIGNAL_QUEUE_ENTRY,
-                                          ListEntry);
-
-            CurrentEntry = CurrentEntry->Next;
-            IsBlocked = IS_SIGNAL_BLOCKED(
-                                    Thread,
-                                    SignalQueueEntry->Parameters.SignalNumber);
-
-            if (IsBlocked != FALSE) {
-                ADD_SIGNAL(Parameters->SignalSet,
-                           SignalQueueEntry->Parameters.SignalNumber);
-            }
-        }
-
-        CurrentEntry = Thread->SignalListHead.Next;
-        while (CurrentEntry != &(Thread->SignalListHead)) {
-            SignalQueueEntry = LIST_VALUE(CurrentEntry,
-                                          SIGNAL_QUEUE_ENTRY,
-                                          ListEntry);
-
-            CurrentEntry = CurrentEntry->Next;
-            IsBlocked = IS_SIGNAL_BLOCKED(
-                                    Thread,
-                                    SignalQueueEntry->Parameters.SignalNumber);
-
-            if (IsBlocked != FALSE) {
-                ADD_SIGNAL(Parameters->SignalSet,
-                           SignalQueueEntry->Parameters.SignalNumber);
-            }
-        }
 
         goto SetSignalBehaviorEnd;
     }
@@ -1701,7 +1664,7 @@ Return Value:
 
     Returns the signal number of the first pending signal.
 
-    -1 if no signals are pending or a signal is already in progress.
+    -1 if no signals are pending.
 
 --*/
 
@@ -1710,6 +1673,7 @@ Return Value:
     SIGNAL_SET CombinedSignalMask;
     PLIST_ENTRY CurrentEntry;
     ULONG DequeuedSignal;
+    PSIGNAL_QUEUE_ENTRY FoundSignal;
     PLIST_ENTRY ListHead;
     PKPROCESS Process;
     SIGNAL_SET ProcessSignalMask;
@@ -1717,6 +1681,7 @@ Return Value:
     PSIGNAL_QUEUE_ENTRY SignalEntry;
     BOOL SignalHandled;
     ULONG SignalNumber;
+    BOOL StillPending;
     PKTHREAD Thread;
     SIGNAL_SET ThreadSignalMask;
 
@@ -1746,9 +1711,7 @@ Return Value:
     //
 
     if ((IS_SIGNAL_SET_EMPTY(Thread->PendingSignals) != FALSE) &&
-        (IS_SIGNAL_SET_EMPTY(Process->PendingSignals) != FALSE) &&
-        (LIST_EMPTY(&(Process->SignalListHead)) != FALSE) &&
-        (LIST_EMPTY(&(Thread->SignalListHead)) != FALSE)) {
+        (IS_SIGNAL_SET_EMPTY(Process->PendingSignals) != FALSE)) {
 
         return -1;
     }
@@ -1785,110 +1748,29 @@ Return Value:
     }
 
     //
-    // Grab the bits if a standard signal is set.
+    // Loop trying to dispatch a signal as long as there is something in the
+    // combined mask.
     //
 
-    if (IS_SIGNAL_SET_EMPTY(CombinedSignalMask) == FALSE) {
-        for (SignalNumber = RtlCountTrailingZeros64(CombinedSignalMask) + 1;
-             SignalNumber < STANDARD_SIGNAL_COUNT;
-             SignalNumber += 1) {
-
-            if (IS_SIGNAL_SET(CombinedSignalMask, SignalNumber) != FALSE) {
-
-                //
-                // If it's set in the thread then clear it.
-                //
-
-                if (IS_SIGNAL_SET(ThreadSignalMask, SignalNumber) != FALSE) {
-                    REMOVE_SIGNAL(Thread->PendingSignals, SignalNumber);
-
-                } else if (IS_SIGNAL_SET(ProcessSignalMask, SignalNumber) !=
-                                                                       FALSE) {
-
-                    REMOVE_SIGNAL(Process->PendingSignals, SignalNumber);
-                }
-
-                //
-                // A signal was pulled off, but there could be more. Next time
-                // a thorough check will need to be done.
-                //
-
-                if (Thread->SignalPending == ThreadNoSignalPending) {
-                    Thread->SignalPending = ThreadSignalPendingStateUnknown;
-                }
-
-                //
-                // Use the caller allocated temporary structure.
-                //
-
-                KeReleaseQueuedLock(Process->QueuedLock);
-                RtlZeroMemory(SignalParameters, sizeof(SIGNAL_PARAMETERS));
-                SignalParameters->SignalNumber = SignalNumber;
-                PspTracerBreak(SignalParameters, TrapFrame, FALSE, NULL);
-                DequeuedSignal = SignalParameters->SignalNumber;
-                if (DequeuedSignal != 0) {
-
-                    //
-                    // If this was and still is a continue signal, then alert
-                    // the parent. Skip this if the parent is already tracing
-                    // the process.
-                    //
-
-                    if ((SignalNumber == SIGNAL_CONTINUE) &&
-                        (SignalNumber == DequeuedSignal) &&
-                        ((Process->DebugData == NULL) ||
-                         (Process->DebugData->TracingProcess !=
-                          Process->Parent))) {
-
-                        PspQueueChildSignalToParent(
-                                               Process,
-                                               SIGNAL_CONTINUE,
-                                               CHILD_SIGNAL_REASON_CONTINUED);
-                    }
-
-                    goto DequeuePendingSignalEnd;
-                }
-
-                //
-                // This signal got converted, reacquire the lock and loop
-                // around again processing the remaining signals in the
-                // previously snapped view.
-                //
-
-                DequeuedSignal = -1;
-                KeAcquireQueuedLock(Process->QueuedLock);
-            }
-        }
-    }
-
-    //
-    // Either no standard signals are available or the tracer ignored them all.
-    // Dequeue an item from the list.
-    //
-
-    ASSERT(KeIsQueuedLockHeld(Process->QueuedLock) != FALSE);
-
-    RtlZeroMemory(SignalParameters, sizeof(SIGNAL_PARAMETERS));
-
-    //
-    // Loop trying to get a signal entry.
-    //
-
-    while (TRUE) {
-        SignalEntry = NULL;
+    DequeuedSignal = -1;
+    while (IS_SIGNAL_SET_EMPTY(CombinedSignalMask) == FALSE) {
+        SignalNumber = RtlCountTrailingZeros64(CombinedSignalMask) + 1;
 
         //
-        // Check both the process and the thread queue.
+        // Attempt to find the signal in the lists of signals while checking to
+        // see if there is an additional signal pending.
         //
 
         for (QueueLoop = 0; QueueLoop < 2; QueueLoop += 1) {
             if (QueueLoop == 0) {
-                ListHead = &(Process->SignalListHead);
+                ListHead = &(Thread->SignalListHead);
 
             } else {
-                ListHead = &(Thread->SignalListHead);
+                ListHead = &(Process->SignalListHead);
             }
 
+            FoundSignal = NULL;
+            StillPending = FALSE;
             CurrentEntry = ListHead->Next;
             while (CurrentEntry != ListHead) {
                 SignalEntry = LIST_VALUE(CurrentEntry,
@@ -1896,16 +1778,20 @@ Return Value:
                                          ListEntry);
 
                 CurrentEntry = CurrentEntry->Next;
-                SignalNumber = SignalEntry->Parameters.SignalNumber;
+                if (SignalEntry->Parameters.SignalNumber != SignalNumber) {
+                    continue;
+                }
 
-                ASSERT((SignalNumber != 0) &&
-                       (SignalNumber < SIGNAL_COUNT));
+                if (FoundSignal != NULL) {
+                    StillPending = TRUE;
+                    break;
+                }
 
                 SignalHandled = IS_SIGNAL_SET(Process->HandledSignals,
                                               SignalNumber);
 
                 //
-                // If the signal is on the queue, it's assumed to be not
+                // If the signal is on the queue, it's assumed to not be
                 // ignored. If it's not handled and the default action is to
                 // ignore it, then delete this signal now.
                 //
@@ -1917,7 +1803,7 @@ Return Value:
                     SignalEntry->ListEntry.Next = NULL;
 
                     //
-                    // Let the debugger have a go a it.
+                    // Let the debugger have a go at it.
                     //
 
                     if ((Process->DebugData != NULL) &&
@@ -1933,8 +1819,8 @@ Return Value:
                     }
 
                     //
-                    // Child signals are moved onto the unreaped list so
-                    // they can get picked up by wait.
+                    // Child signals are moved onto the unreaped list so they
+                    // can get picked up by wait.
                     //
 
                     if (IS_CHILD_SIGNAL(SignalEntry)) {
@@ -1952,101 +1838,149 @@ Return Value:
                     }
 
                 //
-                // The signal is not discarded.
+                // This signal is not discarded. Take it.
                 //
 
                 } else {
-
-                    //
-                    // The signal is not ignored or blocked, take it.
-                    //
-
-                    if (!IS_SIGNAL_BLOCKED(Thread, SignalNumber)) {
-                        LIST_REMOVE(&(SignalEntry->ListEntry));
-                        SignalEntry->ListEntry.Next = NULL;
-                        break;
-                    }
+                    LIST_REMOVE(&(SignalEntry->ListEntry));
+                    SignalEntry->ListEntry.Next = NULL;
+                    FoundSignal = SignalEntry;
                 }
-
-                SignalEntry = NULL;
             }
 
-            if (SignalEntry != NULL) {
+            //
+            // If a signal was found on this queue, take it and attempt to
+            // dispatch it.
+            //
+
+            if (FoundSignal != NULL) {
 
                 //
-                // If an entry was pulled off, there could be more behind it.
-                // Do a thorough check next time.
+                // If a second signal with the same number was not found on the
+                // queue, then clear the pending bit from the masks.
                 //
 
-                if (Thread->SignalPending == ThreadNoSignalPending) {
-                    Thread->SignalPending = ThreadSignalPendingStateUnknown;
+                if (StillPending == FALSE) {
+                    if (QueueLoop == 0) {
+                        REMOVE_SIGNAL(ThreadSignalMask, SignalNumber);
+                        REMOVE_SIGNAL(Thread->PendingSignals, SignalNumber);
+
+                    } else {
+                        REMOVE_SIGNAL(ProcessSignalMask, SignalNumber);
+                        REMOVE_SIGNAL(Process->PendingSignals, SignalNumber);
+                    }
                 }
 
                 break;
             }
         }
 
-        KeReleaseQueuedLock(Process->QueuedLock);
-        if (SignalEntry != NULL) {
-            RtlCopyMemory(SignalParameters,
-                          &(SignalEntry->Parameters),
-                          sizeof(SIGNAL_PARAMETERS));
+        //
+        // If the signal was not found on the queue, always remove it from the
+        // pending masks.
+        //
 
-            PspTracerBreak(SignalParameters, TrapFrame, FALSE, NULL);
-            DequeuedSignal = SignalParameters->SignalNumber;
+        if (FoundSignal == NULL) {
+            if (IS_SIGNAL_SET(ThreadSignalMask, SignalNumber)) {
+                REMOVE_SIGNAL(ThreadSignalMask, SignalNumber);
+                REMOVE_SIGNAL(Thread->PendingSignals, SignalNumber);
 
-            //
-            // The tracer is letting this signal head to the target.
-            //
-
-            if (DequeuedSignal != 0) {
-
-                //
-                // If it is a child signal, then move it to the blocked
-                // signal list where the wait function can pick it up. Do
-                // not call the completion routine.
-                //
-
-                if (IS_CHILD_SIGNAL(SignalEntry)) {
-                    INSERT_BEFORE(&(SignalEntry->ListEntry),
-                                  &(Process->UnreapedChildList));
-
-                //
-                // Otherwise, call the completion routine and return.
-                //
-
-                } else if (SignalEntry->CompletionRoutine != NULL) {
-                    SignalEntry->CompletionRoutine(SignalEntry);
-                }
-
-                goto DequeuePendingSignalEnd;
-
-            //
-            // The tracer wants this signal to be ignored. Free up the
-            // signal and try again to find a queued signal.
-            //
-
-            } else {
-                DequeuedSignal = -1;
-                if (SignalEntry->CompletionRoutine != NULL) {
-                    SignalEntry->CompletionRoutine(SignalEntry);
-                }
-
-                //
-                // Go back and try to get another queued signal.
-                //
-
-                KeAcquireQueuedLock(Process->QueuedLock);
-                continue;
+            } else if (IS_SIGNAL_SET(ProcessSignalMask, SignalNumber)) {
+                REMOVE_SIGNAL(ProcessSignalMask, SignalNumber);
+                REMOVE_SIGNAL(Process->PendingSignals, SignalNumber);
             }
         }
 
         //
-        // Most of the time, executing this loop once is it.
+        // A signal was pulled off, but there could be more behind it. Next
+        // time a thorough check will need to be done.
         //
 
-        break;
+        if (Thread->SignalPending == ThreadNoSignalPending) {
+            Thread->SignalPending = ThreadSignalPendingStateUnknown;
+        }
+
+        //
+        // Release the process lock and hopefully dequeue the signal.
+        //
+
+        KeReleaseQueuedLock(Process->QueuedLock);
+
+        //
+        // If no signal was found on the queues, then it is a basic signal
+        // without the signal information. Use the caller allocated temporary
+        // structure to create signal information.
+        //
+
+        if (FoundSignal == NULL) {
+            RtlZeroMemory(SignalParameters, sizeof(SIGNAL_PARAMETERS));
+            SignalParameters->SignalNumber = SignalNumber;
+
+        } else {
+            RtlCopyMemory(SignalParameters,
+                          &(FoundSignal->Parameters),
+                          sizeof(SIGNAL_PARAMETERS));
+
+            //
+            // The queue entry is no longer needed. If it's a child move it to
+            // the unreaped list to be picked up by wait.
+            //
+
+            if (IS_CHILD_SIGNAL(FoundSignal)) {
+                INSERT_BEFORE(&(FoundSignal->ListEntry),
+                              &(Process->UnreapedChildList));
+
+            //
+            // Otherwise, call the completion routine.
+            //
+
+            } else if (FoundSignal->CompletionRoutine != NULL) {
+                FoundSignal->CompletionRoutine(FoundSignal);
+            }
+        }
+
+        //
+        // Allow a tracer a chance to ignore the signal.
+        //
+
+        PspTracerBreak(SignalParameters, TrapFrame, FALSE, NULL);
+        DequeuedSignal = SignalParameters->SignalNumber;
+        if (DequeuedSignal != 0) {
+
+            //
+            // If this was and still is a continue signal, then alert
+            // the parent. Skip this if the parent is already tracing
+            // the process.
+            //
+
+            if ((SignalNumber == SIGNAL_CONTINUE) &&
+                (SignalNumber == DequeuedSignal) &&
+                ((Process->DebugData == NULL) ||
+                 (Process->DebugData->TracingProcess !=
+                  Process->Parent))) {
+
+                PspQueueChildSignalToParent(
+                                       Process,
+                                       SIGNAL_CONTINUE,
+                                       CHILD_SIGNAL_REASON_CONTINUED);
+            }
+
+            goto DequeuePendingSignalEnd;
+        }
+
+        //
+        // Update the local combined pending signal mask and try again. This
+        // avoids processing newly arriving signals and keeps dequeue moving
+        // forward through the mask.
+        //
+
+        DequeuedSignal = -1;
+        KeAcquireQueuedLock(Process->QueuedLock);
+        OR_SIGNAL_SETS(CombinedSignalMask, ThreadSignalMask, ProcessSignalMask);
+        REMOVE_SIGNALS_FROM_SET(CombinedSignalMask, Thread->BlockedSignals);
     }
+
+    KeReleaseQueuedLock(Process->QueuedLock);
 
 DequeuePendingSignalEnd:
     return DequeuedSignal;
@@ -2614,6 +2548,8 @@ Return Value:
 {
 
     PKPROCESS ChildProcess;
+    USHORT ChildSignal;
+    BOOL ClearPending;
     PLIST_ENTRY CurrentEntry;
     BOOL EntryFound;
     PKPROCESS Process;
@@ -2664,7 +2600,17 @@ Return Value:
     // through the process list if nothing was found above.
     //
 
-    if (EntryFound == FALSE) {
+    ClearPending = FALSE;
+    ChildSignal = SIGNAL_CHILD_PROCESS_ACTIVITY;
+    if ((EntryFound == FALSE) &&
+        (IS_SIGNAL_SET(Process->PendingSignals, ChildSignal) != FALSE)) {
+
+        //
+        // If one is found, then keep looking for a second child signal. It
+        // doesn't need to match the request.
+        //
+
+        ClearPending = TRUE;
         CurrentEntry = Process->SignalListHead.Next;
         while (CurrentEntry != &(Process->SignalListHead)) {
             SignalEntry = LIST_VALUE(CurrentEntry,
@@ -2674,13 +2620,23 @@ Return Value:
             ASSERT((SignalEntry->Parameters.SignalNumber != 0) &&
                    (SignalEntry->Parameters.SignalNumber < SIGNAL_COUNT));
 
+            //
+            // If a match has already been found, keep looking until another
+            // child signal is found.
+            //
+
+            if (EntryFound != FALSE) {
+                if (SignalEntry->Parameters.SignalNumber == ChildSignal) {
+                    ClearPending = FALSE;
+                    break;
+                }
+
+                continue;
+            }
+
             EntryFound = PspMatchChildWaitRequestWithProcessId(ProcessId,
                                                                WaitFlags,
                                                                SignalEntry);
-
-            if (EntryFound != FALSE) {
-                break;
-            }
 
             CurrentEntry = CurrentEntry->Next;
         }
@@ -2702,11 +2658,15 @@ Return Value:
 
         //
         // Otherwise remove it from its signal list, never to be waited on
-        // again.
+        // again. Clear it from the pending signal set if it was found on the
+        // signal queue and there are no more child signals.
         //
 
         LIST_REMOVE(&(SignalEntry->ListEntry));
         SignalEntry->ListEntry.Next = NULL;
+        if (ClearPending != FALSE) {
+            REMOVE_SIGNAL(Process->PendingSignals, ChildSignal);
+        }
 
         //
         // If the child exited, then accumulate the child's resource usage
@@ -3725,38 +3685,35 @@ Return Value:
         //
 
         } else {
-            if (SignalPendingType == ThreadNoSignalPending) {
-                SignalPendingType = ThreadSignalPending;
-            }
-
             if (Thread != NULL) {
                 INSERT_BEFORE(&(SignalQueueEntry->ListEntry),
                               &(Thread->SignalListHead));
-
-                if (SignalBlocked != FALSE) {
-                    SignalPendingType = ThreadNoSignalPending;
-                }
 
             } else {
                 INSERT_BEFORE(&(SignalQueueEntry->ListEntry),
                               &(Process->SignalListHead));
             }
         }
+    }
 
     //
-    // This is just a signal number, not an entry.
+    // If the signal is not ignored, set the appropriate pending signal mask.
     //
 
-    } else {
-        if (SignalIgnored == FALSE) {
-            if (Thread != NULL) {
-                ADD_SIGNAL(Thread->PendingSignals, SignalNumber);
+    if (SignalIgnored == FALSE) {
+        if (Thread != NULL) {
+            ADD_SIGNAL(Thread->PendingSignals, SignalNumber);
 
-            } else {
-                ADD_SIGNAL(Process->PendingSignals, SignalNumber);
-            }
+        } else {
+            ADD_SIGNAL(Process->PendingSignals, SignalNumber);
+        }
 
-            if (SignalBlocked == FALSE) {
+        //
+        // If the signal is not blocked, then prepare to wake a thread.
+        //
+
+        if (SignalBlocked == FALSE) {
+            if (SignalPendingType == ThreadNoSignalPending) {
                 SignalPendingType = ThreadSignalPending;
             }
         }
@@ -4131,9 +4088,6 @@ Return Value:
 
     SIGNAL_SET PendingSignals;
     PKPROCESS Process;
-    PLIST_ENTRY SignalEntry;
-    ULONG SignalNumber;
-    PSIGNAL_QUEUE_ENTRY SignalQueueEntry;
     PKTHREAD Thread;
     PLIST_ENTRY ThreadEntry;
     SIGNAL_SET ThreadPendingSignals;
@@ -4192,53 +4146,6 @@ Return Value:
         //
 
         REMOVE_SIGNALS_FROM_SET(PendingSignals, ThreadPendingSignals);
-    }
-
-    //
-    // Check the process signal list as well.
-    //
-
-    SignalEntry = Process->SignalListHead.Next;
-    while (SignalEntry != &(Process->SignalListHead)) {
-        SignalQueueEntry = LIST_VALUE(SignalEntry,
-                                      SIGNAL_QUEUE_ENTRY,
-                                      ListEntry);
-
-        SignalEntry = SignalEntry->Next;
-        SignalNumber = SignalQueueEntry->Parameters.SignalNumber;
-        if (IS_SIGNAL_SET(SignalSet, SignalNumber) == FALSE) {
-            continue;
-        }
-
-        //
-        // The signal is in the set, find a thread to take the signal.
-        //
-
-        ThreadEntry = Process->ThreadListHead.Next;
-        while (ThreadEntry != &(Process->ThreadListHead)) {
-            Thread = LIST_VALUE(ThreadEntry, KTHREAD, ProcessEntry);
-            ThreadEntry = ThreadEntry->Next;
-            if ((Thread->Flags & THREAD_FLAG_EXITING) != 0) {
-                continue;
-            }
-
-            if (IS_SIGNAL_BLOCKED(Thread, SignalNumber) != FALSE) {
-                continue;
-            }
-
-            //
-            // Wake this thread up for this signal. It is now responsible for
-            // dispatching it.
-            //
-
-            if (Thread->SignalPending < ThreadSignalPending) {
-                Thread->SignalPending = ThreadSignalPending;
-                RtlMemoryBarrier();
-                ObWakeBlockedThread(Thread, FALSE);
-            }
-
-            break;
-        }
     }
 
     return;
