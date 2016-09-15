@@ -2804,6 +2804,10 @@ Return Value:
                                                OriginalValue,
                                                PreviousMaximum);
 
+        if (ReadMaximum == PreviousMaximum) {
+            break;
+        }
+
         PreviousMaximum = ReadMaximum;
     }
 
