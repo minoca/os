@@ -815,7 +815,7 @@ Return Value:
                                                      1,
                                                      0);
 
-            if (TimerQueued == 0) {
+            if (TimerQueued == 1) {
                 return;
             }
         }
