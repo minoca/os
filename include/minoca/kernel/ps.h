@@ -95,25 +95,6 @@ Author:
                                             _TrapFrame)
 
 //
-// This macro dispatches pending signals on the given thread if there are any,
-// preserving the system call information so that is can be resumed or
-// restarted.
-//
-
-#define PsDispatchPendingSignalsForSystemCall(_Thread,              \
-                                              _TrapFrame,           \
-                                              _SystemCallResult,    \
-                                              _SystemCallParameter, \
-                                              _SystemCallNumber)    \
-                                                                    \
-    ((_Thread)->SignalPending == ThreadNoSignalPending) ?           \
-    FALSE :                                                         \
-    PsDispatchPendingSignalsOnCurrentThread(_SystemCallResult,      \
-                                            _SystemCallNumber,      \
-                                            _SystemCallParameter,   \
-                                            _TrapFrame)
-
-//
 // This macro performs a quick inline check to see if any of the runtime timers
 // are armed, and only then calls the real check function.
 //
@@ -446,6 +427,7 @@ Author:
 #define THREAD_FLAG_IN_SYSTEM_CALL  0x0002
 #define THREAD_FLAG_FREE_USER_STACK 0x0004
 #define THREAD_FLAG_EXITING         0x0008
+#define THREAD_FLAG_RESTORE_SIGNALS 0x0010
 
 //
 // Define thread FPU flags.
@@ -1589,6 +1571,9 @@ Members:
     BlockedSignals - Stores a bitfield of signals that are blocked by the
         thread.
 
+    RestoreSignals - Stores a bitfield of signals that are to be restored to
+        the blocked signals set after a signal is dispatched.
+
     SignalListHead - Stores the head of the list of signals that are currently
         queued for the process. The type of elements on this list will be
         SIGNAL_QUEUE_ENTRY structures. This list is protected by the process
@@ -1660,6 +1645,7 @@ struct _KTHREAD {
     PWAIT_BLOCK WaitBlock;
     SIGNAL_SET PendingSignals;
     SIGNAL_SET BlockedSignals;
+    SIGNAL_SET RestoreSignals;
     LIST_ENTRY SignalListHead;
     RESOURCE_USAGE ResourceUsage;
     PFPU_CONTEXT FpuContext;

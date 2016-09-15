@@ -738,7 +738,6 @@ Return Value:
     PKPROCESS ChildProcess;
     KSTATUS CopyStatus;
     SYSTEM_CALL_WAIT_FOR_CHILD Parameters;
-    BOOL SignalApplied;
     PSIGNAL_PARAMETERS SignalParameters;
     PSIGNAL_QUEUE_ENTRY SignalQueueEntry;
     KSTATUS Status;
@@ -856,22 +855,7 @@ Return Value:
         // if WNOHANG is set then EINTR will never be returned.
         //
 
-        PsCheckRuntimeTimers(Thread);
-        SignalApplied = PsDispatchPendingSignalsForSystemCall(
-                                                Thread,
-                                                Thread->TrapFrame,
-                                                STATUS_RESTART_SYSTEM_CALL,
-                                                SystemCallParameter,
-                                                SystemCallWaitForChildProcess);
-
-        if (SignalApplied != FALSE) {
-
-            //
-            // The system call handler also attempts to dispatch signals.
-            // Prevent a second restart attempt from coming in on top of the
-            // one initiated above.
-            //
-
+        if (Thread->SignalPending == ThreadSignalPending) {
             Status = STATUS_INTERRUPTED;
             break;
         }
@@ -1624,6 +1608,7 @@ Return Value:
     BOOL Applied;
     ULONG SignalNumber;
     SIGNAL_PARAMETERS SignalParameters;
+    PKTHREAD Thread;
 
     Applied = FALSE;
     while (TRUE) {
@@ -1638,6 +1623,18 @@ Return Value:
                                  SystemCallResult,
                                  SystemCallParameter,
                                  SystemCallNumber);
+    }
+
+    //
+    // If a signal did not get applied, restore the signal mask if necessary.
+    //
+
+    if (Applied == FALSE) {
+        Thread = KeGetCurrentThread();
+        if ((Thread->Flags & THREAD_FLAG_RESTORE_SIGNALS) != 0) {
+            Thread->Flags &= ~THREAD_FLAG_RESTORE_SIGNALS;
+            PsSetSignalMask(&(Thread->RestoreSignals), NULL);
+        }
     }
 
     return Applied;

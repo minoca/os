@@ -181,6 +181,7 @@ Return Value:
     PSIGNAL_CONTEXT_X86 Context;
     UINTN ContextSp;
     ULONG Flags;
+    PSIGNAL_SET RestoreSignals;
     BOOL Result;
     KSTATUS Status;
     PKTHREAD Thread;
@@ -192,8 +193,14 @@ Return Value:
     Context = (PVOID)ContextSp;
     Flags = 0;
     Result = MmUserWrite(&(Context->Common.Next), 0);
+    RestoreSignals = &(Thread->BlockedSignals);
+    if ((Thread->Flags & THREAD_FLAG_RESTORE_SIGNALS) != 0) {
+        RestoreSignals = &(Thread->RestoreSignals);
+        Thread->Flags &= ~THREAD_FLAG_RESTORE_SIGNALS;
+    }
+
     Status = MmCopyToUserMode(&(Context->Common.Mask),
-                              &(Thread->BlockedSignals),
+                              RestoreSignals,
                               sizeof(SIGNAL_SET));
 
     //

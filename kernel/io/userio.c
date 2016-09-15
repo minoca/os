@@ -1574,22 +1574,23 @@ PollEnd:
     if (RestoreSignalMask != FALSE) {
 
         //
-        // Queue up signals before resetting the mask. The poll system call
-        // cannot be restarted, so there is no need to provide the system call
-        // parameters.
+        // If a signal arrived during the poll, then do not restore the blocked
+        // mask until it gets a chance to be dispatched. Save the old signal
+        // set to be restored during signal dispatch.
         //
 
-        PsCheckRuntimeTimers(Thread);
+        if (Thread->SignalPending == ThreadSignalPending) {
+            Thread->RestoreSignals = OldSignalSet;
+            Thread->Flags |= THREAD_FLAG_RESTORE_SIGNALS;
 
-        ASSERT(Status != STATUS_RESTART_SYSTEM_CALL);
+        //
+        // Otherwise restore the signal mask now. The period under the
+        // temporary mask is now over.
+        //
 
-        PsDispatchPendingSignalsForSystemCall(Thread,
-                                              Thread->TrapFrame,
-                                              Status,
-                                              NULL,
-                                              SystemCallPoll);
-
-        PsSetSignalMask(&OldSignalSet, NULL);
+        } else {
+            PsSetSignalMask(&OldSignalSet, NULL);
+        }
     }
 
     if (WaitObjects != NULL) {
