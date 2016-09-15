@@ -254,10 +254,10 @@ Return Value:
                               TrapFrame,
                               Thread->OwningProcess);
 
-        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
-                                                SystemCallResult,
+        PsDispatchPendingSignalsOnCurrentThread(SystemCallResult,
+                                                SystemCallNumber,
                                                 SystemCallParameter,
-                                                SystemCallNumber);
+                                                TrapFrame);
     }
 
     TrapFrame->Pc = (ULONG)(Thread->OwningProcess->SignalHandlerRoutine);
@@ -548,7 +548,6 @@ Return Value:
     TrapFrame->SvcLink = OldSvcLink;
     TrapFrame->SvcSp = OldSvcStackPointer;
     TrapFrame->UserSp = (UINTN)UserStackPointer;
-    TrapFrame->R0 = (UINTN)Thread->ThreadParameter;
     TrapFrame->Cpsr = ARM_MODE_USER;
     TrapFrame->Pc = (UINTN)Thread->ThreadRoutine;
     if ((TrapFrame->Pc & ARM_THUMB_BIT) != 0) {
@@ -560,7 +559,13 @@ Return Value:
         ArDisableFpu();
     }
 
-    return TrapFrame->R0;
+    //
+    // Return the thread parameter so that is gets placed in R0. Do not smash
+    // R0 in the trap frame as that stores the system call number and is needed
+    // to avoid system call restarts for the execute image system call.
+    //
+
+    return (UINTN)Thread->ThreadParameter;
 }
 
 KSTATUS

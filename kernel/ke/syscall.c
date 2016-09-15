@@ -399,11 +399,6 @@ SystemCallHandlerEnd:
     }
 
     PsCheckRuntimeTimers(Thread);
-    PsDispatchPendingSignalsForSystemCall(Thread,
-                                          TrapFrame,
-                                          Result,
-                                          SystemCallParameter,
-                                          SystemCallNumber);
 
     //
     // Return to the previous thread state and cycle account. A restarted

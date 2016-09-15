@@ -221,7 +221,7 @@ FUNCTION(KdDebugServiceHandlerAsm)
     pushl   %ebx                    # Push a pointer to the trap frame.
     call    KeDispatchDebugServiceTrap  # Call the main exception handler.
     addl    $0x4, %esp              # Pop the parameter.
-    call   ArRestoreTrapFrame       # Restore the trap frame
+    call    ArRestoreTrapFrame      # Restore the trap frame
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
 
@@ -514,8 +514,23 @@ ArSystemCallHandlerAfterTrapSave:
     pushl   %edx                    # Push system call parameter.
     pushl   %ecx                    # Push system call number.
     call    KeSystemCallHandler     # Call the main exception handler.
-    addl    $0xc, %esp              # Pop the parameters.
     movl    %eax, TRAP_EAX(%ebx)    # Save the return value in the trap frame.
+
+    ##
+    ## If a signal is pending, then go attempt to dispatch it as the trap frame
+    ## is already complete. Keep the parameters on the stack, as the dispatch
+    ## routine takes them in the same order.
+    ##
+
+    movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
+    cmpl    $ThreadNoSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
+    jz      ArSystemCallHandlerExit # Jump to end if no signals are pending.
+    pushl   %eax                    # Push system call result.
+    call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
+    addl    $0x4, %esp              # Pop the parameter.
+
+ArSystemCallHandlerExit:
+    addl    $0xc, %esp              # Pop the parameters.
     call    ArRestoreTrapFrame      # Restore the trap frame
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
@@ -582,18 +597,103 @@ FUNCTION(ArSysenterHandlerAsm)
     pushl   %ebx                    # Push EBX, the system call parameter.
     pushl   %ecx                    # Push saved EAX, the system call number.
     call    KeSystemCallHandler     # Call out to the main service handler.
-    addl    $0xC, %esp              # Pop the parameters.
+
+    ##
+    ## If a signal is pending, then save the full trap frame and attempt to
+    ## dispatch the signal. Note that the trap frame was allocated on the
+    ## kernel stack and may be copied out to user mode. Don't leak kernel stack
+    ## values.
+    ##
+
+    movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
+    cmpl    $ThreadNoSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
+    jz      ArSysenterHandlerFastRestore  # Exit via the fast restore path.
+
+    ##
+    ## Save the default user mode segment selectors.
+    ##
+
+    movl    $USER_DS, TRAP_DS+12(%esp)    # Save DS.
+    movl    $USER_DS, TRAP_ES+12(%esp)    # Save ES.
+    movl    $GDT_THREAD, TRAP_FS+12(%esp) # Save FS.
+    movl    $GDT_THREAD, TRAP_GS+12(%esp) # Save GS.
+    movl    $USER_DS, TRAP_SS+12(%esp)    # Save SS.
+
+    ##
+    ## Save the registers.
+    ##
+
+    movl    %eax, TRAP_EAX+12(%esp) # Save the return value in the trap frame.
+    movl    %ebx, TRAP_EBX+12(%esp) # Save EBX. It is non-volatile.
+    movl    $0x0, TRAP_ECX+12(%esp) # Zero ECX. It is volatile.
+    movl    $0x0, TRAP_EDX+12(%esp) # Zero EDX. It is volatile.
+    movl    %esi, TRAP_ESI+12(%esp) # Save ESI. It is non-volatile.
+    movl    %edi, TRAP_EDI+12(%esp) # Save EDI. It is non-volatile.
+    movl    %ebp, TRAP_EBP+12(%esp) # Save EBP. It is non-volatile.
+    movl    $0x0, TRAP_ERRORCODE+12(%esp) # Scrub the error code.
+    movl    $0x0, TRAP_EFLAGS+12(%esp) # Scrub the EFLAGS.
+
+    ##
+    ## Fix up CS, now that the trap frame is complete. It used to be user DS.
+    ##
+
+    movl    $USER_CS, TRAP_CS+12(%esp)
+
+    ##
+    ## Call the signal dispatch routine. Only the system call result needs to
+    ## be pushed on the stack, as the other parameters are still there.
+    ##
+
+    pushl   %eax                    # Push system call result.
+    call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
+    addl    $0x4, %esp              # Pop the system call result.
+
+    ##
+    ## Restore the non-volatile registers in case they were modified by the
+    ## trap frame.
+    ##
+
+    movl    TRAP_EBX+12(%esp), %ebx
+    movl    TRAP_ESI+12(%esp), %esi
+    movl    TRAP_EDI+12(%esp), %edi
+    movl    TRAP_EBP+12(%esp), %ebp
+
+    ##
+    ## Restore EAX in case the return value was modified. The other volitiles
+    ## (ECX and EDX) are used specifically by sysexit to restore the stack and
+    ## instruction pointer.
+    ##
+
+    movl    TRAP_EAX+12(%esp), %eax
+
+    ##
+    ## Restore the segment registers. SS and CS are restored by sysexit.
+    ##
+
+    movl    TRAP_DS+12(%esp), %ecx  # Restore DS.
+    movw    %cx, %ds                #
+    movl    TRAP_ES+12(%esp), %ecx  # Restore ES.
+    movw    %cx, %es                #
+    movl    TRAP_FS+12(%esp), %ecx  # Restore FS.
+    movw    %cx, %fs                #
+    movl    TRAP_GS+12(%esp), %ecx  # Restore GS.
+    movw    %cx, %gs                #
+    jmp     ArSysenterHandlerExit
 
     ##
     ## Reset the segment registers to user mode and return.
     ##
 
+ArSysenterHandlerFastRestore:
     mov     $USER_DS, %cx           # Get the user mode DS.
     mov     %cx, %ds                # Move to DS.
     mov     %cx, %es                # Move to ES.
     mov     $GDT_THREAD, %cx        # Get the user-mode GS.
     mov     %cx, %fs                # Move to FS.
     mov     %cx, %gs                # Move to GS.
+
+ArSysenterHandlerExit:
+    addl    $0xC, %esp              # Pop the parameters.
 
     ##
     ## Restore some portions of the pseudo trap frame. Do not zero EAX as it

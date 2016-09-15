@@ -744,10 +744,10 @@ Return Value:
 
 BOOL
 PsDispatchPendingSignalsOnCurrentThread (
-    PTRAP_FRAME TrapFrame,
     INTN SystemCallResult,
+    ULONG SystemCallNumber,
     PVOID SystemCallParameter,
-    ULONG SystemCallNumber
+    PTRAP_FRAME TrapFrame
     )
 
 /*++
@@ -759,20 +759,20 @@ Routine Description:
 
 Arguments:
 
-    TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
-        is not destined for user mode, this function exits immediately.
-
     SystemCallResult - Supplies the result of the system call that is
         attempting to dispatch a pending signal. This is only valid if the
         system call number is valid.
+
+    SystemCallNumber - Supplies the number of the system call that is
+        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
+        the caller is not a system call.
 
     SystemCallParameter - Supplies a pointer to the parameters of the system
         call that is attempting to dispatch a pending signal. This is a pointer
         to user mode. This is only valid if the system call number if valid.
 
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
-        the caller is not a system call.
+    TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
+        is not destined for user mode, this function exits immediately.
 
 Return Value:
 

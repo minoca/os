@@ -268,10 +268,10 @@ Return Value:
                               TrapFrame,
                               Thread->OwningProcess);
 
-        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
-                                                SystemCallResult,
+        PsDispatchPendingSignalsOnCurrentThread(SystemCallResult,
+                                                SystemCallNumber,
                                                 SystemCallParameter,
-                                                SystemCallNumber);
+                                                TrapFrame);
 
     }
 

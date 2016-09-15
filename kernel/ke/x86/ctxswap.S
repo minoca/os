@@ -155,7 +155,7 @@ FUNCTION(KepContextSwap)
     ##
 
     cmpl    $FALSE, %esi            # Compare FirstTime to FALSE.
-    je     KepContextSwapRestore    # Special case a first run.
+    je      KepContextSwapRestore   # Special case a first run.
 
 KepContextSwapFirstTime:
     pushl   %esp                    # Push a pointer to the trap frame.

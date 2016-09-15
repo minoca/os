@@ -214,6 +214,14 @@ FUNCTION ArpSoftwareInterruptEntry
     cpsie   i, #ARM_MODE_SVC                    @ Enable interrupts, svc mode.
 
     ##
+    ## Save the R0 and R1, as they hold the system call parameters that will be
+    ## needed if the system call gets restarted.
+    ##
+
+    str     %r0, [%sp, #TRAP_R0]
+    str     %r1, [%sp, #TRAP_R1]
+
+    ##
     ## Set the exception CPSR to something wild as a hint that this trap frame
     ## is incomplete.
     ##
@@ -231,6 +239,26 @@ FUNCTION ArpSoftwareInterruptEntry
 
     mov     %r2, %sp                            @ Set trap frame parameter.
     bl      KeSystemCallHandler                 @ Handle system call.
+
+    ##
+    ## Determine whether or not a signal is pending on the thread.
+    ## KeGetCurrentThread uses R0, R1, and R2. Save the system call's return
+    ## value in R3, so that it is not lost. It cannot be saved in the trap
+    ## frame as the saved R0 and R1 hold the parameters needed to dispatch
+    ## a signal.
+    ##
+
+    mov     %r3, %r0                             @ Save the return value.
+    bl      KeGetCurrentThread                   @ Get current thread in R0.
+    ldr     %r1, [%r0, #THREAD_SIGNAL_PENDING]   @ Load signal pending status.
+    mov     %r0, %r3                             @ Restore return value.
+    cbnz    %r1, ArpSoftwareInterruptFastSignal  @ Jump to dispatch signal.
+
+    ##
+    ## Restore the user mode stack and link registers. Do not restore or
+    ## clobber R0 as it holds the system call's return value.
+    ##
+
     mov     %r1, %sp                            @ Get SVC stack pointer.
     cpsid   i, #ARM_MODE_SYSTEM                 @ Switch to system mode.
     ldr     %sp, [%r1, #TRAP_USERSP]            @ Restore usermode SP.
@@ -250,6 +278,23 @@ FUNCTION ArpSoftwareInterruptEntry
     rfeia   %sp!                                @ Restore PC and CPSR. Bye!
 
     ##
+    ## Save the full trap frame. The CPSR, PC, user SP, user LR, R0, and R1 are
+    ## the only values saved in the trap frame.
+    ##
+
+ArpSoftwareInterruptFastSignal:
+    eor     %lr, %lr                             @ Zero SVC link register.
+    eor     %r12, %r12                           @ Zero volatile R12.
+    eor     %r3, %r3                             @ Zero volatile R3.
+    eor     %r2, %r2                             @ Zero volatile R2.
+    add     %r1, %sp, #TRAP_PC                   @ Get location after SVC LR.
+    stmdb   %r1!, {%r2-%r12, %lr}                @ Push general registers.
+    mrs     %r1, cpsr                            @ Get the "exception" CPSR.
+    str     %r1, [%sp, #TRAP_EXCEPTION_CPSR]     @ Save the "exception" CPSR.
+    str     %sp, [%sp]                           @ Save SP.
+    b       ArpSoftwareInterruptSlowSignal
+
+    ##
     ## Perform the slow version of the system call that builds up a complete
     ## trap frame. This is used for system calls like fork and exec, where the
     ## trap frame is used in the system call.
@@ -260,7 +305,7 @@ ArpSoftwareInterruptEntrySlow:
     stmdb   %sp!, {%r1-%r12, %lr}                @ Push general registers.
     mrs     %r2, cpsr                            @ Get the "exception" CPSR.
     stmdb   %sp!, {%r0, %r2}                     @ Push exception CPSR and R0.
-    sub     %sp, #12                             @ Account for pushes.
+    sub     %sp, #TRAP_R0                        @ Account for pushes.
     mov     %r4, %sp                             @ Get stack.
     cps     #ARM_MODE_SYSTEM                     @ Switch to system mode.
     str     %lr, [%r4, #TRAP_USERLR]             @ Save usermode SP.
@@ -277,10 +322,43 @@ ArpSoftwareInterruptEntrySlow:
     bl      KeSystemCallHandler
 
     ##
+    ## Determine whether or not a signal is pending on the thread.
+    ## KeGetCurrentThread uses R0, R1, and R2. Save the system call's return
+    ## value in R3, so that it is not lost. It cannot be saved in the trap
+    ## frame as the saved R0 and R1 hold the parameters needed to dispatch
+    ## a signal.
+    ##
+
+    mov     %r3, %r0                             @ Save the return value.
+    bl      KeGetCurrentThread                   @ Get current thread in R0.
+    ldr     %r1, [%r0, #THREAD_SIGNAL_PENDING]   @ Load signal pending status.
+    mov     %r0, %r3                             @ Restore the return value.
+    cbz     %r1, ArpSoftwareInterruptEntrySlowEnd  @ Jump to the end if 0.
+
+    ##
+    ## Restore the parameters for the signal dispatcher.
+    ##
+
+ArpSoftwareInterruptSlowSignal:
+    ldr     %r1, [%sp, #TRAP_R0]
+    ldr     %r2, [%sp, #TRAP_R1]
+    mov     %r3, %sp
+
+    ##
+    ## Store the return value in the trap frame now in case the signal wants to
+    ## modify it and then put it back in R0 after the signal is dispatched.
+    ##
+
+    str     %r0, [%sp, #TRAP_R0]
+    bl      PsDispatchPendingSignalsOnCurrentThread
+    ldr     %r0, [%sp, #TRAP_R0]
+
+    ##
     ## Restore the stack pointer. The rest of the context better be at the new
     ## stack location. Then restore the user mode sp and lr.
     ##
 
+ArpSoftwareInterruptEntrySlowEnd:
     ldr     %sp, [%sp]                          @ Restore stack pointer.
     add     %sp, %sp, #4                        @ Pop stack pointer.
 

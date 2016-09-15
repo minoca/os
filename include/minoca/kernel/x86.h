@@ -687,8 +687,6 @@ Members:
 
     Edi - Stores a non-volatile general register.
 
-    Esp - Stores a non-volatile general register.
-
     Ebp - Stores a non-volatile general register.
 
     Esp - Stores the stack pointer. This should be restored after the final

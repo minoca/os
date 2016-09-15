@@ -198,6 +198,18 @@ Environment:
 #define PROCESSOR_CONTEXT_SIZE 192
 
 ##
+## Thread structure offsets.
+##
+
+#define THREAD_SIGNAL_PENDING 84
+
+##
+## Define the thread signal pending state options.
+##
+
+#define ThreadNoSignalPending 0
+
+##
 ## Define the instructions for DSB/ISB, which are different in ARMv6 vs ARMv7.
 ##
 
