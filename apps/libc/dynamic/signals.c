@@ -920,7 +920,8 @@ Routine Description:
 
 Arguments:
 
-    SignalMask - Supplies a pointer to the mask of signals to wait for.
+    SignalMask - Supplies a pointer to the mask of signals to block during the
+        suspend.
 
 Return Value:
 

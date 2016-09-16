@@ -1579,6 +1579,7 @@ PollEnd:
         // set to be restored during signal dispatch.
         //
 
+        PsCheckRuntimeTimers(Thread);
         if (Thread->SignalPending == ThreadSignalPending) {
             Thread->RestoreSignals = OldSignalSet;
             Thread->Flags |= THREAD_FLAG_RESTORE_SIGNALS;

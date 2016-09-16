@@ -107,7 +107,10 @@ Return Value:
     }
 
     do {
-        SignalNumber = PspDequeuePendingSignal(SignalParameters, TrapFrame);
+        SignalNumber = PspDequeuePendingSignal(SignalParameters,
+                                               TrapFrame,
+                                               NULL);
+
         if (SignalNumber == -1) {
             break;
         }

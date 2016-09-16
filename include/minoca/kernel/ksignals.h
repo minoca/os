@@ -73,6 +73,12 @@ Author:
     ((_ResultSet) = (_Set1) & (_Set2))
 
 //
+// This macro NOTs a signal set.
+//
+
+#define NOT_SIGNAL_SET(_SignalSet) ((_SignalSet) = ~(_SignalSet))
+
+//
 // This macro removes the signals in the second set from the signals in the
 // first, and writes the result back to the first set.
 //
