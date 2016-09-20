@@ -229,6 +229,8 @@ Return Value:
 
                 return 0;
             }
+
+            OldValue = NewOldValue;
         }
     }
 
