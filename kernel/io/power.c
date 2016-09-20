@@ -905,15 +905,20 @@ Return Value:
         }
 
     //
-    // All subsequent references need to wait for the active event and then
-    // check the state to see if the resume succeeded.
+    // If the state is active, then go ahead. Otherwise, wait for the ready
+    // event.
     //
 
     } else {
-        KeWaitForEvent(Device->Power->ActiveEvent, FALSE, WAIT_TIME_INDEFINITE);
         if (Device->Power->State != DevicePowerStateActive) {
-            RtlAtomicAdd(&(State->ReferenceCount), -1);
-            Status = STATUS_NOT_READY;
+            KeWaitForEvent(Device->Power->ActiveEvent,
+                           FALSE,
+                           WAIT_TIME_INDEFINITE);
+
+            if (Device->Power->State != DevicePowerStateActive) {
+                RtlAtomicAdd(&(State->ReferenceCount), -1);
+                Status = STATUS_NOT_READY;
+            }
         }
     }
 
@@ -1041,6 +1046,7 @@ Return Value:
             State->PreviousState = State->State;
         }
 
+        KeSignalEvent(State->ActiveEvent, SignalOptionUnsignal);
         State->State = DevicePowerStateTransitioning;
     }
 
@@ -1228,9 +1234,14 @@ Return Value:
         ASSERT((ParentState == NULL) || (ParentState->ActiveChildren > 1));
 
         PmpDeviceDecrementActiveChildren(Parent);
-    }
+        Status = STATUS_SUCCESS;
 
-    if (Request == DevicePowerRequestResume) {
+    //
+    // Actually ask the driver to resume. The if case above prevents the resume
+    // from being sent if the idle/suspend request never actually got sent.
+    //
+
+    } else if (Request == DevicePowerRequestResume) {
         Irp = State->Irp;
         IoInitializeIrp(Irp);
         Irp->MinorCode = IrpMinorResume;
@@ -1362,12 +1373,19 @@ Return Value:
     State = Device->Power;
 
     //
-    // Exit quickly if there are references now, which there often will be. The
-    // state should be active or about to become active.
+    // If someone else has added a reference AND successfully killed the idle
+    // transition, then exit quickly. (If there's a reference but the idle
+    // transition has not been killed, then this routine will have to cancel
+    // the idle request. This might happen if an add reference zooms through
+    // just before the state is set to transitioning.)
     //
 
     if (State->ReferenceCount != 0) {
-        return;
+        if ((State->State != DevicePowerStateTransitioning) ||
+            (State->Request != DevicePowerRequestIdle)) {
+
+            return;
+        }
     }
 
     DecrementParent = FALSE;
@@ -1378,25 +1396,28 @@ Return Value:
     }
 
     //
-    // Unsignal the event now so that there isn't a window in between
-    // 1) Checking the references here, and
-    // 2) Unsignaling the event
-    // where an add reference call could zoom through, get past the event, and
-    // then get in trouble when this lumbering idle finally rolls through. It
-    // means add reference calls may get stuck briefly while this routine
-    // figures out it's not needed.
-    //
-
-    KeSignalEvent(State->ActiveEvent, SignalOptionUnsignal);
-
-    //
     // Do nothing if it turns out this request was stale.
     //
 
     if ((State->State != DevicePowerStateTransitioning) ||
-        (State->Request != DevicePowerRequestIdle) ||
-        (State->ReferenceCount != 0)) {
+        (State->Request != DevicePowerRequestIdle)) {
 
+        goto DeviceIdleEnd;
+
+    //
+    // A reference might have come in before the state was set to transitioning,
+    // in which case add reference would just exit and continue. Cancel the
+    // transition the way resume was supposed to so the state doesn't get stuck
+    // as transitioning.
+    //
+
+    } else if (State->ReferenceCount != 0) {
+
+        ASSERT(State->PreviousState == DevicePowerStateActive);
+
+        State->State = State->PreviousState;
+        State->Request = DevicePowerRequestNone;
+        KeSignalEvent(State->ActiveEvent, SignalOptionSignalAll);
         goto DeviceIdleEnd;
     }
 
@@ -1499,8 +1520,6 @@ Return Value:
     if (State->State == DevicePowerStateRemoved) {
         goto DeviceSuspendEnd;
     }
-
-    KeSignalEvent(State->ActiveEvent, SignalOptionUnsignal);
 
     //
     // Do nothing if it turns out this request was stale.
