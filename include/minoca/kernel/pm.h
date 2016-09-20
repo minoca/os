@@ -412,7 +412,7 @@ Return Value:
 --*/
 
 KERNEL_API
-KSTATUS
+VOID
 PmDeviceReleaseReference (
     PDEVICE Device
     );
@@ -430,8 +430,7 @@ Arguments:
 
 Return Value:
 
-    Status code indicating if the idle timer was successfully queued. The
-    reference itself is always dropped, even on failure.
+    None.
 
 --*/
 

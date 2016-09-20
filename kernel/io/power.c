@@ -108,6 +108,11 @@ PmpDeviceSuspend (
     PDEVICE Device
     );
 
+VOID
+PmpStartIdleTimer (
+    PDEVICE Device
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -233,7 +238,7 @@ Return Value:
 }
 
 KERNEL_API
-KSTATUS
+VOID
 PmDeviceReleaseReference (
     PDEVICE Device
     )
@@ -251,8 +256,7 @@ Arguments:
 
 Return Value:
 
-    Status code indicating if the idle timer was successfully queued. The
-    reference itself is always dropped, even on failure.
+    None.
 
 --*/
 
@@ -260,17 +264,14 @@ Return Value:
 
     UINTN PreviousCount;
     PDEVICE_POWER State;
-    KSTATUS Status;
-    ULONG TimerQueued;
 
     State = Device->Power;
-    Status = STATUS_SUCCESS;
     PreviousCount = RtlAtomicAdd(&(State->ReferenceCount), -1);
 
     ASSERT((PreviousCount != 0) && (PreviousCount < 0x10000000));
 
     if (PreviousCount > 1) {
-        return Status;
+        return;
     }
 
     //
@@ -279,28 +280,8 @@ Return Value:
     //
 
     State->IdleTimeout = HlQueryTimeCounter() + State->IdleDelay;
-
-    //
-    // Try to win the race to queue the timer.
-    //
-
-    TimerQueued = RtlAtomicCompareExchange32(&(State->TimerQueued), 1, 0);
-    if (TimerQueued == 0) {
-        Status = KeQueueTimer(State->IdleTimer,
-                              TimerQueueSoftWake,
-                              State->IdleTimeout,
-                              0,
-                              0,
-                              State->IdleTimerDpc);
-
-        if (!KSUCCESS(Status)) {
-            RtlDebugPrint("PM: Cannot queue idle timer: device 0x%x: %d\n",
-                          Device,
-                          Status);
-        }
-    }
-
-    return Status;
+    PmpStartIdleTimer(Device);
+    return;
 }
 
 KERNEL_API
@@ -340,21 +321,19 @@ Return Value:
     switch (PowerState) {
     case DevicePowerStateActive:
         if (State->State == DevicePowerStateActive) {
-            Status = STATUS_SUCCESS;
+            break;
+        }
 
-        } else {
+        //
+        // Add a reference on the device to bring it up, then release that
+        // reference to send it down towards sleepytown.
+        //
 
-            //
-            // Add a reference on the device to bring it up, then release that
-            // reference to send it down towards sleepytown.
-            //
+        Status = PmpDeviceAddReference(Device,
+                                       DevicePowerRequestMarkActive);
 
-            Status = PmpDeviceAddReference(Device,
-                                           DevicePowerRequestMarkActive);
-
-            if (KSUCCESS(Status)) {
-                Status = PmDeviceReleaseReference(Device);
-            }
+        if (KSUCCESS(Status)) {
+            PmDeviceReleaseReference(Device);
         }
 
         break;
@@ -783,10 +762,16 @@ Return Value:
     PDEVICE_POWER State;
     KSTATUS Status;
     ULONGLONG Timeout;
-    ULONG TimerQueued;
 
     Device = Parameter;
     State = Device->Power;
+
+    //
+    // The timer is no longer queued. After this, calls to release the final
+    // reference will attempt to requeue the timer.
+    //
+
+    RtlAtomicExchange32(&(State->TimerQueued), 0);
 
     //
     // The timer gets left on a lot, even if it's no longer needed. If there
@@ -794,31 +779,7 @@ Return Value:
     //
 
     if (State->ReferenceCount != 0) {
-        RtlAtomicExchange32(&(State->TimerQueued), 0);
-
-        //
-        // Assuming there are still references, then this is done.
-        //
-
-        if (State->ReferenceCount != 0) {
-            return;
-
-        //
-        // The references went away, but may have lost the race to queue the
-        // timer. Try to reclaim the right to queue the timer. If someone else
-        // got there first, then the timer is requeued and doesn't need
-        // the rest of this routine.
-        //
-
-        } else {
-            TimerQueued = RtlAtomicCompareExchange32(&(State->TimerQueued),
-                                                     1,
-                                                     0);
-
-            if (TimerQueued == 1) {
-                return;
-            }
-        }
+        return;
     }
 
     //
@@ -829,24 +790,13 @@ Return Value:
     CurrentTime = HlQueryTimeCounter();
     Timeout = State->IdleTimeout;
     if (CurrentTime < Timeout) {
-        Status = KeQueueTimer(State->IdleTimer,
-                              TimerQueueSoftWake,
-                              Timeout,
-                              0,
-                              0,
-                              State->IdleTimerDpc);
-
-        if (!KSUCCESS(Status)) {
-            RtlAtomicExchange32(&(State->TimerQueued), 0);
-        }
+        PmpStartIdleTimer(Device);
 
     //
-    // The idle timer really did expire. Reset the timer queued variable, and
-    // queue the idle transition.
+    // The idle timer really did expire. Queue the idle transition.
     //
 
     } else {
-        RtlAtomicExchange32(&(State->TimerQueued), 0);
         Status = PmpDeviceQueuePowerTransition(Device, DevicePowerRequestIdle);
         if (!KSUCCESS(Status)) {
             RtlDebugPrint("PM: Failed to queue idle work: 0x%x %d\n",
@@ -1202,7 +1152,7 @@ Return Value:
 
     //
     // First resume the parent recursively. Always resume the parent, even if
-    // the initiali request was to mark the device active. The parent is not
+    // the initial request was to mark the device active. The parent is not
     // necessarily resumed.
     //
 
@@ -1618,6 +1568,63 @@ DeviceSuspendEnd:
 
     if (DecrementParent != FALSE) {
         PmpDeviceDecrementActiveChildren(Device->ParentDevice);
+    }
+
+    return;
+}
+
+VOID
+PmpStartIdleTimer (
+    PDEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine queues the device's idle timer if it has not already been
+    queued.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PDEVICE_POWER PowerState;
+    KSTATUS Status;
+    ULONG TimerQueued;
+
+    PowerState = Device->Power;
+    if (PowerState->TimerQueued != 0) {
+        return;
+    }
+
+    //
+    // Try to win the race to queue the timer.
+    //
+
+    TimerQueued = RtlAtomicCompareExchange32(&(PowerState->TimerQueued), 1, 0);
+    if (TimerQueued == 0) {
+        Status = KeQueueTimer(PowerState->IdleTimer,
+                              TimerQueueSoftWake,
+                              PowerState->IdleTimeout,
+                              0,
+                              0,
+                              PowerState->IdleTimerDpc);
+
+        if (!KSUCCESS(Status)) {
+            RtlAtomicExchange32(&(PowerState->TimerQueued), 0);
+            RtlDebugPrint("PM: Cannot queue idle timer: device 0x%x: %d\n",
+                          Device,
+                          Status);
+        }
     }
 
     return;
