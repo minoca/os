@@ -121,10 +121,10 @@ FUNCTION(OspSysenterSystemCall)
 ##
 
 OspSysenter:
-    popl    %edx                # Put the return address in EDX for sysenter.
-    movl    8(%esp), %eax       # Move the system call number to EAX.
-    movl    12(%esp), %ebx      # Move the system call parameter to EBX.
-    movl    %esp, %ecx          # ECX contains the return stack pointer.
+    popl    %ebx                # Put the return address in EBX for sysenter.
+    movl    8(%esp), %ecx       # Move the system call number to ECX.
+    movl    12(%esp), %edx      # Move the system call parameter to EDX.
+    movl    %esp, %eax          # EAX contains the return stack pointer.
     sysenter                    # Jump to kernel mode.
 
 END_FUNCTION(OspSysenterSystemCall)

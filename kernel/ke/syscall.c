@@ -315,8 +315,6 @@ Return Value:
 
     PSYSTEM_CALL_TABLE_ENTRY Handler;
     SYSTEM_CALL_PARAMETER_UNION LocalParameters;
-    USHORT OriginalThreadFlags;
-    CYCLE_ACCOUNT PreviousCycleAccount;
     INTN Result;
     KSTATUS Status;
     PKTHREAD Thread;
@@ -326,9 +324,8 @@ Return Value:
     //
 
     Status = STATUS_SUCCESS;
-    PreviousCycleAccount = KeBeginCycleAccounting(CycleAccountKernel);
+    KeBeginCycleAccounting(CycleAccountKernel);
     Thread = KeGetCurrentThread();
-    OriginalThreadFlags = Thread->Flags;
     Thread->Flags |= THREAD_FLAG_IN_SYSTEM_CALL;
     Thread->TrapFrame = TrapFrame;
 
@@ -401,16 +398,11 @@ SystemCallHandlerEnd:
     PsCheckRuntimeTimers(Thread);
 
     //
-    // Return to the previous thread state and cycle account. A restarted
-    // system call can come in on top of the context restore system call after
-    // a signal is handled.
+    // Return to the previous thread state and cycle account.
     //
 
-    if ((OriginalThreadFlags & THREAD_FLAG_IN_SYSTEM_CALL) == 0) {
-        Thread->Flags &= ~THREAD_FLAG_IN_SYSTEM_CALL;
-    }
-
-    KeBeginCycleAccounting(PreviousCycleAccount);
+    Thread->Flags &= ~THREAD_FLAG_IN_SYSTEM_CALL;
+    KeBeginCycleAccounting(CycleAccountUser);
     return Result;
 }
 

@@ -26,12 +26,27 @@ Author:
 
 //
 // This macro determines whether or not a system call is eligible for being
-// restarted.
+// restarted after a signal is dispatched.
 //
 
-#define IS_SYSTEM_CALL_RESTARTABLE(_SystemCallNumber, _SystemCallResult) \
-    (((_SystemCallResult) == STATUS_RESTART_SYSTEM_CALL) &&              \
-     ((_SystemCallNumber) != SystemCallRestoreContext) &&                \
+#define IS_SYSTEM_CALL_RESTARTABLE_AFTER_SIGNAL(_SystemCallNumber, \
+                                                _SystemCallResult) \
+                                                                   \
+    (((_SystemCallResult) == STATUS_RESTART_AFTER_SIGNAL) &&       \
+     ((_SystemCallNumber) != SystemCallRestoreContext) &&          \
+     ((_SystemCallNumber) != SystemCallExecuteImage))
+
+//
+// This macro determines whether or not a signal call is eligible for being
+// restarted if no signal is applied.
+//
+
+#define IS_SYSTEM_CALL_RESTARTABLE_NO_SIGNAL(_SystemCallNumber, \
+                                             _SystemCallResult) \
+                                                                \
+    ((((_SystemCallResult) == STATUS_RESTART_AFTER_SIGNAL) ||   \
+      ((_SystemCallResult) == STATUS_RESTART_NO_SIGNAL))  &&    \
+     ((_SystemCallNumber) != SystemCallRestoreContext) &&       \
      ((_SystemCallNumber) != SystemCallExecuteImage))
 
 //

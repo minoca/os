@@ -856,6 +856,40 @@ Return Value:
 --*/
 
 VOID
+PspArchRestartSystemCall (
+    PTRAP_FRAME TrapFrame,
+    ULONG SystemCallNumber,
+    PVOID SystemCallParameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not a system call needs to be restarted.
+    If so, it modifies the given trap frame such that the system call return
+    to user mode will fall right back into calling the system call.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the full trap frame saved by a system
+        call in order to attempt dispatching a signal.
+
+    SystemCallNumber - Supplies the number of the system call that is
+        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
+        the caller is not a system call.
+
+    SystemCallParameter - Supplies a pointer to the parameters supplied with
+        the system call that is attempting to dispatch a signal. Supply NULL if
+        the caller is not a system call.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
 PspPrepareThreadForFirstRun (
     PKTHREAD Thread,
     PTRAP_FRAME TrapFrame,

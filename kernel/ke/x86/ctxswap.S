@@ -169,7 +169,7 @@ KepContextSwapFirstTime:
 KepContextSwapRestore:
     popl    %eax                    # Pop the magic value.
     cmp     $CONTEXT_SWAP_MAGIC, %eax   # Compare.
-    jne      KepContextSwapBadMagic # Jump out of line if it's bad.
+    jne     KepContextSwapBadMagic  # Jump out of line if it's bad.
 
 KepContextSwapReturn:
     popfl                           # Restore registers.

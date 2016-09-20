@@ -132,7 +132,8 @@ Author:
 #define STATUS_DOMAIN_ERROR               (LONG)-109
 #define STATUS_MEDIA_CHANGED              (LONG)-110
 #define STATUS_DEADLOCK                   (LONG)-111
-#define STATUS_RESTART_SYSTEM_CALL        (LONG)-112
+#define STATUS_RESTART_AFTER_SIGNAL       (LONG)-112
+#define STATUS_RESTART_NO_SIGNAL          (LONG)-113
 
 //
 // ------------------------------------------------------ Data Type Definitions

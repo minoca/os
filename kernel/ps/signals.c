@@ -857,7 +857,7 @@ Return Value:
         //
 
         if (Thread->SignalPending == ThreadSignalPending) {
-            Status = STATUS_INTERRUPTED;
+            Status = STATUS_RESTART_AFTER_SIGNAL;
             break;
         }
     }
@@ -1540,10 +1540,9 @@ Return Value:
 
 BOOL
 PsDispatchPendingSignalsOnCurrentThread (
-    INTN SystemCallResult,
+    PTRAP_FRAME TrapFrame,
     ULONG SystemCallNumber,
-    PVOID SystemCallParameter,
-    PTRAP_FRAME TrapFrame
+    PVOID SystemCallParameter
     )
 
 /*++
@@ -1555,20 +1554,16 @@ Routine Description:
 
 Arguments:
 
-    SystemCallResult - Supplies the result of the system call that is
-        attempting to dispatch a pending signal. This is only valid if the
-        system call number is valid.
-
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters of the system
-        call that is attempting to dispatch a pending signal. This is a pointer
-        to user mode. This is only valid if the system call number if valid.
-
     TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
         is not destined for user mode, this function exits immediately.
+
+    SystemCallNumber - Supplies the number of the system call that is
+        attempting to dispatch a pending signal. Supply SystemCallInvalid if
+        the caller is not a system call.
+
+    SystemCallParameter - Supplies a pointer to the parameters supplied with
+        the system call that is attempting to dispatch a signal. Supply NULL if
+        the caller is not a system call.
 
 Return Value:
 
@@ -1595,20 +1590,26 @@ Return Value:
         Applied = TRUE;
         PsApplySynchronousSignal(TrapFrame,
                                  &SignalParameters,
-                                 SystemCallResult,
-                                 SystemCallParameter,
-                                 SystemCallNumber);
+                                 SystemCallNumber,
+                                 SystemCallParameter);
     }
 
     //
-    // If a signal did not get applied, restore the signal mask if necessary.
+    // If a signal did not get applied, restore the signal mask if necessary
+    // and potentially restart the system call.
     //
 
-    if (Applied == FALSE) {
-        Thread = KeGetCurrentThread();
-        if ((Thread->Flags & THREAD_FLAG_RESTORE_SIGNALS) != 0) {
-            Thread->Flags &= ~THREAD_FLAG_RESTORE_SIGNALS;
-            PsSetSignalMask(&(Thread->RestoreSignals), NULL);
+    if (SystemCallNumber != SystemCallInvalid) {
+        if (Applied == FALSE) {
+            Thread = KeGetCurrentThread();
+            if ((Thread->Flags & THREAD_FLAG_RESTORE_SIGNALS) != 0) {
+                Thread->Flags &= ~THREAD_FLAG_RESTORE_SIGNALS;
+                PsSetSignalMask(&(Thread->RestoreSignals), NULL);
+            }
+
+            PspArchRestartSystemCall(TrapFrame,
+                                     SystemCallNumber,
+                                     SystemCallParameter);
         }
     }
 

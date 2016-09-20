@@ -48,6 +48,8 @@ Environment:
 
 #define X86_SYSENTER_INSTRUCTION 0x340F
 #define X86_SYSENTER_INSTRUCTION_LENGTH 2
+#define X86_INT_INSTRUCTION_LENGTH 2
+#define X86_CALL_INSTRUCTION_LENGTH 5
 
 //
 // Define an intial value for the thread pointer, which is a valid user mode
@@ -141,9 +143,8 @@ VOID
 PsApplySynchronousSignal (
     PTRAP_FRAME TrapFrame,
     PSIGNAL_PARAMETERS SignalParameters,
-    INTN SystemCallResult,
-    PVOID SystemCallParameter,
-    ULONG SystemCallNumber
+    ULONG SystemCallNumber,
+    PVOID SystemCallParameter
     )
 
 /*++
@@ -161,16 +162,12 @@ Arguments:
 
     SignalParameters - Supplies a pointer to the signal information to apply.
 
-    SystemCallResult - Supplies the result of the system call that is
-        attempting to dispatch a pending signal. This is only valid if the
-        system call number is valid.
-
-    SystemCallParameter - Supplies a pointer to the parameters of the system
-        call that is attempting to dispatch a pending signal. This is a pointer
-        to user mode. This is only valid if the system call number if valid.
-
     SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
+        attempting to dispatch a pending signal. Supply SystemCallInvalid if
+        the caller is not a system call.
+
+    SystemCallParameter - Supplies a pointer to the parameters supplied with
+        the system call that is attempting to dispatch a signal. Supply NULL if
         the caller is not a system call.
 
 Return Value:
@@ -184,6 +181,7 @@ Return Value:
     PSIGNAL_CONTEXT_X86 Context;
     UINTN ContextSp;
     ULONG Flags;
+    BOOL Restart;
     PSIGNAL_SET RestoreSignals;
     BOOL Result;
     KSTATUS Status;
@@ -230,39 +228,43 @@ Return Value:
     }
 
     //
-    // If this signal is being applied in the middle of a system call, preserve
-    // the system call's return value.
+    // If this signal is being applied in the middle of a system call, EAX
+    // holds the return value.
     //
 
     if (SystemCallNumber != SystemCallInvalid) {
 
         //
         // If the result indicates that the system call is restartable, then
-        // let user mode know by setting the restart flag in the context and
-        // save the system call number and parameters in volatile registers.
-        // This should not be done for restore context or execute image, as
-        // their result values are unsigned and may overlap with the restart
-        // system call status. Convert the system call restart return value
-        // into an interrupted status in case the signal call handler does not
-        // allow restarting.
+        // let user mode know by setting the restart flag in the context. This
+        // should not be done for restore context or execute image, as their
+        // result values are unsigned and may overlap with the restart system
+        // call status. And in case the restart does not happen, update the
+        // system call result to an interrupted status.
         //
 
-        if (IS_SYSTEM_CALL_RESTARTABLE(SystemCallNumber, SystemCallResult)) {
-            Result &= MmUserWrite(&(Context->TrapFrame.Eax),
-                                  STATUS_INTERRUPTED);
+        Restart = IS_SYSTEM_CALL_RESTARTABLE_AFTER_SIGNAL(SystemCallNumber,
+                                                          (INTN)TrapFrame->Eax);
 
-            Result &= MmUserWrite(&(Context->TrapFrame.Ecx), SystemCallNumber);
-            Result &= MmUserWrite(&(Context->TrapFrame.Edx),
-                                  (UINTN)SystemCallParameter);
+        if (Restart != FALSE) {
+            MmUserWrite(&(Context->TrapFrame.Eax), STATUS_INTERRUPTED);
+
+            //
+            // If the trap frame is complete, then it came from a full system
+            // call and the restart only backs up over the INT instruction. ECX
+            // needs to hold the system call number and EDX needs to hold the
+            // parameters.
+            //
+
+            if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
+                MmUserWrite(&(Context->TrapFrame.Ecx),
+                            SystemCallNumber);
+
+                MmUserWrite(&(Context->TrapFrame.Edx),
+                            (UINTN)SystemCallParameter);
+            }
 
             Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
-
-        //
-        // Otherwise just preserve the system call result.
-        //
-
-        } else {
-            MmUserWrite(&(Context->TrapFrame.Eax), SystemCallResult);
         }
     }
 
@@ -278,11 +280,9 @@ Return Value:
                               TrapFrame,
                               Thread->OwningProcess);
 
-        PsDispatchPendingSignalsOnCurrentThread(SystemCallResult,
+        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
                                                 SystemCallNumber,
-                                                SystemCallParameter,
-                                                TrapFrame);
-
+                                                SystemCallParameter);
     }
 
     TrapFrame->Eip = (ULONG)(Thread->OwningProcess->SignalHandlerRoutine);
@@ -322,13 +322,11 @@ Return Value:
     ULONG Eflags;
     ULONG Flags;
     TRAP_FRAME Frame;
-    INTN Result;
     SIGNAL_SET SignalMask;
     KSTATUS Status;
     PKTHREAD Thread;
 
     Context = (PSIGNAL_CONTEXT_X86)UserContext;
-    Result = 0;
     Thread = KeGetCurrentThread();
     Status = MmCopyFromUserMode(&Frame,
                                 &(Context->TrapFrame),
@@ -349,24 +347,14 @@ Return Value:
     PsSetSignalMask(&SignalMask, NULL);
 
     //
-    // TODO: Restore the whole trap frame when the system call handler can do
-    // a complete trap frame save.
+    // Sanitize EFLAGS, ES, and DS. Then copy the whole trap frame.
     //
 
     Eflags = TrapFrame->Eflags & ~IA32_EFLAG_USER;
     Frame.Eflags = (Frame.Eflags & IA32_EFLAG_USER) | Eflags;
     Frame.Ds = USER_DS;
     Frame.Es = USER_DS;
-    Result = Frame.Eax;
-    TrapFrame->Eax = Frame.Eax;
-    TrapFrame->Ecx = Frame.Ecx;
-    TrapFrame->Edx = Frame.Edx;
-    TrapFrame->Eip = Frame.Eip;
-    if (ArIsTrapFrameComplete(&Frame)) {
-        TrapFrame->Eflags = Frame.Eflags;
-    }
-
-    TrapFrame->Esp = Frame.Esp;
+    RtlCopyMemory(TrapFrame, &Frame, sizeof(TRAP_FRAME));
     if (((Flags & SIGNAL_CONTEXT_FLAG_FPU_VALID) != 0) &&
         (Thread->FpuContext != NULL)) {
 
@@ -386,24 +374,130 @@ Return Value:
     }
 
     //
-    // If the signal context indicates that a restart is necessary, then fire
-    // off the system call again. The trap frame must be restored before the
-    // restart or else the context saved on application of another signal would
-    // cause the next restore to return to the signal handler.
+    // If the signal context indicates that a system call restart is necessary,
+    // then back up EIP so that the system call gets executed again when the
+    // signal handler gets restored. An "incomplete" trap frame indicates that
+    // sysenter was used for the system call, even though the trap frame was
+    // filled out before dispatching the signal.
     //
 
     if ((Flags & SIGNAL_CONTEXT_FLAG_RESTART) != 0) {
-        Result = KeSystemCallHandler(TrapFrame->Ecx,
-                                     (PVOID)TrapFrame->Edx,
-                                     TrapFrame);
+
+        //
+        // If the saved trap frame was from a full system call, then ECX and
+        // EDX were filled with the system call number and system call
+        // parameter when the context was saved. Only back up over the INT
+        // instruction.
+        //
+
+        if (ArIsTrapFrameComplete(&Frame)) {
+            TrapFrame->Eip -= X86_INT_INSTRUCTION_LENGTH;
+
+        //
+        // Otherwise EIP points to the instruction after the dummy call to
+        // OspSysenter. Back up over that, which will replay setting up the
+        // arguments for sysenter.
+        //
+
+        } else {
+            TrapFrame->Eip -= X86_CALL_INSTRUCTION_LENGTH;
+        }
     }
+
+    //
+    // Force the trap frame to user CS. It may have held user DS for CS to
+    // indicate an incomplete trap frame.
+    //
+
+    TrapFrame->Cs = USER_CS;
 
 RestorePreSignalTrapFrameEnd:
     if (!KSUCCESS(Status)) {
         PsSignalThread(Thread, SIGNAL_ACCESS_VIOLATION, NULL, TRUE);
     }
 
-    return Result;
+    //
+    // Preserve EAX by returning it. The system call assembly return path
+    // guarantees this.
+    //
+
+    return (INTN)TrapFrame->Eax;
+}
+
+VOID
+PspArchRestartSystemCall (
+    PTRAP_FRAME TrapFrame,
+    ULONG SystemCallNumber,
+    PVOID SystemCallParameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not a system call needs to be restarted.
+    If so, it modifies the given trap frame such that the system call return
+    to user mode will fall right back into calling the system call.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the full trap frame saved by a system
+        call in order to attempt dispatching a signal.
+
+    SystemCallNumber - Supplies the number of the system call that is
+        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
+        the caller is not a system call.
+
+    SystemCallParameter - Supplies a pointer to the parameters supplied with
+        the system call that is attempting to dispatch a signal. Supply NULL if
+        the caller is not a system call.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    BOOL Restart;
+
+    //
+    // On x86, the trap frame holds the system call return value in EAX. Check
+    // to see if the system call can be restarted. If not, exit.
+    //
+
+    Restart = IS_SYSTEM_CALL_RESTARTABLE_NO_SIGNAL(SystemCallNumber,
+                                                   (INTN)TrapFrame->Eax);
+
+    if (Restart == FALSE) {
+        return;
+    }
+
+    //
+    // This system call needs to be restarted; back up the EIP. The trap frame
+    // is actually complete, but CS still indicates whether the system call was
+    // full or not. This matters when backing up the EIP. A "complete" trap
+    // frame came from a full system call and only needs to back up over the
+    // INT instruction.
+    //
+
+    if (ArIsTrapFrameComplete(TrapFrame)) {
+        TrapFrame->Ecx = SystemCallNumber;
+        TrapFrame->Edx = (ULONG)(UINTN)SystemCallParameter;
+        TrapFrame->Eip -= X86_INT_INSTRUCTION_LENGTH;
+
+    //
+    // An "incomplete" trap frame came from sysenter. EIP points to the
+    // instruction after the dummy call to OspSysenter. Back up over that,
+    // which will replay setting up the arguments for sysenter.
+    //
+
+    } else {
+        TrapFrame->Eip -= X86_CALL_INSTRUCTION_LENGTH;
+    }
+
+    return;
 }
 
 VOID
@@ -612,6 +706,10 @@ Return Value:
         Thread->FpuFlags &= ~(THREAD_FPU_FLAG_IN_USE | THREAD_FPU_FLAG_OWNER);
         ArDisableFpu();
     }
+
+    //
+    // Return 0 as this will make its way to EAX when the system call returns.
+    //
 
     return 0;
 }

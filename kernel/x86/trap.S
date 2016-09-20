@@ -461,12 +461,28 @@ Return Value:
 --*/
 
 FUNCTION(ArTrapSystemCallHandlerAsm)
+
+    ##
+    ## ESP is currently pointing at the processor double fault stack, which
+    ## is also the main TSS. Switch to the thread stack.
+    ##
+
+    movl    TSS_ESP0(%esp), %esp    # Load the stack.
+    sti                             # Re-enable interrupts.
+
+    ##
+    ## Fake a user mode exception by pushing SS, Esp, Eflags, CS and Eip.
+    ##
+
+    pushl   $USER_DS                # Push user mode SS.
+    pushl   %eax                    # Push user ESP supplied by sysenter.
+    pushfl                          # Push the Eflags.
+    pushl   $USER_CS                # Push user CS.
+    pushl   %ebx                    # Push return address supplied by sysenter.
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
-    orl     $IA32_EFLAG_TF, TRAP_EFLAGS(%esp)   # Set the trap flag.
-    movl    TRAP_EAX(%esp), %ecx    # Sysenter's syscall number was in eax.
-    movl    TRAP_EBX(%esp), %edx    # Sysenter's parameter was in ebx.
-    jmp     ArSystemCallHandlerAfterTrapSave    # Go to the regular path.
+    orl     $IA32_EFLAG_TF, TRAP_EFLAGS(%ebx) # Set the trap flag.
+    jmp     ArSystemCallHandlerAfterTrapSave  # Go to the regular path.
 
 END_FUNCTION(ArTrapSystemCallHandlerAsm)
 
@@ -506,33 +522,56 @@ Return Value:
 FUNCTION(ArSystemCallHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+
+ArSystemCallHandlerAfterTrapSave:
     mov     TRAP_ECX(%ebx), %ecx    # Get ecx, containing the call number.
     mov     TRAP_EDX(%ebx), %edx    # Get edx, containing the parameter.
 
-ArSystemCallHandlerAfterTrapSave:
+    ##
+    ## Dispatching the signal takes the system call number, system call
+    ## parameter and trap frame as arguments. This means that the system call
+    ## number and parameter need to be saved across the call to
+    ## KeSystemCallHandler.
+    ##
+
+    pushl   %edx                    # Push system call parameter for dispatch.
+    pushl   %ecx                    # Push system call number for dispatch.
+
+    ##
+    ## Push the parameters for the system call handler. The compiler is free to
+    ## modify the parameters on the stack in the callee, so this second push is
+    ## necessary.
+    ##
+
     pushl   %ebx                    # Push a pointer to the trap frame.
     pushl   %edx                    # Push system call parameter.
     pushl   %ecx                    # Push system call number.
     call    KeSystemCallHandler     # Call the main exception handler.
+    addl    $0xC, %esp              # Pop the parameters.
     movl    %eax, TRAP_EAX(%ebx)    # Save the return value in the trap frame.
 
     ##
     ## If a signal is pending, then go attempt to dispatch it as the trap frame
-    ## is already complete. Keep the parameters on the stack, as the dispatch
-    ## routine takes them in the same order.
+    ## is already complete.
     ##
 
     movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
     cmpl    $ThreadNoSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
-    jz      ArSystemCallHandlerExit # Jump to end if no signals are pending.
-    pushl   %eax                    # Push system call result.
+    jz      ArSystemCallHandlerExit
+
+    ##
+    ## Push the trap frame as the first parameter. The system call number and
+    ## system call paramter were saved on the stack earlier for this call.
+    ##
+
+    pushl   %ebx                    # Push trap frame.
     call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
-    addl    $0x4, %esp              # Pop the parameter.
+    addl    $0x4, %esp              # Pop the trap frame.
 
 ArSystemCallHandlerExit:
-    addl    $0xc, %esp              # Pop the parameters.
+    addl    $0x8, %esp              # Pop the system call number and parameter.
     call    ArRestoreTrapFrame      # Restore the trap frame
-    addl    $4, %esp                # Pop the error code.
+    addl    $0x4, %esp              # Pop the error code.
     iret                            # Return from the exception.
 
 END_FUNCTION(ArSystemCallHandlerAsm)
@@ -567,11 +606,10 @@ FUNCTION(ArSysenterHandlerAsm)
 
     ##
     ## ESP is currently pointing at the processor double fault stack, which
-    ## pointed up is also the main TSS. Switch to the thread stack.
+    ## is also the main TSS. Switch to the thread stack.
     ##
 
     movl    TSS_ESP0(%esp), %esp    # Load the stack.
-    subl    $24, %esp               # Make room for possible (unusual) iret.
 
     ##
     ## Make a fake trap frame but fill in the bare minimum: Eip and Esp.
@@ -580,23 +618,39 @@ FUNCTION(ArSysenterHandlerAsm)
     ## from user or kernel mode.
     ##
 
-    pushl   %ecx                    # Save user ESP in trap frame.
-    movl    %eax, %ecx              # Get EAX free.
+    pushl   %eax                    # Save user ESP in trap frame.
     LoadKernelDataSegments          # Load kernel data segments (using EAX).
     sti                             # Re-enable interrupts.
     subl    $(TRAP_FRAME_SIZE - 4), %esp  # Allocate most of trap frame.
-    movl    %edx, TRAP_EIP(%esp)    # EDX contains the return address.
+    movl    %ebx, TRAP_EIP(%esp)    # EDX contains the return address.
+    movl    %esp, %ebx              # Save the trap frame in EBX.
 
     ##
     ## Move user DS (rather than user CS) into the trap frame to indicate
     ## 1) this is a user mode trap frame and 2) it's incomplete.
     ##
 
-    movl    $USER_DS, TRAP_CS(%esp) # Indicate a user mode trap frame.
-    pushl   %esp                    # Push a pointer to the sort-of trap frame.
-    pushl   %ebx                    # Push EBX, the system call parameter.
-    pushl   %ecx                    # Push saved EAX, the system call number.
+    movl    $USER_DS, TRAP_CS(%ebx) # Indicate a user mode trap frame.
+
+    ##
+    ## Dispatching the signal takes the system call number, system call
+    ## parameter and trap frame as arguments. This means that the system call
+    ## number and parameter need to be saved across the call to
+    ## KeSystemCallHandler.
+    ##
+
+    pushl   %edx                    # Push system call parameter for dispatch.
+    pushl   %ecx                    # Push system call number for dispatch.
+
+    ##
+    ## Push the paramters for the system call handler and execute it.
+    ##
+
+    pushl   %ebx                    # Push a pointer to the sort-of trap frame.
+    pushl   %edx                    # Push EDX, the system call parameter.
+    pushl   %ecx                    # Push saved ECX, the system call number.
     call    KeSystemCallHandler     # Call out to the main service handler.
+    addl    $0xC, %esp              # Pop the system call parameter.
 
     ##
     ## If a signal is pending, then save the full trap frame and attempt to
@@ -610,53 +664,48 @@ FUNCTION(ArSysenterHandlerAsm)
     jz      ArSysenterHandlerFastRestore  # Exit via the fast restore path.
 
     ##
-    ## Save the default user mode segment selectors.
+    ## Save the default user mode segment selectors. Keep CS set to USER_DS so
+    ## that the restart code knows that this trap frame came from sysenter. EIP
+    ## gets backed up a different amount for sysenter vs int.
     ##
 
-    movl    $USER_DS, TRAP_DS+12(%esp)    # Save DS.
-    movl    $USER_DS, TRAP_ES+12(%esp)    # Save ES.
-    movl    $GDT_THREAD, TRAP_FS+12(%esp) # Save FS.
-    movl    $GDT_THREAD, TRAP_GS+12(%esp) # Save GS.
-    movl    $USER_DS, TRAP_SS+12(%esp)    # Save SS.
+    movl    $USER_DS, TRAP_DS(%ebx)    # Save DS.
+    movl    $USER_DS, TRAP_ES(%ebx)    # Save ES.
+    movl    $GDT_THREAD, TRAP_FS(%ebx) # Save FS.
+    movl    $GDT_THREAD, TRAP_GS(%ebx) # Save GS.
+    movl    $USER_DS, TRAP_SS(%ebx)    # Save SS.
 
     ##
     ## Save the registers.
     ##
 
-    movl    %eax, TRAP_EAX+12(%esp) # Save the return value in the trap frame.
-    movl    %ebx, TRAP_EBX+12(%esp) # Save EBX. It is non-volatile.
-    movl    $0x0, TRAP_ECX+12(%esp) # Zero ECX. It is volatile.
-    movl    $0x0, TRAP_EDX+12(%esp) # Zero EDX. It is volatile.
-    movl    %esi, TRAP_ESI+12(%esp) # Save ESI. It is non-volatile.
-    movl    %edi, TRAP_EDI+12(%esp) # Save EDI. It is non-volatile.
-    movl    %ebp, TRAP_EBP+12(%esp) # Save EBP. It is non-volatile.
-    movl    $0x0, TRAP_ERRORCODE+12(%esp) # Scrub the error code.
-    movl    $0x0, TRAP_EFLAGS+12(%esp) # Scrub the EFLAGS.
+    movl    %eax, TRAP_EAX(%ebx) # Save the return value in the trap frame.
+    movl    $0x0, TRAP_EBX(%ebx) # Zero EBX. It holds the kernel trap pointer.
+    movl    $0x0, TRAP_ECX(%ebx) # Zero ECX. It is volatile.
+    movl    $0x0, TRAP_EDX(%ebx) # Zero EDX. It is volatile.
+    movl    %esi, TRAP_ESI(%ebx) # Save ESI. It is non-volatile.
+    movl    %edi, TRAP_EDI(%ebx) # Save EDI. It is non-volatile.
+    movl    %ebp, TRAP_EBP(%ebx) # Save EBP. It is non-volatile.
+    movl    $0x0, TRAP_ERRORCODE(%ebx) # Scrub the error code.
+    movl    $0x0, TRAP_EFLAGS(%ebx) # Scrub the EFLAGS.
 
     ##
-    ## Fix up CS, now that the trap frame is complete. It used to be user DS.
+    ## Push the trap frame as the first parameter. The system call number and
+    ## system call paramter were saved on the stack earlier for this call.
     ##
 
-    movl    $USER_CS, TRAP_CS+12(%esp)
-
-    ##
-    ## Call the signal dispatch routine. Only the system call result needs to
-    ## be pushed on the stack, as the other parameters are still there.
-    ##
-
-    pushl   %eax                    # Push system call result.
+    pushl   %ebx                    # Pass the trap frame.
     call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
-    addl    $0x4, %esp              # Pop the system call result.
+    addl    $0x4, %esp              # Pop the system call number.
 
     ##
     ## Restore the non-volatile registers in case they were modified by the
     ## trap frame.
     ##
 
-    movl    TRAP_EBX+12(%esp), %ebx
-    movl    TRAP_ESI+12(%esp), %esi
-    movl    TRAP_EDI+12(%esp), %edi
-    movl    TRAP_EBP+12(%esp), %ebp
+    movl    TRAP_ESI(%ebx), %esi
+    movl    TRAP_EDI(%ebx), %edi
+    movl    TRAP_EBP(%ebx), %ebp
 
     ##
     ## Restore EAX in case the return value was modified. The other volitiles
@@ -664,20 +713,26 @@ FUNCTION(ArSysenterHandlerAsm)
     ## instruction pointer.
     ##
 
-    movl    TRAP_EAX+12(%esp), %eax
+    movl    TRAP_EAX(%ebx), %eax
 
     ##
     ## Restore the segment registers. SS and CS are restored by sysexit.
     ##
 
-    movl    TRAP_DS+12(%esp), %ecx  # Restore DS.
-    movw    %cx, %ds                #
-    movl    TRAP_ES+12(%esp), %ecx  # Restore ES.
-    movw    %cx, %es                #
-    movl    TRAP_FS+12(%esp), %ecx  # Restore FS.
-    movw    %cx, %fs                #
-    movl    TRAP_GS+12(%esp), %ecx  # Restore GS.
-    movw    %cx, %gs                #
+    movl    TRAP_DS(%ebx), %ecx  # Restore DS.
+    movw    %cx, %ds             #
+    movl    TRAP_ES(%ebx), %ecx  # Restore ES.
+    movw    %cx, %es             #
+    movl    TRAP_FS(%ebx), %ecx  # Restore FS.
+    movw    %cx, %fs             #
+    movl    TRAP_GS(%ebx), %ecx  # Restore GS.
+    movw    %cx, %gs             #
+
+    ##
+    ## Finally restore EBX, which held the trap frame pointer.
+    ##
+
+    movl    TRAP_EBX(%ebx), %ebx
     jmp     ArSysenterHandlerExit
 
     ##
@@ -693,7 +748,7 @@ ArSysenterHandlerFastRestore:
     mov     %cx, %gs                # Move to GS.
 
 ArSysenterHandlerExit:
-    addl    $0xC, %esp              # Pop the parameters.
+    addl    $0x8, %esp              # Pop the system call number and parameter.
 
     ##
     ## Restore some portions of the pseudo trap frame. Do not zero EAX as it
@@ -871,8 +926,8 @@ RestoreTrapFrameToKernelMode:
     movw    %ax, %ss                 # to the current stack, this will be bad.
 
 ##
-## Build the iret return on the value The parameters going on the new stack are
-## Ebx, Return Address, Error Code, Eip, CS, and Eflags.
+## Build the iret return. The parameters going on the new stack are Ebx, Return
+## Address, Error Code, Eip, CS, and Eflags.
 ##
 ## Note that if the stack pointer doesn't change, the Ebx and Return address
 ## values destroy data that was on the stack there (immediately after the
