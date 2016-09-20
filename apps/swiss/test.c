@@ -268,7 +268,7 @@ PSTR TestOperatorStrings[] = {
     "-u",
     "-w",
     "-x",
-    "-fe",
+    "-ef",
     "-nt",
     "-ot",
     NULL,
@@ -1181,7 +1181,7 @@ Return Value:
         return TestFileCanExecute;
     }
 
-    if (strcmp(String, "fe") == 0) {
+    if (strcmp(String, "ef") == 0) {
         return TestFileEqual;
     }
 
