@@ -351,7 +351,9 @@ Return Value:
 
     if (IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(TrapFrame) == FALSE) {
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
-        ArEnableInterrupts();
+
+        ASSERT(ArAreInterruptsEnabled() != FALSE);
+
         Thread = KeGetCurrentThread();
         PsSignalThread(Thread, SIGNAL_MATH_ERROR, NULL, TRUE);
         PsCheckRuntimeTimers(Thread);
