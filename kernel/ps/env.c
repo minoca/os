@@ -825,6 +825,7 @@ Return Value:
 
     StartData->ExecutableBase = Executable->LoadedImageBuffer;
     StartData->OsLibraryBase = OsBaseLibrary->LoadedImageBuffer;
+    StartData->StackBase = NULL;
     return;
 }
 

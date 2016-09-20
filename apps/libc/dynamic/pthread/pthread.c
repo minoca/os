@@ -1003,6 +1003,7 @@ Return Value:
 
 {
 
+    PPROCESS_ENVIRONMENT Environment;
     int Error;
     struct rlimit Limit;
     int OldError;
@@ -1026,6 +1027,10 @@ Return Value:
         }
 
         Thread->Attribute.StackSize = Limit.rlim_cur;
+        if (Thread->Attribute.StackBase == NULL) {
+            Environment = OsGetCurrentEnvironment();
+            Thread->Attribute.StackBase = Environment->StartData->StackBase;
+        }
     }
 
     memcpy(Attribute, &(Thread->Attribute), sizeof(PTHREAD_ATTRIBUTE));

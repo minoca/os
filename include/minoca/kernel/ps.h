@@ -485,7 +485,7 @@ Author:
 // Define the current version of the process start data structure.
 //
 
-#define PROCESS_START_DATA_VERSION 1
+#define PROCESS_START_DATA_VERSION 2
 
 //
 // Define the number of random bytes of data supplied to new processes.
@@ -742,6 +742,8 @@ Members:
     EntryPoint - Stores the initial entry point, either into the interpreter
         if there was one or into the executable if not.
 
+    StackBase - Stores the base of the stack.
+
 --*/
 
 typedef struct _PROCESS_START_DATA {
@@ -753,6 +755,7 @@ typedef struct _PROCESS_START_DATA {
     PVOID OsLibraryBase;
     PVOID ExecutableBase;
     PVOID EntryPoint;
+    PVOID StackBase;
 } PROCESS_START_DATA, *PPROCESS_START_DATA;
 
 /*++

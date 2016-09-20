@@ -300,6 +300,9 @@ Return Value:
 
         if (Parameters->Environment != NULL) {
             ParameterIsStack = TRUE;
+            Parameters->Environment->StartData->StackBase =
+                                                          NewThread->UserStack;
+
             Status = PsCopyEnvironment(Parameters->Environment,
                                        &UserEnvironment,
                                        FALSE,
@@ -1184,6 +1187,7 @@ Return Value:
 
 {
 
+    PPROCESS_ENVIRONMENT Environment;
     KSTATUS Status;
     PPROCESS_ENVIRONMENT UserEnvironment;
 
@@ -1203,11 +1207,9 @@ Return Value:
     }
 
     Thread->ThreadParameter = NULL;
-    Status = PsCopyEnvironment(Thread->OwningProcess->Environment,
-                               &UserEnvironment,
-                               FALSE,
-                               Thread);
-
+    Environment = Thread->OwningProcess->Environment;
+    Environment->StartData->StackBase = Thread->UserStack;
+    Status = PsCopyEnvironment(Environment, &UserEnvironment, FALSE, Thread);
     if (!KSUCCESS(Status)) {
         goto CreateThreadEnd;
     }
