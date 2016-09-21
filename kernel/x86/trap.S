@@ -556,8 +556,8 @@ ArSystemCallHandlerAfterTrapSave:
     ##
 
     movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
-    cmpl    $ThreadNoSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
-    jz      ArSystemCallHandlerExit
+    cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
+    jnz     ArSystemCallHandlerExit
 
     ##
     ## Push the trap frame as the first parameter. The system call number and
@@ -660,8 +660,8 @@ FUNCTION(ArSysenterHandlerAsm)
     ##
 
     movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
-    cmpl    $ThreadNoSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
-    jz      ArSysenterHandlerFastRestore  # Exit via the fast restore path.
+    cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
+    jnz     ArSysenterHandlerFastRestore # Exit via the fast restore path.
 
     ##
     ## Save the default user mode segment selectors. Update user CS as the trap

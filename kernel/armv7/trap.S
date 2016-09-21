@@ -250,7 +250,8 @@ FUNCTION ArpSoftwareInterruptEntry
     eor     %r3, %r3                            @ Scrub volatile R3.
     eor     %r12, %r12                          @ Scrub volatile R12.
     ldr     %r1, [%r1, #THREAD_SIGNAL_PENDING]  @ Load signal pending status.
-    cbnz    %r1, ArpSoftwareInterruptFastSignal @ Jump to dispatch signal.
+    cmp     %r1, #ThreadSignalPending           @ Compare to signal pending.
+    beq     ArpSoftwareInterruptFastSignal      @ Jump to dispatch signal.
 
     ##
     ## Restore the user mode stack and link registers. Do not restore or
@@ -293,6 +294,14 @@ ArpSoftwareInterruptFastSignal:
     add     %r0, %sp, #(TRAP_PC + 8)            @ Get location after SVC LR.
     stmdb   %r0!, {%r1-%r12, %lr}               @ Push registers and CPSR.
     str     %sp, [%sp, #8]                      @ Save SP.
+
+    ##
+    ## Jump down to the slow signal path which starts an IT block. The compare
+    ## that dropped the fast path to dispatch a signal should have set the zero
+    ## flag and none of the instructions above should have changed the flags,
+    ## making the IT block safe to jump to.
+    ##
+
     b       ArpSoftwareInterruptSlowSignal
 
     ##
@@ -342,7 +351,7 @@ ArpSoftwareInterruptEntrySlow:
 
     ARM_GET_CURRENT_THREAD                       @ Get current thread in R1.
     ldr     %r1, [%r1, #THREAD_SIGNAL_PENDING]   @ Load signal pending status.
-    cbz     %r1, ArpSoftwareInterruptEntrySlowEnd @ Skip signal dispatch.
+    cmp     %r1, #ThreadSignalPending            @ Compare to signal pending.
 
 ArpSoftwareInterruptSlowSignal:
 
@@ -351,10 +360,11 @@ ArpSoftwareInterruptSlowSignal:
     ## system call parameter.
     ##
 
-    ldr     %r2, [%sp, #4]
-    ldr     %r1, [%sp]
-    add     %r0, %sp, #8
-    bl      PsDispatchPendingSignalsOnCurrentThread
+    ITTTT   EQ                                   @ If the zero flag is set...
+    ldreq   %r2, [%sp, #4]                       @ Get system call parameter.
+    ldreq   %r1, [%sp]                           @ Get system call number.
+    addeq   %r0, %sp, #8                         @ Get trap frame.
+    bleq    PsDispatchPendingSignalsOnCurrentThread @ Dispatch signal.
 
     ##
     ## A slow exit or an exit from a signal dispatch restores the full trap

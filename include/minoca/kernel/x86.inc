@@ -147,7 +147,7 @@ Environment:
 ## Define the thread signal pending state options.
 ##
 
-#define ThreadNoSignalPending 0
+#define ThreadSignalPending 2
 
 ##
 ## Define the minimum and maximum external interrupt vectors.

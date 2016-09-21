@@ -1679,7 +1679,7 @@ Return Value:
 
     BlockedSignals = BlockedSignalsOverride;
     if (BlockedSignals == NULL) {
-        if (Thread->SignalPending == ThreadNoSignalPending) {
+        if (Thread->SignalPending != ThreadSignalPending) {
             return -1;
         }
 
@@ -2266,7 +2266,7 @@ Return Value:
     // making sure other threads are awake to handle process-wide signals.
     //
 
-    if (CurrentThread->SignalPending == ThreadNoSignalPending) {
+    if (CurrentThread->SignalPending != ThreadSignalPending) {
         return;
     }
 

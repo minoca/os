@@ -210,6 +210,12 @@ Environment:
 #define THREAD_SIGNAL_PENDING 84
 
 ##
+## Define the thread signal pending state options.
+##
+
+#define ThreadSignalPending 2
+
+##
 ## Define the instructions for DSB/ISB, which are different in ARMv6 vs ARMv7.
 ##
 
