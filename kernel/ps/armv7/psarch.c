@@ -784,28 +784,53 @@ Return Value:
         Break->InstructionPointer |= ARM_THUMB_BIT;
     }
 
+    //
+    // Be careful. A trap frame that resulted from a fast system call
+    // (before becoming complete for signal dispatching) only contains CPSR,
+    // PC, user LR, user SP, and a dummy exception code. The rest is garbage
+    // from the kernel mode stack, which shouldn't be leaked to the debugger.
+    //
+
     RtlZeroMemory(Break->InstructionStream, sizeof(Break->InstructionStream));
     MmCopyFromUserMode(Break->InstructionStream,
                        (PVOID)REMOVE_THUMB_BIT(TrapFrame->Pc),
                        ARM_INSTRUCTION_LENGTH);
 
-    Break->Registers.Arm.R0 = TrapFrame->R0;
-    Break->Registers.Arm.R1 = TrapFrame->R1;
-    Break->Registers.Arm.R2 = TrapFrame->R2;
-    Break->Registers.Arm.R3 = TrapFrame->R3;
-    Break->Registers.Arm.R4 = TrapFrame->R4;
-    Break->Registers.Arm.R5 = TrapFrame->R5;
-    Break->Registers.Arm.R6 = TrapFrame->R6;
-    Break->Registers.Arm.R7 = TrapFrame->R7;
-    Break->Registers.Arm.R8 = TrapFrame->R8;
-    Break->Registers.Arm.R9 = TrapFrame->R9;
-    Break->Registers.Arm.R10 = TrapFrame->R10;
-    Break->Registers.Arm.R11Fp = TrapFrame->R11;
-    Break->Registers.Arm.R12Ip = TrapFrame->R12;
-    Break->Registers.Arm.R13Sp = TrapFrame->UserSp;
-    Break->Registers.Arm.R14Lr = TrapFrame->UserLink;
     Break->Registers.Arm.R15Pc = TrapFrame->Pc;
     Break->Registers.Arm.Cpsr = TrapFrame->Cpsr;
+    Break->Registers.Arm.R13Sp = TrapFrame->UserSp;
+    Break->Registers.Arm.R14Lr = TrapFrame->UserLink;
+    if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
+        Break->Registers.Arm.R0 = TrapFrame->R0;
+        Break->Registers.Arm.R1 = TrapFrame->R1;
+        Break->Registers.Arm.R2 = TrapFrame->R2;
+        Break->Registers.Arm.R3 = TrapFrame->R3;
+        Break->Registers.Arm.R4 = TrapFrame->R4;
+        Break->Registers.Arm.R5 = TrapFrame->R5;
+        Break->Registers.Arm.R6 = TrapFrame->R6;
+        Break->Registers.Arm.R7 = TrapFrame->R7;
+        Break->Registers.Arm.R8 = TrapFrame->R8;
+        Break->Registers.Arm.R9 = TrapFrame->R9;
+        Break->Registers.Arm.R10 = TrapFrame->R10;
+        Break->Registers.Arm.R11Fp = TrapFrame->R11;
+        Break->Registers.Arm.R12Ip = TrapFrame->R12;
+
+    } else {
+        Break->Registers.Arm.R0 = 0;
+        Break->Registers.Arm.R1 = 0;
+        Break->Registers.Arm.R2 = 0;
+        Break->Registers.Arm.R3 = 0;
+        Break->Registers.Arm.R4 = 0;
+        Break->Registers.Arm.R5 = 0;
+        Break->Registers.Arm.R6 = 0;
+        Break->Registers.Arm.R7 = 0;
+        Break->Registers.Arm.R8 = 0;
+        Break->Registers.Arm.R9 = 0;
+        Break->Registers.Arm.R10 = 0;
+        Break->Registers.Arm.R11Fp = 0;
+        Break->Registers.Arm.R12Ip = 0;
+    }
+
     return STATUS_SUCCESS;
 }
 

@@ -46,8 +46,6 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define X86_SYSENTER_INSTRUCTION 0x340F
-#define X86_SYSENTER_INSTRUCTION_LENGTH 2
 #define X86_INT_INSTRUCTION_LENGTH 2
 #define X86_CALL_INSTRUCTION_LENGTH 5
 
@@ -770,11 +768,7 @@ Return Value:
 
     PBREAK_NOTIFICATION Break;
     PPROCESS_DEBUG_DATA DebugData;
-    BOOL FullTrapFrame;
-    USHORT PreviousInstruction;
-    PVOID PreviousInstructionPointer;
     PKPROCESS Process;
-    KSTATUS Status;
     PKTHREAD Thread;
 
     Thread = KeGetCurrentThread();
@@ -796,10 +790,10 @@ Return Value:
     Break->LoadedModuleSignature = Process->ImageListSignature;
 
     //
-    // Be careful. A trap frame that resulted from a sysenter only contains
-    // EIP, ESP, EAX, EBX, ESI, EDI, EBP, and EFLAGS. The rest is just garbage
-    // from the kernel mode stack, which shouldn't be leaked to the debugger.
-    // Start by copying all the common registers.
+    // Be careful. A trap frame that resulted from a sysenter (before becoming
+    // complete for signal dispatching) only contains EIP and ESP. The rest is
+    // just garbage from the kernel mode stack, which shouldn't be leaked to
+    // the debugger.
     //
 
     Break->InstructionPointer = TrapFrame->Eip;
@@ -808,38 +802,18 @@ Return Value:
                        (PVOID)TrapFrame->Eip,
                        sizeof(Break->InstructionStream));
 
-    Break->Registers.X86.Eflags = TrapFrame->Eflags;
     Break->Registers.X86.Eip = TrapFrame->Eip;
     Break->Registers.X86.Esp = TrapFrame->Esp;
-    Break->Registers.X86.Eax = TrapFrame->Eax;
-    Break->Registers.X86.Ebx = TrapFrame->Ebx;
-    Break->Registers.X86.Edi = TrapFrame->Edi;
-    Break->Registers.X86.Ebp = TrapFrame->Ebp;
-
-    //
-    // Now read backwards in the instruction stream to see if the last
-    // instruction was a sysenter.
-    //
-
-    FullTrapFrame = TRUE;
-    PreviousInstructionPointer = (PVOID)TrapFrame->Eip -
-                                 X86_SYSENTER_INSTRUCTION_LENGTH;
-
-    Status = MmCopyFromUserMode(&PreviousInstruction,
-                                PreviousInstructionPointer,
-                                sizeof(USHORT));
-
-    if (!KSUCCESS(Status) ||
-        (PreviousInstruction == X86_SYSENTER_INSTRUCTION)) {
-
-        FullTrapFrame = FALSE;
-    }
-
-    if (FullTrapFrame != FALSE) {
+    if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
         Break->ErrorCode = TrapFrame->ErrorCode;
+        Break->Registers.X86.Eax = TrapFrame->Eax;
+        Break->Registers.X86.Ebx = TrapFrame->Ebx;
         Break->Registers.X86.Ecx = TrapFrame->Ecx;
         Break->Registers.X86.Edx = TrapFrame->Edx;
+        Break->Registers.X86.Ebp = TrapFrame->Ebp;
         Break->Registers.X86.Esi = TrapFrame->Esi;
+        Break->Registers.X86.Edi = TrapFrame->Edi;
+        Break->Registers.X86.Eflags = TrapFrame->Eflags;
         Break->Registers.X86.Cs = TrapFrame->Cs;
         Break->Registers.X86.Ds = TrapFrame->Ds;
         Break->Registers.X86.Es = TrapFrame->Es;
@@ -849,9 +823,14 @@ Return Value:
 
     } else {
         Break->ErrorCode = 0;
+        Break->Registers.X86.Eax = 0;
+        Break->Registers.X86.Ebx = 0;
         Break->Registers.X86.Ecx = 0;
         Break->Registers.X86.Edx = 0;
+        Break->Registers.X86.Ebp = 0;
         Break->Registers.X86.Esi = 0;
+        Break->Registers.X86.Edi = 0;
+        Break->Registers.X86.Eflags = 0;
         Break->Registers.X86.Cs = USER_CS;
         Break->Registers.X86.Ds = USER_DS;
         Break->Registers.X86.Es = USER_DS;
