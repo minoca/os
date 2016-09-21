@@ -25,6 +25,7 @@ export TEMP=$TMPDIR
 PERF_TEST=../../testbin/perftest
 CLIENT=../../client.py
 CPU_INFO=../../tasks/test/cpu_info.py
+uname -a
 
 ##
 ## Run the performance test with a single process.
