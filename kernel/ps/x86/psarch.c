@@ -46,6 +46,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define X86_INT_INSTRUCTION_PREFIX 0xCD
 #define X86_INT_INSTRUCTION_LENGTH 2
 #define X86_CALL_INSTRUCTION_LENGTH 5
 
@@ -63,6 +64,12 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+KSTATUS
+PspIsSysenterTrapFrame (
+    PTRAP_FRAME TrapFrame,
+    PBOOL FromSysenter
+    );
 
 //
 // -------------------------------------------------------------------- Globals
@@ -209,6 +216,9 @@ Return Value:
     Result &= MmUserWrite(&(Context->Common.Stack.Base), 0);
     Result &= MmUserWrite(&(Context->Common.Stack.Size), 0);
     Result &= MmUserWrite32(&(Context->Common.Stack.Flags), 0);
+
+    ASSERT(ArIsTrapFrameComplete(TrapFrame) != FALSE);
+
     Status |= MmCopyToUserMode(&(Context->TrapFrame),
                                TrapFrame,
                                sizeof(TRAP_FRAME));
@@ -246,22 +256,8 @@ Return Value:
 
         if (Restart != FALSE) {
             MmUserWrite(&(Context->TrapFrame.Eax), STATUS_INTERRUPTED);
-
-            //
-            // If the trap frame is complete, then it came from a full system
-            // call and the restart only backs up over the INT instruction. ECX
-            // needs to hold the system call number and EDX needs to hold the
-            // parameters.
-            //
-
-            if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
-                MmUserWrite(&(Context->TrapFrame.Ecx),
-                            SystemCallNumber);
-
-                MmUserWrite(&(Context->TrapFrame.Edx),
-                            (UINTN)SystemCallParameter);
-            }
-
+            MmUserWrite(&(Context->TrapFrame.Ecx), SystemCallNumber);
+            MmUserWrite(&(Context->TrapFrame.Edx), (UINTN)SystemCallParameter);
             Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
         }
     }
@@ -320,6 +316,7 @@ Return Value:
     ULONG Eflags;
     ULONG Flags;
     TRAP_FRAME Frame;
+    BOOL FromSysenter;
     SIGNAL_SET SignalMask;
     KSTATUS Status;
     PKTHREAD Thread;
@@ -374,40 +371,34 @@ Return Value:
     //
     // If the signal context indicates that a system call restart is necessary,
     // then back up EIP so that the system call gets executed again when the
-    // signal handler gets restored. An "incomplete" trap frame indicates that
-    // sysenter was used for the system call, even though the trap frame was
-    // filled out before dispatching the signal.
+    // trap frame gets restored.
     //
 
     if ((Flags & SIGNAL_CONTEXT_FLAG_RESTART) != 0) {
+        Status = PspIsSysenterTrapFrame(TrapFrame, &FromSysenter);
+        if (!KSUCCESS(Status)) {
+            goto RestorePreSignalTrapFrameEnd;
+        }
 
         //
-        // If the saved trap frame was from a full system call, then ECX and
-        // EDX were filled with the system call number and system call
-        // parameter when the context was saved. Only back up over the INT
-        // instruction.
+        // If the saved trap frame was from a full system call (not sysenter),
+        // only back up over the INT instruction. When the signal was applied,
+        // the system call number and parameter were stored in ECX and EDX.
         //
 
-        if (ArIsTrapFrameComplete(&Frame)) {
+        if (FromSysenter == FALSE) {
             TrapFrame->Eip -= X86_INT_INSTRUCTION_LENGTH;
 
         //
-        // Otherwise EIP points to the instruction after the dummy call to
-        // OspSysenter. Back up over that, which will replay setting up the
-        // arguments for sysenter.
+        // On sysenter trap frames, EIP points to the instruction after the
+        // dummy call to OspSysenter. Back up over that, which will replay
+        // setting up the arguments for sysenter.
         //
 
         } else {
             TrapFrame->Eip -= X86_CALL_INSTRUCTION_LENGTH;
         }
     }
-
-    //
-    // Force the trap frame to user CS. It may have held user DS for CS to
-    // indicate an incomplete trap frame.
-    //
-
-    TrapFrame->Cs = USER_CS;
 
 RestorePreSignalTrapFrameEnd:
     if (!KSUCCESS(Status)) {
@@ -458,7 +449,9 @@ Return Value:
 
 {
 
+    BOOL FromSysenter;
     BOOL Restart;
+    KSTATUS Status;
 
     //
     // On x86, the trap frame holds the system call return value in EAX. Check
@@ -473,22 +466,41 @@ Return Value:
     }
 
     //
-    // This system call needs to be restarted; back up the EIP. The trap frame
-    // is actually complete, but CS still indicates whether the system call was
-    // full or not. This matters when backing up the EIP. A "complete" trap
-    // frame came from a full system call and only needs to back up over the
-    // INT instruction.
+    // Attempt to determine if this trap frame was created by sysenter. If this
+    // fails, then signal the thread and dispatch the new signal. This restart
+    // call is likely already in the middle of dispatching signals and found
+    // there were none.
     //
 
-    if (ArIsTrapFrameComplete(TrapFrame)) {
+    Status = PspIsSysenterTrapFrame(TrapFrame, &FromSysenter);
+    if (!KSUCCESS(Status)) {
+        PsSignalThread(KeGetCurrentThread(),
+                       SIGNAL_ACCESS_VIOLATION,
+                       NULL,
+                       TRUE);
+
+        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
+                                                SystemCallNumber,
+                                                SystemCallParameter);
+
+        return;
+    }
+
+    //
+    // If the trap frame was from a full system call (not sysenter), only back
+    // up over the INT instruction. Store the system call number and parameter
+    // in ECX and EDX so that only the INT instruction needs to be replayed.
+    //
+
+    if (FromSysenter == FALSE) {
         TrapFrame->Ecx = SystemCallNumber;
         TrapFrame->Edx = (ULONG)(UINTN)SystemCallParameter;
         TrapFrame->Eip -= X86_INT_INSTRUCTION_LENGTH;
 
     //
-    // An "incomplete" trap frame came from sysenter. EIP points to the
-    // instruction after the dummy call to OspSysenter. Back up over that,
-    // which will replay setting up the arguments for sysenter.
+    // A sysenter trap frame's EIP points to the instruction after the dummy
+    // call to OspSysenter. Back up over that. It will replay enough to gather
+    // the system call number and parameter from the stack.
     //
 
     } else {
@@ -961,4 +973,55 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+KSTATUS
+PspIsSysenterTrapFrame (
+    PTRAP_FRAME TrapFrame,
+    PBOOL FromSysenter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not the given trap frame was created by
+    sysenter.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the trap frame whose origin is in
+        question.
+
+    FromSysenter - Supplies a pointer to a boolean that receives whether or not
+        the trap frame came from sysenter.
+
+Return Value:
+
+    TRUE if the trap frame was created by sysenter. FALSE otherwise.
+
+--*/
+
+{
+
+    UCHAR Instruction;
+    PVOID PreviousInstructionPointer;
+    BOOL Result;
+
+    ASSERT(IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(TrapFrame) == FALSE);
+
+    PreviousInstructionPointer = (PVOID)TrapFrame->Eip -
+                                 X86_INT_INSTRUCTION_LENGTH;
+
+    Result = MmUserRead8(PreviousInstructionPointer, &Instruction);
+    if (Result == FALSE) {
+        return STATUS_ACCESS_VIOLATION;
+    }
+
+    *FromSysenter = FALSE;
+    if (Instruction != X86_INT_INSTRUCTION_PREFIX) {
+        *FromSysenter = TRUE;
+    }
+
+    return STATUS_SUCCESS;
+}
 

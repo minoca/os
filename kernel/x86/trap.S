@@ -664,11 +664,11 @@ FUNCTION(ArSysenterHandlerAsm)
     jz      ArSysenterHandlerFastRestore  # Exit via the fast restore path.
 
     ##
-    ## Save the default user mode segment selectors. Keep CS set to USER_DS so
-    ## that the restart code knows that this trap frame came from sysenter. EIP
-    ## gets backed up a different amount for sysenter vs int.
+    ## Save the default user mode segment selectors. Update user CS as the trap
+    ## frame is about to become full.
     ##
 
+    movl    $USER_CS, TRAP_CS(%ebx)    # Save CS.
     movl    $USER_DS, TRAP_DS(%ebx)    # Save DS.
     movl    $USER_DS, TRAP_ES(%ebx)    # Save ES.
     movl    $GDT_THREAD, TRAP_FS(%ebx) # Save FS.

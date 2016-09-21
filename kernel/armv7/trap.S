@@ -286,10 +286,12 @@ FUNCTION ArpSoftwareInterruptEntry
 
 ArpSoftwareInterruptFastSignal:
     eor     %lr, %lr                            @ Zero SVC link register.
-    eor     %r1, %r1                            @ Zero volatile R1.
+    eor     %r1, %r1                            @ Scrub volatile R1.
     str     %r0, [%sp, #(TRAP_R0 + 8)]          @ Save the return value in R0.
+    mrs     %r0, cpsr                           @ Get the "exception" CPSR.
+    str     %r0, [%sp, #(TRAP_EXCEPTION_CPSR + 8)] @ Save "exception" CPSR.
     add     %r0, %sp, #(TRAP_PC + 8)            @ Get location after SVC LR.
-    stmdb   %r0!, {%r1-%r12, %lr}               @ Push general registers.
+    stmdb   %r0!, {%r1-%r12, %lr}               @ Push registers and CPSR.
     str     %sp, [%sp, #8]                      @ Save SP.
     b       ArpSoftwareInterruptSlowSignal
 

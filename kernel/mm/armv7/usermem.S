@@ -437,6 +437,77 @@ END_FUNCTION MmpTouchUserModeMemoryForWrite
 
 ##
 ## BOOL
+## MmUserRead8 (
+##     PVOID Buffer,
+##     PUCHAR Value
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine performs a 8-bit read from user mode.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to read.
+
+    Value - Supplies a pointer where the read value will be returned.
+
+Return Value:
+
+    TRUE if the read succeeded.
+
+    FALSE if the read failed.
+
+--*/
+
+FUNCTION MmUserRead8
+    ldrb    %r2, [%r0]              @ Perform the read.
+    strb    %r2, [%r1]              @ Write it to the value.
+    mov     %r0, #1                 @ Set success status.
+    bx      %lr                     @ Return.
+
+END_FUNCTION MmUserRead8
+
+##
+## BOOL
+## MmUserWrite8 (
+##     PVOID Buffer,
+##     UCHAR Value
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine performs a 8-bit write to user mode.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to write to.
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    TRUE if the write succeeded.
+
+    FALSE if the write failed.
+
+--*/
+
+FUNCTION MmUserWrite8
+    strb    %r1, [%r0]              @ Write the value out.
+    mov     %r0, #1                 @ Set success status.
+    bx      %lr                     @ Return.
+
+END_FUNCTION MmUserWrite8
+
+##
+## BOOL
 ## MmUserRead16 (
 ##     PVOID Buffer,
 ##     PUSHORT Value
