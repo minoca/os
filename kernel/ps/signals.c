@@ -1620,7 +1620,7 @@ ULONG
 PspDequeuePendingSignal (
     PSIGNAL_PARAMETERS SignalParameters,
     PTRAP_FRAME TrapFrame,
-    PSIGNAL_SET BlockedSignals
+    PSIGNAL_SET BlockedSignalsOverride
     )
 
 /*++
@@ -1639,8 +1639,8 @@ Arguments:
     TrapFrame - Supplies a pointer to the user mode trap that got execution
         into kernel mode.
 
-    BlockedSignals - Supplies an optional pointer to a set of signals that
-        replaces the blocked signal set during this dequeue.
+    BlockedSignalsOverride - Supplies an optional pointer to a set of signals
+        that replaces the blocked signal set during this dequeue.
 
 Return Value:
 
@@ -1652,6 +1652,7 @@ Return Value:
 
 {
 
+    PSIGNAL_SET BlockedSignals;
     SIGNAL_SET CombinedSignalMask;
     PLIST_ENTRY CurrentEntry;
     ULONG DequeuedSignal;
@@ -1676,6 +1677,7 @@ Return Value:
     // is provided.
     //
 
+    BlockedSignals = BlockedSignalsOverride;
     if (BlockedSignals == NULL) {
         if (Thread->SignalPending == ThreadNoSignalPending) {
             return -1;
@@ -1800,10 +1802,13 @@ Return Value:
                 //
                 // If the signal is on the queue, it's assumed to not be
                 // ignored. If it's not handled and the default action is to
-                // ignore it, then delete this signal now.
+                // ignore it, then delete this signal now. Don't listen to the
+                // default handling if a blocked signal override was provided;
+                // any pending signal gets dequeued in that case.
                 //
 
-                if ((SignalHandled == FALSE) &&
+                if ((BlockedSignalsOverride == NULL) &&
+                    (SignalHandled == FALSE) &&
                     (IS_SIGNAL_DEFAULT_IGNORE(SignalNumber))) {
 
                     LIST_REMOVE(&(SignalEntry->ListEntry));
@@ -1948,10 +1953,14 @@ Return Value:
         }
 
         //
-        // Allow a tracer a chance to ignore the signal.
+        // Allow a tracer a chance to ignore the signal unless a blocked
+        // signals override was provided.
         //
 
-        PspTracerBreak(SignalParameters, TrapFrame, FALSE, NULL);
+        if (BlockedSignalsOverride == NULL) {
+            PspTracerBreak(SignalParameters, TrapFrame, FALSE, NULL);
+        }
+
         DequeuedSignal = SignalParameters->SignalNumber;
         if (DequeuedSignal != 0) {
 

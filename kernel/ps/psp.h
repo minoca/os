@@ -1075,7 +1075,7 @@ ULONG
 PspDequeuePendingSignal (
     PSIGNAL_PARAMETERS SignalParameters,
     PTRAP_FRAME TrapFrame,
-    PSIGNAL_SET BlockedSignals
+    PSIGNAL_SET BlockedSignalsOverride
     );
 
 /*++
@@ -1094,8 +1094,8 @@ Arguments:
     TrapFrame - Supplies a pointer to the user mode trap that got execution
         into kernel mode.
 
-    BlockedSignals - Supplies an optional pointer to a set of signals that
-        replaces the blocked signal set during this dequeue.
+    BlockedSignalsOverride - Supplies an optional pointer to a set of signals
+        that replaces the blocked signal set during this dequeue.
 
 Return Value:
 
