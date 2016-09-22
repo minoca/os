@@ -182,10 +182,10 @@ Return Value:
     PSIGNAL_CONTEXT_ARM Context;
     ULONG ContextSp;
     ULONG Flags;
-    BOOL Restart;
     PSIGNAL_SET RestoreSignals;
     BOOL Result;
     KSTATUS Status;
+    INTN SystemCallResult;
     PKTHREAD Thread;
 
     Thread = KeGetCurrentThread();
@@ -232,41 +232,36 @@ Return Value:
     Result &= MmUserWrite32(&(Context->TrapFrame.SvcLink), 0);
 
     //
-    // If this signal is being applied in the middle of a system call, R0 holds
-    // the return value.
+    // If this signal is being applied in the middle of a system call, the trap
+    // frame needs modification if it is restartable. R0 holds the system call
+    // result.
     //
 
-    if (SystemCallNumber != SystemCallInvalid) {
+    SystemCallResult = (INTN)TrapFrame->R0;
+    if ((SystemCallNumber != SystemCallInvalid) &&
+        (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) != FALSE) &&
+        (IS_SYSTEM_CALL_RESULT_RESTARTABLE(SystemCallResult) != FALSE)) {
 
         //
-        // If the result indicates that the system call is restartable, then
-        // let user mode know by setting the restart flag in the context. This
-        // should not be done for restore context or execute image, as their
-        // result values are unsigned and may overlap with the restart system
-        // call status.
+        // If the result indicates that the system call is restartable after a
+        // signal is applied, then let user mode know by setting the restart
+        // flag in the context. Also save the system call number and parameters
+        // in volatile registers so that they can be placed in the correct
+        // registers for restart.
         //
 
-        Restart = IS_SYSTEM_CALL_RESTARTABLE_AFTER_SIGNAL(SystemCallNumber,
-                                                          (INTN)TrapFrame->R0);
-
-        if (Restart != FALSE) {
+        if (IS_SYSTEM_CALL_RESULT_RESTARTABLE_AFTER_SIGNAL(SystemCallResult)) {
             Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
-
-            //
-            // In case the handler does not allow restarts, convert the saved
-            // return status to interrupted.
-            //
-
-            MmUserWrite32(&(Context->TrapFrame.R0), STATUS_INTERRUPTED);
-
-            //
-            // In case the handler does allow restarts, save the system call
-            // number and system call parameters in other volatile registers.
-            //
-
             MmUserWrite32(&(Context->TrapFrame.R1), (UINTN)SystemCallParameter);
             MmUserWrite32(&(Context->TrapFrame.R2), SystemCallNumber);
         }
+
+        //
+        // In case the handler does not allow restarts, convert the saved
+        // restart status to the interrupted status.
+        //
+
+        MmUserWrite32(&(Context->TrapFrame.R0), STATUS_INTERRUPTED);
     }
 
     Result &= MmUserWrite32(&(Context->Common.Flags), Flags);
@@ -439,18 +434,15 @@ Return Value:
 
 {
 
-    BOOL Restart;
-
     //
     // On ARM, the trap frame holds the system call return value in R0. Check
     // to see if the system call can be restarted. If it cannot be restarted,
     // exit without modifying the trap frame.
     //
 
-    Restart = IS_SYSTEM_CALL_RESTARTABLE_NO_SIGNAL(SystemCallNumber,
-                                                   (INTN)TrapFrame->R0);
+    if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) ||
+        !IS_SYSTEM_CALL_RESULT_RESTARTABLE_NO_SIGNAL((INTN)TrapFrame->R0)) {
 
-    if (Restart == FALSE) {
         return;
     }
 

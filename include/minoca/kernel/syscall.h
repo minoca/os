@@ -26,28 +26,37 @@ Author:
 
 //
 // This macro determines whether or not a system call is eligible for being
-// restarted after a signal is dispatched.
+// restarted based on its system call number.
 //
 
-#define IS_SYSTEM_CALL_RESTARTABLE_AFTER_SIGNAL(_SystemCallNumber, \
-                                                _SystemCallResult) \
-                                                                   \
-    (((_SystemCallResult) == STATUS_RESTART_AFTER_SIGNAL) &&       \
-     ((_SystemCallNumber) != SystemCallRestoreContext) &&          \
+#define IS_SYSTEM_CALL_NUMBER_RESTARTABLE(_SystemCallNumber) \
+    (((_SystemCallNumber) != SystemCallRestoreContext) &&     \
      ((_SystemCallNumber) != SystemCallExecuteImage))
+
+//
+// This macro determines whether or not a system call is eligible for being
+// restarted based on its result.
+//
+
+#define IS_SYSTEM_CALL_RESULT_RESTARTABLE(_SystemCallResult) \
+    (((_SystemCallResult) == STATUS_RESTART_AFTER_SIGNAL) || \
+     ((_SystemCallResult) == STATUS_RESTART_NO_SIGNAL))
+
+//
+// This macro determines whether or not a system call is eligible for being
+// restarted after a signal is dispatched based on its result.
+//
+
+#define IS_SYSTEM_CALL_RESULT_RESTARTABLE_AFTER_SIGNAL(_SystemCallResult) \
+    ((_SystemCallResult) == STATUS_RESTART_AFTER_SIGNAL)
 
 //
 // This macro determines whether or not a signal call is eligible for being
-// restarted if no signal is applied.
+// restarted if no signal is applied based on its result.
 //
 
-#define IS_SYSTEM_CALL_RESTARTABLE_NO_SIGNAL(_SystemCallNumber, \
-                                             _SystemCallResult) \
-                                                                \
-    ((((_SystemCallResult) == STATUS_RESTART_AFTER_SIGNAL) ||   \
-      ((_SystemCallResult) == STATUS_RESTART_NO_SIGNAL))  &&    \
-     ((_SystemCallNumber) != SystemCallRestoreContext) &&       \
-     ((_SystemCallNumber) != SystemCallExecuteImage))
+#define IS_SYSTEM_CALL_RESULT_RESTARTABLE_NO_SIGNAL(_SystemCallResult) \
+    IS_SYSTEM_CALL_RESULT_RESTARTABLE(_SystemCallResult)
 
 //
 // ---------------------------------------------------------------- Definitions

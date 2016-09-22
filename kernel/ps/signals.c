@@ -1027,7 +1027,7 @@ Return Value:
     // Wake back up when something has changed. Ignore child signals here.
     //
 
-    Status = STATUS_INTERRUPTED;
+    Status = STATUS_RESTART_NO_SIGNAL;
     while (Thread->SignalPending != ThreadSignalPending) {
         PsCheckRuntimeTimers(Thread);
         if (Parameters->TimeoutInMilliseconds != SYS_WAIT_TIME_INDEFINITE) {
@@ -1066,6 +1066,8 @@ Return Value:
             } else {
                 Parameters->TimeoutInMilliseconds = 0;
             }
+
+            Status = STATUS_RESTART_NO_SIGNAL;
 
         } else {
             KeSuspendExecution();

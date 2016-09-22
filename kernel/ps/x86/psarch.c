@@ -186,10 +186,10 @@ Return Value:
     PSIGNAL_CONTEXT_X86 Context;
     UINTN ContextSp;
     ULONG Flags;
-    BOOL Restart;
     PSIGNAL_SET RestoreSignals;
     BOOL Result;
     KSTATUS Status;
+    INTN SystemCallResult;
     PKTHREAD Thread;
 
     Thread = KeGetCurrentThread();
@@ -236,30 +236,36 @@ Return Value:
     }
 
     //
-    // If this signal is being applied in the middle of a system call, EAX
-    // holds the return value.
+    // If this signal is being applied in the middle of a system call, the trap
+    // frame needs modification if it is restartable. EAX holds the system call
+    // result.
     //
 
-    if (SystemCallNumber != SystemCallInvalid) {
+    SystemCallResult = (INTN)TrapFrame->Eax;
+    if ((SystemCallNumber != SystemCallInvalid) &&
+        (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) != FALSE) &&
+        (IS_SYSTEM_CALL_RESULT_RESTARTABLE(SystemCallResult) != FALSE)) {
 
         //
-        // If the result indicates that the system call is restartable, then
-        // let user mode know by setting the restart flag in the context. This
-        // should not be done for restore context or execute image, as their
-        // result values are unsigned and may overlap with the restart system
-        // call status. And in case the restart does not happen, update the
-        // system call result to an interrupted status.
+        // If the result indicates that the system call is restartable after a
+        // signal is applied, then let user mode know by setting the restart
+        // flag in the context. Also save the system call number and parameters
+        // in volatile registers so that they can be placed in the correct
+        // registers for restart.
         //
 
-        Restart = IS_SYSTEM_CALL_RESTARTABLE_AFTER_SIGNAL(SystemCallNumber,
-                                                          (INTN)TrapFrame->Eax);
-
-        if (Restart != FALSE) {
-            MmUserWrite(&(Context->TrapFrame.Eax), STATUS_INTERRUPTED);
+        if (IS_SYSTEM_CALL_RESULT_RESTARTABLE_AFTER_SIGNAL(SystemCallResult)) {
+            Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
             MmUserWrite(&(Context->TrapFrame.Ecx), SystemCallNumber);
             MmUserWrite(&(Context->TrapFrame.Edx), (UINTN)SystemCallParameter);
-            Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
         }
+
+        //
+        // In case the handler does not allow restarts, convert the saved
+        // restart status to the interrupted status.
+        //
+
+        MmUserWrite(&(Context->TrapFrame.Eax), STATUS_INTERRUPTED);
     }
 
     Result &= MmUserWrite32(&(Context->Common.Flags), Flags);
@@ -450,7 +456,6 @@ Return Value:
 {
 
     BOOL FromSysenter;
-    BOOL Restart;
     KSTATUS Status;
 
     //
@@ -458,10 +463,9 @@ Return Value:
     // to see if the system call can be restarted. If not, exit.
     //
 
-    Restart = IS_SYSTEM_CALL_RESTARTABLE_NO_SIGNAL(SystemCallNumber,
-                                                   (INTN)TrapFrame->Eax);
+    if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) ||
+        !IS_SYSTEM_CALL_RESULT_RESTARTABLE_NO_SIGNAL((INTN)TrapFrame->Eax)) {
 
-    if (Restart == FALSE) {
         return;
     }
 
