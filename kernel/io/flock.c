@@ -333,6 +333,10 @@ Return Value:
                     //
 
                     if (!KSUCCESS(Status)) {
+                        if (Status == STATUS_INTERRUPTED) {
+                            Status = STATUS_RESTART_AFTER_SIGNAL;
+                        }
+
                         goto SetFileLockEnd;
                     }
 

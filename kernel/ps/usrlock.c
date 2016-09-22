@@ -311,8 +311,12 @@ Return Value:
 
 {
 
+    ULONGLONG ElapsedTimeInMilliseconds;
+    ULONGLONG EndTime;
+    ULONGLONG Frequency;
     USER_LOCK Lock;
     BOOL Private;
+    ULONGLONG StartTime;
     KSTATUS Status;
     ULONG UserValue;
 
@@ -367,9 +371,39 @@ Return Value:
 
     ASSERT(SYS_WAIT_TIME_INDEFINITE == WAIT_TIME_INDEFINITE);
 
+    StartTime = 0;
+    if (Parameters->TimeoutInMilliseconds != SYS_WAIT_TIME_INDEFINITE) {
+        StartTime = KeGetRecentTimeCounter();
+    }
+
     Status = ObWaitOnQueue(&(Lock.WaitQueue),
                            WAIT_FLAG_INTERRUPTIBLE,
                            Parameters->TimeoutInMilliseconds);
+
+    //
+    // If a user lock wait is interrupted by a signal, allow it to restart
+    // after the signal is applied if the handler allows restarts. Update the
+    // timeout, so the next round doesn't wait too long.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        if (Parameters->TimeoutInMilliseconds != SYS_WAIT_TIME_INDEFINITE) {
+            EndTime = KeGetRecentTimeCounter();
+            Frequency = HlQueryTimeCounterFrequency();
+            ElapsedTimeInMilliseconds = ((EndTime - StartTime) *
+                                         MILLISECONDS_PER_SECOND) /
+                                        Frequency;
+
+            if (ElapsedTimeInMilliseconds < Parameters->TimeoutInMilliseconds) {
+                Parameters->TimeoutInMilliseconds -= ElapsedTimeInMilliseconds;
+
+            } else {
+                Parameters->TimeoutInMilliseconds = 0;
+            }
+        }
+
+        Status = STATUS_RESTART_AFTER_SIGNAL;
+    }
 
     //
     // Remove the object from the tree, racing with the parent who may

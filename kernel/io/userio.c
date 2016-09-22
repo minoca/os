@@ -297,6 +297,15 @@ SysOpenEnd:
         if (Handle != NULL) {
             IoClose(Handle);
         }
+
+        //
+        // Open is allowed to restart if interrupted and the signal handler
+        // allows restarts.
+        //
+
+        if (Status == STATUS_INTERRUPTED) {
+            Status = STATUS_RESTART_AFTER_SIGNAL;
+        }
     }
 
     Parameters->Status = Status;
@@ -570,6 +579,21 @@ SysPerformIoEnd:
         IoIoHandleReleaseReference(HandleValue);
     }
 
+    //
+    // If the I/O got interrupted and no bytes were transferred, then the
+    // system call can be restarted if the signal handler allows. If bytes were
+    // transferred, convert to a success status.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        if (Parameters->Size == 0) {
+            Status = STATUS_RESTART_AFTER_SIGNAL;
+
+        } else {
+            Status = STATUS_SUCCESS;
+        }
+    }
+
     Parameters->Status = Status;
     return Status;
 }
@@ -690,6 +714,21 @@ SysPerformVectoredIoEnd:
 
     if (HandleValue != NULL) {
         IoIoHandleReleaseReference(HandleValue);
+    }
+
+    //
+    // If the I/O got interrupted and no bytes were transferred, then the
+    // system call can be restarted if the signal handler allows. If bytes were
+    // transferred, convert to a success status.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        if (Parameters->Size == 0) {
+            Status = STATUS_RESTART_AFTER_SIGNAL;
+
+        } else {
+            Status = STATUS_SUCCESS;
+        }
     }
 
     Parameters->Status = Status;
@@ -2863,11 +2902,20 @@ Return Value:
     }
 
 SysUserControlEnd:
-    Request->Status = Status;
     if (IoHandle != NULL) {
         IoIoHandleReleaseReference(IoHandle);
     }
 
+    //
+    // If the user control system call got interrupted, then it can be
+    // restarted if the signal handler allows.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        Status = STATUS_RESTART_AFTER_SIGNAL;
+    }
+
+    Request->Status = Status;
     return Status;
 }
 

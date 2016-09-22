@@ -1011,9 +1011,7 @@ Return Value:
 
     } else if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
-        if (BytesCompleted == 0) {
-            BytesCompleted = -1;
-        }
+        BytesCompleted = -1;
     }
 
     return (ssize_t)BytesCompleted;
@@ -1082,9 +1080,7 @@ Return Value:
 
     } else if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
-        if (BytesCompleted == 0) {
-            BytesCompleted = -1;
-        }
+        BytesCompleted = -1;
     }
 
     return (ssize_t)BytesCompleted;

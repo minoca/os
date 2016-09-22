@@ -265,6 +265,13 @@ Author:
 #define NET_DOMAIN_PHYSICAL_LIMIT          0xC000
 
 //
+// Define the kernel socket flags.
+//
+
+#define SOCKET_FLAG_SEND_TIMEOUT_SET    0x00000001
+#define SOCKET_FLAG_RECEIVE_TIMEOUT_SET 0x00000002
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -714,6 +721,8 @@ Members:
     IoHandle - Stores a pointer to the I/O handle that goes along with this
         socket.
 
+    Flags - Stores a bitmaks of socket flags. See SOCKET_FLAG_* for definitions.
+
 --*/
 
 typedef struct _SOCKET {
@@ -723,6 +732,7 @@ typedef struct _SOCKET {
     UINTN ReferenceCount;
     PIO_OBJECT_STATE IoState;
     PIO_HANDLE IoHandle;
+    ULONG Flags;
 } SOCKET, *PSOCKET;
 
 /*++

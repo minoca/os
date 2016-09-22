@@ -210,6 +210,7 @@ Return Value:
     ULONG Operation;
     PPTHREAD_SEMAPHORE SemaphoreInternal;
     ULONG Shared;
+    KSTATUS Status;
     ULONG Value;
 
     SemaphoreInternal = (PPTHREAD_SEMAPHORE)Semaphore;
@@ -225,10 +226,15 @@ Return Value:
         }
 
         Value = PTHREAD_SEMAPHORE_WAITED_ON | Shared;
-        OsUserLock(&(SemaphoreInternal->State),
-                   Operation,
-                   &Value,
-                   SYS_WAIT_TIME_INDEFINITE);
+        Status = OsUserLock(&(SemaphoreInternal->State),
+                            Operation,
+                            &Value,
+                            SYS_WAIT_TIME_INDEFINITE);
+
+        if (Status == STATUS_INTERRUPTED) {
+            errno = EINTR;
+            return -1;
+        }
     }
 
     return 0;

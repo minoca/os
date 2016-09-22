@@ -45,6 +45,13 @@ IopDestroySocket (
     PSOCKET Socket
     );
 
+KSTATUS
+IopConvertInterruptedSocketStatus (
+    PIO_HANDLE Handle,
+    UINTN BytesComplete,
+    BOOL Send
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -830,6 +837,15 @@ Return Value:
         }
     }
 
+    if (KSUCCESS(Status) && (InformationType == SocketInformationBasic)) {
+        if (SocketOption == SocketBasicOptionSendTimeout) {
+            RtlAtomicOr32(&(Socket->Flags), SOCKET_FLAG_SEND_TIMEOUT_SET);
+
+        } else if (SocketOption == SocketBasicOptionReceiveTimeout) {
+            RtlAtomicOr32(&(Socket->Flags), SOCKET_FLAG_RECEIVE_TIMEOUT_SET);
+        }
+    }
+
 SocketGetSetInformationEnd:
     return Status;
 }
@@ -1440,6 +1456,15 @@ SysSocketAcceptEnd:
     }
 
     //
+    // An interrupted socket accept cannot be restarted if a receive timeout
+    // has been set.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        Status = IopConvertInterruptedSocketStatus(IoHandle, 0, FALSE);
+    }
+
+    //
     // Release the reference that was added when the handle was looked up.
     //
 
@@ -1568,6 +1593,7 @@ Return Value:
     PSYSTEM_CALL_SOCKET_PERFORM_IO Parameters;
     PKPROCESS Process;
     KSTATUS Status;
+    BOOL Write;
 
     Parameters = (PSYSTEM_CALL_SOCKET_PERFORM_IO)SystemCallParameter;
     Process = PsGetCurrentProcess();
@@ -1635,6 +1661,17 @@ SysSocketPerformIoEnd:
                      sizeof(SOCKET_IO_PARAMETERS));
 
     //
+    // An interrupted socket cannot be restarted if a timeout has been set.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        Write = ((IoParameters.IoFlags & SYS_IO_FLAG_WRITE) != 0);
+        Status = IopConvertInterruptedSocketStatus(IoHandle,
+                                                   IoParameters.Size,
+                                                   Write);
+    }
+
+    //
     // Release the reference that was added when the handle was looked up.
     //
 
@@ -1680,6 +1717,7 @@ Return Value:
     PSYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO Parameters;
     PKPROCESS Process;
     KSTATUS Status;
+    BOOL Write;
 
     IoBuffer = NULL;
     Parameters = (PSYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO)SystemCallParameter;
@@ -1749,6 +1787,17 @@ SysSocketPerformVectoredIoEnd:
     MmCopyToUserMode(Parameters->Parameters,
                      &IoParameters,
                      sizeof(SOCKET_IO_PARAMETERS));
+
+    //
+    // An interrupted socket cannot be restarted if a timeout has been set.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        Write = ((IoParameters.IoFlags & SYS_IO_FLAG_WRITE) != 0);
+        Status = IopConvertInterruptedSocketStatus(IoHandle,
+                                                   IoParameters.Size,
+                                                   Write);
+    }
 
     //
     // Release the reference that was added when the handle was looked up.
@@ -2333,3 +2382,72 @@ Return Value:
 
     return;
 }
+
+KSTATUS
+IopConvertInterruptedSocketStatus (
+    PIO_HANDLE Handle,
+    UINTN BytesComplete,
+    BOOL Send
+    )
+
+/*++
+
+Routine Description:
+
+    This routine handles converting an interrupted socket status into the
+    appropriate system call return status, taking into account whether or not
+    the system call can be restarted.
+
+Arguments:
+
+    Handle - Supplies a pointer to the I/O handle for a socket.
+
+    BytesComplete - Supplies the number of I/O bytes completed during the
+        system call.
+
+    Send - Supplies a boolean indicating if the system call was performing a
+        send (TRUE) or receive (FALSE).
+
+Return Value:
+
+    Returns the status that the interrupted status should be convert to.
+
+--*/
+
+{
+
+    ULONG Mask;
+    PSOCKET Socket;
+    KSTATUS Status;
+
+    ASSERT(Handle != NULL);
+
+    //
+    // If bytes were actually completed, return success.
+    //
+
+    if (BytesComplete != 0) {
+        return STATUS_SUCCESS;
+    }
+
+    Status = IoGetSocketFromHandle(Handle, &Socket);
+
+    ASSERT(KSUCCESS(Status));
+
+    Mask = SOCKET_FLAG_RECEIVE_TIMEOUT_SET;
+    if (Send != FALSE) {
+        Mask = SOCKET_FLAG_SEND_TIMEOUT_SET;
+    }
+
+    //
+    // If no bytes were completed and a timeout was not set, then the system
+    // call can be restarted if the signal handler allows.
+    //
+
+    if ((Socket->Flags & Mask) == 0) {
+        return STATUS_RESTART_AFTER_SIGNAL;
+    }
+
+    return STATUS_INTERRUPTED;
+}
+

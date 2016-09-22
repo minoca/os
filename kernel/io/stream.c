@@ -381,7 +381,7 @@ Return Value:
 
             } else {
                 if (*BytesRead == 0) {
-                    Status = STATUS_NO_DATA_AVAILABLE;
+                    Status = STATUS_TRY_AGAIN;
                 }
 
                 break;

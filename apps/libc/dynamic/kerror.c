@@ -165,6 +165,7 @@ int ClpStatusToErrorNumber[] = {
     EDOM,
     ENODEV,
     EDEADLK,
+    EINTR,          /* 70 */
     EINTR
 };
 
