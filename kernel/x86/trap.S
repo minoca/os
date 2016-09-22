@@ -621,8 +621,8 @@ FUNCTION(ArSysenterHandlerAsm)
     pushl   %eax                    # Save user ESP in trap frame.
     LoadKernelDataSegments          # Load kernel data segments (using EAX).
     sti                             # Re-enable interrupts.
-    subl    $(TRAP_FRAME_SIZE - 4), %esp  # Allocate most of trap frame.
-    movl    %ebx, TRAP_EIP(%esp)    # EDX contains the return address.
+    subl    $(TRAP_FRAME_SIZE - 4), %esp  # Allocate the rest of the trap frame.
+    movl    %ebx, TRAP_EIP(%esp)    # EBX contains the return address.
     movl    %esp, %ebx              # Save the trap frame in EBX.
 
     ##
@@ -643,7 +643,7 @@ FUNCTION(ArSysenterHandlerAsm)
     pushl   %ecx                    # Push system call number for dispatch.
 
     ##
-    ## Push the paramters for the system call handler and execute it.
+    ## Push the parameters for the system call handler and execute it.
     ##
 
     pushl   %ebx                    # Push a pointer to the sort-of trap frame.
@@ -696,43 +696,45 @@ FUNCTION(ArSysenterHandlerAsm)
 
     pushl   %ebx                    # Pass the trap frame.
     call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
-    addl    $0x4, %esp              # Pop the system call number.
+    addl    $0xC, %esp              # Pop all three parameters.
 
     ##
     ## Restore the non-volatile registers in case they were modified by the
     ## trap frame.
     ##
 
-    movl    TRAP_ESI(%ebx), %esi
-    movl    TRAP_EDI(%ebx), %edi
-    movl    TRAP_EBP(%ebx), %ebp
+    movl    TRAP_ESI(%esp), %esi
+    movl    TRAP_EDI(%esp), %edi
+    movl    TRAP_EBP(%esp), %ebp
 
     ##
-    ## Restore EAX in case the return value was modified. The other volitiles
+    ## Restore EAX in case the return value was modified. The other volatiles
     ## (ECX and EDX) are used specifically by sysexit to restore the stack and
     ## instruction pointer.
     ##
 
-    movl    TRAP_EAX(%ebx), %eax
+    movl    TRAP_EAX(%esp), %eax
 
     ##
-    ## Restore the segment registers. SS and CS are restored by sysexit.
+    ## Restore the segment registers. SS and CS are restored by sysexit. Once
+    ## DS is restored then only memory accesses through ESP are allowed.
     ##
 
-    movl    TRAP_DS(%ebx), %ecx  # Restore DS.
+    movl    TRAP_DS(%esp), %ecx  # Restore DS.
     movw    %cx, %ds             #
-    movl    TRAP_ES(%ebx), %ecx  # Restore ES.
+    movl    TRAP_ES(%esp), %ecx  # Restore ES.
     movw    %cx, %es             #
-    movl    TRAP_FS(%ebx), %ecx  # Restore FS.
+    movl    TRAP_FS(%esp), %ecx  # Restore FS.
     movw    %cx, %fs             #
-    movl    TRAP_GS(%ebx), %ecx  # Restore GS.
+    movl    TRAP_GS(%esp), %ecx  # Restore GS.
     movw    %cx, %gs             #
 
     ##
-    ## Finally restore EBX, which held the trap frame pointer.
+    ## Upon sysenter ebx held the return address, making it effectively
+    ## volatile.
     ##
 
-    movl    TRAP_EBX(%ebx), %ebx
+    xorl    %ebx, %ebx
     jmp     ArSysenterHandlerExit
 
     ##
@@ -746,9 +748,9 @@ ArSysenterHandlerFastRestore:
     mov     $GDT_THREAD, %cx        # Get the user-mode GS.
     mov     %cx, %fs                # Move to FS.
     mov     %cx, %gs                # Move to GS.
+    addl    $0x8, %esp              # Pop the system call number and parameter.
 
 ArSysenterHandlerExit:
-    addl    $0x8, %esp              # Pop the system call number and parameter.
 
     ##
     ## Restore some portions of the pseudo trap frame. Do not zero EAX as it

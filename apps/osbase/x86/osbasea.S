@@ -126,6 +126,7 @@ OspSysenter:
     movl    12(%esp), %edx      # Move the system call parameter to EDX.
     movl    %esp, %eax          # EAX contains the return stack pointer.
     sysenter                    # Jump to kernel mode.
+    int $3                      # Execution should never get here.
 
 END_FUNCTION(OspSysenterSystemCall)
 
