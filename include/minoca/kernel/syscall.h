@@ -557,8 +557,7 @@ Members:
     Offset - Stores the offset the I/O should occur at. Supply -1ULL to use the
         current file pointer offset.
 
-    Size - Stores the number of bytes of I/O to complete on input. On output
-        returns the number of bytes successfully completed.
+    Size - Stores the number of bytes of I/O to complete on input.
 
     BytesCompleted - Stores the number of bytes of I/O that were actually
         completed.
@@ -574,6 +573,7 @@ typedef struct _SYSTEM_CALL_PERFORM_IO {
     ULONG TimeoutInMilliseconds;
     IO_OFFSET Offset;
     UINTN Size;
+    UINTN BytesCompleted;
     KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_PERFORM_IO, *PSYSTEM_CALL_PERFORM_IO;
 
@@ -599,8 +599,10 @@ Members:
     Offset - Stores the offset the I/O should occur at. Supply -1ULL to use the
         current file pointer offset.
 
-    Size - Stores the number of bytes of I/O to complete on input. On output
-        returns the number of bytes successfully completed.
+    Size - Stores the number of bytes of I/O to complete on input.
+
+    BytesCompleted - Stores the number of bytes of I/O that were actually
+        completed.
 
     VectoryArray - Stores a pointer to an array of I/O vector structures which
         specify the buffers to read or write.
@@ -618,6 +620,7 @@ typedef struct _SYSTEM_CALL_PERFORM_VECTORED_IO {
     ULONG TimeoutInMilliseconds;
     IO_OFFSET Offset;
     UINTN Size;
+    UINTN BytesCompleted;
     PIO_VECTOR VectorArray;
     UINTN VectorCount;
     KSTATUS Status;

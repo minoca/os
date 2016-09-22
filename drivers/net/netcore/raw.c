@@ -1088,7 +1088,7 @@ Return Value:
     BytesComplete = Size;
 
 RawSendEnd:
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
     if (!KSUCCESS(Status)) {
         NetDestroyBufferList(&PacketList);
     }
@@ -1565,7 +1565,7 @@ RawReceiveEnd:
         KeReleaseQueuedLock(RawSocket->ReceiveLock);
     }
 
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
     return Status;
 }
 

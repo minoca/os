@@ -1177,7 +1177,7 @@ Return Value:
     BytesComplete = Size;
 
 UdpSendEnd:
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
     if (!KSUCCESS(Status)) {
         NetDestroyBufferList(&PacketList);
     }
@@ -1713,7 +1713,7 @@ UdpReceiveEnd:
         KeReleaseQueuedLock(UdpSocket->ReceiveLock);
     }
 
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
     return Status;
 }
 

@@ -1847,7 +1847,7 @@ Return Value:
 
     if (NetGlobalDebug != FALSE) {
         RtlDebugPrint("Net: Sent %ld on socket 0x%x: %d.\n",
-                      Parameters->Size,
+                      Parameters->BytesCompleted,
                       NetSocket,
                       Status);
     }
@@ -1913,7 +1913,7 @@ Return Value:
 
     if (NetGlobalDebug != FALSE) {
         RtlDebugPrint("Net: Received %ld on socket 0x%x: %d.\n",
-                      Parameters->Size,
+                      Parameters->BytesCompleted,
                       NetSocket,
                       Status);
     }

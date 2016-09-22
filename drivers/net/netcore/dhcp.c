@@ -1656,7 +1656,7 @@ Return Value:
         goto DhcpSendDiscoverEnd;
     }
 
-    if (Parameters.Size != TotalPacketSize) {
+    if (Parameters.BytesCompleted != TotalPacketSize) {
         Status = STATUS_DATA_LENGTH_MISMATCH;
         goto DhcpSendDiscoverEnd;
     }
@@ -1993,7 +1993,7 @@ Return Value:
         goto DhcpSendRequestEnd;
     }
 
-    if (Parameters.Size != TotalPacketSize) {
+    if (Parameters.BytesCompleted != TotalPacketSize) {
         Status = STATUS_DATA_LENGTH_MISMATCH;
         goto DhcpSendRequestEnd;
     }
@@ -2265,7 +2265,7 @@ Return Value:
         goto DhcpSendDiscoverEnd;
     }
 
-    if (Parameters.Size != TotalPacketSize) {
+    if (Parameters.BytesCompleted != TotalPacketSize) {
         Status = STATUS_DATA_LENGTH_MISMATCH;
         goto DhcpSendDiscoverEnd;
     }
@@ -2341,7 +2341,7 @@ Return Value:
         goto DhcpReceiveReplyEnd;
     }
 
-    PacketSize = Parameters.Size;
+    PacketSize = Parameters.BytesCompleted;
 
     //
     // Validate some basic attributes about the packet.

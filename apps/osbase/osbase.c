@@ -384,8 +384,9 @@ Return Value:
     Parameters.TimeoutInMilliseconds = TimeoutInMilliseconds;
     Parameters.Offset = Offset;
     Parameters.Size = Size;
+    Parameters.BytesCompleted = 0;
     OsSystemCall(SystemCallPerformIo, &Parameters);
-    *BytesCompleted = Parameters.Size;
+    *BytesCompleted = Parameters.BytesCompleted;
     return Parameters.Status;
 }
 
@@ -446,10 +447,11 @@ Return Value:
     Parameters.TimeoutInMilliseconds = TimeoutInMilliseconds;
     Parameters.Offset = Offset;
     Parameters.Size = Size;
+    Parameters.BytesCompleted = 0;
     Parameters.VectorArray = VectorArray;
     Parameters.VectorCount = VectorCount;
     OsSystemCall(SystemCallPerformVectoredIo, &Parameters);
-    *BytesCompleted = Parameters.Size;
+    *BytesCompleted = Parameters.BytesCompleted;
     return Parameters.Status;
 }
 

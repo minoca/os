@@ -743,8 +743,10 @@ Structure Description:
 
 Members:
 
-    Size - Stores the size in bytes of the I/O request. Upon return, the
-        number of bytes successfully sent or received will be returned here.
+    Size - Stores the size in bytes of the I/O request.
+
+    BytesCompleted - Stores the number of bytes of I/O that were actually
+        completed.
 
     IoFlags - Stores the standard I/O flags. See IO_FLAG_* definitions for
         kernel mode or SYS_IO_FLAG_* definitions for user mode.
@@ -774,6 +776,7 @@ Members:
 
 typedef struct _SOCKET_IO_PARAMETERS {
     UINTN Size;
+    UINTN BytesCompleted;
     ULONG IoFlags;
     ULONG SocketIoFlags;
     ULONG TimeoutInMilliseconds;

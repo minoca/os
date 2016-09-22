@@ -1656,7 +1656,7 @@ Return Value:
     BytesComplete = Size;
 
 GenericSendEnd:
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
     if (!KSUCCESS(Status)) {
         NetDestroyBufferList(&PacketList);
     }
@@ -2134,7 +2134,7 @@ GenericReceiveEnd:
         KeReleaseQueuedLock(GenericSocket->ReceiveLock);
     }
 
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
     return Status;
 }
 

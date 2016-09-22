@@ -1667,7 +1667,7 @@ SysSocketPerformIoEnd:
     if (Status == STATUS_INTERRUPTED) {
         Write = ((IoParameters.IoFlags & SYS_IO_FLAG_WRITE) != 0);
         Status = IopConvertInterruptedSocketStatus(IoHandle,
-                                                   IoParameters.Size,
+                                                   IoParameters.BytesCompleted,
                                                    Write);
     }
 
@@ -1795,7 +1795,7 @@ SysSocketPerformVectoredIoEnd:
     if (Status == STATUS_INTERRUPTED) {
         Write = ((IoParameters.IoFlags & SYS_IO_FLAG_WRITE) != 0);
         Status = IopConvertInterruptedSocketStatus(IoHandle,
-                                                   IoParameters.Size,
+                                                   IoParameters.BytesCompleted,
                                                    Write);
     }
 
@@ -2237,7 +2237,7 @@ Return Value:
                                      IoContext->IoBuffer);
     }
 
-    IoContext->BytesCompleted = IoParameters.Size;
+    IoContext->BytesCompleted = IoParameters.BytesCompleted;
     return Status;
 }
 

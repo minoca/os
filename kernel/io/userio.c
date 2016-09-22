@@ -494,7 +494,7 @@ Return Value:
     CurrentProcess = PsGetCurrentProcess();
     Parameters = (PSYSTEM_CALL_PERFORM_IO)SystemCallParameter;
     Size = Parameters->Size;
-    Parameters->Size = 0;
+    Parameters->BytesCompleted = 0;
     HandleValue = ObGetHandleValue(CurrentProcess->HandleTable,
                                    Parameters->Handle,
                                    NULL);
@@ -549,7 +549,7 @@ Return Value:
                                  Size,
                                  0,
                                  Timeout,
-                                 &(Parameters->Size),
+                                 &(Parameters->BytesCompleted),
                                  NULL);
 
         if (Status == STATUS_BROKEN_PIPE) {
@@ -566,7 +566,7 @@ Return Value:
                                 Size,
                                 0,
                                 Timeout,
-                                &(Parameters->Size),
+                                &(Parameters->BytesCompleted),
                                 NULL);
     }
 
@@ -586,7 +586,7 @@ SysPerformIoEnd:
     //
 
     if (Status == STATUS_INTERRUPTED) {
-        if (Parameters->Size == 0) {
+        if (Parameters->BytesCompleted == 0) {
             Status = STATUS_RESTART_AFTER_SIGNAL;
 
         } else {
@@ -636,7 +636,7 @@ Return Value:
     CurrentProcess = PsGetCurrentProcess();
     Parameters = (PSYSTEM_CALL_PERFORM_VECTORED_IO)SystemCallParameter;
     Size = Parameters->Size;
-    Parameters->Size = 0;
+    Parameters->BytesCompleted = 0;
     IoBuffer = NULL;
     HandleValue = ObGetHandleValue(CurrentProcess->HandleTable,
                                    Parameters->Handle,
@@ -682,7 +682,7 @@ Return Value:
                                  Size,
                                  0,
                                  Timeout,
-                                 &(Parameters->Size),
+                                 &(Parameters->BytesCompleted),
                                  NULL);
 
         if (Status == STATUS_BROKEN_PIPE) {
@@ -699,7 +699,7 @@ Return Value:
                                 Size,
                                 0,
                                 Timeout,
-                                &(Parameters->Size),
+                                &(Parameters->BytesCompleted),
                                 NULL);
     }
 
@@ -723,7 +723,7 @@ SysPerformVectoredIoEnd:
     //
 
     if (Status == STATUS_INTERRUPTED) {
-        if (Parameters->Size == 0) {
+        if (Parameters->BytesCompleted == 0) {
             Status = STATUS_RESTART_AFTER_SIGNAL;
 
         } else {

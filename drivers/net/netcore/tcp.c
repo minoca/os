@@ -2104,7 +2104,7 @@ TcpSendEnd:
         KeReleaseQueuedLock(TcpSocket->Lock);
     }
 
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
 
     //
     // If any bytes were written, then consider this a success.
@@ -2825,7 +2825,7 @@ TcpReceiveEnd:
         Status = STATUS_SUCCESS;
     }
 
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
     return Status;
 }
 
@@ -8703,7 +8703,7 @@ TcpReceiveOutOfBandDataEnd:
         KeReleaseQueuedLock(TcpSocket->Lock);
     }
 
-    Parameters->Size = BytesComplete;
+    Parameters->BytesCompleted = BytesComplete;
     return Status;
 }
 

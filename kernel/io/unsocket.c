@@ -1719,7 +1719,7 @@ UnixSocketSendDataEnd:
         IO_PATH_POINT_RELEASE_REFERENCE(&PathPoint);
     }
 
-    Parameters->Size = BytesCompleted;
+    Parameters->BytesCompleted = BytesCompleted;
     return Status;
 }
 
@@ -2021,7 +2021,7 @@ UnixSocketReceiveDataEnd:
         Status = STATUS_SUCCESS;
     }
 
-    Parameters->Size = BytesReceived;
+    Parameters->BytesCompleted = BytesReceived;
     return Status;
 }
 

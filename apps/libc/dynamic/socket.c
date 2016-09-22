@@ -754,6 +754,7 @@ Return Value:
     KSTATUS Status;
 
     Parameters.Size = Length;
+    Parameters.BytesCompleted = 0;
     Parameters.IoFlags = SYS_IO_FLAG_WRITE;
     Parameters.SocketIoFlags = Flags;
     Parameters.TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
@@ -796,7 +797,7 @@ Return Value:
         return -1;
     }
 
-    return (ssize_t)(Parameters.Size);
+    return (ssize_t)(Parameters.BytesCompleted);
 }
 
 LIBC_API
@@ -851,6 +852,7 @@ Return Value:
 
     ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT();
 
+    Parameters.BytesCompleted = 0;
     Parameters.IoFlags = SYS_IO_FLAG_WRITE;
     Parameters.SocketIoFlags = Flags;
     Parameters.TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
@@ -890,7 +892,7 @@ Return Value:
         return -1;
     }
 
-    return (ssize_t)(Parameters.Size);
+    return (ssize_t)(Parameters.BytesCompleted);
 }
 
 LIBC_API
@@ -983,6 +985,7 @@ Return Value:
     KSTATUS Status;
 
     Parameters.Size = Length;
+    Parameters.BytesCompleted = 0;
     Parameters.IoFlags = 0;
     Parameters.SocketIoFlags = Flags;
     Parameters.TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
@@ -1034,7 +1037,7 @@ Return Value:
         }
     }
 
-    return (ssize_t)(Parameters.Size);
+    return (ssize_t)(Parameters.BytesCompleted);
 }
 
 LIBC_API
@@ -1093,6 +1096,7 @@ Return Value:
 
     ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT();
 
+    Parameters.BytesCompleted = 0;
     Parameters.IoFlags = 0;
     Parameters.SocketIoFlags = Flags;
     Parameters.TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
@@ -1147,7 +1151,7 @@ Return Value:
         }
     }
 
-    return (ssize_t)(Parameters.Size);
+    return (ssize_t)(Parameters.BytesCompleted);
 }
 
 LIBC_API
