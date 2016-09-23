@@ -2324,8 +2324,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This is a pointer to the actual parameters passed from
-        user mode.
+        the system call. This structure will be a stack-local copy of the
+        actual parameters passed from user-mode.
 
 Return Value:
 
