@@ -804,7 +804,7 @@ Return Value:
                                     NonBlocking,
                                     &PipeBytesCompleted);
 
-        if ((Status == STATUS_NO_DATA_AVAILABLE) && (Pipe->WriterCount == 0)) {
+        if ((Status == STATUS_TRY_AGAIN) && (Pipe->WriterCount == 0)) {
 
             ASSERT(PipeBytesCompleted == 0);
 
