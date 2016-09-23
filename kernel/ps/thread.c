@@ -597,6 +597,13 @@ Return Value:
     }
 
     //
+    // Update the stack base and size on output.
+    //
+
+    Parameters->StackBase = ThreadParameters.UserStack;
+    Parameters->StackSize = ThreadParameters.StackSize;
+
+    //
     // Null out the name parameters as that memory is now owned by the object
     // manager.
     //
