@@ -589,11 +589,7 @@ Return Value:
     PSYSTEM_CALL_DELAY_EXECUTION Parameters;
 
     Parameters = (PSYSTEM_CALL_DELAY_EXECUTION)SystemCallParameter;
-    Parameters->Status = KeDelayExecution(TRUE,
-                                          Parameters->TimeTicks,
-                                          Parameters->Interval);
-
-    return Parameters->Status;
+    return KeDelayExecution(TRUE, Parameters->TimeTicks, Parameters->Interval);
 }
 
 INTN
@@ -635,7 +631,6 @@ Return Value:
     }
 
 SysSetSystemTimeEnd:
-    Parameters->Status = Status;
     return Status;
 }
 

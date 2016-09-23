@@ -345,7 +345,6 @@ SysLoadDriverEnd:
         MmFreePagedPool(DriverName);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 

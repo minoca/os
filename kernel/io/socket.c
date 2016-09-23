@@ -1122,7 +1122,6 @@ CreateSocketPairEnd:
         }
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1205,7 +1204,6 @@ CreateSocketEnd:
         Parameters->Socket = INVALID_HANDLE;
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1275,7 +1273,6 @@ SysSocketBindEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1335,7 +1332,6 @@ SysSocketListenEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1472,7 +1468,6 @@ SysSocketAcceptEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1553,7 +1548,6 @@ SysSocketConnectEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1679,7 +1673,6 @@ SysSocketPerformIoEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1807,7 +1800,6 @@ SysSocketPerformVectoredIoEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1916,7 +1908,6 @@ SysSocketGetSetInformationEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1973,7 +1964,6 @@ SysSocketShutdownEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 

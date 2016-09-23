@@ -246,15 +246,16 @@ Return Value:
 {
 
     SYSTEM_CALL_OPEN Parameters;
+    KSTATUS Status;
 
     Parameters.Directory = Directory;
     Parameters.Path = Path;
     Parameters.PathBufferLength = PathLength;
     Parameters.Flags = Flags;
     Parameters.CreatePermissions = CreatePermissions & FILE_PERMISSION_MASK;
-    OsSystemCall(SystemCallOpen, &Parameters);
+    Status = OsSystemCall(SystemCallOpen, &Parameters);
     *Handle = Parameters.Handle;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -289,12 +290,13 @@ Return Value:
 {
 
     SYSTEM_CALL_OPEN_DEVICE Parameters;
+    KSTATUS Status;
 
     Parameters.DeviceId = DeviceId;
     Parameters.Flags = Flags;
-    OsSystemCall(SystemCallOpenDevice, &Parameters);
+    Status = OsSystemCall(SystemCallOpenDevice, &Parameters);
     *Handle = Parameters.Handle;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -321,11 +323,7 @@ Return Value:
 
 {
 
-    SYSTEM_CALL_CLOSE Parameters;
-
-    Parameters.Handle = Handle;
-    OsSystemCall(SystemCallClose, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallClose, Handle);
 }
 
 OS_API
@@ -377,6 +375,7 @@ Return Value:
 {
 
     SYSTEM_CALL_PERFORM_IO Parameters;
+    KSTATUS Status;
 
     Parameters.Handle = Handle;
     Parameters.Buffer = Buffer;
@@ -385,9 +384,9 @@ Return Value:
     Parameters.Offset = Offset;
     Parameters.Size = Size;
     Parameters.BytesCompleted = 0;
-    OsSystemCall(SystemCallPerformIo, &Parameters);
+    Status = OsSystemCall(SystemCallPerformIo, &Parameters);
     *BytesCompleted = Parameters.BytesCompleted;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -441,6 +440,7 @@ Return Value:
 {
 
     SYSTEM_CALL_PERFORM_VECTORED_IO Parameters;
+    KSTATUS Status;
 
     Parameters.Handle = Handle;
     Parameters.Flags = Flags;
@@ -450,9 +450,9 @@ Return Value:
     Parameters.BytesCompleted = 0;
     Parameters.VectorArray = VectorArray;
     Parameters.VectorCount = VectorCount;
-    OsSystemCall(SystemCallPerformVectoredIo, &Parameters);
+    Status = OsSystemCall(SystemCallPerformVectoredIo, &Parameters);
     *BytesCompleted = Parameters.BytesCompleted;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -488,8 +488,7 @@ Return Value:
 
     Parameters.Handle = Handle;
     Parameters.Flags = Flags;
-    OsSystemCall(SystemCallFlush, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallFlush, &Parameters);
 }
 
 OS_API
@@ -544,19 +543,20 @@ Return Value:
 {
 
     SYSTEM_CALL_CREATE_PIPE Parameters;
+    KSTATUS Status;
 
     Parameters.Directory = Directory;
     Parameters.Path = Path;
     Parameters.PathLength = PathLength;
     Parameters.OpenFlags = Flags;
     Parameters.Permissions = Permissions;
-    OsSystemCall(SystemCallCreatePipe, &Parameters);
+    Status = OsSystemCall(SystemCallCreatePipe, &Parameters);
     if (Path == NULL) {
         *ReadHandle = Parameters.ReadHandle;
         *WriteHandle = Parameters.WriteHandle;
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -663,8 +663,7 @@ Return Value:
     Parameters.StackSize = StackSize;
     Parameters.ThreadPointer = ThreadPointer;
     Parameters.ThreadId = ThreadId;
-    OsSystemCall(SystemCallCreateThread, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallCreateThread, &Parameters);
 }
 
 OS_API
@@ -696,20 +695,21 @@ Return Value:
 
 {
 
-    SYSTEM_CALL_FORK_PROCESS Parameters;
+    INTN Result;
 
     //
-    // If the call is successful, the child's parameter structure will not be
-    // modified. Set the parameters up with the return values for the child
-    // before making the call so that when the child returns, it looks like the
-    // kernel filled those values in.
+    // Fork returns the process ID of the child to the parent and 0 to the
+    // child. Or a negative status code to the parent if the fork failed.
     //
 
-    Parameters.Status = STATUS_SUCCESS;
-    Parameters.ProcessId = 0;
-    OspSystemCallFull(SystemCallForkProcess, &Parameters);
-    *NewProcessId = Parameters.ProcessId;
-    return Parameters.Status;
+    Result = OspSystemCallFull(SystemCallForkProcess, NULL);
+    if (Result < 0) {
+        *NewProcessId = -1;
+        return (KSTATUS)Result;
+    }
+
+    *NewProcessId = Result;
+    return STATUS_SUCCESS;
 }
 
 OS_API
@@ -740,13 +740,18 @@ Return Value:
 
 {
 
-    SYSTEM_CALL_EXECUTE_IMAGE Parameters;
+    PSYSTEM_CALL_EXECUTE_IMAGE Parameters;
 
-    RtlCopyMemory(&(Parameters.Environment),
-                  Environment,
-                  sizeof(PROCESS_ENVIRONMENT));
+    //
+    // Avoid copying the process environment to the system call structure, only
+    // for it to be copied again by the kernel. Just cast the environment into
+    // the system call parameters. It's a bit sneaky, but saves a double copy.
+    //
 
-    return OspSystemCallFull(SystemCallExecuteImage, &Parameters);
+    ASSERT(FIELD_OFFSET(SYSTEM_CALL_EXECUTE_IMAGE, Environment) == 0);
+
+    Parameters = (PSYSTEM_CALL_EXECUTE_IMAGE)Environment;
+    return OspSystemCallFull(SystemCallExecuteImage, Parameters);
 }
 
 OS_API
@@ -924,13 +929,13 @@ Return Value:
         Parameters.Root = Root;
         Parameters.Buffer = CurrentDirectory;
         Parameters.BufferSize = CurrentDirectorySize;
-        OsSystemCall(SystemCallGetCurrentDirectory, &Parameters);
+        Status = OsSystemCall(SystemCallGetCurrentDirectory, &Parameters);
 
         //
         // Exit on any status besides a buffer too small result.
         //
 
-        if (Parameters.Status != STATUS_BUFFER_TOO_SMALL) {
+        if (Status != STATUS_BUFFER_TOO_SMALL) {
             break;
         }
 
@@ -943,8 +948,6 @@ Return Value:
         OsHeapFree(CurrentDirectory);
     }
 
-    Status = Parameters.Status;
-
 GetCurrentDirectoryEnd:
     if (KSUCCESS(Status)) {
         *Buffer = Parameters.Buffer;
@@ -954,7 +957,7 @@ GetCurrentDirectoryEnd:
         OsHeapFree(CurrentDirectory);
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -1000,8 +1003,7 @@ Return Value:
     Parameters.Buffer = Path;
     Parameters.BufferLength = PathSize;
     Parameters.Handle = INVALID_HANDLE;
-    OsSystemCall(SystemCallChangeDirectory, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallChangeDirectory, &Parameters);
 }
 
 OS_API
@@ -1044,8 +1046,7 @@ Return Value:
     Parameters.Buffer = NULL;
     Parameters.BufferLength = 0;
     Parameters.Handle = Handle;
-    OsSystemCall(SystemCallChangeDirectory, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallChangeDirectory, &Parameters);
 }
 
 OS_API
@@ -1096,14 +1097,15 @@ Return Value:
 {
 
     SYSTEM_CALL_POLL Poll;
+    KSTATUS Status;
 
     Poll.SignalMask = SignalMask;
     Poll.Descriptors = Descriptors;
     Poll.DescriptorCount = DescriptorCount;
     Poll.TimeoutInMilliseconds = TimeoutInMilliseconds;
-    OsSystemCall(SystemCallPoll, &Poll);
+    Status = OsSystemCall(SystemCallPoll, &Poll);
     *DescriptorsSelected = Poll.DescriptorsSelected;
-    return Poll.Status;
+    return Status;
 }
 
 OS_API
@@ -1187,8 +1189,7 @@ Return Value:
     SendSignal.SignalNumber = SignalNumber;
     SendSignal.SignalCode = SignalCode;
     SendSignal.SignalParameter = SignalParameter;
-    OsSystemCall(SystemCallSendSignal, &SendSignal);
-    return SendSignal.Status;
+    return OsSystemCall(SystemCallSendSignal, &SendSignal);
 }
 
 OS_API
@@ -1222,6 +1223,7 @@ Return Value:
 {
 
     SYSTEM_CALL_GET_SET_PROCESS_ID Parameters;
+    INTN Result;
 
     //
     // TODO: These values should be read once and cached, which means changing
@@ -1232,9 +1234,13 @@ Return Value:
     Parameters.ProcessId = *ProcessId;
     Parameters.NewValue = 0;
     Parameters.Set = FALSE;
-    OsSystemCall(SystemCallGetSetProcessId, &Parameters);
-    *ProcessId = Parameters.ProcessId;
-    return Parameters.Status;
+    Result = OsSystemCall(SystemCallGetSetProcessId, &Parameters);
+    if (Result < 0) {
+        return Result;
+    }
+
+    *ProcessId = Result;
+    return STATUS_SUCCESS;
 }
 
 OS_API
@@ -1275,8 +1281,7 @@ Return Value:
     Parameters.ProcessId = ProcessId;
     Parameters.NewValue = NewValue;
     Parameters.Set = TRUE;
-    OsSystemCall(SystemCallGetSetProcessId, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallGetSetProcessId, &Parameters);
 }
 
 OS_API
@@ -1367,7 +1372,7 @@ Arguments:
         On output, this parameter will contain the process ID of the child that
         generated the signal activity, and the child signal will be discarded.
         If the wait for child parameter is set to FALSE, then this parameter
-        is ignored. If a non-child signal cause the routine to return, then
+        is ignored. If a non-child signal caused the routine to return, then
         the value at this parameter is undefined.
 
     Reason - Supplies a pointer where the reason for the child event will be
@@ -1381,10 +1386,11 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS if the wait was successfully satisfied. If the
-    SYSTEM_CALL_WAIT_FLAG_RETURN_IMMEDIATELY flag is set and there are no
-    children ready to be reaped, then STATUS_SUCCESS is returned and the child
-    PID is returned as -1.
+    STATUS_SUCCESS if the wait was successfully satisfied.
+
+    STATUS_NO_DATA_AVAILABLE if the SYSTEM_CALL_WAIT_FLAG_RETURN_IMMEDIATELY
+    flag is set and there are no children ready to be reaped. The child PID is
+    returned as -1.
 
     STATUS_INTERRUPTED if the wait was interrupted by a signal.
 
@@ -1395,6 +1401,7 @@ Return Value:
 {
 
     SYSTEM_CALL_WAIT_FOR_CHILD Parameters;
+    KSTATUS Status;
 
     Parameters.Flags = Flags;
     Parameters.ChildPid = -1;
@@ -1403,7 +1410,7 @@ Return Value:
     }
 
     Parameters.ResourceUsage = ChildResourceUsage;
-    OsSystemCall(SystemCallWaitForChildProcess, &Parameters);
+    Status = OsSystemCall(SystemCallWaitForChildProcess, &Parameters);
     if (ChildPid != NULL) {
         *ChildPid = Parameters.ChildPid;
     }
@@ -1416,7 +1423,7 @@ Return Value:
         *ChildExitValue = Parameters.ChildExitValue;
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -1480,8 +1487,7 @@ Return Value:
     Parameters.SignalOperation = SignalOperation;
     Parameters.SignalParameters = SignalParameters;
     Parameters.TimeoutInMilliseconds = TimeoutInMilliseconds;
-    OsSystemCall(SystemCallSuspendExecution, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallSuspendExecution, &Parameters);
 }
 
 OS_API
@@ -1513,10 +1519,7 @@ Return Value:
 
 {
 
-    SYSTEM_CALL_EXIT_PROCESS Parameters;
-
-    Parameters.Status = Status;
-    OsSystemCall(SystemCallExitProcess, &Parameters);
+    OsSystemCall(SystemCallExitProcess, (PVOID)Status);
     while (TRUE) {
 
         ASSERT(FALSE);
@@ -1560,8 +1563,7 @@ Return Value:
     FileControl.File = Handle;
     FileControl.Command = Command;
     FileControl.Parameters = Parameters;
-    OsSystemCall(SystemCallFileControl, &FileControl);
-    return FileControl.Status;
+    return OsSystemCall(SystemCallFileControl, &FileControl);
 }
 
 OS_API
@@ -1807,16 +1809,17 @@ Return Value:
 {
 
     SYSTEM_CALL_SEEK Request;
+    KSTATUS Status;
 
     Request.Handle = Handle;
     Request.Command = SeekCommand;
     Request.Offset = Offset;
-    OsSystemCall(SystemCallSeek, &Request);
+    Status = OsSystemCall(SystemCallSeek, &Request);
     if (NewOffset != NULL) {
         *NewOffset = Request.Offset;
     }
 
-    return Request.Status;
+    return Status;
 }
 
 OS_API
@@ -1867,8 +1870,7 @@ Return Value:
     Parameters.PathSize = PathSize;
     Parameters.LinkDestinationBuffer = LinkDestinationBuffer;
     Parameters.LinkDestinationBufferSize = LinkDestinationBufferSize;
-    OsSystemCall(SystemCallCreateSymbolicLink, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallCreateSymbolicLink, &Parameters);
 }
 
 OS_API
@@ -1925,15 +1927,16 @@ Return Value:
 {
 
     SYSTEM_CALL_READ_SYMBOLIC_LINK Parameters;
+    KSTATUS Status;
 
     Parameters.Directory = Directory;
     Parameters.Path = Path;
     Parameters.PathSize = PathSize;
     Parameters.LinkDestinationBuffer = LinkDestinationBuffer;
     Parameters.LinkDestinationBufferSize = LinkDestinationBufferSize;
-    OsSystemCall(SystemCallReadSymbolicLink, &Parameters);
+    Status = OsSystemCall(SystemCallReadSymbolicLink, &Parameters);
     *LinkDestinationSize = Parameters.LinkDestinationSize;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -1997,8 +2000,7 @@ Return Value:
     Parameters.NewLinkPath = LinkPath;
     Parameters.NewLinkPathSize = LinkPathSize;
     Parameters.FollowLinks = FollowExistingFileLinks;
-    OsSystemCall(SystemCallCreateHardLink, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallCreateHardLink, &Parameters);
 }
 
 OS_API
@@ -2052,8 +2054,7 @@ Return Value:
     Parameters.Path = Path;
     Parameters.PathSize = PathSize;
     Parameters.Flags = Flags;
-    OsSystemCall(SystemCallDelete, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallDelete, &Parameters);
 }
 
 OS_API
@@ -2120,8 +2121,7 @@ Return Value:
     Parameters.DestinationDirectory = DestinationDirectory;
     Parameters.DestinationPath = DestinationPath;
     Parameters.DestinationPathSize = DestinationPathSize;
-    OsSystemCall(SystemCallRename, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallRename, &Parameters);
 }
 
 OS_API
@@ -2165,8 +2165,7 @@ Return Value:
     Parameters.RequestCode = RequestCode;
     Parameters.Context = Context;
     Parameters.ContextSize = ContextSize;
-    OsSystemCall(SystemCallUserControl, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallUserControl, &Parameters);
 }
 
 OS_API
@@ -2398,6 +2397,7 @@ Return Value:
 {
 
     SYSTEM_CALL_GET_EFFECTIVE_ACCESS Parameters;
+    KSTATUS Status;
 
     Parameters.Directory = Directory;
     Parameters.FilePath = Path;
@@ -2405,9 +2405,9 @@ Return Value:
     Parameters.UseRealIds = UseRealIds;
     Parameters.DesiredFlags = DesiredFlags;
     Parameters.EffectiveAccess = 0;
-    OsSystemCall(SystemCallGetEffectiveAccess, &Parameters);
+    Status = OsSystemCall(SystemCallGetEffectiveAccess, &Parameters);
     *EffectiveAccess = Parameters.EffectiveAccess;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -2442,8 +2442,7 @@ Return Value:
 
     Parameters.DriverName = Path;
     Parameters.DriverNameSize = PathSize;
-    OsSystemCall(SystemCallLoadDriver, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallLoadDriver, &Parameters);
 }
 
 OS_API
@@ -2494,6 +2493,7 @@ Return Value:
 {
 
     SYSTEM_CALL_LOCATE_DEVICE_INFORMATION Request;
+    KSTATUS Status;
 
     RtlZeroMemory(&Request, sizeof(SYSTEM_CALL_LOCATE_DEVICE_INFORMATION));
     if (Uuid != NULL) {
@@ -2508,9 +2508,9 @@ Return Value:
 
     Request.Results = Results;
     Request.ResultCount = *ResultCount;
-    OsSystemCall(SystemCallLocateDeviceInformation, &Request);
+    Status = OsSystemCall(SystemCallLocateDeviceInformation, &Request);
     *ResultCount = Request.ResultCount;
-    return Request.Status;
+    return Status;
 }
 
 OS_API
@@ -2555,15 +2555,16 @@ Return Value:
 {
 
     SYSTEM_CALL_GET_SET_DEVICE_INFORMATION Request;
+    KSTATUS Status;
 
     RtlCopyMemory(&(Request.Uuid), Uuid, sizeof(UUID));
     Request.DeviceId = DeviceId;
     Request.Data = Data;
     Request.DataSize = *DataSize;
     Request.Set = Set;
-    OsSystemCall(SystemCallGetSetDeviceInformation, &Request);
+    Status = OsSystemCall(SystemCallGetSetDeviceInformation, &Request);
     *DataSize = Request.DataSize;
-    return Request.Status;
+    return Status;
 }
 
 OS_API
@@ -2619,15 +2620,16 @@ Return Value:
 {
 
     SYSTEM_CALL_GET_SET_SYSTEM_INFORMATION Request;
+    KSTATUS Status;
 
     Request.Subsystem = Subsystem;
     Request.InformationType = InformationType;
     Request.Data = Data;
     Request.DataSize = *DataSize;
     Request.Set = Set;
-    OsSystemCall(SystemCallGetSetSystemInformation, &Request);
+    Status = OsSystemCall(SystemCallGetSetSystemInformation, &Request);
     *DataSize = Request.DataSize;
-    return Request.Status;
+    return Status;
 }
 
 OS_API
@@ -2663,11 +2665,7 @@ Return Value:
 
 {
 
-    SYSTEM_CALL_RESET_SYSTEM Request;
-
-    Request.ResetType = ResetType;
-    OsSystemCall(SystemCallResetSystem, &Request);
-    return Request.Status;
+    return OsSystemCall(SystemCallResetSystem, (PVOID)ResetType);
 }
 
 OS_API
@@ -2745,6 +2743,7 @@ Return Value:
 {
 
     SYSTEM_CALL_MAP_UNMAP_MEMORY Parameters;
+    KSTATUS Status;
 
     Parameters.Map = TRUE;
     Parameters.Flags = Flags;
@@ -2752,12 +2751,12 @@ Return Value:
     Parameters.Address = *Address;
     Parameters.Offset = Offset;
     Parameters.Size = Size;
-    OsSystemCall(SystemCallMapOrUnmapMemory, &Parameters);
-    if (KSUCCESS(Parameters.Status)) {
+    Status = OsSystemCall(SystemCallMapOrUnmapMemory, &Parameters);
+    if (KSUCCESS(Status)) {
         *Address = Parameters.Address;
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -2793,8 +2792,7 @@ Return Value:
     Parameters.Map = FALSE;
     Parameters.Address = Address;
     Parameters.Size = Size;
-    OsSystemCall(SystemCallMapOrUnmapMemory, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallMapOrUnmapMemory, &Parameters);
 }
 
 OS_API
@@ -2835,8 +2833,7 @@ Return Value:
     Parameters.Address = Address;
     Parameters.Size = Size;
     Parameters.NewAttributes = NewAttributes;
-    OsSystemCall(SystemCallSetMemoryProtection, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallSetMemoryProtection, &Parameters);
 }
 
 OS_API
@@ -2876,8 +2873,7 @@ Return Value:
     Parameters.Address = Address;
     Parameters.Size = Size;
     Parameters.Flags = Flags;
-    OsSystemCall(SystemCallFlushMemory, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallFlushMemory, &Parameters);
 }
 
 OS_API
@@ -2912,6 +2908,7 @@ Return Value:
 {
 
     SYSTEM_CALL_SET_THREAD_IDENTITY Parameters;
+    KSTATUS Status;
 
     Parameters.Request.FieldsToSet = FieldsToSet;
     if (FieldsToSet != 0) {
@@ -2920,14 +2917,14 @@ Return Value:
                       sizeof(THREAD_IDENTITY));
     }
 
-    OsSystemCall(SystemCallSetThreadIdentity, &Parameters);
-    if (KSUCCESS(Parameters.Status)) {
+    Status = OsSystemCall(SystemCallSetThreadIdentity, &Parameters);
+    if (KSUCCESS(Status)) {
         RtlCopyMemory(Identity,
                       &(Parameters.Request.Identity),
                       sizeof(THREAD_IDENTITY));
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -2962,6 +2959,7 @@ Return Value:
 {
 
     SYSTEM_CALL_SET_THREAD_PERMISSIONS Parameters;
+    KSTATUS Status;
 
     Parameters.Request.FieldsToSet = FieldsToSet;
     if (FieldsToSet != 0) {
@@ -2970,14 +2968,14 @@ Return Value:
                       sizeof(THREAD_PERMISSIONS));
     }
 
-    OsSystemCall(SystemCallSetThreadPermissions, &Parameters);
-    if (KSUCCESS(Parameters.Status)) {
+    Status = OsSystemCall(SystemCallSetThreadPermissions, &Parameters);
+    if (KSUCCESS(Status)) {
         RtlCopyMemory(Permissions,
                       &(Parameters.Request.Permissions),
                       sizeof(THREAD_PERMISSIONS));
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -3030,13 +3028,14 @@ Return Value:
 {
 
     SYSTEM_CALL_SET_SUPPLEMENTARY_GROUPS Parameters;
+    KSTATUS Status;
 
     Parameters.Set = Set;
     Parameters.Groups = Groups;
     Parameters.Count = *Count;
-    OsSystemCall(SystemCallSetSupplementaryGroups, &Parameters);
+    Status = OsSystemCall(SystemCallSetSupplementaryGroups, &Parameters);
     *Count = Parameters.Count;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -3078,6 +3077,7 @@ Return Value:
 {
 
     SYSTEM_CALL_SET_RESOURCE_LIMIT Parameters;
+    KSTATUS Status;
 
     Parameters.Type = Type;
     if (NewValue != NULL) {
@@ -3089,13 +3089,13 @@ Return Value:
         Parameters.Set = FALSE;
     }
 
-    OsSystemCall(SystemCallSetResourceLimit, &Parameters);
+    Status = OsSystemCall(SystemCallSetResourceLimit, &Parameters);
     if (OldValue != NULL) {
         OldValue->Current = Parameters.Value.Current;
         OldValue->Max = Parameters.Value.Max;
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -3163,6 +3163,7 @@ Return Value:
 {
 
     SYSTEM_CALL_CREATE_TERMINAL Parameters;
+    KSTATUS Status;
 
     Parameters.MasterDirectory = MasterDirectory;
     Parameters.SlaveDirectory = SlaveDirectory;
@@ -3173,13 +3174,13 @@ Return Value:
     Parameters.MasterOpenFlags = MasterOpenFlags;
     Parameters.MasterCreatePermissions = MasterCreatePermissions;
     Parameters.SlaveCreatePermissions = SlaveCreatePermissions;
-    OsSystemCall(SystemCallCreateTerminal, &Parameters);
+    Status = OsSystemCall(SystemCallCreateTerminal, &Parameters);
     *MasterHandle = INVALID_HANDLE;
-    if (KSUCCESS(Parameters.Status)) {
+    if (KSUCCESS(Status)) {
         *MasterHandle = Parameters.MasterHandle;
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -3263,10 +3264,7 @@ Return Value:
 
 {
 
-    SYSTEM_CALL_SET_THREAD_ID_POINTER Parameters;
-
-    Parameters.Pointer = Pointer;
-    OsSystemCall(SystemCallSetThreadIdPointer, &Parameters);
+    OsSystemCall(SystemCallSetThreadIdPointer, Pointer);
     return;
 }
 
@@ -3341,13 +3339,14 @@ Return Value:
 {
 
     SYSTEM_CALL_DUPLICATE_HANDLE Parameters;
+    KSTATUS Status;
 
     Parameters.OldHandle = ExistingHandle;
     Parameters.NewHandle = *NewHandle;
     Parameters.OpenFlags = Flags;
-    OsSystemCall(SystemCallDuplicateHandle, &Parameters);
+    Status = OsSystemCall(SystemCallDuplicateHandle, &Parameters);
     *NewHandle = Parameters.NewHandle;
-    return Parameters.Status;
+    return Status;
 }
 
 VOID
@@ -3481,6 +3480,7 @@ Return Value:
 {
 
     SYSTEM_CALL_GET_SET_FILE_INFORMATION Parameters;
+    KSTATUS Status;
 
     Parameters.Request.FieldsToSet = 0;
     if (Request->FieldsToSet != 0) {
@@ -3493,14 +3493,14 @@ Return Value:
     Parameters.FilePath = Path;
     Parameters.FilePathSize = PathSize;
     Parameters.FollowLink = FollowLink;
-    OsSystemCall(SystemCallGetSetFileInformation, &Parameters);
+    Status = OsSystemCall(SystemCallGetSetFileInformation, &Parameters);
     if (Request->FieldsToSet == 0) {
         RtlCopyMemory(Request,
                       &(Parameters.Request),
                       sizeof(SET_FILE_INFORMATION));
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 KSTATUS
@@ -3555,8 +3555,7 @@ Return Value:
     Parameters.TargetPath = TargetPath;
     Parameters.TargetPathSize = TargetPathSize;
     Parameters.Flags = Flags;
-    OsSystemCall(SystemCallMountOrUnmount, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallMountOrUnmount, &Parameters);
 }
 
 NO_RETURN

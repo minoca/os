@@ -169,7 +169,6 @@ Return Value:
         break;
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 

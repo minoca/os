@@ -330,8 +330,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. The parameter is a user mode pointer to the signal
+        context to restore.
 
 Return Value:
 
@@ -345,12 +345,10 @@ Return Value:
 
 {
 
-    PSYSTEM_CALL_RESTORE_CONTEXT Parameters;
     PKTHREAD Thread;
 
     Thread = KeGetCurrentThread();
-    Parameters = SystemCallParameter;
-    return PspRestorePreSignalTrapFrame(Thread->TrapFrame, Parameters->Context);
+    return PspRestorePreSignalTrapFrame(Thread->TrapFrame, SystemCallParameter);
 }
 
 INTN
@@ -549,7 +547,6 @@ Return Value:
     }
 
 SendSignalEnd:
-    Request->Status = Status;
     return Status;
 }
 
@@ -867,7 +864,6 @@ SysWaitForChildProcessEnd:
         Parameters.ChildPid = -1;
     }
 
-    Parameters.Status = Status;
     CopyStatus = MmCopyToUserMode(SystemCallParameter,
                                   &Parameters,
                                   sizeof(SYSTEM_CALL_WAIT_FOR_CHILD));
@@ -1123,7 +1119,6 @@ SysSuspendExecutionEnd:
         }
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 

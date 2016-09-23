@@ -729,7 +729,6 @@ SysMapOrUnmapMemoryEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -807,7 +806,6 @@ Return Value:
                                               SectionFlags);
 
 SysSetMemoryProtectionEnd:
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1075,7 +1073,6 @@ SysSyncMemoryEnd:
         MmpImageSectionReleaseReference(ReleaseSection);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 

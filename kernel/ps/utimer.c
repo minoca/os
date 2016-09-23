@@ -375,7 +375,6 @@ SysTimerControlEnd:
         ObReleaseReference(Thread);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -570,7 +569,6 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 SysSetITimerEnd:
-    Request->Status = Status;
     return Status;
 }
 

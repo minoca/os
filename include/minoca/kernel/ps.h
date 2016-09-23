@@ -2168,8 +2168,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This is supplies the thread pointer directly, which is
+        passed from user mode via a register.
 
 Return Value:
 
@@ -2193,8 +2193,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This is supplies the thread ID pointer directly, which
+        is passed from user mode via a register.
 
 Return Value:
 
@@ -2244,14 +2244,16 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. The parameter is a user mode pointer to the signal
+        context to restore.
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
-
-    Error status code on failure.
+    Returns the architecture-specific return register from the thread context.
+    The architecture-specific system call assembly routines do not restore the
+    return register out of the trap frame in order to allow a system call to
+    return a value via a register. The restore context system call, however,
+    must restore the old context, including the return register.
 
 --*/
 
@@ -3125,9 +3127,9 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    Process ID of the child on success (a positive integer).
 
-    Error status code on failure.
+    Error status code on failure (a negative integer).
 
 --*/
 
@@ -3182,7 +3184,7 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the requested process ID on success.
 
     Error status code on failure.
 
@@ -3227,8 +3229,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This stores the exit status for the process. It is
+        passed to the kernel in a register.
 
 Return Value:
 

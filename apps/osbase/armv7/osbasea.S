@@ -141,9 +141,7 @@ FUNCTION OspSignalHandler
     add     %r1, %sp, #SIGNAL_PARAMETERS_SIZE @ Get the signal context.
     bl      OspProcessSignal    @ The parameters are already set up. Just call.
     add     %sp, #SIGNAL_PARAMETERS_SIZE    @ Pop the signal parameters.
-    mov     %r1, %sp            @ Get stack pointer.
-    push    {%r1}               @ Create the parameters structure.
-    mov     %r1, %sp            @ Pass a pointer to it.
+    mov     %r1, %sp            @ Pass a pointer to the signal context.
     mov     %r0, #SystemCallRestoreContext  @ Set up the system call number.
     bl      OspSystemCallFull   @ Execute the system call to restore.
     DEBUGGER_BREAK              @ Execution should never get here.

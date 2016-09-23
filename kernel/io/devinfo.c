@@ -511,7 +511,6 @@ Return Value:
     }
 
 SysLocateDeviceInformationEnd:
-    Request->Status = Status;
     if (Results != NULL) {
         MmFreePagedPool(Results);
     }
@@ -612,7 +611,6 @@ SysGetSetDeviceInformationEnd:
         MmFreePagedPool(Buffer);
     }
 
-    Request->Status = Status;
     return Status;
 }
 

@@ -173,8 +173,7 @@ FUNCTION(OspSignalHandler)
     pushl   %eax                # Push a pointer to the signal parameters.
     call    OspProcessSignal    # Call out to the C routine to handle it.
     addl    $(SIGNAL_PARAMETERS_SIZE + 8), %esp # Pop arguments + signal params.
-    pushl   %esp                # Push system call parameter.
-    pushl   %esp                # It's a pointer to a pointer.
+    pushl   %esp                # Push system call parameter (signal context).
     pushl   $SystemCallRestoreContext # Push system call number.
     call    OspSystemCallFull   # Call the full restore handler.
     int     $3                  # Execution should never get back here.

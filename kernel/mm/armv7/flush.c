@@ -337,8 +337,7 @@ Return Value:
         Size = KERNEL_VA_START - Address;
     }
 
-    Parameters->Status = MmSyncCacheRegion(Address, Size);
-    return Parameters->Status;
+    return MmSyncCacheRegion(Address, Size);
 }
 
 VOID

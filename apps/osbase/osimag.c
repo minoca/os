@@ -862,8 +862,7 @@ Return Value:
 
     Parameters.Address = Address;
     Parameters.Size = Size;
-    OsSystemCall(SystemCallFlushCache, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallFlushCache, &Parameters);
 }
 
 OS_API

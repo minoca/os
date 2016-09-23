@@ -107,6 +107,27 @@ typedef struct _CLOSE_EXECUTE_HANDLES_CONTEXT {
     KSTATUS Status;
 } CLOSE_EXECUTE_HANDLES_CONTEXT, *PCLOSE_EXECUTE_HANDLES_CONTEXT;
 
+/*++
+
+Structure Description:
+
+    This structure stores context during a check for open directory handles.
+
+Members:
+
+    Handle - Stores a handle to a directory that is to be excluded from the
+        check.
+
+    Status - Stores the current status of the check operation. Initialize to
+        STATUS_SUCCESS.
+
+--*/
+
+typedef struct _CHECK_FOR_DIRECTORY_HANDLES_CONTEXT {
+    HANDLE Handle;
+    KSTATUS Status;
+} CHECK_FOR_DIRECTORY_HANDLES_CONTEXT, *PCHECK_FOR_DIRECTORY_HANDLES_CONTEXT;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -308,7 +329,6 @@ SysOpenEnd:
         }
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -413,7 +433,6 @@ SysOpenDeviceEnd:
         }
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -431,8 +450,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This stores the user mode handle returned during the
+        open system call. It is passed to the kernel in a register.
 
 Return Value:
 
@@ -445,15 +464,12 @@ Return Value:
 {
 
     PKPROCESS CurrentProcess;
-    PSYSTEM_CALL_CLOSE Parameters;
 
     CurrentProcess = PsGetCurrentProcess();
 
     ASSERT(CurrentProcess != PsGetKernelProcess());
 
-    Parameters = (PSYSTEM_CALL_CLOSE)SystemCallParameter;
-    Parameters->Status = IopSysClose(CurrentProcess, Parameters->Handle);
-    return Parameters->Status;
+    return IopSysClose(CurrentProcess, (HANDLE)SystemCallParameter);
 }
 
 INTN
@@ -594,7 +610,6 @@ SysPerformIoEnd:
         }
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -731,7 +746,6 @@ SysPerformVectoredIoEnd:
         }
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -813,7 +827,6 @@ SysFlushEnd:
         IoIoHandleReleaseReference(HandleValue);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -984,7 +997,6 @@ SysCreatePipeEnd:
         }
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1100,7 +1112,6 @@ SysGetCurrentDirectoryEnd:
         IO_PATH_POINT_RELEASE_REFERENCE(RootDirectory);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1132,6 +1143,7 @@ Return Value:
 
 {
 
+    CHECK_FOR_DIRECTORY_HANDLES_CONTEXT Context;
     BOOL EscapeRoot;
     PIO_HANDLE ExistingHandle;
     PFILE_OBJECT FileObject;
@@ -1174,12 +1186,14 @@ Return Value:
             goto SysChangeDirectoryEnd;
         }
 
-        Parameters->Status = STATUS_SUCCESS;
+        Context.Handle = Parameters->Handle;
+        Context.Status = STATUS_SUCCESS;
         ObHandleTableIterate(Process->HandleTable,
                              IopCheckForDirectoryHandlesIterationRoutine,
-                             &Status);
+                             &Context);
 
-        if (!KSUCCESS(Parameters->Status)) {
+        if (!KSUCCESS(Context.Status)) {
+            Status = Context.Status;
             goto SysChangeDirectoryEnd;
         }
 
@@ -1309,7 +1323,6 @@ SysChangeDirectoryEnd:
         MmFreePagedPool(NewPath);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1656,7 +1669,6 @@ PollEnd:
         MmFreePagedPool(Descriptors);
     }
 
-    PollInformation->Status = Status;
     PollInformation->DescriptorsSelected = SelectedDescriptors;
     return Status;
 }
@@ -1786,7 +1798,6 @@ SysDuplicateHandleEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -2204,7 +2215,6 @@ SysFileControlEnd:
         }
     }
 
-    FileControl->Status = Status;
     if (IoHandle != NULL) {
         IoIoHandleReleaseReference(IoHandle);
     }
@@ -2314,7 +2324,6 @@ SysGetSetFileInformationEnd:
         MmFreePagedPool(PathCopy);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -2368,7 +2377,6 @@ Return Value:
     }
 
 SysSeekEnd:
-    Request->Status = Status;
     if (IoHandle != NULL) {
         IoIoHandleReleaseReference(IoHandle);
     }
@@ -2468,7 +2476,6 @@ SysCreateSymbolicLinkEnd:
         MmFreePagedPool(LinkTarget);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -2594,7 +2601,6 @@ SysReadSymbolicLinkEnd:
     }
 
     Parameters->LinkDestinationSize = LinkTargetSize;
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -2625,15 +2631,10 @@ Return Value:
 
 {
 
-    PSYSTEM_CALL_CREATE_HARD_LINK Parameters;
-
-    Parameters = (PSYSTEM_CALL_CREATE_HARD_LINK)SystemCallParameter;
-
     //
     // TODO: Add support for creating a hard link.
     //
 
-    Parameters->Status = STATUS_NOT_SUPPORTED;
     return STATUS_NOT_SUPPORTED;
 }
 
@@ -2723,7 +2724,6 @@ SysDeleteEnd:
         MmFreePagedPool(PathCopy);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -2838,7 +2838,6 @@ SysRenameEnd:
         IoIoHandleReleaseReference(DestinationDirectory);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -2915,7 +2914,6 @@ SysUserControlEnd:
         Status = STATUS_RESTART_AFTER_SIGNAL;
     }
 
-    Request->Status = Status;
     return Status;
 }
 
@@ -3050,7 +3048,6 @@ SysMountUnmountEnd:
         MmFreePagedPool(TargetCopy);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -3175,7 +3172,6 @@ SysGetEffectiveAccessEnd:
         IoClose(IoHandle);
     }
 
-    Parameters->Status = Status;
     if (Path != NULL) {
         MmFreePagedPool(Path);
     }
@@ -3333,7 +3329,6 @@ SysCreateTerminalEnd:
         MmFreePagedPool(SlavePath);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -3792,16 +3787,16 @@ Return Value:
 
     PFILE_OBJECT FileObject;
     PIO_HANDLE IoHandle;
-    PSYSTEM_CALL_CHANGE_DIRECTORY Parameters;
+    PCHECK_FOR_DIRECTORY_HANDLES_CONTEXT IterationContext;
 
-    Parameters = Context;
+    IterationContext = Context;
     IoHandle = HandleValue;
     FileObject = IoHandle->FileObject;
-    if ((Descriptor != Parameters->Handle) &&
+    if ((Descriptor != IterationContext->Handle) &&
         ((FileObject->Properties.Type == IoObjectRegularDirectory) ||
          (FileObject->Properties.Type == IoObjectObjectDirectory))) {
 
-        Parameters->Status = STATUS_TOO_MANY_HANDLES;
+        IterationContext->Status = STATUS_TOO_MANY_HANDLES;
     }
 
     return;

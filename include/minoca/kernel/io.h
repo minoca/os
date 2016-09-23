@@ -5445,8 +5445,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This stores the user mode handle returned during the
+        open system call. It is passed to the kernel in a register.
 
 Return Value:
 

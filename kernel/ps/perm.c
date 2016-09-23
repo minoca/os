@@ -206,12 +206,13 @@ Return Value:
 {
 
     PSYSTEM_CALL_SET_THREAD_IDENTITY Parameters;
+    KSTATUS Status;
 
     Parameters = SystemCallParameter;
-    Parameters->Status = PspSetThreadIdentity(Parameters->Request.FieldsToSet,
-                                              &(Parameters->Request.Identity));
+    Status = PspSetThreadIdentity(Parameters->Request.FieldsToSet,
+                                  &(Parameters->Request.Identity));
 
-    return Parameters->Status;
+    return Status;
 }
 
 INTN
@@ -242,13 +243,13 @@ Return Value:
 {
 
     PSYSTEM_CALL_SET_THREAD_PERMISSIONS Parameters;
+    KSTATUS Status;
 
     Parameters = SystemCallParameter;
-    Parameters->Status = PspSetThreadPermissions(
-                                           Parameters->Request.FieldsToSet,
-                                           &(Parameters->Request.Permissions));
+    Status = PspSetThreadPermissions(Parameters->Request.FieldsToSet,
+                                     &(Parameters->Request.Permissions));
 
-    return Parameters->Status;
+    return Status;
 }
 
 INTN
@@ -465,7 +466,6 @@ SysSetSupplementaryGroupsEnd:
         MmFreePagedPool(NewBlock);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -579,7 +579,6 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 SysSetResourceLimitEnd:
-    Parameters->Status = Status;
     return Status;
 }
 

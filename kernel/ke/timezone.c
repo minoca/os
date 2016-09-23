@@ -661,7 +661,6 @@ Return Value:
     }
 
 TimeZoneControlEnd:
-    Parameters->Status = Status;
     if (Almanac != NULL) {
         MmFreePagedPool(Almanac);
     }
