@@ -2135,7 +2135,7 @@ Return Value:
     PPTE DestinationDirectory;
     PADDRESS_SPACE_X86 DestinationSpace;
     PPTE DestinationTable;
-    ULONG DirectoryIndex;
+    UINTN DirectoryIndex;
     ULONG DirectoryIndexEnd;
     ULONG DirectoryIndexStart;
     INTN MappedCount;

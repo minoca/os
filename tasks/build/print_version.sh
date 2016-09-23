@@ -106,7 +106,7 @@ fi
 ## For simple revisions, just print out the basic version number.
 ##
 
-if [ "$form" == "simple" ]; then
+if [ "$form" = "simple" ]; then
     printf "$major.$minor.$revision.$serial" > $file
     exit 0
 fi

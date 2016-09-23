@@ -32,6 +32,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "mingen.h"
@@ -394,7 +395,10 @@ Return Value:
 
 SetupRootDirectoriesEnd:
     if (Start != NULL) {
-        chdir(Start);
+        if (chdir(Start) != 0) {
+            Status = errno;
+        }
+
         free(Start);
     }
 
@@ -1142,7 +1146,13 @@ Return Value:
     }
 
 GetAbsoluteDirectoryEnd:
-    chdir(Original);
+    if (chdir(Original) != 0) {
+        if (Directory != NULL) {
+            free(Directory);
+            Directory = NULL;
+        }
+    }
+
     return Directory;
 }
 

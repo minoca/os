@@ -55,9 +55,15 @@ OBJS += $(POSIX_OBJS)
 
 endif
 
-TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
+TARGETLIBS = $(OBJROOT)/os/lib/yy/build/yy.a                     \
+             $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
              $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a             \
-             $(OBJROOT)/os/lib/yy/build/yy.a                     \
+
+ifneq ($(OS),$(filter Windows_NT Minoca,$(OS)))
+
+DYNLIBS += -ldl
+
+endif
 
 include $(SRCROOT)/os/minoca.mk
 
@@ -77,7 +83,7 @@ endif
 
 %.o:%.ck
 	@echo Objectifying - $(notdir $<)
-	@cp $< $(CURDIR) && \
+	@[ -r $(notdir $<) ] || cp $< $(CURDIR) && \
 	   $(OBJCOPY) --rename-section \
 	       .data=.rodata,alloc,load,data,contents,readonly -I binary \
 	       -O $(OBJ_FORMAT) -B $(BFD_ARCH) $(EXTRA_OBJCOPY_ARGS) \

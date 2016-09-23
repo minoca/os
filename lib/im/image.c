@@ -695,7 +695,7 @@ Return Value:
     if (KSUCCESS(Status)) {
         Information->Format = Image.Format;
         Information->Machine = Image.Machine;
-        Information->EntryPoint = (ULONG)(Image.EntryPoint);
+        Information->EntryPoint = (UINTN)(Image.EntryPoint);
         Information->ImageBase = (UINTN)(Image.PreferredLowestAddress);
         goto GetImageInformationEnd;
     }

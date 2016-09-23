@@ -32,6 +32,8 @@ INCLUDES += $(SRCROOT)/os/apps/libc/include;
 
 VPATH += $(SRCDIR)/..:$(SRCDIR)/../math:
 
+EXTRA_CFLAGS += -ffreestanding
+
 OBJS = bsearch.o           \
        bsrchtst.o          \
        getopt.o            \

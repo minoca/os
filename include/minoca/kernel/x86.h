@@ -1012,7 +1012,7 @@ Return Value:
 
 --*/
 
-ULONG
+UINTN
 ArGetCurrentPageDirectory (
     VOID
     );

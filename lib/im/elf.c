@@ -1904,7 +1904,7 @@ PVOID
 ImpElfResolvePltEntry (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    UINTN RelocationOffset
+    ULONG RelocationOffset
     )
 
 /*++
@@ -2434,7 +2434,7 @@ Return Value:
 
         case ELF_DYNAMIC_DEBUG:
             if (UseLoadedAddress != FALSE) {
-                DynamicEntry->Value = (ELF_SWORD)&(Image->Debug);
+                DynamicEntry->Value = (UINTN)&(Image->Debug);
             }
 
             break;

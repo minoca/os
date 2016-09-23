@@ -1602,7 +1602,7 @@ Return Value:
     return STATUS_NOT_IMPLEMENTED;
 }
 
-ULONG
+UINTN
 ArGetCurrentPageDirectory (
     VOID
     )

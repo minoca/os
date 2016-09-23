@@ -2854,7 +2854,13 @@ Return Value:
         snprintf(ValueString, sizeof(ValueString), "%d", Value);
     }
 
-    snprintf(Line, sizeof(Line), "%s%*s", Name, 20 - strlen(Name), ValueString);
+    snprintf(Line,
+             sizeof(Line),
+             "%s%*s",
+             Name,
+             (int)(20 - strlen(Name)),
+             ValueString);
+
     SwMoveCursor(stdout, 9, Row);
     SwPrintInColor(Background, Foreground, Line);
     return;

@@ -467,7 +467,7 @@ FUNCTION(ArSetFaultingAddress)
 END_FUNCTION(ArSetFaultingAddress)
 
 ##
-## ULONG
+## UINTN
 ## ArGetCurrentPageDirectory (
 ##     VOID
 ##     )

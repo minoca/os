@@ -1652,7 +1652,7 @@ Return Value:
 
     UINTN Count;
     INTN Start;
-    INTN Step;
+    LONG Step;
     PCK_STRING String;
 
     String = CK_AS_STRING(Arguments[0]);

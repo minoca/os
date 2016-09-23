@@ -1761,7 +1761,7 @@ Return Value:
     if (SourceVolume == 0) {
         Source = Context->SourceVolume;
 
-    } else if (SourceVolume == -1L) {
+    } else if (SourceVolume == (ULONG)-1L) {
         Source = Context->HostFileSystem;
 
     } else {
