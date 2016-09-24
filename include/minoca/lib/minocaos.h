@@ -885,6 +885,8 @@ Return Value:
 
     STATUS_TIMEOUT if no descriptors were ready in the given amount of time.
 
+    STATUS_INVALID_PARAMETER if more than MAX_LONG descriptors are supplied.
+
 --*/
 
 OS_API

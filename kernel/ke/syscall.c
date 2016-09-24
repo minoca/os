@@ -113,7 +113,7 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
         sizeof(SYSTEM_CALL_SUSPEND_EXECUTION),
         sizeof(SYSTEM_CALL_SUSPEND_EXECUTION)},
     {PsSysExitProcess, 0, 0},
-    {IoSysPoll, sizeof(SYSTEM_CALL_POLL), sizeof(SYSTEM_CALL_POLL)},
+    {IoSysPoll, sizeof(SYSTEM_CALL_POLL), 0},
     {IoSysSocketCreate,
         sizeof(SYSTEM_CALL_SOCKET_CREATE),
         sizeof(SYSTEM_CALL_SOCKET_CREATE)},

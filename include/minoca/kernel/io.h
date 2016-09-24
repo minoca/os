@@ -5628,9 +5628,10 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the number of descriptors selected (a positive integer)
+    on success.
 
-    Error status code on failure.
+    Error status code (a negative integer) on failure.
 
 --*/
 

@@ -1346,17 +1346,18 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the number of descriptors selected (a positive integer)
+    on success.
 
-    Error status code on failure.
+    Error status code (a negative integer) on failure.
 
 --*/
 
 {
 
     ULONG AllocationSize;
-    ULONG DescriptorCount;
-    ULONG DescriptorIndex;
+    LONG DescriptorCount;
+    LONG DescriptorIndex;
     PPOLL_DESCRIPTOR Descriptors;
     PFILE_OBJECT FileObject;
     HANDLE Handle;
@@ -1369,7 +1370,8 @@ Return Value:
     PSYSTEM_CALL_POLL PollInformation;
     PKPROCESS Process;
     BOOL RestoreSignalMask;
-    ULONG SelectedDescriptors;
+    INTN Result;
+    INTN SelectedDescriptors;
     SIGNAL_SET SignalMask;
     KSTATUS Status;
     PKTHREAD Thread;
@@ -1407,7 +1409,7 @@ Return Value:
     // Polling nothing is easy.
     //
 
-    if ((PollInformation->Descriptors == NULL) || (DescriptorCount == 0)) {
+    if ((PollInformation->Descriptors == NULL) || (DescriptorCount <= 0)) {
         Microseconds = PollInformation->TimeoutInMilliseconds *
                        MICROSECONDS_PER_MILLISECOND;
 
@@ -1669,8 +1671,17 @@ PollEnd:
         MmFreePagedPool(Descriptors);
     }
 
-    PollInformation->DescriptorsSelected = SelectedDescriptors;
-    return Status;
+    //
+    // On success, return the positive descriptor count. Otherwise return the
+    // failure status.
+    //
+
+    Result = Status;
+    if (KSUCCESS(Result)) {
+        Result = SelectedDescriptors;
+    }
+
+    return Result;
 }
 
 INTN

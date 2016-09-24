@@ -943,17 +943,13 @@ Members:
     TimeoutInMilliseconds - Stores the number of milliseconds to wait for one
         of the descriptors to become ready before giving up.
 
-    DescriptorsSelected - Stores the number of descriptors that had activity,
-        returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_POLL {
     PSIGNAL_SET SignalMask;
     PPOLL_DESCRIPTOR Descriptors;
-    ULONG DescriptorCount;
+    LONG DescriptorCount;
     ULONG TimeoutInMilliseconds;
-    ULONG DescriptorsSelected;
 } SYSCALL_STRUCT SYSTEM_CALL_POLL, *PSYSTEM_CALL_POLL;
 
 /*++

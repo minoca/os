@@ -2696,6 +2696,11 @@ Return Value:
     KSTATUS Status;
     ULONG TimeoutMilliseconds;
 
+    if (DescriptorCount > sysconf(_SC_OPEN_MAX)) {
+        errno = EINVAL;
+        return -1;
+    }
+
     ASSERT_POLL_FLAGS_EQUIVALENT();
     ASSERT_POLL_STRUCTURE_EQUIVALENT();
 
@@ -2727,7 +2732,7 @@ pollEnd:
         return -1;
     }
 
-    return DescriptorsSelected;
+    return (int)DescriptorsSelected;
 }
 
 LIBC_API
@@ -3027,7 +3032,7 @@ pselectEnd:
         }
     }
 
-    return DescriptorsSelected;
+    return (int)DescriptorsSelected;
 }
 
 LIBC_API

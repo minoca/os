@@ -1092,20 +1092,31 @@ Return Value:
 
     STATUS_TIMEOUT if no descriptors were ready in the given amount of time.
 
+    STATUS_INVALID_PARAMETER if more than MAX_LONG descriptors are supplied.
+
 --*/
 
 {
 
     SYSTEM_CALL_POLL Poll;
-    KSTATUS Status;
+    INTN Result;
+
+    if (DescriptorCount > (ULONG)MAX_LONG) {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     Poll.SignalMask = SignalMask;
     Poll.Descriptors = Descriptors;
-    Poll.DescriptorCount = DescriptorCount;
+    Poll.DescriptorCount = (LONG)DescriptorCount;
     Poll.TimeoutInMilliseconds = TimeoutInMilliseconds;
-    Status = OsSystemCall(SystemCallPoll, &Poll);
-    *DescriptorsSelected = Poll.DescriptorsSelected;
-    return Status;
+    Result = OsSystemCall(SystemCallPoll, &Poll);
+    if (Result < 0) {
+        *DescriptorsSelected = 0;
+        return Result;
+    }
+
+    *DescriptorsSelected = (ULONG)Result;
+    return STATUS_SUCCESS;
 }
 
 OS_API
