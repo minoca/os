@@ -525,8 +525,7 @@ typedef struct _SYSTEM_CALL_PERFORM_IO {
     ULONG Flags;
     ULONG TimeoutInMilliseconds;
     IO_OFFSET Offset;
-    UINTN Size;
-    UINTN BytesCompleted;
+    INTN Size;
 } SYSCALL_STRUCT SYSTEM_CALL_PERFORM_IO, *PSYSTEM_CALL_PERFORM_IO;
 
 /*++
@@ -553,9 +552,6 @@ Members:
 
     Size - Stores the number of bytes of I/O to complete on input.
 
-    BytesCompleted - Stores the number of bytes of I/O that were actually
-        completed.
-
     VectoryArray - Stores a pointer to an array of I/O vector structures which
         specify the buffers to read or write.
 
@@ -569,8 +565,7 @@ typedef struct _SYSTEM_CALL_PERFORM_VECTORED_IO {
     ULONG Flags;
     ULONG TimeoutInMilliseconds;
     IO_OFFSET Offset;
-    UINTN Size;
-    UINTN BytesCompleted;
+    INTN Size;
     PIO_VECTOR VectorArray;
     UINTN VectorCount;
 } SYSCALL_STRUCT SYSTEM_CALL_PERFORM_VECTORED_IO,

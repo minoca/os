@@ -491,26 +491,29 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the number of bytes completed (a positive integer) on
+    success.
 
-    Error status code on failure.
+    Error status code (a negative integer) on failure.
 
 --*/
 
 {
 
+    UINTN BytesCompleted;
     PKPROCESS CurrentProcess;
     PIO_HANDLE HandleValue;
     IO_BUFFER IoBuffer;
     PSYSTEM_CALL_PERFORM_IO Parameters;
-    UINTN Size;
+    INTN Result;
+    INTN Size;
     KSTATUS Status;
     ULONG Timeout;
 
     CurrentProcess = PsGetCurrentProcess();
     Parameters = (PSYSTEM_CALL_PERFORM_IO)SystemCallParameter;
     Size = Parameters->Size;
-    Parameters->BytesCompleted = 0;
+    BytesCompleted = 0;
     HandleValue = ObGetHandleValue(CurrentProcess->HandleTable,
                                    Parameters->Handle,
                                    NULL);
@@ -520,7 +523,12 @@ Return Value:
         goto SysPerformIoEnd;
     }
 
-    if (Size == 0) {
+    //
+    // The proper system call interface doesn't pass negative values, but
+    // treat them the same as zero if they find a way through.
+    //
+
+    if (Size <= 0) {
         Status = STATUS_SUCCESS;
         goto SysPerformIoEnd;
     }
@@ -565,7 +573,7 @@ Return Value:
                                  Size,
                                  0,
                                  Timeout,
-                                 &(Parameters->BytesCompleted),
+                                 &BytesCompleted,
                                  NULL);
 
         if (Status == STATUS_BROKEN_PIPE) {
@@ -582,7 +590,7 @@ Return Value:
                                 Size,
                                 0,
                                 Timeout,
-                                &(Parameters->BytesCompleted),
+                                &BytesCompleted,
                                 NULL);
     }
 
@@ -602,7 +610,7 @@ SysPerformIoEnd:
     //
 
     if (Status == STATUS_INTERRUPTED) {
-        if (Parameters->BytesCompleted == 0) {
+        if (BytesCompleted == 0) {
             Status = STATUS_RESTART_AFTER_SIGNAL;
 
         } else {
@@ -610,7 +618,21 @@ SysPerformIoEnd:
         }
     }
 
-    return Status;
+    Result = Status;
+    if (KSUCCESS(Result)) {
+
+        //
+        // The internal APIs allow UINTN sizes, but the system call size was
+        // limited to MAX_INTN. The bytes completed should never exceed the
+        // maximum supplied size.
+        //
+
+        ASSERT(BytesCompleted <= (UINTN)MAX_INTN);
+
+        Result = (INTN)BytesCompleted;
+    }
+
+    return Result;
 }
 
 INTN
@@ -632,26 +654,29 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the number of bytes completed (a positive integer) on
+    success.
 
-    Error status code on failure.
+    Error status code (a negative integer) on failure.
 
 --*/
 
 {
 
+    UINTN BytesCompleted;
     PKPROCESS CurrentProcess;
     PIO_HANDLE HandleValue;
     PIO_BUFFER IoBuffer;
     PSYSTEM_CALL_PERFORM_VECTORED_IO Parameters;
-    UINTN Size;
+    INTN Result;
+    INTN Size;
     KSTATUS Status;
     ULONG Timeout;
 
     CurrentProcess = PsGetCurrentProcess();
     Parameters = (PSYSTEM_CALL_PERFORM_VECTORED_IO)SystemCallParameter;
     Size = Parameters->Size;
-    Parameters->BytesCompleted = 0;
+    BytesCompleted = 0;
     IoBuffer = NULL;
     HandleValue = ObGetHandleValue(CurrentProcess->HandleTable,
                                    Parameters->Handle,
@@ -662,7 +687,12 @@ Return Value:
         goto SysPerformVectoredIoEnd;
     }
 
-    if (Size == 0) {
+    //
+    // The proper system call interface doesn't pass negative values, but
+    // treat them the same as zero if they find a way through.
+    //
+
+    if (Size <= 0) {
         Status = STATUS_SUCCESS;
         goto SysPerformVectoredIoEnd;
     }
@@ -694,10 +724,10 @@ Return Value:
         Status = IoWriteAtOffset(HandleValue,
                                  IoBuffer,
                                  Parameters->Offset,
-                                 Size,
+                                 (UINTN)Size,
                                  0,
                                  Timeout,
-                                 &(Parameters->BytesCompleted),
+                                 &BytesCompleted,
                                  NULL);
 
         if (Status == STATUS_BROKEN_PIPE) {
@@ -711,10 +741,10 @@ Return Value:
         Status = IoReadAtOffset(HandleValue,
                                 IoBuffer,
                                 Parameters->Offset,
-                                Size,
+                                (UINTN)Size,
                                 0,
                                 Timeout,
-                                &(Parameters->BytesCompleted),
+                                &BytesCompleted,
                                 NULL);
     }
 
@@ -738,12 +768,26 @@ SysPerformVectoredIoEnd:
     //
 
     if (Status == STATUS_INTERRUPTED) {
-        if (Parameters->BytesCompleted == 0) {
+        if (BytesCompleted == 0) {
             Status = STATUS_RESTART_AFTER_SIGNAL;
 
         } else {
             Status = STATUS_SUCCESS;
         }
+    }
+
+    Result = Status;
+    if (KSUCCESS(Result)) {
+
+        //
+        // The internal APIs allow UINTN sizes, but the system call size was
+        // limited to MAX_INTN. The bytes completed should never exceed the
+        // maximum supplied size.
+        //
+
+        ASSERT(BytesCompleted <= (UINTN)MAX_INTN);
+
+        Result = (INTN)BytesCompleted;
     }
 
     return Status;

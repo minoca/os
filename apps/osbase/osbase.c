@@ -375,18 +375,33 @@ Return Value:
 {
 
     SYSTEM_CALL_PERFORM_IO Parameters;
-    KSTATUS Status;
+    INTN Result;
+
+    //
+    // Truncate the size so that the bytes completed can be returned via a
+    // register. Callers of perform I/O should be aware enough that bytes
+    // completed may not be the requested size and that large I/O needs to
+    // happen in a loop.
+    //
+
+    if (Size > (UINTN)MAX_INTN) {
+        Size = (UINTN)MAX_INTN;
+    }
 
     Parameters.Handle = Handle;
     Parameters.Buffer = Buffer;
     Parameters.Flags = Flags;
     Parameters.TimeoutInMilliseconds = TimeoutInMilliseconds;
     Parameters.Offset = Offset;
-    Parameters.Size = Size;
-    Parameters.BytesCompleted = 0;
-    Status = OsSystemCall(SystemCallPerformIo, &Parameters);
-    *BytesCompleted = Parameters.BytesCompleted;
-    return Status;
+    Parameters.Size = (INTN)Size;
+    Result = OsSystemCall(SystemCallPerformIo, &Parameters);
+    if (Result < 0) {
+        *BytesCompleted = 0;
+        return Result;
+    }
+
+    *BytesCompleted = (UINTN)Result;
+    return STATUS_SUCCESS;
 }
 
 OS_API
@@ -440,19 +455,34 @@ Return Value:
 {
 
     SYSTEM_CALL_PERFORM_VECTORED_IO Parameters;
-    KSTATUS Status;
+    INTN Result;
+
+    //
+    // Truncate the size so that the bytes completed can be returned via a
+    // register. Callers of perform I/O should be aware enough that bytes
+    // completed may not be the requested size and that large I/O needs to
+    // happen in a loop.
+    //
+
+    if (Size > (UINTN)MAX_INTN) {
+        Size = (UINTN)MAX_INTN;
+    }
 
     Parameters.Handle = Handle;
     Parameters.Flags = Flags;
     Parameters.TimeoutInMilliseconds = TimeoutInMilliseconds;
     Parameters.Offset = Offset;
-    Parameters.Size = Size;
-    Parameters.BytesCompleted = 0;
+    Parameters.Size = (INTN)Size;
     Parameters.VectorArray = VectorArray;
     Parameters.VectorCount = VectorCount;
-    Status = OsSystemCall(SystemCallPerformVectoredIo, &Parameters);
-    *BytesCompleted = Parameters.BytesCompleted;
-    return Status;
+    Result = OsSystemCall(SystemCallPerformVectoredIo, &Parameters);
+    if (Result < 0) {
+        *BytesCompleted = 0;
+        return Result;
+    }
+
+    *BytesCompleted = (UINTN)Result;
+    return STATUS_SUCCESS;
 }
 
 OS_API
