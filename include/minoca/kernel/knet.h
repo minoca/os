@@ -752,7 +752,7 @@ Members:
         kernel mode or SYS_IO_FLAG_* definitions for user mode.
 
     SocketIoFlags - Stores a set of socket-specific I/O flags. See SOCKET_IO_*
-        definitions.
+        definitions. On return, these may be updated.
 
     TimeoutInMilliseconds - Stores the timeout in milliseconds before the
         operation returns with what it has.

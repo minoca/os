@@ -1585,11 +1585,13 @@ Return Value:
     PIO_HANDLE IoHandle;
     SOCKET_IO_PARAMETERS IoParameters;
     PSYSTEM_CALL_SOCKET_PERFORM_IO Parameters;
+    BOOL ParametersCopied;
     PKPROCESS Process;
     KSTATUS Status;
     BOOL Write;
 
     Parameters = (PSYSTEM_CALL_SOCKET_PERFORM_IO)SystemCallParameter;
+    ParametersCopied = FALSE;
     Process = PsGetCurrentProcess();
 
     ASSERT(SYS_WAIT_TIME_INDEFINITE == WAIT_TIME_INDEFINITE);
@@ -1608,6 +1610,8 @@ Return Value:
         goto SysSocketPerformIoEnd;
     }
 
+    ParametersCopied = TRUE;
+    IoParameters.BytesCompleted = 0;
     IoParameters.IoFlags &= SYS_IO_FLAG_MASK;
     Status = MmInitializeIoBuffer(&IoBuffer,
                                   Parameters->Buffer,
@@ -1650,9 +1654,6 @@ Return Value:
     }
 
 SysSocketPerformIoEnd:
-    MmCopyToUserMode(Parameters->Parameters,
-                     &IoParameters,
-                     sizeof(SOCKET_IO_PARAMETERS));
 
     //
     // An interrupted socket cannot be restarted if a timeout has been set.
@@ -1671,6 +1672,16 @@ SysSocketPerformIoEnd:
 
     if (IoHandle != NULL) {
         IoIoHandleReleaseReference(IoHandle);
+    }
+
+    //
+    // Only copy the parameters out if they were copied in.
+    //
+
+    if (ParametersCopied != FALSE) {
+        MmCopyToUserMode(Parameters->Parameters,
+                         &IoParameters,
+                         sizeof(SOCKET_IO_PARAMETERS));
     }
 
     return Status;
@@ -1708,12 +1719,14 @@ Return Value:
     PIO_HANDLE IoHandle;
     SOCKET_IO_PARAMETERS IoParameters;
     PSYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO Parameters;
+    BOOL ParametersCopied;
     PKPROCESS Process;
     KSTATUS Status;
     BOOL Write;
 
     IoBuffer = NULL;
     Parameters = (PSYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO)SystemCallParameter;
+    ParametersCopied = FALSE;
     Process = PsGetCurrentProcess();
 
     ASSERT(SYS_WAIT_TIME_INDEFINITE == WAIT_TIME_INDEFINITE);
@@ -1732,6 +1745,8 @@ Return Value:
         goto SysSocketPerformVectoredIoEnd;
     }
 
+    ParametersCopied = TRUE;
+    IoParameters.BytesCompleted = 0;
     IoParameters.IoFlags &= SYS_IO_FLAG_MASK;
     Status = MmCreateIoBufferFromVector(Parameters->VectorArray,
                                         FALSE,
@@ -1777,10 +1792,6 @@ SysSocketPerformVectoredIoEnd:
         MmFreeIoBuffer(IoBuffer);
     }
 
-    MmCopyToUserMode(Parameters->Parameters,
-                     &IoParameters,
-                     sizeof(SOCKET_IO_PARAMETERS));
-
     //
     // An interrupted socket cannot be restarted if a timeout has been set.
     //
@@ -1798,6 +1809,16 @@ SysSocketPerformVectoredIoEnd:
 
     if (IoHandle != NULL) {
         IoIoHandleReleaseReference(IoHandle);
+    }
+
+    //
+    // Only copy the parameters out if they were copied in.
+    //
+
+    if (ParametersCopied != FALSE) {
+        MmCopyToUserMode(Parameters->Parameters,
+                         &IoParameters,
+                         sizeof(SOCKET_IO_PARAMETERS));
     }
 
     return Status;

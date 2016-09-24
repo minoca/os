@@ -2104,8 +2104,6 @@ TcpSendEnd:
         KeReleaseQueuedLock(TcpSocket->Lock);
     }
 
-    Parameters->BytesCompleted = BytesComplete;
-
     //
     // If any bytes were written, then consider this a success.
     //
@@ -2119,6 +2117,7 @@ TcpSendEnd:
         Status = STATUS_BROKEN_PIPE_SILENT;
     }
 
+    Parameters->BytesCompleted = BytesComplete;
     return Status;
 }
 
