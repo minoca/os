@@ -2054,7 +2054,58 @@ Return Value:
     Result = TermCreateOutputSequence(&Command, Sequence, sizeof(Sequence));
     if (Result != FALSE) {
         Sequence[sizeof(Sequence) - 1] = '\0';
-        fwrite(Sequence, 1, strlen(Sequence), stdout);
+        fwrite(Sequence, 1, strlen(Sequence), Stream);
+        fflush(Stream);
+    }
+
+    return;
+}
+
+void
+SwEnableCursor (
+    void *Stream,
+    int Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enables or disables display of the cursor.
+
+Arguments:
+
+    Stream - Supplies a pointer to the output file stream.
+
+    Enable - Supplies a boolean. If non-zero the cursor will be displayed. If
+        zero, the cursor will be hidden.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    TERMINAL_COMMAND_DATA Command;
+    BOOL Result;
+    CHAR Sequence[10];
+
+    memset(&Command, 0, sizeof(TERMINAL_COMMAND_DATA));
+    if (Enable != 0) {
+        Command.Command = TerminalCommandSetPrivateMode;
+
+    } else {
+        Command.Command = TerminalCommandClearPrivateMode;
+    }
+
+    Command.ParameterCount = 1;
+    Command.Parameter[0] = TERMINAL_PRIVATE_MODE_CURSOR;
+    Result = TermCreateOutputSequence(&Command, Sequence, sizeof(Sequence));
+    if (Result != FALSE) {
+        Sequence[sizeof(Sequence) - 1] = '\0';
+        fwrite(Sequence, 1, strlen(Sequence), Stream);
         fflush(stdout);
     }
 

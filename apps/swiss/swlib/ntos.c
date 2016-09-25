@@ -2161,6 +2161,53 @@ Return Value:
 }
 
 void
+SwEnableCursor (
+    void *Stream,
+    int Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enables or disables display of the cursor.
+
+Arguments:
+
+    Stream - Supplies a pointer to the output file stream.
+
+    Enable - Supplies a boolean. If non-zero the cursor will be displayed. If
+        zero, the cursor will be hidden.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CONSOLE_CURSOR_INFO Cursor;
+    HANDLE Handle;
+
+    fflush(NULL);
+    Handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (!GetConsoleCursorInfo(Handle, &Cursor)) {
+        return;
+    }
+
+    if (Enable != 0) {
+        Cursor.bVisible = TRUE;
+
+    } else {
+        Cursor.bVisible = FALSE;
+    }
+
+    SetConsoleCursorInfo(Handle, &Cursor);
+    return;
+}
+
+void
 SwScrollTerminal (
     int Rows
     )

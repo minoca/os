@@ -79,6 +79,7 @@ function build() {
         "sh/signals.c",
         "sh/util.c",
         "sh/var.c",
+        "soko.c",
         "sort.c",
         "split.c",
         "sum.c",

@@ -1673,6 +1673,31 @@ Return Value:
 --*/
 
 void
+SwEnableCursor (
+    void *Stream,
+    int Enable
+    );
+
+/*++
+
+Routine Description:
+
+    This routine enables or disables display of the cursor.
+
+Arguments:
+
+    Stream - Supplies a pointer to the output file stream.
+
+    Enable - Supplies a boolean. If non-zero the cursor will be displayed. If
+        zero, the cursor will be hidden.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
 SwScrollTerminal (
     int Rows
     );

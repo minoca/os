@@ -269,7 +269,9 @@ uos/uoscmds.c
 win32/w32cmds.c"
 
 for file in $SWISS_EDITED_FILES; do
-    sed -e '/.*DwMain.*/d' -e "$SED_ARG" "$APPS/swiss/$file" > "$SWISS/$file"
+    sed -e '/.*DwMain.*/d' -e '/.*SokoMain.*/d' -e "$SED_ARG" \
+        "$APPS/swiss/$file" > "$SWISS/$file"
+
 done
 
 INCLUDE="$DEST/include"

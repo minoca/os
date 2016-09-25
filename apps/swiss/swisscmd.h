@@ -219,6 +219,8 @@ Author:
 #define STTY_COMMAND_DESCRIPTION "Set terminal attributes"
 #define WHICH_COMMAND_NAME "which"
 #define WHICH_COMMAND_DESCRIPTION "Print the full path of an executable"
+#define SOKO_COMMAND_NAME "soko"
+#define SOKO_COMMAND_DESCRIPTION "Pack data bins"
 
 //
 // Command entry point prototypes.
@@ -2211,3 +2213,27 @@ Return Value:
 
 --*/
 
+INT
+SokoMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the main entry point for the soko application.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of command line arguments the program
+        was invoked with.
+
+    Arguments - Supplies a tokenized array of command line arguments.
+
+Return Value:
+
+    Returns an integer exit code. 0 for success, nonzero otherwise.
+
+--*/

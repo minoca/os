@@ -80,6 +80,7 @@ COMMON_OBJS = basename.o       \
               sh/signals.o     \
               sh/util.o        \
               sh/var.o         \
+              soko.o           \
               sort.o           \
               split.o          \
               sum.o            \
