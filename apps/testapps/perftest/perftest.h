@@ -120,6 +120,14 @@ Author:
 #define MUTEX_CONTENDED_TEST_DESCRIPTION \
     "Benchmarks pthread mutex lock and unlock routines under contention."
 
+#define STAT_TEST_NAME "stat"
+#define STAT_TEST_DESCRIPTION \
+    "Benchmarks the stat() C library routine."
+
+#define FSTAT_TEST_NAME "fstat"
+#define FSTAT_TEST_DESCRIPTION \
+    "Benchmarks the fstat() C library routine."
+
 //
 // Default test durations, in seconds.
 //
@@ -150,6 +158,8 @@ Author:
 #define PTHREAD_DETACH_TEST_DEFAULT_DURATION 30
 #define MUTEX_TEST_DEFAULT_DURATION 30
 #define MUTEX_CONTENDED_TEST_DEFAULT_DURATION 30
+#define STAT_TEST_DEFAULT_DURATION 30
+#define FSTAT_TEST_DEFAULT_DURATION 30
 
 //
 // Define the number of variables supplied to an iteration of the execute test
@@ -190,6 +200,8 @@ typedef enum _PT_TEST_TYPE {
     PtTestPthreadDetach,
     PtTestMutex,
     PtTestMutexContended,
+    PtTestStat,
+    PtTestFstat,
     PtTestTypeCount
 } PT_TEST_TYPE, *PPT_TEST_TYPE;
 
@@ -897,6 +909,56 @@ MutexMain (
 Routine Description:
 
     This routine performs the mutex performance benchmark tests.
+
+Arguments:
+
+    Test - Supplies a pointer to the performance test being executed.
+
+    Result - Supplies a pointer to a performance test result structure that
+        receives the tests results.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
+StatMain (
+    PPT_TEST_INFORMATION Test,
+    PPT_TEST_RESULT Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs the stat performance benchmark tests.
+
+Arguments:
+
+    Test - Supplies a pointer to the performance test being executed.
+
+    Result - Supplies a pointer to a performance test result structure that
+        receives the tests results.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
+FstatMain (
+    PPT_TEST_INFORMATION Test,
+    PPT_TEST_RESULT Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs the fstat performance benchmark tests.
 
 Arguments:
 

@@ -45,6 +45,7 @@ OBJS = copy.o     \
        pthread.o  \
        read.o     \
        rename.o   \
+       stat.o     \
        write.o    \
 
 DYNLIBS = -lminocaos
