@@ -153,10 +153,7 @@ CHAR CkOpcodeStackEffects[CkOpcodeCount] = {
     -1, // CkOpCloseUpvalue
     0,  // CkOpReturn
     1,  // CkOpClosure
-    0,  // CkOpConstruct
-    0,  // CkOpForeignConstruct
     -1, // CkOpClass
-    -1, // CkOpForeignClass
     -2, // CkOpMethod
     -2, // CkOpStaticMethod
     0,  // CkOpTry
@@ -231,10 +228,7 @@ UCHAR CkCompilerOperandSizes[CkOpcodeCount] = {
     0, // CkOpCloseUpvalue
     0, // CkOpReturn
     0, // CkOpClosure (not actually zero)
-    0, // CkOpConstruct
-    0, // CkOpForeignConstruct
     1, // CkOpClass
-    0, // CkOpForeignClass
     2, // CkOpMethod
     2, // CkOpStaticMethod
     2, // CkOpTry

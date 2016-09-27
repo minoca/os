@@ -193,22 +193,10 @@ Values:
         opposed to an upvalue). The second element is the symbol index of the
         local or upvalue being captured. The created closure is then pushed.
 
-    CkOpConstruct - Creates a new instance of a class. The class object is
-        popped from the top of the stack, and the uninitialized new instance
-        is pushed in its place.
-
-    CkOpForeignConstruct - Creates a new instance of a foreign class. The
-        class object is popped from the top of the stack, and the new
-        uninitialized instance is pushed in its place.
-
     CkOpClass - Creates a class type. The superclass type is popped from the
         stack. The name of the new class is then popped from the stack. The
         number of fields in the class is encoded in the next instruction byte.
         The new class type object is then pushed onto the stack.
-
-    CkOpForeignClass - Creates a new foreign class type. The superclass is
-        popped from the stack. Then the name is popped from the stack. The new
-        class object is pushed as a result.
 
     CkOpMethod - Defines a new method for the symbol given in the subsequent
         instruction word. The class that will receive the method is popped off
@@ -292,10 +280,7 @@ typedef enum _CK_OPCODE {
     CkOpCloseUpvalue,
     CkOpReturn,
     CkOpClosure,
-    CkOpConstruct,
-    CkOpForeignConstruct,
     CkOpClass,
-    CkOpForeignClass,
     CkOpMethod,
     CkOpStaticMethod,
     CkOpTry,

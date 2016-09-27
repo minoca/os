@@ -196,10 +196,7 @@ Environment:
         CKI_GOTO_OFFSET(CkOpCloseUpvalue), \
         CKI_GOTO_OFFSET(CkOpReturn), \
         CKI_GOTO_OFFSET(CkOpClosure), \
-        CKI_GOTO_OFFSET(CkOpConstruct), \
-        CKI_GOTO_OFFSET(CkOpForeignConstruct), \
         CKI_GOTO_OFFSET(CkOpClass), \
-        CKI_GOTO_OFFSET(CkOpForeignClass), \
         CKI_GOTO_OFFSET(CkOpMethod), \
         CKI_GOTO_OFFSET(CkOpStaticMethod), \
         CKI_GOTO_OFFSET(CkOpTry), \
@@ -1281,14 +1278,6 @@ Return Value:
         }
 
         Function = Frame->Closure->U.Block.Function;
-        CKI_DISPATCH();
-
-    CKI_CASE(CkOpConstruct):
-    CKI_CASE(CkOpForeignConstruct):
-    CKI_CASE(CkOpForeignClass):
-
-        CK_ASSERT(FALSE);
-
         CKI_DISPATCH();
 
     CKI_CASE(CkOpClass):
