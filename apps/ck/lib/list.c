@@ -530,7 +530,7 @@ Return Value:
 
     Destination = CK_AS_LIST(Arguments[0]);
     if (!CK_IS_LIST(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a list");
+        CkpRuntimeError(Vm, "TypeError", "Expected a list");
         return FALSE;
     }
 
@@ -744,7 +744,7 @@ Return Value:
     }
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -857,7 +857,7 @@ Return Value:
     //
 
     if (!CK_IS_RANGE(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer or range");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer or range");
         return FALSE;
     }
 

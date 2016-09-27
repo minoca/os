@@ -100,7 +100,7 @@ Members:
 --*/
 
 typedef struct _CK_FUNCTION_SIGNATURE {
-    PSTR Name;
+    PCSTR Name;
     UINTN Length;
     CK_ARITY Arity;
 } CK_FUNCTION_SIGNATURE, *PCK_FUNCTION_SIGNATURE;
@@ -167,7 +167,7 @@ CK_SYMBOL_INDEX
 CkpStringTableEnsure (
     PCK_VM Vm,
     PCK_STRING_TABLE StringTable,
-    PSTR Name,
+    PCSTR Name,
     UINTN Size
     );
 
@@ -230,7 +230,7 @@ CK_SYMBOL_INDEX
 CkpStringTableAdd (
     PCK_VM Vm,
     PCK_STRING_TABLE StringTable,
-    PSTR Name,
+    PCSTR Name,
     UINTN Size
     );
 
@@ -261,7 +261,7 @@ Return Value:
 CK_SYMBOL_INDEX
 CkpStringTableFind (
     PCK_STRING_TABLE StringTable,
-    PSTR Name,
+    PCSTR Name,
     UINTN Size
     );
 

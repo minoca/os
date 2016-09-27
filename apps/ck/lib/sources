@@ -30,6 +30,7 @@ OBJS = capi.o        \
        core.o        \
        debug.o       \
        dict.o        \
+       except.o      \
        fiber.o       \
        gc.o          \
        gram.o        \

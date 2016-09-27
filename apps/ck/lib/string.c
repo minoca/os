@@ -204,7 +204,7 @@ Return Value:
     }
 
     if ((Length != 0) && (Text != NULL)) {
-        memcpy(String->Value, Text, Length);
+        memcpy((PSTR)(String->Value), Text, Length);
     }
 
     CkpStringHash(String);
@@ -502,7 +502,7 @@ Return Value:
 
     va_start(ArgumentList, Format);
     Current = Format;
-    Out = NewString->Value;
+    Out = (PSTR)(NewString->Value);
     while (*Current != '\0') {
         if (*Current == '$') {
             Parameter = va_arg(ArgumentList, PSTR);
@@ -904,7 +904,7 @@ Return Value:
 
     String->Length = Length;
     String->Value = (PSTR)(String + 1);
-    String->Value[Length] = '\0';
+    ((PSTR)String->Value)[Length] = '\0';
     return String;
 }
 
@@ -952,7 +952,7 @@ Return Value:
 CK_VALUE
 CkpStringFake (
     PCK_STRING FakeStringObject,
-    PSTR String,
+    PCSTR String,
     UINTN Length
     )
 
@@ -1033,13 +1033,13 @@ Return Value:
     CK_INTEGER CodePoint;
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
     CodePoint = CK_AS_INTEGER(Arguments[1]);
     if ((CodePoint < 0) || (CodePoint > CK_MAX_UTF8)) {
-        CkpRuntimeError(Vm, "Invalid UTF8 code point");
+        CkpRuntimeError(Vm, "ValueError", "Invalid UTF8 code point");
         return FALSE;
     }
 
@@ -1130,7 +1130,7 @@ Return Value:
                               String->Length - Index);
 
     if (Character < 0) {
-        CkpRuntimeError(Vm, "Invalid UTF-8 character");
+        CkpRuntimeError(Vm, "ValueError", "Invalid UTF-8 character");
         return FALSE;
     }
 
@@ -1171,7 +1171,7 @@ Return Value:
     PCK_STRING Needle;
 
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
@@ -1220,7 +1220,7 @@ Return Value:
     PCK_STRING Needle;
 
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
@@ -1269,11 +1269,11 @@ Return Value:
 
     INT Compare;
     PCK_STRING Haystack;
-    PSTR HaystackEnd;
+    PCSTR HaystackEnd;
     PCK_STRING Needle;
 
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
@@ -1329,7 +1329,7 @@ Return Value:
     PCK_STRING Needle;
 
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
@@ -1396,7 +1396,7 @@ Return Value:
     //
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -1491,7 +1491,7 @@ Return Value:
     }
 
     Copy = CK_AS_STRING(Arguments[0]);
-    String = Copy->Value;
+    String = (PSTR)(Copy->Value);
     for (Index = 0; Index < Copy->Length; Index += 1) {
         *String = tolower(*String);
         String += 1;
@@ -1541,7 +1541,7 @@ Return Value:
     }
 
     Copy = CK_AS_STRING(Arguments[0]);
-    String = Copy->Value;
+    String = (PSTR)(Copy->Value);
     for (Index = 0; Index < Copy->Length; Index += 1) {
         *String = toupper(*String);
         String += 1;
@@ -1614,7 +1614,7 @@ Return Value:
 {
 
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
@@ -1661,7 +1661,7 @@ Return Value:
     }
 
     if (!CK_IS_RANGE(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer or range");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer or range");
         return FALSE;
     }
 

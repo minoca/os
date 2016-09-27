@@ -73,19 +73,13 @@ Environment:
     Frame = &(Fiber->Frames[Fiber->FrameCount - 1]);    \
     Stack = Frame->StackStart;                          \
     Ip = Frame->Ip;                                     \
-    if (Ip == NULL) {                                   \
-        if (!CK_IS_NULL(Vm->Fiber->Error)) {            \
-            return CkErrorRuntime;                      \
-        }                                               \
-                                                        \
-        goto RunInterpreterEnd;                         \
-    }                                                   \
-                                                        \
     Function = Frame->Closure->U.Block.Function
 
 //
 // This macro reloads the fiber local variable in cases where a fiber context
-// switch may have occured.
+// switch may have occured. This is basically any place where an exception
+// could have been taken. Because the fiber may have changed, the frame is
+// reloaded too.
 //
 
 #define CKI_LOAD_FIBER()                                \
@@ -93,25 +87,8 @@ Environment:
     if ((Fiber == NULL) || (Fiber->FrameCount == 0)) {  \
         goto RunInterpreterEnd;                         \
     }                                                   \
-
-//
-// This macro dispatches a runtime error, and potentially exits out of the
-// interpreter loop or runs the next ready fiber.
-//
-
-#define CKI_RUNTIME_ERROR()         \
-    {                               \
-                                    \
-        CKI_STORE_FRAME();          \
-        CkpHandleRuntimeError(Vm);  \
-        if (Vm->Fiber == NULL) {    \
-            return CkErrorRuntime;  \
-        }                           \
-                                    \
-        Fiber = Vm->Fiber;          \
-        CKI_LOAD_FRAME();           \
-        CKI_DISPATCH();             \
-    }
+                                                        \
+    CKI_LOAD_FRAME()                                    \
 
 //
 // This macro prints the instruction and the stack. It can be used when
@@ -225,6 +202,8 @@ Environment:
         CKI_GOTO_OFFSET(CkOpForeignClass), \
         CKI_GOTO_OFFSET(CkOpMethod), \
         CKI_GOTO_OFFSET(CkOpStaticMethod), \
+        CKI_GOTO_OFFSET(CkOpTry), \
+        CKI_GOTO_OFFSET(CkOpPopTry), \
         CKI_GOTO_OFFSET(CkOpEnd), \
     };
 
@@ -304,11 +283,6 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-VOID
-CkpHandleRuntimeError (
-    PCK_VM Vm
-    );
 
 PCK_UPVALUE
 CkpCaptureUpvalue (
@@ -505,6 +479,7 @@ CK_API
 CK_ERROR_TYPE
 CkInterpret (
     PCK_VM Vm,
+    PSTR Path,
     PSTR Source,
     UINTN Length
     )
@@ -520,6 +495,9 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
+    Path - Supplies an optional pointer to the path of the file containing the
+        source being interpreted.
+
     Source - Supplies a pointer to the null terminated string containing the
         source to interpret.
 
@@ -534,7 +512,7 @@ Return Value:
 
 {
 
-    return CkpInterpret(Vm, "__main", Source, Length);
+    return CkpInterpret(Vm, "__main", Path, Source, Length);
 }
 
 CK_SYMBOL_INDEX
@@ -602,7 +580,7 @@ CK_SYMBOL_INDEX
 CkpDefineModuleVariable (
     PCK_VM Vm,
     PCK_MODULE Module,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length,
     CK_VALUE Value
     )
@@ -689,7 +667,7 @@ PCK_VALUE
 CkpFindModuleVariable (
     PCK_VM Vm,
     PCK_MODULE Module,
-    PSTR Name,
+    PCSTR Name,
     BOOL Create
     )
 
@@ -758,6 +736,7 @@ CK_ERROR_TYPE
 CkpInterpret (
     PCK_VM Vm,
     PSTR ModuleName,
+    PSTR ModulePath,
     PSTR Source,
     UINTN Length
     )
@@ -774,6 +753,8 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     ModuleName - Supplies a pointer to the module to interpret the source in.
+
+    ModulePath - Supplies an optional pointer to the module path.
 
     Source - Supplies a pointer to the null terminated string containing the
         source to interpret.
@@ -792,15 +773,30 @@ Return Value:
     PCK_FIBER Fiber;
     PCK_MODULE Module;
     CK_VALUE NameValue;
+    CK_VALUE PathValue;
 
     NameValue = CkNullValue;
     if (ModuleName != NULL) {
         NameValue = CkpStringFormat(Vm, "$", ModuleName);
-        CkpPushRoot(Vm, CK_AS_OBJECT(NameValue));
+        if (!CK_IS_NULL(NameValue)) {
+            CkpPushRoot(Vm, CK_AS_OBJECT(NameValue));
+        }
     }
 
-    Module = CkpModuleLoadSource(Vm, NameValue, CkNullValue, Source, Length);
-    if (ModuleName != NULL) {
+    PathValue = CkNullValue;
+    if (ModulePath != NULL) {
+        PathValue = CkpStringFormat(Vm, "$", ModulePath);
+        if (!CK_IS_NULL(PathValue)) {
+            CkpPushRoot(Vm, CK_AS_OBJECT(PathValue));
+        }
+    }
+
+    Module = CkpModuleLoadSource(Vm, NameValue, PathValue, Source, Length);
+    if (!CK_IS_NULL(PathValue)) {
+        CkpPopRoot(Vm);
+    }
+
+    if (!CK_IS_NULL(NameValue)) {
         CkpPopRoot(Vm);
     }
 
@@ -1055,11 +1051,6 @@ Return Value:
         CKI_STORE_FRAME();
         CkpCallMethod(Vm, Class, MethodName, Arity);
         CKI_LOAD_FIBER();
-        CKI_LOAD_FRAME();
-        if (!CK_IS_NULL(Fiber->Error)) {
-            CKI_RUNTIME_ERROR();
-        }
-
         CKI_DISPATCH();
 
     CKI_CASE(CkOpCall):
@@ -1072,11 +1063,6 @@ Return Value:
         CKI_STORE_FRAME();
         CkpCallMethod(Vm, Class, MethodName, Arity);
         CKI_LOAD_FIBER();
-        CKI_LOAD_FRAME();
-        if (!CK_IS_NULL(Fiber->Error)) {
-            CKI_RUNTIME_ERROR();
-        }
-
         CKI_DISPATCH();
 
     CKI_CASE(CkOpSuperCall0):
@@ -1096,11 +1082,6 @@ Return Value:
         CKI_STORE_FRAME();
         CkpCallMethod(Vm, Class, MethodName, Arity);
         CKI_LOAD_FIBER();
-        CKI_LOAD_FRAME();
-        if (!CK_IS_NULL(Fiber->Error)) {
-            CKI_RUNTIME_ERROR();
-        }
-
         CKI_DISPATCH();
 
     CKI_CASE(CkOpSuperCall):
@@ -1113,28 +1094,16 @@ Return Value:
         CKI_STORE_FRAME();
         CkpCallMethod(Vm, Class, MethodName, Arity);
         CKI_LOAD_FIBER();
-        CKI_LOAD_FRAME();
-        if (!CK_IS_NULL(Fiber->Error)) {
-            CKI_RUNTIME_ERROR();
-        }
-
         CKI_DISPATCH();
 
     CKI_CASE(CkOpIndirectCall):
         CKI_READ_ARITY(Arity);
         Arity += 1;
         Arguments = Fiber->StackTop - Arity;
+        CKI_STORE_FRAME();
         if (CK_IS_CLOSURE(Arguments[0])) {
             Closure = CK_AS_CLOSURE(Arguments[0]);
-            CKI_STORE_FRAME();
             CkpCallFunction(Vm, Closure, Arity);
-            CKI_LOAD_FIBER();
-            CKI_LOAD_FRAME();
-            if (!CK_IS_NULL(Fiber->Error)) {
-                CKI_RUNTIME_ERROR();
-            }
-
-            CKI_DISPATCH();
 
         //
         // Calling a class is the official method of constructing a new object.
@@ -1142,20 +1111,14 @@ Return Value:
 
         } else if (CK_IS_CLASS(Arguments[0])) {
             Class = CK_AS_CLASS(Arguments[0]);
-            CKI_STORE_FRAME();
             CkpInstantiateClass(Vm, Class, Arity);
-            CKI_LOAD_FIBER();
-            CKI_LOAD_FRAME();
-            if (!CK_IS_NULL(Fiber->Error)) {
-                CKI_RUNTIME_ERROR();
-            }
-
-            CKI_DISPATCH();
 
         } else {
-            CkpRuntimeError(Vm, "Object is not callable");
-            CKI_RUNTIME_ERROR();
+            CkpRuntimeError(Vm, "TypeError", "Object is not callable");
         }
+
+        CKI_LOAD_FIBER();
+        CKI_DISPATCH();
 
     CKI_CASE(CkOpJump):
         CKI_READ_OFFSET(Offset);
@@ -1214,9 +1177,11 @@ Return Value:
     CKI_CASE(CkOpReturn):
         Value = CKI_POP();
 
-        CK_ASSERT(Fiber->FrameCount != 0);
+        CK_ASSERT((Fiber->FrameCount != 0) &&
+                  (Frame->TryCount <= Fiber->TryCount));
 
         Fiber->FrameCount -= 1;
+        Fiber->TryCount = Frame->TryCount;
         CkpCloseUpvalues(Fiber, Stack);
 
         //
@@ -1227,6 +1192,7 @@ Return Value:
         if (Fiber->FrameCount == 0) {
 
             CK_ASSERT(Fiber->ForeignCalls == 0);
+            CK_ASSERT(Fiber->TryCount == 0);
 
             if (Fiber->Caller == NULL) {
 
@@ -1260,6 +1226,15 @@ Return Value:
         }
 
         CKI_LOAD_FRAME();
+
+        //
+        // If the caller is a foreign function, return.
+        //
+
+        if (Ip == NULL) {
+            return CkSuccess;
+        }
+
         CKI_DISPATCH();
 
     CKI_CASE(CkOpClosure):
@@ -1276,9 +1251,11 @@ Return Value:
         //
 
         Function = CK_AS_FUNCTION(Function->Constants.Data[Symbol]);
+        CKI_STORE_FRAME();
         Closure = CkpClosureCreate(Vm, Function, Frame->Closure->Class);
         if (Closure == NULL) {
-            CKI_RUNTIME_ERROR();
+            CKI_LOAD_FIBER();
+            CKI_DISPATCH();
         }
 
         CK_OBJECT_VALUE(Value, Closure);
@@ -1316,11 +1293,9 @@ Return Value:
 
     CKI_CASE(CkOpClass):
         CKI_READ_FIELD(Field);
+        CKI_STORE_FRAME();
         CkpClassCreate(Vm, Field, Function->Module);
-        if (!CK_IS_NULL(Fiber->Error)) {
-            CKI_RUNTIME_ERROR();
-        }
-
+        CKI_LOAD_FIBER();
         CKI_DISPATCH();
 
     CKI_CASE(CkOpMethod):
@@ -1340,13 +1315,28 @@ Return Value:
         CK_ASSERT(Symbol < Function->Module->Strings.List.Count);
 
         MethodName = Function->Module->Strings.List.Data[Symbol];
+        CKI_DROP();
+        CKI_DROP();
+        CKI_STORE_FRAME();
         CkpBindMethod(Vm, Class, MethodName, CK_AS_CLOSURE(Value));
-        if (!CK_IS_NULL(Fiber->Error)) {
-            CKI_RUNTIME_ERROR();
-        }
+        CKI_LOAD_FIBER();
+        CKI_DISPATCH();
 
-        CKI_DROP();
-        CKI_DROP();
+    CKI_CASE(CkOpTry):
+        CKI_READ_OFFSET(Offset);
+
+        CK_ASSERT(Ip + Offset < Function->Code.Data + Function->Code.Count);
+
+        CKI_STORE_FRAME();
+        CkpPushTryBlock(Vm, Ip + Offset);
+        CKI_LOAD_FIBER();
+        CKI_DISPATCH();
+
+    CKI_CASE(CkOpPopTry):
+
+        CK_ASSERT(Fiber->TryCount != 0);
+
+        Fiber->TryCount -= 1;
         CKI_DISPATCH();
 
     //
@@ -1363,6 +1353,10 @@ Return Value:
     }
 
 RunInterpreterEnd:
+    if ((Vm->Fiber == NULL) || (!CK_IS_NULL(Vm->Fiber->Error))) {
+        return CkErrorRuntime;
+    }
+
     return CkSuccess;
 }
 
@@ -1572,9 +1566,9 @@ Return Value:
 
 {
 
-    CK_VALUE ClassName;
     PCK_CLOSURE Closure;
     CK_VALUE Method;
+    PCK_STRING NameString;
 
     CK_ASSERT(CK_IS_STRING(MethodName));
 
@@ -1584,11 +1578,12 @@ Return Value:
 
     Method = CkpDictGet(Class->Methods, MethodName);
     if (CK_IS_UNDEFINED(Method)) {
-        CK_OBJECT_VALUE(ClassName, Class->Name);
-        Vm->Fiber->Error = CkpStringFormat(Vm,
-                                           "@ does not implement '@'",
-                                           ClassName,
-                                           MethodName);
+        NameString = CK_AS_STRING(MethodName);
+        CkpRuntimeError(Vm,
+                        "LookupError",
+                        "%s does not implement %s",
+                        Class->Name->Value,
+                        NameString->Value);
 
         return;
     }
@@ -1632,7 +1627,7 @@ Return Value:
     PCK_FIBER Fiber;
     UINTN FrameCount;
     CK_ARITY FunctionArity;
-    PSTR Name;
+    PCK_STRING Name;
     UINTN RequiredStackSize;
     UINTN StackSize;
 
@@ -1645,12 +1640,13 @@ Return Value:
     //
 
     FunctionArity = CkpGetFunctionArity(Closure);
-    Name = CkpGetFunctionName(Closure);
     if (FunctionArity != Arity - 1) {
+        Name = CkpGetFunctionName(Closure);
         CkpRuntimeError(Vm,
+                        "TypeError",
                         "Expected %d arguments for %s, got %d",
                         FunctionArity,
-                        Name,
+                        Name->Value,
                         Arity - 1);
 
         return;
@@ -1713,37 +1709,6 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
-VOID
-CkpHandleRuntimeError (
-    PCK_VM Vm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine processes a runtime error for the interpreter.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    CK_ASSERT(!CK_IS_NULL(Vm->Fiber->Error));
-
-    Vm->Fiber->Caller = NULL;
-    CkpDebugPrintStackTrace(Vm);
-    Vm->Fiber = NULL;
-    return;
-}
 
 PCK_UPVALUE
 CkpCaptureUpvalue (
@@ -1912,12 +1877,12 @@ Return Value:
     PCK_CLASS Super;
 
     if (!CK_IS_STRING(Name)) {
-        CkpRuntimeError(Vm, "Class name must be a string");
+        CkpRuntimeError(Vm, "TypeError", "Class name must be a string");
         return FALSE;
     }
 
     if (!CK_IS_CLASS(Superclass)) {
-        CkpRuntimeError(Vm, "Class must inherit from a class");
+        CkpRuntimeError(Vm, "TypeError", "Class must inherit from a class");
         return FALSE;
     }
 
@@ -1929,17 +1894,23 @@ Return Value:
     //
 
     if ((Super->Flags & CK_CLASS_UNINHERITABLE) != 0) {
-        CkpRuntimeError(Vm, "Class cannot inherit from builtin class");
+        CkpRuntimeError(Vm,
+                        "ValueError",
+                        "Class cannot inherit from builtin class");
+
         return FALSE;
     }
 
     if ((Super->Flags & CK_CLASS_FOREIGN) != 0) {
-        CkpRuntimeError(Vm, "Cannot inherit from a foreign class");
+        CkpRuntimeError(Vm,
+                        "ValueError",
+                        "Cannot inherit from a foreign class");
+
         return FALSE;
     }
 
     if ((Super->FieldCount + FieldCount) >= CK_MAX_FIELDS) {
-        CkpRuntimeError(Vm, "Class has too many fields");
+        CkpRuntimeError(Vm, "RuntimeError", "Class has too many fields");
         return FALSE;
     }
 

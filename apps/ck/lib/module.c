@@ -123,7 +123,7 @@ Return Value:
     }
 
     if (Vm->Configuration.LoadModule == NULL) {
-        CkpRuntimeError(Vm, "Module load not supported");
+        CkpRuntimeError(Vm, "ImportError", "Module load not supported");
         return CkNullValue;
     }
 
@@ -158,7 +158,11 @@ Return Value:
 
         CkFree(Vm, ModuleData.Source.Text);
         if (Module == NULL) {
-            CkpRuntimeError(Vm, "Module compile error: %s", NameString->Value);
+            CkpRuntimeError(Vm,
+                            "CompileError",
+                            "Module compile error: %s",
+                            NameString->Value);
+
             return CkNullValue;
         }
 
@@ -203,23 +207,23 @@ Return Value:
     //
 
     case CkLoadModuleNotFound:
-        CkpRuntimeError(Vm, "Module not found");
+        CkpRuntimeError(Vm, "ImportError", "Module not found");
         return CkNullValue;
 
     case CkLoadModuleNoMemory:
         if (!CK_IS_NULL(Vm->Fiber->Error)) {
-            CkpRuntimeError(Vm, "Allocation failure");
+            CkpRuntimeError(Vm, "MemoryError", "Allocation failure");
         }
 
         return CkNullValue;
 
     case CkLoadModuleNotSupported:
-        CkpRuntimeError(Vm, "Module loading not supported");
+        CkpRuntimeError(Vm, "ImportError", "Module loading not supported");
         break;
 
     case CkLoadModuleStaticError:
     case CkLoadModuleFreeError:
-        CkpRuntimeError(Vm, "%s", ModuleData.Error);
+        CkpRuntimeError(Vm, "ImportError", "%s", ModuleData.Error);
         if (LoadStatus == CkLoadModuleFreeError) {
             CkFree(Vm, ModuleData.Error);
         }
@@ -227,7 +231,7 @@ Return Value:
         break;
 
     default:
-        CkpRuntimeError(Vm, "Unknown module load error");
+        CkpRuntimeError(Vm, "ImportError", "Unknown module load error");
         return CkNullValue;
     }
 
@@ -728,7 +732,7 @@ Return Value:
 
     Module = CK_AS_MODULE(Arguments[0]);
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
@@ -736,6 +740,7 @@ Return Value:
     Variable = CkpFindModuleVariable(Vm, Module, Name->Value, FALSE);
     if (Variable == NULL) {
         CkpRuntimeError(Vm,
+                        "NameError",
                         "No such variable '%s' in module '%s'",
                         Name->Value,
                         Module->Name->Value);
@@ -776,8 +781,8 @@ Return Value:
 {
 
     PCK_MODULE Module;
-    PSTR Name;
-    PSTR Path;
+    PCSTR Name;
+    PCSTR Path;
 
     Module = CK_AS_MODULE(Arguments[0]);
     Name = "<builtin>";

@@ -911,7 +911,7 @@ Return Value:
     // Loop through again to create the concatenated string.
     //
 
-    Destination = NewString->Value;
+    Destination = (PSTR)(NewString->Value);
     for (Index = 0; Index < Count; Index += 1) {
         if (CK_IS_STRING(*Value)) {
             Source = CK_AS_STRING(*Value);
@@ -974,7 +974,7 @@ Return Value:
 
     CK_OBJECT_VALUE(Value, String);
     CK_PUSH(Fiber, Value);
-    return String->Value;
+    return (PVOID)(String->Value);
 }
 
 CK_API
@@ -1026,7 +1026,7 @@ Return Value:
 
     CK_ASSERT(Length <= String->Length);
 
-    String->Value[Length] = '\0';
+    ((PSTR)String->Value)[Length] = '\0';
     String->Length = Length;
     CkpStringHash(String);
     return;
@@ -2132,7 +2132,7 @@ Return Value:
         CkpInstantiateClass(Vm, Class, ArgumentCount + 1);
 
     } else {
-        CkpRuntimeError(Vm, "Object is not callable");
+        CkpRuntimeError(Vm, "TypeError", "Object is not callable");
         goto CallEnd;
     }
 
@@ -2227,6 +2227,7 @@ Return Value:
     Method = CkpDictGet(Class->Methods, NameValue);
     if (CK_IS_UNDEFINED(Method)) {
         CkpRuntimeError(Vm,
+                        "LookupError",
                         "Object of type %s does not implement method %s with "
                         "%d arguments",
                         Class->Name->Value,
@@ -2240,6 +2241,7 @@ Return Value:
 
     Closure = CK_AS_CLOSURE(Method);
     CkpCallFunction(Vm, Closure, ArgumentCount + 1);
+    CkpRunInterpreter(Vm, Fiber);
 
 CallMethodEnd:
 

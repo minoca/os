@@ -219,6 +219,11 @@ Values:
         method is popped off the stack. Then the function or closure defining
         the body is popped.
 
+    CkOpTry - Enters a new try block scope. The offset of the first except
+        block is encoded in the next two bytes in the instruction stream.
+
+    CkOpPopTry - Leaves a previously pushed try block scope.
+
     CkOpEnd - This opcode terminates a compilation. It should always be
         preceded by a return and therefore should never be executed.
 
@@ -293,6 +298,8 @@ typedef enum _CK_OPCODE {
     CkOpForeignClass,
     CkOpMethod,
     CkOpStaticMethod,
+    CkOpTry,
+    CkOpPopTry,
     CkOpEnd,
     CkOpcodeCount
 } CK_OPCODE, *PCK_OPCODE;
@@ -331,6 +338,8 @@ Members:
 
     Core - Stores a pointer to the core interpreter class.
 
+    Exception - Stores a pointer to the exception class type.
+
 --*/
 
 typedef struct _CK_BUILTIN_CLASSES {
@@ -346,6 +355,7 @@ typedef struct _CK_BUILTIN_CLASSES {
     PCK_CLASS String;
     PCK_CLASS Module;
     PCK_CLASS Core;
+    PCK_CLASS Exception;
 } CK_BUILTIN_CLASSES, *PCK_BUILTIN_CLASSES;
 
 /*++
@@ -402,6 +412,13 @@ Members:
     ForeignCalls - Stores the number of active foreign calls running
         in any fibers that are not the currently running one.
 
+    MemoryException - Stores a value indicating whether a memory exception is
+        currently being dispatched. This prevents infinite recursion in the
+        case that allocating part of an exception fails.
+
+    UnhandledException - Stores a pointer to a function used to catch any
+        unhandled exceptions.
+
 --*/
 
 struct _CK_VM {
@@ -420,6 +437,8 @@ struct _CK_VM {
     PCK_FIBER Fiber;
     PCK_LIST ModulePath;
     LONG ForeignCalls;
+    INT MemoryException;
+    PCK_CLOSURE UnhandledException;
 };
 
 //
@@ -471,7 +490,7 @@ CK_SYMBOL_INDEX
 CkpDefineModuleVariable (
     PCK_VM Vm,
     PCK_MODULE Module,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length,
     CK_VALUE Value
     );
@@ -509,7 +528,7 @@ PCK_VALUE
 CkpFindModuleVariable (
     PCK_VM Vm,
     PCK_MODULE Module,
-    PSTR Name,
+    PCSTR Name,
     BOOL Create
     );
 
@@ -544,6 +563,7 @@ CK_ERROR_TYPE
 CkpInterpret (
     PCK_VM Vm,
     PSTR ModuleName,
+    PSTR ModulePath,
     PSTR Source,
     UINTN Length
     );
@@ -560,6 +580,8 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     ModuleName - Supplies a pointer to the module to interpret the source in.
+
+    ModulePath - Supplies an optional pointer to the module path.
 
     Source - Supplies a pointer to the null terminated string containing the
         source to interpret.

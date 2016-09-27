@@ -209,6 +209,8 @@ Return Value:
     Fiber->FrameCapacity = CK_INITIAL_CALL_FRAMES;
     Fiber->Stack = Stack;
     Fiber->StackCapacity = StackCapacity;
+    Fiber->TryStack = NULL;
+    Fiber->TryCapacity = 0;
     Fiber->ForeignCalls = 0;
     CkpPushRoot(Vm, &(Fiber->Header));
     CkpFiberReset(Vm, Fiber, Closure);
@@ -250,6 +252,11 @@ Return Value:
     if (Fiber->Frames != NULL) {
         CkFree(Vm, Fiber->Frames);
         Fiber->Frames = NULL;
+    }
+
+    if (Fiber->TryStack != NULL) {
+        CkFree(Vm, Fiber->TryStack);
+        Fiber->TryStack = NULL;
     }
 
     return;
@@ -324,6 +331,68 @@ Return Value:
 
     Frame->Closure = Closure;
     Frame->StackStart = Stack;
+    Frame->TryCount = Fiber->TryCount;
+    return;
+}
+
+VOID
+CkpPushTryBlock (
+    PCK_VM Vm,
+    PCK_IP ExceptionHandler
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pushes a try block onto the current fiber's try stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ExceptionHandler - Supplies a pointer to the exception handler code.
+
+Return Value:
+
+    None. On allocation failure, the runtime error will be set.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PVOID NewBuffer;
+    UINTN NewCapacity;
+    PCK_TRY_BLOCK TryBlock;
+
+    Fiber = Vm->Fiber;
+    if (Fiber->TryCount >= Fiber->TryCapacity) {
+        NewCapacity = Fiber->TryCapacity * 2;
+        if (NewCapacity == 0) {
+            NewCapacity = CK_MIN_TRY_STACK;
+        }
+
+        CK_ASSERT(NewCapacity >= Fiber->TryCapacity);
+
+        NewBuffer = CkpReallocate(Vm,
+                                  Fiber->TryStack,
+                                  Fiber->TryCapacity * sizeof(CK_TRY_BLOCK),
+                                  NewCapacity * sizeof(CK_TRY_BLOCK));
+
+        if (NewBuffer == NULL) {
+            return;
+        }
+
+        Fiber->TryStack = NewBuffer;
+        Fiber->TryCapacity = NewCapacity;
+    }
+
+    TryBlock = &(Fiber->TryStack[Fiber->TryCount]);
+    Fiber->TryCount += 1;
+    TryBlock->Ip = ExceptionHandler;
+    TryBlock->Stack = Fiber->StackTop;
+    TryBlock->FrameCount = Fiber->FrameCount;
     return;
 }
 
@@ -367,7 +436,7 @@ Return Value:
     }
 
     if (Size >= CK_MAX_STACK) {
-        CkpRuntimeError(Vm, "Stack overflow");
+        CkpRuntimeError(Vm, "RuntimeError", "Stack overflow");
         return;
     }
 
@@ -459,6 +528,7 @@ Return Value:
     Fiber->Caller = NULL;
     Fiber->Error = CK_NULL_VALUE;
     Fiber->FrameCount = 0;
+    Fiber->TryCount = 0;
     if (Closure != NULL) {
 
         CK_ASSERT(Closure->Type == CkClosureBlock);
@@ -551,19 +621,22 @@ Return Value:
     PCK_FIBER Fiber;
 
     if (!CK_IS_CLOSURE(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a closure");
+        CkpRuntimeError(Vm, "TypeError", "Expected a closure");
         return FALSE;
     }
 
     Fiber = CK_AS_FIBER(Arguments[0]);
     Closure = CK_AS_CLOSURE(Arguments[1]);
     if (Fiber == Vm->Fiber) {
-        CkpRuntimeError(Vm, "Cannot initialize running fiber");
+        CkpRuntimeError(Vm, "ValueError", "Cannot initialize running fiber");
         return FALSE;
     }
 
     if (CkpGetFunctionArity(Closure) != 1) {
-        CkpRuntimeError(Vm, "Fiber functions take exactly one argument");
+        CkpRuntimeError(Vm,
+                        "TypeError",
+                        "Fiber functions take exactly one argument");
+
         return FALSE;
     }
 
@@ -755,7 +828,10 @@ Return Value:
     //
 
     if (Vm->Fiber->ForeignCalls + Vm->ForeignCalls > 0) {
-        CkpRuntimeError(Vm, "Cannot suspend with foreign calls on stack");
+        CkpRuntimeError(Vm,
+                        "RuntimeError",
+                        "Cannot suspend with foreign calls on stack");
+
         return FALSE;
     }
 
@@ -799,7 +875,10 @@ Return Value:
     //
 
     if (Vm->Fiber->ForeignCalls + Vm->ForeignCalls > 0) {
-        CkpRuntimeError(Vm, "Cannot transfer with foreign calls on stack");
+        CkpRuntimeError(Vm,
+                        "RuntimeError",
+                        "Cannot transfer with foreign calls on stack");
+
         return FALSE;
     }
 
@@ -844,7 +923,10 @@ Return Value:
     //
 
     if (Vm->Fiber->ForeignCalls + Vm->ForeignCalls > 0) {
-        CkpRuntimeError(Vm, "Cannot transfer with foreign calls on stack");
+        CkpRuntimeError(Vm,
+                        "RuntimeError",
+                        "Cannot transfer with foreign calls on stack");
+
         return FALSE;
     }
 
@@ -857,7 +939,7 @@ Return Value:
     Arguments[1] = CkNullValue;
     CkpRunFiber(Vm, Fiber, Arguments, FALSE, "transfer to");
     if (Vm->Fiber == Fiber) {
-        Vm->Fiber->Error = Error;
+        CkpRaiseException(Vm, Error, 0);
     }
 
     if (CK_IS_OBJECT(Error)) {
@@ -904,6 +986,7 @@ Return Value:
 
     if (CurrentFiber->ForeignCalls != 0) {
         CkpRuntimeError(Vm,
+                        "RuntimeError",
                         "Cannot yield with a foreign function on the stack");
 
         return FALSE;
@@ -994,7 +1077,7 @@ Return Value:
 
     if (IsCall != FALSE) {
         if (Fiber->Caller != NULL) {
-            CkpRuntimeError(Vm, "Fiber is already running");
+            CkpRuntimeError(Vm, "RuntimeError", "Fiber is already running");
             return;
         }
 
@@ -1013,12 +1096,19 @@ Return Value:
     }
 
     if (Fiber->FrameCount == 0) {
-        CkpRuntimeError(Vm, "Cannot %s to a finished fiber", Verb);
+        CkpRuntimeError(Vm,
+                        "RuntimeError",
+                        "Cannot %s to a finished fiber",
+                        Verb);
+
         return;
     }
 
     if (!CK_IS_NULL(Fiber->Error)) {
-        CkpRuntimeError(Vm, "Cannot %s to an aborted fiber", Verb);
+        CkpRuntimeError(Vm,
+                        "RuntimeError",
+                        "Cannot %s to an aborted fiber",
+                        Verb);
     }
 
     //

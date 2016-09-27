@@ -383,14 +383,14 @@ Return Value:
     PCK_STRING StringObject;
 
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
     StringObject = CK_AS_STRING(Arguments[1]);
     Integer = strtoll(StringObject->Value, &AfterScan, 0);
     if (AfterScan != StringObject->Value + StringObject->Length) {
-        CkpRuntimeError(Vm, "Cannot convert string to integer");
+        CkpRuntimeError(Vm, "ValueError", "Cannot convert string to integer");
         return FALSE;
     }
 
@@ -427,7 +427,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -466,7 +466,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer.");
         return FALSE;
     }
 
@@ -505,7 +505,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -544,7 +544,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -583,7 +583,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -622,7 +622,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -661,7 +661,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -700,7 +700,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -739,7 +739,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -778,7 +778,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -818,7 +818,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -858,7 +858,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -898,7 +898,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -938,7 +938,7 @@ Return Value:
 {
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -1059,7 +1059,7 @@ Return Value:
     CK_VALUE RangeValue;
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -1103,7 +1103,7 @@ Return Value:
     CK_VALUE RangeValue;
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 
@@ -1546,7 +1546,7 @@ Return Value:
     }
 
     if (!CK_IS_INTEGER(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected an integer.");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return FALSE;
     }
 

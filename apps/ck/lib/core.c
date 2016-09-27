@@ -42,13 +42,6 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-VOID
-CkpReportRuntimeError (
-    PCK_VM Vm,
-    PSTR MessageFormat,
-    va_list ArgumentList
-    );
-
 PCK_CLASS
 CkpDefineCoreClass (
     PCK_VM Vm,
@@ -192,6 +185,12 @@ CkpCoreSetModulePath (
     PCK_VALUE Arguments
     );
 
+BOOL
+CkpCoreRaise (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -241,6 +240,7 @@ CK_PRIMITIVE_DESCRIPTION CkCorePrimitives[] = {
     {"write@1", 1, CkpCoreWrite},
     {"modulePath@0", 0, CkpCoreGetModulePath},
     {"setModulePath@1", 1, CkpCoreSetModulePath},
+    {"raise@1", 1, CkpCoreRaise},
     {NULL, 0, NULL}
 };
 
@@ -334,7 +334,7 @@ Return Value:
     //
 
     Size = (UINTN)&_binary_ckcore_ck_end - (UINTN)&_binary_ckcore_ck_start;
-    Error = CkpInterpret(Vm, NULL, (PSTR)&_binary_ckcore_ck_start, Size);
+    Error = CkpInterpret(Vm, NULL, NULL, (PSTR)&_binary_ckcore_ck_start, Size);
     if (Error != CkSuccess) {
         return Error;
     }
@@ -382,6 +382,9 @@ Return Value:
     Value = *(CkpFindModuleVariable(Vm, CoreModule, "Module", FALSE));
     Classes->Module = CK_AS_CLASS(Value);
     CkpCoreAddPrimitives(Vm, Classes->Module, CkModulePrimitives);
+    Value = *(CkpFindModuleVariable(Vm, CoreModule, "Exception", FALSE));
+    Classes->Exception = CK_AS_CLASS(Value);
+    CkpCoreAddPrimitives(Vm, Classes->Module, CkExceptionPrimitives);
 
     //
     // Some strings may have been created without being assigned to string
@@ -421,43 +424,6 @@ Return Value:
 
     Classes->Core->Flags |= CK_CLASS_UNINHERITABLE | CK_CLASS_SPECIAL_CREATION;
     return CkSuccess;
-}
-
-VOID
-CkpRuntimeError (
-    PCK_VM Vm,
-    PSTR MessageFormat,
-    ...
-    )
-
-/*++
-
-Routine Description:
-
-    This routine reports a runtime error in the current fiber.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    MessageFormat - Supplies the printf message format string.
-
-    ... - Supplies the remaining arguments.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    va_list ArgumentList;
-
-    va_start(ArgumentList, MessageFormat);
-    CkpReportRuntimeError(Vm, MessageFormat, ArgumentList);
-    va_end(ArgumentList);
-    return;
 }
 
 CK_ARITY
@@ -504,7 +470,7 @@ Return Value:
     return 0;
 }
 
-PSTR
+PCK_STRING
 CkpGetFunctionName (
     PCK_CLOSURE Closure
     )
@@ -532,10 +498,10 @@ Return Value:
         return Closure->U.Block.Function->Debug.Name;
 
     case CkClosurePrimitive:
-        return Closure->U.Primitive.Name->Value;
+        return Closure->U.Primitive.Name;
 
     case CkClosureForeign:
-        return Closure->U.Foreign.Name->Value;
+        return Closure->U.Foreign.Name;
 
     default:
 
@@ -547,63 +513,57 @@ Return Value:
     return 0;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-VOID
-CkpReportRuntimeError (
-    PCK_VM Vm,
-    PSTR MessageFormat,
-    va_list ArgumentList
+BOOL
+CkpObjectIsClass (
+    PCK_CLASS ObjectClass,
+    PCK_CLASS QueryClass
     )
 
 /*++
 
 Routine Description:
 
-    This routine reports a runtime error in the current fiber.
+    This routine determines if the given object is of the given type.
 
 Arguments:
 
-    Vm - Supplies a pointer to the virtual machine.
+    ObjectClass - Supplies a pointer to the object class to query.
 
-    MessageFormat - Supplies the printf message format string.
-
-    ArgumentList - Supplies the argument list.
+    QueryClass - Supplies a pointer to the class to check membership for.
 
 Return Value:
 
-    None.
+    TRUE if the object class is a subclass of the query class.
+
+    FALSE if the object class is not a member of the query class.
 
 --*/
 
 {
 
-    UINTN Length;
-    CHAR Message[CK_MAX_ERROR_MESSAGE];
-
-    CK_ASSERT(Vm->Fiber != NULL);
-
-    if ((Vm->Fiber == NULL) || (!CK_IS_NULL(Vm->Fiber->Error))) {
-        return;
-    }
-
-    Length = vsnprintf(Message, sizeof(Message), MessageFormat, ArgumentList);
-    Message[sizeof(Message) - 1] = '\0';
-    Vm->Fiber->Error = CkpStringCreate(Vm, Message, Length);
-
     //
-    // If string allocation happened to fail, it's important that some sort of
-    // error get set, so just initialize the error to an integer.
+    // Walk up the class hierarchy comparing to the class in question.
     //
 
-    if (CK_IS_NULL(Vm->Fiber->Error)) {
-        CK_INT_VALUE(Vm->Fiber->Error, 1);
+    while (TRUE) {
+        if (ObjectClass == QueryClass) {
+            return TRUE;
+
+        } else if ((ObjectClass->Super == ObjectClass) ||
+                   (ObjectClass == NULL)) {
+
+            break;
+        }
+
+        ObjectClass = ObjectClass->Super;
     }
 
-    return;
+    return FALSE;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 PCK_CLASS
 CkpDefineCoreClass (
@@ -941,36 +901,60 @@ Return Value:
 
 {
 
+    UINTN Index;
+    BOOL Is;
+    PCK_LIST List;
     PCK_CLASS ObjectClass;
     PCK_CLASS QueryClass;
+    CK_VALUE Value;
 
-    if (!CK_IS_CLASS(Arguments[1])) {
-        CkpRuntimeError(Vm, "is: Argument must be a class.");
-        return FALSE;
-    }
-
-    QueryClass = CK_AS_CLASS(Arguments[1]);
     ObjectClass = CkpGetClass(Vm, Arguments[0]);
 
     //
-    // Walk up the class hierarchy comparing to the class in question.
+    // If a list was passed in, determine if the object is an instance of any
+    // of the classes in the list.
     //
 
-    while (TRUE) {
-        if (ObjectClass == QueryClass) {
-            Arguments[0] = CkOneValue;
-            return TRUE;
+    if (CK_IS_LIST(Arguments[1])) {
+        List = CK_AS_LIST(Arguments[1]);
+        Is = FALSE;
+        for (Index = 0; Index < List->Elements.Count; Index += 1) {
+            Value = List->Elements.Data[Index];
+            if (!CK_IS_CLASS(Value)) {
+                CkpRuntimeError(Vm,
+                                "TypeError",
+                                "Expected a class");
 
-        } else if ((ObjectClass->Super == ObjectClass) ||
-                   (ObjectClass == NULL)) {
+                return FALSE;
+            }
 
-            break;
+            QueryClass = CK_AS_CLASS(Value);
+            Is = CkpObjectIsClass(ObjectClass, QueryClass);
+            if (Is != FALSE) {
+                break;
+            }
         }
 
-        ObjectClass = ObjectClass->Super;
+    //
+    // If a class was passed in, see if the object is an instance of the class.
+    //
+
+    } else if (CK_IS_CLASS(Arguments[1])) {
+        QueryClass = CK_AS_CLASS(Arguments[1]);
+        Is = CkpObjectIsClass(ObjectClass, QueryClass);
+
+    } else {
+        CkpRuntimeError(Vm, "TypeError", "Expected a class");
+        return FALSE;
     }
 
-    Arguments[0] = CkZeroValue;
+    if (Is != FALSE) {
+        Arguments[0] = CkOneValue;
+
+    } else {
+        Arguments[0] = CkZeroValue;
+    }
+
     return TRUE;
 }
 
@@ -1443,7 +1427,7 @@ Return Value:
 {
 
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
@@ -1487,7 +1471,7 @@ Return Value:
     PCK_STRING String;
 
     if (!CK_IS_STRING(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a string");
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
@@ -1570,11 +1554,47 @@ Return Value:
 {
 
     if (!CK_IS_LIST(Arguments[1])) {
-        CkpRuntimeError(Vm, "Expected a list");
+        CkpRuntimeError(Vm, "TypeError", "Expected a list");
         return FALSE;
     }
 
     Vm->ModulePath = CK_AS_LIST(Arguments[1]);
     return TRUE;
+}
+
+BOOL
+CkpCoreRaise (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine raises an exception.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    FALSE always to indicate an exception was raised.
+
+--*/
+
+{
+
+    if (!CkpObjectIsClass(CkpGetClass(Vm, Arguments[1]), Vm->Class.Exception)) {
+        CkpRuntimeError(Vm, "TypeError", "Expected an Exception");
+
+    } else {
+        CkpRaiseException(Vm, Arguments[1], 1);
+    }
+
+    return FALSE;
 }
 

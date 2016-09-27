@@ -36,24 +36,33 @@ Author:
 // -------------------------------------------------------- Function Prototypes
 //
 
-VOID
-CkpDebugPrintStackTrace (
-    PCK_VM Vm
+CK_VALUE
+CkpCreateStackTrace (
+    PCK_VM Vm,
+    UINTN Skim
     );
 
 /*++
 
 Routine Description:
 
-    This routine prints a stack trace of the current fiber.
+    This routine creates a stack trace object from the current fiber.
 
 Arguments:
 
     Vm - Supplies a pointer to the VM.
 
+    Skim - Supplies the number of most recently called functions not to include
+        in the stack trace. This is usually 0 for exceptions created in C and
+        1 for exceptions created in Chalk.
+
 Return Value:
 
-    None.
+    Returns a list of lists containing the stack trace. The first element is
+    the least recently called. Each elements contains a list of 3 elements:
+    the module name, the function name, and the line number.
+
+    CK_NULL_VALUE on allocation failure.
 
 --*/
 

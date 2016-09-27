@@ -65,6 +65,7 @@ extern CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkFiberPrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkFiberStaticPrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[];
+extern CK_PRIMITIVE_DESCRIPTION CkExceptionPrimitives[];
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -92,33 +93,6 @@ Return Value:
 
 --*/
 
-VOID
-CkpRuntimeError (
-    PCK_VM Vm,
-    PSTR MessageFormat,
-    ...
-    );
-
-/*++
-
-Routine Description:
-
-    This routine reports a runtime error in the current fiber.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    MessageFormat - Supplies the printf message format string.
-
-    ... - Supplies the remaining arguments.
-
-Return Value:
-
-    None.
-
---*/
-
 CK_ARITY
 CkpGetFunctionArity (
     PCK_CLOSURE Closure
@@ -141,7 +115,7 @@ Return Value:
 
 --*/
 
-PSTR
+PCK_STRING
 CkpGetFunctionName (
     PCK_CLOSURE Closure
     );
@@ -159,6 +133,124 @@ Arguments:
 Return Value:
 
     Returns a pointer to a string containing the name of the function.
+
+--*/
+
+BOOL
+CkpObjectIsClass (
+    PCK_CLASS ObjectClass,
+    PCK_CLASS QueryClass
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given object is of the given type.
+
+Arguments:
+
+    ObjectClass - Supplies a pointer to the object class to query.
+
+    QueryClass - Supplies a pointer to the class to check membership for.
+
+Return Value:
+
+    TRUE if the object class is a subclass of the query class.
+
+    FALSE if the object class is not a member of the query class.
+
+--*/
+
+//
+// Exception functions
+//
+
+VOID
+CkpError (
+    PCK_VM Vm,
+    CK_ERROR_TYPE ErrorType,
+    PSTR Message
+    );
+
+/*++
+
+Routine Description:
+
+    This routine calls the error function when the Chalk interpreter
+    experiences an error it cannot itself recover from. Usually the appropriate
+    course of action is to clean up and exit without returning.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ErrorType - Supplies the type of error occurring.
+
+    Message - Supplies a pointer to a string describing the error.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+CkpRuntimeError (
+    PCK_VM Vm,
+    PCSTR Type,
+    PCSTR MessageFormat,
+    ...
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reports a runtime error in the current fiber.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Type - Supplies the name of a builtin exception type.
+
+    MessageFormat - Supplies the printf message format string.
+
+    ... - Supplies the remaining arguments.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+CkpRaiseException (
+    PCK_VM Vm,
+    CK_VALUE Exception,
+    UINTN Skim
+    );
+
+/*++
+
+Routine Description:
+
+    This routine raises an exception on the currently running fiber.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Exception - Supplies the exception to raise.
+
+    Skim - Supplies the number of most recently called functions not to include
+        in the stack trace. This is usually 0 for exceptions created in C and
+        1 for exceptions created in Chalk.
+
+Return Value:
+
+    None.
 
 --*/
 

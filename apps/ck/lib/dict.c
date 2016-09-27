@@ -594,7 +594,7 @@ Return Value:
     Dict = CK_AS_DICT(Arguments[0]);
     Value = CkpDictGet(Dict, Arguments[1]);
     if (CK_IS_UNDEFINED(Value)) {
-        CkpRuntimeError(Vm, "Key is not defined");
+        CkpRuntimeError(Vm, "KeyError", "Key is not defined");
         return FALSE;
     }
 
@@ -792,7 +792,7 @@ Return Value:
     Index = 0;
     if (!CK_IS_NULL(Arguments[1])) {
         if (!CK_IS_INTEGER(Arguments[1])) {
-            CkpRuntimeError(Vm, "Expected an integer");
+            CkpRuntimeError(Vm, "TypeError", "Expected an integer");
             return FALSE;
         }
 
@@ -863,7 +863,7 @@ Return Value:
 
     Entry = &(Dict->Entries[Index]);
     if (CK_IS_UNDEFINED(Entry->Key)) {
-        CkpRuntimeError(Vm, "Dict changed while iterating");
+        CkpRuntimeError(Vm, "LookupError", "Dict changed while iterating");
         return FALSE;
     }
 

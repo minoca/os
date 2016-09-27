@@ -335,7 +335,7 @@ typedef struct _CK_STRING {
     CK_OBJECT Header;
     UINTN Length;
     ULONG Hash;
-    PSTR Value;
+    PCSTR Value;
 } CK_STRING, *PCK_STRING;
 
 /*++
@@ -439,10 +439,7 @@ Structure Description:
 
 Members:
 
-    Name - Stores a pointer to the heap allocated name of the function.
-
-    NameSize - Stores the size of the function name, not including the null
-        terminator.
+    Name - Stores a pointer to the name of the function.
 
     FirstLine - Stores the first line of the function.
 
@@ -453,8 +450,7 @@ Members:
 --*/
 
 typedef struct _CK_FUNCTION_DEBUG {
-    PSTR Name;
-    UINTN NameSize;
+    PCK_STRING Name;
     LONG FirstLine;
     CK_BYTE_ARRAY LineProgram;
 } CK_FUNCTION_DEBUG, *PCK_FUNCTION_DEBUG;
@@ -790,13 +786,41 @@ Members:
         The first element is the receiver, followed by the function parameters,
         followed by the local variables.
 
+    TryCount - Stores the try stack size upon invocation of this frame. This is
+        used during function return to quickly pop all open try blocks off.
+
 --*/
 
 typedef struct _CK_CALL_FRAME {
     PCK_IP Ip;
     PCK_CLOSURE Closure;
     PCK_VALUE StackStart;
+    UINTN TryCount;
 } CK_CALL_FRAME, *PCK_CALL_FRAME;
+
+/*++
+
+Structure Description:
+
+    This structure stores the state for an instantiated try-except scope.
+
+Members:
+
+    Ip - Stores a pointer to the first instruction of the first except clause.
+
+    Stack - Stores a pointer to the stack value to set if jumping to this
+        except clause.
+
+    FrameCount - Stores the call frame count at the time this try block was
+        entered.
+
+--*/
+
+typedef struct _CK_TRY_BLOCK {
+    PCK_IP Ip;
+    PCK_VALUE Stack;
+    UINTN FrameCount;
+} CK_TRY_BLOCK, *PCK_TRY_BLOCK;
 
 /*++
 
@@ -826,6 +850,13 @@ Members:
     FrameCapacity - Stores the maximum number of elements that can be stored on
         the call frame stack before it will need to be reallocated.
 
+    TryStack - Stores the start of the stack of executing try blocks.
+
+    TryCount - Stores the number of open try blocks in this fiber.
+
+    TryCapacity - Stores the number of blocks in the try block stack before the
+        array will need to be reallocated.
+
     OpenUpvalues - Stores the head of the singly linked list of upvalues that
         might need to be closed if something goes out of scope. The first
         element is the most recent upvalue.
@@ -849,6 +880,9 @@ struct _CK_FIBER {
     PCK_CALL_FRAME Frames;
     UINTN FrameCount;
     UINTN FrameCapacity;
+    PCK_TRY_BLOCK TryStack;
+    UINTN TryCount;
+    UINTN TryCapacity;
     PCK_UPVALUE OpenUpvalues;
     PCK_FIBER Caller;
     CK_VALUE Error;
@@ -1021,38 +1055,6 @@ Return Value:
     Returns a pointer to the new function on success.
 
     NULL on allocation failure.
-
---*/
-
-VOID
-CkpFunctionSetDebugName (
-    PCK_VM Vm,
-    PCK_FUNCTION Function,
-    PSTR Name,
-    UINTN Length
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sets the name of the function used when printing stack traces.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Function - Supplies a pointer to the function to set the name of.
-
-    Name - Supplies a pointer to the name of the function. A copy of this
-        memory will be made.
-
-    Length - Supplies the length of the function name, not including the null
-        terminator.
-
-Return Value:
-
-    None.
 
 --*/
 
@@ -2022,7 +2024,7 @@ Return Value:
 CK_VALUE
 CkpStringFake (
     PCK_STRING FakeStringObject,
-    PSTR String,
+    PCSTR String,
     UINTN Length
     );
 
@@ -2128,6 +2130,30 @@ Arguments:
 
     Stack - Supplies a pointer to the base of the stack. The receiver and
         arguments should already be set up after this pointer.
+
+Return Value:
+
+    None. On allocation failure, the runtime error will be set.
+
+--*/
+
+VOID
+CkpPushTryBlock (
+    PCK_VM Vm,
+    PCK_IP ExceptionHandler
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes a try block onto the current fiber's try stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ExceptionHandler - Supplies a pointer to the exception handler code.
 
 Return Value:
 

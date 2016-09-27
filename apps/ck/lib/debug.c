@@ -132,6 +132,8 @@ PSTR CkOpcodeNames[CkOpcodeCount] = {
     "ForeignClass",
     "Method",
     "StaticMethod",
+    "Try",
+    "PopTry",
     "End"
 };
 
@@ -139,12 +141,12 @@ PSTR CkObjectTypeNames[CkObjectTypeCount] = {
     "Invalid",
     "Class",
     "Closure",
+    "Dict",
     "Fiber",
-    "Function",
     "Foreign",
+    "Function",
     "Instance",
     "List",
-    "Dict",
     "Module",
     "Range",
     "String",
@@ -155,70 +157,75 @@ PSTR CkObjectTypeNames[CkObjectTypeCount] = {
 // ------------------------------------------------------------------ Functions
 //
 
-VOID
-CkpDebugPrintStackTrace (
-    PCK_VM Vm
+CK_VALUE
+CkpCreateStackTrace (
+    PCK_VM Vm,
+    UINTN Skim
     )
 
 /*++
 
 Routine Description:
 
-    This routine prints a stack trace of the current fiber.
+    This routine creates a stack trace object from the current fiber.
 
 Arguments:
 
     Vm - Supplies a pointer to the VM.
 
+    Skim - Supplies the number of most recently called functions not to include
+        in the stack trace. This is usually 0 for exceptions created in C and
+        1 for exceptions created in Chalk.
+
 Return Value:
 
-    None.
+    Returns a list of lists containing the stack trace. The first element is
+    the least recently called. Each elements contains a list of 3 elements:
+    the module name, the function name, and the line number.
+
+    CK_NULL_VALUE on allocation failure.
 
 --*/
 
 {
 
     PCK_CLOSURE Closure;
-    PSTR ErrorString;
     PCK_FIBER Fiber;
     PCK_CALL_FRAME Frame;
+    PCK_LIST FrameElement;
     INTN FrameIndex;
     PCK_FUNCTION Function;
-    PSTR FunctionName;
-    INT Line;
+    LONG Line;
     PCK_MODULE Module;
-    PSTR ModuleName;
-    PCK_STRING String;
-
-    if (Vm->Configuration.Error == NULL) {
-        return;
-    }
+    PCK_STRING Name;
+    PCK_LIST Stack;
+    CK_VALUE Value;
 
     Fiber = Vm->Fiber;
-
-    CK_ASSERT(Fiber != NULL);
-
-    if (CK_IS_STRING(Fiber->Error)) {
-        String = CK_AS_STRING(Fiber->Error);
-        ErrorString = String->Value;
-
-    } else {
-        ErrorString = "Runtime Error";
+    Stack = CkpListCreate(Vm, 0);
+    if (Stack == NULL) {
+        return CkNullValue;
     }
 
-    Vm->Configuration.Error(Vm, CkErrorRuntime, NULL, -1, ErrorString);
-    for (FrameIndex = Fiber->FrameCount - 1; FrameIndex >= 0; FrameIndex -= 1) {
+    if (Fiber == NULL) {
+        CK_OBJECT_VALUE(Value, Stack);
+        return Value;
+    }
+
+    CK_ASSERT(Fiber->FrameCount >= Skim);
+
+    CkpPushRoot(Vm, &(Stack->Header));
+    for (FrameIndex = Fiber->FrameCount - 1 - Skim;
+         FrameIndex >= 0;
+         FrameIndex -= 1) {
+
         Frame = &(Fiber->Frames[FrameIndex]);
         Closure = Frame->Closure;
         Line = 0;
-        FunctionName = CkpGetFunctionName(Closure);
         switch (Closure->Type) {
         case CkClosureBlock:
             Function = Closure->U.Block.Function;
             Module = Function->Module;
-
-            CK_ASSERT(Frame->Ip > Function->Code.Data);
-
             Line = CkpGetLineForOffset(Closure->U.Block.Function,
                                        Frame->Ip - Function->Code.Data - 1);
 
@@ -240,19 +247,33 @@ Return Value:
             break;
         }
 
-        ModuleName = "<builtin>";
-        if ((Module != NULL) && (Module->Name != NULL)) {
-            ModuleName = Module->Name->Value;
+        FrameElement = CkpListCreate(Vm, 4);
+        if (FrameElement == NULL) {
+            CkpPopRoot(Vm);
+            return CkNullValue;
         }
 
-        Vm->Configuration.Error(Vm,
-                                CkErrorStackTrace,
-                                ModuleName,
-                                Line,
-                                FunctionName);
+        CK_OBJECT_VALUE(FrameElement->Elements.Data[0], Module->Name);
+        if (Module->Path != NULL) {
+            CK_OBJECT_VALUE(FrameElement->Elements.Data[1], Module->Path);
+
+        } else {
+            FrameElement->Elements.Data[1] = CkNullValue;
+        }
+
+        Name = CkpGetFunctionName(Closure);
+
+        CK_ASSERT(Name != NULL);
+
+        CK_OBJECT_VALUE(FrameElement->Elements.Data[2], Name);
+        CK_INT_VALUE(FrameElement->Elements.Data[3], Line);
+        CK_OBJECT_VALUE(Value, FrameElement);
+        CkpListInsert(Vm, Stack, Value, Stack->Elements.Count);
     }
 
-    return;
+    CkpPopRoot(Vm);
+    CK_OBJECT_VALUE(Value, Stack);
+    return Value;
 }
 
 VOID
@@ -282,7 +303,7 @@ Return Value:
 {
 
     LONG LastLine;
-    PSTR Name;
+    PCSTR Name;
     UINTN Offset;
     INTN Size;
 
@@ -293,7 +314,7 @@ Return Value:
         Name = "<core>";
     }
 
-    CkpDebugPrint(Vm, "%s: %s\n", Name, Function->Debug.Name);
+    CkpDebugPrint(Vm, "%s: %s\n", Name, Function->Debug.Name->Value);
     Offset = 0;
     LastLine = -1;
     while (TRUE) {
@@ -522,6 +543,7 @@ Return Value:
     case CkOpJumpIf:
     case CkOpAnd:
     case CkOpOr:
+    case CkOpTry:
         Jump = CK_READ16(ByteCode + Offset);
         Offset += 2;
         CkpDebugPrint(Vm, "%x", Offset + Jump);
@@ -821,7 +843,13 @@ Return Value:
         break;
 
     default:
-        if (Object->Type < CkObjectTypeCount) {
+        if (Object->Type == CkObjectInstance) {
+            CkpDebugPrint(Vm,
+                          "<%s %p>",
+                          Object->Class->Name->Value,
+                          Object);
+
+        } else if (Object->Type < CkObjectTypeCount) {
             CkpDebugPrint(Vm,
                           "<%s %p>",
                           CkObjectTypeNames[Object->Type],

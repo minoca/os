@@ -123,7 +123,7 @@ CK_SYMBOL_INDEX
 CkpStringTableEnsure (
     PCK_VM Vm,
     PCK_STRING_TABLE StringTable,
-    PSTR Name,
+    PCSTR Name,
     UINTN Size
     )
 
@@ -216,7 +216,7 @@ CK_SYMBOL_INDEX
 CkpStringTableAdd (
     PCK_VM Vm,
     PCK_STRING_TABLE StringTable,
-    PSTR Name,
+    PCSTR Name,
     UINTN Size
     )
 
@@ -263,7 +263,7 @@ Return Value:
 CK_SYMBOL_INDEX
 CkpStringTableFind (
     PCK_STRING_TABLE StringTable,
-    PSTR Name,
+    PCSTR Name,
     UINTN Size
     )
 
@@ -547,7 +547,7 @@ Return Value:
     CK_INTEGER IndexValue;
 
     if (!CK_IS_INTEGER(Index)) {
-        CkpRuntimeError(Vm, "Expected an integer");
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
         return MAX_UINTN;
     }
 
@@ -557,7 +557,11 @@ Return Value:
     }
 
     if ((IndexValue < 0) || (IndexValue >= Count) || (IndexValue > MAX_INTN)) {
-        CkpRuntimeError(Vm, "Index %lld out of range", (LONGLONG)IndexValue);
+        CkpRuntimeError(Vm,
+                        "IndexError",
+                        "Index %lld out of range",
+                        (LONGLONG)IndexValue);
+
         return MAX_UINTN;
     }
 

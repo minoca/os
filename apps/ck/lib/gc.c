@@ -221,6 +221,7 @@ Return Value:
         CkpKissCompiler(Vm, Vm->Compiler);
     }
 
+    CkpKissObject(Vm, &(Vm->UnhandledException->Header));
     CkpDeeplyKiss(Vm, &KissHead);
     CkpCollectUnkissedObjects(Vm);
 
@@ -362,11 +363,19 @@ Return Value:
 
     Allocation = CkRawReallocate(Vm, Memory, NewSize);
     if ((Allocation == NULL) && (NewSize != 0)) {
-        if (Vm->Compiler != NULL) {
-            CkpCompileError(Vm->Compiler, NULL, "Allocation failure");
+
+        //
+        // If there's already a memory exception in progress, then this is
+        // serious. Call the emergency function.
+        //
+
+        if (Vm->MemoryException != 0) {
+            CkpError(Vm, CkErrorNoMemory, "Allocation failure");
 
         } else {
-            CkpRuntimeError(Vm, "Allocation failure");
+            Vm->MemoryException += 1;
+            CkpRuntimeError(Vm, "MemoryError", "Allocation failure");
+            Vm->MemoryException -= 1;
         }
     }
 
@@ -886,6 +895,7 @@ Return Value:
     CkpKissValue(Vm, Fiber->Error);
     Vm->BytesAllocated += sizeof(CK_FIBER) +
                           (Fiber->FrameCapacity * sizeof(CK_CALL_FRAME)) +
+                          (Fiber->TryCapacity * sizeof(CK_TRY_BLOCK)) +
                           (Fiber->StackCapacity * sizeof(CK_VALUE));
 
     return;
@@ -951,11 +961,11 @@ Return Value:
 
     CkpKissValueArray(Vm, &(Function->Constants));
     CkpKissObject(Vm, &(Function->Module->Header));
+    CkpKissObject(Vm, &(Function->Debug.Name->Header));
     Vm->BytesAllocated += sizeof(CK_FUNCTION) +
                           (sizeof(UCHAR) * Function->Code.Capacity) +
                           (sizeof(UCHAR) *
-                           Function->Debug.LineProgram.Capacity) +
-                          (Function->Debug.NameSize + 1);
+                           Function->Debug.LineProgram.Capacity);
 
     return;
 }

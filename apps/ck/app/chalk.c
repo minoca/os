@@ -265,7 +265,7 @@ Return Value:
     //
 
     if (ScriptPath != NULL) {
-        FileBuffer = ChalkLoadFile(Arguments[ArgumentIndex], &FileSize);
+        FileBuffer = ChalkLoadFile(ScriptPath, &FileSize);
         if (FileBuffer == NULL) {
             fprintf(stderr,
                     "Error: Failed to load file %s: %s\n",
@@ -277,7 +277,7 @@ Return Value:
         }
 
         ArgumentIndex += 1;
-        Status = CkInterpret(Context.Vm, FileBuffer, FileSize);
+        Status = CkInterpret(Context.Vm, ScriptPath, FileBuffer, FileSize);
 
     //
     // With no arguments, run the interactive interpreter.
@@ -580,7 +580,7 @@ Return Value:
             break;
         }
 
-        CkInterpret(Context->Vm, Context->Line, strlen(Context->Line));
+        CkInterpret(Context->Vm, NULL, Context->Line, strlen(Context->Line));
     }
 
     return Status;

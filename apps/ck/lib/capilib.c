@@ -149,11 +149,10 @@ Return Value:
 {
 
     PCK_CLOSURE Closure;
-    CK_VALUE Error;
     PCK_FIBER Fiber;
     CK_API_TYPE FoundType;
     PCK_CALL_FRAME Frame;
-    PSTR Name;
+    PCK_STRING Name;
 
     FoundType = CkGetType(Vm, StackIndex);
 
@@ -170,14 +169,13 @@ Return Value:
     Frame = &(Fiber->Frames[Fiber->FrameCount - 1]);
     Closure = Frame->Closure;
     Name = CkpGetFunctionName(Closure);
-    Error = CkpStringFormat(Vm,
-                            "%s expects %s for argument %d, got %s",
-                            Name,
-                            CkApiTypeNames[Type],
-                            (INT)StackIndex,
-                            CkApiTypeNames[FoundType]);
+    CkpRuntimeError(Vm,
+                    "TypeError",
+                    Name->Value,
+                    CkApiTypeNames[Type],
+                    (INT)StackIndex,
+                    CkApiTypeNames[FoundType]);
 
-    Fiber->Error = Error;
     return FALSE;
 }
 

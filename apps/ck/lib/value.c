@@ -276,52 +276,6 @@ Return Value:
 }
 
 VOID
-CkpFunctionSetDebugName (
-    PCK_VM Vm,
-    PCK_FUNCTION Function,
-    PSTR Name,
-    UINTN Length
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the name of the function used when printing stack traces.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Function - Supplies a pointer to the function to set the name of.
-
-    Name - Supplies a pointer to the name of the function. A copy of this
-        memory will be made.
-
-    Length - Supplies the length of the function name, not including the null
-        terminator.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    CK_ASSERT(Function->Debug.Name == NULL);
-
-    Function->Debug.Name = CkAllocate(Vm, Length + 1);
-    if (Function->Debug.Name != NULL) {
-        memcpy(Function->Debug.Name, Name, Length);
-        Function->Debug.Name[Length] = '\0';
-    }
-
-    Function->Debug.NameSize = Length;
-    return;
-}
-
-VOID
 CkpDestroyObject (
     PCK_VM Vm,
     PCK_OBJECT Object
@@ -360,7 +314,6 @@ Return Value:
         CkpClearArray(Vm, &(Function->Constants));
         CkpClearArray(Vm, &(Function->Code));
         CkpClearArray(Vm, &(Function->Debug.LineProgram));
-        CkFree(Vm, Function->Debug.Name);
         break;
 
     case CkObjectForeign:

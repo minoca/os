@@ -33,6 +33,10 @@ void count();
 "this"          { count(); return(THIS); }
 "import"        { count(); return(IMPORT); }
 "from"          { count(); return(FROM); }
+"try"           { count(); return(TRY); }
+"except"        { count(); return(EXCEPT); }
+"as"            { count(); return(AS); }
+"finally"       { count(); return(FINALLY); }
 
 {L}({L}|{D})*       { count(); return(IDENTIFIER); }
 

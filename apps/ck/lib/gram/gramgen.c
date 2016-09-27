@@ -315,6 +315,7 @@ YY_VALUE CkgStatement[] = {
     CkNodeSelectionStatement, -1,
     CkNodeIterationStatement, -1,
     CkNodeJumpStatement, -1,
+    CkNodeTryStatement, -1,
     0
 };
 
@@ -379,6 +380,37 @@ YY_VALUE CkgJumpStatement[] = {
     CkTokenBreak, CkTokenSemicolon, -1,
     CkTokenReturn, CkTokenSemicolon, -1,
     CkTokenReturn, CkNodeExpression, CkTokenSemicolon, -1,
+    0
+};
+
+YY_VALUE CkgTryEnding[] = {
+    CkTokenElse, CkNodeCompoundStatement, -1,
+    CkTokenFinally, CkNodeCompoundStatement, -1,
+    CkTokenElse, CkNodeCompoundStatement,
+        CkTokenFinally, CkNodeCompoundStatement, -1,
+
+    -1,
+    0
+};
+
+YY_VALUE CkgExceptStatement[] = {
+    CkTokenExcept, CkNodeExpression, CkNodeCompoundStatement, -1,
+    CkTokenExcept, CkNodeExpression, CkTokenAs, CkTokenIdentifier,
+        CkNodeCompoundStatement, -1,
+
+    0
+};
+
+YY_VALUE CkgExceptStatementList[] = {
+    CkNodeExceptStatement, -1,
+    CkNodeExceptStatementList, CkNodeExceptStatement, -1,
+    0
+};
+
+YY_VALUE CkgTryStatement[] = {
+    CkTokenTry, CkNodeCompoundStatement, CkNodeExceptStatementList,
+        CkNodeTryEnding, -1,
+
     0
 };
 
@@ -483,6 +515,10 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"this", 0, 0, NULL},
     {"import", 0, 0, NULL},
     {"from", 0, 0, NULL},
+    {"try", 0, 0, NULL},
+    {"except", 0, 0, NULL},
+    {"as", 0, 0, NULL},
+    {"finally", 0, 0, NULL},
     {"Identifier", 0, 0, NULL},
     {"Constant", 0, 0, NULL},
     {"String", 0, 0, NULL},
@@ -570,6 +606,10 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"SelectionStatement", 0, 0, CkgSelectionStatement},
     {"IterationStatement", 0, 0, CkgIterationStatement},
     {"JumpStatement", 0, 0, CkgJumpStatement},
+    {"TryEnding", 0, 0, CkgTryEnding},
+    {"ExceptStatement", 0, 0, CkgExceptStatement},
+    {"ExceptStatementList", 0, 0, CkgExceptStatementList},
+    {"TryStatement", 0, 0, CkgTryStatement},
     {"IdentifierList", 0, 0, CkgIdentifierList},
     {"FunctionDefinition", 0, 0, CkgFunctionDefinition},
     {"ClassMember", 0, 0, CkgClassMember},

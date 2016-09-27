@@ -205,6 +205,9 @@ Members:
 
     Scope - Stores the scope index for the loop.
 
+    TryCount - Stores the number of try blocks currently being executed within
+        the loop.
+
     Enclosing - Stores a pointer to the loop enclosing this one, or NULL if
         this is the outermost loop currently being processed.
 
@@ -215,6 +218,7 @@ struct _CK_LOOP {
     UINTN ExitJump;
     UINTN Body;
     LONG Scope;
+    LONG TryCount;
     PCK_LOOP Enclosing;
 };
 
@@ -305,6 +309,9 @@ Members:
     Assign - Stores a boolean indicating whether the next primary expression
         needs to be an lvalue or not.
 
+    FinallyOffset - Stores the offset of the finally block if a try-except
+        block is being compiled.
+
 --*/
 
 struct _CK_COMPILER {
@@ -325,6 +332,7 @@ struct _CK_COMPILER {
     UINTN LineOffset;
     PUCHAR LastLineOp;
     BOOL Assign;
+    UINTN FinallyOffset;
 };
 
 //

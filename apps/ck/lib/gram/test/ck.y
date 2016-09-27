@@ -10,6 +10,7 @@
 %token FUNCTION IN NULL_TOKEN DOTDOT DOTDOTDOT CLASS STATIC SUPER THIS IS VAR
 %token FROM IMPORT
 %token TRUE_TOKEN FALSE_TOKEN
+%token TRY EXCEPT AS FINALLY
 
 %start translation_unit
 
@@ -199,6 +200,7 @@ statement
     | selection_statement
     | iteration_statement
     | jump_statement
+    | try_statement
     ;
 
 compound_statement
@@ -235,6 +237,27 @@ jump_statement
     | BREAK ';'
     | RETURN ';'
     | RETURN expression ';'
+    ;
+
+try_ending
+    : ELSE compound_statement
+    | FINALLY compound_statement
+    | ELSE compound_statement FINALLY compound_statement
+    |
+    ;
+
+except_statement
+    : EXCEPT expression compound_statement
+    | EXCEPT expression AS IDENTIFIER compound_statement
+    ;
+
+except_statement_list
+    : except_statement
+    | except_statement_list except_statement
+    ;
+
+try_statement
+    : TRY compound_statement except_statement_list try_ending
     ;
 
 identifier_list

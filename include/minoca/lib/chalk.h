@@ -106,8 +106,7 @@ typedef enum _CK_ERROR_TYPE {
     CkSuccess,
     CkErrorNoMemory,
     CkErrorCompile,
-    CkErrorRuntime,
-    CkErrorStackTrace
+    CkErrorRuntime
 } CK_ERROR_TYPE, *PCK_ERROR_TYPE;
 
 typedef enum _CK_LOAD_MODULE_RESULT {
@@ -333,7 +332,7 @@ typedef
 VOID
 (*PCK_WRITE) (
     PCK_VM Vm,
-    PSTR String
+    PCSTR String
     );
 
 /*++
@@ -360,8 +359,6 @@ VOID
 (*PCK_ERROR) (
     PCK_VM Vm,
     CK_ERROR_TYPE ErrorType,
-    PSTR Module,
-    INT Line,
     PSTR Message
     );
 
@@ -376,10 +373,6 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     ErrorType - Supplies the type of error occurring.
-
-    Module - Supplies a pointer to the module the error occurred in.
-
-    Line - Supplies the line number the error occurred on.
 
     Message - Supplies a pointer to a string describing the error.
 
@@ -412,6 +405,10 @@ Members:
     Error - Stores a pointer to a function used to report errors. If NULL,
         errors are not reported.
 
+    UnhandledException - Stores a pointer to a foreign function to call if an
+        unhandled exception occurs. If null, a default function will be
+        provided that prints the error.
+
     InitialHeapSize - Stores the number of bytes to allocate before triggering
         a garbage collection.
 
@@ -434,6 +431,7 @@ typedef struct _CK_CONFIGURATION {
     PCK_DESTROY_DATA UnloadForeignModule;
     PCK_WRITE Write;
     PCK_ERROR Error;
+    PCK_FOREIGN_FUNCTION UnhandledException;
     UINTN InitialHeapSize;
     UINTN MinimumHeapSize;
     ULONG HeapGrowthPercent;
@@ -549,6 +547,7 @@ CK_API
 CK_ERROR_TYPE
 CkInterpret (
     PCK_VM Vm,
+    PSTR Path,
     PSTR Source,
     UINTN Length
     );
@@ -563,6 +562,9 @@ Routine Description:
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
+
+    Path - Supplies an optional pointer to the path of the file containing the
+        source being interpreted.
 
     Source - Supplies a pointer to the null terminated string containing the
         source to interpret.

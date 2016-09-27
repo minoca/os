@@ -159,6 +159,8 @@ CHAR CkOpcodeStackEffects[CkOpcodeCount] = {
     -1, // CkOpForeignClass
     -2, // CkOpMethod
     -2, // CkOpStaticMethod
+    0,  // CkOpTry
+    0,  // CkOpPopTry
     0,  // CkOpEnd
 };
 
@@ -235,6 +237,8 @@ UCHAR CkCompilerOperandSizes[CkOpcodeCount] = {
     0, // CkOpForeignClass
     2, // CkOpMethod
     2, // CkOpStaticMethod
+    2, // CkOpTry
+    0, // CkOpPopTry
     0, // CkOpEnd
 };
 
@@ -271,6 +275,7 @@ Return Value:
     Loop->Enclosing = Compiler->Loop;
     Loop->Start = Compiler->Function->Code.Count - 1;
     Loop->Scope = Compiler->ScopeDepth;
+    Loop->TryCount = 0;
     Compiler->Loop = Loop;
     return;
 }
@@ -641,6 +646,12 @@ Return Value:
             Op = CkOpSuperCall;
         }
 
+        //
+        // Manually track stack usage since the op doesn't inherently
+        // know it's stack effects.
+        //
+
+        Compiler->StackSlots -= Signature->Arity;
         CkpEmitByteOp(Compiler, Op, Signature->Arity);
         CkpEmitShort(Compiler, Symbol);
     }
@@ -705,10 +716,7 @@ Return Value:
         // have that information encoded.
         //
 
-        Compiler->StackSlots += ArgumentCount;
-        if (Compiler->StackSlots > Compiler->Function->MaxStack) {
-            Compiler->Function->MaxStack = Compiler->StackSlots;
-        }
+        Compiler->StackSlots -= ArgumentCount;
     }
 
     return;
@@ -1417,6 +1425,7 @@ Return Value:
     PCK_BYTE_ARRAY LineProgram;
     LONG OffsetAdvance;
     UCHAR Op;
+    LONG PreviousAdvance;
     ULONG Size;
     ULONG Value;
 
@@ -1469,17 +1478,17 @@ Return Value:
         //
 
         } else if (LastOp == CkLineOpAdvanceOffset) {
-            LastOffset = Compiler->LineOffset -
-                         CkpUtf8Decode(Compiler->LastLineOp + 1, 4);
-
+            PreviousAdvance = CkpUtf8Decode(Compiler->LastLineOp + 1, 4);
+            LastOffset = Compiler->LineOffset - PreviousAdvance;
             OffsetAdvance = Offset - LastOffset;
 
             CK_ASSERT(OffsetAdvance > 0);
 
             if ((OffsetAdvance <= CK_MAX_UTF8) &&
-                (CkpUtf8EncodeSize(LastOffset) == CkpUtf8EncodeSize(Offset))) {
+                (CkpUtf8EncodeSize(PreviousAdvance) ==
+                 CkpUtf8EncodeSize(OffsetAdvance))) {
 
-                CkpUtf8Encode(Offset, Compiler->LastLineOp + 1);
+                CkpUtf8Encode(OffsetAdvance, Compiler->LastLineOp + 1);
                 Line = 0;
             }
 

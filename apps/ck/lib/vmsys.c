@@ -75,16 +75,19 @@ CkpDefaultUnloadForeignModule (
 VOID
 CkpDefaultWrite (
     PCK_VM Vm,
-    PSTR String
+    PCSTR String
     );
 
 VOID
 CkpDefaultError (
     PCK_VM Vm,
     CK_ERROR_TYPE ErrorType,
-    PSTR Module,
-    INT Line,
     PSTR Message
+    );
+
+VOID
+CkpDefaultUnhandledException (
+    PCK_VM Vm
     );
 
 CK_LOAD_MODULE_RESULT
@@ -113,6 +116,7 @@ CK_CONFIGURATION CkDefaultConfiguration = {
     CkpDefaultUnloadForeignModule,
     CkpDefaultWrite,
     CkpDefaultError,
+    CkpDefaultUnhandledException,
     CK_INITIAL_HEAP_DEFAULT,
     CK_MINIMUM_HEAP_DEFAULT,
     CK_HEAP_GROWTH_DEFAULT
@@ -283,7 +287,7 @@ Return Value:
 VOID
 CkpDefaultWrite (
     PCK_VM Vm,
-    PSTR String
+    PCSTR String
     )
 
 /*++
@@ -315,8 +319,6 @@ VOID
 CkpDefaultError (
     PCK_VM Vm,
     CK_ERROR_TYPE ErrorType,
-    PSTR Module,
-    INT Line,
     PSTR Message
     )
 
@@ -332,10 +334,6 @@ Arguments:
 
     ErrorType - Supplies the type of error occurring.
 
-    Module - Supplies a pointer to the module the error occurred in.
-
-    Line - Supplies the line number the error occurred on.
-
     Message - Supplies a pointer to a string describing the error.
 
 Return Value:
@@ -350,17 +348,9 @@ Return Value:
         Message = "";
     }
 
-    if (Module == NULL) {
-        Module = "<none>";
-    }
-
     switch (ErrorType) {
     case CkErrorNoMemory:
-        fprintf(stderr, "%s:%d: Allocation failure\n", Module, Line);
-        break;
-
-    case CkErrorStackTrace:
-        fprintf(stderr, "  in %s at %s:%d\n", Message, Module, Line);
+        fprintf(stderr, "Allocation failure\n");
         break;
 
     case CkErrorRuntime:
@@ -369,10 +359,46 @@ Return Value:
 
     case CkErrorCompile:
     default:
-        fprintf(stderr, "%s:%d: %s.\n", Module, Line, Message);
+        fprintf(stderr, "Compile Error: %s.\n", Message);
         break;
     }
 
+    return;
+}
+
+VOID
+CkpDefaultUnhandledException (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the default handling of an unhandled exception. It
+    takes one argument, the exception, and prints the exception and stack trace
+    to stderr.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN Length;
+    PCSTR String;
+
+    fprintf(stderr, "Unhandled Exception:\n");
+    CkPushValue(Vm, 1);
+    CkCallMethod(Vm, "__str", 0);
+    String = CkGetString(Vm, -1, &Length);
+    fprintf(stderr, "%s\n", String);
     return;
 }
 

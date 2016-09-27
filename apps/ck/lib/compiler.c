@@ -89,7 +89,7 @@ CkpInitializeCompiler (
 PCK_FUNCTION
 CkpFinalizeCompiler (
     PCK_COMPILER Compiler,
-    PSTR DebugName,
+    PCSTR DebugName,
     UINTN DebugNameLength
     );
 
@@ -113,6 +113,18 @@ CkpVisitModuleName (
 
 VOID
 CkpVisitFunctionDefinition (
+    PCK_COMPILER Compiler,
+    PCK_AST_NODE Node
+    );
+
+VOID
+CkpVisitExceptStatement (
+    PCK_COMPILER Compiler,
+    PCK_AST_NODE Node
+    );
+
+VOID
+CkpVisitTryStatement (
     PCK_COMPILER Compiler,
     PCK_AST_NODE Node
     );
@@ -248,6 +260,10 @@ PCK_COMPILER_NODE_VISITOR CkCompilerNodeFunctions[] = {
     CkpVisitSelectionStatement, // CkNodeSelectionStatement,
     CkpVisitIterationStatement, // CkNodeIterationStatement,
     CkpVisitJumpStatement, // CkNodeJumpStatement,
+    NULL, // CkNodeTryEnding,
+    CkpVisitExceptStatement, // CkNodeExceptStatement,
+    NULL, // CkNodeExceptStatementList,
+    CkpVisitTryStatement, // CkNodeTryStatement,
     NULL, // CkNodeIdentifierList,
     CkpVisitFunctionDefinition, // CkNodeFunctionDefinition,
     CkpVisitChildren, // CkNodeClassMember,
@@ -575,7 +591,7 @@ Return Value:
 PCK_FUNCTION
 CkpFinalizeCompiler (
     PCK_COMPILER Compiler,
-    PSTR DebugName,
+    PCSTR DebugName,
     UINTN DebugNameLength
     )
 
@@ -618,10 +634,13 @@ Return Value:
 
     Compiler->Line += 1;
     CkpEmitOp(Compiler, CkOpEnd);
-    CkpFunctionSetDebugName(Compiler->Parser->Vm,
-                            Compiler->Function,
-                            DebugName,
-                            DebugNameLength);
+    Value = CkpStringCreate(Compiler->Parser->Vm, DebugName, DebugNameLength);
+    if (!CK_IS_STRING(Value)) {
+        Compiler->Function = NULL;
+        goto FinalizeCompilerEnd;
+    }
+
+    Compiler->Function->Debug.Name = CK_AS_STRING(Value);
 
     //
     // Don't return the function if there were any errors along the way
@@ -1058,7 +1077,7 @@ Return Value:
         return;
     }
 
-    Current = String->Value;
+    Current = (PSTR)(String->Value);
     CkCopy(Current,
            Compiler->Parser->Source + Identifier->Position,
            Identifier->Size);
@@ -1213,6 +1232,10 @@ Return Value:
     }
 
     MethodCompiler.Function->Arity = Signature.Arity;
+    MethodCompiler.StackSlots += Signature.Arity;
+    if (MethodCompiler.StackSlots > MethodCompiler.Function->MaxStack) {
+        MethodCompiler.Function->MaxStack = MethodCompiler.StackSlots;
+    }
 
     //
     // Parse the parameter list. It's left recursive, so go backwards.
@@ -1264,6 +1287,305 @@ Return Value:
 }
 
 VOID
+CkpVisitExceptStatement (
+    PCK_COMPILER Compiler,
+    PCK_AST_NODE Node
+    )
+
+/*++
+
+Routine Description:
+
+    This routine compiles a single case of an "except <expr> as e".
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Node - Supplies a pointer to the node to visit.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_AST_NODE Body;
+    CK_SYMBOL_INDEX Exception;
+    CK_SYMBOL_INDEX ExceptionLocal;
+    UINTN IfJump;
+    UINTN Offset;
+    PLEXER_TOKEN Token;
+
+    //
+    // The node takes one of the forms:
+    // EXCEPT expression compound_statement
+    // EXCEPT expression AS ID compound_statement
+    //
+
+    CK_ASSERT(Node->Children >= 3);
+    CK_ASSERT(Compiler->LocalCount != 0);
+
+    //
+    // The exception is pushed onto the stack, and a local was created for it
+    // by the visit try function.
+    //
+
+    Exception = Compiler->LocalCount - 1;
+    CkpPushScope(Compiler);
+
+    //
+    // Load the exception in preparation for the call to it.
+    //
+
+    CkpLoadLocal(Compiler, Exception);
+
+    //
+    // Evaluate the expression.
+    //
+
+    CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex + 1));
+
+    //
+    // Call the is method to determine if the exception is of the type (or list
+    // of types) specified by the expression. Jump over the except body if it
+    // is not.
+    //
+
+    CkpEmitMethodCall(Compiler, 1, "__is@1", 6);
+    IfJump = CkpEmitJump(Compiler, CkOpJumpIf);
+
+    //
+    // Define the visible version of the exception local if the exception block
+    // wants one.
+    //
+
+    if (Node->Children == 5) {
+        Token = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 3);
+
+        CK_ASSERT(Token->Value == CkTokenIdentifier);
+
+        CkpLoadLocal(Compiler, Exception);
+        ExceptionLocal = CkpDeclareVariable(Compiler, Token);
+        if (ExceptionLocal == -1) {
+            return;
+        }
+
+        CkpDefineVariable(Compiler, ExceptionLocal);
+    }
+
+    Body = CK_GET_AST_NODE(Compiler, Node->ChildIndex + Node->Children - 1);
+
+    CK_ASSERT(Body->Symbol == CkNodeCompoundStatement);
+
+    CkpVisitNode(Compiler, Body);
+    CkpPopScope(Compiler);
+
+    //
+    // The finally block is not in the same scope as the one that contains the
+    // hidden exception local. The compiler will emit a pop to remove that
+    // scope, but by jumping directly to the finally case (which is also
+    // executed when no exception occured), execution flow skips that pop.
+    // Add an explicit pop now to remove the hidden exception local.
+    //
+
+    CkpEmitOp(Compiler, CkOpPop);
+
+    //
+    // Jump backwards to the finally block.
+    //
+
+    CK_ASSERT((Compiler->FinallyOffset != 0) &&
+              (Compiler->FinallyOffset < Compiler->Function->Code.Count));
+
+    Offset = Compiler->Function->Code.Count - Compiler->FinallyOffset + 2;
+    CkpEmitShortOp(Compiler, CkOpLoop, Offset);
+
+    //
+    // If the exception didn't match, end up here to try the next except
+    // statement or the default case provided by the try visit function.
+    //
+
+    CkpPatchJump(Compiler, IfJump);
+    return;
+}
+
+VOID
+CkpVisitTryStatement (
+    PCK_COMPILER Compiler,
+    PCK_AST_NODE Node
+    )
+
+/*++
+
+Routine Description:
+
+    This routine compiles a try-except-else-finally block.
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Node - Supplies a pointer to the node to visit.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CK_SYMBOL_INDEX ExceptionLocal;
+    PCK_AST_NODE Finally;
+    UINTN FinallyJumpOffset;
+    UINTN FinallyOffset;
+    UINTN PreviousFinallyOffset;
+    PLEXER_TOKEN Token;
+    PCK_AST_NODE TryEnd;
+    UINTN TryOffset;
+
+    //
+    // The statement should take the form:
+    // TRY compound_statement except_statement_list try_ending.
+    // The ending should be in the form:
+    // [ ELSE compound_statement ] [ FINALLY compound_statement ].
+    //
+
+    CK_ASSERT(Node->Children == 4);
+
+    TryEnd = CK_GET_AST_NODE(Compiler, Node->ChildIndex + 3);
+
+    //
+    // Emit the try, and compile the compound statement. Track the number of
+    // tries in the current loop in case a break statement occurs. A break or
+    // continue will need to pop the try blocks before jumping directly out of
+    // the try.
+    //
+
+    TryOffset = CkpEmitJump(Compiler, CkOpTry);
+    if (Compiler->Loop != NULL) {
+        Compiler->Loop->TryCount += 1;
+    }
+
+    CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex + 1));
+    if (Compiler->Loop != NULL) {
+
+        CK_ASSERT(Compiler->Loop->TryCount != 0);
+
+        Compiler->Loop->TryCount -= 1;
+    }
+
+    //
+    // At this point the try succeeded without taking an exception. Pop the
+    // try so that exceptions in the else or finally cases are not handled by
+    // this try.
+    //
+
+    CkpEmitOp(Compiler, CkOpPopTry);
+
+    //
+    // If there's no else or finally, then emit a stub "finally" block that
+    // just jumps over all the except cases. The "finally" is emitted before
+    // the except cases to avoid having to remember N jump patch locations for
+    // when each except clause finishes and needs to jump to the finally code.
+    //
+
+    FinallyOffset = Compiler->Function->Code.Count;
+    if (TryEnd->Children != 0) {
+        Token = CK_GET_AST_TOKEN(Compiler, TryEnd->ChildIndex);
+
+        //
+        // If there's an else, emit it now. The success no-exception case just
+        // falls through to here.
+        //
+
+        Finally = NULL;
+        if (Token->Value == CkTokenElse) {
+            CkpVisitNode(Compiler,
+                         CK_GET_AST_NODE(Compiler, TryEnd->ChildIndex + 1));
+
+            if (TryEnd->Children == 4) {
+                Finally = CK_GET_AST_NODE(Compiler, TryEnd->ChildIndex + 3);
+            }
+
+        } else {
+
+            CK_ASSERT(Token->Value == CkTokenFinally);
+
+            Finally = CK_GET_AST_NODE(Compiler, TryEnd->ChildIndex + 1);
+        }
+
+        FinallyOffset = Compiler->Function->Code.Count;
+        if (Finally != NULL) {
+            CkpVisitNode(Compiler, Finally);
+        }
+    }
+
+    //
+    // Now after executing the finally block, jump over all the except blocks.
+    //
+
+    FinallyJumpOffset = CkpEmitJump(Compiler, CkOpJump);
+
+    //
+    // Now handle the exception cases. This first one is where the interpreter
+    // should jump to if an exception occurs.
+    //
+
+    CkpPatchJump(Compiler, TryOffset);
+
+    //
+    // Push a scope and define a local for the exception that the interpreter
+    // put on the stack. Give it a hidden (illegal) name so regular code can't
+    // see it.
+    //
+
+    CkpPushScope(Compiler);
+    ExceptionLocal = CkpAddLocal(Compiler, " e", 2);
+    PreviousFinallyOffset = Compiler->FinallyOffset;
+    Compiler->FinallyOffset = FinallyOffset - 1;
+    CkpVisitLeftRecursiveList(Compiler,
+                              CK_GET_AST_NODE(Compiler, Node->ChildIndex + 2));
+
+    Compiler->FinallyOffset = PreviousFinallyOffset;
+
+    //
+    // Emit the case where no except case matches the current exception.
+    // In that case re-raise the exception to the next try block. The exception
+    // is already on the stack, so it will need to be re-pushed as an argument.
+    //
+
+    CkpLoadCoreVariable(Compiler, "Core");
+    CkpLoadLocal(Compiler, ExceptionLocal);
+    CkpEmitMethodCall(Compiler, 1, "raise@1", 7);
+
+    //
+    // Pop the return value and the scope containing the hidden exception local
+    // pushed on by the raise. The pops emitted here never get executed
+    // (since raise doesn't return), but it keeps the compiler's stack tracking
+    // in sync.
+    //
+
+    CkpEmitOp(Compiler, CkOpPop);
+    CkpPopScope(Compiler);
+
+    //
+    // And finally, everything is emitted. This is where the finally block
+    // jumps to continue execution. The end of the finally skips the code that
+    // popped this exception scope because it's also executed in the success
+    // case (where no exception was pushed). Each exception clause has an
+    // extra pop on the end to cover the pop missed by not executing the pop
+    // scope above.
+    //
+
+    CkpPatchJump(Compiler, FinallyJumpOffset);
+    return;
+}
+
+VOID
 CkpVisitJumpStatement (
     PCK_COMPILER Compiler,
     PCK_AST_NODE Node
@@ -1290,38 +1612,36 @@ Return Value:
 {
 
     UINTN Offset;
+    PSTR StatementName;
     PLEXER_TOKEN Token;
+    LONG TryIndex;
 
     CK_ASSERT(Node->Children >= 1);
 
     Token = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex);
     switch (Token->Value) {
+    case CkTokenBreak:
     case CkTokenContinue:
         if (Compiler->Loop == NULL) {
+            StatementName = "break";
+            if (Token->Value == CkTokenContinue) {
+                StatementName = "continue";
+            }
+
             CkpCompileError(Compiler,
                             Token,
                             "Cannot use '%s' outside of a loop",
-                            "continue");
+                            StatementName);
 
             break;
         }
 
         //
-        // Emit a loop back to the conditional, the start of the loop.
+        // Pop out of the try blocks currently running inside this loop.
         //
 
-        Offset = Compiler->Function->Code.Count - Compiler->Loop->Start + 2;
-        CkpEmitShortOp(Compiler, CkOpLoop, Offset);
-        break;
-
-    case CkTokenBreak:
-        if (Compiler->Loop == NULL) {
-            CkpCompileError(Compiler,
-                            Token,
-                            "Cannot use '%s' outside of a loop",
-                            "break");
-
-            break;
+        for (TryIndex = 0; TryIndex < Compiler->Loop->TryCount; TryIndex += 1) {
+            CkpEmitOp(Compiler, CkOpPopTry);
         }
 
         //
@@ -1329,14 +1649,26 @@ Return Value:
         //
 
         CkpDiscardLocals(Compiler, Compiler->Loop->Scope + 1);
+        if (Token->Value == CkTokenBreak) {
 
-        //
-        // Emit a jump, but it's not yet known where the end of the loop is.
-        // Emit an end op because it cannot occur normally inside the loop, and
-        // serves as noticable placeholders for patching later.
-        //
+            //
+            // Emit a jump, but it's not yet known where the end of the loop is.
+            // Emit an end op because it cannot occur normally inside the loop,
+            // and serves as noticable placeholders for patching later.
+            //
 
-        CkpEmitJump(Compiler, CkOpEnd);
+            CkpEmitJump(Compiler, CkOpEnd);
+
+        } else {
+
+            //
+            // Emit a loop back to the conditional, the start of the loop.
+            //
+
+            Offset = Compiler->Function->Code.Count - Compiler->Loop->Start + 2;
+            CkpEmitShortOp(Compiler, CkOpLoop, Offset);
+        }
+
         break;
 
     case CkTokenReturn:
@@ -2107,18 +2439,34 @@ Return Value:
 
     INT Length;
     CHAR Message[CK_MAX_ERROR_MESSAGE];
-    PSTR Name;
+    PCSTR Name;
 
     Parser->Errors += 1;
-    if ((Parser->PrintErrors == FALSE) ||
-        (Parser->Vm->Configuration.Error == NULL)) {
-
+    if (Parser->PrintErrors == FALSE) {
         return;
     }
 
-    Length = 0;
+    if (Parser->Module->Name != NULL) {
+        Name = Parser->Module->Name->Value;
+
+    } else {
+        Name = "<core>";
+    }
+
     if (Label != NULL) {
-        Length = snprintf(Message, sizeof(Message), "%s: ", Label);
+        Length = snprintf(Message,
+                          sizeof(Message),
+                          "%s:%d %s: ",
+                          Name,
+                          Line,
+                          Label);
+
+    } else {
+        Length = snprintf(Message, sizeof(Message), "%s:%d ", Name, Line);
+    }
+
+    if (Length < 0) {
+        Length = 0;
     }
 
     vsnprintf(Message + Length,
@@ -2127,19 +2475,7 @@ Return Value:
               ArgumentList);
 
     Message[sizeof(Message) - 1] = '\0';
-    if (Parser->Module->Name != NULL) {
-        Name = Parser->Module->Name->Value;
-
-    } else {
-        Name = "<core>";
-    }
-
-    Parser->Vm->Configuration.Error(Parser->Vm,
-                                    CkErrorCompile,
-                                    Name,
-                                    Line,
-                                    Message);
-
+    CkpRuntimeError(Parser->Vm, "CompileError", "%s", Message);
     return;
 }
 

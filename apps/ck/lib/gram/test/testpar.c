@@ -196,9 +196,13 @@ PSTR CkLexerTokenNames[] = {
     "this",
     "import",
     "from",
-    "ID", // identifier
-    "DECINT", // decimal integer
-    "STRING", // string literal
+    "try",
+    "except",
+    "as",
+    "finally",
+    "ID",
+    "CONSTANT",
+    "STRING",
     ">>=",
     "<<=",
     "+=",
@@ -291,6 +295,10 @@ PSTR CkNodeNames[] = {
     "SelectionStatement",
     "IterationStatement",
     "JumpStatement",
+    "TryEnding",
+    "ExceptStatement",
+    "ExceptStatementList",
+    "TryStatement",
     "IdentifierList",
     "FunctionDefinition",
     "ClassMember",
