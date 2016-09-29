@@ -1822,13 +1822,6 @@ Return Value:
 
 {
 
-    //
-    // TODO: Re-enable this code once a build has gone around and the C
-    // library has the *context routines.
-    //
-
-#if 0
-
     pid_t Child;
     ucontext_t Context1;
     ucontext_t Context2;
@@ -1914,13 +1907,6 @@ Return Value:
     DEBUG_PRINT("MainContext exiting\n");
     exit(0);
     return 0;
-
-#else
-
-    return 0;
-
-#endif
-
 }
 
 VOID
@@ -1952,13 +1938,6 @@ Return Value:
 
 {
 
-    //
-    // TODO: Re-enable this code once a build has gone around and the C
-    // library has the *context routines.
-    //
-
-#if 0
-
     DEBUG_PRINT("Context %d: Swapping\n", Identifier);
     SigtestContextHits += Identifier;
     if (swapcontext(OldContext, NextContext) != 0) {
@@ -1968,9 +1947,6 @@ Return Value:
 
     DEBUG_PRINT("Context %d: Exiting\n", Identifier);
     SigtestContextHits += Identifier;
-
-#endif
-
     return;
 }
 
