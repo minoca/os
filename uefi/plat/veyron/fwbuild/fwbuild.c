@@ -541,8 +541,10 @@ Return Value:
     SignatureData = NULL;
     SignatureDataSize = 0;
     memset(&RsaContext, 0, sizeof(RSA_CONTEXT));
-    RsaContext.BigIntegerContext.AllocateMemory = malloc;
-    RsaContext.BigIntegerContext.ReallocateMemory = realloc;
+    RsaContext.BigIntegerContext.AllocateMemory = (PCY_ALLOCATE_MEMORY)malloc;
+    RsaContext.BigIntegerContext.ReallocateMemory =
+                                               (PCY_REALLOCATE_MEMORY)realloc;
+
     RsaContext.BigIntegerContext.FreeMemory = free;
     KStatus = CyRsaInitializeContext(&RsaContext);
     if (!KSUCCESS(KStatus)) {
