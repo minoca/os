@@ -11,5 +11,6 @@ sources text=auto whitespace=trailing-space,space-before-tab
 *.asl text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 *.y text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 *.l text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
+*.md text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 common text=auto whitespace=trailing-space,space-before-tab
 *.bin binary
