@@ -58,13 +58,13 @@ PSTR RtlReleaseLevelStrings[SystemReleaseLevelCount] = {
     "alpha",
     "beta",
     "candidate",
-    "release"
+    "final"
 };
 
 PSTR RtlBuildDebugLevelStrings[SystemBuildDebugLevelCount] = {
     "INVALID",
-    "checked",
-    "free"
+    "debug",
+    "release"
 };
 
 //
@@ -146,7 +146,7 @@ Return Value:
     }
 
     if ((Level != SystemVersionStringComplete) &&
-        (VersionInformation->DebugLevel == SystemBuildFree)) {
+        (VersionInformation->DebugLevel == SystemBuildRelease)) {
 
         PrintDebugLevel = FALSE;
     }

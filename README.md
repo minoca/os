@@ -20,7 +20,7 @@ The Minoca OS build environment is keyed off of a few environment variables you'
  - `SRCROOT` - Contains the absolute path to the base source directory. This respository is expected to be in a directory called `os` inside `SRCROOT`. If the third-party or tools repositories are present, they should be in directories called `third-party` and `tools` respectively underneath `SRCROOT`. For example, if you had checked out this repository into `~/src/os`, then in your shell you'd run `export SRCROOT=~/src`.
  - `ARCH` - Contains the architecture to build Minoca OS for (aka the target architecture). Valid values are `armv6`, `armv7`, and `x86`.
  - `VARIANT` - Contains the architecture variant, if any. Leave this unset most of the time. Currently the only valid value is `q` for the `x86` architecture, which builds for the Intel Quark.
- - `DEBUG` - Describes whether to build Minoca OS for debugging or release. Valid values are `chk` for debug or `fre` for release. We always build `chk`.
+ - `DEBUG` - Describes whether to build Minoca OS for debugging or release. Valid values are `dbg` for debug or `rel` for release. We always build `dbg`.
  - `PATH` - You'll need to have `$SRCROOT/$ARCH$VARIANT$DEBUG/tools/bin` your path to build successfully.
 
 ### Prerequisites
@@ -28,7 +28,7 @@ To build Minoca OS you'll need a Minoca-specific toolchain for the particular ar
 > Note: If you want to build your own toolchain on Windows, you may find the [tools](https://github.com/minoca/tools) repository helpful, as it contains a native MinGW compiler, make, and other tools needed to bootstrap a toolchain on Windows.
 
 ### Build
-Run `make` to build the OS for the particular architecture you've supplied. Parallel make is supported. The final output of the build will be several .img files located in `$SRCROOT/$ARCH$VARIANT$DEBUG/bin/*.img`. For example, the PC image is usually located at `$SRCROOT/x86chk/bin/pc.img`. This is a raw hard disk file that can be applied directly to a hard drive or USB stick to boot Minoca OS. The image `install.img` is a generic installation archive that the `msetup` tool can use to create new Minoca OS installations on target disks or partitions.
+Run `make` to build the OS for the particular architecture you've supplied. Parallel make is supported. The final output of the build will be several .img files located in `$SRCROOT/$ARCH$VARIANT$DEBUG/bin/*.img`. For example, the PC image is usually located at `$SRCROOT/x86dbg/bin/pc.img`. This is a raw hard disk file that can be applied directly to a hard drive or USB stick to boot Minoca OS. The image `install.img` is a generic installation archive that the `msetup` tool can use to create new Minoca OS installations on target disks or partitions.
 
 Object files are generated in `$SRCROOT/$ARCH$VARIANT$DEBUG/obj/os`. You can run `make clean`, or simply delete this directory, to cause the os repository to completely rebuild. Alternatively, you can run `make wipe` to delete all generated files, including the third-party tools you built or downloaded. Running `make wipe` simply deletes `$SRCROOT/$ARCH$VARIANT$DEBUG/`. We usually stick to `make clean` since `make wipe` requires a complete rebuild of the toolchain.
 

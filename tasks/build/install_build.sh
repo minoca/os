@@ -67,7 +67,7 @@ cd ./bin
 ##
 
 DEBUG_FLAG=''
-if test x$DEBUG = xchk; then
+if test "$DEBUG" != "rel"; then
     DEBUG_FLAG='-D'
 fi
 

@@ -28,7 +28,7 @@ INSTALL_IMAGE := $(BINROOT)/install.img
 
 IMAGES = $(INSTALL_IMAGE)
 
-ifeq ($(DEBUG),chk)
+ifneq ($(DEBUG),rel)
 MSETUP_DEBUG := -D
 endif
 

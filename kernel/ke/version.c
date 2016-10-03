@@ -50,11 +50,11 @@ Environment:
 
 #ifdef DEBUG
 
-#define VERSION_DEBUG SystemBuildChecked
+#define VERSION_DEBUG SystemBuildDebug
 
 #else
 
-#define VERSION_DEBUG SystemBuildFree
+#define VERSION_DEBUG SystemBuildRelease
 
 #endif
 

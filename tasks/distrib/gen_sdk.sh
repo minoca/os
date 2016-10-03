@@ -31,7 +31,7 @@ if test -z "$ARCH"; then
     exit 1
 fi
 
-BINROOT="$SRCROOT/${ARCH}chk/bin"
+BINROOT="$SRCROOT/${ARCH}dbg/bin"
 if ! test -d $BINROOT; then
     echo "Error: BINROOT '$BINROOT' does not exist."
     exit 1
@@ -384,8 +384,8 @@ around three environment variables:
     determines this based on its own path.
   * ARCH -- Defines the architecture to build for. This is either set to x86,
     armv6 or armv7 depending on .bat file used.
-  * DEBUG -- Defines whether to compile with debugging checks ("chk"), or
-    without debugging checks ("fre"). This is set to "chk", as it matches with
+  * DEBUG -- Defines whether to compile with debugging checks ("dbg"), or
+    without debugging checks ("rel"). This is set to "dbg", as it matches with
     the free edition binaries.
 
 The various scripts make certain assumptions about the layout of directories
@@ -396,7 +396,7 @@ it:
   * os -- Contains the SDK source.
   * third-party (optional) -- Contains the third party source packages not
     authored by Minoca.
-  * x86chk, x86qchk, armv7chk, armv6chk -- These are actually
+  * x86dbg, x86qdbg, armv7dbg, armv6dbg -- These are actually
     $ARCH$VARIANT$DEBUG, and contain the build output. Each directory is
     created automatically when a build for its particular architecture is
     initiated. Notable directories inside of these include obj, the directory
@@ -428,7 +428,7 @@ for iarch in x86 armv7 armv6; do
 @ECHO OFF
 
 set REVISION=$REVISION
-cmd.exe /k .\\tools\\win32\\scripts\\setenv.cmd $iarch chk
+cmd.exe /k .\\tools\\win32\\scripts\\setenv.cmd $iarch dbg
 
 _EOF
 done

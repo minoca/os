@@ -12,7 +12,7 @@ ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
 ata1: enabled=1, ioaddr1=0x170, ioaddr2=0x370, irq=15
 ata2: enabled=0
 ata3: enabled=0
-ata0-master: type=disk, path=$SRCROOT/x86chk/bin/pc.img, mode=flat
+ata0-master: type=disk, path=$SRCROOT/x86dbg/bin/pc.img, mode=flat
 parport1: enabled=1, file=""
 parport2: enabled=0
 #com1: enabled=1, mode=socket-server, dev=localhost:8888

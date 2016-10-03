@@ -229,7 +229,7 @@ def main(argv):
     else:
         os.environ['ARCH'] = arch
 
-    os.environ['DEBUG'] = 'chk'
+    os.environ['DEBUG'] = 'dbg'
     run(binroot, "sh '%s'" % image_script)
 
     ##

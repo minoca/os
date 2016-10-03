@@ -30,7 +30,7 @@ if test -z "$ARCH"; then
     exit 1
 fi
 
-BINROOT=$SRCROOT/${ARCH}${VARIANT}chk/bin
+BINROOT=$SRCROOT/${ARCH}${VARIANT}dbg/bin
 if ! test -d $BINROOT; then
     echo "Error: BINROOT '$BINROOT' does not exist."
     exit 1

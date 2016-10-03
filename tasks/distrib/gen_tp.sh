@@ -31,7 +31,7 @@ if test -z "$ARCH"; then
     exit 1
 fi
 
-BINROOT=$SRCROOT/${ARCH}chk/bin
+BINROOT=$SRCROOT/${ARCH}dbg/bin
 if ! test -d $BINROOT; then
     echo "Error: BINROOT '$BINROOT' does not exist."
     exit 1
@@ -138,13 +138,13 @@ MinocaSDK-NNN/
 Our build glue for a package generally works something like this:
      * Run make in third-party/build/<package>/ (our glue).
      * Our glue extracts the clean source in third-party/src/<package>.tar.gz
-       to x86chk/obj/third-party/<package>.src/ (x86chk may be different based
+       to x86dbg/obj/third-party/<package>.src/ (x86dbg may be different based
        on architecture and flavor).
      * The patch from third-party/build/<package>/<package>.diff is applied to
        the newly copied source.
      * Make then invokes third-party/build/<package>/build.sh
      * The build.sh script will invoke configure, make, and make install of the
-       patched source in x86chk/obj/third-party/<package>/ (it's an out-of-tree
+       patched source in x86dbg/obj/third-party/<package>/ (it's an out-of-tree
        build).
 
 

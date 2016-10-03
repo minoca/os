@@ -203,10 +203,10 @@ INCLUDES += $(SRCROOT)/os/include
 ##
 
 CFLAGS ?= -Wall -Werror
-ifeq ($(DEBUG), chk)
-CFLAGS += -O1
-else
+ifeq ($(DEBUG),rel)
 CFLAGS += -O2 -Wno-unused-but-set-variable
+else
+CFLAGS += -O1
 endif
 
 ##
@@ -215,10 +215,10 @@ endif
 
 EXTRA_CPPFLAGS += -I $(subst ;, -I ,$(INCLUDES))
 
-ifeq ($(DEBUG), chk)
-EXTRA_CPPFLAGS += -DDEBUG=1
-else
+ifeq ($(DEBUG),rel)
 EXTRA_CPPFLAGS += -DNDEBUG=1
+else
+EXTRA_CPPFLAGS += -DDEBUG=1
 endif
 
 EXTRA_CPPFLAGS_FOR_BUILD := $(EXTRA_CPPFLAGS)
@@ -319,7 +319,7 @@ override STRIP = $(STRIP_FOR_BUILD)
 override CFLAGS = -Wall -Werror -O1
 override BFD_ARCH = $(BUILD_BFD_ARCH)
 override OBJ_FORMAT = $(BUILD_OBJ_FORMAT)
-ifneq ($(DEBUG), chk)
+ifeq ($(DEBUG),rel)
 override CFLAGS += -Wno-unused-but-set-variable
 endif
 

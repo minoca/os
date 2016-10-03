@@ -1448,8 +1448,8 @@ typedef enum _SYSTEM_RELEASE_LEVEL {
 
 typedef enum _SYSTEM_BUILD_DEBUG_LEVEL {
     SystemBuildInvalid,
-    SystemBuildChecked,
-    SystemBuildFree,
+    SystemBuildDebug,
+    SystemBuildRelease,
     SystemBuildDebugLevelCount
 } SYSTEM_BUILD_DEBUG_LEVEL, *PSYSTEM_BUILD_DEBUG_LEVEL;
 
