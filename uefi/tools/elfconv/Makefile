@@ -27,7 +27,7 @@ BINARY = elfconv
 
 BUILD = yes
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BINARYTYPE = build
 

@@ -4,7 +4,7 @@
 #
 #   Module Name:
 #
-#       Chalk
+#       Chalk (Build)
 #
 #   Abstract:
 #
@@ -20,15 +20,13 @@
 #
 ################################################################################
 
-BINARY = chalk_build
+BINARY = chalk
 
 BINARYTYPE = build
 
 BUILD = yes
 
-BINARYTYPE = build
-
-BINPLACE = bin
+BINPLACE = tools/bin
 
 INCLUDES += $(SRCDIR)/..;
 

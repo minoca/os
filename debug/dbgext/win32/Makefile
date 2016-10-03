@@ -25,7 +25,7 @@ BINARY = dbgextnt.a
 
 BINARYTYPE = library
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 VPATH += $(SRCDIR)/..:
 

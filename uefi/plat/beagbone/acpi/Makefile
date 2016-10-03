@@ -24,8 +24,6 @@ BINARY := acpi.ffs
 
 BINARYTYPE = none
 
-BINPLACE = none
-
 IASL = iasl
 
 IASL_OPTIONS = -we

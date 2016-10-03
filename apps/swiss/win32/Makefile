@@ -4,7 +4,7 @@
 #
 #   Binary Name:
 #
-#       swiss.exe
+#       swiss (Win32)
 #
 #   Abstract:
 #
@@ -21,9 +21,9 @@
 #
 ################################################################################
 
-BINARY = swiss_build.exe
+BINARY = swiss.exe
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BUILD = yes
 

@@ -32,7 +32,7 @@ ifneq ($(DEBUG),rel)
 MSETUP_DEBUG := -D
 endif
 
-MSETUP := ./msetup_build
+MSETUP := msetup
 MSETUP_IMAGE_SIZE := -G512M
 MSETUP_TINY_IMAGE_SIZE := -G30M
 

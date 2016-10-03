@@ -30,8 +30,6 @@ BINPLACE = bin
 
 INCLUDES += $(SRCROOT)/os/uefi/include;$(SRCDIR)/..;
 
-BINPLACE = bin
-
 OBJS += reboot.o    \
         rtc.o       \
         runtime.o   \

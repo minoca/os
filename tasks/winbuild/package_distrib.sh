@@ -105,12 +105,8 @@ mv ./bin "$BINROOT"
 ## Copy the debugger files from x86.
 ##
 
-DEBUGROOT="$SRCROOT/x86$DEBUG/bin"
-if test "x$ARCH$VARIANT" = "xx86"; then
-    DEBUGROOT="$SAVED_BINROOT"
-fi
-
-for file in debugui.exe debug.exe kexts.dll dbgext.a msetup_build.exe; do
+DEBUGROOT="$SRCROOT/x86$DEBUG/tools/bin"
+for file in debugui.exe debug.exe kexts.dll dbgext.a msetup.exe; do
     cp -v $DEBUGROOT/$file  "$BINROOT/"
 done
 

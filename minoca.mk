@@ -65,6 +65,7 @@ endif
 SRCROOT := $(subst \,/,$(SRCROOT))
 OUTROOT := $(SRCROOT)/$(ARCH)$(VARIANT)$(DEBUG)
 TOOLROOT := $(OUTROOT)/tools
+TOOLBIN := $(TOOLROOT)/bin
 BINROOT := $(OUTROOT)/bin
 TESTBIN := $(OUTROOT)/testbin
 OBJROOT := $(OUTROOT)/obj
@@ -189,7 +190,7 @@ GEN_VERSION := @echo "Creating - version.h" && $(SRCROOT)/os/tasks/build/print_v
 ## images need to be rebuilt.
 ##
 
-LAST_UPDATE_FILE := $(OBJROOT)/last-update
+LAST_UPDATE_FILE := $(OBJROOT)/os/last-update
 UPDATE_LAST_UPDATE := date > $(LAST_UPDATE_FILE)
 
 ##
@@ -434,15 +435,14 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
 	@echo Linking - $@
 	@$(CC) $(LDFLAGS) -o $@ $^ $(TARGETLIBS) -Bdynamic $(DYNLIBS)
     endif
+    ifneq ($(BINPLACE),)
+	@echo Binplacing - $(OUTROOT)/$(BINPLACE)/$(BINARY)
+	@mkdir -p $(OUTROOT)/$(BINPLACE)
+	@cp -fp $(BINARY) $(OUTROOT)/$(BINPLACE)/$(BINARY)
     ifeq ($(BINPLACE),bin)
-	@echo Binplacing - $(OBJROOT)/$(THISDIR)/$(BINARY)
-	@cp -pf $(BINARY) $(BINROOT)/
 	@$(STRIP) -p -o $(STRIPPED_DIR)/$(BINARY) $(BINARY)
 	@$(UPDATE_LAST_UPDATE)
     endif
-    ifeq ($(BINPLACE),testbin)
-	@echo Binplacing Test - $(OBJROOT)/$(THISDIR)/$(BINARY)
-	@cp -pf $(BINARY) $(TESTBIN)/
     endif
 
 else
@@ -457,10 +457,10 @@ endif
 ## rebuilt.
 ##
 
-$(OBJROOT)/$(THISDIR): | prebuild $(BINROOT) $(TOOLROOT) $(TESTBIN) $(EXTRA_OBJ_DIRS)
+$(OBJROOT)/$(THISDIR): | prebuild $(BINROOT) $(TOOLBIN) $(TESTBIN) $(EXTRA_OBJ_DIRS)
 	@mkdir -p $(OBJROOT)/$(THISDIR)
 
-$(BINROOT) $(TOOLROOT) $(TESTBIN) $(EXTRA_OBJ_DIRS):
+$(BINROOT) $(TOOLBIN) $(TESTBIN) $(EXTRA_OBJ_DIRS):
 	@mkdir -p $@
 
 ##

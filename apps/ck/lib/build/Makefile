@@ -27,12 +27,7 @@ BINARYTYPE = so
 
 BUILD = yes
 
-##
-## TODO: The build and native versions of these libraries collide in the bin
-## directory. The new build infrastructure should address this.
-##
-
-BINPLACE = bin
+BINPLACE = tools/bin
 
 INCLUDES += $(SRCDIR)/..;
 

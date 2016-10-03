@@ -25,7 +25,7 @@ BINARY = genffs
 
 BUILD = yes
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BINARYTYPE = build
 

@@ -55,8 +55,8 @@ for arch in x86 x86q armv7 armv6; do
         cp -pv "$BINROOT/msetup" "$WORKING/$arch/"
     fi
 
-    if [ -r "$SRCROOT/x86dbg/msetup_build.exe" ]; then
-        cp -pv "$SRCROOT/x86dbg/msetup_build.exe" "$WORKING/msetup.exe"
+    if [ -r "$SRCROOT/x86dbg/tools/bin/msetup.exe" ]; then
+        cp -pv "$SRCROOT/x86dbg/tools/bin/msetup.exe" "$WORKING/msetup.exe"
     fi
 
 done

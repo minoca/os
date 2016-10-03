@@ -26,6 +26,8 @@ BINARYTYPE = so
 
 BUILD = yes
 
+BINPLACE = tools/lib/chalk1
+
 INCLUDES += $(SRCDIR)/..;
 
 VPATH += $(SRCDIR)/..:
@@ -53,8 +55,3 @@ endif
 
 include $(SRCROOT)/os/minoca.mk
 
-postbuild:
-	@mkdir -p $(BINROOT)/build/chalk1
-	@if test $(BINARY) -nt $(BINROOT)/build/chalk1/$(BINARY); then \
-	    cp $(BINARY) $(BINROOT)/build/chalk1/$(BINARY); \
-	fi

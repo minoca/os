@@ -25,13 +25,13 @@ BINARY = kexts.dll
 
 BINARYTYPE = dll
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 VPATH += $(SRCDIR)/..:
 
 BUILD = yes
 
-TARGETLIBS = $(BINROOT)/dbgextnt.a
+TARGETLIBS = $(OBJROOT)/os/debug/dbgext/win32/dbgextnt.a
 
 X86_OBJS = acpiext.o  \
            kexts.o    \

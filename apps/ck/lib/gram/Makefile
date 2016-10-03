@@ -27,8 +27,6 @@ BINARYTYPE = build
 
 BUILD = yes
 
-BINPLACE = testbin
-
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
              $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a             \
              $(OBJROOT)/os/lib/yy/gen/yygen.a                    \

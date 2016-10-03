@@ -4,7 +4,7 @@
 #
 #   Binary Name:
 #
-#       swiss_build
+#       swiss (Build)
 #
 #   Abstract:
 #
@@ -22,9 +22,9 @@
 #
 ################################################################################
 
-BINARY = swiss_build
+BINARY = swiss
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BUILD = yes
 

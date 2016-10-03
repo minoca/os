@@ -22,7 +22,7 @@
 
 BINARY = tzcomp
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BUILD = yes
 
@@ -51,9 +51,9 @@ postbuild: tzdata tzdflt
 
 tzdata: $(TZ_FILES) | $(BINARY)
 	@echo Compiling time zone almanac
-	@$(BINROOT)/$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdata
+	@./$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdata
 
 tzdflt: $(TZ_FILES) | $(BINARY)
 	@echo Compiling default time zone: $(TZ_DEFAULT)
-	@$(BINROOT)/$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdflt -f $(TZ_DEFAULT)
+	@.//$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdflt -f $(TZ_DEFAULT)
 

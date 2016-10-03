@@ -27,7 +27,7 @@ BINARYTYPE = win32
 
 BUILD = yes
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 INCLUDES += $(SRCDIR)/../..;
 INCLUDES += $(SRCROOT)/os/lib/im;

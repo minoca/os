@@ -21,9 +21,9 @@
 #
 ################################################################################
 
-BINARY = msetup_build.exe
+BINARY = msetup.exe
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BUILD = yes
 

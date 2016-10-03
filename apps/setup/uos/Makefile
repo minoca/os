@@ -4,7 +4,7 @@
 #
 #   Binary Name:
 #
-#       msetup_build
+#       msetup (Build)
 #
 #   Abstract:
 #
@@ -21,9 +21,9 @@
 #
 ################################################################################
 
-BINARY = msetup_build
+BINARY = msetup
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BUILD = yes
 

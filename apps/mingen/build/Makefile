@@ -23,7 +23,7 @@
 
 BINARY = mingen
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BUILD = yes
 
