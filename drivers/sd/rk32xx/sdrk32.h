@@ -71,6 +71,16 @@ Author:
     (SD_RK32_DMA_DESCRIPTOR_COUNT * sizeof(SD_DWC_DMA_DESCRIPTOR))
 
 //
+// Define the max block count that can be transferred if each descriptor holds
+// a page.
+//
+
+#define SD_RK32_MAX_BLOCK_COUNT                 \
+    ((SD_DWC_DMA_DESCRIPTOR_MAX_BUFFER_SIZE *   \
+      (SD_RK32_DMA_DESCRIPTOR_COUNT - 1)) /     \
+     SD_DWC_BLOCK_SIZE)
+
+//
 // Define the set of flags for the child SD disk.
 //
 

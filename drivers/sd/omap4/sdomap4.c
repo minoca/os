@@ -1914,6 +1914,12 @@ Return Value:
                                        Child->Parent->DmaTransfer);
         }
 
+        if (!KSUCCESS(Status)) {
+            RtlDebugPrint("OMAP4 SD Completion %d Bytes %ld\n",
+                          Status,
+                          BytesTransferred);
+        }
+
         SdOmap4DmaCompletion(Controller, Context, BytesTransferred, Status);
 
     //
@@ -2882,6 +2888,12 @@ Return Value:
     CompletedThisRound = Transfer->Completed -
                          Child->Irp->U.ReadWrite.IoBytesCompleted;
 
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("OMAP4 EDMA SD Completion %d Bytes %ld\n",
+                      Status,
+                      CompletedThisRound);
+    }
+
     SdOmap4DmaCompletion(Child->Controller, Child, CompletedThisRound, Status);
     return;
 }
@@ -2932,7 +2944,12 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         RtlAtomicAdd32(&(Child->RemainingInterrupts), -1);
-        RtlDebugPrint("SD OMAP4 Failed: %d\n", Status);
+        RtlDebugPrint("SD OMAP4 Failed 0x%x 0x%I64x 0x%x: %d\n",
+                      Irp->MinorCode,
+                      Irp->U.ReadWrite.IoOffset,
+                      Irp->U.ReadWrite.IoSizeInBytes,
+                      Status);
+
         SdAbortTransaction(Controller, FALSE);
         IoCompleteIrp(SdOmap4Driver, Irp, Status);
         return;

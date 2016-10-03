@@ -924,7 +924,7 @@ Return Value:
     RtlAtomicAnd32(&(Controller->Flags), ~SD_CONTROLLER_FLAG_MEDIA_PRESENT);
     Inserted = FALSE;
     Removed = FALSE;
-    Status = SdInitializeController(Controller, FALSE);
+    Status = SdInitializeController(Controller, TRUE);
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("SD: Card gone: %d\n", Status);
         Removed = TRUE;
@@ -2498,25 +2498,26 @@ Return Value:
     // Read the SCR to find out if the card supports higher speeds.
     //
 
-    RtlZeroMemory(&Command, sizeof(SD_COMMAND));
-    Command.Command = SdCommandApplicationSpecific;
-    Command.ResponseType = SD_RESPONSE_R1;
-    Command.CommandArgument = Controller->CardAddress << 16;
-    Status = Controller->FunctionTable.SendCommand(Controller,
+    RetryCount = SD_CONFIGURATION_REGISTER_RETRY_COUNT;
+    while (TRUE) {
+        RtlZeroMemory(&Command, sizeof(SD_COMMAND));
+        Command.Command = SdCommandApplicationSpecific;
+        Command.ResponseType = SD_RESPONSE_R1;
+        Command.CommandArgument = Controller->CardAddress << 16;
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
                                                    Controller->ConsumerContext,
                                                    &Command);
 
-    if (!KSUCCESS(Status)) {
-        return Status;
-    }
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
 
-    Command.Command = SdCommandSendSdConfigurationRegister;
-    Command.ResponseType = SD_RESPONSE_R1;
-    Command.CommandArgument = 0;
-    Command.BufferVirtual = ConfigurationRegister;
-    Command.BufferSize = sizeof(ConfigurationRegister);
-    RetryCount = SD_CONFIGURATION_REGISTER_RETRY_COUNT;
-    while (TRUE) {
+        Command.Command = SdCommandSendSdConfigurationRegister;
+        Command.ResponseType = SD_RESPONSE_R1;
+        Command.CommandArgument = 0;
+        Command.BufferVirtual = ConfigurationRegister;
+        Command.BufferSize = sizeof(ConfigurationRegister);
         Status = Controller->FunctionTable.SendCommand(
                                                    Controller,
                                                    Controller->ConsumerContext,

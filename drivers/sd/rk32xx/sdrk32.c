@@ -328,7 +328,7 @@ SdRk32Rk808InterfaceNotificationCallback (
 KSTATUS
 SdRk32SetRegulatorVoltage (
     PSD_RK32_CONTEXT Device,
-    BOOL LowVoltage
+    ULONG Millivolts
     );
 
 //
@@ -863,6 +863,10 @@ Return Value:
     Child->Irp = Irp;
     BlockOffset = IoOffset >> Child->BlockShift;
     BlockCount = BytesToComplete >> Child->BlockShift;
+    if (BlockCount > SD_RK32_MAX_BLOCK_COUNT) {
+        BlockCount = SD_RK32_MAX_BLOCK_COUNT;
+    }
+
     CompleteIrp = FALSE;
     IoPendIrp(SdRk32Driver, Irp);
 
@@ -1825,7 +1829,7 @@ Return Value:
         return Status;
     }
 
-    Status = SdRk32SetRegulatorVoltage(Device, FALSE);
+    Status = SdRk32SetRegulatorVoltage(Device, SdVoltage3V3);
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2099,6 +2103,7 @@ Return Value:
     //
 
     if ((PendingBits & SD_DWC_INTERRUPT_ERROR_MASK) != 0) {
+        RtlDebugPrint("SD RK32 IO Error INTSTS 0x%x\n", PendingBits);
         Status = STATUS_DEVICE_IO_ERROR;
         if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) {
             Inserted = TRUE;
@@ -2295,6 +2300,14 @@ Return Value:
                      SdRk32DmaCompletion,
                      Child);
 
+    //
+    // The first time this is called, the Send block count command just
+    // finished, so the first write which corresponds to that doesn't need a
+    // stop. Subsequent writes however will not be prefixed by a send block
+    // count, so they do need a stop.
+    //
+
+    Controller->SendStop = TRUE;
     return;
 }
 
@@ -3021,6 +3034,15 @@ Return Value:
         goto BlockIoDmaEnd;
     }
 
+    //
+    // Limit the number of blocks that can be transferred so as not to spill
+    // over the DMA descriptors.
+    //
+
+    if (BlockCount > SD_RK32_MAX_BLOCK_COUNT) {
+        BlockCount = SD_RK32_MAX_BLOCK_COUNT;
+    }
+
     if (Write != FALSE) {
         if (BlockCount > 1) {
             Command.Command = SdCommandWriteMultipleBlocks;
@@ -3150,6 +3172,8 @@ Return Value:
             FragmentOffset = 0;
         }
     }
+
+    ASSERT(TransferSizeRemaining == 0);
 
     //
     // Mark the last DMA descriptor as the end of the transfer.
@@ -3418,8 +3442,9 @@ Return Value:
         //
 
         SD_DWC_WRITE_REGISTER(Device, SdDwcPower, 0);
-        HlBusySpin(10000);
-        SdRk32SetRegulatorVoltage(Device, FALSE);
+        SdRk32SetRegulatorVoltage(Device, SdVoltage0V);
+        HlBusySpin(100000);
+        SdRk32SetRegulatorVoltage(Device, SdVoltage3V3);
         SD_DWC_WRITE_REGISTER(Device, SdDwcPower, SD_DWC_POWER_ENABLE);
         HlBusySpin(10000);
     }
@@ -4113,7 +4138,7 @@ Return Value:
     }
 
     if (Controller->CurrentVoltage != SdVoltage1V8) {
-        Status = SdRk32SetRegulatorVoltage(Device, FALSE);
+        Status = SdRk32SetRegulatorVoltage(Device, Controller->CurrentVoltage);
         if (!KSUCCESS(Status)) {
             goto GetSetVoltageEnd;
         }
@@ -4135,7 +4160,7 @@ Return Value:
     // Switch the voltage.
     //
 
-    Status = SdRk32SetRegulatorVoltage(Device, TRUE);
+    Status = SdRk32SetRegulatorVoltage(Device, Controller->CurrentVoltage);
     if (!KSUCCESS(Status)) {
         goto GetSetVoltageEnd;
     }
@@ -4915,7 +4940,7 @@ Return Value:
 KSTATUS
 SdRk32SetRegulatorVoltage (
     PSD_RK32_CONTEXT Device,
-    BOOL LowVoltage
+    ULONG Millivolts
     )
 
 /*++
@@ -4928,8 +4953,7 @@ Arguments:
 
     Device - Supplies a pointer to the device context.
 
-    LowVoltage - Supplies a boolean indicating whether to set the bus voltage
-        to 1.8V (TRUE) or 3.3V (FALSE).
+    Millivolts - Supplies the number of millivolts to set.
 
 Return Value:
 
@@ -4945,10 +4969,10 @@ Return Value:
 
     if ((Device->Ldo != 0) && (Device->Rk808 != NULL)) {
         RtlZeroMemory(&Configuration, sizeof(RK808_LDO_CONFIGURATION));
-        Configuration.Flags = RK808_LDO_ENABLED | RK808_LDO_OFF_IN_SLEEP;
-        Configuration.ActiveVoltage = 3300;
-        if (LowVoltage != FALSE) {
-            Configuration.ActiveVoltage = 1800;
+        Configuration.Flags = RK808_LDO_OFF_IN_SLEEP;
+        Configuration.ActiveVoltage = Millivolts;
+        if (Millivolts != 0) {
+            Configuration.Flags |= RK808_LDO_ENABLED;
         }
 
         Status = Device->Rk808->SetLdo(Device->Rk808,
@@ -4961,7 +4985,7 @@ Return Value:
     }
 
     Value = SD_DWC_READ_REGISTER(Device, SdDwcUhs);
-    if (LowVoltage != FALSE) {
+    if (Millivolts == SdVoltage1V8) {
         Value |= SD_DWC_UHS_VOLTAGE_1V8;
 
     } else {

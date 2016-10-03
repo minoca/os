@@ -29,6 +29,12 @@ Author:
 //
 
 //
+// Define the block sized used by the SD library.
+//
+
+#define SD_DWC_BLOCK_SIZE 512
+
+//
 // Define the SD control register bits.
 //
 
