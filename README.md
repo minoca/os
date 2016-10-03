@@ -111,3 +111,8 @@ Submissions are welcome! See our [CONTRIBUTING.md](CONTRIBUTING.md) page for det
 
 ## License
 Minoca OS is licensed to the public under the terms of the GNU General Public License, version 3. Alternate licensing options are available. Contact info@minocacorp.com if your company is interested in licensing Minoca OS. For complete licensing information, see the [LICENSE](LICENSE) file in this repository.
+
+## Contact
+ * Email: dev@minocacorp.com
+ * Website: [http://www.minocacorp.com/](http://www.minocacorp.com)
+ * Github: [http://github.com/minoca](http://github.com/minoca)
