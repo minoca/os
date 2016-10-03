@@ -52,7 +52,7 @@ if test -z $SOURCE_DIRECTORY; then
 fi
 
 OUTROOT="$SRCROOT/$ARCH$VARIANT$DEBUG"
-export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$OUTROOT/bin;$OUTROOT/bin/tools/bin;$OUTROOT/testbin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
+export PATH="$SRCROOT/tools/win32/mingw/bin;$OUTROOT/tools/bin;$OUTROOT/testbin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
 cd $SOURCE_DIRECTORY
 echo Making in $PWD
 echo make "$@"

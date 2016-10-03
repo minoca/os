@@ -47,7 +47,7 @@ fi
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
 OUTROOT="$SRCROOT/$ARCH$VARIANT$DEBUG"
-export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$OUTROOT/bin;$OUTROOT/testbin;$OUTROOT/bin/tools/bin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
+export PATH="$SRCROOT/tools/win32/mingw/bin;$OUTROOT/tools/bin;$OUTROOT/testbin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
 
 ##
 ## Download the latest build.
@@ -100,14 +100,6 @@ fi
 ##
 
 mv ./bin "$BINROOT"
-
-##
-## Copy the tools back in.
-##
-
-if [ -d "$SAVED_BINROOT/tools" ] ; then
-    cp -rp "$SAVED_BINROOT/tools" "$BINROOT/"
-fi
 
 ##
 ## Copy the debugger files from x86.

@@ -64,6 +64,7 @@ endif
 
 SRCROOT := $(subst \,/,$(SRCROOT))
 OUTROOT := $(SRCROOT)/$(ARCH)$(VARIANT)$(DEBUG)
+TOOLROOT := $(OUTROOT)/tools
 BINROOT := $(OUTROOT)/bin
 TESTBIN := $(OUTROOT)/testbin
 OBJROOT := $(OUTROOT)/obj
@@ -97,6 +98,7 @@ wipe:
 	rm -rf $(OBJROOT)
 	rm -rf $(BINROOT)
 	rm -rf $(TESTBIN)
+	rm -rf $(TOOLROOT)
 
 Makefile: ;
 %.mk :: ;
@@ -455,10 +457,10 @@ endif
 ## rebuilt.
 ##
 
-$(OBJROOT)/$(THISDIR): | prebuild $(BINROOT) $(TESTBIN) $(EXTRA_OBJ_DIRS)
+$(OBJROOT)/$(THISDIR): | prebuild $(BINROOT) $(TOOLROOT) $(TESTBIN) $(EXTRA_OBJ_DIRS)
 	@mkdir -p $(OBJROOT)/$(THISDIR)
 
-$(BINROOT) $(TESTBIN) $(EXTRA_OBJ_DIRS):
+$(BINROOT) $(TOOLROOT) $(TESTBIN) $(EXTRA_OBJ_DIRS):
 	@mkdir -p $@
 
 ##

@@ -115,8 +115,8 @@ for iarch in x86 armv7 armv6; do
         echo "Warning: SDK binaries not found for $iarch"
     fi
 
-    if test -d "$IBINROOT\tools"; then
-        cp -Rpv "$IBINROOT\tools" "$WORKING_BINROOT"
+    if test -d "$SRCROOT/${iarch}$DEBUG/tools"; then
+        cp -Rpv "$SRCROOT/${iarch}$DEBUG/tools" "$WORKING/${iarch}$DEBUG/"
     fi
 done
 
