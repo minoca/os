@@ -138,7 +138,7 @@ IopGetPathEntryCacheTargetSize (
 //
 
 //
-// Store a pointer to the root path entry.
+// Store the root path point.
 //
 
 PATH_POINT IoPathPointRoot;
@@ -511,7 +511,7 @@ InitializePathSupportEnd:
         }
     }
 
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 KSTATUS
@@ -1945,7 +1945,6 @@ Return Value:
 
     CurrentPath = *Path;
     CurrentPathSize = *PathSize;
-    Entry.PathEntry = NULL;
 
     //
     // Empty paths do not resolve to anything.
@@ -1983,27 +1982,38 @@ Return Value:
     //
 
     KeAcquireQueuedLock(Process->Paths.Lock);
-    Root = (PPATH_POINT)&(Process->Paths.Root);
-    if (Root->PathEntry != NULL) {
-        IO_COPY_PATH_POINT(&RootCopy, Root);
-        Root = &RootCopy;
-
-    } else {
-        Root = &IoPathPointRoot;
-    }
-
-    if (*CurrentPath != PATH_SEPARATOR) {
-        if (Start != NULL) {
-            IO_COPY_PATH_POINT(&Entry, Start);
+    if ((OpenFlags & OPEN_FLAG_SHARED_MEMORY) != 0) {
+        Root = (PPATH_POINT)&(Process->Paths.SharedMemoryDirectory);
+        if (Root->PathEntry != NULL) {
+            IO_COPY_PATH_POINT(&RootCopy, Root);
+            Root = &RootCopy;
 
         } else {
-            IO_COPY_PATH_POINT(&Entry, &(Process->Paths.CurrentDirectory));
+            Root = &IoSharedMemoryRoot;
+        }
+
+    } else {
+        Root = (PPATH_POINT)&(Process->Paths.Root);
+        if (Root->PathEntry != NULL) {
+            IO_COPY_PATH_POINT(&RootCopy, Root);
+            Root = &RootCopy;
+
+        } else {
+            Root = &IoPathPointRoot;
+        }
+
+        if (*CurrentPath != PATH_SEPARATOR) {
+            if (Start == NULL) {
+                Start = (PPATH_POINT)&(Process->Paths.CurrentDirectory);
+            }
         }
     }
 
-    if (Entry.PathEntry == NULL) {
-        IO_COPY_PATH_POINT(&Entry, Root);
+    if ((Start == NULL) || (Start->PathEntry == NULL)) {
+        Start = Root;
     }
+
+    IO_COPY_PATH_POINT(&Entry, Start);
 
     //
     // This add reference is safe because the root will never be removed and
@@ -2291,6 +2301,7 @@ Return Value:
     PPATH_ENTRY DirectoryEntry;
     PFILE_OBJECT DirectoryFileObject;
     BOOL DoNotCache;
+    BOOL Equal;
     PFILE_OBJECT FileObject;
     ULONG FileObjectFlags;
     BOOL FoundPathPoint;
@@ -2635,8 +2646,11 @@ Return Value:
             // Pipes are allowed in the pipes directory.
             //
 
-            if ((TypeOverride == IoObjectPipe) &&
-                (Object == IopGetPipeDirectory())) {
+            switch (TypeOverride) {
+            case IoObjectPipe:
+                if (IopGetPipeDirectory() != Object) {
+                    break;
+                }
 
                 Status = IopCreatePipe(Name,
                                        NameSize,
@@ -2650,10 +2664,19 @@ Return Value:
                     goto PathLookupThroughFileSystemEnd;
                 }
 
-            } else if ((TypeOverride == IoObjectSharedMemoryObject) &&
-                       (Object == IopGetSharedMemoryObjectDirectory())) {
+                break;
 
-                Status = IopCreateSharedMemoryObject(Name,
+            case IoObjectSharedMemoryObject:
+                Equal = IO_ARE_PATH_POINTS_EQUAL(
+                                  Directory,
+                                  IopGetSharedMemoryDirectory(FromKernelMode));
+
+                if (Equal == FALSE) {
+                    break;
+                }
+
+                Status = IopCreateSharedMemoryObject(FromKernelMode,
+                                                     Name,
                                                      NameSize,
                                                      OpenFlags,
                                                      CreatePermissions,
@@ -2666,13 +2689,18 @@ Return Value:
                     goto PathLookupThroughFileSystemEnd;
                 }
 
+                break;
+
             //
             // Directory creates are not permitted in the object manager system.
             //
 
-            } else if (TypeOverride == IoObjectRegularDirectory) {
+            case IoObjectRegularDirectory:
                 Status = STATUS_ACCESS_DENIED;
                 goto PathLookupThroughFileSystemEnd;
+
+            default:
+                break;
             }
         }
 
@@ -2879,7 +2907,8 @@ Return Value:
         case IoObjectTerminalSlave:
         case IoObjectSharedMemoryObject:
             if (FileObject->SpecialIo == NULL) {
-                Status = IopCreateSpecialIoObject(OpenFlags,
+                Status = IopCreateSpecialIoObject(FromKernelMode,
+                                                  OpenFlags,
                                                   FileObject->Properties.Type,
                                                   OverrideParameter,
                                                   CreatePermissions,

@@ -279,26 +279,22 @@ Return Value:
 {
 
     SOCKET_CREATION_PARAMETERS Parameters;
-    FILE_PERMISSIONS Permissions;
-    PKPROCESS Process;
     PSOCKET Socket;
     KSTATUS Status;
 
-    Process = PsGetCurrentProcess();
     Parameters.Domain = Domain;
     Parameters.Type = Type;
     Parameters.Protocol = Protocol;
     Parameters.ExistingSocket = NULL;
-    Permissions = FILE_PERMISSION_ALL & ~(Process->Umask);
     Status = IopOpen(FALSE,
                      NULL,
                      NULL,
                      0,
                      IO_ACCESS_READ | IO_ACCESS_WRITE,
-                     OpenFlags,
+                     OpenFlags | OPEN_FLAG_CREATE,
                      IoObjectSocket,
                      &Parameters,
-                     Permissions,
+                     FILE_PERMISSION_ALL,
                      IoHandle);
 
     if (KSUCCESS(Status)) {

@@ -94,185 +94,18 @@ IopAddSharedMemoryObjectPathPrefix (
 // -------------------------------------------------------------------- Globals
 //
 
-POBJECT_HEADER IoSharedMemoryObjectDirectory;
+//
+// Store a pointer to the shared memory object root path point.
+//
+
+PATH_POINT IoSharedMemoryRoot;
 
 //
 // ------------------------------------------------------------------ Functions
 //
 
 KSTATUS
-IopOpenSharedMemoryObject (
-    PSTR Path,
-    ULONG PathLength,
-    ULONG Access,
-    ULONG Flags,
-    FILE_PERMISSIONS CreatePermissions,
-    PIO_HANDLE *Handle
-    )
-
-/*++
-
-Routine Description:
-
-    This routine opens a shared memory objeect.
-
-Arguments:
-
-    Path - Supplies a pointer to the path to open.
-
-    PathLength - Supplies the length of the path buffer in bytes, including the
-        null terminator.
-
-    Access - Supplies the desired access permissions to the object. See
-        IO_ACCESS_* definitions.
-
-    Flags - Supplies a bitfield of flags governing the behavior of the handle.
-        See OPEN_FLAG_* definitions.
-
-    CreatePermissions - Supplies the permissions to apply for a created file.
-
-    Handle - Supplies a pointer where a pointer to the open I/O handle will be
-        returned on success.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PSTR NewPath;
-    ULONG NewPathLength;
-    KSTATUS Status;
-
-    NewPath = NULL;
-
-    //
-    // Append the appropriate shared memory object path to the given path
-    // unless the path is empty and it's meant to be an anonymous object.
-    //
-
-    if (PathLength != 0) {
-        Status = IopAddSharedMemoryObjectPathPrefix(Path,
-                                                    PathLength,
-                                                    &NewPath,
-                                                    &NewPathLength);
-
-        if (!KSUCCESS(Status)) {
-            goto OpenSharedMemoryObjectEnd;
-        }
-
-        Path = NewPath;
-        PathLength = NewPathLength;
-    }
-
-    //
-    // With the correct path in place, open the shared memory object.
-    //
-
-    Status = IopOpen(TRUE,
-                     NULL,
-                     Path,
-                     PathLength,
-                     Access,
-                     Flags,
-                     IoObjectSharedMemoryObject,
-                     NULL,
-                     CreatePermissions,
-                     Handle);
-
-    if (!KSUCCESS(Status)) {
-        goto OpenSharedMemoryObjectEnd;
-    }
-
-OpenSharedMemoryObjectEnd:
-    if (NewPath != NULL) {
-        MmFreePagedPool(NewPath);
-    }
-
-    return Status;
-}
-
-KSTATUS
-IopDeleteSharedMemoryObject (
-    PSTR Path,
-    ULONG PathLength
-    )
-
-/*++
-
-Routine Description:
-
-    This routine deletes a shared memory object. It does not handle deletion of
-    unnamed anonymous shared memory objects.
-
-Arguments:
-
-    Path - Supplies a pointer to the path of the shared memory object within
-        the shared memory object namespace.
-
-    PathLength - Supplies the length of the path, in bytes, including the null
-        terminator.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PSTR NewPath;
-    ULONG NewPathLength;
-    KSTATUS Status;
-
-    NewPath = NULL;
-
-    //
-    // If the supplied path is empty, then fail the delete.
-    //
-
-    if (PathLength == 0) {
-        Status = STATUS_PATH_NOT_FOUND;
-        goto DeleteSharedMemroyObjectEnd;
-    }
-
-    //
-    // Append the appropriate shared memory object path to givn path.
-    //
-
-    Status = IopAddSharedMemoryObjectPathPrefix(Path,
-                                                PathLength,
-                                                &NewPath,
-                                                &NewPathLength);
-
-    if (!KSUCCESS(Status)) {
-        goto DeleteSharedMemroyObjectEnd;
-    }
-
-    //
-    // With the correct path in place, delete the shared memory object. This
-    // must be marked as a call from kernel mode even though the delete may
-    // have come from user mode because the prefix might have created a path
-    // outside of the calling processes root.
-    //
-
-    Status = IopDelete(TRUE, NULL, NewPath, NewPathLength, 0);
-    if (!KSUCCESS(Status)) {
-        goto DeleteSharedMemroyObjectEnd;
-    }
-
-DeleteSharedMemroyObjectEnd:
-    if (NewPath != NULL) {
-        MmFreePagedPool(NewPath);
-    }
-
-    return Status;
-}
-
-POBJECT_HEADER
-IopGetSharedMemoryObjectDirectory (
+IopInitializeSharedMemoryObjectSupport (
     VOID
     )
 
@@ -280,9 +113,8 @@ IopGetSharedMemoryObjectDirectory (
 
 Routine Description:
 
-    This routine returns the shared memory objects' root directory in the
-    object manager's system. This is the only place in the object system
-    shared memory object creation is allowed.
+    This routine is called during system initialization to set up support for
+    shared memory objects.
 
 Arguments:
 
@@ -290,17 +122,141 @@ Arguments:
 
 Return Value:
 
-    Returns a pointer to the shared memory object directory.
+    Status code.
 
 --*/
 
 {
 
-    return IoSharedMemoryObjectDirectory;
+    BOOL Created;
+    PFILE_OBJECT FileObject;
+    PVOID Object;
+    PPATH_ENTRY PathEntry;
+    FILE_PROPERTIES Properties;
+    KSTATUS Status;
+
+    FileObject = NULL;
+
+    //
+    // Create the shared memory object directory.
+    //
+
+    Object = ObCreateObject(ObjectDirectory,
+                            NULL,
+                            "SharedMemoryObjects",
+                            sizeof("SharedMemoryObjects"),
+                            sizeof(OBJECT_HEADER),
+                            NULL,
+                            OBJECT_FLAG_USE_NAME_DIRECTLY,
+                            FI_ALLOCATION_TAG);
+
+    if (Object == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeSharedMemoryObjectSupportEnd;
+    }
+
+    //
+    // Open a path point to this shared memory object root.
+    //
+
+    IopFillOutFilePropertiesForObject(&Properties, Object);
+    Status = IopCreateOrLookupFileObject(&Properties,
+                                         ObGetRootObject(),
+                                         FILE_OBJECT_FLAG_EXTERNAL_IO_STATE,
+                                         &FileObject,
+                                         &Created);
+
+    if (!KSUCCESS(Status)) {
+        goto InitializeSharedMemoryObjectSupportEnd;
+    }
+
+    ASSERT(Created != FALSE);
+
+    KeSignalEvent(FileObject->ReadyEvent, SignalOptionSignalAll);
+    PathEntry = IopCreatePathEntry(NULL, 0, 0, NULL, FileObject);
+    if (PathEntry == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeSharedMemoryObjectSupportEnd;
+    }
+
+    ASSERT(IoPathPointRoot.MountPoint != NULL);
+
+    IoSharedMemoryRoot.PathEntry = PathEntry;
+    IoSharedMemoryRoot.MountPoint = IoPathPointRoot.MountPoint;
+    IoMountPointAddReference(IoSharedMemoryRoot.MountPoint);
+
+InitializeSharedMemoryObjectSupportEnd:
+    if (!KSUCCESS(Status)) {
+
+        //
+        // Release once for the file properties and once for the create.
+        //
+
+        if (Object != NULL) {
+            ObReleaseReference(Object);
+            ObReleaseReference(Object);
+        }
+
+        if (FileObject != NULL) {
+            IopFileObjectReleaseReference(FileObject);
+        }
+    }
+
+    return Status;
+}
+
+PPATH_POINT
+IopGetSharedMemoryDirectory (
+    BOOL FromKernelMode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current process' shared memory directory. This is
+    the only place the current process is allowed to create shared memory
+    objects.
+
+Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not the request
+        originated from kernel mode (TRUE) or user mode (FALSE).
+
+Return Value:
+
+    Returns a pointer to the process' shared memory directory.
+
+--*/
+
+{
+
+    PPATH_POINT Directory;
+    PKPROCESS Process;
+
+    //
+    // The shared memory object directory can only be changed by
+    // single-threaded processes. Thus the path lock does not need to be held.
+    //
+
+    if (FromKernelMode != FALSE) {
+        Process = PsGetKernelProcess();
+
+    } else {
+        Process = PsGetCurrentProcess();
+    }
+
+    Directory = (PPATH_POINT)&(Process->Paths.SharedMemoryDirectory);
+    if (Directory->PathEntry == NULL) {
+        Directory = &IoSharedMemoryRoot;
+    }
+
+    return Directory;
 }
 
 KSTATUS
 IopCreateSharedMemoryObject (
+    BOOL FromKernelMode,
     PSTR Name,
     ULONG NameSize,
     ULONG Flags,
@@ -315,6 +271,9 @@ Routine Description:
     This routine actually creates a new shared memory object.
 
 Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not the request
+        originated from kernel mode (TRUE) or user mode (FALSE).
 
     Name - Supplies an optional pointer to the shared memory object name. This
         is only used for shared memory objects created in the shared memory
@@ -345,6 +304,7 @@ Return Value:
     ULONG DirectoryOpenFlags;
     PSHARED_MEMORY_OBJECT ExistingObject;
     ULONG FileAccess;
+    FILE_ID FileId;
     PSTR FileName;
     ULONG FileNameLength;
     ULONG FileOpenFlags;
@@ -353,9 +313,11 @@ Return Value:
     ULONG MaxFileNameLength;
     PFILE_OBJECT NewFileObject;
     PSHARED_MEMORY_OBJECT NewSharedMemoryObject;
+    POBJECT_HEADER ObjectDirectory;
     PSTR Path;
     ULONG PathLength;
     ULONG RetryCount;
+    PPATH_POINT SharedMemoryDirectory;
     KSTATUS Status;
 
     DirectoryHandle = INVALID_HANDLE;
@@ -375,16 +337,25 @@ Return Value:
     }
 
     //
+    // Get the shared memory object directory for the process.
+    //
+
+    SharedMemoryDirectory = IopGetSharedMemoryDirectory(FromKernelMode);
+
+    ASSERT(SharedMemoryDirectory->PathEntry->FileObject->Properties.Type ==
+           IoObjectObjectDirectory);
+
+    FileId = SharedMemoryDirectory->PathEntry->FileObject->Properties.FileId;
+    ObjectDirectory = (POBJECT_HEADER)(UINTN)FileId;
+
+    //
     // Make sure there is not already an existing shared memory object by the
     // same name. The caller should have the appropriate locks to make the
     // check and create synchronous.
     //
 
     if (Name != NULL) {
-        ExistingObject = ObFindObject(Name,
-                                      NameSize,
-                                      IoSharedMemoryObjectDirectory);
-
+        ExistingObject = ObFindObject(Name, NameSize, ObjectDirectory);
         if (ExistingObject != NULL) {
             ObReleaseReference(ExistingObject);
             Status = STATUS_FILE_EXISTS;
@@ -393,7 +364,7 @@ Return Value:
     }
 
     NewSharedMemoryObject = ObCreateObject(ObjectSharedMemoryObject,
-                                           IoSharedMemoryObjectDirectory,
+                                           ObjectDirectory,
                                            Name,
                                            NameSize,
                                            sizeof(SHARED_MEMORY_OBJECT),
@@ -858,76 +829,5 @@ Return Value:
     ASSERT(SharedMemoryObject->FileObject == NULL);
 
     return;
-}
-
-KSTATUS
-IopAddSharedMemoryObjectPathPrefix (
-    PSTR Path,
-    ULONG PathLength,
-    PSTR *NewPath,
-    PULONG NewPathLength
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds the shared memory object directory's path as a prefix to
-    the given path.
-
-Arguments:
-
-    Path - Supplies a pointer to a path to a shared memory object.
-
-    PathLength - Supplies the length of the path.
-
-    NewPath - Supplies a pointer that receives a pointer to the new, complete
-        path. The caller is expected to release this memory.
-
-    NewPathLength - Supplies a pointer that receives the length of the newly
-        allocated path.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PSTR SharedMemoryPath;
-    ULONG SharedMemoryPathLength;
-    KSTATUS Status;
-
-    ASSERT(Path != NULL);
-    ASSERT(PathLength != 0);
-
-    SharedMemoryPath = ObGetFullPath(IoSharedMemoryObjectDirectory,
-                                     IO_ALLOCATION_TAG);
-
-    if (SharedMemoryPath == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddSharedMemoryObjectPathPrefixEnd;
-    }
-
-    SharedMemoryPathLength = RtlStringLength(SharedMemoryPath) + 1;
-    Status = IoPathAppend(SharedMemoryPath,
-                          SharedMemoryPathLength,
-                          Path,
-                          PathLength,
-                          IO_ALLOCATION_TAG,
-                          NewPath,
-                          NewPathLength);
-
-    if (!KSUCCESS(Status)) {
-        goto AddSharedMemoryObjectPathPrefixEnd;
-    }
-
-AddSharedMemoryObjectPathPrefixEnd:
-    if (SharedMemoryPath != NULL) {
-        MmFreePagedPool(SharedMemoryPath);
-    }
-
-    return Status;
 }
 

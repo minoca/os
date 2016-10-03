@@ -216,6 +216,7 @@ Return Value:
                                              NULL,
                                              NULL,
                                              NULL,
+                                             NULL,
                                              NULL);
 
             if (KernelProcess == NULL) {
@@ -507,7 +508,8 @@ Return Value:
     Process = PsCreateProcess(Command,
                               (ULONG)FileSize + 1,
                               NULL,
-                              IoGetPathPoint(Volume));
+                              IoGetPathPoint(Volume),
+                              NULL);
 
     if (Process == NULL) {
         RtlDebugPrint("Failed to create initial process: \"%s\"\n",

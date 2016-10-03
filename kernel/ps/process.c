@@ -1187,7 +1187,8 @@ PsCreateProcess (
     PSTR CommandLine,
     ULONG CommandLineSize,
     PVOID RootDirectoryPathPoint,
-    PVOID WorkingDirectoryPathPoint
+    PVOID WorkingDirectoryPathPoint,
+    PVOID SharedMemoryDirectoryPathPoint
     )
 
 /*++
@@ -1210,6 +1211,9 @@ Arguments:
 
     WorkingDirectoryPathPoint - Supplies an optional pointer to the path point
         of the working directory to set for the process.
+
+    SharedMemoryDirectoryPathPoint - Supplies an optional pointer to the path
+        point of the shared memory object directory to set for the process.
 
 Return Value:
 
@@ -1311,7 +1315,8 @@ Return Value:
                                   NULL,
                                   NULL,
                                   RootDirectoryPathPoint,
-                                  WorkingDirectoryPathPoint);
+                                  WorkingDirectoryPathPoint,
+                                  SharedMemoryDirectoryPathPoint);
 
     if (NewProcess == NULL) {
         Status = STATUS_UNSUCCESSFUL;
@@ -1699,12 +1704,15 @@ Return Value:
     PKPROCESS NewProcess;
     PPATH_POINT RootDirectory;
     PATH_POINT RootDirectoryCopy;
+    PPATH_POINT SharedMemoryDirectory;
+    PATH_POINT SharedMemoryDirectoryCopy;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     CurrentDirectory = NULL;
     RootDirectory = NULL;
+    SharedMemoryDirectory = NULL;
 
     //
     // Get the processes root and current directories. Add references in case a
@@ -1727,6 +1735,14 @@ Return Value:
         RootDirectory = &RootDirectoryCopy;
     }
 
+    if (Process->Paths.SharedMemoryDirectory.PathEntry != NULL) {
+        IO_COPY_PATH_POINT(&SharedMemoryDirectoryCopy,
+                           &(Process->Paths.SharedMemoryDirectory));
+
+        IO_PATH_POINT_ADD_REFERENCE(&SharedMemoryDirectoryCopy);
+        SharedMemoryDirectory = &SharedMemoryDirectoryCopy;
+    }
+
     KeReleaseQueuedLock(Process->Paths.Lock);
     NewProcess = PspCreateProcess(Process->BinaryName,
                                   Process->BinaryNameSize,
@@ -1734,7 +1750,8 @@ Return Value:
                                   &(Process->Identifiers),
                                   Process->ControllingTerminal,
                                   RootDirectory,
-                                  CurrentDirectory);
+                                  CurrentDirectory,
+                                  SharedMemoryDirectory);
 
     if (CurrentDirectory != NULL) {
         IO_PATH_POINT_RELEASE_REFERENCE(CurrentDirectory);
@@ -1742,6 +1759,10 @@ Return Value:
 
     if (RootDirectory != NULL) {
         IO_PATH_POINT_RELEASE_REFERENCE(RootDirectory);
+    }
+
+    if (SharedMemoryDirectory != NULL) {
+        IO_PATH_POINT_RELEASE_REFERENCE(SharedMemoryDirectory);
     }
 
     if (NewProcess == NULL) {
@@ -1860,7 +1881,8 @@ PspCreateProcess (
     PPROCESS_IDENTIFIERS Identifiers,
     PVOID ControllingTerminal,
     PPATH_POINT RootDirectory,
-    PPATH_POINT WorkingDirectory
+    PPATH_POINT WorkingDirectory,
+    PPATH_POINT SharedMemoryDirectory
     )
 
 /*++
@@ -1895,6 +1917,10 @@ Arguments:
     WorkingDirectory - Supplies a pointer to the path point to use for the
         working directory. A reference will be added to the path entry and
         mount point of this path point.
+
+    SharedMemoryDirectory - Supplies a pointer to the path point to use as the
+        shared memory object root. A reference will be added to the path entry
+        and mount point of this path point.
 
 Return Value:
 
@@ -2081,6 +2107,17 @@ Return Value:
                            WorkingDirectory);
 
         IO_PATH_POINT_ADD_REFERENCE(WorkingDirectory);
+    }
+
+    if (SharedMemoryDirectory != NULL) {
+
+        ASSERT(SharedMemoryDirectory->PathEntry != NULL);
+        ASSERT(SharedMemoryDirectory->MountPoint != NULL);
+
+        IO_COPY_PATH_POINT(&(NewProcess->Paths.SharedMemoryDirectory),
+                           SharedMemoryDirectory);
+
+        IO_PATH_POINT_ADD_REFERENCE(SharedMemoryDirectory);
     }
 
     //
@@ -2773,6 +2810,8 @@ Return Value:
 
 {
 
+    PPATH_POINT PathPoint;
+
     //
     // Proceed to destroy the process structures.
     //
@@ -2804,6 +2843,13 @@ Return Value:
         IO_PATH_POINT_RELEASE_REFERENCE(&(Process->Paths.Root));
         Process->Paths.Root.PathEntry = NULL;
         Process->Paths.Root.MountPoint = NULL;
+    }
+
+    if (Process->Paths.SharedMemoryDirectory.PathEntry != NULL) {
+        PathPoint = (PPATH_POINT)&(Process->Paths.SharedMemoryDirectory);
+        IO_PATH_POINT_RELEASE_REFERENCE(PathPoint);
+        PathPoint->PathEntry = NULL;
+        PathPoint->MountPoint = NULL;
     }
 
     if (Process->Environment != NULL) {
@@ -3152,6 +3198,8 @@ Return Value:
     ASSERT(Process->Paths.CurrentDirectory.MountPoint == NULL);
     ASSERT(Process->Paths.Root.PathEntry == NULL);
     ASSERT(Process->Paths.Root.MountPoint == NULL);
+    ASSERT(Process->Paths.SharedMemoryDirectory.PathEntry == NULL);
+    ASSERT(Process->Paths.SharedMemoryDirectory.MountPoint == NULL);
     ASSERT(Process->Environment == NULL);
     ASSERT(Process->HandleTable == NULL);
 

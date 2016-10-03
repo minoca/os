@@ -1138,12 +1138,6 @@ extern POBJECT_HEADER IoIrpDirectory;
 extern POBJECT_HEADER IoPipeDirectory;
 
 //
-// Store a pointer to the shared memory object directory.
-//
-
-extern POBJECT_HEADER IoSharedMemoryObjectDirectory;
-
-//
 // Store the saved boot information.
 //
 
@@ -1156,10 +1150,16 @@ extern IO_BOOT_INFORMATION IoBootInformation;
 extern IO_GLOBAL_STATISTICS IoGlobalStatistics;
 
 //
-// Store a pointer to the root path point.
+// Store the root path point.
 //
 
 extern PATH_POINT IoPathPointRoot;
+
+//
+// Store the shared memory object root path point.
+//
+
+extern PATH_POINT IoSharedMemoryRoot;
 
 //
 // Store a pointer to the mount lock.
@@ -1904,6 +1904,7 @@ Return Value:
 
 KSTATUS
 IopCreateSpecialIoObject (
+    BOOL FromKernelMode,
     ULONG Flags,
     IO_OBJECT_TYPE Type,
     PVOID OverrideParameter,
@@ -1918,6 +1919,9 @@ Routine Description:
     This routine creates a special file object.
 
 Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not the request
+        originated from kernel mode (TRUE) or user mode (FALSE).
 
     Type - Supplies the type of special object to create.
 
@@ -1953,50 +1957,6 @@ Arguments:
 
     IoHandle - Supplies a pointer to the I/O handle returned when the file was
         opened.
-
-Return Value:
-
-    Status code.
-
---*/
-
-KSTATUS
-IopDelete (
-    BOOL FromKernelMode,
-    PIO_HANDLE Directory,
-    PSTR Path,
-    ULONG PathSize,
-    ULONG Flags
-    );
-
-/*++
-
-Routine Description:
-
-    This routine attempts to delete the object at the given path. If the path
-    points to a directory, the directory must be empty. If the path points to
-    a file object or shared memory object, its hard link count is decremented.
-    If the hard link count reaches zero and no processes have the object open,
-    the contents of the object are destroyed. If processes have open handles to
-    the object, the destruction of the object contents are deferred until the
-    last handle to the old file is closed. If the path points to a symbolic
-    link, the link itself is removed and not the destination. The removal of
-    the entry from the directory is immediate.
-
-Arguments:
-
-    FromKernelMode - Supplies a boolean indicating the request is coming from
-        kernel mode.
-
-    Directory - Supplies an optional pointer to an open handle to a directory
-        for relative paths. Supply NULL to use the current working directory.
-
-    Path - Supplies a pointer to the path to delete.
-
-    PathSize - Supplies the length of the path buffer in bytes, including the
-        null terminator.
-
-    Flags - Supplies a bitfield of flags. See DELETE_FLAG_* definitions.
 
 Return Value:
 
@@ -3551,6 +3511,28 @@ Return Value:
 --*/
 
 KSTATUS
+IopInitializeSharedMemoryObjectSupport (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called during system initialization to set up support for
+    shared memory objects.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 IopOpenSharedMemoryObject (
     PSTR Path,
     ULONG PathLength,
@@ -3617,31 +3599,33 @@ Return Value:
 
 --*/
 
-POBJECT_HEADER
-IopGetSharedMemoryObjectDirectory (
-    VOID
+PPATH_POINT
+IopGetSharedMemoryDirectory (
+    BOOL FromKernelMode
     );
 
 /*++
 
 Routine Description:
 
-    This routine returns the shared memory objects' root directory in the
-    object manager's system. This is the only place in the object system
-    shared memory object creation is allowed.
+    This routine returns the current process' shared memory directory. This is
+    the only place the current process is allowed to create shared memory
+    objects.
 
 Arguments:
 
-    None.
+    FromKernelMode - Supplies a boolean indicating whether or not the request
+        originated from kernel mode (TRUE) or user mode (FALSE).
 
 Return Value:
 
-    Returns a pointer to the shared memory object directory.
+    Returns a pointer to the process' shared memory directory.
 
 --*/
 
 KSTATUS
 IopCreateSharedMemoryObject (
+    BOOL FromKernelMode,
     PSTR Name,
     ULONG NameSize,
     ULONG Flags,
@@ -3656,6 +3640,9 @@ Routine Description:
     This routine actually creates a new shared memory object.
 
 Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not the request
+        originated from kernel mode (TRUE) or user mode (FALSE).
 
     Name - Supplies an optional pointer to the shared memory object name. This
         is only used for shared memory objects created in the shared memory

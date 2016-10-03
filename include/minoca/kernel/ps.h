@@ -927,6 +927,9 @@ Members:
 
     CurrentDirectory - Stores the current directory path point for this process.
 
+    SharedMemoryDirectory - Stores the shared memory directory path point for
+        this process.
+
     Lock - Stores a pointer to a queued lock synchronizing accesses with
         changes.
 
@@ -942,6 +945,11 @@ typedef struct _PROCESS_PATHS {
         PVOID PathEntry;
         PVOID MountPoint;
     } CurrentDirectory;
+
+    struct {
+        PVOID PathEntry;
+        PVOID MountPoint;
+    } SharedMemoryDirectory;
 
     PVOID Lock;
 } PROCESS_PATHS, *PPROCESS_PATHS;
@@ -3295,7 +3303,8 @@ PsCreateProcess (
     PSTR CommandLine,
     ULONG CommandLineSize,
     PVOID RootDirectoryPathPoint,
-    PVOID WorkingDirectoryPathPoint
+    PVOID WorkingDirectoryPathPoint,
+    PVOID SharedMemoryDirectoryPathPoint
     );
 
 /*++
@@ -3318,6 +3327,9 @@ Arguments:
 
     WorkingDirectoryPathPoint - Supplies an optional pointer to the path point
         of the working directory to set for the process.
+
+    SharedMemoryDirectoryPathPoint - Supplies an optional pointer to the path
+        point of the shared memory object directory to set for the process.
 
 Return Value:
 

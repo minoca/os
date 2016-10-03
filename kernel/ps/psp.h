@@ -440,7 +440,8 @@ PspCreateProcess (
     PPROCESS_IDENTIFIERS Identifiers,
     PVOID ControllingTerminal,
     PPATH_POINT RootDirectory,
-    PPATH_POINT WorkingDirectory
+    PPATH_POINT WorkingDirectory,
+    PPATH_POINT SharedMemoryDirectory
     );
 
 /*++
@@ -475,6 +476,10 @@ Arguments:
     WorkingDirectory - Supplies a pointer to the path point to use for the
         working directory. A reference will be added to the path entry and
         mount point of this path point.
+
+    SharedMemoryDirectory - Supplies a pointer to the path point to use as the
+        shared memory object root. A reference will be added to the path entry
+        and mount point of this path point.
 
 Return Value:
 
