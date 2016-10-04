@@ -60,7 +60,7 @@ function build() {
     tzcomp_tool = {
         "type": "tool",
         "name": "tzcomp",
-        "command": "$^//tzcomp/tzcomp $TZCOMP_FLAGS -o $OUT $IN",
+        "command": "$^//apps/tzcomp/tzcomp $TZCOMP_FLAGS -o $OUT $IN",
         "description": "Compiling Time Zone Data - $OUT"
     };
 

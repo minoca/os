@@ -22,23 +22,23 @@ Environment:
 
 function build() {
     debug_binaries = [
-        "//debug/client:debug",
-        "//debug/kexts:kexts",
-        "//debug/kexts:build_kexts"
+        "//apps/debug/client:debug",
+        "//apps/debug/kexts:kexts",
+        "//apps/debug/kexts:build_kexts"
     ];
 
     if ((build_os == "Windows") || (build_os == "Minoca")) {
         debug_binaries += [
-            "//debug/client:build_debug",
-            "//debug/client/tdwarf:build_tdwarf",
-            "//debug/client/testdisa:build_testdisa",
-            "//debug/client/teststab:build_teststab",
+            "//apps/debug/client:build_debug",
+            "//apps/debug/client/tdwarf:build_tdwarf",
+            "//apps/debug/client/testdisa:build_testdisa",
+            "//apps/debug/client/teststab:build_teststab",
         ];
     }
 
     if (build_os == "Windows") {
         debug_binaries += [
-            "//debug/client:build_debugui"
+            "//apps/debug/client:build_debugui"
         ];
     }
 

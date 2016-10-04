@@ -31,7 +31,7 @@ VPATH += $(SRCDIR)/..:
 
 BUILD = yes
 
-TARGETLIBS = $(OBJROOT)/os/debug/dbgext/win32/dbgextnt.a
+TARGETLIBS = $(OBJROOT)/os/apps/debug/dbgext/win32/dbgextnt.a
 
 X86_OBJS = acpiext.o  \
            kexts.o    \

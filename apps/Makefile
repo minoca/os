@@ -25,6 +25,7 @@
 ##
 
 APPS = ck       \
+       debug    \
        efiboot  \
        mingen   \
        mount    \
@@ -33,6 +34,7 @@ APPS = ck       \
        setup    \
        swiss    \
        testapps \
+       tzcomp   \
        unmount  \
        vmstat   \
 

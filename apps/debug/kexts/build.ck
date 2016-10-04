@@ -31,11 +31,11 @@ function build() {
     ];
 
     target_libs = [
-        "//debug/dbgext:dbgext"
+        "//apps/debug/dbgext:dbgext"
     ];
 
     build_libs = [
-        "//debug/dbgext:build_dbgext"
+        "//apps/debug/dbgext:build_dbgext"
     ];
 
     lib = {

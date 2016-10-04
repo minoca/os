@@ -34,7 +34,7 @@ function build() {
         ["//apps/setup:msetup", "msetup"],
         ["//apps/swiss:swiss", "swiss"],
         ["//apps/unmount:umount", "umount"],
-        ["//debug/client:debug", "debug"]
+        ["//apps/debug/client:debug", "debug"]
     ];
 
     libfiles = [

@@ -23,15 +23,15 @@ Environment:
 function build() {
     sources = [
         "tdwarf.c",
-        "//debug/client:build/coff.o",
-        "//debug/client:build/elf.o",
-        "//debug/client:build/dwarf.o",
-        "//debug/client:build/dwexpr.o",
-        "//debug/client:build/dwframe.o",
-        "//debug/client:build/dwline.o",
-        "//debug/client:build/dwread.o",
-        "//debug/client:build/stabs.o",
-        "//debug/client:build/symbols.o"
+        "//apps/debug/client:build/coff.o",
+        "//apps/debug/client:build/elf.o",
+        "//apps/debug/client:build/dwarf.o",
+        "//apps/debug/client:build/dwexpr.o",
+        "//apps/debug/client:build/dwframe.o",
+        "//apps/debug/client:build/dwline.o",
+        "//apps/debug/client:build/dwread.o",
+        "//apps/debug/client:build/stabs.o",
+        "//apps/debug/client:build/symbols.o"
     ];
 
     build_libs = [

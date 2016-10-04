@@ -35,7 +35,7 @@ Environment:
 #include <minoca/lib/rtl.h>
 #include <minoca/lib/im.h>
 #include <minoca/debug/dbgext.h>
-#include "../../drivers/acpi/acpiobj.h"
+#include "../../../drivers/acpi/acpiobj.h"
 
 #include <errno.h>
 #include <stdio.h>

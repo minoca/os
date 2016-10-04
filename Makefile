@@ -41,10 +41,8 @@ LIBRARIES = lib          \
 
 COMPONENTS = apps        \
              boot        \
-             debug       \
              drivers     \
              kernel      \
-             tzcomp      \
              uefi        \
 
 DIRS = $(LIBRARIES)      \

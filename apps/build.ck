@@ -37,6 +37,7 @@ function build() {
     ];
 
     apps = [
+        "//apps/debug:debug",
         "//apps/efiboot:efiboot",
         "//apps/mingen:mingen",
         "//apps/mount:mount",
@@ -46,6 +47,7 @@ function build() {
         "//apps/setup:build_msetup",
         "//apps/swiss:swiss",
         "//apps/swiss:build_swiss",
+        "//apps/tzcomp:tz_files",
         "//apps/unmount:umount",
         "//apps/vmstat:vmstat",
     ];

@@ -23,10 +23,10 @@ Environment:
 function build() {
     sources = [
         "teststab.c",
-        "//debug/client:build/stabs.o",
-        "//debug/client:build/coff.o",
-        "//debug/client:build/elf.o",
-        "//debug/client:build/symbols.o"
+        "//apps/debug/client:build/stabs.o",
+        "//apps/debug/client:build/coff.o",
+        "//apps/debug/client:build/elf.o",
+        "//apps/debug/client:build/symbols.o"
     ];
 
     build_libs = [

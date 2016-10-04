@@ -334,7 +334,7 @@ endif
 ## have files associated with them.
 ##
 
-.PHONY: test all clean wipe $(DIRS) $(TESTDIRS) prebuild postbuild
+.PHONY: all clean wipe $(DIRS) $(TESTDIRS) prebuild postbuild
 
 ##
 ## prepend the current object directory to every extra directory.

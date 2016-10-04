@@ -24,16 +24,15 @@ function build_image(name, msetup_flags) {
     install_deps = [
         "//apps:all_apps",
         "//apps/posix:skel",
+        "//apps/tzcomp:tz_files",
         "//kernel:kernel",
         "//kernel:devmap.set",
         "//kernel:dev2drv.set",
         "//kernel:init.set",
         "//kernel:init.sh",
         "//boot:boot_apps",
-        "//debug:debug",
         "//drivers:drivers",
         "//uefi:platfw",
-        "//tzcomp:tz_files",
         "//apps/setup:build_msetup"
     ];
 

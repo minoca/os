@@ -23,11 +23,11 @@ Environment:
 function build() {
     sources = [
         "testdisa.c",
-        "//debug/client:build/x86dis.o",
-        "//debug/client:build/armdis.o",
-        "//debug/client:build/disasm.o",
-        "//debug/client:build/thmdis.o",
-        "//debug/client:build/thm32dis.o",
+        "//apps/debug/client:build/x86dis.o",
+        "//apps/debug/client:build/armdis.o",
+        "//apps/debug/client:build/disasm.o",
+        "//apps/debug/client:build/thmdis.o",
+        "//apps/debug/client:build/thm32dis.o",
     ];
 
     build_libs = [

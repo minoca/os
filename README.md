@@ -41,6 +41,7 @@ If you're building Minoca OS on Windows and have downloaded the [tools](https://
 Below if a brief orientation of a few of the directories in the repository. Check the Makefile in each directory for a more detailed description of what that directory contains.
  * `apps` - User mode applications and libraries
    * `ck` - Chalk, an embeddable scripting language
+   * `debug` - Debugger application
    * `libc` - The Minoca OS C Library
    * `osbase` - The Minoca OS API library
    * `setup` - The msetup build tool
@@ -51,7 +52,6 @@ Below if a brief orientation of a few of the directories in the repository. Chec
    * `bootman` - The Minoca Boot Manager
    * `loader` - The Minoca OS loader
    * `lib` - Libraries shared across multiple boot executables
- * `debug` - Debugger application
  * `drivers` - Device drivers
    * `acpi` - ACPI platform driver, with AML interpreter
    * `fat` - FAT file system driver
@@ -92,7 +92,6 @@ Below if a brief orientation of a few of the directories in the repository. Chec
    * `rtl` - General runtime library, implements support like printf and date/time conversion
    * `termlib` - Terminal support library
  * `tasks` - Internal automation configuration
- * `tzcomp` - The time zone compiler tool
  * `uefi` - Minimal UEFI implementation for platforms supported by Minoca OS.
    * `core` - Platform-agnostic UEFI firmware core
    * `dev` - UEFI device libraries
