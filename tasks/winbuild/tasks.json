@@ -577,7 +577,7 @@
         {
             "name": "Make OS",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os test"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os"
         },
         {
             "name": "Create Windows binaries",

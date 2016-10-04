@@ -342,26 +342,18 @@ endif
 
 EXTRA_OBJ_DIRS += $(EXTRA_SRC_DIRS:%=$(OBJROOT)/$(THISDIR)/%) $(STRIPPED_DIR)
 
-all: $(DIRS) $(BINARY) postbuild
+all: $(DIRS) $(TESTDIRS) $(BINARY) postbuild
 
 $(DIRS): $(OBJROOT)/$(THISDIR)
 postbuild: $(BINARY)
 
-test: all $(TESTDIRS)
-
-$(DIRS):
+$(TESTDIRS): $(BINARY)
+$(DIRS) $(TESTDIRS):
 	@$(CECHO_CYAN) Entering Directory: $(SRCROOT)/$(THISDIR)/$@ && \
 	[ -d $@ ] || mkdir -p $@ && \
 	$(MAKE) --no-print-directory -C $@ -f $(SRCDIR)/$@/Makefile \
 	    $(MAKECMDGOALS) SRCDIR=$(SRCDIR)/$@ && \
 	$(CECHO_CYAN) Leaving Directory: $(SRCROOT)/$(THISDIR)/$@
-
-$(TESTDIRS): $(BINARY)
-	@$(CECHO_CYAN) Entering Test Directory: $(SRCROOT)/$(THISDIR)/$@ && \
-	[ -d $@ ] || mkdir -p $@ && \
-	$(MAKE) --no-print-directory -C $@ -f $(SRCDIR)/$@/Makefile \
-	    -I$(SRCDIR)/$@ $(MAKECMDGOALS) SRCDIR=$(SRCDIR)/$@ && \
-	$(CECHO_CYAN) Leaving Test Directory: $(SRCROOT)/$(THISDIR)/$@
 
 ##
 ## The dependencies of the binary object depend on the architecture and type of

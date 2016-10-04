@@ -651,7 +651,7 @@
         {
             "name": "Make OS (Distribution)",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh os test"
+            "parameter": "src/os/tasks/build/make.sh os"
         },
         {
             "name": "Add Files",
@@ -661,7 +661,7 @@
         {
             "name": "Make OS (Automation)",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh os test"
+            "parameter": "src/os/tasks/build/make.sh os"
         },
         {
             "name": "Package Binaries",
