@@ -1351,9 +1351,7 @@ Return Value:
             PhysicalPage = ((PPHYSICAL_PAGE)(Segment + 1)) + PageOffset;
             for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
 
-                ASSERT((PhysicalPage->U.Flags &
-                        PHYSICAL_PAGE_FLAG_NON_PAGED) != 0);
-
+                ASSERT(PhysicalPage->U.Flags == PHYSICAL_PAGE_FLAG_NON_PAGED);
                 ASSERT(((UINTN)PagingEntries[PageIndex] &
                         PHYSICAL_PAGE_FLAG_NON_PAGED) == 0);
 

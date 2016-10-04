@@ -2393,6 +2393,7 @@ Return Value:
         (((Section->Parent == NULL) ||
           ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) == 0)) &&
          (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+          ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0) ||
           ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)))) {
 
         if ((Section->Flags & IMAGE_SECTION_WRITABLE) != 0) {
@@ -2408,6 +2409,14 @@ Return Value:
     //
 
     } else {
+
+        //
+        // A page cache backed section better be writable if a private page,
+        // potentially with a paging entry, is being set.
+        //
+
+        ASSERT(((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+               ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0));
 
         ASSERT((Section->Flags & IMAGE_SECTION_SHARED) == 0);
         ASSERT((Section->MinTouched <= VirtualAddress) &&
@@ -2440,13 +2449,14 @@ Return Value:
                                              1,
                                              &PagingEntry,
                                              FALSE);
+
+            PagingEntry = NULL;
         }
 
         if (Section->InheritPageBitmap != NULL) {
             Section->InheritPageBitmap[BitmapIndex] &= ~BitmapMask;
         }
 
-        PagingEntry = NULL;
         PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
     }
 
@@ -3547,11 +3557,17 @@ Return Value:
     }
 
     //
-    // Modify the mappings in the region.
+    // Update the flags. If the section is writable, make sure that it gets
+    // marked as "was writable". Dirty bitmap accounting and page out depend on
+    // whether or not the section was ever writable, not its current state.
     //
 
     Section->Flags = (Section->Flags & ~IMAGE_SECTION_ACCESS_MASK) |
                      (NewAccess & IMAGE_SECTION_ACCESS_MASK);
+
+    if ((Section->Flags & IMAGE_SECTION_WRITABLE) != 0) {
+        Section->Flags |= IMAGE_SECTION_WAS_WRITABLE;
+    }
 
     //
     // If the section is going read-only, then change the mappings. Don't
@@ -3753,18 +3769,6 @@ Return Value:
         }
 
         //
-        // When unmapping due to truncation, reset the dirty bit, even if there
-        // is no page to unmap. Page-in needs to start fresh for any pages
-        // touched by this routine in this case.
-        //
-
-        if (((Flags & IMAGE_SECTION_UNMAP_FLAG_TRUNCATE) != 0) &&
-            (Section->DirtyPageBitmap != NULL)) {
-
-            Section->DirtyPageBitmap[BitmapIndex] &= ~BitmapMask;
-        }
-
-        //
         // If the section is not mapped at this page offset, then neither are
         // any of its inheriting children. Skip it.
         //
@@ -3774,6 +3778,19 @@ Return Value:
                                              &PhysicalAddress);
 
         if (PageMapped == FALSE) {
+
+            //
+            // When unmapping due to truncation, reset the dirty bit, even if
+            // there is no page to unmap. Page-in needs to start fresh for any
+            // pages touched by this routine in this case.
+            //
+
+            if (((Flags & IMAGE_SECTION_UNMAP_FLAG_TRUNCATE) != 0) &&
+                (Section->DirtyPageBitmap != NULL)) {
+
+                Section->DirtyPageBitmap[BitmapIndex] &= ~BitmapMask;
+            }
+
             continue;
         }
 
@@ -3869,6 +3886,17 @@ Return Value:
             ASSERT((Flags & IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY) == 0);
 
             MmFreePhysicalPage(PhysicalAddress);
+        }
+
+        //
+        // When unmapping due to truncation, reset the dirty bit. Page-in needs
+        // to start fresh for any pages touched by this routine in this case.
+        //
+
+        if (((Flags & IMAGE_SECTION_UNMAP_FLAG_TRUNCATE) != 0) &&
+            (Section->DirtyPageBitmap != NULL)) {
+
+            Section->DirtyPageBitmap[BitmapIndex] &= ~BitmapMask;
         }
     }
 

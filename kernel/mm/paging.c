@@ -3318,7 +3318,6 @@ Return Value:
     UINTN BitmapIndex;
     ULONG BitmapMask;
     PAGE_IN_CONTEXT Context;
-    BOOL Dirty;
     PULONG DirtyPageBitmap;
     PHYSICAL_ADDRESS ExistingPhysicalAddress;
     PIO_BUFFER IoBuffer;
@@ -3336,6 +3335,7 @@ Return Value:
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN PageShift;
     UINTN PageSize;
+    PPAGING_ENTRY PagingEntry;
     PIMAGE_SECTION RootSection;
     KSTATUS Status;
     ULONG TruncateCount;
@@ -3514,22 +3514,12 @@ Return Value:
         }
 
         //
-        // Figure out if the page is clean or dirty by looking at the owning
-        // section.
+        // If the page is dirty, read from the page file.
         //
 
         ASSERT(OwningSection->DirtyPageBitmap != NULL);
 
-        Dirty = FALSE;
         if ((OwningSection->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0) {
-            Dirty = TRUE;
-        }
-
-        //
-        // If the page is dirty, read from the page file.
-        //
-
-        if (Dirty != FALSE) {
             RootSection = MmpGetRootSection(OwningSection);
             Status = MmpPrepareForPageFileRead(RootSection,
                                                OwningSection,
@@ -3880,13 +3870,27 @@ PageInCacheBackedSectionEnd:
             }
 
             if (KSUCCESS(Status)) {
+
+                //
+                // A paging entry should only be set if the page was read from
+                // the page file. Otherwise it is a page cache page and should
+                // not have a paging entry. Truncate can cause a page to go
+                // from dirty to clean, so a paging entry may be present even
+                // though a page cache page is being mapped.
+                //
+
+                PagingEntry = NULL;
+                if (Context.PhysicalAddress != PageCacheAddress) {
+                    PagingEntry = Context.PagingEntry;
+                    Context.PagingEntry = NULL;
+                }
+
                 MmpMapPageInSection(OwningSection,
                                     PageOffset,
                                     Context.PhysicalAddress,
-                                    Context.PagingEntry,
+                                    PagingEntry,
                                     LockPage);
 
-                Context.PagingEntry = NULL;
                 Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
             }
         }
