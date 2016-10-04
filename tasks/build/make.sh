@@ -45,7 +45,7 @@ if test -z $SOURCE_DIRECTORY; then
     echo "first argument must be source directory."
 fi
 
-export PATH=$PATH:$SRCROOT/$ARCH$VARIANT$DEBUG/bin
+export PATH=$PATH:$SRCROOT/$ARCH$VARIANT$DEBUG/tools/bin
 cd $SOURCE_DIRECTORY
 
 uname -a
