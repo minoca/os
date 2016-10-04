@@ -743,27 +743,28 @@ InitializePagingEnd:
 }
 
 KSTATUS
-MmpAllocatePageFileSpace (
-    PIMAGE_SECTION Section
+MmAllocatePageFileSpace (
+    PIMAGE_BACKING ImageBacking,
+    UINTN Size
     )
 
 /*++
 
 Routine Description:
 
-    This routine allocates space from a page file. It is assumed the image
-    section lock is already held.
+    This routine allocates space from a page file.
 
 Arguments:
 
-    Section - Supplies a pointer to the image section. It is expected that the
-        page count member will be filled out. On successful return, the page
-        file backing member will be filled out with the allocation.
+    ImageBacking - Supplies a pointer to an image backing structure that
+        recevies the allocated page file space.
+
+    Size - Supplies the size of the page file space to allocate, in bytes.
 
 Return Value:
 
-    STATUS_SUCCESS on success. In this case the page file backing member of the
-        section parameter will be filled out.
+    STATUS_SUCCESS on success. In this case the image backing structure
+    parameterwill be filled out.
 
     STATUS_INSUFFICIENT_RESOURCES if the request could not be satisified.
 
@@ -780,7 +781,7 @@ Return Value:
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(Section->PageFileBacking.DeviceHandle == INVALID_HANDLE);
+    ASSERT(ImageBacking->DeviceHandle == INVALID_HANDLE);
 
     //
     // If paging is not enabled, then there's no way page file space could be
@@ -798,10 +799,9 @@ Return Value:
     PageShift = MmPageShift();
     PageSize = MmPageSize();
 
-    ASSERT((IS_ALIGNED((UINTN)(Section->VirtualAddress), PageSize)) &&
-           (IS_ALIGNED(Section->Size, PageSize)));
+    ASSERT(IS_ALIGNED(Size, PageSize));
 
-    PageCount = Section->Size >> PageShift;
+    PageCount = Size >> PageShift;
 
     //
     // Look through all page files for the given space.
@@ -830,8 +830,8 @@ Return Value:
         //
 
         if (KSUCCESS(Status)) {
-            Section->PageFileBacking.DeviceHandle = CurrentPageFile;
-            Section->PageFileBacking.Offset = Allocation << PageShift;
+            ImageBacking->DeviceHandle = CurrentPageFile;
+            ImageBacking->Offset = Allocation << PageShift;
             break;
         }
     }
@@ -843,9 +843,9 @@ Return Value:
 
 AllocatePageFileSpaceEnd:
     if (!KSUCCESS(Status)) {
-        if (Section->PageFileBacking.DeviceHandle != INVALID_HANDLE) {
-            MmpFreeFromPageFile(Section->PageFileBacking.DeviceHandle,
-                                Section->PageFileBacking.Offset >> PageShift,
+        if (ImageBacking->DeviceHandle != INVALID_HANDLE) {
+            MmpFreeFromPageFile(ImageBacking->DeviceHandle,
+                                ImageBacking->Offset >> PageShift,
                                 PageCount);
         }
     }
@@ -854,8 +854,9 @@ AllocatePageFileSpaceEnd:
 }
 
 VOID
-MmpFreePageFileSpace (
-    PIMAGE_SECTION Section
+MmFreePageFileSpace (
+    PIMAGE_BACKING ImageBacking,
+    UINTN Size
     )
 
 /*++
@@ -866,8 +867,9 @@ Routine Description:
 
 Arguments:
 
-    Section - Supplies a pointer to the memory section taking up page file
-        space.
+    ImageBacking - Supplies a pointer to the page file image backing to release.
+
+    Size - Supplies the size of the image backing.
 
 Return Value:
 
@@ -886,26 +888,22 @@ Return Value:
         return;
     }
 
-    if (Section->PagingInIrp != NULL) {
-        IoDestroyIrp(Section->PagingInIrp);
-    }
-
-    if (Section->PageFileBacking.DeviceHandle == INVALID_HANDLE) {
+    if (ImageBacking->DeviceHandle == INVALID_HANDLE) {
         return;
     }
 
     PageShift = MmPageShift();
-    PageCount = Section->Size >> PageShift;
-    MmpFreeFromPageFile(Section->PageFileBacking.DeviceHandle,
-                        Section->PageFileBacking.Offset >> PageShift,
+    PageCount = Size >> PageShift;
+    MmpFreeFromPageFile(ImageBacking->DeviceHandle,
+                        ImageBacking->Offset >> PageShift,
                         PageCount);
 
     return;
 }
 
 VOID
-MmpFreePartialPageFileSpace (
-    PIMAGE_SECTION Section,
+MmFreePartialPageFileSpace (
+    PIMAGE_BACKING ImageBacking,
     UINTN PageOffset,
     UINTN PageCount
     )
@@ -914,12 +912,12 @@ MmpFreePartialPageFileSpace (
 
 Routine Description:
 
-    This routine frees a portion of the original space allocated by an image
-    section in the page file.
+    This routine frees a portion of the original space allocated in the page
+    file.
 
 Arguments:
 
-    Section - Supplies a pointer to the memory section taking up page file
+    ImageBacking - Supplies a pointer to the image backing taking up page file
         space.
 
     PageOffset - Supplies the offset in pages to the beginning of the region
@@ -944,21 +942,13 @@ Return Value:
         return;
     }
 
-    if (Section->PageFileBacking.DeviceHandle == INVALID_HANDLE) {
+    if (ImageBacking->DeviceHandle == INVALID_HANDLE) {
         return;
     }
 
     PageShift = MmPageShift();
-
-    ASSERT(PageOffset + PageCount <= (Section->Size >> PageShift));
-
-    PageFileOffset = (Section->PageFileBacking.Offset >> PageShift) +
-                     PageOffset;
-
-    MmpFreeFromPageFile(Section->PageFileBacking.DeviceHandle,
-                        PageFileOffset,
-                        PageCount);
-
+    PageFileOffset = (ImageBacking->Offset >> PageShift) + PageOffset;
+    MmpFreeFromPageFile(ImageBacking->DeviceHandle, PageFileOffset, PageCount);
     return;
 }
 
@@ -1262,7 +1252,12 @@ Return Value:
     PageFile = INVALID_HANDLE;
     if ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) {
         if (Section->PageFileBacking.DeviceHandle == INVALID_HANDLE) {
-            Status = MmpAllocatePageFileSpace(Section);
+
+            ASSERT(IS_POINTER_ALIGNED(Section->VirtualAddress, PageSize));
+
+            Status = MmAllocatePageFileSpace(&(Section->PageFileBacking),
+                                             Section->Size);
+
             if (!KSUCCESS(Status)) {
                 goto PageOutEnd;
             }

@@ -3296,6 +3296,88 @@ Return Value:
 --*/
 
 KSTATUS
+MmAllocatePageFileSpace (
+    PIMAGE_BACKING ImageBacking,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates space from a page file.
+
+Arguments:
+
+    ImageBacking - Supplies a pointer to an image backing structure that
+        recevies the allocated page file space.
+
+    Size - Supplies the size of the page file space to allocate, in bytes.
+
+Return Value:
+
+    STATUS_SUCCESS on success. In this case the image backing structure
+    parameterwill be filled out.
+
+    STATUS_INSUFFICIENT_RESOURCES if the request could not be satisified.
+
+--*/
+
+VOID
+MmFreePageFileSpace (
+    PIMAGE_BACKING ImageBacking,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine frees space from a page file.
+
+Arguments:
+
+    ImageBacking - Supplies a pointer to the page file image backing to release.
+
+    Size - Supplies the size of the image backing.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+MmFreePartialPageFileSpace (
+    PIMAGE_BACKING ImageBacking,
+    UINTN PageOffset,
+    UINTN PageCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine frees a portion of the original space allocated in the page
+    file.
+
+Arguments:
+
+    ImageBacking - Supplies a pointer to the image backing taking up page file
+        space.
+
+    PageOffset - Supplies the offset in pages to the beginning of the region
+        that should be freed.
+
+    PageCount - Supplies the number of pages to free.
+
+Return Value:
+
+    None.
+
+--*/
+
+KSTATUS
 MmMapFileSection (
     HANDLE FileHandle,
     IO_OFFSET FileOffset,

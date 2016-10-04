@@ -3154,7 +3154,12 @@ Return Value:
 
         HolePageCount = ((UINTN)HoleEnd - (UINTN)HoleBegin) >> PageShift;
         MmpUnmapImageSection(Section, HolePageOffset, HolePageCount, 0, NULL);
-        MmpFreePartialPageFileSpace(Section, HolePageOffset, HolePageCount);
+
+        ASSERT(HolePageOffset + HolePageCount <= (Section->Size >> PageShift));
+
+        MmFreePartialPageFileSpace(&(Section->PageFileBacking),
+                                   HolePageOffset,
+                                   HolePageCount);
     }
 
     //
@@ -3467,7 +3472,11 @@ Return Value:
     ASSERT(ImageSection->AddressListEntry.Next == NULL);
     ASSERT(ImageSection->ImageListEntry.Next == NULL);
 
-    MmpFreePageFileSpace(ImageSection);
+    MmFreePageFileSpace(&(ImageSection->PageFileBacking), ImageSection->Size);
+    if (ImageSection->PagingInIrp != NULL) {
+        IoDestroyIrp(ImageSection->PagingInIrp);
+    }
+
     if (ImageSection->Lock != NULL) {
         KeDestroyQueuedLock(ImageSection->Lock);
     }
