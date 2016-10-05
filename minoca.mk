@@ -325,6 +325,7 @@ endif
 override EXTRA_CFLAGS := $(EXTRA_CFLAGS_FOR_BUILD)
 override EXTRA_CPPFLAGS := $(EXTRA_CPPFLAGS_FOR_BUILD)
 override CPPFLAGS :=
+override LDFLAGS :=
 endif
 
 ##
