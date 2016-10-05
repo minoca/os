@@ -64,7 +64,7 @@ EXTRA_SRC_DIRS = armv7
 
 ifeq ($(BINARY), bbonefw.elf)
 
-RAMDISK_O = $(OBJROOT)/os/uefi/core/emptyrd.o
+RAMDISK_O = $(OBJROOT)/os/uefi/core/emptyrd/emptyrd.a
 
 DIRS = acpi     \
        init     \

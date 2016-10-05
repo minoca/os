@@ -52,7 +52,7 @@ TEXT_ADDRESS = 0x00008000
 TARGETLIBS += $(OBJROOT)/os/uefi/dev/pl11/pl11.a       \
               $(OBJROOT)/os/uefi/dev/sd/core/sd.a      \
               $(OBJROOT)/os/uefi/dev/bcm2709/bcm2709.a \
-              $(OBJROOT)/os/uefi/core/emptyrd.o        \
+              $(OBJROOT)/os/uefi/core/emptyrd/emptyrd.a
 
 EXTRA_SRC_DIRS = armv7
 

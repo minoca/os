@@ -61,7 +61,7 @@ ifeq ($(BINARY), integfw.elf)
 
 BINPLACE = bin
 
-RAMDISK_O = $(OBJROOT)/os/uefi/core/emptyrd.o
+RAMDISK_O = $(OBJROOT)/os/uefi/core/emptyrd/emptyrd.a
 
 DIRS = acpi     \
        runtime

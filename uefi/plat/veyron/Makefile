@@ -57,7 +57,7 @@ TARGETLIBS += $(OBJROOT)/os/uefi/dev/gic/gic.a               \
               $(OBJROOT)/os/uefi/dev/ns16550/ns16550.a       \
               $(OBJROOT)/os/uefi/dev/sd/core/sd.a            \
               $(OBJROOT)/os/uefi/dev/sd/dwc/sddwc.a          \
-              $(OBJROOT)/os/uefi/core/emptyrd.o              \
+              $(OBJROOT)/os/uefi/core/emptyrd/emptyrd.a      \
 
 EXTRA_SRC_DIRS = armv7
 

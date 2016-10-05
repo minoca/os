@@ -89,7 +89,8 @@ ARMV6_OBJS = armv7/commsup.o    \
 
 EXTRA_SRC_DIRS = x86 armv7 armv6
 
-DIRS = rtlib    \
+DIRS = emptyrd  \
+       rtlib    \
        runtime
 
 include $(SRCROOT)/os/minoca.mk
@@ -105,6 +106,4 @@ version.o: $(CURDIR)/version.h
 $(CURDIR)/version.h:
 	$(GEN_VERSION) $@ header $(VERSION_MAJOR) $(VERSION_MINOR) \
 	    $(VERSION_REVISION) $(VERSION_RELEASE)
-
-$(BINARY): emptyrd.o
 
