@@ -28,6 +28,7 @@ BINARYTYPE = app
 
 INCLUDES += $(SRCROOT)/os/apps/libc/include;    \
             $(SRCROOT)/os/apps/lib/chalk;       \
+            $(SRCDIR)/config;                   \
 
 include $(SRCDIR)/sources
 
@@ -43,11 +44,8 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/partlib.a            \
              $(OBJROOT)/os/apps/osbase/urtl/urtl.a          \
              $(OBJROOT)/os/apps/lib/chalk/chalk.a           \
              $(OBJROOT)/os/lib/yy/yy.a                      \
-             $(OBJROOT)/os/apps/setup/config/msetplat.a     \
 
 DYNLIBS = -lminocaos
-
-DIRS = config
 
 ifeq ($(OS),Windows_NT)
 
@@ -69,5 +67,5 @@ postbuild:
 	    $(STRIP) -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY); \
 	fi
 
-uos win32: config
-$(OBJROOT)/os/apps/setup/config/msetplat.a: config
+config.o: $(CONFIG_FILES)
+

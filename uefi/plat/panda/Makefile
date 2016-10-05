@@ -32,7 +32,6 @@ endif
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = emptyrd
 RAMDISK_O = ramdisk.o
 
 OBJS += debug.o                 \
@@ -73,7 +72,7 @@ ifeq ($(BINARY), pandafw.elf)
 
 BINPLACE = bin
 
-RAMDISK_O = emptyrd.o
+RAMDISK_O = $(OBJROOT)/os/uefi/core/emptyrd.o
 
 DIRS = acpi     \
        init     \
@@ -92,20 +91,11 @@ CFLAGS += -fshort-wchar
 FWVOL_IMAGES = $(RTBASE) runtime/pandart.ffs acpi/acpi.ffs
 
 pandafwv.o: pandafwv
-	@echo Objectifying - $(notdir $<)
-	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
+ramdisk.o: ramdisk
 
 pandafwv: $(FWVOL_IMAGES)
 	@echo Generating - $@
 	@genfv -o $@ $^
-
-$(RAMDISK_O): $(RAMDISK)
-	@echo Objectifying - $(notdir $<)
-	@cp $^ ramdisk
-	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
-
-emptyrd:
-	@echo Minoca > $@
 
 runtime/pandart.ffs: runtime
 acpi/acpi.ffs: acpi

@@ -105,3 +105,6 @@ version.o: $(CURDIR)/version.h
 $(CURDIR)/version.h:
 	$(GEN_VERSION) $@ header $(VERSION_MAJOR) $(VERSION_MINOR) \
 	    $(VERSION_REVISION) $(VERSION_RELEASE)
+
+$(BINARY): emptyrd.o
+

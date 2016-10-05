@@ -72,17 +72,10 @@ biosfw.bin: $(BINARY)
 FWVOL_IMAGES = $(RTBASE) runtime/biosrt.ffs
 
 biosfwv.o: biosfwv
-	@echo Objectifying - $(notdir $<)
-	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
 
 biosfwv: $(FWVOL_IMAGES)
 	@echo Generating - $@
 	@genfv -o $@ $^
-
-$(RAMDISK_O): $(RAMDISK)
-	@echo Objectifying - $(notdir $<)
-	@cp $^ ramdisk
-	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
 
 runtime/biosrt.ffs: runtime
 

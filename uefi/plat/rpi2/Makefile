@@ -32,9 +32,6 @@ VPATH += $(BINROOT):
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = emptyrd
-RAMDISK_O = ramdisk.o
-
 OBJS += debug.o              \
         fwvol.o              \
         intr.o               \
@@ -42,7 +39,6 @@ OBJS += debug.o              \
         memmap.o             \
         rpi2fwv.o            \
         ramdenum.o           \
-        $(RAMDISK_O)         \
         smbios.o             \
         smp.o                \
         timer.o              \
@@ -56,6 +52,7 @@ TEXT_ADDRESS = 0x00008000
 TARGETLIBS += $(OBJROOT)/os/uefi/dev/pl11/pl11.a       \
               $(OBJROOT)/os/uefi/dev/sd/core/sd.a      \
               $(OBJROOT)/os/uefi/dev/bcm2709/bcm2709.a \
+              $(OBJROOT)/os/uefi/core/emptyrd.o        \
 
 EXTRA_SRC_DIRS = armv7
 
@@ -65,8 +62,6 @@ EXTRA_SRC_DIRS = armv7
 ##
 
 ifeq ($(BINARY), rpi2fw.elf)
-
-RAMDISK_O = emptyrd.o
 
 DIRS = acpi     \
        blobs    \
@@ -85,20 +80,10 @@ CFLAGS += -fshort-wchar
 FWVOL_IMAGES = $(RTBASE) runtime/rpi2rt.ffs acpi/acpi.ffs
 
 rpi2fwv.o: rpi2fwv
-	@echo Objectifying - $(notdir $<)
-	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
 
 rpi2fwv: $(FWVOL_IMAGES)
 	@echo Generating - $@
 	@genfv -o $@ $^
-
-$(RAMDISK_O): $(RAMDISK)
-	@echo Objectifying - $(notdir $<)
-	@cp $^ ramdisk
-	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
-
-emptyrd:
-	@echo Minoca > $@
 
 runtime/rpi2rt.ffs: runtime
 acpi/acpi.ffs: acpi

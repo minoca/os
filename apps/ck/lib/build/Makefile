@@ -66,22 +66,4 @@ gram.c:
 	@echo Generating Grammar - $@
 	@../gram/gramgen $@
 
-##
-## Build .o files from .ck sources.
-##
-
-ifeq ($(OS),Windows_NT)
-
-EXTRA_OBJCOPY_ARGS = --prefix-symbols=_
-
-endif
-
-%.o:%.ck
-	@echo Objectifying - $(notdir $<)
-	@[ -r $(notdir $<) ] || cp $< $(CURDIR) && \
-	   $(OBJCOPY) --rename-section \
-	       .data=.rodata,alloc,load,data,contents,readonly -I binary \
-	       -O $(OBJ_FORMAT) -B $(BFD_ARCH) $(EXTRA_OBJCOPY_ARGS) \
-	       $(notdir $<) $@ && \
-	   rm $(notdir $<)
-
+ckcore.o: ckcore.ck

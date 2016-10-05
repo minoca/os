@@ -23,6 +23,7 @@ Environment:
 function build() {
     common_sources = [
         "cache.c",
+        "config.S",
         "disk.c",
         "fatdev.c",
         "fileio.c",
@@ -61,8 +62,7 @@ function build() {
         "//lib/rtl/base:basertl",
         "//apps/osbase/urtl:urtl",
         "//apps/lib/chalk:chalk",
-        "//lib/yy:yy",
-        "//apps/setup/config:msetplat"
+        "//lib/yy:yy"
     ];
 
     build_libs = [
@@ -72,8 +72,7 @@ function build() {
         "//lib/rtl/base:build_basertl",
         "//lib/rtl/rtlc:build_rtlc",
         "//apps/lib/chalk:build_chalk",
-        "//lib/yy:build_yy",
-        "//apps/setup/config:build_msetplat"
+        "//lib/yy:build_yy"
     ];
 
     target_dynlibs = [
@@ -81,7 +80,8 @@ function build() {
     ];
 
     build_includes = [
-        "$//apps/lib/chalk"
+        "$//apps/lib/chalk",
+        "$//apps/setup/config"
     ];
 
     target_includes = build_includes + [

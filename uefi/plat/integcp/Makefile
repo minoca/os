@@ -28,7 +28,6 @@ BINARYTYPE = staticapp
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = emptyrd
 RAMDISK_O = ramdisk.o
 
 OBJS += debug.o                 \
@@ -62,7 +61,7 @@ ifeq ($(BINARY), integfw.elf)
 
 BINPLACE = bin
 
-RAMDISK_O = emptyrd.o
+RAMDISK_O = $(OBJROOT)/os/uefi/core/emptyrd.o
 
 DIRS = acpi     \
        runtime
@@ -80,25 +79,11 @@ CFLAGS += -fshort-wchar
 FWVOL_IMAGES = $(RTBASE) runtime/integrt.ffs acpi/acpi.ffs
 
 integfwv.o: integfwv
-	@echo Objectifying - $(notdir $<)
-	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
+ramdisk.o: ramdisk
 
 integfwv: $(FWVOL_IMAGES)
 	@echo Generating - $@
 	@genfv -o $@ $^
-
-##
-## Copy the ramdisk name to a file named simply "ramdisk" so that the objcopy
-## generated symbols will be _binary_ramdisk_start.
-##
-
-$(RAMDISK_O): $(RAMDISK)
-	@echo Objectifying - $(notdir $<)
-	@cp $< ramdisk
-	@$(OBJCOPY) -I binary -O elf32-littlearm -B arm ramdisk $@
-
-emptyrd:
-	@echo Minoca > $@
 
 runtime/integrt.ffs: runtime
 acpi/acpi.ffs: acpi

@@ -127,13 +127,6 @@ function build() {
         "depfile": "$OUT.d"
     };
 
-    build_objcopy = {
-        "type": "tool",
-        "name": "build_objcopy",
-        "command": "$SHELL -c \"cd `dirname $IN` && $BUILD_OBJCOPY $BUILD_OBJCOPY_FLAGS `basename $IN` $OUT\"",
-        "description": "Objectifying - $IN"
-    };
-
     build_strip = {
         "type": "tool",
         "name": "build_strip",
@@ -204,8 +197,8 @@ function build() {
 
     entries = [cc, cxx, ld, ar, as, objcopy, strip_tool,
                build_cc, build_cxx, build_ld, build_ar, build_as, build_rcc,
-               build_objcopy, build_strip, iasl, cp, symlink, stamp, touch,
-               gen_version, config_entry];
+               build_strip, iasl, cp, symlink, stamp, touch, gen_version,
+               config_entry];
 
     all = [
         "//lib:test_apps",

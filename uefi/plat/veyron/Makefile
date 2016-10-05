@@ -32,16 +32,12 @@ VPATH += $(BINROOT):
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = emptyrd
-RAMDISK_O = ramdisk.o
-
 OBJS += debug.o                 \
         fwvol.o                 \
         intr.o                  \
         main.o                  \
         memmap.o                \
         ramdenum.o              \
-        $(RAMDISK_O)            \
         sd.o                    \
         serial.o                \
         smbios.o                \
@@ -61,6 +57,7 @@ TARGETLIBS += $(OBJROOT)/os/uefi/dev/gic/gic.a               \
               $(OBJROOT)/os/uefi/dev/ns16550/ns16550.a       \
               $(OBJROOT)/os/uefi/dev/sd/core/sd.a            \
               $(OBJROOT)/os/uefi/dev/sd/dwc/sddwc.a          \
+              $(OBJROOT)/os/uefi/core/emptyrd.o              \
 
 EXTRA_SRC_DIRS = armv7
 
@@ -70,8 +67,6 @@ EXTRA_SRC_DIRS = armv7
 ##
 
 ifeq ($(BINARY), veyronfw.elf)
-
-RAMDISK_O = emptyrd.o
 
 DIRS = acpi     \
        fwbuild  \
@@ -100,20 +95,10 @@ PRIVATE_KEY = $(SRCROOT)/os/uefi/plat/veyron/veyron.pem
 FWVOL_IMAGES = $(RTBASE) runtime/veyronrt.ffs acpi/acpi.ffs
 
 veyronfwv.o: veyronfwv
-	@echo Objectifying - $(notdir $<)
-	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
 
 veyronfwv: $(FWVOL_IMAGES)
 	@echo Generating - $@
 	@genfv -o $@ $^
-
-$(RAMDISK_O): $(RAMDISK)
-	@echo Objectifying - $(notdir $<)
-	@cp $^ ramdisk
-	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
-
-emptyrd:
-	@echo Minoca > $@
 
 runtime/veyronrt.ffs: runtime
 acpi/acpi.ffs: acpi

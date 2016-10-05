@@ -21,6 +21,7 @@
 ################################################################################
 
 COMMON_OBJS = cache.o          \
+              config.o         \
               disk.o           \
               fatdev.o         \
               fileio.o         \
@@ -31,5 +32,18 @@ COMMON_OBJS = cache.o          \
               steps.o          \
               util.o           \
 
-EXTRA_SRC_DIRS = minoca
+CONFIG_FILES := config/bbone.txt    \
+                config/common.txt   \
+                config/galileo.txt  \
+                config/instarv6.txt \
+                config/instarv7.txt \
+                config/instx86.txt  \
+                config/integrd.txt  \
+                config/panda.txt    \
+                config/pandausb.txt \
+                config/pc.txt       \
+                config/pctiny.txt   \
+                config/rpi.txt      \
+                config/rpi2.txt     \
+                config/veyron.txt   \
 

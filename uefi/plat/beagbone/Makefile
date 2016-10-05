@@ -30,7 +30,6 @@ BINPLACE = bin
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = emptyrd
 RAMDISK_O = ramdisk.o
 
 OBJS += clock.o                 \
@@ -65,7 +64,7 @@ EXTRA_SRC_DIRS = armv7
 
 ifeq ($(BINARY), bbonefw.elf)
 
-RAMDISK_O = emptyrd.o
+RAMDISK_O = $(OBJROOT)/os/uefi/core/emptyrd.o
 
 DIRS = acpi     \
        init     \
@@ -84,21 +83,12 @@ CFLAGS += -fshort-wchar
 FWVOL_IMAGES = $(RTBASE) runtime/bbonert.ffs acpi/acpi.ffs
 
 bbonefwv.o: bbonefwv
-	@echo Objectifying - $(notdir $<)
-	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
 
 bbonefwv: $(FWVOL_IMAGES)
 	@echo Generating - $@
 	@genfv -o $@ $^
 
-$(RAMDISK_O): $(RAMDISK)
-	@echo Objectifying - $(notdir $<)
-	@cp $^ ramdisk
-	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
-
-emptyrd:
-	@echo Minoca > $@
-
+ramdisk.o: ramdisk
 runtime/bbonert.ffs: runtime
 acpi/acpi.ffs: acpi
 

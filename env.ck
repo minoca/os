@@ -49,7 +49,6 @@ global_config = {
     "VARIANT": variant,
     "BUILD_CC": getenv("BUILD_CC"),
     "BUILD_AR": getenv("BUILD_AR"),
-    "BUILD_OBJCOPY": getenv("BUILD_OBJCOPY"),
     "BUILD_STRIP": getenv("BUILD_STRIP"),
     "CC": getenv("CC"),
     "AR": getenv("AR"),
@@ -79,31 +78,6 @@ assert(((build_arch == "x86") || (build_arch == "armv7") ||
        "Unknown build architecture");
 
 assert(((debug == "dbg") || (debug == "rel")), "Invalid debug setting");
-
-//
-// Set up build architecture-specific globals.
-//
-
-build_bfd_arch = "";
-build_obj_format = "";
-if (build_arch == "x86") {
-    build_bfd_arch = "i386";
-    build_obj_format = "elf32-i386";
-    if (build_os == "Windows") {
-        build_obj_format = "pe-i386";
-    }
-
-} else if ((build_arch == "armv7") || (build_arch == "armv6")) {
-    build_bfd_arch = "arm";
-    build_obj_format = "elf32-littlearm";
-
-} else if (build_arch == "x64") {
-    build_bfd_arch = "x86-64";
-    build_obj_format = "elf64-x86-64";
-
-} else {
-    print("Set build_bfd_arch and build_obj_format for new architecture.\n");
-}
 
 //
 // Set up target architecture-specific globals.
@@ -138,7 +112,6 @@ if (arch == "x86") {
 
 global_config["BUILD_CC"] ?= "gcc";
 global_config["BUILD_AR"] ?= "ar";
-global_config["BUILD_OBJCOPY"] ?= "objcopy";
 global_config["BUILD_STRIP"] ?= "strip";
 global_config["RCC"] ?= "windres";
 global_config["IASL"] ?= "iasl";
@@ -198,17 +171,6 @@ objcopy_flags ?= [
     "-B " + bfd_arch
 ];
 
-build_objcopy_flags ?= [
-    "--rename-section .data=.rodata,alloc,load,data,contents,readonly",
-    "-I binary",
-    "-O " + build_obj_format,
-    "-B " + build_bfd_arch
-];
-
-if (build_os == "Windows") {
-    build_objcopy_flags += ["--prefix-symbols=_"];
-}
-
 //
 // Set a default target compiler if one was not set. On Minoca building its own
 // architecture, use the native compiler.
@@ -217,7 +179,6 @@ if (build_os == "Windows") {
 if ((build_os == "Minoca") && (build_arch == arch)) {
     global_config["CC"] ?= global_config["BUILD_CC"];
     global_config["AR"] ?= global_config["BUILD_AR"];
-    global_config["OBJCOPY"] ?= global_config["BUILD_OBJCOPY"];
     global_config["STRIP"] ?= global_config["BUILD_STRIP"];
 
 } else {
@@ -236,7 +197,6 @@ global_config["BUILD_BASE_CFLAGS"] = build_cflags;
 global_config["BUILD_BASE_CPPFLAGS"] = build_cppflags;
 global_config["BUILD_BASE_LDFLAGS"] = ldflags;
 global_config["BUILD_BASE_ASFLAGS"] = asflags;
-global_config["BUILD_OBJCOPY_FLAGS"] = build_objcopy_flags;
 global_config["IASL_FLAGS"] = ["-we"];
 
 //
@@ -707,11 +667,6 @@ function flattened_binary(params) {
     params["type"] = "target";
     params["tool"] = "objcopy";
     flags = "OBJCOPY_FLAGS";
-    if (get(params, "build")) {
-        params["tool"] = "build_objcopy";
-        flags = "BUILD_OBJCOPY_FLAGS";
-    }
-
     add_config(params, flags, "-O binary");
     if (get(params, "binplace")) {
         params["nostrip"] = TRUE;
@@ -789,14 +744,8 @@ function uefi_fwvol_o(name, ffs) {
         "tool": "genfv"
     };
 
-    fwv_o = {
-        "label": fwv_name + ".o",
-        "inputs": [":" + fwv_name],
-        "tool": "objcopy",
-        "config": {"OBJCOPY_FLAGS": global_config["OBJCOPY_FLAGS"]}
-    };
-
-    return [fwv, fwv_o];
+    fwv_o = compiled_sources({"inputs": [fwv_name + ".S"]);
+    return [fwv] + fwv_o;
 }
 
 //

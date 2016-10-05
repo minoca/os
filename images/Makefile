@@ -115,9 +115,9 @@ $(BINROOT)/bbone.img: $(INSTALL_IMAGE)
 
 $(BINROOT)/integ.img: $(BINROOT)/integrd.img
 	@echo Building - $(notdir $@)
+	@cp $^ $(OBJROOT)/os/uefi/plat/integcp/ramdisk
 	@cd $(SRCROOT)/os/uefi/plat/integcp && \
-	    $(MAKE) RAMDISK=$< BINARY=integ.img \
-	    SRCDIR=$(SRCROOT)/os/uefi/plat/integcp
+	    $(MAKE) BINARY=integ.img SRCDIR=$(SRCROOT)/os/uefi/plat/integcp
 
 $(BINROOT)/integrd.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
@@ -131,9 +131,9 @@ $(BINROOT)/panda.img: $(INSTALL_IMAGE)
 
 $(BINROOT)/pandausb.img: $(BINROOT)/pandard.img
 	@echo Building - $(notdir $@)
+	@cp $^ $(OBJROOT)/os/uefi/plat/panda/ramdisk
 	@cd $(SRCROOT)/os/uefi/plat/panda && \
-	    $(MAKE) RAMDISK=$< BINARY=pandafw_usb.elf \
-	    SRCDIR=$(SRCROOT)/os/uefi/plat/panda
+	    $(MAKE) BINARY=pandafw_usb.elf SRCDIR=$(SRCROOT)/os/uefi/plat/panda
 
 $(BINROOT)/pandard.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)

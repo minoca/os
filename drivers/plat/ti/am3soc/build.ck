@@ -25,7 +25,7 @@ function build() {
     fw_name = "am3cm3fw";
     sources = [
         "am3soc.c",
-        ":" + fw_name + ".o",
+        "am3cm3fw.S",
         "mailbox.c",
         "sleep.S"
     ];
@@ -36,17 +36,6 @@ function build() {
     };
 
     entries = driver(drv);
-
-    //
-    // Objectify the firmware into the driver.
-    //
-
-    fw_o = {
-        "label": fw_name + ".o",
-        "inputs": [fw_name + ".bin"]
-    };
-
-    entries += objectified_binary(fw_o);
     return entries;
 }
 

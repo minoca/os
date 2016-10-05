@@ -122,7 +122,6 @@ VPATH += :$(SRCDIR):
 
 CC_FOR_BUILD ?= gcc
 AR_FOR_BUILD ?= ar
-OBJCOPY_FOR_BUILD ?= objcopy
 STRIP_FOR_BUILD ?= strip
 
 ifeq ($(OS), $(filter Windows_NT Minoca,$(OS)))
@@ -306,7 +305,7 @@ endif
 ## Assembler flags
 ##
 
-EXTRA_ASFLAGS += -Wa,-g
+EXTRA_ASFLAGS += -Wa,-g -Wa,-I$(SRCDIR)
 
 ##
 ## For build executables, override the names even if set on the command line.
@@ -315,7 +314,6 @@ EXTRA_ASFLAGS += -Wa,-g
 ifneq (, $(BUILD))
 override CC = $(CC_FOR_BUILD)
 override AR = $(AR_FOR_BUILD)
-override OBJCOPY = $(OBJCOPY_FOR_BUILD)
 override STRIP = $(STRIP_FOR_BUILD)
 override CFLAGS = -Wall -Werror -O1
 override BFD_ARCH = $(BUILD_BFD_ARCH)

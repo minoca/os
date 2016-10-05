@@ -26,10 +26,8 @@ BINARYTYPE = so
 
 BINPLACE = bin
 
-FW = am3cm3fw
-
 OBJS = am3soc.o   \
-       $(FW).o    \
+       am3cm3fw.o \
        mailbox.o  \
        sleep.o    \
 
@@ -39,11 +37,5 @@ DYNLIBS = $(BINROOT)/kernel              \
 
 include $(SRCROOT)/os/minoca.mk
 
-am3cm3fw.o: $(FW_BIN)
-	@echo Including - $(notdir $<)
-	@cp $< $(CURDIR) && \
-	   $(OBJCOPY) --rename-section \
-	       .data=.rodata,alloc,load,data,contents,readonly -B arm -I binary \
-	       -O elf32-littlearm $(FW_BIN) $@ && \
-	   rm $(FW_BIN)
+am3cm3fw.o: am3cm3fw.bin
 
