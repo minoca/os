@@ -45,10 +45,10 @@ cd $SRCROOT/$ARCH$VARIANT$DEBUG
 ## the archive.
 ##
 
-cp "./bin/kernel-version" "./bin/packages/"
+cp "./bin/kernel-version" "./bin/packages"
 if test -d "./bin/packages"; then
-    rm -rf "$ARCHIVE_LOCATION/packages/"
-    mv "./bin/packages/" "$ARCHIVE_LOCATION/"
+    rm -rf "$ARCHIVE_LOCATION/packages"
+    mv "./bin/packages" "$ARCHIVE_LOCATION"
 fi
 
 ##

@@ -107,7 +107,7 @@ mv ./bin "$BINROOT"
 
 DEBUGROOT="$SRCROOT/x86$DEBUG/tools/bin"
 for file in debugui.exe debug.exe kexts.dll dbgext.a msetup.exe; do
-    cp -v $DEBUGROOT/$file  "$BINROOT/"
+    cp -v $DEBUGROOT/$file  "$BINROOT"
 done
 
 ##
