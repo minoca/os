@@ -4,7 +4,7 @@ If you're looking for a way to contribute to Minoca OS, but aren't sure where to
 
 If you're serious about tackling one of the medium or hard tasks, feel free to shoot us an email first. We'll be able to provide a more detailed description, some context, and can offer suggestions towards getting started on any particular task.
 
-Questions or patches can be submitted to dev@minocacorp.com. Good luck!
+Questions or patches can be submitted to minoca-dev@googlegroups.com. Good luck!
 
 ### General
  - Fix a bug
