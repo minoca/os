@@ -1527,7 +1527,7 @@ Return Value:
         ListIndex = Index->Integer.Value;
         if ((ListIndex < 0) || (ListIndex >= MAX_ULONG)) {
             fprintf(stderr,
-                    "Invalid list index %I64d.\n",
+                    "Invalid list index %lld.\n",
                     ListIndex);
 
             Status = EINVAL;
@@ -1547,7 +1547,7 @@ Return Value:
 
             if (ChalkIsNodeAssignmentLValue(Interpreter, Node) == FALSE) {
                 fprintf(stderr,
-                        "Error: List index %d used before assignment.\n",
+                        "Error: List index %lld used before assignment.\n",
                         ListIndex);
 
                 Status = EINVAL;

@@ -467,7 +467,7 @@ Return Value:
         }
 
         if (Failed != FALSE) {
-            printf("Failed SHA1 at size %d:\nExpect: ", Size);
+            printf("Failed SHA1 at size %lu:\nExpect: ", Size);
             for (HashIndex = 0; HashIndex < SHA1_HASH_SIZE; HashIndex += 1) {
                 printf("%02X ", TestCrypSha1Answers[Index][HashIndex]);
             }
@@ -532,7 +532,7 @@ Return Value:
         }
 
         if (Failed != FALSE) {
-            printf("Failed SHA256 at size %d:\nExpect: ", Size);
+            printf("Failed SHA256 at size %lu:\nExpect: ", Size);
             for (HashIndex = 0; HashIndex < SHA256_HASH_SIZE; HashIndex += 1) {
                 printf("%02X ", TestCrypSha256Answers[Index][HashIndex]);
             }
@@ -600,7 +600,7 @@ Return Value:
         }
 
         if (Failed != FALSE) {
-            printf("Failed SHA512 at size %d:\nExpect: ", Size);
+            printf("Failed SHA512 at size %lu:\nExpect: ", Size);
             for (HashIndex = 0; HashIndex < SHA512_HASH_SIZE; HashIndex += 1) {
                 printf("%02X ", TestCrypSha512Answers[Index][HashIndex]);
             }
@@ -668,7 +668,7 @@ Return Value:
         }
 
         if (Failed != FALSE) {
-            printf("Failed MD5 at size %d:\nExpect: ", Size);
+            printf("Failed MD5 at size %lu:\nExpect: ", Size);
             for (HashIndex = 0; HashIndex < SHA1_HASH_SIZE; HashIndex += 1) {
                 printf("%02X ", TestCrypSha1Answers[Index][HashIndex]);
             }
@@ -771,7 +771,7 @@ Return Value:
     for (Index = 0; Index < SHA512_HASH_SIZE; Index += 1) {
         if (PlainBuffer[Index] != TestCrypSha512Answers[0][Index]) {
             Failures += 1;
-            printf("RSA %d: %02x %02x",
+            printf("RSA %lu: %02x %02x",
                    Index,
                    PlainBuffer[Index],
                    TestCrypSha512Answers[0][Index]);
@@ -781,7 +781,7 @@ Return Value:
 TestRsaEnd:
     CyRsaDestroyContext(&RsaContext);
     if (Failures != 0) {
-        printf("%d failures in RSA test.\n");
+        printf("%d failures in RSA test.\n", Failures);
     }
 
     return Failures;

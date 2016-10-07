@@ -1788,10 +1788,10 @@ Return Value:
            "**********************************************************"
            "**********************\n\n"
            "Error Code: %s (0x%x)\n"
-           "Parameter1: 0x%08I64x\n"
-           "Parameter2: 0x%08I64x\n"
-           "Parameter3: 0x%08I64x\n"
-           "Parameter4: 0x%08I64x\n\n",
+           "Parameter1: 0x%08llx\n"
+           "Parameter2: 0x%08llx\n"
+           "Parameter3: 0x%08llx\n"
+           "Parameter4: 0x%08llx\n\n",
            CrashCodeString,
            CrashCode,
            Parameter1,

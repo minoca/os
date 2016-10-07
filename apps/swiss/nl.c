@@ -637,7 +637,9 @@ Return Value:
             Context->Line += Context->Increment;
 
         } else {
-            printf("%*s", Context->Width + Context->SeparatorLength, "");
+            printf("%*s",
+                   (int)(Context->Width + Context->SeparatorLength),
+                   "");
         }
 
         printf("%s", Line);

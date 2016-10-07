@@ -24,7 +24,7 @@ Environment:
 ## ---------------------------------------------------------------- Definitions
 ##
 
-#ifdef __WINNT
+#if defined(__WINNT) || defined(__APPLE__)
 
 #define LABEL(_Name) _##_Name
 

@@ -441,7 +441,7 @@ Return Value:
                 printf("%s/", File->SourceDirectory);
             }
 
-            printf("%s, 0x%I64x - 0x%I64x\n",
+            printf("%s, 0x%llx - 0x%llx\n",
                    File->SourceFile,
                    File->StartAddress,
                    File->EndAddress);
@@ -501,7 +501,7 @@ Return Value:
                     (Relation->Array.Maximum != 0LL)) {
 
                     if ((Options & TDWARF_OPTION_PRINT_TYPES) != 0) {
-                        printf(" Array [%I64i, %I64i]",
+                        printf(" Array [%lli, %lli]",
                                Relation->Array.Minimum,
                                Relation->Array.Maximum);
                     }
@@ -597,7 +597,7 @@ Return Value:
                     if (MemberType == NULL) {
                         printf("Error: Unable to resolve structure member "
                                "type from (%s, %d).\n",
-                               Member->TypeFile,
+                               Member->TypeFile->SourceFile,
                                Member->TypeNumber);
 
                         Status = EINVAL;
@@ -641,7 +641,7 @@ Return Value:
                     }
 
                     if ((Options & TDWARF_OPTION_PRINT_TYPES) != 0) {
-                        printf("      %s = %I64d\n",
+                        printf("      %s = %lld\n",
                                EnumerationMember->Name,
                                EnumerationMember->Value);
                     }
@@ -704,8 +704,8 @@ Return Value:
                     ReturnTypeSource = "NONE";
                 }
 
-                printf("   Function %d: (%s, %d) %s: 0x%08I64x - "
-                       "0x%08I64x\n",
+                printf("   Function %d: (%s, %d) %s: 0x%08llx - "
+                       "0x%08llx\n",
                        FunctionCount,
                        ReturnTypeSource,
                        Function->ReturnTypeNumber,
@@ -823,7 +823,7 @@ Return Value:
         while (LineEntry != &(File->SourceLinesHead)) {
             Line = LIST_VALUE(LineEntry, SOURCE_LINE_SYMBOL, ListEntry);
             if ((Options & TDWARF_OPTION_PRINT_LINES) != 0) {
-                printf("   Line %u: %s/%s:%d: %I64x - %I64x\n",
+                printf("   Line %u: %s/%s:%d: %llx - %llx\n",
                        LineCount,
                        Line->ParentSource->SourceDirectory,
                        Line->ParentSource->SourceFile,
@@ -963,14 +963,14 @@ Return Value:
                                       Variable->Location.Indirect.Register);
 
         if (Print != FALSE) {
-            printf(" [%s%+I64d]", Register, Variable->Location.Indirect.Offset);
+            printf(" [%s%+lld]", Register, Variable->Location.Indirect.Offset);
         }
 
         break;
 
     case DataLocationAbsoluteAddress:
         if (Print != FALSE) {
-            printf(" [0x%I64x]", Variable->Location.Address);
+            printf(" [0x%llx]", Variable->Location.Address);
         }
 
         break;
@@ -1032,7 +1032,7 @@ Return Value:
                 Length = DwarfpRead2(&LocationList);
                 LocationList += Length;
                 if (Print != FALSE) {
-                    printf("\n       [%I64x - %I64x (%d)] ",
+                    printf("\n       [%llx - %llx (%d)] ",
                            LocationStart + Base,
                            LocationEnd + Base,
                            Length);
@@ -1057,8 +1057,7 @@ Return Value:
 
                 if (Status != 0) {
                     fprintf(stderr,
-                            "Error: Failed to get DWARF location of %s: "
-                            "Locations %I64x - %I64x\n",
+                            "Error: Failed to get DWARF location of %s\n",
                             Variable->Name);
 
                     return Status;
@@ -1113,7 +1112,7 @@ Return Value:
 
     if (Variable->MinimumValidExecutionAddress != 0) {
         if (Print != FALSE) {
-            printf(" Valid at %I64x", Variable->MinimumValidExecutionAddress);
+            printf(" Valid at %llx", Variable->MinimumValidExecutionAddress);
         }
     }
 
@@ -1176,7 +1175,7 @@ Return Value:
         Table = Context->Sections.Frame.Data;
         End = Table + Context->Sections.Frame.Size;
         if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
-            printf(".debug_frame section, %d bytes\n", End - Table);
+            printf(".debug_frame section, %ld bytes\n", End - Table);
         }
 
         EhFrame = FALSE;
@@ -1185,7 +1184,7 @@ Return Value:
         Table = Context->Sections.EhFrame.Data;
         End = Table + Context->Sections.EhFrame.Size;
         if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
-            printf(".eh_frame section, %d bytes\n", End - Table);
+            printf(".eh_frame section, %ld bytes\n", End - Table);
         }
 
         EhFrame = TRUE;
@@ -1216,7 +1215,7 @@ Return Value:
         if (Status != 0) {
             if (Status == EAGAIN) {
                 if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
-                    printf(" Zero terminator Offset %x.\n\n",
+                    printf(" Zero terminator Offset %lx.\n\n",
                            ObjectStart - Start);
                 }
 
@@ -1228,15 +1227,15 @@ Return Value:
 
         if (IsCie != FALSE) {
             if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
-                printf(" CIE Offset %x Length %I64x\n"
+                printf(" CIE Offset %lx Length %llx\n"
                        "  Version: %d\n"
                        "  Augmentation: \"%s\"\n"
                        "  Address Size: %d\n"
                        "  Segment Size: %d\n"
-                       "  Code Alignment Factor: %I64u\n"
-                       "  Data Alignment Factor: %I64d\n"
-                       "  Return Address Register: %I64u\n"
-                       "  Augmentation Length: %I64u\n"
+                       "  Code Alignment Factor: %llu\n"
+                       "  Data Alignment Factor: %lld\n"
+                       "  Return Address Register: %llu\n"
+                       "  Augmentation Length: %llu\n"
                        "  Language Encoding: ",
                        ObjectStart - Start,
                        Cie.UnitLength,
@@ -1261,8 +1260,8 @@ Return Value:
 
         } else {
             if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
-                printf("  FDE Offset %x Length %I64x CIE %I64d "
-                       "PC %I64x - %I64x\n",
+                printf("  FDE Offset %lx Length %llx CIE %lld "
+                       "PC %llx - %llx\n",
                        ObjectStart - Start,
                        Fde.Length,
                        Fde.CiePointer,
@@ -1274,7 +1273,7 @@ Return Value:
             Status = DwarfStackUnwind(Symbols, Pc, &Frame);
             if (Status != 0) {
                 fprintf(stderr,
-                        "Error: Failed to unwind stack for PC %I64x.\n",
+                        "Error: Failed to unwind stack for PC %llx.\n",
                         Pc);
 
                 goto TestUnwindEnd;
@@ -1437,7 +1436,7 @@ Return Value:
     while (Location != NULL) {
         switch (Location->Form) {
         case DwarfLocationMemory:
-            printf(" [%I64x]", Location->Value.Address);
+            printf(" [%llx]", Location->Value.Address);
             break;
 
         case DwarfLocationRegister:
@@ -1458,7 +1457,7 @@ Return Value:
             break;
 
         case DwarfLocationKnownValue:
-            printf(" Known Value 0x%I64x", Location->Value.Value);
+            printf(" Known Value 0x%llx", Location->Value.Value);
             break;
 
         case DwarfLocationUndefined:
@@ -1475,7 +1474,7 @@ Return Value:
         if (Location->BitSize != 0) {
             printf(" Piece %d bits", Location->BitSize);
             if (Location->BitOffset != 0) {
-                printf(" Offset %I64d bits", Location->BitOffset);
+                printf(" Offset %d bits", Location->BitOffset);
             }
         }
 

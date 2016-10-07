@@ -67,7 +67,7 @@ Author:
 // in the kernel.
 //
 
-typedef long long intmax_t;
+typedef __INTMAX_TYPE__ intmax_t;
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
 typedef __SIZE_TYPE__ size_t;
 

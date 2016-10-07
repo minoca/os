@@ -24,16 +24,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#define RTL_API
-#define KERNEL_API
-
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/lib/rtl.h>
-
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -193,6 +187,19 @@ typedef struct _MKUBOOT_PROPERTY_ENTRY {
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+//
+// Borrow the CRC32 routine from EFI core. This program can't link in Rtl
+// because there are naming conflicts with some EFI names (like INTN).
+//
+
+EFIAPI
+EFI_STATUS
+EfiCoreCalculateCrc32 (
+    VOID *Data,
+    UINTN DataSize,
+    UINT32 *Crc32
+    );
+
 int
 MupOpenFiles (
     PMKUBOOT_CONTEXT Context
@@ -319,7 +326,7 @@ Return Value:
     int Result;
 
     srand(time(NULL));
-    RtlZeroMemory(&Context, sizeof(MKUBOOT_CONTEXT));
+    memset(&Context, 0, sizeof(MKUBOOT_CONTEXT));
     Format = MkUBootFormatLegacy;
     Context.Architecture = MKUBOOT_ARCHITECTURE_X86;
 
@@ -597,7 +604,7 @@ Return Value:
     if (BytesRead != InputFileSize) {
         fprintf(stderr,
                 "mkuboot: Unable to read \"%s\". Read %ld bytes, expected "
-                "%ld.\n",
+                "%d.\n",
                 Context->InputFileName,
                 BytesRead,
                 InputFileSize);
@@ -723,30 +730,30 @@ Return Value:
     // Fill out the U-Boot header.
     //
 
-    RtlZeroMemory(&UBootHeader, sizeof(UBOOT_HEADER));
-    UBootHeader.Magic = RtlByteSwapUlong(UBOOT_MAGIC);
-    UBootHeader.CreationTimestamp = RtlByteSwapUlong(time(NULL));
-    UBootHeader.DataSize = RtlByteSwapUlong(Context->InputFileSize);
-    UBootHeader.DataLoadAddress = RtlByteSwapUlong(Context->LoadAddress);
-    UBootHeader.EntryPoint = RtlByteSwapUlong(Context->EntryPoint);
-    UBootHeader.DataCrc32 = RtlComputeCrc32(0,
-                                            Context->InputFileBuffer,
-                                            Context->InputFileSize);
+    memset(&UBootHeader, 0, sizeof(UBOOT_HEADER));
+    UBootHeader.Magic = htonl(UBOOT_MAGIC);
+    UBootHeader.CreationTimestamp = htonl(time(NULL));
+    UBootHeader.DataSize = htonl(Context->InputFileSize);
+    UBootHeader.DataLoadAddress = htonl(Context->LoadAddress);
+    UBootHeader.EntryPoint = htonl(Context->EntryPoint);
+    EfiCoreCalculateCrc32(Context->InputFileBuffer,
+                          Context->InputFileSize,
+                          &(UBootHeader.DataCrc32));
 
-    UBootHeader.DataCrc32 = RtlByteSwapUlong(UBootHeader.DataCrc32);
+    UBootHeader.DataCrc32 = htonl(UBootHeader.DataCrc32);
     UBootHeader.OperatingSystem = UBOOT_OS_LINUX;
     UBootHeader.Architecture = UBOOT_ARCHITECTURE_ARM;
     UBootHeader.ImageType = UBOOT_IMAGE_KERNEL;
     UBootHeader.CompressionType = UBOOT_COMPRESSION_NONE;
-    RtlStringCopy((PSTR)&UBootHeader.ImageName,
-                  Context->InputFileName,
-                  UBOOT_MAX_NAME);
+    strncpy((CHAR8 *)&UBootHeader.ImageName,
+            Context->InputFileName,
+            UBOOT_MAX_NAME);
 
-    UBootHeader.HeaderCrc32 = RtlComputeCrc32(0,
-                                              &UBootHeader,
-                                              sizeof(UBOOT_HEADER));
+    EfiCoreCalculateCrc32(&UBootHeader,
+                          sizeof(UBOOT_HEADER),
+                          &(UBootHeader.HeaderCrc32));
 
-    UBootHeader.HeaderCrc32 = RtlByteSwapUlong(UBootHeader.HeaderCrc32);
+    UBootHeader.HeaderCrc32 = htonl(UBootHeader.HeaderCrc32);
 
     //
     // Write out the U-Boot header.
@@ -759,7 +766,7 @@ Return Value:
 
     if (BytesWritten != sizeof(UBOOT_HEADER)) {
         fprintf(stderr,
-                "mkuboot: Needed to write %d byte U-Boot header, wrote %d "
+                "mkuboot: Needed to write %ld byte U-Boot header, wrote %ld "
                 "bytes.\n",
                 sizeof(UBOOT_HEADER),
                 BytesWritten);
@@ -909,7 +916,7 @@ Return Value:
     if (BytesWritten != StringsSize) {
         fprintf(stderr,
                 "mkuboot: Failed to write FIT strings. Write %ld bytes, "
-                "expected %ld.\n",
+                "expected %d.\n",
                 BytesWritten,
                 StringsSize);
 
@@ -939,21 +946,19 @@ Return Value:
     // Fill out the U-Boot FIT header.
     //
 
-    RtlZeroMemory(&UBootFitHeader, sizeof(UBOOT_FIT_HEADER));
-    UBootFitHeader.Magic = RtlByteSwapUlong(UBOOT_FIT_MAGIC);
-    UBootFitHeader.TotalSize = RtlByteSwapUlong(TotalSize);
-    UBootFitHeader.StructuresOffset = RtlByteSwapUlong(StructuresOffset);
-    UBootFitHeader.StringsOffset = RtlByteSwapUlong(StringsOffset);
-    UBootFitHeader.MemoryReserveMapOffset =
-                                      RtlByteSwapUlong(MemoryReserveMapOffset);
-
-    UBootFitHeader.Version = RtlByteSwapUlong(UBOOT_FIT_VERSION);
+    memset(&UBootFitHeader, 0, sizeof(UBOOT_FIT_HEADER));
+    UBootFitHeader.Magic = htonl(UBOOT_FIT_MAGIC);
+    UBootFitHeader.TotalSize = htonl(TotalSize);
+    UBootFitHeader.StructuresOffset = htonl(StructuresOffset);
+    UBootFitHeader.StringsOffset = htonl(StringsOffset);
+    UBootFitHeader.MemoryReserveMapOffset = htonl(MemoryReserveMapOffset);
+    UBootFitHeader.Version = htonl(UBOOT_FIT_VERSION);
     UBootFitHeader.LastCompatibleVersion =
-                           RtlByteSwapUlong(UBOOT_FIT_LAST_COMPATIBLE_VERSION);
+                                 htonl(UBOOT_FIT_LAST_COMPATIBLE_VERSION);
 
     UBootFitHeader.BootCpuId = 0;
-    UBootFitHeader.StringsSize = RtlByteSwapUlong(StringsSize);
-    UBootFitHeader.StructuresSize = RtlByteSwapUlong(StructuresSize);
+    UBootFitHeader.StringsSize = htonl(StringsSize);
+    UBootFitHeader.StructuresSize = htonl(StructuresSize);
 
     //
     // Write out the U-Boot FIT header back at the beginning of the file.
@@ -972,8 +977,8 @@ Return Value:
 
     if (BytesWritten != sizeof(UBOOT_FIT_HEADER)) {
         fprintf(stderr,
-                "mkuboot: Needed to write %d byte U-Boot FIT header, wrote %d "
-                "bytes.\n",
+                "mkuboot: Needed to write %ld byte U-Boot FIT header, "
+                "wrote %ld bytes.\n",
                 sizeof(UBOOT_FIT_HEADER),
                 BytesWritten);
 
@@ -1032,7 +1037,7 @@ Return Value:
     Size = 0;
     for (Index = 0; Index < MkUBootPropertyCount; Index += 1) {
         PropertyEntry = &(MkUBootProperties[Index]);
-        Length = RtlStringLength(PropertyEntry->Name) + 1;
+        Length = strlen(PropertyEntry->Name) + 1;
         Size += Length;
     }
 
@@ -1051,8 +1056,8 @@ Return Value:
     for (Index = 0; Index < MkUBootPropertyCount; Index += 1) {
         PropertyEntry = &(MkUBootProperties[Index]);
         PropertyEntry->Offset = Offset;
-        Length = RtlStringLength(PropertyEntry->Name) + 1;
-        RtlCopyMemory(Buffer + Offset, PropertyEntry->Name, Length);
+        Length = strlen(PropertyEntry->Name) + 1;
+        memcpy(Buffer + Offset, PropertyEntry->Name, Length);
         Offset += Length;
     }
 
@@ -1134,8 +1139,8 @@ Return Value:
     CHAR8 *String;
     UINT32 Timestamp;
 
-    EndTag = RtlByteSwapUlong(UBOOT_FIT_TAG_END);
-    EndNodeTag = RtlByteSwapUlong(UBOOT_FIT_TAG_NODE_END);
+    EndTag = htonl(UBOOT_FIT_TAG_END);
+    EndNodeTag = htonl(UBOOT_FIT_TAG_NODE_END);
 
     //
     // Write the root node.
@@ -1150,7 +1155,7 @@ Return Value:
     // Write the root's timestamp.
     //
 
-    Timestamp = RtlByteSwapUlong(time(NULL));
+    Timestamp = htonl(time(NULL));
     Result = MupWriteProperty(Context,
                               MkUBootPropertyTimestamp,
                               &Timestamp,
@@ -1260,7 +1265,7 @@ Return Value:
         goto FitWriteStructuresEnd;
     }
 
-    Address = RtlByteSwapUlong(Context->LoadAddress);
+    Address = htonl(Context->LoadAddress);
     Result = MupWriteProperty(Context,
                               MkUBootPropertyLoadAddress,
                               &Address,
@@ -1270,7 +1275,7 @@ Return Value:
         goto FitWriteStructuresEnd;
     }
 
-    Address = RtlByteSwapUlong(Context->EntryPoint);
+    Address = htonl(Context->EntryPoint);
     Result = MupWriteProperty(Context,
                               MkUBootPropertyEntryPoint,
                               &Address,
@@ -1461,9 +1466,9 @@ Return Value:
         goto WriteNodeStartEnd;
     }
 
-    RtlZeroMemory(Node, NodeSize);
-    Node->Tag = RtlByteSwapUlong(UBOOT_FIT_TAG_NODE_START);
-    RtlCopyMemory((Node + 1), Name, NameLength);
+    memset(Node, 0, NodeSize);
+    Node->Tag = htonl(UBOOT_FIT_TAG_NODE_START);
+    memcpy((Node + 1), Name, NameLength);
     BytesWritten = fwrite(Node, 1, NodeSize, Context->OutputFile);
     if (BytesWritten != NodeSize) {
         Result = 1;
@@ -1527,13 +1532,13 @@ Return Value:
         goto WritePropertyEnd;
     }
 
-    RtlZeroMemory(FitProperty, FitPropertySize);
-    FitProperty->Tag = RtlByteSwapUlong(UBOOT_FIT_TAG_PROPERTY);
-    FitProperty->Size = RtlByteSwapUlong(DataSize);
-    StringOffset = RtlByteSwapUlong(MkUBootProperties[Property].Offset);
+    memset(FitProperty, 0, FitPropertySize);
+    FitProperty->Tag = htonl(UBOOT_FIT_TAG_PROPERTY);
+    FitProperty->Size = htonl(DataSize);
+    StringOffset = htonl(MkUBootProperties[Property].Offset);
     FitProperty->StringOffset = StringOffset;
     if (DataSize != 0) {
-        RtlCopyMemory((FitProperty + 1), Data, DataSize);
+        memcpy((FitProperty + 1), Data, DataSize);
     }
 
     BytesWritten = fwrite(FitProperty, 1, FitPropertySize, Context->OutputFile);

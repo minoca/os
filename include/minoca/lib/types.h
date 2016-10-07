@@ -77,18 +77,26 @@ Author:
 // Error out if the architecture is unknown.
 //
 
-#ifdef __ELF__
+#ifdef __WINNT__
+
+#define __DLLIMPORT __declspec(dllimport)
+#define __DLLEXPORT __declspec(dllexport)
+#define __DLLPROTECTED __DLLEXPORT
+
+#else
 
 #define __DLLIMPORT __attribute__ ((visibility ("default")))
 #define __DLLEXPORT __attribute__ ((visibility ("default")))
+
+#ifdef __ELF__
+
 #define __DLLPROTECTED __attribute__ ((visibility ("protected")))
 
 #else
 
-#define __DLLIMPORT __declspec(dllimport)
-#define __DLLEXPORT __declspec(dllexport)
-#define __DLLPROTECTED __declspec(dllexport)
+#define __DLLPROTECTED __DLLEXPORT
 
+#endif
 #endif
 
 #if defined(__i386)
@@ -133,20 +141,11 @@ typedef unsigned int UINT, *PUINT;
 typedef __WINT_TYPE__ WINT, *PWINT;
 typedef int LONG, *PLONG;
 typedef unsigned int ULONG, *PULONG;
-typedef long long LONGLONG, *PLONGLONG;
-typedef unsigned long long ULONGLONG, *PULONGLONG;
+typedef __INT64_TYPE__ LONGLONG, *PLONGLONG;
+typedef __UINT64_TYPE__ ULONGLONG, *PULONGLONG;
 
-#if defined(__amd64)
-
-typedef LONGLONG INTN, *PINTN;
-typedef ULONGLONG UINTN, *PUINTN;
-
-#else
-
-typedef LONG INTN, *PINTN;
-typedef ULONG UINTN, *PUINTN;
-
-#endif
+typedef __INTPTR_TYPE__ INTN, *PINTN;
+typedef __UINTPTR_TYPE__ UINTN, *PUINTN;
 
 typedef unsigned long long PHYSICAL_ADDRESS, *PPHYSICAL_ADDRESS;
 

@@ -473,7 +473,7 @@ Return Value:
     BOOL Assign;
     PCK_AST_NODE Expression;
     PLEXER_TOKEN MethodToken;
-    CK_SYMBOL Op;
+    CK_OPCODE Op;
     CK_SYMBOL Operator;
     PLEXER_TOKEN OperatorToken;
     CK_FUNCTION_SIGNATURE Signature;

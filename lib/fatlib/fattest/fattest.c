@@ -283,7 +283,7 @@ Return Value:
                            &FileToken);
 
     if (!KSUCCESS(Status)) {
-        printf("Error: Unable to open %s (ID %I64d) in the output image."
+        printf("Error: Unable to open %s (ID %lld) in the output image."
                "Status %d\n",
                TEST_FILE_NAME,
                Properties.FileId,
@@ -319,7 +319,7 @@ Return Value:
                           &BytesWritten);
 
     if ((!KSUCCESS(Status)) || (BytesWritten != TEST_FILE_SIZE)) {
-        printf("Error: %d bytes were written to file \"%s\", but the "
+        printf("Error: %lu bytes were written to file \"%s\", but the "
                "original file size is %d. Status = %d.\n",
                BytesWritten,
                TEST_FILE_NAME,
@@ -397,7 +397,7 @@ Return Value:
                               &BytesWritten);
 
         if ((!KSUCCESS(Status)) || (BytesWritten != BLOCK_SIZE)) {
-            printf("Error: %d bytes were written to file \"%s\", but the "
+            printf("Error: %lu bytes were written to file \"%s\", but the "
                    "block size is %d. Status = %d.\n",
                    BytesWritten,
                    TEST_FILE_NAME,
@@ -435,7 +435,7 @@ Return Value:
 
         if ((!KSUCCESS(Status)) || (BytesRead != BLOCK_SIZE)) {
             printf("Attempting to read block %x immediately after writing it "
-                   "read %d bytes, status %d.\n",
+                   "read %lu bytes, status %d.\n",
                    BlockIndex,
                    BytesRead,
                    Status);
@@ -453,7 +453,7 @@ Return Value:
              FillIndex += 1) {
 
             if (PageBuffer[FillIndex] != PageValue) {
-                printf("Error: Immediately after writing block %d, offset %d "
+                printf("Error: Immediately after writing block %d, offset %lu "
                        "had %x in it instead of %x\n",
                        BlockIndex,
                        FillIndex * sizeof(ULONG),

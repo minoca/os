@@ -29,6 +29,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "setup.h"
 
@@ -938,10 +939,10 @@ Return Value:
     if (BytesWritten != SETUP_CACHE_BLOCK_SIZE) {
         if (errno != 0) {
             fprintf(stderr,
-                    "Error: Write failed at offset %I64x: %d bytes "
+                    "Error: Write failed at offset %llx: %d bytes "
                     "written: %s.\n",
                     Data->Offset,
-                    BytesWritten,
+                    (int)BytesWritten,
                     strerror(errno));
 
             return -1;
@@ -962,7 +963,7 @@ Return Value:
                     Errors += 1;
                     if (Errors < 10) {
                         fprintf(stderr,
-                                "    Offset %x: Got %02x, expected %02x\n",
+                                "    Offset %lx: Got %02x, expected %02x\n",
                                 Index,
                                 ReadBytes[Index],
                                 Bytes[Index]);
@@ -979,7 +980,7 @@ Return Value:
             }
 
             fprintf(stderr,
-                    "%d errors (offsets %x - %x) at offset %I64x\n",
+                    "%ld errors (offsets %lx - %lx) at offset %llx\n",
                     Errors,
                     FirstBad,
                     LastBad,

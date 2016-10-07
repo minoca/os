@@ -902,7 +902,7 @@ Return Value:
     printf("\nConsole escape:\n"
            " l - Set line mode.\n"
            " c - Set character mode.\n"
-           " z - Suspend telnet.\n",
+           " z - Suspend telnet.\n"
            " e - Exit telnet.\n\n"
            "telnet> ");
 

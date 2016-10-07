@@ -806,7 +806,7 @@ Return Value:
 
     assert(sizeof(gid_t) == sizeof(id_t));
 
-    Result = getgrouplist(UserName, GroupId, Buffer, &Count);
+    Result = getgrouplist(UserName, GroupId, (void *)Buffer, &Count);
     if (Count == 0) {
         Result = EINVAL;
         goto GetGroupListEnd;
@@ -823,7 +823,7 @@ Return Value:
         goto GetGroupListEnd;
     }
 
-    Result = getgrouplist(UserName, GroupId, (gid_t *)Buffer, &Count);
+    Result = getgrouplist(UserName, GroupId, (void *)Buffer, &Count);
     if (Result > 0) {
         Result = 0;
     }
@@ -1419,8 +1419,18 @@ Return Value:
     Name->Version[sizeof(Name->Version) - 1] = '\0';
     strncpy(Name->Machine, UtsName.machine, sizeof(Name->Machine));
     Name->Machine[sizeof(Name->Machine) - 1] = '\0';
+
+#if defined(__APPLE__)
+
+    Name->DomainName[0] = '\0';
+
+#else
+
     strncpy(Name->DomainName, UtsName.domainname, sizeof(Name->DomainName));
     Name->DomainName[sizeof(Name->DomainName) - 1] = '\0';
+
+#endif
+
     return 0;
 }
 

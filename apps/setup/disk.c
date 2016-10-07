@@ -286,8 +286,8 @@ Return Value:
 
     if (BlockOffset > PartitionContext->BlockCount) {
         fprintf(stderr,
-                "Error: Partition specification goes out to block 0x%I64x, "
-                "but disk size is only 0x%I64x.\n",
+                "Error: Partition specification goes out to block 0x%llx, "
+                "but disk size is only 0x%llx.\n",
                 BlockOffset,
                 PartitionContext->BlockCount);
 
@@ -362,8 +362,8 @@ Return Value:
             (Start + Size < Start)) {
 
             fprintf(stderr,
-                    "Error: Partition blocks 0x%I64x + 0x%I64x bigger than "
-                    "disk size 0x%I64x (%I64dMB).\n",
+                    "Error: Partition blocks 0x%llx + 0x%llx bigger than "
+                    "disk size 0x%llx (%lldMB).\n",
                     Start,
                     Size,
                     PartitionContext->BlockCount,
@@ -469,7 +469,7 @@ Return Value:
 
         if (!KSUCCESS(Status)) {
             fprintf(stderr,
-                    "Error: Failed to clear %I64x: %d\n",
+                    "Error: Failed to clear %llx: %d\n",
                     Partitions[PartitionIndex].StartOffset + BlockIndex,
                     Status);
 
@@ -504,7 +504,7 @@ Return Value:
 
             if (!KSUCCESS(Status)) {
                 fprintf(stderr,
-                        "Error: Failed to clear %I64x: %d\n",
+                        "Error: Failed to clear %llx: %d\n",
                         Partitions[PartitionIndex].StartOffset + BlockIndex,
                         Status);
 

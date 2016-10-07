@@ -1319,7 +1319,7 @@ Return Value:
     }
 
     if (PrintTotal != FALSE) {
-        printf("total %I64d\n", TotalBlockCount);
+        printf("total %lld\n", TotalBlockCount);
     }
 
     Row = 0;
@@ -1423,7 +1423,7 @@ Return Value:
     if ((Context->Flags & LS_OPTION_INCLUDE_SERIAL_NUMBERS) != 0) {
         if (File->StatValid != FALSE) {
             Number = File->Stat.st_ino;
-            printf("%*I64u ", Context->FileNumberColumnSize - 1, Number);
+            printf("%*llu ", Context->FileNumberColumnSize - 1, Number);
 
         } else {
             printf("%*s ", Context->FileNumberColumnSize - 1, "?");
@@ -1437,7 +1437,7 @@ Return Value:
     if ((Context->Flags & LS_OPTION_PRINT_BLOCK_COUNT) != 0) {
         if (File->StatValid != FALSE) {
             Number = SwGetBlockCount(&(File->Stat));
-            printf("%*I64u ", Context->FileBlocksColumnSize - 1, Number);
+            printf("%*llu ", Context->FileBlocksColumnSize - 1, Number);
 
         } else {
             printf("%*s ", Context->FileBlocksColumnSize - 1, "?");
@@ -1458,7 +1458,7 @@ Return Value:
         LsPrintPermissions(File);
         if (File->StatValid != FALSE) {
             Number = File->Stat.st_nlink;
-            printf("%*I64u ", Context->HardLinkColumnSize - 1, Number);
+            printf("%*llu ", Context->HardLinkColumnSize - 1, Number);
 
         } else {
             printf("%*s ", Context->HardLinkColumnSize - 1, "?");
@@ -1474,7 +1474,7 @@ Return Value:
 
             } else {
                 Number = File->Stat.st_uid;
-                printf("%*I64u ", Context->OwnerColumnSize, Number);
+                printf("%*llu ", Context->OwnerColumnSize, Number);
             }
         }
 
@@ -1484,7 +1484,7 @@ Return Value:
 
             } else {
                 Number = File->Stat.st_gid;
-                printf("%*I64u ", Context->GroupColumnSize, Number);
+                printf("%*llu ", Context->GroupColumnSize, Number);
             }
         }
 
@@ -1494,7 +1494,7 @@ Return Value:
 
         if (File->StatValid != FALSE) {
             Number = File->Stat.st_size;
-            printf("%*I64u ", Context->FileSizeColumnSize, Number);
+            printf("%*llu ", Context->FileSizeColumnSize, Number);
 
         } else {
             printf("%*s ", Context->FileSizeColumnSize, "?");
@@ -1680,7 +1680,7 @@ Return Value:
     //
 
     String[10] = ' ';
-    printf(String);
+    printf("%s", String);
     return;
 }
 

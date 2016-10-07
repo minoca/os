@@ -428,7 +428,7 @@ Return Value:
 
     if ((!KSUCCESS(Status)) || ((Address & 0x1FFF) != 0)) {
         printf("Error: Failed to allocate a page with no alignment: "
-               "Status = %d. Address = 0x%x\n",
+               "Status = %d. Address = 0x%llx\n",
                Status,
                Address);
 
@@ -455,7 +455,7 @@ Return Value:
 
     if ((!KSUCCESS(Status)) || ((Address & 0x3FFF) != 0)) {
         printf("Error: Failed to allocate 1 4-page aligned page. "
-               "Status = %d, Address = 0x%x.\n",
+               "Status = %d, Address = 0x%llx.\n",
                Status,
                Address);
 
@@ -481,7 +481,7 @@ Return Value:
 
     if ((!KSUCCESS(Status)) || ((Address & 0xFFFF) != 0)) {
         printf("Error: Failed to allocate 4 10-page aligned pages. "
-               "Status = %d, Address = 0x%x.\n",
+               "Status = %d, Address = 0x%llx.\n",
                Status,
                Address);
 
@@ -514,7 +514,7 @@ Return Value:
 
         Status = MmMdAddDescriptorToList(&Mdl, &NewDescriptor);
         if (!KSUCCESS(Status)) {
-            printf("Failed to add %I64x %I64x %d to MDL: %d\n",
+            printf("Failed to add %llx %llx %d to MDL: %d\n",
                    NewDescriptor.BaseAddress,
                    NewDescriptor.Size,
                    Type,
@@ -593,7 +593,7 @@ Return Value:
     }
 
     if (Context.Total != Mdl->TotalSpace) {
-        printf("Error: MDL reported %I64x total space, but %I64x total space "
+        printf("Error: MDL reported %llx total space, but %llx total space "
                "calculated.\n",
                Mdl->TotalSpace,
                Context.Total);
@@ -602,7 +602,7 @@ Return Value:
     }
 
     if (Context.Free != Mdl->FreeSpace) {
-        printf("Error: MDL reported %I64x free space, but %I64x free space "
+        printf("Error: MDL reported %llx free space, but %llx free space "
                "calculated.\n",
                Mdl->FreeSpace,
                Context.Free);
@@ -650,8 +650,8 @@ Return Value:
 
             CurrentEntry = CurrentEntry->Next;
             if (MmpMdGetFreeBinIndex(Descriptor->Size) != BinIndex) {
-                printf("Error: Descriptor %I64x Size %I64x belongs on bin "
-                       "%d, not bin %d.\n",
+                printf("Error: Descriptor %llx Size %llx belongs on bin "
+                       "%ld, not bin %ld.\n",
                        Descriptor->BaseAddress,
                        Descriptor->Size,
                        MmpMdGetFreeBinIndex(Descriptor->Size),
@@ -799,15 +799,15 @@ Return Value:
     }
 
     if (Descriptor->Size == 0) {
-        printf("Error: found descriptor with base 0x%I64x and size 0!\n",
+        printf("Error: found descriptor with base 0x%llx and size 0!\n",
                Descriptor->BaseAddress);
 
         ValidationContext->Valid = FALSE;
     }
 
     if (Descriptor->BaseAddress < ValidationContext->PreviousEnd) {
-        printf("Descriptor out of order! Base: 0x%I64x, Previous End: "
-               "0x%I64x\n",
+        printf("Descriptor out of order! Base: 0x%llx, Previous End: "
+               "0x%llx\n",
                Descriptor->BaseAddress,
                ValidationContext->PreviousEnd);
 
@@ -820,7 +820,7 @@ Return Value:
         printf("Error: found adjacent descriptors with the same type that "
                "should have been coalesced!\n");
 
-        printf("    %13I64x  %13I64x  %8I64x (PreviousEnd %I64x)\n",
+        printf("    %13llx  %13llx  %8llx (PreviousEnd %llx)\n",
                Descriptor->BaseAddress,
                Descriptor->BaseAddress + Descriptor->Size,
                Descriptor->Size,

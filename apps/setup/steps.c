@@ -563,7 +563,7 @@ Return Value:
             }
 
             if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-                printf("Creating %I64dMB page file...", PageFileSize / _1MB);
+                printf("Creating %lldMB page file...", PageFileSize / _1MB);
                 fflush(stdout);
             }
 
@@ -581,7 +581,7 @@ Return Value:
             SetupFileClose(PageFile);
             PageFile = NULL;
             if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-                printf("Done\n", Context->PageFileSize);
+                printf("Done.\n");
             }
 
             if (Result != 0) {
@@ -716,7 +716,7 @@ Return Value:
 
     SystemPartition = SetupGetPartition(Context, SETUP_PARTITION_FLAG_SYSTEM);
     if (SystemPartition == NULL) {
-        Status = EINVAL;
+        Result = EINVAL;
         goto UpdateBootVolumeEnd;
     }
 
@@ -1085,7 +1085,7 @@ Return Value:
                    SETUP_DEFAULT_PAGE_FILE_DENOMINATOR;
 
     if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-        printf("System memory %I64dMB, Page File size %I64dMB.\n",
+        printf("System memory %lldMB, Page File size %lldMB.\n",
                SystemMemory,
                PageFileSize);
     }
@@ -1103,8 +1103,8 @@ Return Value:
 
         PageFileSize = InstallPartitionSize / SETUP_MAX_PAGE_FILE_DISK_DIVISOR;
         if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Clipping page file to %I64dMB, as install partition is "
-                   "only %I64dMB.\n",
+            printf("Clipping page file to %lldMB, as install partition is "
+                   "only %lldMB.\n",
                    PageFileSize,
                    InstallPartitionSize);
         }
@@ -1404,7 +1404,7 @@ Return Value:
 
             if (BytesDone != SETUP_BLOCK_SIZE) {
                 fprintf(stderr,
-                        "Read only %d of %d bytes.\n",
+                        "Read only %ld of %d bytes.\n",
                         BytesDone,
                         SETUP_BLOCK_SIZE);
 
@@ -1458,7 +1458,7 @@ Return Value:
                          SETUP_BLOCK_SIZE;
 
             if (BlockCount > MAX_UCHAR) {
-                printf("Error: Boot code is too big at %d sectors. Max is "
+                printf("Error: Boot code is too big at %lld sectors. Max is "
                        "%d.\n",
                        BlockCount,
                        MAX_UCHAR);
@@ -1524,7 +1524,7 @@ Return Value:
 
         if (BytesDone != SETUP_BLOCK_SIZE) {
             fprintf(stderr,
-                    "Error: Wrote only %d of %d bytes.\n",
+                    "Error: Wrote only %ld of %d bytes.\n",
                     BytesDone,
                     SETUP_BLOCK_SIZE);
 
@@ -1539,7 +1539,7 @@ Return Value:
 
     Result = 0;
     if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-        printf("Wrote file %s, size %d to boot sector 0x%I64x.\n",
+        printf("Wrote file %s, size %d to boot sector 0x%llx.\n",
                Command->Source,
                FileSize,
                DiskOffset);

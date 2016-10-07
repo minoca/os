@@ -423,7 +423,7 @@ Return Value:
                                         0);
 
         if (!KSUCCESS(Status)) {
-            printf("Error freeing allocation 0x%x. Status = %d.\n",
+            printf("Error freeing allocation %p. Status = %d.\n",
                    TestAllocation,
                    Status);
 
@@ -451,7 +451,7 @@ Return Value:
                                             0);
 
             if (!KSUCCESS(Status)) {
-                printf("Error freeing allocation 0x%x. Status = %d.\n",
+                printf("Error freeing allocation %p. Status = %d.\n",
                        PreviousAllocation,
                        Status);
 
@@ -474,7 +474,7 @@ Return Value:
                                         0);
 
         if (!KSUCCESS(Status)) {
-            printf("Error freeing allocation 0x%x. Status = %d.\n",
+            printf("Error freeing allocation %p. Status = %d.\n",
                    PreviousAllocation,
                    Status);
 
@@ -494,7 +494,7 @@ Return Value:
     if (MmNonPagedPool.Statistics.Allocations !=
                                  (MmNonPagedPool.TagStatistics.TagCount - 1)) {
 
-        printf("Error: %d outstanding non-paged pool allocations.\n",
+        printf("Error: %ld outstanding non-paged pool allocations.\n",
                MmNonPagedPool.Statistics.Allocations);
 
         Failures += 1;
@@ -573,7 +573,7 @@ Return Value:
     Allocation = VaRequest.Address;
     if ((!KSUCCESS(Status)) && (ExpectedSuccess != FALSE)) {
         printf("Error: Allocation Failed: size %d, Requested address: "
-               "0x%08x, Status = %d.\n",
+               "%p, Status = %d.\n",
                Size,
                RequestedAddress,
                Status);
@@ -582,7 +582,7 @@ Return Value:
 
     } else if ((KSUCCESS(Status)) && (ExpectedSuccess == FALSE)) {
         printf("Error: Allocation succeeded that shouldn't have. Size %d, "
-               "Requested address: 0x%08x.\n",
+               "Requested address: %p.\n",
                Size,
                RequestedAddress);
 
@@ -591,7 +591,7 @@ Return Value:
 
     if (KSUCCESS(Status)) {
         if ((RequestedAddress != NULL) && (Allocation != RequestedAddress)) {
-            printf("Error: Requested address %x, but got %x\n",
+            printf("Error: Requested address %p, but got %p\n",
                    RequestedAddress,
                    Allocation);
 
@@ -601,7 +601,7 @@ Return Value:
 
     Valid = ValidateMdl(&(Process->AddressSpace->Accountant->Mdl));
     if (Valid == FALSE) {
-        printf("MDL not valid after allocating 0x%08x.\n",
+        printf("MDL not valid after allocating %p.\n",
                Allocation);
 
         *Failures += 1;

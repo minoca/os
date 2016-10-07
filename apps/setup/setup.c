@@ -884,6 +884,7 @@ Return Value:
     INT Status;
     PSETUP_PARTITION_DESCRIPTION SystemDisk;
 
+    Devices = NULL;
     if ((Context->DiskPath != NULL) || (Context->PartitionPath != NULL) ||
         (Context->DirectoryPath != NULL)) {
 

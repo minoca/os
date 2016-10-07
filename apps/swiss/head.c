@@ -432,6 +432,7 @@ Return Value:
 
                 if (InIndex == OutIndex) {
                     SwPrintError(0, FileName, "Line too long");
+                    Status = EINVAL;
                     goto ProcessFileEnd;
                 }
 
@@ -480,6 +481,7 @@ Return Value:
             //
 
             if (InIndex != BufferSize) {
+                Status = 0;
                 goto ProcessFileEnd;
             }
 

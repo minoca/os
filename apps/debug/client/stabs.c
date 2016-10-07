@@ -2494,7 +2494,7 @@ Return Value:
     LONG Type;
 
     if ((String == NULL) || (strlen(String) == 0)) {
-        return FALSE;
+        return NULL;
     }
 
     EndString = String;

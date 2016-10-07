@@ -331,10 +331,10 @@ Return Value:
         if (PrintSourceFiles != FALSE) {
             printf("%d: ", SourceFilesProcessed);
             if (CurrentSource->SourceDirectory != NULL) {
-                printf(CurrentSource->SourceDirectory);
+                printf("%s", CurrentSource->SourceDirectory);
             }
 
-            printf("%s, 0x%08I64x - 0x%08I64x\n",
+            printf("%s, 0x%08llx - 0x%08llx\n",
                    CurrentSource->SourceFile,
                    CurrentSource->StartAddress,
                    CurrentSource->EndAddress);
@@ -351,7 +351,7 @@ Return Value:
                                         ListEntry);
 
             if (PrintGlobals != FALSE) {
-                printf("   Global %s: (%s,%d) at 0x%08I64x\n",
+                printf("   Global %s: (%s,%d) at 0x%08llx\n",
                        GlobalVariable->Name,
                        GlobalVariable->TypeOwner->SourceFile,
                        GlobalVariable->TypeNumber,
@@ -395,8 +395,8 @@ Return Value:
                     ReturnTypeSource = "NONE";
                 }
 
-                printf("   Function %d in %s: (%s, %d) %s: 0x%08I64x - "
-                       "0x%08I64x\n",
+                printf("   Function %d in %s: (%s, %d) %s: 0x%08llx - "
+                       "0x%08llx\n",
                        (ULONG)Function->FunctionNumber,
                        Function->ParentSource->SourceFile,
                        ReturnTypeSource,
@@ -418,7 +418,7 @@ Return Value:
 
                 if (Parameter->LocationType == DataLocationIndirect) {
                     if (PrintFunctions != FALSE) {
-                        printf("      +%d %s: (%s, %d)\n",
+                        printf("      +%lld %s: (%s, %d)\n",
                                Parameter->Location.Indirect.Offset,
                                Parameter->Name,
                                Parameter->TypeOwner->SourceFile,
@@ -487,7 +487,7 @@ Return Value:
                         }
 
                         printf("         Local %s (%s, %d)  @%s, Valid at "
-                               "0x%08I64x\n",
+                               "0x%08llx\n",
                                LocalVariable->Name,
                                LocalVariable->TypeOwner->SourceFile,
                                LocalVariable->TypeNumber,
@@ -499,8 +499,8 @@ Return Value:
                            DataLocationIndirect) {
 
                     if (PrintLocalVariables != FALSE) {
-                        printf("         Local %s (%s, %d)  offset %d, Valid "
-                               "at 0x%08I64x\n",
+                        printf("         Local %s (%s, %d)  offset %lld, "
+                               "Valid at 0x%08llx\n",
                                LocalVariable->Name,
                                LocalVariable->TypeOwner->SourceFile,
                                LocalVariable->TypeNumber,
@@ -532,7 +532,7 @@ Return Value:
                                     ListEntry);
 
             if (PrintSourceLines != FALSE) {
-                printf("   Line %d of file %s: %08I64x - %08I64x\n",
+                printf("   Line %d of file %s: %08llx - %08llx\n",
                        SourceLine->LineNumber,
                        SourceLine->ParentSource->SourceFile,
                        SourceLine->Start,
@@ -599,7 +599,7 @@ Return Value:
                     (Relation->Array.Maximum != 0LL)) {
 
                     if (PrintTypes != FALSE) {
-                        printf(" Array [%I64i, %I64i]",
+                        printf(" Array [%lli, %lli]",
                                Relation->Array.Minimum,
                                Relation->Array.Maximum);
                     }
@@ -687,7 +687,7 @@ Return Value:
                     if (MemberType == NULL) {
                         printf("Error: Unable to resolve structure member "
                                "type from (%s, %d).\n",
-                               CurrentStructureMember->TypeFile,
+                               CurrentStructureMember->TypeFile->SourceFile,
                                CurrentStructureMember->TypeNumber);
 
                         assert(MemberType != NULL);
@@ -728,7 +728,7 @@ Return Value:
                     assert(CurrentEnumerationMember->Name != NULL);
 
                     if (PrintTypes != FALSE) {
-                        printf("      %s = %I64d\n",
+                        printf("      %s = %lld\n",
                                CurrentEnumerationMember->Name,
                                CurrentEnumerationMember->Value);
                     }
@@ -795,7 +795,7 @@ Return Value:
             break;
 
         case SymbolResultData:
-            printf("%d Data Symbol: %s in %s%s \t\t0x%I64x\n",
+            printf("%d Data Symbol: %s in %s%s \t\t0x%llx\n",
                    FunctionsProcessed,
                    SearchResult.U.DataResult->Name,
                    SearchResult.U.DataResult->ParentSource->SourceDirectory,
@@ -805,7 +805,7 @@ Return Value:
             break;
 
         case SymbolResultFunction:
-            printf("%d Function Symbol: %s in %s%s \t\t0x%I64x - 0x%I64x\n",
+            printf("%d Function Symbol: %s in %s%s \t\t0x%llx - 0x%llx\n",
                    FunctionsProcessed,
                    SearchResult.U.FunctionResult->Name,
                    SearchResult.U.FunctionResult->ParentSource->SourceDirectory,
@@ -849,7 +849,7 @@ Return Value:
                 assert(SearchResult.U.DataResult->LocationType ==
                        DataLocationAbsoluteAddress);
 
-                printf("Data matched 0x%I64x: %s in %s%s at 0x%I64x\n",
+                printf("Data matched 0x%llx: %s in %s%s at 0x%llx\n",
                        SearchAddress,
                        SearchResult.U.DataResult->Name,
                        SearchResult.U.DataResult->ParentSource->SourceDirectory,
@@ -860,8 +860,8 @@ Return Value:
 
             case SymbolResultFunction:
                 printf(
-                  "Function matched 0x%I64x: %s in %s%s at 0x%I64x - "
-                  "0x%I64x\n",
+                  "Function matched 0x%llx: %s in %s%s at 0x%llx - "
+                  "0x%llx\n",
                   SearchAddress,
                   SearchResult.U.FunctionResult->Name,
                   SearchResult.U.FunctionResult->ParentSource->SourceDirectory,
@@ -883,7 +883,7 @@ Return Value:
 
         SourceLine = DbgLookupSourceLine(Symbols, SearchAddress);
         if (SourceLine != NULL) {
-            printf("Address 0x%I64x: at %s, Line %d.\n",
+            printf("Address 0x%llx: at %s, Line %d.\n",
                    SearchAddress,
                    SourceLine->ParentSource->SourceFile,
                    SourceLine->LineNumber);

@@ -335,7 +335,7 @@ Return Value:
 
         assert((Options & SUM_OPTION_SYSV) == 0);
 
-        printf("%05d %5llu\n", Sum, TotalSize, FileName);
+        printf("%05d %5llu %s\n", Sum, TotalSize, FileName);
     }
 
     Status = 0;

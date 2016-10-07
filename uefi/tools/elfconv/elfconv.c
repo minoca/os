@@ -818,8 +818,8 @@ Return Value:
     Buffer = malloc(Stat.st_size);
     if (Buffer == NULL) {
         fprintf(stderr,
-                "Error: Failed to allocate 0x%x for input file buffer.\n",
-                Stat.st_size);
+                "Error: Failed to allocate 0x%llx for input file buffer.\n",
+                (UINT64)Stat.st_size);
 
         Status = ENOMEM;
         goto LoadFileEnd;

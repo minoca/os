@@ -2425,7 +2425,7 @@ Return Value:
         SystemTime.Seconds = CalendarTest->Seconds;
         Status = RtlSystemTimeToGmtCalendarTime(&SystemTime, &CalendarTime);
         if (!KSUCCESS(Status)) {
-            printf("TimeTest: Failed to convert system time %I64d to "
+            printf("TimeTest: Failed to convert system time %lld to "
                    "GMT calendar time.\n",
                    SystemTime.Seconds);
 
@@ -2444,7 +2444,7 @@ Return Value:
             (CalendarTime.IsDaylightSaving !=
              CalendarTest->GmtTime.IsDaylightSaving)) {
 
-            printf("TimeTest: Convert %I64d to GMT failed.\n"
+            printf("TimeTest: Convert %lld to GMT failed.\n"
                    "Was     : %04d/%02d/%02d %02d:%02d:%02d.%d %d %3d %d\n"
                    "Expected: %04d/%02d/%02d %02d:%02d:%02d.%d %d %3d %d\n",
                    SystemTime.Seconds,
@@ -2477,8 +2477,7 @@ Return Value:
 
         if (!KSUCCESS(Status)) {
             printf("TimeTest: Failed to convert GMT calendar time back into "
-                   "system time.\n",
-                   SystemTime.Seconds);
+                   "system time.\n");
 
             Failures += 1;
         }
@@ -2486,8 +2485,8 @@ Return Value:
         if ((ComputedSystemTime.Seconds != SystemTime.Seconds) ||
             (ComputedSystemTime.Nanoseconds != SystemTime.Nanoseconds)) {
 
-            printf("TimeTest: Error: System time %I64d.%d converted back into "
-                   "%I64d.%d through GMT calendar time.\n",
+            printf("TimeTest: Error: System time %lld.%d converted back into "
+                   "%lld.%d through GMT calendar time.\n",
                    SystemTime.Seconds,
                    SystemTime.Nanoseconds,
                    ComputedSystemTime.Seconds,
@@ -2507,7 +2506,7 @@ Return Value:
                                    &(CalendarTest->GmtTime));
 
         if (FormatSize != RtlStringLength(TestTimeBuffer) + 1) {
-            printf("TimeTest: FormatSize %d, strlen + 1: %d\n",
+            printf("TimeTest: FormatSize %lu, strlen + 1: %d\n",
                    FormatSize,
                    RtlStringLength(TestTimeBuffer) + 1);
 
@@ -2627,7 +2626,7 @@ Return Value:
 
 #if 0
 
-        RtlDebugPrint("    {%I64dLL,\n"
+        RtlDebugPrint("    {%lldLL,\n"
                       "     {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d},\n",
                       SystemTime.Seconds,
                       CalendarTime.Year,
@@ -2645,7 +2644,7 @@ Return Value:
 
         Status = RtlSystemTimeToLocalCalendarTime(&SystemTime, &CalendarTime);
         if (!KSUCCESS(Status)) {
-            printf("TimeTest: Failed to convert system time %I64d to "
+            printf("TimeTest: Failed to convert system time %lld to "
                    "local calendar time.\n",
                    SystemTime.Seconds);
 
@@ -2664,7 +2663,7 @@ Return Value:
             (CalendarTime.IsDaylightSaving !=
              CalendarTest->LocalTime.IsDaylightSaving)) {
 
-            printf("TimeTest: Convert %I64d to local time failed.\n"
+            printf("TimeTest: Convert %lld to local time failed.\n"
                    "Was     : %04d/%02d/%02d %02d:%02d:%02d.%d %d %3d %d\n"
                    "Expected: %04d/%02d/%02d %02d:%02d:%02d.%d %d %3d %d\n",
                    SystemTime.Seconds,
@@ -2697,8 +2696,7 @@ Return Value:
 
         if (!KSUCCESS(Status)) {
             printf("TimeTest: Failed to convert local calendar time back into "
-                   "system time.\n",
-                   SystemTime.Seconds);
+                   "system time.\n");
 
             Failures += 1;
         }
@@ -2706,8 +2704,8 @@ Return Value:
         if ((ComputedSystemTime.Seconds != SystemTime.Seconds) ||
             (ComputedSystemTime.Nanoseconds != SystemTime.Nanoseconds)) {
 
-            printf("TimeTest: Error: System time %I64d.%d converted back into "
-                   "%I64d.%d through local calendar time.\n",
+            printf("TimeTest: Error: System time %lld.%d converted back into "
+                   "%lld.%d through local calendar time.\n",
                    SystemTime.Seconds,
                    SystemTime.Nanoseconds,
                    ComputedSystemTime.Seconds,
@@ -2747,8 +2745,8 @@ Return Value:
                              &(FormatTest->CalendarTime));
 
         if (Size != FormatTest->StringSize) {
-            printf("TimeTest: Error: Format size for test %d was %d, "
-                   "expected %d.\n",
+            printf("TimeTest: Error: Format size for test %d was %lu, "
+                   "expected %lu.\n",
                    TestIndex,
                    Size,
                    FormatTest->StringSize);

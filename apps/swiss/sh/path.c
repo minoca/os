@@ -758,7 +758,7 @@ Return Value:
                  ((Stat.st_mode & S_IXUSR) != 0))) {
 
                 *FullCommand = ExtendedPath;
-                *FullCommandSize = CompletePathSize + ExtensionLength;
+                *FullCommandSize = CommandSize + ExtensionLength;
                 ExtendedPath = NULL;
                 Result = TRUE;
                 goto LocateCommandEnd;

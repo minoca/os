@@ -1759,7 +1759,7 @@ Return Value:
         strcpy(Destination, ModeString);
 
     } else {
-        sprintf(Destination, "#02X", Mode);
+        sprintf(Destination, "#%02X", Mode);
     }
 
     return;
@@ -3219,7 +3219,7 @@ Return Value:
             if (Offset == 0) {
                 sprintf(Context->Operand2,
                         "[%s]",
-                        DbgArmRegisterNames);
+                        DbgArmRegisterNames[BaseRegister]);
 
             } else {
                 sprintf(Context->Operand2,
@@ -4876,7 +4876,7 @@ Return Value:
         if ((Instruction & ARM_FLOATING_POINT_SZ_BIT) != 0) {
             Double.Immediate = ARM_FLOATING_POINT_BUILD_IMMEDIATE64(Immediate8);
             sprintf(Context->Operand2,
-                    "#%d  ; 0x%I64x %g",
+                    "#%d  ; 0x%llx %g",
                     Immediate8,
                     Double.Immediate,
                     Double.Double);
@@ -7403,7 +7403,7 @@ Return Value:
 
     sprintf(Context->Operand1, "%s%d", VectorTypeString, Vector);
     if (PrintFloat == FALSE) {
-        sprintf(Context->Operand2, "#%I64d  ; 0x%I64d", Immediate, Immediate);
+        sprintf(Context->Operand2, "#%lld  ; 0x%lld", Immediate, Immediate);
 
     } else {
         sprintf(Context->Operand2,

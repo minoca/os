@@ -403,7 +403,7 @@ Return Value:
     //
 
     if (Context->BlockCount != 0) {
-        BufferSize = Context->BlockCount * Context->BlockSize;
+        CurrentOffset = Context->BlockCount * Context->BlockSize;
 
     } else {
         BufferSize = 0;
@@ -447,7 +447,7 @@ Return Value:
     Buffer = malloc(BufferSize);
     if (Buffer == NULL) {
         fprintf(stderr,
-                "Error: Failed to allocate image buffer, size 0x%I64x.\n",
+                "Error: Failed to allocate image buffer, size 0x%llx.\n",
                 CurrentOffset);
 
         Status = ENOMEM;
@@ -649,7 +649,7 @@ Return Value:
     BytesRead = fread(&Header, 1, HeaderSize, File);
     if (BytesRead < HeaderSize) {
         fprintf(stderr,
-                "Error: Only read %d bytes of %s.\n",
+                "Error: Only read %ld bytes of %s.\n",
                 BytesRead,
                 FileName);
 
@@ -708,10 +708,10 @@ Return Value:
 
             if ((PaddedOffset % Alignment) != 0) {
                 fprintf(stderr,
-                        "Error: Volume top file is size 0x%I64x, which "
+                        "Error: Volume top file is size 0x%llx, which "
                         "conflicts with its required alignment of 0x%x.\n",
                         FileSize,
-                        Alignment);
+                        (UINT32)Alignment);
 
                 Status = EINVAL;
                 goto AddFileEnd;
@@ -735,10 +735,10 @@ Return Value:
             TopFileEnd = PaddedOffset + HeaderSize + FileSize;
             if ((TopFileEnd % Context->BlockSize) != 0) {
                 fprintf(stderr,
-                        "Error: Volume top file is size 0x%I64x, which "
+                        "Error: Volume top file is size 0x%llx, which "
                         "conflicts with its required alignment of 0x%x.\n",
                         FileSize,
-                        Alignment);
+                        (UINT32)Alignment);
 
                 Status = EINVAL;
                 goto AddFileEnd;
@@ -791,7 +791,7 @@ Return Value:
 
     if (BufferSize != 0) {
         if ((Context->Flags & GENFV_OPTION_VERBOSE) != 0) {
-            printf("Adding file %s at offset %I64x, size %I64x\n",
+            printf("Adding file %s at offset %llx, size %llx\n",
                    FileName,
                    *Offset,
                    FileSize);
@@ -897,8 +897,8 @@ Return Value:
         PadFile->Attributes = 0;
         PadFileSize = (NewOffset - *Offset) - sizeof(EFI_FFS_FILE_HEADER);
         if ((Context->Flags & GENFV_OPTION_VERBOSE) != 0) {
-            printf("Creating pad file at 0x%I64x, Size %I64x to new offset "
-                   "0x%I64x.\n",
+            printf("Creating pad file at 0x%llx, Size %llx to new offset "
+                   "0x%llx.\n",
                    *Offset,
                    PadFileSize,
                    NewOffset);
@@ -911,6 +911,7 @@ Return Value:
             Context->Flags |= GENFV_OPTION_LARGE_FILE;
 
         } else {
+            HeaderSize = sizeof(EFI_FFS_FILE_HEADER);
             PadFile->Size[0] = (UINT8)(PadFileSize & 0xFF);
             PadFile->Size[1] = (UINT8)((PadFileSize & 0xFF00) >> 8);
             PadFile->Size[2] = (UINT8)((PadFileSize & 0xFF0000) >> 16);

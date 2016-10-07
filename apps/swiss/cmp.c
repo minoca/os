@@ -306,14 +306,14 @@ Return Value:
         if (Character1 != Character2) {
             Status = 1;
             if ((Options & CMP_OPTION_VERBOSE) != 0) {
-                printf("%I64d %o %o\n",
+                printf("%lld %o %o\n",
                        CharacterNumber,
                        Character1,
                        Character2);
 
             } else {
                 if ((Options & CMP_OPTION_SILENT) == 0) {
-                    printf("%s %s differ: char %I64d, line %I64d\n",
+                    printf("%s %s differ: char %lld, line %lld\n",
                            Path1,
                            Path2,
                            CharacterNumber,

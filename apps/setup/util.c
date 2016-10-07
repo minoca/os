@@ -434,7 +434,7 @@ Return Value:
         printf("%s", Destination->Path);
 
     } else {
-        printf("Device 0x%I64X", Destination->DeviceId);
+        printf("Device 0x%llX", Destination->DeviceId);
     }
 
     return;
@@ -1049,7 +1049,7 @@ Return Value:
 
         if (Result != 0) {
             fprintf(stderr,
-                    "Failed to set mode on file %s, ModData %I64x Mode %x, "
+                    "Failed to set mode on file %s, ModData %llx Mode %x, "
                     "Result %d\n",
                     DestinationPath,
                     (ULONGLONG)ModificationDate,

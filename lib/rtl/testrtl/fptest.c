@@ -1181,8 +1181,8 @@ Return Value:
         Answer.Ulonglong = MathTest->Int64;
         Result.Ulonglong = RtlDoubleConvertToInteger64(MathTest->Value1);
         if (Answer.Ulonglong != Result.Ulonglong) {
-            printf("SoftFloat ConvertToInt64 %0.13a was 0x%I64x, should "
-                   "have been 0x%I64x.\n",
+            printf("SoftFloat ConvertToInt64 %0.13a was 0x%llx, should "
+                   "have been 0x%llx.\n",
                    MathTest->Value1,
                    Result.Ulonglong,
                    Answer.Ulonglong);
@@ -1194,7 +1194,7 @@ Return Value:
         Float.Float = RtlDoubleConvertToFloat(MathTest->Value1);
         if (Answer.Ulonglong != Float.Ulong) {
             printf("SoftFloat ConvertDoubleToFloat %0.13a was 0x%x, should "
-                   "have been 0x%I64x.\n",
+                   "have been 0x%llx.\n",
                    MathTest->Value1,
                    Float.Ulong,
                    Answer.Ulonglong);
@@ -1231,7 +1231,7 @@ Return Value:
         Answer.Double = ConvertTest->FromInt64;
         Result.Double = RtlDoubleConvertFromInteger64(ConvertTest->Integer);
         if (Answer.Ulonglong != Result.Ulonglong) {
-            printf("SoftFloat ConvertFromInt64 0x%I64x was %.13a, should "
+            printf("SoftFloat ConvertFromInt64 0x%llx was %.13a, should "
                    "have been %.13a.\n",
                    ConvertTest->Integer,
                    Result.Double,

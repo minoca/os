@@ -455,20 +455,20 @@ Return Value:
         Current += 1;
         switch (*Current) {
         case 'a':
-            fprintf(File, YyAbbreviatedWeekdays[TimeFields->tm_wday]);
+            fprintf(File, "%s", YyAbbreviatedWeekdays[TimeFields->tm_wday]);
             break;
 
         case 'A':
-            fprintf(File, YyFullWeekdays[TimeFields->tm_wday]);
+            fprintf(File, "%s", YyFullWeekdays[TimeFields->tm_wday]);
             break;
 
         case 'b':
         case 'h':
-            fprintf(File, YyAbbreviatedMonths[TimeFields->tm_mon]);
+            fprintf(File, "%s", YyAbbreviatedMonths[TimeFields->tm_mon]);
             break;
 
         case 'B':
-            fprintf(File, YyFullMonths[TimeFields->tm_mon]);
+            fprintf(File, "%s", YyFullMonths[TimeFields->tm_mon]);
             break;
 
         case 'd':

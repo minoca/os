@@ -149,7 +149,7 @@ typedef struct _SHELL_PROCESS_TIMES {
     unsigned long long ShellSystemMinutes;
     unsigned long ShellSystemMicroseconds;
     unsigned long long ChildrenUserMinutes;
-    unsigned long long ChildrenUserMicroseconds;
+    unsigned long ChildrenUserMicroseconds;
     unsigned long long ChildrenSystemMinutes;
     unsigned long ChildrenSystemMicroseconds;
 } SHELL_PROCESS_TIMES, *PSHELL_PROCESS_TIMES;

@@ -255,7 +255,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
 
     if (ChalkAllocations != 0) {
-        printf("%d allocations\n", ChalkAllocations);
+        printf("%ld allocations\n", ChalkAllocations);
     }
 
     if (ChalkDebugLeaks != FALSE) {
@@ -263,7 +263,7 @@ Return Value:
         while (CurrentEntry != &ChalkAllocationList) {
             Allocation = LIST_VALUE(CurrentEntry, CHALK_ALLOCATION, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            printf("Allocation %x Size %x Caller %x\n",
+            printf("Allocation %p Size %x Caller %p\n",
                    Allocation + 1,
                    Allocation->Size,
                    Allocation->Caller);

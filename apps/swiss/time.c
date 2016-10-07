@@ -289,7 +289,7 @@ Return Value:
     //
 
     fprintf(stderr,
-            "\nreal %d.%06d\nuser %d.%06d\nsys %d.%06d\n",
+            "\nreal %ld.%06d\nuser %ld.%06d\nsys %ld.%06d\n",
             (long)RealTime.tv_sec,
             RealTime.tv_usec,
             (long)UserTime.tv_sec,

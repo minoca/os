@@ -597,8 +597,8 @@ Return Value:
     Divisor = 5;
     Quotient = RtlDivideUnsigned64(Dividend, Divisor, &Remainder);
     if ((Quotient != 4) || (Remainder != 1)) {
-        printf("Error: Unsigned divide of %I64d/%I64d returned %I64d, "
-               "remainder %I64d.\n",
+        printf("Error: Unsigned divide of %lld/%lld returned %lld, "
+               "remainder %lld.\n",
                Dividend,
                Divisor,
                Quotient,
@@ -621,8 +621,8 @@ Return Value:
     Divisor = 0x100000000ULL;
     Quotient = RtlDivideUnsigned64(Dividend, Divisor, &Remainder);
     if ((Quotient != 0x10) || (Remainder != 0)) {
-        printf("Error: Unsigned divide of %I64d/%I64d returned %I64d, "
-               "remainder %I64d.\n",
+        printf("Error: Unsigned divide of %lld/%lld returned %lld, "
+               "remainder %lld.\n",
                Dividend,
                Divisor,
                Quotient,
@@ -639,8 +639,8 @@ Return Value:
     Divisor = 11;
     Quotient = RtlDivideUnsigned64(Dividend, Divisor, &Remainder);
     if ((Quotient != 0x1745D1745ULL) || (Remainder != 9)) {
-        printf("Error: Unsigned divide of 0x%I64x/0x%I64x returned 0x%I64x, "
-               "remainder 0x%I64x.\n",
+        printf("Error: Unsigned divide of 0x%llx/0x%llx returned 0x%llx, "
+               "remainder 0x%llx.\n",
                Dividend,
                Divisor,
                Quotient,
@@ -660,8 +660,8 @@ Return Value:
                                        &SignedRemainder);
 
     if ((SignedQuotient != -4) || (SignedRemainder != -1)) {
-        printf("Error: Signed divide of %I64d/%I64d returned %I64d, "
-               "remainder %I64d.\n",
+        printf("Error: Signed divide of %lld/%lld returned %lld, "
+               "remainder %lld.\n",
                SignedDividend,
                SignedDivisor,
                SignedQuotient,
@@ -677,8 +677,8 @@ Return Value:
                                        &SignedRemainder);
 
     if ((SignedQuotient != -666) || (SignedRemainder != 2)) {
-        printf("Error: Signed divide of %I64d/%I64d returned %I64d, "
-               "remainder %I64d.\n",
+        printf("Error: Signed divide of %lld/%lld returned %lld, "
+               "remainder %lld.\n",
                SignedDividend,
                SignedDivisor,
                SignedQuotient,
@@ -698,7 +698,7 @@ Return Value:
 
     if (StringLength != strlen(BASIC_STRING) + 1) {
         printf("Error: Print basic string with NULL output returned output "
-               "length of %d, should have been %d.\n",
+               "length of %d, should have been %lu.\n",
                StringLength,
                strlen(BASIC_STRING) + 1);
 
@@ -716,7 +716,7 @@ Return Value:
 
     if (StringLength != strlen(BASIC_STRING) + 1) {
         printf("Error: Print basic string with no output returned output "
-               "length of %d, should have been %d.\n",
+               "length of %d, should have been %lu.\n",
                StringLength,
                strlen(BASIC_STRING) + 1);
 
@@ -742,7 +742,7 @@ Return Value:
 
     if (StringLength != strlen(FORMATTED_STRING_RESULT) + 1) {
         printf("Error: Print formatted string with no output returned output "
-               "length of %d, should have been %d.\n",
+               "length of %d, should have been %lu.\n",
                StringLength,
                strlen(FORMATTED_STRING_RESULT) + 1);
 
@@ -756,7 +756,7 @@ Return Value:
 
     if (StringLength != strlen(FORMATTED_STRING_RESULT) + 1) {
         printf("Error: Print formatted string with output returned output "
-               "length of %d, should have been %d.\n",
+               "length of %d, should have been %lu.\n",
                StringLength,
                strlen(FORMATTED_STRING_RESULT) + 1);
 
@@ -801,7 +801,7 @@ Return Value:
 
     if (StringLength != strlen(FORMATTED_STRING_POSITIONAL_RESULT) + 1) {
         printf("Error: Print formatted string with output returned output "
-               "length of %d, should have been %d.\n",
+               "length of %d, should have been %lu.\n",
                StringLength,
                strlen(FORMATTED_STRING_POSITIONAL_RESULT) + 1);
 
@@ -850,7 +850,7 @@ Return Value:
 
     if (StringLength != strlen(PRINT_FLOAT_RESULT) + 1) {
         printf("Error: Print float string with output returned output "
-               "length of %d, should have been %d.\n",
+               "length of %d, should have been %lu.\n",
                StringLength,
                strlen(PRINT_FLOAT_RESULT) + 1);
 
@@ -878,7 +878,7 @@ Return Value:
 
     if (StringLength != strlen(PRINT_HEX_FLOAT_RESULT) + 1) {
         printf("Error: Print hex float string with output returned output "
-               "length of %d, should have been %d.\n",
+               "length of %d, should have been %lu.\n",
                StringLength,
                strlen(PRINT_HEX_FLOAT_RESULT) + 1);
 
@@ -1730,7 +1730,7 @@ Return Value:
     DummyNode.Value = TEST_NODE_COUNT + 1;
     FoundNode = RtlRedBlackTreeSearch(Tree, &(DummyNode.TreeNode));
     if (FoundNode != NULL) {
-        printf("RBTREE: Found %x for out of bounds search %d\n",
+        printf("RBTREE: Found %p for out of bounds search %d\n",
                FoundNode,
                TEST_NODE_COUNT + 1);
 
@@ -1779,7 +1779,7 @@ Return Value:
     RtlRedBlackTreeIterate(Tree, TestRedBlackTreeVerifyInOrderTraversal, NULL);
     FoundNode = RtlRedBlackTreeGetLowestNode(Tree);
     if (FoundNode != NULL) {
-        printf("RBTREE: Get Lowest Node on an empty tree returned %x\n",
+        printf("RBTREE: Get Lowest Node on an empty tree returned %p\n",
                FoundNode);
 
         TestsFailed += 1;
@@ -1787,7 +1787,7 @@ Return Value:
 
     FoundNode = RtlRedBlackTreeGetHighestNode(Tree);
     if (FoundNode != NULL) {
-        printf("RBTREE: Get Highest Node on an empty tree returned %x\n",
+        printf("RBTREE: Get Highest Node on an empty tree returned %p\n",
                FoundNode);
 
         TestsFailed += 1;
@@ -1796,7 +1796,7 @@ Return Value:
     DummyNode.Value = 0;
     FoundNode = RtlRedBlackTreeSearch(Tree, &(DummyNode.TreeNode));
     if (FoundNode != NULL) {
-        printf("RBTREE: Search on an empty tree returned %x.\n", FoundNode);
+        printf("RBTREE: Search on an empty tree returned %p.\n", FoundNode);
         TestsFailed += 1;
     }
 
@@ -1849,7 +1849,7 @@ Return Value:
              ByteIndex += 1) {
 
             if (BytePointer[ByteIndex] != 0) {
-                printf("RBTREE: Node %x Index %d has non-zero contents.\n",
+                printf("RBTREE: Node %p Index %d has non-zero contents.\n",
                        CurrentNode,
                        Index);
 

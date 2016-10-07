@@ -1832,7 +1832,7 @@ Return Value:
         printf("-e ");
 
     } else if (Context->ContextLines != 0) {
-        printf("-C %d ");
+        printf("-C %d ", Context->ContextLines);
     }
 
     printf("%s/%s %s/%s\n", PathA, FileA->Name, PathB, FileB->Name);
@@ -3173,17 +3173,17 @@ Return Value:
             assert((SizeA != 0) && (SizeB != 0));
 
             if (SizeA == 1) {
-                printf("%d", LineA + 1);
+                printf("%ld", LineA + 1);
 
             } else {
-                printf("%d,%d", LineA + 1, LineA + SizeA);
+                printf("%ld,%ld", LineA + 1, LineA + SizeA);
             }
 
             if (SizeB == 1) {
-                printf("c%d\n", LineB + 1);
+                printf("c%ld\n", LineB + 1);
 
             } else {
-                printf("c%d,%d\n", LineB + 1, LineB + SizeB);
+                printf("c%ld,%ld\n", LineB + 1, LineB + SizeB);
             }
 
         //
@@ -3196,10 +3196,10 @@ Return Value:
             assert((SizeA != 0) && (SizeB == 0));
 
             if (SizeA == 1) {
-                printf("%dd%d\n", LineA + 1, LineB);
+                printf("%ldd%ld\n", LineA + 1, LineB);
 
             } else {
-                printf("%d,%dd%d\n", LineA + 1, LineA + SizeA, LineB);
+                printf("%ld,%ldd%ld\n", LineA + 1, LineA + SizeA, LineB);
             }
 
         //
@@ -3214,10 +3214,10 @@ Return Value:
             assert((SizeB != 0) && (SizeA == 0));
 
             if (SizeB == 1) {
-                printf("%da%d\n", LineA, LineB + 1);
+                printf("%lda%ld\n", LineA, LineB + 1);
 
             } else {
-                printf("%da%d,%d\n", LineA, LineB + 1, LineB + SizeB);
+                printf("%lda%ld,%ld\n", LineA, LineB + 1, LineB + SizeB);
             }
         }
 
@@ -3384,10 +3384,10 @@ Return Value:
         //
 
         if (SizeA <= 1) {
-            printf("*** %d ***\n", LineA + SizeA);
+            printf("*** %ld ***\n", LineA + SizeA);
 
         } else {
-            printf("*** %d,%d ***\n", LineA + 1, LineA + SizeA);
+            printf("*** %ld,%ld ***\n", LineA + 1, LineA + SizeA);
         }
 
         ChangesPresent = FALSE;
@@ -3463,10 +3463,10 @@ Return Value:
         //
 
         if (SizeB <= 1) {
-            printf("--- %d ---\n", LineB + SizeB);
+            printf("--- %ld ---\n", LineB + SizeB);
 
         } else {
-            printf("--- %d,%d ---\n", LineB + 1, LineB + SizeB);
+            printf("--- %ld,%ld ---\n", LineB + 1, LineB + SizeB);
         }
 
         ChangesPresent = FALSE;
@@ -3642,23 +3642,23 @@ Return Value:
         //
 
         if (SizeA == 0) {
-            printf("@@ -%d,0 ", LineA);
+            printf("@@ -%ld,0 ", LineA);
 
         } else if (SizeA == 1) {
-            printf("@@ -%d ", LineA + SizeA);
+            printf("@@ -%ld ", LineA + SizeA);
 
         } else {
-            printf("@@ -%d,%d ", LineA + 1, SizeA);
+            printf("@@ -%ld,%ld ", LineA + 1, SizeA);
         }
 
         if (SizeB == 0) {
-            printf("+%d,0 @@\n", LineB);
+            printf("+%ld,0 @@\n", LineB);
 
         } else if (SizeB == 1) {
-            printf("+%d @@\n", LineB + SizeB);
+            printf("+%ld @@\n", LineB + SizeB);
 
         } else {
-            printf("+%d,%d @@\n", LineB + 1, SizeB);
+            printf("+%ld,%ld @@\n", LineB + 1, SizeB);
         }
 
         IndexA = LineA;

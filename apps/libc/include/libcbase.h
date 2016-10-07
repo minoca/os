@@ -71,25 +71,34 @@ extern "C" {
 #define __ALIGNED16 __ALIGNED(16)
 #define __THREAD __thread
 
-#ifdef __ELF__
-
-#define __DLLIMPORT __attribute__ ((visibility ("default")))
-#define __DLLEXPORT __attribute__ ((visibility ("default")))
-#define __DLLPROTECTED __attribute__ ((visibility ("protected")))
-
-#define __HIDDEN __attribute__ ((visibility ("hidden")))
-#define __CONSTRUCTOR __attribute__ ((constructor))
-#define __DESTRUCTOR __attribute__ ((destructor))
-
-#else
+#ifdef __WINNT__
 
 #define __DLLIMPORT __declspec(dllimport)
 #define __DLLEXPORT __declspec(dllexport)
-#define __DLLPROTECTED __declspec(dllexport)
+#define __DLLPROTECTED __DLLEXPORT
 
 #define __HIDDEN
 #define __CONSTRUCTOR
 #define __DESTRUCTOR
+
+#else
+
+#define __DLLIMPORT __attribute__ ((visibility ("default")))
+#define __DLLEXPORT __attribute__ ((visibility ("default")))
+
+#ifdef __ELF__
+
+#define __DLLPROTECTED __attribute__ ((visibility ("protected")))
+
+#else
+
+#define __DLLPROTECTED __DLLEXPORT
+
+#endif
+
+#define __HIDDEN __attribute__ ((visibility ("hidden")))
+#define __CONSTRUCTOR __attribute__ ((constructor))
+#define __DESTRUCTOR __attribute__ ((destructor))
 
 #endif
 

@@ -233,6 +233,10 @@ ifneq ($(OS),Windows_NT)
 EXTRA_CFLAGS_FOR_BUILD += -fpic
 endif
 
+ifeq ($(OS),Darwin)
+EXTRA_CFLAGS_FOR_BUILD += -Wno-tautological-compare -Wno-parentheses-equality
+endif
+
 ##
 ## Restrict ARMv6 to armv6zk instructions to support the arm1176jzf-s.
 ##
@@ -261,6 +265,12 @@ EXTRA_CFLAGS += -mno-stack-arg-probe
 endif
 endif
 
+ifeq ($(OS),Darwin)
+STRIP_FLAGS :=
+else
+STRIP_FLAGS := -p
+endif
+
 ifeq ($(BINARYTYPE),so)
 ENTRY ?= DriverEntry
 endif
@@ -278,8 +288,6 @@ BINARY := $(BINARY).exe
 endif
 endif
 
-ENTRY ?= _start
-
 ##
 ## Linker flags
 ##
@@ -292,13 +300,27 @@ ifneq (,$(LINKER_SCRIPT))
 EXTRA_LDFLAGS += -T$(LINKER_SCRIPT)
 endif
 
-EXTRA_LDFLAGS += -Wl,-e$(ENTRY)                             \
-                 -Wl,-u$(ENTRY)                             \
-                 -Wl,-Map=$(BINARY).map                     \
-                 -Wl,--gc-sections                          \
+ifneq ($(ENTRY),)
+EXTRA_LDFLAGS += -Wl,-e,$(ENTRY)                            \
+                 -Wl,-u,$(ENTRY)                            \
+
+endif
 
 ifeq ($(BINARYTYPE),so)
 EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
+endif
+
+##
+## The Darwin linker can't handle -Map or --gc-sections.
+##
+
+EXTRA_LDFLAGS_FOR_BUILD := $(EXTRA_LDFLAGS)
+
+EXTRA_LDFLAGS += -Wl,-Map=$(BINARY).map                     \
+                 -Wl,--gc-sections                          \
+
+ifneq ($(OS),Darwin)
+EXTRA_LDFLAGS_FOR_BUILD := $(EXTRA_LDFLAGS)
 endif
 
 ##
@@ -324,8 +346,10 @@ endif
 
 override EXTRA_CFLAGS := $(EXTRA_CFLAGS_FOR_BUILD)
 override EXTRA_CPPFLAGS := $(EXTRA_CPPFLAGS_FOR_BUILD)
+override EXTRA_ASFLAGS :=
 override CPPFLAGS :=
 override LDFLAGS :=
+override EXTRA_LDFLAGS := $(EXTRA_LDFLAGS_FOR_BUILD)
 endif
 
 ##
@@ -396,7 +420,7 @@ $(ALLOBJS): | $(OBJROOT)/$(THISDIR)
 $(BINARY): $(ALLOBJS) $(TARGETLIBS)
     ifeq ($(BINARYTYPE),app)
 	@echo Linking - $@
-	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -pie -o $@ $^ -Bdynamic $(DYNLIBS)
+	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -Wl,-pie -o $@ $^ -Bdynamic $(DYNLIBS)
     endif
     ifeq ($(BINARYTYPE),staticapp)
 	@echo Linking - $@
@@ -431,7 +455,7 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
 	@mkdir -p $(OUTROOT)/$(BINPLACE)
 	@cp -fp $(BINARY) $(OUTROOT)/$(BINPLACE)/$(BINARY)
     ifeq ($(BINPLACE),bin)
-	@$(STRIP) -p -o $(STRIPPED_DIR)/$(BINARY) $(BINARY)
+	@$(STRIP) $(STRIP_FLAGS) -o $(STRIPPED_DIR)/$(BINARY) $(BINARY)
 	@$(UPDATE_LAST_UPDATE)
     endif
     endif

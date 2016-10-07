@@ -35,6 +35,7 @@ include $(SRCDIR)/sources
 
 OBJS = $(COMMON_OBJS)   \
        $(UOS_OBJS)      \
+       $(LOGIN_OBJS)    \
        cmds.o           \
        dw.o             \
        swlib/minocaos.o \

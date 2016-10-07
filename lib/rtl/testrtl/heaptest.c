@@ -230,7 +230,7 @@ Return Value:
 
             } else {
                 if (((UINTN)(Allocations[Index]) & 0x7) != 0) {
-                    printf("Error: Heap returned unaligned allocation %x\n",
+                    printf("Error: Heap returned unaligned allocation %p\n",
                            Allocations[Index]);
 
                     Failures += 1;
@@ -270,8 +270,8 @@ Return Value:
         (TestUpperHeap.Statistics.TotalAllocationCalls !=
          TestUpperHeap.Statistics.TotalFreeCalls)) {
 
-        printf("Error: Empty upper heap still has %d allocations, %d direct "
-               "allocations, or %d != %d alloc/free calls.\n",
+        printf("Error: Empty upper heap still has %lu allocations, %lu "
+               "direct allocations, or %lu != %lu alloc/free calls.\n",
                TestUpperHeap.Statistics.Allocations,
                TestUpperHeap.Statistics.DirectAllocationSize,
                TestUpperHeap.Statistics.TotalAllocationCalls,
@@ -293,8 +293,8 @@ Return Value:
         (TestLowerHeap.Statistics.TotalAllocationCalls !=
          TestLowerHeap.Statistics.TotalFreeCalls)) {
 
-        printf("Error: Empty lower heap still has %d allocations, %d direct "
-               "allocations, or %d != %d alloc/free calls.\n",
+        printf("Error: Empty lower heap still has %lu allocations, %lu "
+               "direct allocations, or %lu != %lu alloc/free calls.\n",
                TestLowerHeap.Statistics.Allocations,
                TestLowerHeap.Statistics.DirectAllocationSize,
                TestLowerHeap.Statistics.TotalAllocationCalls,
@@ -502,7 +502,7 @@ Return Value:
 {
 
     fprintf(stderr,
-            "Error: Heap corruption in heap %x, Code %d, Parameter %x\n",
+            "Error: Heap corruption in heap %p, Code %d, Parameter %p\n",
             Heap,
             Code,
             Parameter);

@@ -948,7 +948,7 @@ Return Value:
                                Match);
 
             } else {
-                fprintf(Output, "%-*s", ColumnSize, Match);
+                fprintf(Output, "%-*s", (int)ColumnSize, Match);
             }
 
             ColumnIndex += 1;

@@ -401,10 +401,19 @@ Author:
 
 #if defined(__amd64)
 
-#define RtlAtomicExchange RtlAtomicExchange64
-#define RtlAtomicCompareExchange RtlAtomicCompareExchange64
-#define RtlAtomicAdd RtlAtomicAdd64
-#define RtlAtomicOr RtlAtomicAdd64
+#define RtlAtomicExchange(_Pointer, _Value) \
+    RtlAtomicExchange64((PULONGLONG)(_Pointer), (_Value))
+
+#define RtlAtomicCompareExchange(_Pointer, _Exchange, _Compare) \
+    RtlAtomicCompareExchange64((PULONGLONG)(_Pointer), \
+                               (_Exchange), \
+                               (_Compare))
+
+#define RtlAtomicAdd(_Pointer, _Value) \
+    RtlAtomicAdd64((PULONGLONG)(_Pointer), (_Value))
+
+#define RtlAtomicOr(_Pointer, _Value) \
+    RtlAtomicAdd64((PULONGLONG)(_Pointer), (_Value))
 
 #define RtlCountLeadingZeros RtlCountLeadingZeros64
 #define RtlCountTrailingZeros RtlCountTrailingZeros64

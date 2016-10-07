@@ -24,8 +24,7 @@
 ## Add apps that are dependent on the C library here.
 ##
 
-APPS = ck       \
-       debug    \
+APPS = debug    \
        efiboot  \
        mingen   \
        mount    \
@@ -46,6 +45,10 @@ DIRS = $(APPS)  \
        posix    \
 
 include $(SRCROOT)/os/minoca.mk
+
+ifneq ($(OS),Darwin)
+APPS += ck
+endif
 
 libc: osbase
 $(APPS): libc lib netlink

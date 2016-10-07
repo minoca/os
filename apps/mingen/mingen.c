@@ -2471,7 +2471,7 @@ Return Value:
             ScriptRoot = "";
         }
 
-        printf("Script: %s%s (%d bytes, %d targets)\n",
+        printf("Script: %s%s (%ld bytes, %d targets)\n",
                ScriptRoot,
                ScriptPath,
                Script->Size,

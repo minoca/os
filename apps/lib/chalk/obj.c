@@ -1723,7 +1723,7 @@ Return Value:
         break;
 
     case ChalkObjectInteger:
-        fprintf(File, "%I64d", Object->Integer.Value);
+        fprintf(File, "%lld", Object->Integer.Value);
         break;
 
     case ChalkObjectString:
@@ -1832,7 +1832,7 @@ Return Value:
         break;
 
     case ChalkObjectFunction:
-        fprintf(File, "Function at 0x%x", Object->Function.Body);
+        fprintf(File, "Function at %p", Object->Function.Body);
         break;
 
     default:

@@ -50,6 +50,14 @@ DYNLIBS += -ldl -lutil
 
 include $(SRCROOT)/os/minoca.mk
 
+##
+## Add the login related apps on everything except Mac OS.
+##
+
+ifneq ($(OS),Darwin)
+OBJS += $(LOGIN_OBJS)
+endif
+
 EXTRA_CFLAGS += -ftls-model=initial-exec
 
 ##

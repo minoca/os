@@ -598,6 +598,7 @@ Return Value:
     memcpy(&OriginalLexer, &(Shell->Lexer), sizeof(SHELL_LEXER_STATE));
     Result = ShInitializeLexer(&(Shell->Lexer), NULL, Input, InputSize);
     if (Result == FALSE) {
+        ReturnValue = 1;
         memcpy(&(Shell->Lexer), &OriginalLexer, sizeof(SHELL_LEXER_STATE));
         goto BuiltinEvalEnd;
     }
@@ -1819,7 +1820,8 @@ Return Value:
     // Floats are for losers.
     //
 
-    printf("%I64dm%d.%06ds %I64dm%d.%06ds\n%I64dm%d.%06ds %I64dm%d.%06ds\n",
+    printf("%lldm%ld.%06lds %lldm%ld.%06lds\n"
+           "%lldm%ld.%06lds %lldm%ld.%06lds\n",
            Times.ShellUserMinutes,
            Times.ShellUserMicroseconds / 1000000,
            Times.ShellUserMicroseconds % 1000000,
@@ -2035,6 +2037,7 @@ Return Value:
     INT Status;
     BOOL UsingPositionalParameters;
 
+    OptionArgument = NULL;
     ReturnValue = 0;
 
     //

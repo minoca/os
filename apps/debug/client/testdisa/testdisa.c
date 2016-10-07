@@ -272,7 +272,7 @@ Return Value:
             Failures += 1;
             printf("ERROR decoding instruction, partial string: ");
             DisassemblyBuffer[99] = '\0';
-            printf(DisassemblyBuffer);
+            printf("%s", DisassemblyBuffer);
             goto MainEnd;
         }
 
@@ -542,7 +542,7 @@ Return Value:
     }
 
     if (Print != FALSE) {
-        printf(" (0x%08I64x)", Instruction->OperandAddress);
+        printf(" (0x%08llx)", Instruction->OperandAddress);
     }
 
     return 0;

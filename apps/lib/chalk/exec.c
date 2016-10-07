@@ -1052,7 +1052,7 @@ Return Value:
         GrammarIndex = ParseNode->GrammarElement - ChalkNodeBegin;
         VisitFunction = ChalkNodeVisit[GrammarIndex];
         if (ChalkDebugNodeVisits != FALSE) {
-            printf("%*s%s 0x%x 0x%x [%s:%d:%d]\n",
+            printf("%*s%s %p %p [%s:%d:%d]\n",
                    Interpreter->NodeDepth,
                    "",
                    ChalkGetNodeGrammarName(Node),

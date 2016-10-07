@@ -516,6 +516,8 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     PageShift = MmPageShift();
+    PhysicalDescriptors = NULL;
+    VirtualDescriptors = NULL;
 
     //
     // Create an array of the virtual boot memory descriptors.

@@ -127,7 +127,19 @@ Environment:
     mov     $GDT_PROCESSOR, %ax ;  \
     mov     %ax, %fs ;             \
 
-#if defined(__ELF__)
+#if defined(__WINNT__)
+
+#define FUNCTION(_Name) \
+    .def _Name; .scl 2; .type 32; .endef ; \
+    .global _Name ; \
+    _Name:
+
+#define PROTECTED_FUNCTION(_Name) FUNCTION(_Name)
+#define EXPORTED_FUNCTION(_Name) FUNCTION(_Name)
+
+#define END_FUNCTION(_Name)
+
+#elif defined(__ELF__)
 
 ##
 ## This macro defines a function, callable from C code in any module and
@@ -167,9 +179,8 @@ Environment:
 #else
 
 #define FUNCTION(_Name) \
-    .def _Name; .scl 2; .type 32; .endef ; \
-    .global _Name ; \
-    _Name:
+    .global _##_Name ; \
+    _##_Name:
 
 #define PROTECTED_FUNCTION(_Name) FUNCTION(_Name)
 #define EXPORTED_FUNCTION(_Name) FUNCTION(_Name)

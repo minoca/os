@@ -108,28 +108,29 @@ COMMON_OBJS = basename.o       \
 ##
 
 UOS_OBJS = chown.o          \
-           init.o           \
-           login/chpasswd.o \
-           login/getty.o    \
-           login/groupadd.o \
-           login/groupdel.o \
-           login/login.o    \
-           login/lutil.o    \
-           login/passwd.o   \
-           login/su.o       \
-           login/sulogin.o  \
-           login/useradd.o  \
-           login/userdel.o  \
-           login/vlock.o    \
            mkfifo.o         \
            readlink.o       \
            sh/shuos.o       \
-           ssdaemon.o       \
            stty.o           \
            swlib/chownutl.o \
            swlib/uos.o      \
            telnet.o         \
-           telnetd.o        \
+
+LOGIN_OBJS += init.o           \
+              login/chpasswd.o \
+              login/getty.o    \
+              login/groupadd.o \
+              login/groupdel.o \
+              login/login.o    \
+              login/lutil.o    \
+              login/passwd.o   \
+              login/su.o       \
+              login/sulogin.o  \
+              login/useradd.o  \
+              login/userdel.o  \
+              login/vlock.o    \
+              ssdaemon.o       \
+              telnetd.o        \
 
 EXTRA_SRC_DIRS = login ls sed sh swlib
 

@@ -29,12 +29,12 @@ BINPLACE = tools/bin
 
 BINARYTYPE = build
 
-TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \
-             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a         \
-
 INCLUDES += $(SRCROOT)/os/uefi/include;
 
-OBJS = mkuboot.o
+VPATH += $(SRCROOT)/os/uefi/core
+
+OBJS = mkuboot.o \
+       crc32.o   \
 
 include $(SRCROOT)/os/minoca.mk
 

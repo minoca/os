@@ -26,6 +26,7 @@ Environment:
 //
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -669,6 +670,7 @@ Return Value:
     UINT16 Address;
     UINT32 AddressValue;
     VOID *Destination;
+    ptrdiff_t Difference;
     Elf32_Ehdr *ElfHeader;
     Elf32_Shdr *ElfSection;
     PELFCONV_SECTION_FILTER_FUNCTION FilterFunction;
@@ -728,11 +730,12 @@ Return Value:
             case SHT_REL:
             case SHT_RELA:
                 if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
+                    Difference = Destination - (VOID *)(Context->CoffFile);
                     printf("Copying section from ELF offset %x, size %x to "
-                           "COFF offset %x.\n",
+                           "COFF offset %tx.\n",
                            ElfSection->sh_offset,
                            ElfSection->sh_size,
-                           (UINTN)Destination - (UINTN)Context->CoffFile);
+                           Difference);
 
                 }
 
@@ -744,8 +747,9 @@ Return Value:
 
             case SHT_NOBITS:
                 if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
-                    printf("Zeroing COFF offset %x, size %x",
-                           (UINTN)Destination - (UINTN)Context->CoffFile,
+                    Difference = Destination - (VOID *)(Context->CoffFile);
+                    printf("Zeroing COFF offset %tx, size %x",
+                           Difference,
                            ElfSection->sh_size);
                 }
 
@@ -842,12 +846,13 @@ Return Value:
             if ((Symbol->st_shndx == SHN_UNDEF) ||
                 (Symbol->st_shndx > ElfHeader->e_shnum)) {
 
+                Difference = (VOID *)Relocation - (VOID *)ElfHeader;
                 fprintf(stderr,
                         "Error: Invalid symbol definition %x, "
-                        "relocation section %d, offset %x.\n",
+                        "relocation section %d, offset %tx.\n",
                         Symbol->st_shndx,
                         SectionIndex,
-                        (UINTN)Relocation - (UINTN)ElfHeader);
+                        Difference);
 
                 return FALSE;
             }
@@ -1061,7 +1066,7 @@ Return Value:
     Elf32_Rel *Relocation;
     UINTN RelocationElementSize;
     UINT32 RelocationIndex;
-    UINTN RelocationOffset;
+    UINT32 RelocationOffset;
     Elf32_Shdr *RelocationSectionHeader;
     UINTN RelocationSize;
     BOOLEAN Result;
@@ -1322,7 +1327,8 @@ Return Value:
                 case DT_REL:
                     RelocationOffset = DynamicSection->d_un.d_val;
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
-                        printf("Relocation offset %x.\n", RelocationOffset);
+                        printf("Relocation offset %x.\n",
+                               (int)RelocationOffset);
                     }
 
                     Result = ElfconvConvertElfAddress(Context,
@@ -1347,7 +1353,8 @@ Return Value:
                 case DT_RELSZ:
                     RelocationSize = DynamicSection->d_un.d_val;
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
-                        printf("Relocation size %x.\n", RelocationSize);
+                        printf("Relocation size %x.\n",
+                               (UINT32)RelocationSize);
                     }
 
                     break;
@@ -1356,7 +1363,7 @@ Return Value:
                     RelocationElementSize = DynamicSection->d_un.d_val;
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                         printf("Relocation element size %x.\n",
-                               RelocationElementSize);
+                               (UINT32)RelocationElementSize);
                     }
 
                     break;
@@ -1374,8 +1381,8 @@ Return Value:
                        SectionIndex,
                        DynamicSegment->p_offset,
                        RelocationOffset,
-                       RelocationSize,
-                       RelocationElementSize);
+                       (UINT32)RelocationSize,
+                       (UINT32)RelocationElementSize);
             }
 
             if ((RelocationOffset == 0) || (RelocationSize == 0) ||
@@ -1457,7 +1464,7 @@ Return Value:
                                 "Bad 386 dynamic relocation type %d, offset "
                                 "%x, program header index %d.\n",
                                 ELF32_R_TYPE(Relocation->r_info),
-                                (UINTN)Relocation - (UINTN)ElfHeader,
+                                (UINT32)RelocationOffset,
                                 SectionIndex);
 
                         return FALSE;
@@ -1529,7 +1536,7 @@ Return Value:
                                 "Bad ARM dynamic relocation type %d, offset "
                                 "%x, program header index %d.\n",
                                 ELF32_R_TYPE(Relocation->r_info),
-                                (UINTN)Relocation - (UINTN)ElfHeader,
+                                (UINT32)RelocationOffset,
                                 SectionIndex);
 
                         return FALSE;

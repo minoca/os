@@ -750,7 +750,7 @@ Return Value:
     Buffer = IoBuffer->Data + IoBuffer->CurrentOffset;
     ItemsRead = fread(Buffer, FatBlockSize, BlockCount, File);
     if (ItemsRead != BlockCount) {
-        printf("Error reading device: Ended at offset 0x%x\n", ftell(File));
+        printf("Error reading device: Ended at offset 0x%lx\n", ftell(File));
         Status = STATUS_END_OF_FILE;
         goto ReadDeviceEnd;
     }
@@ -816,7 +816,7 @@ Return Value:
     Buffer = IoBuffer->Data + IoBuffer->CurrentOffset;
     ItemsWritten = fwrite(Buffer, FatBlockSize, BlockCount, File);
     if (ItemsWritten != BlockCount) {
-        printf("Error writing device: Ended at offset 0x%x\n", ftell(File));
+        printf("Error writing device: Ended at offset 0x%lx\n", ftell(File));
         Status = STATUS_END_OF_FILE;
         goto WriteDeviceEnd;
     }

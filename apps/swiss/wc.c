@@ -533,27 +533,27 @@ Return Value:
 
     Space = "";
     if ((Options & WC_OPTION_PRINT_LINES) != 0) {
-        printf("%7I64d", TotalLines);
+        printf("%7lld", TotalLines);
         Space = " ";
     }
 
     if ((Options & WC_OPTION_PRINT_WORDS) != 0) {
-        printf("%s%7I64d", Space, TotalWords);
+        printf("%s%7lld", Space, TotalWords);
         Space = " ";
     }
 
     if ((Options & WC_OPTION_PRINT_BYTES) != 0) {
-        printf("%s%7I64d", Space, TotalBytes);
+        printf("%s%7lld", Space, TotalBytes);
         Space = " ";
     }
 
     if ((Options & WC_OPTION_PRINT_CHARACTERS) != 0) {
-        printf("%s%7I64d", Space, TotalCharacters);
+        printf("%s%7lld", Space, TotalCharacters);
         Space = " ";
     }
 
     if ((Options & WC_OPTION_PRINT_MAX_LINE_LENGTH) != 0) {
-        printf("%s%7I64d", Space, MaxLineLength);
+        printf("%s%7lld", Space, MaxLineLength);
         Space = " ";
     }
 

@@ -1102,6 +1102,7 @@ Return Value:
 
         if (IdentifierList->TokenCount >= MAX_LONG) {
             fprintf(stderr, "Too many function arguments\n");
+            Status = EINVAL;
             goto VisitFunctionDefinitionEnd;
         }
 

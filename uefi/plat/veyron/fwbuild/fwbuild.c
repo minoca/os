@@ -222,6 +222,7 @@ Return Value:
     Buffer = NULL;
     FirmwareImage = NULL;
     FirmwareImageBuffer = NULL;
+    FirmwareImageSignature = NULL;
     OutputImage = NULL;
     PreambleSignatureBuffer = NULL;
     KeyBlockFile = NULL;

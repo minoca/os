@@ -1794,7 +1794,7 @@ Return Value:
                                (PLONGLONG)Address);
 
         *Address += (InstructionPointer + Instruction->Length);
-        sprintf(DbgX86OperandBuffer, "[0x%x]", *Address);
+        sprintf(DbgX86OperandBuffer, "[0x%llx]", *Address);
         strcat(Operand, DbgX86OperandBuffer);
         *AddressValid = TRUE;
         break;

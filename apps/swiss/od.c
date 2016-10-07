@@ -1054,8 +1054,8 @@ Return Value:
     if (Count != Context->SkipCount) {
         SwPrintError(0,
                      NULL,
-                     "Input stream ended after %I64d bytes, but "
-                     "requested skip count was %I64d bytes.\n",
+                     "Input stream ended after %lld bytes, but "
+                     "requested skip count was %lld bytes.\n",
                      Count,
                      Context->SkipCount);
 
@@ -1297,13 +1297,13 @@ Return Value:
         return;
 
     } else if (Context->AddressRadix == 8) {
-        printf("%0*I64o ", Context->AddressWidth, Address);
+        printf("%0*llo ", Context->AddressWidth, Address);
 
     } else if (Context->AddressRadix == 10) {
-        printf("%0*I64d ", Context->AddressWidth, Address);
+        printf("%0*lld ", Context->AddressWidth, Address);
 
     } else if (Context->AddressRadix == 16) {
-        printf("%0*I64x ", Context->AddressWidth, Address);
+        printf("%0*llx ", Context->AddressWidth, Address);
 
     } else {
 
@@ -1382,7 +1382,7 @@ Return Value:
             }
 
             memcpy(&LongDouble, Line, ValueSize);
-            printf("%*.15e ", Format->Width, LongDouble);
+            printf("%*.15Le ", Format->Width, LongDouble);
 
         } else if (Format->OutputType == OdOutputCharacter) {
             Character = *Line;
@@ -1449,21 +1449,21 @@ Return Value:
             memcpy(&Integer, Line, ValueSize);
             switch (Format->Radix) {
             case 8:
-                printf("%0*I64o ", Format->Width, Integer);
+                printf("%0*llo ", Format->Width, Integer);
                 break;
 
             case 10:
                 if (Format->OutputType == OdOutputSignedInteger) {
-                    printf("%*I64d ", Format->Width, Integer);
+                    printf("%*lld ", Format->Width, Integer);
 
                 } else {
-                    printf("%*I64u ", Format->Width, Integer);
+                    printf("%*llu ", Format->Width, Integer);
                 }
 
                 break;
 
             case 16:
-                printf("%0*I64x ", Format->Width, Integer);
+                printf("%0*llx ", Format->Width, Integer);
                 break;
 
             default:

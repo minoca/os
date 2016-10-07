@@ -1582,8 +1582,9 @@ Return Value:
     NewCapacity = Lexer->TokenBufferCapacity * 2;
     Lexer->TokenBuffer = realloc(Lexer->TokenBuffer, NewCapacity);
     if (Lexer->TokenBuffer == NULL) {
-        printf("Error: Failed to allocate %d bytes for expanded token "
-               "buffer.\n");
+        printf("Error: Failed to allocate %ld bytes for expanded token "
+               "buffer.\n",
+               NewCapacity);
 
         return FALSE;
     }
