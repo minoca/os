@@ -50,3 +50,8 @@ endif
 
 include $(SRCROOT)/os/minoca.mk
 
+ifeq ($(OS),Darwin)
+
+DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/libchalk.1.dylib
+
+endif

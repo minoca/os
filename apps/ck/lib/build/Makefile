@@ -21,7 +21,10 @@
 #
 ################################################################################
 
-BINARY := libchalk.so.1
+SO_VERSION_MAJOR := 1
+SO_VERSION_MINOR := 0
+
+BINARY := libchalk.so.$(SO_VERSION_MAJOR)
 
 BINARYTYPE = so
 
@@ -32,8 +35,6 @@ BINPLACE = tools/bin
 INCLUDES += $(SRCDIR)/..;
 
 VPATH += $(SRCDIR)/..:
-
-ENTRY := 0
 
 include $(SRCDIR)/../sources
 
@@ -47,6 +48,10 @@ OBJS += $(WIN32_OBJS)
 else
 
 OBJS += $(POSIX_OBJS)
+
+ifeq ($(shell uname -s),Darwin)
+BINARY := libchalk.$(SO_VERSION_MAJOR).dylib
+endif
 
 endif
 

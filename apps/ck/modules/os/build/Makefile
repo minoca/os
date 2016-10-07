@@ -32,8 +32,6 @@ INCLUDES += $(SRCDIR)/..;
 
 VPATH += $(SRCDIR)/..:
 
-ENTRY := 0
-
 include $(SRCDIR)/../sources
 
 ifeq ($(OS),Windows_NT)
@@ -55,3 +53,8 @@ endif
 
 include $(SRCROOT)/os/minoca.mk
 
+ifeq ($(OS),Darwin)
+
+DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/libchalk.1.dylib
+
+endif

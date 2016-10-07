@@ -271,7 +271,12 @@ else
 STRIP_FLAGS := -p
 endif
 
-ifeq ($(BINARYTYPE),so)
+##
+## TODO: Either driver should be its own type, or all the driver makefiles
+## should have ENTRY := DriverEntry in them.
+##
+
+ifeq ($(BINARYTYPE)$(BUILD),so)
 ENTRY ?= DriverEntry
 endif
 
@@ -444,7 +449,21 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
     endif
     ifeq ($(BINARYTYPE),so)
 	@echo Linking - $@
+    ifneq ($(BUILD),)
+    ifeq ($(OS),Darwin)
+    # Mac OS (Darwin)
+	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -undefined dynamic_lookup -dynamiclib -current_version $(SO_VERSION_MAJOR).$(SO_VERSION_MINOR) -compatibility_version $(SO_VERSION_MAJOR).0 -o $@ $^ $(DYNLIBS)
+    else ifeq ($(OS),Windows_NT)
+    # Windows
+	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -shared -o $@ $^ -Bdynamic $(DYNLIBS)
+    else
+    # Generic ELF
 	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -shared -Wl,-soname=$(BINARY) -o $@ $^ -Bdynamic $(DYNLIBS)
+    endif
+    else
+    # Native build
+	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -shared -Wl,-soname=$(BINARY) -o $@ $^ -Bdynamic $(DYNLIBS)
+    endif
     endif
     ifeq ($(BINARYTYPE),build)
 	@echo Linking - $@
