@@ -593,8 +593,9 @@ IoPageCacheEntryAddReference (
 Routine Description:
 
     This routine increments the reference count on the given page cache entry.
-    It is assumed that callers of this routine either hold the page cache lock
-    or already hold a reference on the given page cache entry.
+    It is assumed that either the lock for the file object associated with the
+    page cache entry is held or the caller already has a reference on the given
+    page cache entry.
 
 Arguments:
 
@@ -1661,6 +1662,7 @@ Return Value:
     PIO_BUFFER FlushBuffer;
     IO_OFFSET FlushNextOffset;
     UINTN FlushSize;
+    BOOL GetNextNode;
     LIST_ENTRY LocalList;
     PRED_BLACK_TREE_NODE Node;
     BOOL PageCacheThread;
@@ -1671,6 +1673,7 @@ Return Value:
     BOOL SkipEntry;
     KSTATUS Status;
     KSTATUS TotalStatus;
+    BOOL UseDirtyPageList;
 
     PageCacheThread = FALSE;
     BytesFlushed = FALSE;
@@ -1683,10 +1686,14 @@ Return Value:
     INITIALIZE_LIST_HEAD(&LocalList);
     if (KeGetCurrentThread() == IoPageCacheThread) {
         PageCacheThread = TRUE;
-
-        ASSERT(KeIsSharedExclusiveLockHeldShared(FileObject->Lock));
     }
 
+    //
+    // As flush buffer may release the lock, it assumes the lock is held shared.
+    // Exclusive is OK, but some assumptions would have to change.
+    //
+
+    ASSERT(KeIsSharedExclusiveLockHeldShared(FileObject->Lock));
     ASSERT((Size == -1ULL) || ((Offset + Size) > Offset));
 
     //
@@ -1702,10 +1709,31 @@ Return Value:
     }
 
     //
-    // Quickly exit if there is nothing to flush.
+    // The dirty page list is only valid if the whole file is being flushed and
+    // it is not synchronized I/O. The dirty page list cannot be used for
+    // synchronized I/O because the file object may not be dirty while its
+    // backing page cache entries are dirty and the data needs to reach the
+    // permanent storage. Backing devices are the exception, as the dirty list
+    // is OK to use for synchronized I/O because there is nothing underneath
+    // them.
     //
 
-    if (LIST_EMPTY(&(FileObject->DirtyPageList)) != FALSE) {
+    UseDirtyPageList = FALSE;
+    if ((Offset == 0) &&
+        (Size == -1ULL) &&
+        (((Flags & IO_FLAG_DATA_SYNCHRONIZED) == 0) ||
+         (IO_IS_CACHEABLE_FILE(FileObject->Properties.Type) == FALSE))) {
+
+        UseDirtyPageList = TRUE;
+    }
+
+    //
+    // Quickly exit if there is nothing to flush on the dirty list.
+    //
+
+    if ((UseDirtyPageList != FALSE) &&
+        (LIST_EMPTY(&(FileObject->DirtyPageList)) != FALSE)) {
+
         goto FlushPageCacheEntriesEnd;
     }
 
@@ -1721,8 +1749,6 @@ Return Value:
 
     PageSize = MmPageSize();
 
-    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock));
-
     //
     // Determine which page cache entry the flush should start on.
     //
@@ -1736,14 +1762,14 @@ Return Value:
     Node = NULL;
 
     //
-    // Loop over page cache entries. For flush-all operations, iteration
-    // grabs the first entry in the dirty list, then iterates using the
-    // tree to maximize contiguous runs. Starting from the list avoids chewing
-    // up CPU time scanning through the tree. For explicit flush operations of
-    // a specific region, iterate using only the tree.
+    // Loop over page cache entries. For non-synchronized flush-all operations,
+    // iteration grabs the first entry in the dirty list, then iterates using
+    // the tree to maximize contiguous runs. Starting from the list avoids
+    // chewing up CPU time scanning through the tree. For explicit flush
+    // operations of a specific region, iterate using only the tree.
     //
 
-    if ((Size != -1ULL) || (Offset != 0)) {
+    if (UseDirtyPageList == FALSE) {
         Node = RtlRedBlackTreeSearchClosest(&(FileObject->PageCacheTree),
                                             &(SearchEntry.Node),
                                             TRUE);
@@ -1763,19 +1789,25 @@ Return Value:
         KeReleaseQueuedLock(IoPageCacheListLock);
     }
 
+    //
+    // Either the first node was selected, or the node will be taken from the
+    // list. Don't move to the next node.
+    //
+
+    GetNextNode = FALSE;
     while (TRUE) {
 
         //
-        // Traverse along the tree if there's already a node.
+        // Get the next greatest node in the tree if necessary.
         //
 
-        if (Node != NULL) {
+        if ((Node != NULL) && (GetNextNode != FALSE)) {
             Node = RtlRedBlackTreeGetNextNode(&(FileObject->PageCacheTree),
                                               FALSE,
                                               Node);
         }
 
-        if ((Node == NULL) && (Size == -1ULL) && (Offset == 0)) {
+        if ((Node == NULL) && (UseDirtyPageList != FALSE)) {
             KeAcquireQueuedLock(IoPageCacheListLock);
             if (!LIST_EMPTY(&LocalList)) {
                 CacheEntry = LIST_VALUE(LocalList.Next,
@@ -1815,9 +1847,11 @@ Return Value:
         }
 
         //
-        // Determine if the current entry can be skipped.
+        // Determine if the current entry can be skipped and plan to iterate to
+        // the next node on the next loop.
         //
 
+        GetNextNode = TRUE;
         SkipEntry = FALSE;
         BackingEntry = CacheEntry->BackingEntry;
 
@@ -1884,7 +1918,7 @@ Return Value:
         //
 
         if (SkipEntry != FALSE) {
-            if ((Size == -1ULL) && (Offset == 0)) {
+            if (UseDirtyPageList != FALSE) {
                 Node = NULL;
             }
 
@@ -1929,8 +1963,16 @@ Return Value:
 
         //
         // Flush the buffer. Note that for block devices this does drop and
-        // reacquire the file object lock.
+        // reacquire the file object lock. As a result, the left over cache
+        // entry that is not in the I/O buffer may disappear. It does not have
+        // a reference. Take one now.
         //
+
+        if ((CacheEntry != NULL) &&
+            (FileObject->Properties.Type == IoObjectBlockDevice)) {
+
+            IoPageCacheEntryAddReference(CacheEntry);
+        }
 
         Status = IopFlushPageCacheBuffer(FlushBuffer, FlushSize, Flags);
         if (!KSUCCESS(Status)) {
@@ -1953,15 +1995,22 @@ Return Value:
         //
 
         if ((PageCount != NULL) && (PagesFlushed >= *PageCount)) {
+            if ((CacheEntry != NULL) &&
+                (FileObject->Properties.Type == IoObjectBlockDevice)) {
+
+                IoPageCacheEntryReleaseReference(CacheEntry);
+            }
+
             break;
         }
 
         //
         // If this cache entry has not been dealt with, add it to the buffer
-        // now.
+        // now. As the flush routine may release the lock (for block devices),
+        // also check to make sure the cache entry is still in the tree.
         //
 
-        if (CacheEntry != NULL) {
+        if ((CacheEntry != NULL) && (CacheEntry->Node.Parent != NULL)) {
             MmIoBufferAppendPage(FlushBuffer,
                                  CacheEntry,
                                  NULL,
@@ -1971,31 +2020,42 @@ Return Value:
             FlushNextOffset = CacheEntry->Offset + PageSize;
 
         //
-        // Reset the iteration for a completely blank slate.
+        // Reset the iteration if the dirty list is valid.
         //
 
-        } else {
-            if ((Size == -1ULL) && (Offset == 0)) {
-                Node = NULL;
+        } else if (UseDirtyPageList != FALSE) {
+            Node = NULL;
+
+        //
+        // If the node was ripped out of the tree while the lock was dropped
+        // during the flush, search for the next closest node. Make sure not to
+        // get the next node on the next loop, or else this one would be
+        // skipped.
+        //
+
+        } else if (Node->Parent == NULL) {
+            if (CacheEntry == NULL) {
+                CacheEntry = RED_BLACK_TREE_VALUE(Node, PAGE_CACHE_ENTRY, Node);
             }
+
+            ASSERT(&(CacheEntry->Node) == Node);
+
+            Node = RtlRedBlackTreeSearchClosest(&(FileObject->PageCacheTree),
+                                                &(CacheEntry->Node),
+                                                TRUE);
+
+            GetNextNode = FALSE;
         }
 
         //
-        // The lock may have been dropped during the flush, so the node might
-        // be ripped out of the list. Handle that if it was.
+        // Now that the next node has been found, release the reference taken
+        // on the next cache entry.
         //
 
-        if ((Node != NULL) && (Node->Parent == NULL)) {
-            if ((Offset == 0) && (Size == -1ULL)) {
-                Node = NULL;
+        if ((CacheEntry != NULL) &&
+            (FileObject->Properties.Type == IoObjectBlockDevice)) {
 
-            } else {
-                CacheEntry = RED_BLACK_TREE_VALUE(Node, PAGE_CACHE_ENTRY, Node);
-                Node = RtlRedBlackTreeSearchClosest(
-                                            &(FileObject->PageCacheTree),
-                                            &(CacheEntry->Node),
-                                            TRUE);
-            }
+            IoPageCacheEntryReleaseReference(CacheEntry);
         }
 
         //
@@ -2050,12 +2110,16 @@ FlushPageCacheEntriesEnd:
 
     //
     // If there are still entries on the local list, put those back on the
-    // dirty list.
+    // dirty list. Be careful. If this routine released the file object lock,
+    // then the local list may have been modified by another thread.
     //
 
     if (!LIST_EMPTY(&LocalList)) {
         KeAcquireQueuedLock(IoPageCacheListLock);
-        APPEND_LIST(&LocalList, &(FileObject->DirtyPageList));
+        if (!LIST_EMPTY(&LocalList)) {
+            APPEND_LIST(&LocalList, &(FileObject->DirtyPageList));
+        }
+
         KeReleaseQueuedLock(IoPageCacheListLock);
     }
 
@@ -2121,11 +2185,11 @@ Arguments:
 
     FileObject - Supplies a pointer to a file object for the device or file.
 
-    Flags - Supplies a bitmask of eviction flags. See
-        PAGE_CACHE_EVICTION_FLAG_* for definitions.
-
     Offset - Supplies the starting offset into the file or device after which
         all page cache entries should be evicted.
+
+    Flags - Supplies a bitmask of eviction flags. See
+        PAGE_CACHE_EVICTION_FLAG_* for definitions.
 
 Return Value:
 
@@ -2139,6 +2203,11 @@ Return Value:
     LIST_ENTRY DestroyListHead;
     PRED_BLACK_TREE_NODE Node;
     PAGE_CACHE_ENTRY SearchEntry;
+
+    //
+    // The tree is being modified, so the file object lock must be held
+    // exclusively.
+    //
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
 
@@ -2156,13 +2225,6 @@ Return Value:
                       FileObject->PathEntryCount,
                       Offset);
     }
-
-    //
-    // The tree is being modified, so the file object lock must be held
-    // exclusively.
-    //
-
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
 
     //
     // Quickly exit if there is nothing to evict.
@@ -2818,10 +2880,15 @@ Return Value:
     PVOID VirtualAddress;
 
     //
-    // The lower file object lock must be held exclusively so that no more
-    // references can be taken on the page cache entries.
+    // The upper file object lock should be held. It may be held exclusive if
+    // this is synchronized I/O (e.g. a file write reaching the disk) or shared
+    // if this is a flush (e.g. the page cache worker thread). The lower file
+    // object lock must be held exclusively so that no more references can be
+    // taken on the page cache entry and so that two threads holding the
+    // upper lock shared do not race to set the backing entry.
     //
 
+    ASSERT(KeIsSharedExclusiveLockHeld(UpperEntry->FileObject->Lock));
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(LowerEntry->FileObject->Lock));
     ASSERT(LowerEntry->ReferenceCount > 0);
     ASSERT(UpperEntry->ReferenceCount > 0);
@@ -2888,6 +2955,7 @@ Return Value:
     //
     // The upper entry better not be dirty, because the accounting numbers
     // would be off otherwise, and it would result in a dirty non page owner.
+    // It cannot become dirty because its file object lock is held.
     //
 
     ASSERT((UpperEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
@@ -3844,8 +3912,13 @@ Return Value:
     PageSize = MmPageSize();
     READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
 
+    //
+    // This routine assumes that the file object lock is held shared when it
+    // releases the block device lock. Exclusive is OK, but not assumed.
+    //
+
+    ASSERT(KeIsSharedExclusiveLockHeldShared(FileObject->Lock) != FALSE);
     ASSERT(FlushSize <= PAGE_CACHE_FLUSH_MAX);
-    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
     //
     // Try to mark all the pages clean. If they are all already clean, then
@@ -4263,10 +4336,10 @@ Return Value:
             INSERT_BEFORE(&(PageCacheEntry->ListEntry), DestroyListHead);
 
         //
-        // Otherwise, either remove it from this list, or stick it on the
-        // end. The list assignment has to be correct because releasing
-        // the reference might try to stick it on the list if it sees its clean
-        // and not on one, but the list lock is already held here.
+        // Otherwise, either remove it from this list, or stick it on the end.
+        // The list assignment has to be correct because releasing the
+        // reference might try to stick it on the list if it sees its clean and
+        // not on one, but the list lock is already held here.
         //
 
         } else {

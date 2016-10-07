@@ -1630,12 +1630,6 @@ Return Value:
     }
 
     //
-    // The file object's lock should already be held, if it exists.
-    //
-
-    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
-
-    //
     // This read needs to happen without re-acquiring the I/O lock. So directly
     // call the non-cached read routine.
     //

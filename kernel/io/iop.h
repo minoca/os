@@ -583,7 +583,7 @@ Members:
 
     Device - Stores a pointer to the device this I/O handle points to.
 
-    DeviceContext - Stores the context pointer returned by the file system  or
+    DeviceContext - Stores the context pointer returned by the file system or
         device when the object was opened.
 
     Capacity - Stores the total size of the file or block device, in bytes.

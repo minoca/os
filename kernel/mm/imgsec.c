@@ -1613,7 +1613,6 @@ Return Value:
     ULONG FirstDirtyPage;
     ULONG LastDirtyPage;
     BOOL LockHeld;
-    BOOL MarkedDirty;
     IO_OFFSET Offset;
     ULONG PageAttributes;
     ULONG PageIndex;
@@ -1632,23 +1631,21 @@ Return Value:
     LockHeld = TRUE;
 
     //
-    // There is nothing to flush if the image section is not writable or not
-    // shared.
+    // There is nothing to flush if the image section is cache-backed, shared,
+    // and writable.
     //
 
-    if (((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0) ||
-        ((Section->Flags & IMAGE_SECTION_SHARED) == 0)) {
+    if (((Section->Flags & IMAGE_SECTION_SHARED) == 0) ||
+        ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+        ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0)) {
 
         Status = STATUS_SUCCESS;
         goto FlushImageSectionRegionEnd;
     }
 
-    ASSERT((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
-    ASSERT((Section->Flags & IMAGE_SECTION_SHARED) != 0);
-
     //
-    // Acquire the image section lock and search for dirty pages in the given
-    // region. If they are dirty, mark the backing page cache entry as dirty.
+    // Search for dirty pages in the region. If they are dirty, mark the
+    // backing page cache entry as dirty.
     //
 
     RegionEndOffset = PageOffset + PageCount;
@@ -1722,10 +1719,8 @@ Return Value:
         // Mark it dirty.
         //
 
-        MarkedDirty = IoMarkPageCacheEntryDirty(CacheEntry);
-        if (MarkedDirty != FALSE) {
-            DirtyPageCount += 1;
-        }
+        IoMarkPageCacheEntryDirty(CacheEntry);
+        DirtyPageCount += 1;
     }
 
     //
@@ -3857,12 +3852,10 @@ Return Value:
               ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)))) {
 
             //
-            // If the caller does not care about dirty pages and this was a
-            // shared section, mark the page cache entry dirty.
+            // If this is a shared section, mark the page cache entry dirty.
             //
 
-            if ((PageWasDirty == NULL) &&
-                ((Section->Flags & IMAGE_SECTION_SHARED) != 0)) {
+            if ((Section->Flags & IMAGE_SECTION_SHARED) != 0) {
 
                 ASSERT((Flags & IMAGE_SECTION_UNMAP_FLAG_TRUNCATE) == 0);
                 ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
@@ -3874,13 +3867,9 @@ Return Value:
 
                 IoMarkPageCacheEntryDirty(PageCacheEntry);
                 DirtyPageCount += 1;
+            }
 
-            //
-            // If the caller does want information about pages being dirty,
-            // then report it as dirty.
-            //
-
-            } else if (PageWasDirty != NULL) {
+            if (PageWasDirty != NULL) {
                 *PageWasDirty = TRUE;
             }
         }
@@ -4030,7 +4019,6 @@ Return Value:
     PVOID CurrentAddress;
     PKPROCESS CurrentProcess;
     UINTN DirtyPageCount;
-    BOOL MarkedDirty;
     UINTN MinOffset;
     BOOL MultipleIpisRequired;
     BOOL OtherProcess;
@@ -4277,10 +4265,8 @@ Return Value:
             // Mark it dirty.
             //
 
-            MarkedDirty = IoMarkPageCacheEntryDirty(PageCacheEntry);
-            if (MarkedDirty != FALSE) {
-                DirtyPageCount += 1;
-            }
+            IoMarkPageCacheEntryDirty(PageCacheEntry);
+            DirtyPageCount += 1;
         }
 
         CurrentAddress += PageSize;

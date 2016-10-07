@@ -7359,8 +7359,9 @@ IoPageCacheEntryAddReference (
 Routine Description:
 
     This routine increments the reference count on the given page cache entry.
-    It is assumed that callers of this routine either hold the page cache lock
-    or already hold a reference on the given page cache entry.
+    It is assumed that either the lock for the file object associated with the
+    page cache entry is held or the caller already has a reference on the given
+    page cache entry.
 
 Arguments:
 
