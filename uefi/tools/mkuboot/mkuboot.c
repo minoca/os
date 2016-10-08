@@ -27,7 +27,6 @@ Environment:
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
-#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -36,6 +35,14 @@ Environment:
 
 #include "uefifw.h"
 #include "uboot.h"
+
+//
+// --------------------------------------------------------------------- Macros
+//
+
+#define MupByteSwap32(_Value) \
+   ((((_Value) & 0xFF000000) >> 24) | (((_Value) & 0x00FF0000) >>  8) | \
+    (((_Value) & 0x0000FF00) <<  8) | (((_Value) & 0x000000FF) << 24))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -731,16 +738,16 @@ Return Value:
     //
 
     memset(&UBootHeader, 0, sizeof(UBOOT_HEADER));
-    UBootHeader.Magic = htonl(UBOOT_MAGIC);
-    UBootHeader.CreationTimestamp = htonl(time(NULL));
-    UBootHeader.DataSize = htonl(Context->InputFileSize);
-    UBootHeader.DataLoadAddress = htonl(Context->LoadAddress);
-    UBootHeader.EntryPoint = htonl(Context->EntryPoint);
+    UBootHeader.Magic = MupByteSwap32(UBOOT_MAGIC);
+    UBootHeader.CreationTimestamp = MupByteSwap32(time(NULL));
+    UBootHeader.DataSize = MupByteSwap32(Context->InputFileSize);
+    UBootHeader.DataLoadAddress = MupByteSwap32(Context->LoadAddress);
+    UBootHeader.EntryPoint = MupByteSwap32(Context->EntryPoint);
     EfiCoreCalculateCrc32(Context->InputFileBuffer,
                           Context->InputFileSize,
                           &(UBootHeader.DataCrc32));
 
-    UBootHeader.DataCrc32 = htonl(UBootHeader.DataCrc32);
+    UBootHeader.DataCrc32 = MupByteSwap32(UBootHeader.DataCrc32);
     UBootHeader.OperatingSystem = UBOOT_OS_LINUX;
     UBootHeader.Architecture = UBOOT_ARCHITECTURE_ARM;
     UBootHeader.ImageType = UBOOT_IMAGE_KERNEL;
@@ -753,7 +760,7 @@ Return Value:
                           sizeof(UBOOT_HEADER),
                           &(UBootHeader.HeaderCrc32));
 
-    UBootHeader.HeaderCrc32 = htonl(UBootHeader.HeaderCrc32);
+    UBootHeader.HeaderCrc32 = MupByteSwap32(UBootHeader.HeaderCrc32);
 
     //
     // Write out the U-Boot header.
@@ -947,18 +954,20 @@ Return Value:
     //
 
     memset(&UBootFitHeader, 0, sizeof(UBOOT_FIT_HEADER));
-    UBootFitHeader.Magic = htonl(UBOOT_FIT_MAGIC);
-    UBootFitHeader.TotalSize = htonl(TotalSize);
-    UBootFitHeader.StructuresOffset = htonl(StructuresOffset);
-    UBootFitHeader.StringsOffset = htonl(StringsOffset);
-    UBootFitHeader.MemoryReserveMapOffset = htonl(MemoryReserveMapOffset);
-    UBootFitHeader.Version = htonl(UBOOT_FIT_VERSION);
+    UBootFitHeader.Magic = MupByteSwap32(UBOOT_FIT_MAGIC);
+    UBootFitHeader.TotalSize = MupByteSwap32(TotalSize);
+    UBootFitHeader.StructuresOffset = MupByteSwap32(StructuresOffset);
+    UBootFitHeader.StringsOffset = MupByteSwap32(StringsOffset);
+    UBootFitHeader.MemoryReserveMapOffset =
+                                         MupByteSwap32(MemoryReserveMapOffset);
+
+    UBootFitHeader.Version = MupByteSwap32(UBOOT_FIT_VERSION);
     UBootFitHeader.LastCompatibleVersion =
-                                 htonl(UBOOT_FIT_LAST_COMPATIBLE_VERSION);
+                              MupByteSwap32(UBOOT_FIT_LAST_COMPATIBLE_VERSION);
 
     UBootFitHeader.BootCpuId = 0;
-    UBootFitHeader.StringsSize = htonl(StringsSize);
-    UBootFitHeader.StructuresSize = htonl(StructuresSize);
+    UBootFitHeader.StringsSize = MupByteSwap32(StringsSize);
+    UBootFitHeader.StructuresSize = MupByteSwap32(StructuresSize);
 
     //
     // Write out the U-Boot FIT header back at the beginning of the file.
@@ -1139,8 +1148,8 @@ Return Value:
     CHAR8 *String;
     UINT32 Timestamp;
 
-    EndTag = htonl(UBOOT_FIT_TAG_END);
-    EndNodeTag = htonl(UBOOT_FIT_TAG_NODE_END);
+    EndTag = MupByteSwap32(UBOOT_FIT_TAG_END);
+    EndNodeTag = MupByteSwap32(UBOOT_FIT_TAG_NODE_END);
 
     //
     // Write the root node.
@@ -1155,7 +1164,7 @@ Return Value:
     // Write the root's timestamp.
     //
 
-    Timestamp = htonl(time(NULL));
+    Timestamp = MupByteSwap32(time(NULL));
     Result = MupWriteProperty(Context,
                               MkUBootPropertyTimestamp,
                               &Timestamp,
@@ -1265,7 +1274,7 @@ Return Value:
         goto FitWriteStructuresEnd;
     }
 
-    Address = htonl(Context->LoadAddress);
+    Address = MupByteSwap32(Context->LoadAddress);
     Result = MupWriteProperty(Context,
                               MkUBootPropertyLoadAddress,
                               &Address,
@@ -1275,7 +1284,7 @@ Return Value:
         goto FitWriteStructuresEnd;
     }
 
-    Address = htonl(Context->EntryPoint);
+    Address = MupByteSwap32(Context->EntryPoint);
     Result = MupWriteProperty(Context,
                               MkUBootPropertyEntryPoint,
                               &Address,
@@ -1467,7 +1476,7 @@ Return Value:
     }
 
     memset(Node, 0, NodeSize);
-    Node->Tag = htonl(UBOOT_FIT_TAG_NODE_START);
+    Node->Tag = MupByteSwap32(UBOOT_FIT_TAG_NODE_START);
     memcpy((Node + 1), Name, NameLength);
     BytesWritten = fwrite(Node, 1, NodeSize, Context->OutputFile);
     if (BytesWritten != NodeSize) {
@@ -1533,9 +1542,9 @@ Return Value:
     }
 
     memset(FitProperty, 0, FitPropertySize);
-    FitProperty->Tag = htonl(UBOOT_FIT_TAG_PROPERTY);
-    FitProperty->Size = htonl(DataSize);
-    StringOffset = htonl(MkUBootProperties[Property].Offset);
+    FitProperty->Tag = MupByteSwap32(UBOOT_FIT_TAG_PROPERTY);
+    FitProperty->Size = MupByteSwap32(DataSize);
+    StringOffset = MupByteSwap32(MkUBootProperties[Property].Offset);
     FitProperty->StringOffset = StringOffset;
     if (DataSize != 0) {
         memcpy((FitProperty + 1), Data, DataSize);
