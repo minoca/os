@@ -1809,7 +1809,7 @@ Return Value:
 
         if ((Node == NULL) && (UseDirtyPageList != FALSE)) {
             KeAcquireQueuedLock(IoPageCacheListLock);
-            if (!LIST_EMPTY(&LocalList)) {
+            while (!LIST_EMPTY(&LocalList)) {
                 CacheEntry = LIST_VALUE(LocalList.Next,
                                         PAGE_CACHE_ENTRY,
                                         ListEntry);
@@ -1828,6 +1828,8 @@ Return Value:
                     Node = NULL;
                     continue;
                 }
+
+                break;
             }
 
             KeReleaseQueuedLock(IoPageCacheListLock);
