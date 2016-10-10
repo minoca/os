@@ -221,6 +221,23 @@ Author:
 #define IO_READ_AHEAD_SIZE _128KB
 
 //
+// This flag is set to indicate that the eviction operation is executing as a
+// result of a truncate. All image sections should be unmapped and all page
+// cache entries should be removed.
+//
+
+#define EVICTION_FLAG_TRUNCATE 0x00000001
+
+//
+// This flag is set to indicate that the eviction operation is executing as a
+// result of a device removal. There may be outstanding references on the
+// device or file, but all of its page cache entries should be aggressively
+// removed and image sections unmapped.
+//
+
+#define EVICTION_FLAG_REMOVE 0x00000002
+
+//
 // --------------------------------------------------------------------- Macros
 //
 
@@ -2611,6 +2628,41 @@ Return Value:
 --*/
 
 VOID
+IopEvictFileObject (
+    PFILE_OBJECT FileObject,
+    IO_OFFSET Offset,
+    ULONG Flags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evicts the tail of a file object from the system. It unmaps
+    all page cache entries used by image sections after the given offset and
+    evicts all page cache entries after the given offset. If the remove or
+    truncate flags are specified, this routine actually unmaps all mappings for
+    the image sections after the given offset, not just the mapped page cache
+    entries. This routine assumes the file object's lock is held exclusively.
+
+Arguments:
+
+    FileObject - Supplies a pointer to the file object to evict.
+
+    Offset - Supplies the starting offset into the file or device after which
+        all page cache entries should be evicted and all image sections should
+        be unmapped.
+
+    Flags - Supplies a bitmask of eviction flags. See EVICTION_FLAG_* for
+        definitions.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
 IopEvictFileObjects (
     DEVICE_ID DeviceId,
     ULONG Flags
@@ -2628,8 +2680,8 @@ Arguments:
     DeviceId - Supplies an optional device ID filter. Supply 0 to iterate over
         file objects for all devices.
 
-    Flags - Supplies a bitmask of eviction flags. See
-        PAGE_CACHE_EVICTION_FLAG_* for definitions.
+    Flags - Supplies a bitmask of eviction flags. See EVICTION_FLAG_* for
+        definitions.
 
 Return Value:
 

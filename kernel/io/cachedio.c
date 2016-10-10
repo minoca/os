@@ -1090,9 +1090,7 @@ PerformCachedWriteEnd:
 
     if (!KSUCCESS(Status)) {
         READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
-        IopEvictPageCacheEntries(FileObject,
-                                 FileSize,
-                                 PAGE_CACHE_EVICTION_FLAG_TRUNCATE);
+        IopEvictFileObject(FileObject, FileSize, EVICTION_FLAG_TRUNCATE);
     }
 
     //
@@ -1811,9 +1809,7 @@ Return Value:
         if (IoContext->BytesCompleted < IoContext->SizeInBytes) {
             FileOffset = IoContext->Offset + IoContext->BytesCompleted;
             FileOffset = ALIGN_RANGE_DOWN(FileOffset, PageSize);
-            IopEvictPageCacheEntries(FileObject,
-                                     BufferOffset,
-                                     PAGE_CACHE_EVICTION_FLAG_TRUNCATE);
+            IopEvictFileObject(FileObject, FileOffset, EVICTION_FLAG_TRUNCATE);
         }
 
     //

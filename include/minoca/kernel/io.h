@@ -884,6 +884,12 @@ Author:
 #define IO_OFFSET_NONE (-1LL)
 
 //
+// Define the maximum I/O offset.
+//
+
+#define IO_OFFSET_MAX MAX_LONGLONG
+
+//
 // Define the set of flags used for read/write IRP preparation and completion.
 //
 

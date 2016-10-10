@@ -2188,8 +2188,8 @@ Arguments:
     Offset - Supplies the starting offset into the file or device after which
         all page cache entries should be evicted.
 
-    Flags - Supplies a bitmask of eviction flags. See
-        PAGE_CACHE_EVICTION_FLAG_* for definitions.
+    Flags - Supplies a bitmask of eviction flags. See EVICTION_FLAG_* for
+        definitions.
 
 Return Value:
 
@@ -2295,16 +2295,6 @@ Return Value:
         //
 
         IopMarkPageCacheEntryClean(CacheEntry, FALSE);
-
-        //
-        // If this is a delete operation, then there should not be any open
-        // handles for this file object. Therefore there should be no I/O
-        // buffers with references to this file object's page cache entries.
-        // Truncate is different, as there may be outstanding handles.
-        //
-
-        ASSERT(((Flags & PAGE_CACHE_EVICTION_FLAG_DELETE) == 0) ||
-               (CacheEntry->ReferenceCount == 0));
 
         //
         // Remove the node from the page cache tree. It should not be found on

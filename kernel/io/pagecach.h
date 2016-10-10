@@ -26,30 +26,6 @@ Author:
 //
 
 //
-// This flag is set to indicate that the page cache eviction operation is
-// executing as a result of a truncate.
-//
-
-#define PAGE_CACHE_EVICTION_FLAG_TRUNCATE 0x00000001
-
-//
-// This flag is set to indicate that the page cache eviction operation is
-// executing as a result of a delete. There should be no outstanding references
-// on the device or file.
-//
-
-#define PAGE_CACHE_EVICTION_FLAG_DELETE 0x00000002
-
-//
-// This flag is set to indicate that the page cache eviction operation is
-// executing as a result of a remove. There may be outstanding references on
-// the device or file, but all of its cache entries should be aggressively
-// removed.
-//
-
-#define PAGE_CACHE_EVICTION_FLAG_REMOVE 0x00000004
-
-//
 // Define the number of pages to clean if a random write stumbles into a page
 // cache that is too dirty.
 //
@@ -317,8 +293,8 @@ Arguments:
     Offset - Supplies the starting offset into the file or device after which
         all page cache entries should be evicted.
 
-    Flags - Supplies a bitmask of eviction flags. See
-        PAGE_CACHE_EVICTION_FLAG_* for definitions.
+    Flags - Supplies a bitmask of eviction flags. See EVICTION_FLAG_* for
+        definitions.
 
 Return Value:
 

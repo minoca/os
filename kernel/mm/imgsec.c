@@ -366,7 +366,7 @@ Arguments:
         section will be unmapped. The offset should be page aligned.
 
     Size - Supplies the size of the region to unmap, in bytes. The size should
-        be page aligned.
+        be page aligned. Supply -1 to unmap everything after the given offset.
 
     Flags - Supplies a bitmask of flags for the unmap. See
         IMAGE_SECTION_UNMAP_FLAG_* for definitions.
@@ -408,8 +408,8 @@ Return Value:
     ReleaseSection = NULL;
 
     ASSERT(IS_ALIGNED(Offset, MmPageSize()) != FALSE);
-    ASSERT(IS_ALIGNED(Size, MmPageSize()) != FALSE);
-    ASSERT((Offset + Size) > Offset);
+    ASSERT((Size == -1ULL) || (IS_ALIGNED(Size, MmPageSize()) != FALSE));
+    ASSERT((Size == -1ULL) || ((Offset + Size) > Offset));
 
     //
     // Iterate over the sections in the list. Sections are added to the list
@@ -419,7 +419,11 @@ Return Value:
     //
 
     UnmapStartOffset = Offset;
-    UnmapEndOffset = UnmapStartOffset + Size;
+    UnmapEndOffset = IO_OFFSET_MAX;
+    if (Size != -1ULL) {
+        UnmapEndOffset = UnmapStartOffset + Size;
+    }
+
     KeAcquireQueuedLock(ImageSectionList->Lock);
     CurrentEntry = ImageSectionList->ListHead.Next;
     while (CurrentEntry != &(ImageSectionList->ListHead)) {
@@ -3857,7 +3861,6 @@ Return Value:
 
             if ((Section->Flags & IMAGE_SECTION_SHARED) != 0) {
 
-                ASSERT((Flags & IMAGE_SECTION_UNMAP_FLAG_TRUNCATE) == 0);
                 ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
 
                 PageCacheEntry = MmpGetPageCacheEntryForPhysicalAddress(

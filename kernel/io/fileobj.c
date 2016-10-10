@@ -1419,10 +1419,7 @@ Return Value:
 
         KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
         Exclusive = TRUE;
-        IopEvictPageCacheEntries(FileObject,
-                                 0,
-                                 PAGE_CACHE_EVICTION_FLAG_REMOVE);
-
+        IopEvictFileObject(FileObject, 0, EVICTION_FLAG_REMOVE);
         ClearFlags = FILE_OBJECT_FLAG_DIRTY_PROPERTIES |
                      FILE_OBJECT_FLAG_DIRTY_DATA;
 
@@ -1666,6 +1663,82 @@ Return Value:
 }
 
 VOID
+IopEvictFileObject (
+    PFILE_OBJECT FileObject,
+    IO_OFFSET Offset,
+    ULONG Flags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine evicts the tail of a file object from the system. It unmaps
+    all page cache entries used by image sections after the given offset and
+    evicts all page cache entries after the given offset. If the remove or
+    truncate flags are specified, this routine actually unmaps all mappings for
+    the image sections after the given offset, not just the mapped page cache
+    entries. This routine assumes the file object's lock is held exclusively.
+
+Arguments:
+
+    FileObject - Supplies a pointer to the file object to evict.
+
+    Offset - Supplies the starting offset into the file or device after which
+        all page cache entries should be evicted and all image sections should
+        be unmapped.
+
+    Flags - Supplies a bitmask of eviction flags. See EVICTION_FLAG_* for
+        definitions.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG UnmapFlags;
+
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
+
+    if (FileObject->ImageSectionList != NULL) {
+
+        //
+        // If the file object is being truncated or removed, unmap all
+        // overlapping portions of the image sections.
+        //
+
+        if (((Flags & EVICTION_FLAG_REMOVE) != 0) ||
+            ((Flags & EVICTION_FLAG_TRUNCATE) != 0)) {
+
+            UnmapFlags = IMAGE_SECTION_UNMAP_FLAG_TRUNCATE;
+
+        //
+        // Otherwise just unmap the page cache entries.
+        //
+
+        } else {
+            UnmapFlags = IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY;
+        }
+
+        MmUnmapImageSectionList(FileObject->ImageSectionList,
+                                Offset,
+                                -1,
+                                UnmapFlags,
+                                NULL);
+    }
+
+    //
+    // Evict the page cache entries for the file object.
+    //
+
+    IopEvictPageCacheEntries(FileObject, Offset, Flags);
+    return;
+}
+
+VOID
 IopEvictFileObjects (
     DEVICE_ID DeviceId,
     ULONG Flags
@@ -1683,8 +1756,8 @@ Arguments:
     DeviceId - Supplies an optional device ID filter. Supply 0 to iterate over
         file objects for all devices.
 
-    Flags - Supplies a bitmask of eviction flags. See
-        PAGE_CACHE_EVICTION_FLAG_* for definitions.
+    Flags - Supplies a bitmask of eviction flags. See EVICTION_FLAG_* for
+        definitions.
 
 Return Value:
 
@@ -1744,7 +1817,7 @@ Return Value:
         // Call the eviction routine for the current file object.
         //
 
-        IopEvictPageCacheEntries(CurrentObject, 0, Flags);
+        IopEvictFileObject(CurrentObject, 0, Flags);
 
         //
         // Release the reference taken on the release object.
@@ -1949,14 +2022,10 @@ Return Value:
 {
 
     ULONG BlockSize;
-    ULONG EvictionFlags;
-    IO_OFFSET EvictionOffset;
     ULONGLONG FileSize;
-    ULONG PageSize;
+    IO_OFFSET Offset;
     SYSTEM_CONTROL_TRUNCATE Request;
     KSTATUS Status;
-    IO_OFFSET UnmapOffset;
-    ULONGLONG UnmapSize;
 
     KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
 
@@ -2016,35 +2085,8 @@ Return Value:
     //
 
     if (NewFileSize < FileSize) {
-
-        //
-        // Unmap all image sections that might have mapped portions of this
-        // file.
-        //
-
-        if (FileObject->ImageSectionList != NULL) {
-            PageSize = MmPageSize();
-            UnmapOffset = ALIGN_RANGE_UP(NewFileSize, PageSize);
-            UnmapSize = ALIGN_RANGE_UP((FileSize - UnmapOffset), PageSize);
-            MmUnmapImageSectionList(FileObject->ImageSectionList,
-                                    UnmapOffset,
-                                    UnmapSize,
-                                    IMAGE_SECTION_UNMAP_FLAG_TRUNCATE,
-                                    NULL);
-        }
-
-        //
-        // Evict all full page cache entries beyond the new file size for this
-        // file object if it is cacheable.
-        //
-
-        if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
-            EvictionFlags = PAGE_CACHE_EVICTION_FLAG_TRUNCATE;
-            EvictionOffset = ALIGN_RANGE_UP(NewFileSize,
-                                            IoGetCacheEntryDataSize());
-
-            IopEvictPageCacheEntries(FileObject, EvictionOffset, EvictionFlags);
-        }
+        Offset = ALIGN_RANGE_UP(NewFileSize, IoGetCacheEntryDataSize());
+        IopEvictFileObject(FileObject, Offset, EVICTION_FLAG_TRUNCATE);
     }
 
 ModifyFileObjectSizeEnd:
