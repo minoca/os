@@ -1953,33 +1953,24 @@ Return Value:
 
 {
 
+    ULONGLONG BlockCount;
     ULONG BlockSize;
     ULONGLONG FileSize;
-    BOOL Updated;
 
-    Updated = FALSE;
     READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
     if (FileSize < NewSize) {
 
         ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
 
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
-        if (FileSize < NewSize) {
-            WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
+        WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
 
-            //
-            // TODO: Block count should be managed by the file system.
-            //
+        //
+        // TODO: Block count should be managed by the file system.
+        //
 
-            BlockSize = FileObject->Properties.BlockSize;
-            FileObject->Properties.BlockCount =
-                            ALIGN_RANGE_UP(NewSize, BlockSize) / BlockSize;
-
-            Updated = TRUE;
-        }
-    }
-
-    if (Updated != FALSE) {
+        BlockSize = FileObject->Properties.BlockSize;
+        BlockCount = ALIGN_RANGE_UP(NewSize, BlockSize) / BlockSize;
+        FileObject->Properties.BlockCount = BlockCount;
         IopMarkFileObjectPropertiesDirty(FileObject);
     }
 
