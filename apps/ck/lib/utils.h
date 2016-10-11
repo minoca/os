@@ -53,6 +53,14 @@ Author:
                         (_Count))
 
 //
+// This macro ensures there is a given amount of capacity in one of the
+// CK_*_ARRAY types.
+//
+
+#define CkpSizeArray(_Vm, _Array, _Capacity) \
+    CkpSizeGenericArray((_Vm), (_Array), sizeof(*((_Array)->Data)), (_Capacity))
+
+//
 // This macro appends a single ement to one of the CK_*_ARRAY types.
 //
 
@@ -291,7 +299,7 @@ CK_ERROR_TYPE
 CkpFillGenericArray (
     PCK_VM Vm,
     PVOID Array,
-    PVOID Data,
+    PCVOID Data,
     UINTN ElementSize,
     UINTN Count
     );
@@ -313,6 +321,39 @@ Arguments:
     ElementSize - Supplies the size of a single element.
 
     Count - Supplies the number of elements to fill.
+
+Return Value:
+
+    CkSuccess on success.
+
+    CkErrorNoMemory on allocation failure.
+
+--*/
+
+CK_ERROR_TYPE
+CkpSizeGenericArray (
+    PCK_VM Vm,
+    PVOID Array,
+    UINTN ElementSize,
+    UINTN Capacity
+    );
+
+/*++
+
+Routine Description:
+
+    This routine ensures a certain amount of capacity in one of the CK_*_ARRAY
+    types.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Array - Supplies a pointer to the array to size.
+
+    ElementSize - Supplies the size of a single element.
+
+    Capacity - Supplies the capacity to ensure.
 
 Return Value:
 

@@ -628,14 +628,13 @@ Members:
     Path - Stores an optional pointer to the string containing the full path
         to the module.
 
-    Fiber - Stores a pointer to the fiber used to load the module contents.
-        Once loaded, this becomes NULL.
-
     Handle - Stores a pointer to the dynamic library handle if this is a
         foreign module.
 
-    EntryFunction - Stores a pointer to the module entry point if this is a
-        foreign module.
+    Closure - Stores a pointer to the main closure of the module.
+
+    Run - Stores a boolean indicating whether or not the module closure has
+        been run.
 
 --*/
 
@@ -646,9 +645,9 @@ struct _CK_MODULE {
     CK_STRING_TABLE Strings;
     PCK_STRING Name;
     PCK_STRING Path;
-    PCK_FIBER Fiber;
     PVOID Handle;
-    PCK_CLOSURE EntryFunction;
+    PCK_CLOSURE Closure;
+    BOOL Run;
 };
 
 /*++

@@ -77,6 +77,7 @@ CkpCompile (
     PCK_MODULE Module,
     PSTR Source,
     UINTN Length,
+    LONG Line,
     BOOL PrintErrors
     );
 
@@ -96,6 +97,9 @@ Arguments:
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
 
     PrintErrors - Supplies a boolean indicating whether or not errors should be
         printed.

@@ -22,6 +22,7 @@
 
 OBJS = capi.o        \
        capilib.o     \
+       cdump.o       \
        ckcore.o      \
        compexpr.o    \
        compiler.o    \

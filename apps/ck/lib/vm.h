@@ -550,7 +550,8 @@ CkpInterpret (
     PSTR ModuleName,
     PSTR ModulePath,
     PSTR Source,
-    UINTN Length
+    UINTN Length,
+    LONG Line
     );
 
 /*++
@@ -573,6 +574,9 @@ Arguments:
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
 
 Return Value:
 
@@ -757,7 +761,8 @@ CkpModuleLoadSource (
     CK_VALUE ModuleName,
     CK_VALUE Path,
     PSTR Source,
-    UINTN Length
+    UINTN Length,
+    LONG Line
     );
 
 /*++
@@ -779,6 +784,9 @@ Arguments:
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
 
 Return Value:
 
@@ -931,3 +939,65 @@ Return Value:
     None.
 
 --*/
+
+CK_VALUE
+CkpModuleFreeze (
+    PCK_VM Vm,
+    PCK_MODULE Module
+    );
+
+/*++
+
+Routine Description:
+
+    This routine freezes a module, writing out its compiled bytecode into a
+    string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module to freeze.
+
+Return Value:
+
+    Returns a string describing the module on success.
+
+    CK_NULL_VALUE on failure.
+
+--*/
+
+BOOL
+CkpModuleThaw (
+    PCK_VM Vm,
+    PCK_MODULE Module,
+    PCSTR Contents,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine thaws out a previously frozen module, reloading it quicker
+    than recompiling it.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Module - Supplies a pointer to the module to freeze. The caller should
+        make sure this module doesn't get cleaned up by garbage collection.
+
+    Contents - Supplies the frozen module contents.
+
+    Size - Supplies the frozen module size in bytes.
+
+Return Value:
+
+    TRUE if the module was successfully thawed.
+
+    FALSE if the module could not be thawed.
+
+--*/
+

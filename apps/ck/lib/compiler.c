@@ -286,6 +286,7 @@ CkpCompile (
     PCK_MODULE Module,
     PSTR Source,
     UINTN Length,
+    LONG Line,
     BOOL PrintErrors
     )
 
@@ -305,6 +306,9 @@ Arguments:
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
 
     PrintErrors - Supplies a boolean indicating whether or not errors should be
         printed.
@@ -332,7 +336,7 @@ Return Value:
     Parser.Source = Source;
     Parser.SourceLength = Length;
     Parser.PrintErrors = PrintErrors;
-    CkpInitializeLexer(&(Parser.Lexer), Source, Length);
+    CkpInitializeLexer(&(Parser.Lexer), Source, Length, Line);
     Parser.Parser.Grammar = &CkGrammar;
     Parser.Parser.Reallocate = CkpCompilerReallocate;
     Parser.Parser.Callback = CkpParserCallback;
@@ -341,7 +345,7 @@ Return Value:
     Parser.Parser.Lexer = &(Parser.Lexer);
     Parser.Parser.GetToken = CkpLexerGetToken;
     Parser.Parser.ValueSize = sizeof(CK_SYMBOL_UNION);
-    Parser.Line = 1;
+    Parser.Line = Line;
     Error = CkpInitializeCompiler(&Compiler, &Parser, NULL, TRUE);
     if (Error != CkSuccess) {
         Parser.Errors += 1;
@@ -539,6 +543,13 @@ Return Value:
     CkZero(Compiler, sizeof(CK_COMPILER));
     Compiler->Parser = Parser;
     Compiler->Parent = Parent;
+    if (Parent != NULL) {
+        Compiler->Depth = Parent->Depth + 1;
+        if (Compiler->Depth > CK_MAX_NESTED_FUNCTIONS) {
+            return CkErrorCompile;
+        }
+    }
+
     Parser->Vm->Compiler = Compiler;
     Compiler->Locals = CkAllocate(Parser->Vm,
                                   CK_INITIAL_LOCALS * sizeof(CK_LOCAL));

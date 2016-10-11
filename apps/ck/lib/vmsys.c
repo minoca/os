@@ -30,6 +30,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "chalkp.h"
 #include "vmsys.h"
@@ -65,6 +66,14 @@ CkpDefaultLoadModule (
     PCK_VM Vm,
     PCSTR ModulePath,
     PCK_MODULE_HANDLE ModuleData
+    );
+
+INT
+CkpDefaultSaveModule (
+    PCK_VM Vm,
+    PCSTR ModulePath,
+    PCSTR FrozenData,
+    UINTN FrozenDataSize
     );
 
 VOID
@@ -113,6 +122,7 @@ CkpLoadDynamicModule (
 CK_CONFIGURATION CkDefaultConfiguration = {
     CkpDefaultReallocate,
     CkpDefaultLoadModule,
+    CkpDefaultSaveModule,
     CkpDefaultUnloadForeignModule,
     CkpDefaultWrite,
     CkpDefaultError,
@@ -252,6 +262,94 @@ Return Value:
     CkStackPop(Vm);
     CkStackPop(Vm);
     return Result;
+}
+
+INT
+CkpDefaultSaveModule (
+    PCK_VM Vm,
+    PCSTR ModulePath,
+    PCSTR FrozenData,
+    UINTN FrozenDataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called after a module is compiled, so that the caller can
+    save the compilation object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModulePath - Supplies a pointer to the source file path that was just
+        loaded.
+
+    FrozenData - Supplies an opaque binary representation of the compiled
+        module. The format of this data is unspecified and may change between
+        revisions of the language.
+
+    FrozenDataSize - Supplies the number of bytes in the frozen module data.
+
+Return Value:
+
+    0 always, since failure is non-fatal.
+
+--*/
+
+{
+
+    PSTR Dot;
+    FILE *File;
+    size_t Length;
+    CHAR Path[PATH_MAX];
+    ssize_t Written;
+
+    //
+    // Use the same path as the source file, but replace the extension with
+    // the object extension.
+    //
+
+    Length = strlen(ModulePath);
+    if (Length + 2 > PATH_MAX) {
+        return 0;
+    }
+
+    memcpy(Path, ModulePath, Length + 1);
+    Dot = strrchr(Path, '.');
+    if (Dot == NULL) {
+        return 0;
+    }
+
+    if (Dot + 1 + strlen(CK_OBJECT_EXTENSION) >= Path + PATH_MAX) {
+        return 0;
+    }
+
+    strcpy(Dot + 1, CK_OBJECT_EXTENSION);
+
+    //
+    // Attempt to save the file.
+    //
+
+    File = fopen(Path, "wb");
+    if (File == NULL) {
+        return 0;
+    }
+
+    Written = fwrite(FrozenData, 1, FrozenDataSize, File);
+    fclose(File);
+
+    //
+    // If not everything was written, delete the file so as not to have half
+    // baked objects.
+    //
+
+    if (Written != FrozenDataSize) {
+        unlink(Path);
+    }
+
+    return 0;
 }
 
 VOID
@@ -441,7 +539,11 @@ Return Value:
 {
 
     FILE *File;
+    off_t FileSize;
     CK_LOAD_MODULE_RESULT LoadStatus;
+    CHAR ObjectPath[PATH_MAX];
+    INT ObjectPathLength;
+    struct stat ObjectStat;
     CHAR Path[PATH_MAX];
     INT PathLength;
     PSTR Source;
@@ -453,14 +555,14 @@ Return Value:
     if ((Directory == NULL) || (*Directory == '\0')) {
         PathLength = snprintf(Path,
                               PATH_MAX,
-                              "%s%s",
+                              "%s.%s",
                               ModulePath,
                               CK_SOURCE_EXTENSION);
 
     } else {
         PathLength = snprintf(Path,
                               PATH_MAX,
-                              "%s/%s%s",
+                              "%s/%s.%s",
                               Directory,
                               ModulePath,
                               CK_SOURCE_EXTENSION);
@@ -480,22 +582,73 @@ Return Value:
         return CkLoadModuleNotFound;
     }
 
-    File = fopen(Path, "rb");
+    //
+    // Check to see if there's a pre-compiled object there, and load that
+    // instead if it checks out.
+    //
+
+    if ((Directory == NULL) || (*Directory == '\0')) {
+        ObjectPathLength = snprintf(ObjectPath,
+                                    PATH_MAX,
+                                    "%s.%s",
+                                    ModulePath,
+                                    CK_OBJECT_EXTENSION);
+
+    } else {
+        ObjectPathLength = snprintf(ObjectPath,
+                                    PATH_MAX,
+                                    "%s/%s.%s",
+                                    Directory,
+                                    ModulePath,
+                                    CK_OBJECT_EXTENSION);
+    }
+
+    if ((ObjectPathLength < 0) || (ObjectPathLength > PATH_MAX)) {
+        ObjectPath[0] = '\0';
+    }
+
+    //
+    // If the object path exists, is a file, is not empty, and is newer than
+    // its corresponding source, then use it instead.
+    //
+
+    FileSize = Stat.st_size;
+    if ((stat(ObjectPath, &ObjectStat) == 0) &&
+        (S_ISREG(ObjectStat.st_mode)) &&
+        (ObjectStat.st_size > 0) &&
+        (ObjectStat.st_mtime >= Stat.st_mtime)) {
+
+        LoadStatus = CkLoadModuleObject;
+        File = fopen(ObjectPath, "rb");
+        if (File != NULL) {
+            FileSize = ObjectStat.st_size;
+
+        } else {
+            File = fopen(Path, "rb");
+        }
+
+    } else {
+        LoadStatus = CkLoadModuleSource;
+        File = fopen(Path, "rb");
+    }
+
     if (File == NULL) {
+        LoadStatus = CkLoadModuleStaticError;
         goto LoadSourceFileEnd;
     }
 
-    Source = CkAllocate(Vm, Stat.st_size + 1);
+    Source = CkAllocate(Vm, FileSize + 1);
     if (Source == NULL) {
         LoadStatus = CkLoadModuleNoMemory;
         goto LoadSourceFileEnd;
     }
 
-    if (fread(Source, 1, Stat.st_size, File) != Stat.st_size) {
+    if (fread(Source, 1, FileSize, File) != FileSize) {
+        LoadStatus = CkLoadModuleStaticError;
         goto LoadSourceFileEnd;
     }
 
-    Source[Stat.st_size] = '\0';
+    Source[FileSize] = '\0';
     ModuleData->Source.Path = CkAllocate(Vm, PathLength + 1);
     if (ModuleData->Source.Path == NULL) {
         LoadStatus = CkLoadModuleNoMemory;
@@ -506,8 +659,7 @@ Return Value:
     ModuleData->Source.PathLength = PathLength;
     ModuleData->Source.Text = Source;
     Source = NULL;
-    ModuleData->Source.Length = Stat.st_size;
-    LoadStatus = CkLoadModuleSource;
+    ModuleData->Source.Length = FileSize;
 
 LoadSourceFileEnd:
     if (LoadStatus == CkLoadModuleStaticError) {

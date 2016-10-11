@@ -24,6 +24,8 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define CK_FREEZE_SIGNATURE_SIZE 4
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -66,6 +68,8 @@ extern CK_PRIMITIVE_DESCRIPTION CkFiberPrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkFiberStaticPrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkExceptionPrimitives[];
+
+extern const UCHAR CkModuleFreezeSignature[CK_FREEZE_SIGNATURE_SIZE];
 
 //
 // -------------------------------------------------------- Function Prototypes

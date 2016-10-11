@@ -79,7 +79,8 @@ Author:
                        (CHALK_VERSION_MINOR << 16) | \
                        CHALK_VERSION_REVISION)
 
-#define CK_SOURCE_EXTENSION ".ck"
+#define CK_SOURCE_EXTENSION "ck"
+#define CK_OBJECT_EXTENSION "cko"
 #define CK_MODULE_ENTRY_NAME "CkModuleInit"
 
 //
@@ -111,6 +112,7 @@ typedef enum _CK_ERROR_TYPE {
 
 typedef enum _CK_LOAD_MODULE_RESULT {
     CkLoadModuleSource,
+    CkLoadModuleObject,
     CkLoadModuleForeign,
     CkLoadModuleNotFound,
     CkLoadModuleNoMemory,
@@ -137,7 +139,7 @@ typedef enum _CK_API_TYPE {
 } CK_API_TYPE, *PCK_API_TYPE;
 
 typedef struct _CK_VM CK_VM, *PCK_VM;
-typedef LONGLONG CK_INTEGER;
+typedef LONGLONG CK_INTEGER, *PCK_INTEGER;
 
 typedef
 PVOID
@@ -329,6 +331,45 @@ Return Value:
 --*/
 
 typedef
+INT
+(*PCK_SAVE_MODULE) (
+    PCK_VM Vm,
+    PCSTR ModulePath,
+    PCSTR FrozenData,
+    UINTN FrozenDataSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called after a module is compiled, so that the caller can
+    save the compilation object.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModulePath - Supplies a pointer to the source file path that was just
+        loaded.
+
+    FrozenData - Supplies an opaque binary representation of the compiled
+        module. The format of this data is unspecified and may change between
+        revisions of the language.
+
+    FrozenDataSize - Supplies the number of bytes in the frozen module data.
+
+Return Value:
+
+    0 on success.
+
+    Returns a non-zero value on failure. Unless being explicitly asked to
+    save a compilation, failures are not normally fatal, and so zero should
+    almost always be returned.
+
+--*/
+
+typedef
 VOID
 (*PCK_WRITE) (
     PCK_VM Vm,
@@ -396,6 +437,9 @@ Members:
     LoadModule - Stores an optional pointer to a function used to load a Chalk
         module.
 
+    SaveModule - Stores an optional pointer to a function used to save the
+        compiled representation of a newly loaded module.
+
     UnloadForeignModule - Stores an optional pointer to a function called when
         a foreign module is being destroyed.
 
@@ -428,6 +472,7 @@ Members:
 typedef struct _CK_CONFIGURATION {
     PCK_REALLOCATE Reallocate;
     PCK_LOAD_MODULE LoadModule;
+    PCK_SAVE_MODULE SaveModule;
     PCK_DESTROY_DATA UnloadForeignModule;
     PCK_WRITE Write;
     PCK_ERROR Error;
@@ -549,7 +594,8 @@ CkInterpret (
     PCK_VM Vm,
     PSTR Path,
     PSTR Source,
-    UINTN Length
+    UINTN Length,
+    LONG Line
     );
 
 /*++
@@ -571,6 +617,9 @@ Arguments:
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
 
 Return Value:
 

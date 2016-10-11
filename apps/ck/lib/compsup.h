@@ -294,6 +294,9 @@ Members:
     Parent - Stores a pointer to the parent compiler if this is an inner
         function compiler.
 
+    Depth - Stores the number of parent compilers above this one. This is used
+        to detect pathological inputs that nest functions too deep.
+
     Line - Stores the current line being visited.
 
     PreviousLine - Stores the last line number generated in the line number
@@ -327,6 +330,7 @@ struct _CK_COMPILER {
     PCK_FUNCTION Function;
     PCK_PARSER Parser;
     PCK_COMPILER Parent;
+    INT Depth;
     INT Line;
     INT PreviousLine;
     UINTN LineOffset;
@@ -1629,7 +1633,8 @@ VOID
 CkpInitializeLexer (
     PLEXER Lexer,
     PSTR Source,
-    UINTN Length
+    UINTN Length,
+    LONG Line
     );
 
 /*++
@@ -1640,12 +1645,15 @@ Routine Description:
 
 Arguments:
 
-    Lexer - Stores a pointer to the lexer to initialize.
+    Lexer - Supplies a pointer to the lexer to initialize.
 
-    Source - Stores a pointer to the null terminated source string to lex.
+    Source - Supplies a pointer to the null terminated source string to lex.
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
 
 Return Value:
 

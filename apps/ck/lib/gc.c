@@ -1076,8 +1076,7 @@ Return Value:
     CkpKissValueArray(Vm, &(Module->Strings.List));
     CkpKissObject(Vm, &(Module->Name->Header));
     CkpKissObject(Vm, &(Module->Path->Header));
-    CkpKissObject(Vm, &(Module->Fiber->Header));
-    CkpKissObject(Vm, &(Module->EntryFunction->Header));
+    CkpKissObject(Vm, &(Module->Closure->Header));
     Vm->BytesAllocated = sizeof(CK_MODULE);
     return;
 }

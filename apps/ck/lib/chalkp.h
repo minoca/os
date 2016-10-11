@@ -131,6 +131,12 @@ Author:
 #define CK_MAX_FIELDS 255
 
 //
+// Define the maximum number of nested functions.
+//
+
+#define CK_MAX_NESTED_FUNCTIONS 32
+
+//
 // Define the initial number of call frames to allocate for any new fiber. This
 // should ideally by a power of two.
 //

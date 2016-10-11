@@ -308,7 +308,7 @@ CK_ERROR_TYPE
 CkpFillGenericArray (
     PCK_VM Vm,
     PVOID Array,
-    PVOID Data,
+    PCVOID Data,
     UINTN ElementSize,
     UINTN Count
     )
@@ -391,6 +391,73 @@ Return Value:
     }
 
     ByteArray->Count += Count;
+    return CkSuccess;
+}
+
+CK_ERROR_TYPE
+CkpSizeGenericArray (
+    PCK_VM Vm,
+    PVOID Array,
+    UINTN ElementSize,
+    UINTN Capacity
+    )
+
+/*++
+
+Routine Description:
+
+    This routine ensures a certain amount of capacity in one of the CK_*_ARRAY
+    types.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Array - Supplies a pointer to the array to size.
+
+    ElementSize - Supplies the size of a single element.
+
+    Capacity - Supplies the capacity to ensure.
+
+Return Value:
+
+    CkSuccess on success.
+
+    CkErrorNoMemory on allocation failure.
+
+--*/
+
+{
+
+    PCK_BYTE_ARRAY ByteArray;
+    PVOID NewBuffer;
+    UINTN NewCapacity;
+
+    //
+    // Assume the thing is a byte array, even though it may not be. The fields
+    // of each array type alias on top of each other.
+    //
+
+    ByteArray = Array;
+    if (ByteArray->Capacity < Capacity) {
+        NewCapacity = Capacity;
+        if (NewCapacity < CK_INITIAL_ARRAY_CAPACITY) {
+            NewCapacity = CK_INITIAL_ARRAY_CAPACITY;
+        }
+
+        NewBuffer = CkpReallocate(Vm,
+                                  ByteArray->Data,
+                                  ByteArray->Capacity * ElementSize,
+                                  NewCapacity * ElementSize);
+
+        if (NewBuffer == NULL) {
+            return CkErrorNoMemory;
+        }
+
+        ByteArray->Data = NewBuffer;
+        ByteArray->Capacity = NewCapacity;
+    }
+
     return CkSuccess;
 }
 

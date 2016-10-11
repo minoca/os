@@ -334,7 +334,13 @@ Return Value:
     //
 
     Size = (UINTN)&_binary_ckcore_ck_end - (UINTN)&_binary_ckcore_ck_start;
-    Error = CkpInterpret(Vm, NULL, NULL, (PSTR)&_binary_ckcore_ck_start, Size);
+    Error = CkpInterpret(Vm,
+                         NULL,
+                         NULL,
+                         (PSTR)&_binary_ckcore_ck_start,
+                         Size,
+                         1);
+
     if (Error != CkSuccess) {
         return Error;
     }

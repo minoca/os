@@ -100,11 +100,13 @@ Return Value:
 
 {
 
+    PCK_STRING Frozen;
     CK_LOAD_MODULE_RESULT LoadStatus;
     PCK_MODULE Module;
     CK_MODULE_HANDLE ModuleData;
     PCK_STRING NameString;
     CK_VALUE PathValue;
+    INT SaveError;
     CK_VALUE Value;
 
     CK_ASSERT(CK_IS_STRING(ModuleName));
@@ -142,6 +144,7 @@ Return Value:
     //
 
     case CkLoadModuleSource:
+    case CkLoadModuleObject:
         if (ModuleData.Source.PathLength != 0) {
             PathValue = CkpStringCreate(Vm,
                                         ModuleData.Source.Path,
@@ -154,16 +157,55 @@ Return Value:
                                      ModuleName,
                                      PathValue,
                                      ModuleData.Source.Text,
-                                     ModuleData.Source.Length);
+                                     ModuleData.Source.Length,
+                                     1);
 
         CkFree(Vm, ModuleData.Source.Text);
         if (Module == NULL) {
-            CkpRuntimeError(Vm,
-                            "CompileError",
-                            "Module compile error: %s",
-                            NameString->Value);
+            if (LoadStatus == CkLoadModuleObject) {
+                CkpRuntimeError(Vm,
+                                "ValueError",
+                                "Module object load error: %s",
+                                NameString->Value);
+
+            } else {
+                CkpRuntimeError(Vm,
+                                "CompileError",
+                                "Module compile error: %s",
+                                NameString->Value);
+            }
 
             return CkNullValue;
+        }
+
+        //
+        // If it was source that was just compiled, allow the system to save
+        // that representation if it cares to.
+        //
+
+        if ((LoadStatus == CkLoadModuleSource) &&
+            (Vm->Configuration.SaveModule != NULL)) {
+
+            Value = CkpModuleFreeze(Vm, Module);
+            if (!CK_IS_NULL(Value)) {
+
+                CK_ASSERT(CK_IS_STRING(Value));
+
+                Frozen = CK_AS_STRING(Value);
+                SaveError = Vm->Configuration.SaveModule(Vm,
+                                                         Module->Path->Value,
+                                                         Frozen->Value,
+                                                         Frozen->Length);
+
+                if (SaveError != 0) {
+                    CkpRuntimeError(Vm,
+                                    "RuntimeError",
+                                    "Module object save failed: %d",
+                                    SaveError);
+
+                    return CkNullValue;
+                }
+            }
         }
 
         break;
@@ -245,7 +287,8 @@ CkpModuleLoadSource (
     CK_VALUE ModuleName,
     CK_VALUE Path,
     PSTR Source,
-    UINTN Length
+    UINTN Length,
+    LONG Line
     )
 
 /*++
@@ -268,6 +311,9 @@ Arguments:
     Length - Supplies the length of the source string, not including the null
         terminator.
 
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
+
 Return Value:
 
     Returns a pointer to the newly loaded module on success.
@@ -282,6 +328,7 @@ Return Value:
     PCK_FUNCTION Function;
     PCK_MODULE Module;
     PCK_STRING PathString;
+    BOOL Result;
 
     PathString = NULL;
     if (CK_IS_STRING(Path)) {
@@ -296,21 +343,44 @@ Return Value:
         }
     }
 
-    Function = CkpCompile(Vm, Module, Source, Length, TRUE);
-    if (Function == NULL) {
-        return NULL;
+    Result = FALSE;
+    if ((Length > CK_FREEZE_SIGNATURE_SIZE) &&
+        (CkCompareMemory(Source,
+                         CkModuleFreezeSignature,
+                         CK_FREEZE_SIGNATURE_SIZE) == 0)) {
+
+        if (CkpModuleThaw(Vm, Module, Source, Length) == FALSE) {
+            goto ModuleLoadSourceEnd;
+        }
+
+    //
+    // Compile and load regular source.
+    //
+
+    } else {
+        Function = CkpCompile(Vm, Module, Source, Length, Line, TRUE);
+        if (Function == NULL) {
+            goto ModuleLoadSourceEnd;
+        }
+
+        CkpPushRoot(Vm, &(Function->Header));
+        Closure = CkpClosureCreate(Vm, Function, NULL);
+        CkpPopRoot(Vm);
+        if (Closure == NULL) {
+            goto ModuleLoadSourceEnd;
+        }
+
+        Module->Closure = Closure;
     }
 
-    CkpPushRoot(Vm, &(Function->Header));
-    Closure = CkpClosureCreate(Vm, Function, NULL);
-    CkpPopRoot(Vm);
-    if (Closure == NULL) {
-        return NULL;
+    Result = TRUE;
+
+ModuleLoadSourceEnd:
+    if (Result == FALSE) {
+        CkpDictRemove(Vm, Vm->Modules, ModuleName);
+        Module = NULL;
     }
 
-    CkpPushRoot(Vm, &(Closure->Header));
-    Module->Fiber = CkpFiberCreate(Vm, Closure);
-    CkpPopRoot(Vm);
     return Module;
 }
 
@@ -390,7 +460,7 @@ Return Value:
         return NULL;
     }
 
-    Module->EntryFunction = Closure;
+    Module->Closure = Closure;
     return Module;
 }
 
@@ -662,32 +732,28 @@ Return Value:
     PCK_MODULE Module;
 
     Module = CK_AS_MODULE(Arguments[0]);
-    Fiber = Module->Fiber;
-    if (Fiber == NULL) {
-
-        //
-        // See if there's an entry function, and run that (once) if so.
-        //
-
-        EntryFunction = Module->EntryFunction;
-        if (EntryFunction != NULL) {
-            Module->EntryFunction = NULL;
-            CkpCallFunction(Vm, EntryFunction, 1);
-
-        } else {
-            Arguments[0] = CkNullValue;
-        }
-
+    if (Module->Run != FALSE) {
+        Arguments[0] = CkNullValue;
         return TRUE;
     }
 
+    Module->Run = TRUE;
+
     //
-    // Clear out and switch to the module contents fiber.
+    // See if there's an entry function, and run that (once) if so.
     //
 
-    CK_ASSERT((Fiber->FrameCount != 0) && (CK_IS_NULL(Fiber->Error)));
+    EntryFunction = Module->Closure;
+    if (EntryFunction->Type == CkClosureForeign) {
+        CkpCallFunction(Vm, EntryFunction, 1);
+        return TRUE;
+    }
 
-    Module->Fiber = NULL;
+    Fiber = CkpFiberCreate(Vm, Module->Closure);
+    if (Fiber == NULL) {
+        return FALSE;
+    }
+
     Fiber->Caller = Vm->Fiber;
     Vm->Fiber = Fiber;
 

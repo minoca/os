@@ -150,6 +150,7 @@ typedef __UINTPTR_TYPE__ UINTN, *PUINTN;
 typedef unsigned long long PHYSICAL_ADDRESS, *PPHYSICAL_ADDRESS;
 
 typedef void *PVOID;
+typedef const void *PCVOID;
 typedef char *PSTR;
 typedef const char *PCSTR;
 typedef WCHAR *PWSTR;

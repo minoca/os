@@ -277,7 +277,7 @@ Return Value:
         }
 
         ArgumentIndex += 1;
-        Status = CkInterpret(Context.Vm, ScriptPath, FileBuffer, FileSize);
+        Status = CkInterpret(Context.Vm, ScriptPath, FileBuffer, FileSize, 1);
 
     //
     // With no arguments, run the interactive interpreter.
@@ -561,6 +561,7 @@ Return Value:
 
 {
 
+    INT Line;
     INT Status;
 
     printf(" _      _\n|_ |-| /-\\ |_ |<  Chalk %d.%d.%d\n",
@@ -570,7 +571,8 @@ Return Value:
 
     Status = 0;
     while (TRUE) {
-        printf("%d> ", Context->LineNumber);
+        Line = Context->LineNumber;
+        printf("%d> ", Line);
         Status = ChalkReadLine(Context);
         if (Status == EOF) {
             Status = 0;
@@ -580,7 +582,11 @@ Return Value:
             break;
         }
 
-        CkInterpret(Context->Vm, NULL, Context->Line, strlen(Context->Line));
+        CkInterpret(Context->Vm,
+                    NULL,
+                    Context->Line,
+                    strlen(Context->Line),
+                    Line);
     }
 
     return Status;

@@ -221,8 +221,6 @@ PSTR CkLexerTokenNames[] = {
 
 PSTR CkLexerIgnoreExpressions[] = {
     "[ \t\v\r\n\f]",
-//    "//[^\n]*",
-//    "/\*.*?\*/",
     NULL
 };
 
@@ -234,7 +232,8 @@ VOID
 CkpInitializeLexer (
     PLEXER Lexer,
     PSTR Source,
-    UINTN Length
+    UINTN Length,
+    LONG Line
     )
 
 /*++
@@ -251,6 +250,9 @@ Arguments:
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
 
 Return Value:
 
@@ -285,6 +287,7 @@ Return Value:
 
     CK_ASSERT(KSUCCESS(Status));
 
+    Lexer->Line = Line;
     return;
 }
 

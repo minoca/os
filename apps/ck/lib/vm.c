@@ -478,7 +478,8 @@ CkInterpret (
     PCK_VM Vm,
     PSTR Path,
     PSTR Source,
-    UINTN Length
+    UINTN Length,
+    LONG Line
     )
 
 /*++
@@ -501,6 +502,9 @@ Arguments:
     Length - Supplies the length of the source string, not including the null
         terminator.
 
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
+
 Return Value:
 
     Chalk status.
@@ -509,7 +513,7 @@ Return Value:
 
 {
 
-    return CkpInterpret(Vm, "__main", Path, Source, Length);
+    return CkpInterpret(Vm, "__main", Path, Source, Length, Line);
 }
 
 CK_SYMBOL_INDEX
@@ -735,7 +739,8 @@ CkpInterpret (
     PSTR ModuleName,
     PSTR ModulePath,
     PSTR Source,
-    UINTN Length
+    UINTN Length,
+    LONG Line
     )
 
 /*++
@@ -758,6 +763,9 @@ Arguments:
 
     Length - Supplies the length of the source string, not including the null
         terminator.
+
+    Line - Supplies the line number this code starts on. Supply 1 to start at
+        the beginning.
 
 Return Value:
 
@@ -788,7 +796,13 @@ Return Value:
         }
     }
 
-    Module = CkpModuleLoadSource(Vm, NameValue, PathValue, Source, Length);
+    Module = CkpModuleLoadSource(Vm,
+                                 NameValue,
+                                 PathValue,
+                                 Source,
+                                 Length,
+                                 Line);
+
     if (!CK_IS_NULL(PathValue)) {
         CkpPopRoot(Vm);
     }
@@ -797,12 +811,15 @@ Return Value:
         CkpPopRoot(Vm);
     }
 
-    if ((Module == NULL) || (Module->Fiber == NULL)) {
+    if (Module == NULL) {
         return CkErrorCompile;
     }
 
-    Fiber = Module->Fiber;
-    Module->Fiber = NULL;
+    Fiber = CkpFiberCreate(Vm, Module->Closure);
+    if (Fiber == NULL) {
+        return CkErrorNoMemory;
+    }
+
     return CkpRunInterpreter(Vm, Fiber);
 }
 
