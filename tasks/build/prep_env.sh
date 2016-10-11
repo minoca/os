@@ -97,7 +97,7 @@ else
     exit 1
 fi
 
-for app in ar as ld objcopy strip; do
+for app in ar as ld objcopy strip ranlib; do
   if ! test -x $BINROOT/$TRIO-$app; then
     ln -s $BINROOT/$app $BINROOT/$TRIO-$app
   fi

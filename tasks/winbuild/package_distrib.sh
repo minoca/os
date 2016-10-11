@@ -19,7 +19,7 @@
 ##     Minoca (Windows) Build
 ##
 
-set -e
+set -xe
 
 SAVE_IFS="$IFS"
 IFS='
