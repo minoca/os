@@ -233,8 +233,10 @@ ifneq ($(OS),Windows_NT)
 EXTRA_CFLAGS_FOR_BUILD += -fpic
 endif
 
+PIE := -pie
 ifeq ($(OS),Darwin)
 EXTRA_CFLAGS_FOR_BUILD += -Wno-tautological-compare -Wno-parentheses-equality
+PIE := -Wl,-pie
 endif
 
 ##
@@ -425,7 +427,7 @@ $(ALLOBJS): | $(OBJROOT)/$(THISDIR)
 $(BINARY): $(ALLOBJS) $(TARGETLIBS)
     ifeq ($(BINARYTYPE),app)
 	@echo Linking - $@
-	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -Wl,-pie -o $@ $^ -Bdynamic $(DYNLIBS)
+	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) $(PIE) -o $@ $^ -Bdynamic $(DYNLIBS)
     endif
     ifeq ($(BINARYTYPE),staticapp)
 	@echo Linking - $@

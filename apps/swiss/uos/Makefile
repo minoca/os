@@ -42,6 +42,14 @@ OBJS = $(COMMON_OBJS)   \
        uoscmds.o        \
        dw.o             \
 
+##
+## Add the login related apps on everything except Mac OS.
+##
+
+ifneq ($(uname -s),Darwin)
+OBJS += $(LOGIN_OBJS)
+endif
+
 TARGETLIBS = $(OBJROOT)/os/lib/termlib/build/termlib.a                       \
              $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a                         \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a                      \
@@ -49,14 +57,6 @@ TARGETLIBS = $(OBJROOT)/os/lib/termlib/build/termlib.a                       \
 DYNLIBS += -ldl -lutil
 
 include $(SRCROOT)/os/minoca.mk
-
-##
-## Add the login related apps on everything except Mac OS.
-##
-
-ifneq ($(OS),Darwin)
-OBJS += $(LOGIN_OBJS)
-endif
 
 EXTRA_CFLAGS += -ftls-model=initial-exec
 

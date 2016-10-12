@@ -141,8 +141,8 @@ typedef unsigned int UINT, *PUINT;
 typedef __WINT_TYPE__ WINT, *PWINT;
 typedef int LONG, *PLONG;
 typedef unsigned int ULONG, *PULONG;
-typedef __INT64_TYPE__ LONGLONG, *PLONGLONG;
-typedef __UINT64_TYPE__ ULONGLONG, *PULONGLONG;
+typedef long long LONGLONG, *PLONGLONG;
+typedef unsigned long long ULONGLONG, *PULONGLONG;
 
 typedef __INTPTR_TYPE__ INTN, *PINTN;
 typedef __UINTPTR_TYPE__ UINTN, *PUINTN;
