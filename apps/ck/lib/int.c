@@ -196,6 +196,12 @@ CkpIntToString (
     );
 
 BOOL
+CkpIntToBaseString (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpRangeFrom (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -246,7 +252,15 @@ CkpRangeToString (
 CK_VALUE
 CkpIntegerToString (
     PCK_VM Vm,
-    CK_INTEGER Integer
+    CK_INTEGER Integer,
+    ULONG Base,
+    BOOL Capitals
+    );
+
+VOID
+CkpStringReverse (
+    PSTR String,
+    PSTR StringEnd
     );
 
 //
@@ -278,6 +292,7 @@ CK_PRIMITIVE_DESCRIPTION CkIntPrimitives[] = {
     {"__inc@0", 0, CkpIntIncrement},
     {"__dec@0", 0, CkpIntDecrement},
     {"__str@0", 0, CkpIntToString},
+    {"base@2", 2, CkpIntToBaseString},
     {NULL, 0, NULL}
 };
 
@@ -346,6 +361,9 @@ Return Value:
     }
 
     CkpInitializeObject(Vm, &(Range->Header), CkObjectRange, Vm->Class.Range);
+    Range->Inclusive = Inclusive;
+    Range->From = From;
+    Range->To = To;
     CK_OBJECT_VALUE(Value, Range);
     return Value;
 }
@@ -1306,7 +1324,57 @@ Return Value:
 
     CK_VALUE Value;
 
-    Value = CkpIntegerToString(Vm, CK_AS_INTEGER(Arguments[0]));
+    Value = CkpIntegerToString(Vm, CK_AS_INTEGER(Arguments[0]), 10, FALSE);
+    Arguments[0] = Value;
+    return TRUE;
+}
+
+BOOL
+CkpIntToBaseString (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given integer into a string of the requested
+    base.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    CK_INTEGER Base;
+    CK_INTEGER Capitals;
+    CK_VALUE Value;
+
+    if ((!CK_IS_INTEGER(Arguments[1])) || (!CK_IS_INTEGER(Arguments[2]))) {
+        CkpRuntimeError(Vm, "TypeError", "Integer expected");
+        return FALSE;
+    }
+
+    Base = CK_AS_INTEGER(Arguments[1]);
+    if ((Base < 2) || (Base > 36)) {
+        CkpRuntimeError(Vm, "ValueError", "Invalid base");
+        return FALSE;
+    }
+
+    Capitals = CK_AS_INTEGER(Arguments[2]);
+    Value = CkpIntegerToString(Vm, CK_AS_INTEGER(Arguments[0]), Base, Capitals);
     Arguments[0] = Value;
     return TRUE;
 }
@@ -1342,7 +1410,7 @@ Return Value:
     PCK_RANGE Range;
 
     Range = CK_AS_RANGE(Arguments[0]);
-    CK_INT_VALUE(Arguments[0], Range->From.Int);
+    CK_INT_VALUE(Arguments[0], Range->From);
     return TRUE;
 }
 
@@ -1378,7 +1446,7 @@ Return Value:
     PCK_RANGE Range;
 
     Range = CK_AS_RANGE(Arguments[0]);
-    CK_INT_VALUE(Arguments[0], Range->To.Int);
+    CK_INT_VALUE(Arguments[0], Range->To);
     return TRUE;
 }
 
@@ -1413,11 +1481,11 @@ Return Value:
     PCK_RANGE Range;
 
     Range = CK_AS_RANGE(Arguments[0]);
-    if (Range->From.Int < Range->To.Int) {
-        CK_INT_VALUE(Arguments[0], Range->From.Int);
+    if (Range->From < Range->To) {
+        CK_INT_VALUE(Arguments[0], Range->From);
 
     } else {
-        CK_INT_VALUE(Arguments[0], Range->To.Int);
+        CK_INT_VALUE(Arguments[0], Range->To);
     }
 
     return TRUE;
@@ -1454,11 +1522,11 @@ Return Value:
     PCK_RANGE Range;
 
     Range = CK_AS_RANGE(Arguments[0]);
-    if (Range->From.Int > Range->To.Int) {
-        CK_INT_VALUE(Arguments[0], Range->From.Int);
+    if (Range->From > Range->To) {
+        CK_INT_VALUE(Arguments[0], Range->From);
 
     } else {
-        CK_INT_VALUE(Arguments[0], Range->To.Int);
+        CK_INT_VALUE(Arguments[0], Range->To);
     }
 
     return TRUE;
@@ -1531,7 +1599,7 @@ Return Value:
     PCK_RANGE Range;
 
     Range = CK_AS_RANGE(Arguments[0]);
-    if ((Range->From.Int == Range->To.Int) && (Range->Inclusive == FALSE)) {
+    if ((Range->From == Range->To) && (Range->Inclusive == FALSE)) {
         Arguments[0] = CkNullValue;
         return TRUE;
     }
@@ -1541,7 +1609,7 @@ Return Value:
     //
 
     if (CK_IS_NULL(Arguments[1])) {
-        CK_INT_VALUE(Arguments[0], Range->From.Int);
+        CK_INT_VALUE(Arguments[0], Range->From);
         return TRUE;
     }
 
@@ -1555,16 +1623,16 @@ Return Value:
     //
 
     Integer = CK_AS_INTEGER(Arguments[1]);
-    if (Range->From.Int < Range->To.Int) {
+    if (Range->From < Range->To) {
         Integer += 1;
-        if (Integer > Range->To.Int) {
+        if (Integer > Range->To) {
             Arguments[0] = CkNullValue;
             return TRUE;
         }
 
     } else {
         Integer -= 1;
-        if (Integer < Range->To.Int) {
+        if (Integer < Range->To) {
             Arguments[0] = CkNullValue;
             return TRUE;
         }
@@ -1575,7 +1643,7 @@ Return Value:
     // inclusiveness.
     //
 
-    if ((Integer == Range->To.Int) && (Range->Inclusive == FALSE)) {
+    if ((Integer == Range->To) && (Range->Inclusive == FALSE)) {
         Arguments[0] = CkNullValue;
         return TRUE;
     }
@@ -1655,13 +1723,13 @@ Return Value:
     CK_VALUE To;
 
     Range = CK_AS_RANGE(Arguments[0]);
-    From = CkpIntegerToString(Vm, Range->From.Int);
+    From = CkpIntegerToString(Vm, Range->From, 10, FALSE);
     if (!CK_IS_OBJECT(From)) {
         return FALSE;
     }
 
     CkpPushRoot(Vm, CK_AS_OBJECT(From));
-    To = CkpIntegerToString(Vm, Range->To.Int);
+    To = CkpIntegerToString(Vm, Range->To, 10, FALSE);
     if (!CK_IS_OBJECT(To)) {
         CkpPopRoot(Vm);
         return FALSE;
@@ -1686,7 +1754,9 @@ Return Value:
 CK_VALUE
 CkpIntegerToString (
     PCK_VM Vm,
-    CK_INTEGER Integer
+    CK_INTEGER Integer,
+    ULONG Base,
+    BOOL Capitals
     )
 
 /*++
@@ -1701,6 +1771,11 @@ Arguments:
 
     Integer - Supplies the integer to convert.
 
+    Base - Supplies the radix to convert with.
+
+    Capitals - Supplies whether or not to use capital letters when converting
+        digits greater than 9.
+
 Return Value:
 
     Returns the string value on success.
@@ -1711,10 +1786,113 @@ Return Value:
 
 {
 
-    CHAR Buffer[100];
-    UINTN Length;
+    CHAR Buffer[70];
+    PSTR Current;
+    ULONG Digit;
+    PSTR Start;
+    ULONGLONG Value;
 
-    Length = snprintf(Buffer, sizeof(Buffer), "%lld", (LONGLONG)Integer);
-    return CkpStringCreate(Vm, Buffer, Length);
+    Current = Buffer;
+    Value = Integer;
+
+    CK_ASSERT((Base > 1) && (Base <= 36));
+
+    //
+    // Currently only base 10 can be negative, everything else is unsigned.
+    //
+
+    if ((Base == 10) && (Integer < 0)) {
+        *Current = '-';
+        Current += 1;
+        Value = -Integer;
+    }
+
+    if (Value == 0) {
+        *Current = '0';
+        Current += 1;
+    }
+
+    Start = Current;
+
+    //
+    // Convert the value backwards because it's easier.
+    //
+
+    while (Value != 0) {
+        Digit = Value % Base;
+        Value /= Base;
+        if (Digit < 10) {
+            *Current = '0' + Digit;
+
+        } else {
+            if (Capitals != FALSE) {
+                *Current = 'A' + Digit - 0xA;
+
+            } else {
+                *Current = 'a' + Digit - 0xA;
+            }
+        }
+
+        Current += 1;
+    }
+
+    //
+    // Now reverse the string.
+    //
+
+    if (Current > Start + 1) {
+        CkpStringReverse(Start, Current);
+    }
+
+    return CkpStringCreate(Vm, Buffer, Current - Buffer);
+}
+
+VOID
+CkpStringReverse (
+    PSTR String,
+    PSTR StringEnd
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reverses the contents of a string inline. For example, the
+    string "abcd" would get reversed to "dcba".
+
+Arguments:
+
+    String - Supplies a pointer to the beginning of the string to reverse.
+
+    StringEnd - Supplies a pointer to one beyond the end of the string. That is,
+        this pointer points to the first byte *not* in the string.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN Length;
+    UINTN Position;
+    UCHAR SwapSpace;
+
+    Length = StringEnd - String;
+
+    //
+    // Work from the left towards the middle, swapping characters with their
+    // positions on the other extreme. The truncation of Length / 2 is okay
+    // because odd length strings do not need their middle byte swapped.
+    //
+
+    for (Position = 0; Position < (Length / 2); Position += 1) {
+        SwapSpace = String[Position];
+        String[Position] = String[Length - Position - 1];
+        String[Length - Position - 1] = SwapSpace;
+    }
+
+    return;
 }
 

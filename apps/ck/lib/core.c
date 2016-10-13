@@ -114,6 +114,12 @@ CkpObjectSet (
     );
 
 BOOL
+CkpObjectImplements (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpObjectType (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -219,6 +225,7 @@ CK_PRIMITIVE_DESCRIPTION CkObjectPrimitives[] = {
     {"__str@0", 0, CkpObjectToString},
     {"__get@1", 1, CkpObjectGet},
     {"__set@2", 2, CkpObjectSet},
+    {"implements@2", 2, CkpObjectImplements},
     {"type@0", 0, CkpObjectType},
     {NULL, 0, NULL}
 };
@@ -251,7 +258,7 @@ CK_PRIMITIVE_DESCRIPTION CkFunctionPrimitives[] = {
 CK_PRIMITIVE_DESCRIPTION CkCorePrimitives[] = {
     {"gc@0", 0, CkpCoreGarbageCollect},
     {"importModule@1", 1, CkpCoreImportModule},
-    {"write@1", 1, CkpCoreWrite},
+    {"_write@1", 1, CkpCoreWrite},
     {"modulePath@0", 0, CkpCoreGetModulePath},
     {"setModulePath@1", 1, CkpCoreSetModulePath},
     {"raise@1", 1, CkpCoreRaise},
@@ -294,7 +301,12 @@ Return Value:
     UINTN Size;
     CK_VALUE Value;
 
-    CoreModule = CkpModuleAllocate(Vm, NULL, NULL);
+    Value = CkpStringCreate(Vm, "<core>", 6);
+    if (CK_IS_NULL(Value)) {
+        return CkErrorNoMemory;
+    }
+
+    CoreModule = CkpModuleAllocate(Vm, CK_AS_STRING(Value), NULL);
     if (CoreModule == NULL) {
         return CkErrorNoMemory;
     }
@@ -333,7 +345,7 @@ Return Value:
     // Create the Object metaclass, which inherits from Class.
     //
 
-    ObjectMeta = CkpDefineCoreClass(Vm, CoreModule, "Object Metaclass");
+    ObjectMeta = CkpDefineCoreClass(Vm, CoreModule, "ObjectMeta");
     if (ObjectMeta == NULL) {
         return CkErrorNoMemory;
     }
@@ -404,17 +416,25 @@ Return Value:
     CkpCoreAddPrimitives(Vm, Classes->Module, CkModulePrimitives);
     Value = *(CkpFindModuleVariable(Vm, CoreModule, "Exception", FALSE));
     Classes->Exception = CK_AS_CLASS(Value);
-    CkpCoreAddPrimitives(Vm, Classes->Module, CkExceptionPrimitives);
 
     //
-    // Some strings may have been created without being assigned to string
-    // class. Go through all objects and patch those up.
+    // Patch up any of the core objects that may have been created before their
+    // associated classes existed.
     //
 
     Object = Vm->FirstObject;
     while (Object != NULL) {
         if (Object->Type == CkObjectString) {
             Object->Class = Classes->String;
+
+        } else if (Object->Type == CkObjectClosure) {
+            Object->Class = Classes->Function;
+
+        } else if (Object->Type == CkObjectDict) {
+            Object->Class = Classes->Dict;
+
+        } else if (Object->Type == CkObjectFiber) {
+            Object->Class = Classes->Fiber;
         }
 
         Object = Object->Next;
@@ -1136,6 +1156,70 @@ Return Value:
     }
 
     CkpDictSet(Vm, Dict, Arguments[1], Arguments[2]);
+    return TRUE;
+}
+
+BOOL
+CkpObjectImplements (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given object implements the given method.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    CHAR Buffer[CK_MAX_METHOD_SIGNATURE];
+    UINTN BufferSize;
+    PCK_CLASS Class;
+    CK_STRING FakeString;
+    PCK_STRING NameString;
+    CK_FUNCTION_SIGNATURE Signature;
+    CK_VALUE Value;
+
+    Class = CkpGetClass(Vm, Arguments[0]);
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
+        return FALSE;
+    }
+
+    NameString = CK_AS_STRING(Arguments[1]);
+    if (!CK_IS_INTEGER(Arguments[2])) {
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
+        return FALSE;
+    }
+
+    Signature.Name = NameString->Value;
+    Signature.Length = NameString->Length;
+    Signature.Arity = CK_AS_INTEGER(Arguments[2]);
+    BufferSize = sizeof(Buffer);
+    CkpPrintSignature(&Signature, Buffer, &BufferSize);
+    Value = CkpStringFake(&FakeString, Buffer, BufferSize);
+    if (!CK_IS_UNDEFINED(CkpDictGet(Class->Methods, Value))) {
+        Arguments[0] = CkOneValue;
+
+    } else {
+        Arguments[0] = CkZeroValue;
+    }
+
     return TRUE;
 }
 

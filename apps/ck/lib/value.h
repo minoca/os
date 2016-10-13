@@ -744,27 +744,20 @@ Members:
 
     Header - Stores the required object header.
 
-    Type - Stores a value indicating the value types of the from and to unions.
-        Currently the only valid value is integer.
-
     Inclusive - Stores a boolean indicating if the range is inclusive of the to
         value or not.
+
+    From - Stores the start of the range, inclusive.
+
+    To - Stores the end of the range, which may be inclusive or exclusive.
 
 --*/
 
 typedef struct _CK_RANGE {
     CK_OBJECT Header;
-    CK_VALUE_TYPE Type;
     BOOL Inclusive;
-    union {
-        CK_INTEGER Int;
-
-    } From;
-
-    union {
-        CK_INTEGER Int;
-    } To;
-
+    CK_INTEGER From;
+    CK_INTEGER To;
 } CK_RANGE, *PCK_RANGE;
 
 /*++

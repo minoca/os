@@ -398,6 +398,7 @@ Return Value:
         }
     }
 
+    Compiler->Loop = Compiler->Loop->Enclosing;
     return;
 }
 

@@ -1184,7 +1184,7 @@ Return Value:
 
     case CkObjectRange:
         Range = (PCK_RANGE)Object;
-        return (ULONG)(Range->From.Int) ^ (ULONG)(Range->To.Int);
+        return (ULONG)(Range->From) ^ (ULONG)(Range->To);
 
     default:
         break;

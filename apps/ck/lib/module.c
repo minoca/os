@@ -563,19 +563,13 @@ Return Value:
     CK_ERROR_TYPE Error;
     PCK_MODULE Module;
 
-    if (Name != NULL) {
-        CkpPushRoot(Vm, &(Name->Header));
-    }
-
+    CkpPushRoot(Vm, &(Name->Header));
     if (Path != NULL) {
         CkpPushRoot(Vm, &(Path->Header));
     }
 
     Module = CkAllocate(Vm, sizeof(CK_MODULE));
-    if (Name != NULL) {
-        CkpPopRoot(Vm);
-    }
-
+    CkpPopRoot(Vm);
     if (Path != NULL) {
         CkpPopRoot(Vm);
     }
@@ -851,12 +845,8 @@ Return Value:
     PCSTR Path;
 
     Module = CK_AS_MODULE(Arguments[0]);
-    Name = "<builtin>";
     Path = NULL;
-    if (Module->Name != NULL) {
-        Name = Module->Name->Value;
-    }
-
+    Name = Module->Name->Value;
     if (Module->Path != NULL) {
         Path = Module->Path->Value;
     }

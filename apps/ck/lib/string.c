@@ -120,6 +120,12 @@ CkpStringAdd (
     );
 
 BOOL
+CkpStringMultiply (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpStringSlice (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -148,6 +154,7 @@ CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[] = {
     {"upper@0", 0, CkpStringUpper},
     {"length@0", 0, CkpStringLength},
     {"__add@1", 1, CkpStringAdd},
+    {"__mul@1", 1, CkpStringMultiply},
     {"__slice@1", 1, CkpStringSlice},
     {"__str@0", 0, CkpStringToString},
     {NULL, 0, NULL}
@@ -281,7 +288,9 @@ Return Value:
     To = (PUCHAR)(NewString->Value);
     for (Index = 0; Index < Count; Index += 1) {
         CurrentIndex = Start + (Index * Step);
-        Character = CkpUtf8Decode(From + Index, SourceLength - Index);
+        Character = CkpUtf8Decode(From + CurrentIndex,
+                                  SourceLength - CurrentIndex);
+
         if (Character != -1) {
             To += CkpUtf8Encode(Character, To);
         }
@@ -580,6 +589,21 @@ Return Value:
 
     if (Needle->Length == 0) {
         return 0;
+
+    //
+    // If the needle is only one byte wide, just search for the byte without
+    // all the fanciness.
+    //
+
+    } else if (Needle->Length == 1) {
+        Character = *(Needle->Value);
+        for (Index = 0; Index < Haystack->Length; Index += 1) {
+            if (Haystack->Value[Index] == Character) {
+                return Index;
+            }
+        }
+
+        return (UINTN)-1;
     }
 
     if (Needle->Length > Haystack->Length) {
@@ -1175,8 +1199,8 @@ Return Value:
         return FALSE;
     }
 
-    Needle = CK_AS_STRING(Arguments[0]);
-    Haystack = CK_AS_STRING(Arguments[1]);
+    Haystack = CK_AS_STRING(Arguments[0]);
+    Needle = CK_AS_STRING(Arguments[1]);
     Index = CkpStringFind(Haystack, Needle);
     if (Index == (UINTN)-1) {
         Arguments[0] = CkZeroValue;
@@ -1333,8 +1357,8 @@ Return Value:
         return FALSE;
     }
 
-    Needle = CK_AS_STRING(Arguments[0]);
-    Haystack = CK_AS_STRING(Arguments[1]);
+    Haystack = CK_AS_STRING(Arguments[0]);
+    Needle = CK_AS_STRING(Arguments[1]);
     Index = CkpStringFind(Haystack, Needle);
     if (Index == (UINTN)-1) {
         CK_INT_VALUE(Arguments[0], -1);
@@ -1623,6 +1647,79 @@ Return Value:
 }
 
 BOOL
+CkpStringMultiply (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine multiplies a string and an integer, which duplicates the
+    string as many times as the integer specifies. Multipliers less than or
+    equal to zero result in the empty string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    CK_INTEGER Count;
+    PSTR Current;
+    UINTN Index;
+    PCK_STRING Result;
+    UINTN ResultLength;
+    PCK_STRING Source;
+    UINTN SourceLength;
+
+    if (!CK_IS_INTEGER(Arguments[1])) {
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
+        return FALSE;
+    }
+
+    Count = CK_AS_INTEGER(Arguments[1]);
+    if (Count <= 0) {
+        Arguments[0] = CkpStringCreate(Vm, NULL, 0);
+        return TRUE;
+    }
+
+    Source = CK_AS_STRING(Arguments[0]);
+    SourceLength = Source->Length;
+    ResultLength = Count * SourceLength;
+    if (ResultLength / Count != SourceLength) {
+        CkpRuntimeError(Vm, "ValueError", "Value too big");
+        return FALSE;
+    }
+
+    Result = CkpStringAllocate(Vm, ResultLength);
+    if (Result == NULL) {
+        return FALSE;
+    }
+
+    Current = (PSTR)(Result->Value);
+    for (Index = 0; Index < Count; Index += 1) {
+        CkCopy(Current, Source->Value, SourceLength);
+        Current += SourceLength;
+    }
+
+    CkpStringHash(Result);
+    CK_OBJECT_VALUE(Arguments[0], Result);
+    return TRUE;
+}
+
+BOOL
 CkpStringSlice (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -1657,17 +1754,30 @@ Return Value:
 
     String = CK_AS_STRING(Arguments[0]);
     if (CK_IS_INTEGER(Arguments[1])) {
-        return CkpStringCharacterAt(Vm, Arguments);
-    }
+        Start = CK_AS_INTEGER(Arguments[1]);
+        if (Start < 0) {
+            Start += String->Length;
+        }
 
-    if (!CK_IS_RANGE(Arguments[1])) {
-        CkpRuntimeError(Vm, "TypeError", "Expected an integer or range");
-        return FALSE;
-    }
+        if ((Start < 0) || (Start >= String->Length)) {
+            CkpRuntimeError(Vm, "IndexError", "String index out of range");
+            return FALSE;
+        }
 
-    Start = CkpGetRange(Vm, CK_AS_RANGE(Arguments[1]), &Count, &Step);
-    if (Start == MAX_UINTN) {
-        return FALSE;
+        Count = 1;
+        Step = 1;
+
+    } else {
+        if (!CK_IS_RANGE(Arguments[1])) {
+            CkpRuntimeError(Vm, "TypeError", "Expected an integer or range");
+            return FALSE;
+        }
+
+        Count = String->Length;
+        Start = CkpGetRange(Vm, CK_AS_RANGE(Arguments[1]), &Count, &Step);
+        if (Start == MAX_UINTN) {
+            return FALSE;
+        }
     }
 
     Arguments[0] = CkpStringCreateFromRange(Vm, String, Start, Count, Step);

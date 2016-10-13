@@ -658,6 +658,17 @@ Return Value:
     while (*Object != NULL) {
 
         //
+        // Take this opportunity to ensure that all objects have classes.
+        // Tack on a couple of conditions on the end to handle gaps during
+        // early init.
+        //
+
+        CK_ASSERT(((*Object)->Class != NULL) ||
+                  ((*Object)->Type == CkObjectFunction) ||
+                  (Vm->Class.Class == NULL) ||
+                  (Vm->Class.Class->Flags == 0));
+
+        //
         // If the object has been kissed, then reset it for next time.
         //
 

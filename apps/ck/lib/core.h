@@ -67,7 +67,6 @@ extern CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkFiberPrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkFiberStaticPrimitives[];
 extern CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[];
-extern CK_PRIMITIVE_DESCRIPTION CkExceptionPrimitives[];
 
 extern const UCHAR CkModuleFreezeSignature[CK_FREEZE_SIGNATURE_SIZE];
 

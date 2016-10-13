@@ -1174,7 +1174,7 @@ Return Value:
         ArgumentsNode = CK_GET_AST_NODE(Compiler, Node->ChildIndex + 3);
     }
 
-    CK_ASSERT((NameToken->Value == CkTokenIdentifier) &
+    CK_ASSERT((NameToken->Value == CkTokenIdentifier) &&
               (ArgumentsNode->Symbol == CkNodeIdentifierList));
 
     Signature.Name = Compiler->Parser->Source + NameToken->Position;
@@ -2447,13 +2447,7 @@ Return Value:
         return;
     }
 
-    if (Parser->Module->Name != NULL) {
-        Name = Parser->Module->Name->Value;
-
-    } else {
-        Name = "<core>";
-    }
-
+    Name = Parser->Module->Name->Value;
     if (Label != NULL) {
         Length = snprintf(Message,
                           sizeof(Message),

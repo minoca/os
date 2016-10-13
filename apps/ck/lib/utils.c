@@ -514,7 +514,7 @@ Return Value:
     // Create a left side. If it's out of range, make it in range.
     //
 
-    From = Range->From.Int;
+    From = Range->From;
     if (From < 0) {
         From += *Count;
     }
@@ -526,7 +526,7 @@ Return Value:
         From = *Count - 1;
     }
 
-    To = Range->To.Int;
+    To = Range->To;
     if (To < 0) {
         To += *Count;
     }

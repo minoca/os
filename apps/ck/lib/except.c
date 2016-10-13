@@ -57,36 +57,6 @@ CkpRaiseInternalException (
     va_list Arguments
     );
 
-BOOL
-CkpExceptionInit (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    );
-
-BOOL
-CkpExceptionGetValue (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    );
-
-BOOL
-CkpExceptionSetValue (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    );
-
-BOOL
-CkpExceptionGetStackTrace (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    );
-
-BOOL
-CkpExceptionSetStackTrace (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    );
-
 CK_VALUE
 CkpExceptionGetField (
     PCK_VM Vm,
@@ -106,13 +76,14 @@ CkpExceptionSetField (
 // -------------------------------------------------------------------- Globals
 //
 
-CK_PRIMITIVE_DESCRIPTION CkExceptionPrimitives[] = {
-    {"__init@1", 1, CkpExceptionInit},
-    {"value@0", 0, CkpExceptionGetValue},
-    {"setValue@1", 1, CkpExceptionSetValue},
-    {"stackTrace@0", 0, CkpExceptionGetStackTrace},
-    {"setStackTrace@1", 1, CkpExceptionSetStackTrace},
-    {NULL, 0, NULL}
+PCSTR CkExceptionKeyNames[] = {
+    "args",
+    "stackTrace"
+};
+
+UCHAR CkExceptionKeyLengths[] = {
+    4,
+    10
 };
 
 //
@@ -560,186 +531,6 @@ Return Value:
     return;
 }
 
-BOOL
-CkpExceptionInit (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    )
-
-/*++
-
-Routine Description:
-
-    This routine initializes a new exception.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Arguments - Supplies the function arguments.
-
-Return Value:
-
-    TRUE on success.
-
-    FALSE if execution caused a runtime error.
-
---*/
-
-{
-
-    //
-    // Set the value (which happens to share the same prototype.
-    //
-
-    CkpExceptionSetValue(Vm, Arguments);
-    return TRUE;
-}
-
-BOOL
-CkpExceptionGetValue (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the exception value, which is usually either a string
-    or a list.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Arguments - Supplies the function arguments.
-
-Return Value:
-
-    TRUE on success.
-
-    FALSE if execution caused a runtime error.
-
---*/
-
-{
-
-    Arguments[0] = CkpExceptionGetField(Vm,
-                                        Arguments[0],
-                                        CK_EXCEPTION_FIELD_VALUE);
-
-    return TRUE;
-}
-
-BOOL
-CkpExceptionSetValue (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the exception value, which is usually either a string or
-    a list.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Arguments - Supplies the function arguments.
-
-Return Value:
-
-    TRUE on success.
-
-    FALSE if execution caused a runtime error.
-
---*/
-
-{
-
-    CkpExceptionSetField(Vm,
-                         Arguments[0],
-                         Arguments[1],
-                         CK_EXCEPTION_FIELD_VALUE);
-
-    return TRUE;
-}
-
-BOOL
-CkpExceptionGetStackTrace (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the stack trace attached to the exception.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Arguments - Supplies the function arguments.
-
-Return Value:
-
-    TRUE on success.
-
-    FALSE if execution caused a runtime error.
-
---*/
-
-{
-
-    Arguments[0] = CkpExceptionGetField(Vm,
-                                        Arguments[0],
-                                        CK_EXCEPTION_FIELD_STACK_TRACE);
-
-    return TRUE;
-}
-
-BOOL
-CkpExceptionSetStackTrace (
-    PCK_VM Vm,
-    PCK_VALUE Arguments
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the stack trace field of an exception.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Arguments - Supplies the function arguments.
-
-Return Value:
-
-    TRUE on success.
-
-    FALSE if execution caused a runtime error.
-
---*/
-
-{
-
-    CkpExceptionSetField(Vm,
-                         Arguments[0],
-                         Arguments[1],
-                         CK_EXCEPTION_FIELD_STACK_TRACE);
-
-    return TRUE;
-}
-
 CK_VALUE
 CkpExceptionGetField (
     PCK_VM Vm,
@@ -769,13 +560,34 @@ Return Value:
 
 {
 
+    PCK_DICT Dict;
+    CK_STRING FakeString;
     PCK_INSTANCE Instance;
+    CK_VALUE Key;
+    PCSTR KeyName;
+    CK_VALUE Value;
 
     CK_ASSERT(
             CkpObjectIsClass(CkpGetClass(Vm, Exception), Vm->Class.Exception));
 
+    //
+    // Use the dictionary that all object instances keep at field zero.
+    //
+
     Instance = CK_AS_INSTANCE(Exception);
-    return Instance->Fields[Vm->Class.Exception->SuperFieldCount + Field];
+    if (!CK_IS_DICT(Instance->Fields[0])) {
+        return CkNullValue;
+    }
+
+    Dict = CK_AS_DICT(Instance->Fields[0]);
+    KeyName = CkExceptionKeyNames[Field];
+    Key = CkpStringFake(&FakeString, KeyName, CkExceptionKeyLengths[Field]);
+    Value = CkpDictGet(Dict, Key);
+    if (CK_IS_UNDEFINED(Value)) {
+        return CkNullValue;
+    }
+
+    return Value;
 }
 
 VOID
@@ -812,13 +624,44 @@ Return Value:
 
 {
 
+    PCK_DICT Dict;
     PCK_INSTANCE Instance;
+    CK_VALUE Key;
+    PCSTR KeyName;
 
     CK_ASSERT(
             CkpObjectIsClass(CkpGetClass(Vm, Exception), Vm->Class.Exception));
 
+    //
+    // Use the dictionary that all object instances keep at field zero.
+    //
+
     Instance = CK_AS_INSTANCE(Exception);
-    Instance->Fields[Vm->Class.Exception->SuperFieldCount + Field] = Value;
+    CkpPushRoot(Vm, &(Instance->Header));
+    if (CK_IS_OBJECT(Value)) {
+        CkpPushRoot(Vm, CK_AS_OBJECT(Value));
+    }
+
+    if (!CK_IS_DICT(Instance->Fields[0])) {
+        Dict = CkpDictCreate(Vm);
+        if (Dict == NULL) {
+            goto ExceptionSetFieldEnd;
+        }
+
+        CK_OBJECT_VALUE(Instance->Fields[0], Dict);
+    }
+
+    Dict = CK_AS_DICT(Instance->Fields[0]);
+    KeyName = CkExceptionKeyNames[Field];
+    Key = CkpStringCreate(Vm, KeyName, CkExceptionKeyLengths[Field]);
+    CkpDictSet(Vm, Dict, Key, Value);
+
+ExceptionSetFieldEnd:
+    if (CK_IS_OBJECT(Value)) {
+        CkpPopRoot(Vm);
+    }
+
+    CkpPopRoot(Vm);
     return;
 }
 

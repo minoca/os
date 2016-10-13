@@ -304,13 +304,7 @@ Return Value:
     UINTN Offset;
     INTN Size;
 
-    if (Function->Module->Name != NULL) {
-        Name = Function->Module->Name->Value;
-
-    } else {
-        Name = "<core>";
-    }
-
+    Name = Function->Module->Name->Value;
     CkpDebugPrint(Vm, "%s: %s\n", Name, Function->Debug.Name->Value);
     Offset = 0;
     LastLine = -1;
@@ -808,8 +802,25 @@ Return Value:
 
     PCK_CLASS Class;
     PCK_MODULE Module;
+    PCK_RANGE Range;
+    PCSTR Separator;
 
     switch (Object->Type) {
+    case CkObjectRange:
+        Range = (PCK_RANGE)Object;
+        Separator = "..";
+        if (Range->Inclusive != FALSE) {
+            Separator = "...";
+        }
+
+        CkpDebugPrint(Vm,
+                      "%lld%s%lld",
+                      (LONGLONG)(Range->From),
+                      Separator,
+                      (LONGLONG)(Range->To));
+
+        break;
+
     case CkObjectString:
         CkpDebugPrint(Vm, "\"%s\"", ((PCK_STRING)Object)->Value);
         break;
@@ -824,13 +835,7 @@ Return Value:
     case CkObjectModule:
         Module = (PCK_MODULE)Object;
         CkpDebugPrint(Vm, "<module ");
-        if (Module->Name != NULL) {
-            CkpDumpObject(Vm, &(Module->Name->Header));
-
-        } else {
-            CkpDebugPrint(Vm, "builtin");
-        }
-
+        CkpDumpObject(Vm, &(Module->Name->Header));
         if (Module->Path != NULL) {
             CkpDebugPrint(Vm, " at ");
             CkpDumpObject(Vm, &(Module->Path->Header));

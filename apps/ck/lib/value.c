@@ -454,8 +454,8 @@ Return Value:
     case CkObjectRange:
         LeftRange = (PCK_RANGE)LeftObject;
         RightRange = (PCK_RANGE)RightObject;
-        if ((LeftRange->From.Int == RightRange->From.Int) &&
-            (LeftRange->To.Int == RightRange->To.Int) &&
+        if ((LeftRange->From == RightRange->From) &&
+            (LeftRange->To == RightRange->To) &&
             (LeftRange->Inclusive == RightRange->Inclusive)) {
 
             return TRUE;
@@ -666,7 +666,7 @@ Return Value:
     }
 
     CkZero(Class, sizeof(CK_CLASS));
-    CkpInitializeObject(Vm, &(Class->Header), CkObjectClass, NULL);
+    CkpInitializeObject(Vm, &(Class->Header), CkObjectClass, Vm->Class.Object);
     Class->FieldCount = FieldCount;
     Class->Name = Name;
     Class->Module = Module;
