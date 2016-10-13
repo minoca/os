@@ -426,6 +426,7 @@ Return Value:
     ULONG Flags;
     YY_ITEM_INDEX ItemIndex;
     PYY_VALUE Items;
+    YY_VALUE LastTerminal;
     YY_VALUE LeftSide;
     YY_RULE_INDEX RuleIndex;
     PYYGEN_RULE Rules;
@@ -505,8 +506,18 @@ Return Value:
         while (*Components != 0) {
             CurrentRule->LeftSide = LeftSide;
             CurrentRule->RightSide = ItemIndex;
+            LastTerminal = -1;
             while (*Components > 0) {
                 Items[ItemIndex] = *Components;
+
+                //
+                // Keep track of the last terminal specified in the rule.
+                //
+
+                if (*Components < Context->TokenCount) {
+                    LastTerminal = *Components;
+                }
+
                 Components += 1;
                 ItemIndex += 1;
             }
@@ -516,13 +527,24 @@ Return Value:
 
             //
             // The precedence for the rule is specified in the terminator. -1
-            // corresponds to precedence 0 (none).
+            // corresponds to precedence 0 (none). If no precedence or
+            // associativity is describe for the rule, then it is taken from
+            // the last terminal in the rule.
             //
 
             assert(*Components != 0);
 
             CurrentRule->Precedence = -(*Components) - 1;
+            if ((CurrentRule->Precedence == 0) && (LastTerminal > 0)) {
+                CurrentRule->Precedence =
+                                    Context->Elements[LastTerminal].Precedence;
+            }
+
             Flags = Context->Elements[LeftSide].Flags;
+            if (Flags == 0) {
+                Flags = Context->Elements[LastTerminal].Flags;
+            }
+
             if (Flags != 0) {
                 if ((Flags & YY_ELEMENT_LEFT_ASSOCIATIVE) != 0) {
                     CurrentRule->Associativity = YyLeftAssociative;

@@ -157,6 +157,8 @@ CkpHashObject (
 CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[] = {
     {"get@1", 1, CkpDictGetPrimitive},
     {"set@2", 2, CkpDictSetPrimitive},
+    {"__get@1", 1, CkpDictSlice},
+    {"__set@2", 2, CkpDictSliceAssign},
     {"__slice@1", 1, CkpDictSlice},
     {"__sliceAssign@2", 2, CkpDictSliceAssign},
     {"clear@0", 0, CkpDictClearPrimitive},

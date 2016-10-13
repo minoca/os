@@ -442,7 +442,9 @@ Return Value:
     Method = NULL;
     if (Arguments == 1) {
 
-        CK_ASSERT((Assign == FALSE) || (Operator == CkTokenOpenBracket));
+        CK_ASSERT((Assign == FALSE) ||
+                  ((Operator == CkTokenOpenBracket) ||
+                   (Operator == CkTokenDot)));
 
         switch (Operator) {
         case CkTokenIs:
@@ -531,6 +533,16 @@ Return Value:
         case CkTokenBitOr:
         case CkTokenOrAssign:
             Method = "__or@1";
+            break;
+
+        case CkTokenDot:
+            if (Assign != FALSE) {
+                Method = "__set@2";
+
+            } else {
+                Method = "__get@1";
+            }
+
             break;
 
         case CkTokenDotDot:

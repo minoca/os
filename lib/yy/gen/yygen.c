@@ -293,6 +293,51 @@ Return Value:
     return;
 }
 
+VOID
+YyGetConflictCounts (
+    PYYGEN_CONTEXT Context,
+    PYY_VALUE ShiftReduceConflicts,
+    PYY_VALUE ReduceReduceConflicts
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of conflicts in the grammar, minus the
+    number of expected conflicts.
+
+Arguments:
+
+    Context - Supplies a pointer to the generator context.
+
+    ShiftReduceConflicts - Supplies an optional pointer where the number of
+        shift-reduce conflicts will be returned.
+
+    ReduceReduceConflicts - Supplies an optional pointer where the number of
+        reduce-reduce conflicts will be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (ShiftReduceConflicts != NULL) {
+        *ShiftReduceConflicts = Context->ShiftReduceConflictCount -
+                                Context->ExpectedShiftReduceConflicts;
+    }
+
+    if (ReduceReduceConflicts != NULL) {
+        *ReduceReduceConflicts = Context->ReduceReduceConflictCount -
+                                 Context->ExpectedReduceReduceConflicts;
+    }
+
+    return;
+}
+
 PVOID
 YypAllocate (
     UINTN Size

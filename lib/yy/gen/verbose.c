@@ -773,6 +773,10 @@ Return Value:
             Current += 1;
         }
 
+        if (Current == Items) {
+            fprintf(File, ". ");
+        }
+
         fprintf(File, "(%d)\n", RuleIndex - 2);
     }
 

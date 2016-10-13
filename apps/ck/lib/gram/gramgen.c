@@ -59,6 +59,31 @@ Environment:
 //
 
 //
+// Define operator precedences in increasing order. The first valid precedence
+// is two.
+// Dot and open parentheses are defined to resolve the shift-reduce conflict
+// between the two postfix expressions "a.b" and "a.b()".
+//
+
+typedef enum _CK_PRECEDENCE {
+    CkPrecedenceNone,
+    CkPrecedenceInvalid,
+    CkPrecedenceLogicalCompare, // && ||
+    CkPrecedenceEquality, // is == !=
+    CkPrecedenceCompare, // < > <= >=
+    CkPrecedenceBitOr, // |
+    CkPrecedenceXor, // ^
+    CkPrecedenceBitAnd, // &
+    CkPrecedenceShift, // << >>
+    CkPrecedenceRange, // .. ...
+    CkPrecedenceAddition, // + - (subtract)
+    CkPrecedenceMultiply, // * / %
+
+    CkPrecedenceDot, // '.'
+    CkPrecedenceParentheses // '('
+} CK_PRECEDENCE, *PCK_PRECEDENCE;
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
@@ -118,9 +143,10 @@ YY_VALUE CkgPrimaryExpression[] = {
 
 YY_VALUE CkgPostfixExpression[] = {
     CkNodePrimaryExpression, -1,
+    CkNodePostfixExpression, CkTokenDot, CkTokenIdentifier, -CkPrecedenceDot,
     CkNodePostfixExpression, CkTokenDot, CkTokenIdentifier,
         CkTokenOpenParentheses, CkNodeArgumentExpressionList,
-        CkTokenCloseParentheses, -1,
+        CkTokenCloseParentheses, -CkPrecedenceParentheses,
 
     CkNodePostfixExpression, CkTokenOpenBracket, CkNodeExpression,
         CkTokenCloseBracket, -1,
@@ -157,103 +183,35 @@ YY_VALUE CkgUnaryOperator[] = {
     0
 };
 
-YY_VALUE CkgMultiplicativeExpression[] = {
+YY_VALUE CkgBinaryExpression[] = {
     CkNodeUnaryExpression, -1,
-    CkNodeMultiplicativeExpression, CkTokenAsterisk,
-        CkNodeUnaryExpression, -1,
-
-    CkNodeMultiplicativeExpression, CkTokenDivide,
-        CkNodeUnaryExpression, -1,
-
-    CkNodeMultiplicativeExpression, CkTokenModulo,
-        CkNodeUnaryExpression, -1,
-
-    0
-};
-
-YY_VALUE CkgAdditiveExpression[] = {
-    CkNodeMultiplicativeExpression, -1,
-    CkNodeAdditiveExpression, CkTokenPlus,
-        CkNodeMultiplicativeExpression, -1,
-
-    CkNodeAdditiveExpression, CkTokenMinus,
-        CkNodeMultiplicativeExpression, -1,
-
-    0
-};
-
-YY_VALUE CkgRangeExpression[] = {
-    CkNodeAdditiveExpression, -1,
-    CkNodeRangeExpression, CkTokenDotDot, CkNodeAdditiveExpression, -1,
-    CkNodeRangeExpression, CkTokenDotDotDot, CkNodeAdditiveExpression, -1,
-    0
-};
-
-YY_VALUE CkgShiftExpression[] = {
-    CkNodeRangeExpression, -1,
-    CkNodeShiftExpression, CkTokenLeftShift, CkNodeRangeExpression, -1,
-    CkNodeShiftExpression, CkTokenRightShift, CkNodeRangeExpression, -1,
-    0
-};
-
-YY_VALUE CkgAndExpression[] = {
-    CkNodeShiftExpression, -1,
-    CkNodeAndExpression, CkTokenBitAnd, CkNodeShiftExpression, -1,
-    0
-};
-
-YY_VALUE CkgExclusiveOrExpression[] = {
-    CkNodeAndExpression, -1,
-    CkNodeExclusiveOrExpression, CkTokenXor, CkNodeAndExpression, -1,
-    0
-};
-
-YY_VALUE CkgInclusiveOrExpression[] = {
-    CkNodeExclusiveOrExpression, -1,
-    CkNodeInclusiveOrExpression, CkTokenBitOr, CkNodeExclusiveOrExpression, -1,
-    0
-};
-
-YY_VALUE CkgRelationalExpression[] = {
-    CkNodeInclusiveOrExpression, -1,
-    CkNodeRelationalExpression, CkTokenLessThan,
-        CkNodeInclusiveOrExpression, -1,
-
-    CkNodeRelationalExpression, CkTokenGreaterThan,
-        CkNodeInclusiveOrExpression, -1,
-
-    CkNodeRelationalExpression, CkTokenLessOrEqual,
-        CkNodeInclusiveOrExpression, -1,
-
-    CkNodeRelationalExpression, CkTokenGreaterOrEqual,
-        CkNodeInclusiveOrExpression, -1,
-
-    0
-};
-
-YY_VALUE CkgEqualityExpression[] = {
-    CkNodeRelationalExpression, -1,
-    CkNodeEqualityExpression, CkTokenIs, CkNodeRelationalExpression, -1,
-    CkNodeEqualityExpression, CkTokenIsEqual, CkNodeRelationalExpression, -1,
-    CkNodeEqualityExpression, CkTokenIsNotEqual, CkNodeRelationalExpression, -1,
-    0
-};
-
-YY_VALUE CkgLogicalAndExpression[] = {
-    CkNodeEqualityExpression, -1,
-    CkNodeLogicalAndExpression, CkTokenLogicalAnd, CkNodeEqualityExpression, -1,
-    0
-};
-
-YY_VALUE CkgLogicalOrExpression[] = {
-    CkNodeLogicalAndExpression, -1,
-    CkNodeLogicalOrExpression, CkTokenLogicalOr, CkNodeLogicalAndExpression, -1,
+    CkNodeBinaryExpression, CkTokenAsterisk, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenDivide, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenModulo, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenPlus, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenMinus, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenDotDot, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenDotDotDot, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenLeftShift, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenRightShift, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenBitAnd, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenXor, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenBitOr, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenLessThan, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenGreaterThan, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenLessOrEqual, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenGreaterOrEqual, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenIs, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenIsEqual, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenIsNotEqual, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenLogicalAnd, CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenLogicalOr, CkNodeBinaryExpression, -1,
     0
 };
 
 YY_VALUE CkgConditionalExpression[] = {
-    CkNodeLogicalOrExpression, -1,
-    CkNodeLogicalOrExpression, CkTokenQuestion, CkNodeExpression,
+    CkNodeBinaryExpression, -1,
+    CkNodeBinaryExpression, CkTokenQuestion, CkNodeExpression,
         CkTokenColon, CkNodeConditionalExpression, -1,
 
     0
@@ -509,7 +467,7 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"false", 0, 0, NULL},
     {"var", 0, 0, NULL},
     {"class", 0, 0, NULL},
-    {"is", 0, 0, NULL},
+    {"is", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceEquality, NULL},
     {"static", 0, 0, NULL},
     {"super", 0, 0, NULL},
     {"this", 0, 0, NULL},
@@ -533,42 +491,42 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"^=", 0, 0, NULL},
     {"|=", 0, 0, NULL},
     {"?=", 0, 0, NULL},
-    {">>", 0, 0, NULL},
-    {"<<", 0, 0, NULL},
+    {">>", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceShift, NULL},
+    {"<<", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceShift, NULL},
     {"++", 0, 0, NULL},
     {"--", 0, 0, NULL},
-    {"&&", 0, 0, NULL},
-    {"||", 0, 0, NULL},
-    {"<=", 0, 0, NULL},
-    {">=", 0, 0, NULL},
-    {"==", 0, 0, NULL},
-    {"!=", 0, 0, NULL},
+    {"&&", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceLogicalCompare, NULL},
+    {"||", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceLogicalCompare, NULL},
+    {"<=", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceCompare, NULL},
+    {">=", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceCompare, NULL},
+    {"==", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceEquality, NULL},
+    {"!=", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceEquality, NULL},
     {";", 0, 0, NULL},
     {"{", 0, 0, NULL},
     {"}", 0, 0, NULL},
     {",", 0, 0, NULL},
     {":", 0, 0, NULL},
     {"=", 0, 0, NULL},
-    {"(", 0, 0, NULL},
+    {"(", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceParentheses, NULL},
     {")", 0, 0, NULL},
     {"[", 0, 0, NULL},
     {"]", 0, 0, NULL},
-    {"&", 0, 0, NULL},
+    {"&", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceBitAnd, NULL},
     {"!", 0, 0, NULL},
     {"~", 0, 0, NULL},
-    {"-", 0, 0, NULL},
-    {"+", 0, 0, NULL},
-    {"*", 0, 0, NULL},
-    {"/", 0, 0, NULL},
-    {"%", 0, 0, NULL},
-    {"<", 0, 0, NULL},
-    {">", 0, 0, NULL},
-    {"^", 0, 0, NULL},
-    {"|", 0, 0, NULL},
+    {"-", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceAddition, NULL},
+    {"+", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceAddition, NULL},
+    {"*", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceMultiply, NULL},
+    {"/", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceMultiply, NULL},
+    {"%", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceMultiply, NULL},
+    {"<", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceCompare, NULL},
+    {">", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceCompare, NULL},
+    {"^", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceXor, NULL},
+    {"|", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceBitOr, NULL},
     {"?", 0, 0, NULL},
-    {".", 0, 0, NULL},
-    {"..", 0, 0, NULL},
-    {"...", 0, 0, NULL},
+    {".", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceDot, NULL},
+    {"..", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceRange, NULL},
+    {"...", YY_ELEMENT_LEFT_ASSOCIATIVE, CkPrecedenceRange, NULL},
     {"Start", 0, 0, NULL},
 
     {"ListElementList", 0, 0, CkgListElementList},
@@ -581,17 +539,7 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"ArgumentExpressionList", 0, 0, CkgArgumentExpressionList},
     {"UnaryExpression", 0, 0, CkgUnaryExpression},
     {"UnaryOperator", 0, 0, CkgUnaryOperator},
-    {"MultiplicativeExpression", 0, 0, CkgMultiplicativeExpression},
-    {"AdditiveExpression", 0, 0, CkgAdditiveExpression},
-    {"RangeExpression", 0, 0, CkgRangeExpression},
-    {"ShiftExpression", 0, 0, CkgShiftExpression},
-    {"AndExpression", 0, 0, CkgAndExpression},
-    {"ExclusiveOrExpression", 0, 0, CkgExclusiveOrExpression},
-    {"InclusiveOrExpression", 0, 0, CkgInclusiveOrExpression},
-    {"RelationalExpression", 0, 0, CkgRelationalExpression},
-    {"EqualityExpression", 0, 0, CkgEqualityExpression},
-    {"LogicalAndExpression", 0, 0, CkgLogicalAndExpression},
-    {"LogicalOrExpression", 0, 0, CkgLogicalOrExpression},
+    {"BinaryExpression", 0, 0, CkgBinaryExpression},
     {"ConditionalExpression", 0, 0, CkgConditionalExpression},
     {"AssignmentExpression", 0, 0, CkgAssignmentExpression},
     {"AssignmentOperator", 0, 0, CkgAssignmentOperator},
@@ -682,6 +630,8 @@ Return Value:
     FILE *OutputFile;
     PSTR OutputPath;
     INT OutputPathLength;
+    YY_VALUE ReduceConflicts;
+    YY_VALUE ShiftConflicts;
     INT Status;
     BOOL Verbose;
     FILE *VerboseFile;
@@ -751,6 +701,22 @@ Return Value:
     YyStatus = YyGenerateGrammar(&CkgGrammarDescription, Flags, &Context);
     if (YyStatus != YyStatusSuccess) {
         fprintf(stderr, "Error: Failed to generate grammar: %d\n", YyStatus);
+        goto MainEnd;
+    }
+
+    YyGetConflictCounts(Context, &ShiftConflicts, &ReduceConflicts);
+    if (ShiftConflicts != 0) {
+        fprintf(stderr,
+                "Warning: %d shift-reduce conflicts.\n",
+                ShiftConflicts);
+    }
+
+    if (ReduceConflicts != 0) {
+        fprintf(stderr,
+                "Error: %d reduce-reduce conflict errors.\n",
+                ReduceConflicts);
+
+        Status = YyStatusInvalidSpecification;
         goto MainEnd;
     }
 

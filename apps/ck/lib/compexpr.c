@@ -267,60 +267,6 @@ Return Value:
 }
 
 VOID
-CkpVisitLogicalExpression (
-    PCK_COMPILER Compiler,
-    PCK_AST_NODE Node
-    )
-
-/*++
-
-Routine Description:
-
-    This routine compiles a logical and or logical or expression.
-
-Arguments:
-
-    Compiler - Supplies a pointer to the compiler.
-
-    Node - Supplies a pointer to the node to visit.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    UINTN Jump;
-    CK_OPCODE Op;
-    PLEXER_TOKEN Operator;
-
-    CK_ASSERT((Node->Children == 1) || (Node->Children == 3));
-
-    CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex));
-    if (Node->Children == 3) {
-        Operator = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 1);
-        CkpComplainIfAssigning(Compiler, Operator, "Logical expression");
-        if (Operator->Value == CkTokenLogicalOr) {
-            Op = CkOpOr;
-
-        } else {
-
-            CK_ASSERT(Operator->Value == CkTokenLogicalAnd);
-
-            Op = CkOpAnd;
-        }
-
-        Jump = CkpEmitJump(Compiler, Op);
-        CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex + 2));
-        CkpPatchJump(Compiler, Jump);
-    }
-
-    return;
-}
-
-VOID
 CkpVisitBinaryExpression (
     PCK_COMPILER Compiler,
     PCK_AST_NODE Node
@@ -348,16 +294,38 @@ Return Value:
 
 {
 
-    PLEXER_TOKEN Operator;
+    UINTN Jump;
+    CK_SYMBOL Operator;
+    PLEXER_TOKEN OperatorToken;
 
     CK_ASSERT((Node->Children == 1) || (Node->Children == 3));
 
     CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex));
     if (Node->Children == 3) {
-        Operator = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 1);
-        CkpComplainIfAssigning(Compiler, Operator, "Binary expression");
+        OperatorToken = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 1);
+        Operator = OperatorToken->Value;
+        CkpComplainIfAssigning(Compiler, OperatorToken, "Binary expression");
+
+        //
+        // Logical AND and logical OR are handled separately since they contain
+        // short circuit logic (and so can't be handled by an operator call).
+        //
+
+        Jump = -1;
+        if (Operator == CkTokenLogicalOr) {
+            Jump = CkpEmitJump(Compiler, CkOpOr);
+
+        } else if (Operator == CkTokenLogicalAnd) {
+            Jump = CkpEmitJump(Compiler, CkOpAnd);
+        }
+
         CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex + 2));
-        CkpEmitOperatorCall(Compiler, Operator->Value, 1, FALSE);
+        if ((Operator == CkTokenLogicalOr) || (Operator == CkTokenLogicalAnd)) {
+            CkpPatchJump(Compiler, Jump);
+
+        } else {
+            CkpEmitOperatorCall(Compiler, Operator, 1, FALSE);
+        }
     }
 
     return;
@@ -472,7 +440,8 @@ Return Value:
     PCK_AST_NODE ArgumentsNode;
     BOOL Assign;
     PCK_AST_NODE Expression;
-    PLEXER_TOKEN MethodToken;
+    PLEXER_TOKEN Identifier;
+    CK_VALUE IdentifierString;
     CK_OPCODE Op;
     CK_SYMBOL Operator;
     PLEXER_TOKEN OperatorToken;
@@ -494,7 +463,6 @@ Return Value:
     Assign = Compiler->Assign;
     Compiler->Assign = FALSE;
     CkpVisitNode(Compiler, Expression);
-    Compiler->Assign = Assign;
     OperatorToken = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 1);
     Operator = OperatorToken->Value;
     switch (Operator) {
@@ -524,6 +492,54 @@ Return Value:
     //
 
     case CkTokenDot:
+
+        //
+        // Handle just x.y, as that's a getter or setter.
+        //
+
+        if (Node->Children == 3) {
+            Identifier = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 2);
+
+            CK_ASSERT(Identifier->Value == CkTokenIdentifier);
+
+            //
+            // Convert the identifier into a string.
+            //
+
+            IdentifierString = CkpStringCreate(
+                               Compiler->Parser->Vm,
+                               Compiler->Parser->Source + Identifier->Position,
+                               Identifier->Size);
+
+            if (!CK_IS_STRING(IdentifierString)) {
+                return;
+            }
+
+            CkpEmitConstant(Compiler, IdentifierString);
+
+            //
+            // If assigning, the rvalue is below the receiver. -1 is the inner
+            // [expression], -2 is the receiver, so -3 is the rvalue. After
+            // the operator, pop the return value, as the rvalue is still back
+            // there.
+            //
+
+            if (Assign != FALSE) {
+                CkpLoadLocal(Compiler, Compiler->StackSlots - 3);
+            }
+
+            CkpEmitOperatorCall(Compiler, Operator, 1, Assign);
+            if (Assign != FALSE) {
+                CkpEmitOp(Compiler, CkOpPop);
+            }
+
+            break;
+        }
+
+        //
+        // Fall through, as this is a method call (ie x.y(...)).
+        //
+
     case CkTokenOpenParentheses:
         CkpComplainIfAssigning(Compiler, OperatorToken, "Function call");
 
@@ -564,12 +580,12 @@ Return Value:
         //
 
         if (Operator == CkTokenDot) {
-            MethodToken = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 2);
+            Identifier = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 2);
 
-            CK_ASSERT(MethodToken->Value == CkTokenIdentifier);
+            CK_ASSERT(Identifier->Value == CkTokenIdentifier);
 
-            Signature.Name = Compiler->Parser->Source + MethodToken->Position;
-            Signature.Length = MethodToken->Size;
+            Signature.Name = Compiler->Parser->Source + Identifier->Position;
+            Signature.Length = Identifier->Size;
             Op = CkOpCall0;
             if ((Expression->Symbol == CkNodePostfixExpression) &&
                 (Expression->Children == 1)) {
@@ -615,7 +631,23 @@ Return Value:
 
         Expression = CK_GET_AST_NODE(Compiler, Node->ChildIndex + 2);
         CkpVisitNode(Compiler, Expression);
+
+        //
+        // If assigning, the rvalue is below the receiver. -1 is the inner
+        // [expression], -2 is the receiver, so -3 is the rvalue. After
+        // the operator, pop the return value, as the rvalue is still back
+        // there.
+        //
+
+        if (Assign != FALSE) {
+            CkpLoadLocal(Compiler, Compiler->StackSlots - 3);
+        }
+
         CkpEmitOperatorCall(Compiler, Operator, 1, Assign);
+        if (Assign != FALSE) {
+            CkpEmitOp(Compiler, CkOpPop);
+        }
+
         break;
 
     default:
@@ -625,6 +657,7 @@ Return Value:
         break;
     }
 
+    Compiler->Assign = Assign;
     return;
 }
 

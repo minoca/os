@@ -452,30 +452,6 @@ Return Value:
 --*/
 
 VOID
-CkpVisitLogicalExpression (
-    PCK_COMPILER Compiler,
-    PCK_AST_NODE Node
-    );
-
-/*++
-
-Routine Description:
-
-    This routine compiles a logical and or logical or expression.
-
-Arguments:
-
-    Compiler - Supplies a pointer to the compiler.
-
-    Node - Supplies a pointer to the node to visit.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
 CkpVisitBinaryExpression (
     PCK_COMPILER Compiler,
     PCK_AST_NODE Node

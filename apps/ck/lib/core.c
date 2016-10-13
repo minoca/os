@@ -102,6 +102,18 @@ CkpObjectToString (
     );
 
 BOOL
+CkpObjectGet (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpObjectSet (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpObjectType (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -205,6 +217,8 @@ CK_PRIMITIVE_DESCRIPTION CkObjectPrimitives[] = {
     {"__ne@1", 1, CkpObjectIsNotEqual},
     {"__is@1", 1, CkpObjectIs},
     {"__str@0", 0, CkpObjectToString},
+    {"__get@1", 1, CkpObjectGet},
+    {"__set@2", 2, CkpObjectSet},
     {"type@0", 0, CkpObjectType},
     {NULL, 0, NULL}
 };
@@ -613,7 +627,12 @@ Return Value:
 
     NameString = CK_AS_STRING(Value);
     CkpPushRoot(Vm, &(NameString->Header));
-    Class = CkpClassAllocate(Vm, Module, 0, NameString);
+
+    //
+    // Allocate one field for the built-in dictionary that all objects have.
+    //
+
+    Class = CkpClassAllocate(Vm, Module, 1, NameString);
     if (Class == NULL) {
         CkpPopRoot(Vm);
         return NULL;
@@ -1005,6 +1024,118 @@ Return Value:
 
     String[sizeof(String) - 1] = '\0';
     Arguments[0] = CkpStringCreate(Vm, String, Length);
+    return TRUE;
+}
+
+BOOL
+CkpObjectGet (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the default object get method.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+    PCK_INSTANCE Instance;
+
+    if (!CK_IS_INSTANCE(Arguments[0])) {
+        CkpRuntimeError(Vm,
+                        "TypeError",
+                        "Builtin type does not implement __get");
+
+        return FALSE;
+    }
+
+    Instance = CK_AS_INSTANCE(Arguments[0]);
+    if (!CK_IS_NULL(Instance->Fields[0])) {
+        Dict = CK_AS_DICT(Instance->Fields[0]);
+        Arguments[0] = CkpDictGet(Dict, Arguments[1]);
+
+    } else {
+        Arguments[0] = CkUndefinedValue;
+    }
+
+    if (CK_IS_UNDEFINED(Arguments[0])) {
+        CkpRuntimeError(Vm, "KeyError", "Key is not defined");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpObjectSet (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the default object set method.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+    PCK_INSTANCE Instance;
+
+    if (!CK_IS_INSTANCE(Arguments[0])) {
+        CkpRuntimeError(Vm,
+                        "TypeError",
+                        "Builtin type does not implement __set");
+
+        return FALSE;
+    }
+
+    Instance = CK_AS_INSTANCE(Arguments[0]);
+    if (CK_IS_NULL(Instance->Fields[0])) {
+        Dict = CkpDictCreate(Vm);
+        if (Dict == NULL) {
+            return FALSE;
+        }
+
+        CK_OBJECT_VALUE(Instance->Fields[0], Dict);
+
+    } else {
+        Dict = CK_AS_DICT(Instance->Fields[0]);
+    }
+
+    CkpDictSet(Vm, Dict, Arguments[1], Arguments[2]);
     return TRUE;
 }
 

@@ -14,6 +14,25 @@
 
 %start translation_unit
 
+%left AND_OP OR_OP
+%left IS EQ_OP NE_OP
+%left '<' '>' LE_OP GE_OP
+%left '|'
+%left '^'
+%left '&'
+%left LEFT_OP RIGHT_OP
+%left DOTDOT DOTDOTDOT
+%left '+' '-'
+%left '*' '/' '%'
+
+//
+// Define the relative precedences of dot and open paren to resolve the
+// shift-reduce conflict between the two postfix expressions "a.b" and "a.b()".
+//
+
+%left '.'
+%left '('
+
 %%
 
 list_element_list
@@ -58,7 +77,8 @@ primary_expression
 
 postfix_expression
     : primary_expression
-    | postfix_expression '.' IDENTIFIER '(' argument_expression_list ')'
+    | postfix_expression '.' IDENTIFIER %prec '.'
+    | postfix_expression '.' IDENTIFIER '(' argument_expression_list ')' %prec '('
     | postfix_expression '[' expression ']'
     | postfix_expression '(' argument_expression_list ')'
     | postfix_expression INC_OP
@@ -84,74 +104,34 @@ unary_operator
     | '!'
     ;
 
-multiplicative_expression
+binary_expression
     : unary_expression
-    | multiplicative_expression '*' unary_expression
-    | multiplicative_expression '/' unary_expression
-    | multiplicative_expression '%' unary_expression
-    ;
-
-additive_expression
-    : multiplicative_expression
-    | additive_expression '+' multiplicative_expression
-    | additive_expression '-' multiplicative_expression
-    ;
-
-range_expression
-    : additive_expression
-    | range_expression DOTDOT additive_expression
-    | range_expression DOTDOTDOT additive_expression
-    ;
-
-shift_expression
-    : range_expression
-    | shift_expression LEFT_OP range_expression
-    | shift_expression RIGHT_OP range_expression
-    ;
-
-and_expression
-    : shift_expression
-    | and_expression '&' shift_expression
-    ;
-
-exclusive_or_expression
-    : and_expression
-    | exclusive_or_expression '^' and_expression
-    ;
-
-inclusive_or_expression
-    : exclusive_or_expression
-    | inclusive_or_expression '|' exclusive_or_expression
-    ;
-
-relational_expression
-    : inclusive_or_expression
-    | relational_expression '<' inclusive_or_expression
-    | relational_expression '>' inclusive_or_expression
-    | relational_expression LE_OP inclusive_or_expression
-    | relational_expression GE_OP inclusive_or_expression
-    ;
-
-equality_expression
-    : relational_expression
-    | equality_expression IS relational_expression
-    | equality_expression EQ_OP relational_expression
-    | equality_expression NE_OP relational_expression
-    ;
-
-logical_and_expression
-    : equality_expression
-    | logical_and_expression AND_OP equality_expression
-    ;
-
-logical_or_expression
-    : logical_and_expression
-    | logical_or_expression OR_OP logical_and_expression
+    | binary_expression '*' binary_expression
+    | binary_expression '/' binary_expression
+    | binary_expression '%' binary_expression
+    | binary_expression '+' binary_expression
+    | binary_expression '-' binary_expression
+    | binary_expression DOTDOT binary_expression
+    | binary_expression DOTDOTDOT binary_expression
+    | binary_expression LEFT_OP binary_expression
+    | binary_expression RIGHT_OP binary_expression
+    | binary_expression '&' binary_expression
+    | binary_expression '^' binary_expression
+    | binary_expression '|' binary_expression
+    | binary_expression '<' binary_expression
+    | binary_expression '>' binary_expression
+    | binary_expression LE_OP binary_expression
+    | binary_expression GE_OP binary_expression
+    | binary_expression IS binary_expression
+    | binary_expression EQ_OP binary_expression
+    | binary_expression NE_OP binary_expression
+    | binary_expression AND_OP binary_expression
+    | binary_expression OR_OP binary_expression
     ;
 
 conditional_expression
-    : logical_or_expression
-    | logical_or_expression '?' expression ':' conditional_expression
+    : binary_expression
+    | binary_expression '?' expression ':' conditional_expression
     ;
 
 assignment_expression
@@ -330,7 +310,7 @@ char *s;
     fflush(stdout);
     printf("\n%*s\n%*s\n", column, "^", column, s);
 }
-int main()
+
 int main(int argc, char **argv)
 {
 

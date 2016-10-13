@@ -233,6 +233,7 @@ Return Value:
     UINTN FrameIndex;
     CK_VALUE StackTrace;
     PCK_TRY_BLOCK TryBlock;
+    PCK_FOREIGN_FUNCTION UnhandledException;
     CK_VALUE UnhandledName;
     PCK_STRING UnhandledString;
 
@@ -369,46 +370,67 @@ RaiseExceptionEnd:
     //
 
     if ((Fiber == NULL) && (Vm->Fiber != NULL)) {
+        if (Vm->Configuration.UnhandledException != NULL) {
 
-        //
-        // Create the unhandled exception closure if needed.
-        //
+            //
+            // Null out the unhandled handler as a hint in case that handler
+            // generates another exception.
+            //
 
-        if ((Vm->UnhandledException == NULL) &&
-            (Vm->Configuration.UnhandledException != NULL)) {
+            UnhandledException = Vm->Configuration.UnhandledException;
+            Vm->Configuration.UnhandledException = NULL;
 
-            UnhandledName = CkpStringCreate(Vm, "<exception>", 11);
-            if (!CK_IS_NULL(UnhandledName)) {
-                UnhandledString = CK_AS_STRING(UnhandledName);
-                Vm->UnhandledException = CkpClosureCreateForeign(
-                                          Vm,
-                                          Vm->Configuration.UnhandledException,
-                                          CkpModuleGet(Vm, CK_NULL_VALUE),
-                                          UnhandledString,
-                                          1);
+            //
+            // Create the unhandled exception closure if needed.
+            //
+
+            if (Vm->UnhandledException == NULL) {
+                UnhandledName = CkpStringCreate(Vm, "<exception>", 11);
+                if (!CK_IS_NULL(UnhandledName)) {
+                    UnhandledString = CK_AS_STRING(UnhandledName);
+                    Vm->UnhandledException = CkpClosureCreateForeign(
+                                              Vm,
+                                              UnhandledException,
+                                              CkpModuleGet(Vm, CK_NULL_VALUE),
+                                              UnhandledString,
+                                              1);
+                }
             }
-        }
 
-        //
-        // If there is an unhandled exception handler, create a new fiber and
-        // call that.
-        //
+            //
+            // Call the unhandled exception handler.
+            //
 
-        if (Vm->UnhandledException != NULL) {
-            Fiber = Vm->Fiber;
+            if (Vm->UnhandledException != NULL) {
+                Fiber = Vm->Fiber;
 
-            CK_ASSERT(Fiber->StackTop + 2 <=
-                      Fiber->Stack + Fiber->StackCapacity);
+                CK_ASSERT(Fiber->StackTop + 2 <=
+                          Fiber->Stack + Fiber->StackCapacity);
 
-            CK_PUSH(Fiber, CkNullValue);
-            CK_PUSH(Fiber, Exception);
-            Fiber->Error = CkNullValue;
-            CkpCallFunction(Vm, Vm->UnhandledException, 2);
+                CK_PUSH(Fiber, CkNullValue);
+                CK_PUSH(Fiber, Exception);
+                Fiber->Error = CkNullValue;
+                CkpCallFunction(Vm, Vm->UnhandledException, 2);
+
+            } else {
+                CkpError(Vm,
+                         CkErrorRuntime,
+                         "Exception occurred");
+            }
+
+            //
+            // Restore the handler.
+            //
+
+            Vm->Configuration.UnhandledException = UnhandledException;
 
         } else {
-            CkpError(Vm,
-                     CkErrorRuntime,
-                     "Exception occurred");
+            if (Vm->UnhandledException != NULL) {
+                CkpError(Vm, CkErrorRuntime, "Double exception");
+
+            } else {
+                CkpError(Vm, CkErrorRuntime, "Exception occurred");
+            }
         }
     }
 

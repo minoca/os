@@ -81,8 +81,10 @@ Members:
     Flags - Stores a bitfield of flags about this node. See YY_ELEMENT_*
         definitions.
 
-    Precedence - Stores the precedence value for a given symbol. Valid
-        precedences start at 2. 0 indicates no precedence specification.
+    Precedence - Stores the precedence value for a given symbol. Non-zero
+        values will be reduced by one to line up with the precedence values
+        given at the end of rules. This make the first active precedence value
+        2. 0 or 1 indicates no precedence specification.
 
     Components - Stores a sequence of rule elements. Each element is either a
         token value or a rule value, determined by the token count. Each form
@@ -268,6 +270,36 @@ Routine Description:
 Arguments:
 
     Context - Supplies a pointer to the generator context.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+YyGetConflictCounts (
+    PYYGEN_CONTEXT Context,
+    PYY_VALUE ShiftReduceConflicts,
+    PYY_VALUE ReduceReduceConflicts
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of conflicts in the grammar, minus the
+    number of expected conflicts.
+
+Arguments:
+
+    Context - Supplies a pointer to the generator context.
+
+    ShiftReduceConflicts - Supplies an optional pointer where the number of
+        shift-reduce conflicts will be returned.
+
+    ReduceReduceConflicts - Supplies an optional pointer where the number of
+        reduce-reduce conflicts will be returned.
 
 Return Value:
 
