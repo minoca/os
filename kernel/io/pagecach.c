@@ -1162,12 +1162,6 @@ Return Value:
     ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock));
 
     FoundEntry = IopLookupPageCacheEntryHelper(FileObject, Offset);
-
-    //
-    // If the entry was found for a write operation, then update its list
-    // information.
-    //
-
     if (FoundEntry != NULL) {
         IopUpdatePageCacheEntryList(FoundEntry, FALSE);
     }
@@ -1243,50 +1237,37 @@ Return Value:
 {
 
     BOOL Created;
-    PPAGE_CACHE_ENTRY ExistingCacheEntry;
     PPAGE_CACHE_ENTRY PageCacheEntry;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
     ASSERT((LinkEntry == NULL) ||
            (LinkEntry->PhysicalAddress == PhysicalAddress));
 
+    //
+    // Check to see if there is an exiting cache entry. This may be called from
+    // a block device read ahread, where only the beginning of the read is
+    // actually missing from the cache.
+    //
+
     Created = FALSE;
-
-    //
-    // Allocate and initialize a new page cache entry.
-    //
-
-    PageCacheEntry = IopCreatePageCacheEntry(FileObject,
-                                             VirtualAddress,
-                                             PhysicalAddress,
-                                             Offset);
-
+    PageCacheEntry = IopLookupPageCacheEntryHelper(FileObject, Offset);
     if (PageCacheEntry == NULL) {
-        goto CreateOrLookupPageCacheEntryEnd;
-    }
+        PageCacheEntry = IopCreatePageCacheEntry(FileObject,
+                                                 VirtualAddress,
+                                                 PhysicalAddress,
+                                                 Offset);
 
-    //
-    // Try to insert the entry. If someone else beat this to the punch, then
-    // use the existing cache entry.
-    //
+        if (PageCacheEntry == NULL) {
+            goto CreateOrLookupPageCacheEntryEnd;
+        }
 
-    ExistingCacheEntry = IopLookupPageCacheEntryHelper(FileObject, Offset);
-    if (ExistingCacheEntry == NULL) {
+        //
+        // The file object lock is held exclusively, so another entry cannot
+        // sneak into the cache. Insert this new entry.
+        //
+
         IopInsertPageCacheEntry(PageCacheEntry, LinkEntry);
         Created = TRUE;
-    }
-
-    //
-    // If an existing entry was found, then release the allocated entry.
-    //
-
-    if (Created == FALSE) {
-
-        ASSERT(PageCacheEntry->ReferenceCount == 1);
-
-        PageCacheEntry->ReferenceCount = 0;
-        IopDestroyPageCacheEntry(PageCacheEntry);
-        PageCacheEntry = ExistingCacheEntry;
     }
 
     //
@@ -1529,7 +1510,7 @@ Return Value:
 
             //
             // If there is a source page cache entry and it had no VA, it is
-            // current mapped at the determined VA. Transfer ownership to the
+            // currently mapped at the determined VA. Transfer ownership to the
             // page cache entry.
             //
 
@@ -3894,7 +3875,8 @@ Return Value:
 
     //
     // This routine assumes that the file object lock is held shared when it
-    // releases the block device lock. Exclusive is OK, but not assumed.
+    // releases the block device lock. Exclusive is OK, but not assumed and the
+    // lock release below would need to change if exclusive were needed.
     //
 
     ASSERT(KeIsSharedExclusiveLockHeldShared(FileObject->Lock) != FALSE);
