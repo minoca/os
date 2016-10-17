@@ -353,10 +353,8 @@ LIST_ENTRY IoPageCacheCleanUnmappedList;
 
 //
 // Stores the list head for the list of page cache entries that are ready to be
-// removed from the cache. These could be evicted entries or entries that
-// belong to a deleted file. A deleted file's entries are not necessarily
-// marked evicted, thus the evicted count is not always equal to the size of
-// this list.
+// removed from the cache. Usually these are evicted page cache entries that
+// still have a reference.
 //
 
 LIST_ENTRY IoPageCacheRemovalList;
@@ -2181,7 +2179,9 @@ Routine Description:
 
     This routine attempts to evict the page cache entries for a given file or
     device, as specified by the file object. The flags specify how aggressive
-    this routine should be. The file object lock must already be held exclusive.
+    this routine should be. The file object lock must already be held
+    exclusively and this routine assumes that the file object has been unmapped
+    from all image sections starting at the offset.
 
 Arguments:
 
@@ -2202,6 +2202,7 @@ Return Value:
 {
 
     PPAGE_CACHE_ENTRY CacheEntry;
+    BOOL Destroyed;
     LIST_ENTRY DestroyListHead;
     PRED_BLACK_TREE_NODE Node;
     PAGE_CACHE_ENTRY SearchEntry;
@@ -2267,38 +2268,6 @@ Return Value:
         ASSERT(CacheEntry->Offset >= Offset);
 
         //
-        // If no flags were provided to indicate more forceful behavior, just
-        // do a best effort. If there is a reference on the cache entry, that
-        // is not from the flush worker (i.e. the busy flag), then skip it.
-        //
-
-        if ((Flags == 0) && (CacheEntry->ReferenceCount != 0)) {
-            if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
-                RtlDebugPrint("PAGE CACHE: Skip evicting entry 0x%08x: file "
-                              "object 0x%08x, offset 0x%I64x, physical "
-                              "address 0x%I64x, reference count %d, flags "
-                              "0x%08x.\n",
-                              CacheEntry,
-                              CacheEntry->FileObject,
-                              CacheEntry->Offset,
-                              CacheEntry->PhysicalAddress,
-                              CacheEntry->ReferenceCount,
-                              CacheEntry->Flags);
-            }
-
-            continue;
-        }
-
-        //
-        // Clean the page to keep the statistics accurate. It's been evicted
-        // and will not be written out. Don't move it to the clean list, as
-        // this routine will place it on either the evicted list or the local
-        // destroy list.
-        //
-
-        IopMarkPageCacheEntryClean(CacheEntry, FALSE);
-
-        //
         // Remove the node from the page cache tree. It should not be found on
         // look-up again.
         //
@@ -2308,27 +2277,40 @@ Return Value:
         IopRemovePageCacheEntryFromTree(CacheEntry);
 
         //
-        // Remove the cache entry from its current list. If there are no
-        // references, it can be destroyed now. Otherwise, stick it on the list
-        // to be destroyed later.
+        // Remove the cache entry from its current list. If it has no
+        // references, move it to the destroy list. Otherwise, stick it on the
+        // removal list to be destroyed later. The reference count must be
+        // checked while the page cache list lock is held as the list traversal
+        // routines can add references with only the list lock held (not the
+        // file object lock).
         //
 
+        Destroyed = FALSE;
         KeAcquireQueuedLock(IoPageCacheListLock);
-
-        ASSERT((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
-
         if (CacheEntry->ListEntry.Next != NULL) {
             LIST_REMOVE(&(CacheEntry->ListEntry));
         }
 
         if (CacheEntry->ReferenceCount == 0) {
             INSERT_BEFORE(&(CacheEntry->ListEntry), &DestroyListHead);
+            Destroyed = TRUE;
 
         } else {
             INSERT_BEFORE(&(CacheEntry->ListEntry), &IoPageCacheRemovalList);
         }
 
         KeReleaseQueuedLock(IoPageCacheListLock);
+
+        //
+        // If the cache entry was moved to the destroyed list, clean it once
+        // and for all. No new references can be taken from page cache entry
+        // lookup and it is now on a local list, so no list traversal routines
+        // can add references.
+        //
+
+        if (Destroyed != FALSE) {
+            IopMarkPageCacheEntryClean(CacheEntry, FALSE);
+        }
     }
 
     //
@@ -2339,6 +2321,16 @@ Return Value:
     //
 
     IopDestroyPageCacheEntries(&DestroyListHead);
+
+    //
+    // If cache entries are on the page cache removal list, schedule the page
+    // cache worker to clean them up.
+    //
+
+    if (LIST_EMPTY(&IoPageCacheRemovalList) == FALSE) {
+        IopSchedulePageCacheThread();
+    }
+
     return;
 }
 
@@ -3470,10 +3462,9 @@ Return Value:
     FileObject = PageCacheEntry->FileObject;
 
     ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
-    ASSERT((PageCacheEntry->ReferenceCount == 0) ||
-           (PageCacheEntry->Node.Parent == NULL));
-
     ASSERT(PageCacheEntry->ListEntry.Next == NULL);
+    ASSERT(PageCacheEntry->ReferenceCount == 0);
+    ASSERT(PageCacheEntry->Node.Parent == NULL);
 
     //
     // If this is the page owner, then free the physical page.
@@ -3526,9 +3517,6 @@ Return Value:
     //
 
     IopFileObjectReleaseReference(FileObject);
-
-    ASSERT((PageCacheEntry->ReferenceCount == 0) &&
-           (PageCacheEntry->Node.Parent == NULL));
 
     //
     // With the final reference gone, free the page cache entry.
@@ -3914,10 +3902,9 @@ Return Value:
 
     //
     // Try to mark all the pages clean. If they are all already clean, then
-    // just exit. Something is already performing the I/O. Also make sure that
-    // all the supplied page cache entries are still in the cache. If an
-    // evicted entry is found, do not write any data from that page or further;
-    // the file was truncated.
+    // just exit. Something is already performing the I/O. As the file object
+    // lock is held shared, all the page cache entries in the buffer should
+    // still be in the cache.
     //
 
     BufferOffset = 0;
@@ -3925,12 +3912,9 @@ Return Value:
     Clean = TRUE;
     while (BufferOffset < FlushSize) {
         CacheEntry = MmGetIoBufferPageCacheEntry(FlushBuffer, BufferOffset);
-        if (CacheEntry->Node.Parent == NULL) {
-            break;
-        }
 
         //
-        // Evicted entries should never be flushed.
+        // Evicted entries should never be in a flush buffer.
         //
 
         ASSERT(CacheEntry->Node.Parent != NULL);
@@ -4098,6 +4082,16 @@ Return Value:
     //
 
     IopDestroyPageCacheEntries(&DestroyListHead);
+
+    //
+    // If there are still cache entries on the list, schedule the page cache
+    // worker to clean them up.
+    //
+
+    if (LIST_EMPTY(&IoPageCacheRemovalList) == FALSE) {
+        IopSchedulePageCacheThread();
+    }
+
     return;
 }
 
@@ -4149,6 +4143,7 @@ Return Value:
     ULONG Flags;
     LIST_ENTRY LocalList;
     PSHARED_EXCLUSIVE_LOCK Lock;
+    PLIST_ENTRY MoveList;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     BOOL PageTakenDown;
     BOOL PageWasDirty;
@@ -4179,40 +4174,48 @@ Return Value:
         Flags = PageCacheEntry->Flags;
 
         //
-        // Remove anything with a reference to avoid iterating through it
-        // over and over. When that last reference is dropped, it will be put
-        // back on.
+        // If the page cache entry has not been evicted, potentially skip it.
         //
 
-        if (PageCacheEntry->ReferenceCount != 0) {
-            LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            PageCacheEntry->ListEntry.Next = NULL;
+        if (PageCacheEntry->Node.Parent != NULL) {
 
             //
-            // Double check the reference count. If it dropped to zero while
-            // the entry was being removed, it may not have observed the list
-            // entry being nulled out, and may not be waiting to put the entry
-            // back.
+            // Remove anything with a reference to avoid iterating through it
+            // over and over. When that last reference is dropped, it will be
+            // put back on.
             //
 
-            RtlMemoryBarrier();
-            if (PageCacheEntry->ReferenceCount == 0) {
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                              &IoPageCacheCleanList);
+            if (PageCacheEntry->ReferenceCount != 0) {
+                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+                PageCacheEntry->ListEntry.Next = NULL;
+
+                //
+                // Double check the reference count. If it dropped to zero
+                // while the entry was being removed, it may not have observed
+                // the list entry being nulled out, and may not be waiting to
+                // put the entry back.
+                //
+
+                RtlMemoryBarrier();
+                if (PageCacheEntry->ReferenceCount == 0) {
+                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                                  &IoPageCacheCleanList);
+                }
+
+                continue;
             }
 
-            continue;
-        }
+            //
+            // If it's dirty, then there must be another thread that just
+            // marked it dirty but has yet to remove it from the list. Remove
+            // it and move on.
+            //
 
-        //
-        // If it's dirty, then there must be another thread that just marked it
-        // dirty but has yet to remove it from the list. Remove it and move on.
-        //
-
-        if ((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
-            LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            PageCacheEntry->ListEntry.Next = NULL;
-            continue;
+            if ((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
+                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+                PageCacheEntry->ListEntry.Next = NULL;
+                continue;
+            }
         }
 
         //
@@ -4226,8 +4229,14 @@ Return Value:
         if (TimidEffort != FALSE) {
             if (KeTryToAcquireSharedExclusiveLockExclusive(Lock) == FALSE) {
                 LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                              &IoPageCacheCleanList);
+                if (PageCacheEntry->Node.Parent != NULL) {
+                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                                  &IoPageCacheCleanList);
+
+                } else {
+                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                                  &IoPageCacheRemovalList);
+                }
 
                 continue;
             }
@@ -4253,54 +4262,52 @@ Return Value:
         if (PageCacheEntry->ReferenceCount == 1) {
 
             //
-            // Unmap this page cache entry from any image sections that may be
-            // mapping it. If the mappings note that the page is dirty, then
-            // mark it dirty and skip removing the page if it became dirty. The
-            // file object lock holds off any new mappings from getting at this
-            // entry. Unmapping a page cache entry can fail if a non-paged
-            // image section maps it.
+            // If the page cache entry is already removed from the tree, then
+            // just mark it clean and grab the flags.
             //
 
-            Flags = PageCacheEntry->Flags;
-            Status = IopUnmapPageCacheEntrySections(PageCacheEntry,
-                                                    &PageWasDirty);
+            if (PageCacheEntry->Node.Parent == NULL) {
+                IopMarkPageCacheEntryClean(PageCacheEntry, FALSE);
+                PageTakenDown = TRUE;
 
-            if (KSUCCESS(Status)) {
-                if (PageWasDirty != FALSE) {
-                    IopMarkPageCacheEntryDirty(PageCacheEntry);
-                    Flags = PageCacheEntry->Flags;
-                }
+            //
+            // Otherwise the page is not evicted and may still be live in some
+            // image sections. Unmap it to see if it is dirty. If the mappings
+            // note that the page is dirty, then mark it dirty and skip
+            // removing the page if it became dirty. The file object lock holds
+            // off any new mappings from getting at this entry. Unmapping a
+            // page cache entry can fail if a non-paged image sections maps it.
+            //
 
-                if ((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+            } else {
+                Status = IopUnmapPageCacheEntrySections(PageCacheEntry,
+                                                        &PageWasDirty);
 
-                    //
-                    // Make sure the cache entry is clean to keep the metrics
-                    // correct.
-                    //
+                if (KSUCCESS(Status)) {
+                    if (PageWasDirty != FALSE) {
+                        IopMarkPageCacheEntryDirty(PageCacheEntry);
+                    }
 
-                    IopMarkPageCacheEntryClean(PageCacheEntry, FALSE);
+                    if ((PageCacheEntry->Flags &
+                         PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
 
-                    //
-                    // Remove the node for the page cache entry tree if
-                    // necessary.
-                    //
-
-                    if (PageCacheEntry->Node.Parent != NULL) {
                         IopRemovePageCacheEntryFromTree(PageCacheEntry);
+                        PageTakenDown = TRUE;
                     }
+                }
+            }
 
-                    PageTakenDown = TRUE;
+            //
+            // If this page cache entry owns its physical page, then it counts
+            // towards the removal count.
+            //
 
-                    //
-                    // If this page cache entry owns its physical page, then it
-                    // counts towards the removal count.
-                    //
+            if ((PageTakenDown != FALSE) &&
+                ((PageCacheEntry->Flags &
+                  PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0)) {
 
-                    if ((Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
-                        if (TargetRemoveCount != NULL) {
-                            *TargetRemoveCount -= 1;
-                        }
-                    }
+                if (TargetRemoveCount != NULL) {
+                    *TargetRemoveCount -= 1;
                 }
             }
         }
@@ -4313,36 +4320,47 @@ Return Value:
         KeAcquireQueuedLock(IoPageCacheListLock);
 
         //
-        // If the page was successfully destroyed, move it over to the destroy
-        // list.
+        // If the page was successfully destroyed and still only has one
+        // reference (another list traversal instance may have a reference),
+        // move it to the destroy list.
         //
 
-        if (PageTakenDown != FALSE) {
+        MoveList = NULL;
+        if ((PageTakenDown != FALSE) &&
+            (PageCacheEntry->ReferenceCount == 1)) {
 
             ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
 
-            if (PageCacheEntry->ListEntry.Next != NULL) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            }
-
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry), DestroyListHead);
+            MoveList = DestroyListHead;
 
         //
-        // Otherwise, either remove it from this list, or stick it on the end.
-        // The list assignment has to be correct because releasing the
-        // reference might try to stick it on the list if it sees its clean and
-        // not on one, but the list lock is already held here.
+        // If the page cache has been evicted, move it to the removal list.
+        //
+
+        } else if (PageCacheEntry->Node.Parent == NULL) {
+            MoveList = &IoPageCacheRemovalList;
+
+        //
+        // Otherwise if it is clean, remove it from the local list and put it
+        // on the clean list. It has to go on a list because releasing the
+        // reference might try to stick it on a list if it sees it's clean and
+        // not on a list. The list lock, however, is already held and would
+        // cause a deadlock. If the object is now dirty, it was likely removed
+        // from the list or about to be removed.
         //
 
         } else {
             if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
-                if (PageCacheEntry->ListEntry.Next != NULL) {
-                    LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                }
-
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                              &IoPageCacheCleanList);
+                MoveList = &IoPageCacheCleanList;
             }
+        }
+
+        if (MoveList != NULL) {
+            if (PageCacheEntry->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+            }
+
+            INSERT_BEFORE(&(PageCacheEntry->ListEntry), MoveList);
         }
 
         IoPageCacheEntryReleaseReference(PageCacheEntry);
@@ -4393,6 +4411,7 @@ Return Value:
     UINTN FreeVirtualPages;
     PSHARED_EXCLUSIVE_LOCK Lock;
     UINTN MappedCleanPageCount;
+    PLIST_ENTRY MoveList;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     LIST_ENTRY ReturnList;
@@ -4596,21 +4615,39 @@ Return Value:
 
         KeReleaseSharedExclusiveLockExclusive(Lock);
         KeAcquireQueuedLock(IoPageCacheListLock);
-        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+
+        //
+        // If the page cache entry was evicted by another thread, it is either
+        // on the global removal list or about to be put on a local destroy
+        // list. It cannot already be on a local destroy list because this
+        // thread holds a reference. Move it to the global removal list so it
+        // does not get processed again in case it is still on the clean list.
+        //
+
+        MoveList = NULL;
+        if (PageCacheEntry->Node.Parent == NULL) {
+            MoveList = &IoPageCacheRemovalList;
+
+        } else {
+            if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+                if (((PageCacheEntry->Flags &
+                      PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
+                    (PageCacheEntry->BackingEntry == NULL)) {
+
+                    MoveList = &IoPageCacheCleanUnmappedList;
+
+                } else {
+                    MoveList = &ReturnList;
+                }
+            }
+        }
+
+        if (MoveList != NULL) {
             if (PageCacheEntry->ListEntry.Next != NULL) {
                 LIST_REMOVE(&(PageCacheEntry->ListEntry));
             }
 
-            if (((PageCacheEntry->Flags &
-                  PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
-                (PageCacheEntry->BackingEntry == NULL)) {
-
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                              &IoPageCacheCleanUnmappedList);
-
-            } else {
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry), &ReturnList);
-            }
+            INSERT_BEFORE(&(PageCacheEntry->ListEntry), MoveList);
         }
 
         IoPageCacheEntryReleaseReference(PageCacheEntry);

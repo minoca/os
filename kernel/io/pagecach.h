@@ -284,7 +284,9 @@ Routine Description:
 
     This routine attempts to evict the page cache entries for a given file or
     device, as specified by the file object. The flags specify how aggressive
-    this routine should be. The file object lock must already be held exclusive.
+    this routine should be. The file object lock must already be held
+    exclusively and this routine assumes that the file object has been unmapped
+    from all image sections starting at the offset.
 
 Arguments:
 
