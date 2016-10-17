@@ -353,12 +353,12 @@ NetpTcpSendSyn (
 
 VOID
 NetpTcpTimerAddReference (
-    VOID
+    PTCP_SOCKET Socket
     );
 
 ULONG
 NetpTcpTimerReleaseReference (
-    VOID
+    PTCP_SOCKET Socket
     );
 
 VOID
@@ -2051,7 +2051,7 @@ Return Value:
 
         if (LIST_EMPTY(&(TcpSocket->OutgoingSegmentList)) != FALSE) {
             OutgoingSegmentListWasEmpty = TRUE;
-            NetpTcpTimerAddReference();
+            NetpTcpTimerAddReference(TcpSocket);
         }
 
         INSERT_BEFORE(&(NewSegment->Header.ListEntry),
@@ -2737,7 +2737,7 @@ Return Value:
             // that there is space. Otherwise if there is space for only 1
             // packet, it is still expected to come in from the remote side,
             // but set the timer to send a window update in case the packet is
-            // loss and so that the toggle will trigger an immediate ACK if it
+            // lost and so that the toggle will trigger an immediate ACK if it
             // does arrive.
             //
 
@@ -2748,7 +2748,7 @@ Return Value:
                          TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) != 0) {
 
                         TcpSocket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-                        NetpTcpTimerReleaseReference();
+                        NetpTcpTimerReleaseReference(TcpSocket);
                     }
 
                     NetpTcpSendControlPacket(TcpSocket, 0);
@@ -2758,7 +2758,7 @@ Return Value:
                          TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) == 0) {
 
                         TcpSocket->Flags |= TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-                        NetpTcpTimerAddReference();
+                        NetpTcpTimerAddReference(TcpSocket);
                     }
                 }
             }
@@ -3745,7 +3745,7 @@ Return Value:
             ASSERT(SignalingObject == NetTcpTimer);
 
             KeSignalTimer(NetTcpTimer, SignalOptionUnsignal);
-            OldReferenceCount = NetpTcpTimerReleaseReference();
+            OldReferenceCount = NetpTcpTimerReleaseReference(NULL);
             if (OldReferenceCount == 1) {
                 continue;
             }
@@ -3955,7 +3955,7 @@ Return Value:
 
             if ((*Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) != 0) {
                 *Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-                NetpTcpTimerReleaseReference();
+                NetpTcpTimerReleaseReference(CurrentSocket);
                 NetpTcpSendControlPacket(CurrentSocket, 0);
             }
 
@@ -4280,7 +4280,7 @@ Return Value:
         if ((Header->Flags & TCP_HEADER_FLAG_RESET) == 0) {
             if ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) == 0) {
                 Socket->Flags |= TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-                NetpTcpTimerAddReference();
+                NetpTcpTimerAddReference(Socket);
             }
         }
 
@@ -4543,7 +4543,7 @@ Return Value:
 
         if ((Socket->State & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) == 0) {
             Socket->Flags |= TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-            NetpTcpTimerAddReference();
+            NetpTcpTimerAddReference(Socket);
         }
     }
 
@@ -4860,7 +4860,7 @@ Return Value:
 
     if ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) != 0) {
         Socket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-        NetpTcpTimerReleaseReference();
+        NetpTcpTimerReleaseReference(Socket);
     }
 
     Buffer = Packet->Buffer + Packet->DataOffset;
@@ -5451,7 +5451,7 @@ Return Value:
 
         if ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) == 0) {
             Socket->Flags |= TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-            NetpTcpTimerAddReference();
+            NetpTcpTimerAddReference(Socket);
         }
 
     //
@@ -6107,12 +6107,12 @@ TcpProcessReceivedDataSegmentEnd:
             ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) == 0)) {
 
             Socket->Flags |= TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-            NetpTcpTimerAddReference();
+            NetpTcpTimerAddReference(Socket);
 
         } else {
             if ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) != 0) {
                 Socket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-                NetpTcpTimerReleaseReference();
+                NetpTcpTimerReleaseReference(Socket);
             }
 
             NetpTcpSendControlPacket(Socket, 0);
@@ -7084,7 +7084,7 @@ Return Value:
 
             LIST_REMOVE(&(Segment->Header.ListEntry));
             if (LIST_EMPTY(&(Socket->OutgoingSegmentList)) != FALSE) {
-                NetpTcpTimerReleaseReference();
+                NetpTcpTimerReleaseReference(Socket);
             }
 
             Socket->SendBufferFreeSize += Segment->Length;
@@ -7190,7 +7190,7 @@ Return Value:
 
         LIST_REMOVE(&(OutgoingSegment->Header.ListEntry));
         if (LIST_EMPTY(&(Socket->OutgoingSegmentList)) != FALSE) {
-            NetpTcpTimerReleaseReference();
+            NetpTcpTimerReleaseReference(Socket);
         }
 
         MmFreePagedPool(OutgoingSegment);
@@ -7435,7 +7435,7 @@ Return Value:
             //
 
             } else if ((*Flags & TCP_SOCKET_FLAG_SEND_FIN_WITH_DATA) == 0) {
-                NetpTcpTimerAddReference();
+                NetpTcpTimerAddReference(TcpSocket);
             }
         }
 
@@ -7987,7 +7987,7 @@ Return Value:
         Socket->SendNextNetworkSequence += 1;
         TCP_UPDATE_RETRY_TIME(Socket);
         TCP_SET_DEFAULT_TIMEOUT(Socket);
-        NetpTcpTimerAddReference();
+        NetpTcpTimerAddReference(Socket);
         NetpTcpSendSyn(Socket, FALSE);
         break;
 
@@ -8011,7 +8011,7 @@ Return Value:
             Socket->SendNextNetworkSequence += 1;
             TCP_UPDATE_RETRY_TIME(Socket);
             TCP_SET_DEFAULT_TIMEOUT(Socket);
-            NetpTcpTimerAddReference();
+            NetpTcpTimerAddReference(Socket);
         }
 
         NetpTcpSendSyn(Socket, TRUE);
@@ -8024,7 +8024,7 @@ Return Value:
 
         Socket->RetryTime = 0;
         Socket->RetryWaitPeriod = TCP_INITIAL_RETRY_WAIT_PERIOD;
-        NetpTcpTimerReleaseReference();
+        NetpTcpTimerReleaseReference(Socket);
         NetpTcpCongestionConnectionEstablished(Socket);
         IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
                            POLL_EVENT_OUT,
@@ -8043,7 +8043,7 @@ Return Value:
             TCP_UPDATE_RETRY_TIME(Socket);
             TCP_SET_DEFAULT_TIMEOUT(Socket);
             if (OldState == TcpStateEstablished) {
-                NetpTcpTimerAddReference();
+                NetpTcpTimerAddReference(Socket);
             }
         }
 
@@ -8054,7 +8054,7 @@ Return Value:
         ASSERT(OldState == TcpStateFinWait1);
 
         if ((Socket->Flags & TCP_SOCKET_FLAG_SEND_FIN_WITH_DATA) == 0) {
-            NetpTcpTimerReleaseReference();
+            NetpTcpTimerReleaseReference(Socket);
         }
 
         break;
@@ -8109,7 +8109,7 @@ Return Value:
             Socket->RetryWaitPeriod = TCP_INITIAL_RETRY_WAIT_PERIOD;
             TCP_UPDATE_RETRY_TIME(Socket);
             TCP_SET_DEFAULT_TIMEOUT(Socket);
-            NetpTcpTimerAddReference();
+            NetpTcpTimerAddReference(Socket);
         }
 
         break;
@@ -8131,7 +8131,7 @@ Return Value:
         if ((OldState == TcpStateFinWait2) ||
             ((Socket->Flags & TCP_SOCKET_FLAG_SEND_FIN_WITH_DATA) != 0)) {
 
-            NetpTcpTimerAddReference();
+            NetpTcpTimerAddReference(Socket);
         }
 
         break;
@@ -8142,17 +8142,15 @@ Return Value:
     //
 
     case TcpStateClosed:
-        if ((TCP_IS_SYN_RETRY_STATE(OldState) != FALSE) ||
-            ((TCP_IS_FIN_RETRY_STATE(OldState) != FALSE) &&
-             ((Socket->Flags & TCP_SOCKET_FLAG_SEND_FIN_WITH_DATA) == 0)) ||
-            (OldState == TcpStateTimeWait)) {
 
-            NetpTcpTimerReleaseReference();
-        }
+        //
+        // Release all TCP timer references.
+        //
 
-        if ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) != 0) {
-            Socket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-            NetpTcpTimerReleaseReference();
+        Socket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
+        if (Socket->TimerReferenceCount >= 1) {
+            Socket->TimerReferenceCount = 1;
+            NetpTcpTimerReleaseReference(Socket);
         }
 
         NetpTcpFreeSocketDataBuffers(Socket);
@@ -8322,7 +8320,7 @@ TcpSendSynEnd:
 
 VOID
 NetpTcpTimerAddReference (
-    VOID
+    PTCP_SOCKET Socket
     )
 
 /*++
@@ -8334,7 +8332,8 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Socket - Supplies a pointer to the TCP socket requesting the timer. This
+        routine assumes the TCP lock is already held.
 
 Return Value:
 
@@ -8345,6 +8344,25 @@ Return Value:
 {
 
     ULONG OldReferenceCount;
+
+    //
+    // Increment the reference count in the socket. If it's already got
+    // references, no action is needed on the global count.
+    //
+
+    Socket->TimerReferenceCount += 1;
+
+    ASSERT((Socket->TimerReferenceCount > 0) &&
+           (Socket->TimerReferenceCount < TCP_TIMER_MAX_REFERENCE));
+
+    if (Socket->TimerReferenceCount > 1) {
+        return;
+    }
+
+    //
+    // This is the first reference the socket is taking on the global timer.
+    // Incremement the reference count of the global timer, and maybe queue it.
+    //
 
     OldReferenceCount = RtlAtomicAdd32(&NetTcpTimerReferenceCount, 1);
 
@@ -8363,7 +8381,7 @@ Return Value:
 
 ULONG
 NetpTcpTimerReleaseReference (
-    VOID
+    PTCP_SOCKET Socket
     )
 
 /*++
@@ -8375,17 +8393,30 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Socket - Supplies an optional pointer to the socket that is releasing the
+        timer reference.
 
 Return Value:
 
-    Returns the old reference count on the TCP timer.
+    Returns the old reference count on the TCP timer. The return value should
+    only be observed if the socket parameter is NULL.
 
 --*/
 
 {
 
     ULONG OldReferenceCount;
+
+    if (Socket != NULL) {
+
+        ASSERT((Socket->TimerReferenceCount > 0) &&
+               (Socket->TimerReferenceCount < TCP_TIMER_MAX_REFERENCE));
+
+        Socket->TimerReferenceCount -= 1;
+        if (Socket->TimerReferenceCount != 0) {
+            return Socket->TimerReferenceCount;
+        }
+    }
 
     OldReferenceCount = RtlAtomicAdd32(&NetTcpTimerReferenceCount, (ULONG)-1);
 

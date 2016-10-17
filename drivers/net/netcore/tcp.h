@@ -428,6 +428,10 @@ Members:
     Flags - Stores a bitmask of TCP flags. See TCP_SOCKET_FLAG_* for
         definitions.
 
+    TimerReferenceCount - Supplies the reference count on the global TCP timer.
+        If this value is non-zero, there is a single reference on the global
+        TCP timer.
+
     SendInitialSequence - Stores the random offset that the sequence numbers
         started at for this socket.
 
@@ -593,6 +597,7 @@ typedef struct _TCP_SOCKET {
     LIST_ENTRY ListEntry;
     TCP_STATE State;
     ULONG Flags;
+    LONG TimerReferenceCount;
     ULONG SendInitialSequence;
     ULONG SendUnacknowledgedSequence;
     ULONG SendNextBufferSequence;
