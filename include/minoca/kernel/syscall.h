@@ -440,24 +440,6 @@ typedef enum _RESOURCE_USAGE_REQUEST {
 
 Structure Description:
 
-    This structure defines the system call parameters for restoring thread
-    context after handling a signal.
-
-Members:
-
-    Context - Supplies a pointer to the context to restore. This context is
-        architecture specific.
-
---*/
-
-typedef struct _SYSTEM_CALL_RESTORE_CONTEXT {
-    PSIGNAL_CONTEXT Context;
-} SYSCALL_STRUCT SYSTEM_CALL_RESTORE_CONTEXT, *PSYSTEM_CALL_RESTORE_CONTEXT;
-
-/*++
-
-Structure Description:
-
     This structure defines the system call parameters for exiting the current
     thread.
 
@@ -498,9 +480,6 @@ Members:
 
     CreatePermissions - Stores the permissions to apply to a created file.
 
-    Status - Stores a status code which will represent the return value of the
-        open file operation.
-
     Handle - Stores a handle where the file handle will be returned on success.
 
 --*/
@@ -511,29 +490,8 @@ typedef struct _SYSTEM_CALL_OPEN {
     ULONG PathBufferLength;
     ULONG Flags;
     FILE_PERMISSIONS CreatePermissions;
-    KSTATUS Status;
     HANDLE Handle;
 } SYSCALL_STRUCT SYSTEM_CALL_OPEN, *PSYSTEM_CALL_OPEN;
-
-/*++
-
-Structure Description:
-
-    This structure defines the system call parameters for the close I/O
-    handle call.
-
-Members:
-
-    Handle - Stores the handle to close.
-
-    Status - Stores the resulting status code from the kernel.
-
---*/
-
-typedef struct _SYSTEM_CALL_CLOSE {
-    HANDLE Handle;
-    KSTATUS Status;
-} SYSCALL_STRUCT SYSTEM_CALL_CLOSE, *PSYSTEM_CALL_CLOSE;
 
 /*++
 
@@ -559,11 +517,6 @@ Members:
 
     Size - Stores the number of bytes of I/O to complete on input.
 
-    BytesCompleted - Stores the number of bytes of I/O that were actually
-        completed.
-
-    Status - Stores the result of the I/O operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_PERFORM_IO {
@@ -572,9 +525,7 @@ typedef struct _SYSTEM_CALL_PERFORM_IO {
     ULONG Flags;
     ULONG TimeoutInMilliseconds;
     IO_OFFSET Offset;
-    UINTN Size;
-    UINTN BytesCompleted;
-    KSTATUS Status;
+    INTN Size;
 } SYSCALL_STRUCT SYSTEM_CALL_PERFORM_IO, *PSYSTEM_CALL_PERFORM_IO;
 
 /*++
@@ -601,15 +552,10 @@ Members:
 
     Size - Stores the number of bytes of I/O to complete on input.
 
-    BytesCompleted - Stores the number of bytes of I/O that were actually
-        completed.
-
     VectoryArray - Stores a pointer to an array of I/O vector structures which
         specify the buffers to read or write.
 
     VectorCount - Stores the number of elements in the vector array.
-
-    Status - Stores the result of the I/O operation.
 
 --*/
 
@@ -619,11 +565,9 @@ typedef struct _SYSTEM_CALL_PERFORM_VECTORED_IO {
     ULONG Flags;
     ULONG TimeoutInMilliseconds;
     IO_OFFSET Offset;
-    UINTN Size;
-    UINTN BytesCompleted;
+    INTN Size;
     PIO_VECTOR VectorArray;
     UINTN VectorCount;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_PERFORM_VECTORED_IO,
     *PSYSTEM_CALL_PERFORM_VECTORED_IO;
 
@@ -654,8 +598,6 @@ Members:
 
     WriteHandle - Stores the returned handle to the write side of the pipe.
 
-    Status - Stores the completion status of the system call.
-
 --*/
 
 typedef struct _SYSTEM_CALL_CREATE_PIPE {
@@ -666,7 +608,6 @@ typedef struct _SYSTEM_CALL_CREATE_PIPE {
     FILE_PERMISSIONS Permissions;
     HANDLE ReadHandle;
     HANDLE WriteHandle;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_CREATE_PIPE, *PSYSTEM_CALL_CREATE_PIPE;
 
 /*++
@@ -705,8 +646,6 @@ Members:
         terminates, zero is written to this value and a UserLockWake operation
         is called on that address to wake up one thread.
 
-    Status - Stores the result of the thread creation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_CREATE_THREAD {
@@ -718,29 +657,7 @@ typedef struct _SYSTEM_CALL_CREATE_THREAD {
     ULONG StackSize;
     PVOID ThreadPointer;
     PTHREAD_ID ThreadId;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_CREATE_THREAD, *PSYSTEM_CALL_CREATE_THREAD;
-
-/*++
-
-Structure Description:
-
-    This structure defines the system call parameters for the fork system call.
-
-Members:
-
-    Status - Stores the status result of the operation.
-
-    ProcessId - Stores the process ID of the created process if this is the
-        parent process, or 0 if this is the child process. This value must be
-        ignored if the status code indicates failure.
-
---*/
-
-typedef struct _SYSTEM_CALL_FORK_PROCESS {
-    KSTATUS Status;
-    PROCESS_ID ProcessId;
-} SYSCALL_STRUCT SYSTEM_CALL_FORK_PROCESS, *PSYSTEM_CALL_FORK_PROCESS;
 
 /*++
 
@@ -781,8 +698,6 @@ Members:
         not INVALID_HANDLE, then this will be used. Otherwise, the path
         pointed to by the buffer will be used.
 
-    Status - Stores the result of the operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_CHANGE_DIRECTORY {
@@ -790,7 +705,6 @@ typedef struct _SYSTEM_CALL_CHANGE_DIRECTORY {
     PSTR Buffer;
     ULONG BufferLength;
     HANDLE Handle;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_CHANGE_DIRECTORY, *PSYSTEM_CALL_CHANGE_DIRECTORY;
 
 /*++
@@ -849,7 +763,6 @@ typedef struct _SYSTEM_CALL_SEND_SIGNAL {
     ULONG SignalNumber;
     SHORT SignalCode;
     UINTN SignalParameter;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SEND_SIGNAL, *PSYSTEM_CALL_SEND_SIGNAL;
 
 /*++
@@ -874,8 +787,6 @@ Members:
     Set - Stores a boolean indicating whether to get the process ID of the
         given type or set it.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_GET_SET_PROCESS_ID {
@@ -883,7 +794,6 @@ typedef struct _SYSTEM_CALL_GET_SET_PROCESS_ID {
     PROCESS_ID ProcessId;
     PROCESS_ID NewValue;
     BOOL Set;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_GET_SET_PROCESS_ID,
     *PSYSTEM_CALL_GET_SET_PROCESS_ID;
 
@@ -944,8 +854,6 @@ Members:
     ResourceUsage - Stores an optional pointer where the kernel will fill in
         resource usage of the child on success.
 
-    Status - Stores the status returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_WAIT_FOR_CHILD {
@@ -954,7 +862,6 @@ typedef struct _SYSTEM_CALL_WAIT_FOR_CHILD {
     UINTN ChildExitValue;
     ULONG Reason;
     PRESOURCE_USAGE ResourceUsage;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_WAIT_FOR_CHILD, *PSYSTEM_CALL_WAIT_FOR_CHILD;
 
 /*++
@@ -975,8 +882,6 @@ Members:
     TimeoutInMilliseconds - Stores the timeout in milliseconds the caller
         should wait. Set to SYS_WAIT_TIME_INDEFINITE to wait forever.
 
-    Status - Stores the status returned by the kernel.
-
     SignalParameters - Stores an optional pointer where the signal information
         for the signal that occurred will be returned.
 
@@ -986,28 +891,8 @@ typedef struct _SYSTEM_CALL_SUSPEND_EXECUTION {
     SIGNAL_MASK_OPERATION SignalOperation;
     SIGNAL_SET SignalSet;
     ULONG TimeoutInMilliseconds;
-    KSTATUS Status;
     PSIGNAL_PARAMETERS SignalParameters;
 } SYSCALL_STRUCT SYSTEM_CALL_SUSPEND_EXECUTION, *PSYSTEM_CALL_SUSPEND_EXECUTION;
-
-/*++
-
-Structure Description:
-
-    This structure defines the system call parameters for exiting a process.
-
-Members:
-
-    Status - Stores the exit status, returned to the parent in the wait calls.
-        Conventionally 0 indicates success, and non-zero indicates failure.
-        The C library only recieves the first eight bits of the return status,
-        portable applications should not set bits beyond that.
-
---*/
-
-typedef struct _SYSTEM_CALL_EXIT_PROCESS {
-    UINTN Status;
-} SYSCALL_STRUCT SYSTEM_CALL_EXIT_PROCESS, *PSYSTEM_CALL_EXIT_PROCESS;
 
 /*++
 
@@ -1053,20 +938,13 @@ Members:
     TimeoutInMilliseconds - Stores the number of milliseconds to wait for one
         of the descriptors to become ready before giving up.
 
-    Status - Stores the return status of the call.
-
-    DescriptorsSelected - Stores the number of descriptors that had activity,
-        returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_POLL {
     PSIGNAL_SET SignalMask;
     PPOLL_DESCRIPTOR Descriptors;
-    ULONG DescriptorCount;
+    LONG DescriptorCount;
     ULONG TimeoutInMilliseconds;
-    KSTATUS Status;
-    ULONG DescriptorsSelected;
 } SYSCALL_STRUCT SYSTEM_CALL_POLL, *PSYSTEM_CALL_POLL;
 
 /*++
@@ -1092,9 +970,6 @@ Members:
 
     Socket - Stores the returned socket file descriptor on success.
 
-    Status - Stores a status code which will represent the return value of the
-        create socket operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_CREATE {
@@ -1103,7 +978,6 @@ typedef struct _SYSTEM_CALL_SOCKET_CREATE {
     ULONG Protocol;
     ULONG OpenFlags;
     HANDLE Socket;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_CREATE, *PSYSTEM_CALL_SOCKET_CREATE;
 
 /*++
@@ -1124,8 +998,6 @@ Members:
     PathSize - Stores the size of the path, in bytes, including the null
         terminator.
 
-    Status - Stores the resulting status of the attempted bind operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_BIND {
@@ -1133,7 +1005,6 @@ typedef struct _SYSTEM_CALL_SOCKET_BIND {
     NETWORK_ADDRESS Address;
     PSTR Path;
     UINTN PathSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_BIND, *PSYSTEM_CALL_SOCKET_BIND;
 
 /*++
@@ -1151,14 +1022,11 @@ Members:
         connections the kernel should queue before rejecting additional
         incoming connections.
 
-    Status - Stores the resulting status of the attempted listen operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_LISTEN {
     HANDLE Socket;
     ULONG BacklogCount;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_LISTEN, *PSYSTEM_CALL_SOCKET_LISTEN;
 
 /*++
@@ -1189,8 +1057,6 @@ Members:
         Only SYS_OPEN_FLAG_NON_BLOCKING and SYS_OPEN_FLAG_CLOSE_ON_EXECUTE
         are accepted.
 
-    Status - Stores the resulting status of the attempted accept operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_ACCEPT {
@@ -1200,7 +1066,6 @@ typedef struct _SYSTEM_CALL_SOCKET_ACCEPT {
     PSTR RemotePath;
     UINTN RemotePathSize;
     ULONG OpenFlags;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_ACCEPT, *PSYSTEM_CALL_SOCKET_ACCEPT;
 
 /*++
@@ -1221,8 +1086,6 @@ Members:
     RemotePathSize - Stores the size of the remote path buffer in bytes,
         including the null terminator.
 
-    Status - Stores the resulting status of the attempted accept operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_CONNECT {
@@ -1230,7 +1093,6 @@ typedef struct _SYSTEM_CALL_SOCKET_CONNECT {
     NETWORK_ADDRESS Address;
     PSTR RemotePath;
     UINTN RemotePathSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_CONNECT, *PSYSTEM_CALL_SOCKET_CONNECT;
 
 /*++
@@ -1250,15 +1112,12 @@ Members:
 
     Buffer - Stores the buffer to read from or write to.
 
-    Status - Stores the result of the I/O operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_PERFORM_IO {
     HANDLE Socket;
     PSOCKET_IO_PARAMETERS Parameters;
     PVOID Buffer;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_PERFORM_IO, *PSYSTEM_CALL_SOCKET_PERFORM_IO;
 
 /*++
@@ -1278,8 +1137,6 @@ Members:
 
     VectorCount - Stores the number of elements in the vector array.
 
-    Status - Stores the result of the I/O operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO {
@@ -1287,7 +1144,6 @@ typedef struct _SYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO {
     PSOCKET_IO_PARAMETERS Parameters;
     PIO_VECTOR VectorArray;
     UINTN VectorCount;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO,
     *PSYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO;
 
@@ -1389,15 +1245,12 @@ Members:
     Parameters - Stores a pointer to any additional command dependent
         parameters.
 
-    Status - Stores the resulting status code of the operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_FILE_CONTROL {
     HANDLE File;
     FILE_CONTROL_COMMAND Command;
     PFILE_CONTROL_PARAMETERS_UNION Parameters;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_FILE_CONTROL, *PSYSTEM_CALL_FILE_CONTROL;
 
 /*++
@@ -1428,8 +1281,6 @@ Members:
         requests, the file properties will be returned here. For "set file
         information" requests, this contains the fields to set.
 
-    Status - Stores the resulting status code of the operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_GET_SET_FILE_INFORMATION {
@@ -1438,7 +1289,6 @@ typedef struct _SYSTEM_CALL_GET_SET_FILE_INFORMATION {
     ULONG FilePathSize;
     BOOL FollowLink;
     SET_FILE_INFORMATION Request;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_GET_SET_FILE_INFORMATION,
     *PSYSTEM_CALL_GET_SET_FILE_INFORMATION;
 
@@ -1477,15 +1327,12 @@ Members:
         the system call this contains the offset (after any seek has been
         applied).
 
-    Status - Stores the returned status of the operation from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SEEK {
     HANDLE Handle;
     SEEK_COMMAND Command;
     IO_OFFSET Offset;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SEEK, *PSYSTEM_CALL_SEEK;
 
 /*++
@@ -1512,8 +1359,6 @@ Members:
     LinkDestinationBufferSize - Stores the size of the link destination
         buffer in bytes including the null terminator.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_CREATE_SYMBOLIC_LINK {
@@ -1522,7 +1367,6 @@ typedef struct _SYSTEM_CALL_CREATE_SYMBOLIC_LINK {
     ULONG PathSize;
     PSTR LinkDestinationBuffer;
     ULONG LinkDestinationBufferSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_CREATE_SYMBOLIC_LINK,
     *PSYSTEM_CALL_CREATE_SYMBOLIC_LINK;
 
@@ -1555,8 +1399,6 @@ Members:
         STATUS_BUFFER_TOO_SMALL case. On failure, 0 will be returned here. This
         size does not include a null terminator.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_READ_SYMBOLIC_LINK {
@@ -1566,7 +1408,6 @@ typedef struct _SYSTEM_CALL_READ_SYMBOLIC_LINK {
     PSTR LinkDestinationBuffer;
     ULONG LinkDestinationBufferSize;
     ULONG LinkDestinationSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_READ_SYMBOLIC_LINK,
     *PSYSTEM_CALL_READ_SYMBOLIC_LINK;
 
@@ -1590,8 +1431,6 @@ Members:
 
     Flags - Stores a bitfield of flags. See SYS_DELETE_FLAG_* definitions.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_DELETE {
@@ -1599,7 +1438,6 @@ typedef struct _SYSTEM_CALL_DELETE {
     PSTR Path;
     ULONG PathSize;
     ULONG Flags;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_DELETE, *PSYSTEM_CALL_DELETE;
 
 /*++
@@ -1632,8 +1470,6 @@ Members:
     DestinationPathSize - Stores the size of the destination path string in
         bytes including the null terminator.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_RENAME {
@@ -1643,7 +1479,6 @@ typedef struct _SYSTEM_CALL_RENAME {
     HANDLE DestinationDirectory;
     PSTR DestinationPath;
     ULONG DestinationPathSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_RENAME, *PSYSTEM_CALL_RENAME;
 
 /*++
@@ -1673,8 +1508,6 @@ Members:
 
     OriginalZoneNameSize - Stores the size of the original zone name buffer.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_TIME_ZONE_CONTROL {
@@ -1685,7 +1518,6 @@ typedef struct _SYSTEM_CALL_TIME_ZONE_CONTROL {
     ULONG ZoneNameSize;
     PSTR OriginalZoneName;
     ULONG OriginalZoneNameSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_TIME_ZONE_CONTROL, *PSYSTEM_CALL_TIME_ZONE_CONTROL;
 
 /*++
@@ -1713,8 +1545,6 @@ Members:
 
     Flags - Stores a bitfield of flags. See SYS_MOUNT_FLAG_* definitions.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_MOUNT_UNMOUNT {
@@ -1723,7 +1553,6 @@ typedef struct _SYSTEM_CALL_MOUNT_UNMOUNT {
     PSTR TargetPath;
     ULONG TargetPathSize;
     ULONG Flags;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_MOUNT_UNMOUNT, *PSYSTEM_CALL_MOUNT_UNMOUNT;
 
 /*++
@@ -1798,8 +1627,6 @@ Members:
     TimerInformation - Stores the timer information, either presented to the
         kernel or returned by the kernel.
 
-    Status - Stores the result of the operation as returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_TIMER_CONTROL {
@@ -1810,7 +1637,6 @@ typedef struct _SYSTEM_CALL_TIMER_CONTROL {
     UINTN SignalValue;
     THREAD_ID ThreadId;
     TIMER_INFORMATION TimerInformation;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_TIMER_CONTROL, *PSYSTEM_CALL_TIMER_CONTROL;
 
 /*++
@@ -1842,8 +1668,6 @@ Members:
         the access the user has to the file. Only the desired flags will be
         checked, all others will be zero.
 
-    Status - Stores the result of the operation as returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_GET_EFFECTIVE_ACCESS {
@@ -1853,7 +1677,6 @@ typedef struct _SYSTEM_CALL_GET_EFFECTIVE_ACCESS {
     BOOL UseRealIds;
     ULONG DesiredFlags;
     ULONG EffectiveAccess;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_GET_EFFECTIVE_ACCESS,
     *PSYSTEM_CALL_GET_EFFECTIVE_ACCESS;
 
@@ -1874,14 +1697,11 @@ Members:
         If the time ticks parameter is FALSE, this parameter represents a
         relative time from now in microseconds.
 
-    Status - Stores the result of the wait returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_DELAY_EXECUTION {
     BOOL TimeTicks;
     ULONGLONG Interval;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_DELAY_EXECUTION, *PSYSTEM_CALL_DELAY_EXECUTION;
 
 /*++
@@ -1903,8 +1723,6 @@ Members:
     ContextSize - Stores the size of the supplied context buffer in bytes. Set
         this to zero if the context is not supplied or not a pointer.
 
-    Status - Stores the result of the operation returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_USER_CONTROL {
@@ -1912,7 +1730,6 @@ typedef struct _SYSTEM_CALL_USER_CONTROL {
     ULONG RequestCode;
     PVOID Context;
     UINTN ContextSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_USER_CONTROL, *PSYSTEM_CALL_USER_CONTROL;
 
 /*++
@@ -1928,14 +1745,11 @@ Members:
     Flags - Stores flags related to the flush operation. See SYS_FLUSH_FLAG_*
         for definitions.
 
-    Status - Stores the result of the operation returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_FLUSH {
     HANDLE Handle;
     ULONG Flags;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_FLUSH, *PSYSTEM_CALL_FLUSH;
 
 /*++
@@ -1952,8 +1766,6 @@ Members:
     Id - Stores the process or thread ID to get. Supply -1 to use the current
         process or thread.
 
-    Status - Stores the resulting status code from the kernel.
-
     Usage - Stores the returned resource usage from the kernel.
 
     Frequency - Stores the frequency of the processor(s).
@@ -1963,7 +1775,6 @@ Members:
 typedef struct _SYSTEM_CALL_GET_RESOURCE_USAGE {
     RESOURCE_USAGE_REQUEST Request;
     PROCESS_ID Id;
-    KSTATUS Status;
     RESOURCE_USAGE Usage;
     ULONGLONG Frequency;
 } SYSCALL_STRUCT SYSTEM_CALL_GET_RESOURCE_USAGE,
@@ -1981,17 +1792,14 @@ Members:
     DriverName - Stores a pointer to a null terminated string containing the
         name of the driver to load.
 
-    DriverNameSize - Stores the name of the driver buffer in bytes including the
-        null terminator.
-
-    Status - Stores the resulting status code from the kernel.
+    DriverNameSize - Stores the size of the driver name buffer in bytes
+        including the null terminator.
 
 --*/
 
 typedef struct _SYSTEM_CALL_LOAD_DRIVER {
     PSTR DriverName;
     ULONG DriverNameSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_LOAD_DRIVER, *PSYSTEM_CALL_LOAD_DRIVER;
 
 /*++
@@ -2007,14 +1815,11 @@ Members:
 
     Size - Stores the size of the region that was modified in bytes.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_FLUSH_CACHE {
     PVOID Address;
     UINTN Size;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_FLUSH_CACHE, *PSYSTEM_CALL_FLUSH_CACHE;
 
 /*++
@@ -2046,7 +1851,6 @@ typedef struct _SYSTEM_CALL_GET_CURRENT_DIRECTORY {
     BOOL Root;
     PSTR Buffer;
     UINTN BufferSize;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_GET_CURRENT_DIRECTORY,
     *PSYSTEM_CALL_GET_CURRENT_DIRECTORY;
 
@@ -2077,8 +1881,6 @@ Members:
     Set - Stores a boolean indicating whether to set socket information
         (TRUE) or get device information (FALSE).
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_GET_SET_INFORMATION {
@@ -2088,7 +1890,6 @@ typedef struct _SYSTEM_CALL_SOCKET_GET_SET_INFORMATION {
     PVOID Data;
     UINTN DataSize;
     BOOL Set;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_GET_SET_INFORMATION,
     *PSYSTEM_CALL_SOCKET_GET_SET_INFORMATION;
 
@@ -2106,14 +1907,11 @@ Members:
     ShutdownType - Stores the type of shutdown to perform. See
         SOCKET_SHUTDOWN_* flags, which can be ORed together.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_SHUTDOWN {
     HANDLE Socket;
     ULONG ShutdownType;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_SHUTDOWN, *PSYSTEM_CALL_SOCKET_SHUTDOWN;
 
 /*++
@@ -2148,8 +1946,6 @@ Members:
     FollowLinks - Stores a boolean indicating whether to follow the link in
         the source (existing file path) if it is a symbolic link.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_CREATE_HARD_LINK {
@@ -2160,7 +1956,6 @@ typedef struct _SYSTEM_CALL_CREATE_HARD_LINK {
     PSTR NewLinkPath;
     ULONG NewLinkPathSize;
     BOOL FollowLinks;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_CREATE_HARD_LINK, *PSYSTEM_CALL_CREATE_HARD_LINK;
 
 /*++
@@ -2192,8 +1987,6 @@ Members:
         starting at the given offset. For an unmap operation, this stores the
         size of the memory region that starts at the given address.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_MAP_UNMAP_MEMORY {
@@ -2203,7 +1996,6 @@ typedef struct _SYSTEM_CALL_MAP_UNMAP_MEMORY {
     PVOID Address;
     ULONGLONG Offset;
     UINTN Size;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_MAP_UNMAP_MEMORY, *PSYSTEM_CALL_MAP_UNMAP_MEMORY;
 
 /*++
@@ -2222,15 +2014,12 @@ Members:
 
     Flags - Stores a bitmask of flags. See SYS_MAP_SYNC_FLAG_* for definitions.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_FLUSH_MEMORY {
     PVOID Address;
     ULONGLONG Size;
     ULONG Flags;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_FLUSH_MEMORY, *PSYSTEM_CALL_FLUSH_MEMORY;
 
 /*++
@@ -2263,8 +2052,6 @@ Members:
         result buffer in elements. On output, returns the number of elements
         in the results, even if the supplied buffer was too small.
 
-    Status - Stores the status code returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_LOCATE_DEVICE_INFORMATION {
@@ -2274,7 +2061,6 @@ typedef struct _SYSTEM_CALL_LOCATE_DEVICE_INFORMATION {
     UUID Uuid;
     PDEVICE_INFORMATION_RESULT Results;
     ULONG ResultCount;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_LOCATE_DEVICE_INFORMATION,
     *PSYSTEM_CALL_LOCATE_DEVICE_INFORMATION;
 
@@ -2301,8 +2087,6 @@ Members:
     Set - Stores a boolean indicating whether to set device information
         (TRUE) or get device information (FALSE).
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_GET_SET_DEVICE_INFORMATION {
@@ -2311,7 +2095,6 @@ typedef struct _SYSTEM_CALL_GET_SET_DEVICE_INFORMATION {
     PVOID Data;
     UINTN DataSize;
     BOOL Set;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_GET_SET_DEVICE_INFORMATION,
     *PSYSTEM_CALL_GET_SET_DEVICE_INFORMATION;
 
@@ -2327,9 +2110,6 @@ Members:
 
     Flags - Stores a bitfield of flags. See SYS_OPEN_FLAG_* definitions.
 
-    Status - Stores a status code which will represent the return value of the
-        open device operation.
-
     Handle - Stores a handle where the handle will be returned on success.
 
 --*/
@@ -2337,7 +2117,6 @@ Members:
 typedef struct _SYSTEM_CALL_OPEN_DEVICE {
     DEVICE_ID DeviceId;
     ULONG Flags;
-    KSTATUS Status;
     HANDLE Handle;
 } SYSCALL_STRUCT SYSTEM_CALL_OPEN_DEVICE, *PSYSTEM_CALL_OPEN_DEVICE;
 
@@ -2365,8 +2144,6 @@ Members:
     Set - Stores a boolean indicating whether to set device information
         (TRUE) or get device information (FALSE).
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_GET_SET_SYSTEM_INFORMATION {
@@ -2375,29 +2152,8 @@ typedef struct _SYSTEM_CALL_GET_SET_SYSTEM_INFORMATION {
     PVOID Data;
     UINTN DataSize;
     BOOL Set;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_GET_SET_SYSTEM_INFORMATION,
     *PSYSTEM_CALL_GET_SET_SYSTEM_INFORMATION;
-
-/*++
-
-Structure Description:
-
-    This structure defines the system call parameters for rebooting the
-    machine.
-
-Members:
-
-    ResetType - Stores the type of reset to perform.
-
-    Status - Stores the resulting status code from the kernel.
-
---*/
-
-typedef struct _SYSTEM_CALL_RESET_SYSTEM {
-    SYSTEM_RESET_TYPE ResetType;
-    KSTATUS Status;
-} SYSCALL_STRUCT SYSTEM_CALL_RESET_SYSTEM, *PSYSTEM_CALL_RESET_SYSTEM;
 
 /*++
 
@@ -2413,14 +2169,11 @@ Members:
     TimeCounter - Stores the time counter value corresponding with the
         moment the system time was meant to be set by the caller.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SET_SYSTEM_TIME {
     SYSTEM_TIME SystemTime;
     ULONGLONG TimeCounter;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SET_SYSTEM_TIME, *PSYSTEM_CALL_SET_SYSTEM_TIME;
 
 /*++
@@ -2441,15 +2194,12 @@ Members:
     NewAttributes - Stores the new attributes to set. See SYS_MAP_FLAG_*
         definitions.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SET_MEMORY_PROTECTION {
     PVOID Address;
     UINTN Size;
     ULONG NewAttributes;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SET_MEMORY_PROTECTION,
     *PSYSTEM_CALL_SET_MEMORY_PROTECTION;
 
@@ -2465,13 +2215,10 @@ Members:
     Request - Stores the request details of the get or set thread identity
         operation.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SET_THREAD_IDENTITY {
     SET_THREAD_IDENTITY Request;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SET_THREAD_IDENTITY,
     *PSYSTEM_CALL_SET_THREAD_IDENTITY;
 
@@ -2487,13 +2234,10 @@ Members:
     Request - Stores the request details of the get or set thread permissions
         operation.
 
-    Status - Stores the resulting status code from the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SET_THREAD_PERMISSIONS {
     SET_THREAD_PERMISSIONS Request;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SET_THREAD_PERMISSIONS,
     *PSYSTEM_CALL_SET_THREAD_PERMISSIONS;
 
@@ -2518,18 +2262,12 @@ Members:
         returns the number of elements in the buffer (or needed if the buffer
         was not large enough).
 
-    Status - Stores the resulting status code from the kernel. If
-        STATUS_BUFFER_TOO_SMALL is returned, then the correct number of
-        elements needed will be returned in the count parameter. If other
-        error status codes are returned, the count output may not be valid.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SET_SUPPLEMENTARY_GROUPS {
     BOOL Set;
     PGROUP_ID Groups;
     UINTN Count;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SET_SUPPLEMENTARY_GROUPS,
     *PSYSTEM_CALL_SET_SUPPLEMENTARY_GROUPS;
 
@@ -2558,9 +2296,6 @@ Members:
 
     Socket2 - Stores the other returned socket file descriptor on success.
 
-    Status - Stores a status code which will represent the return value of the
-        create socket operation.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_CREATE_PAIR {
@@ -2570,7 +2305,6 @@ typedef struct _SYSTEM_CALL_SOCKET_CREATE_PAIR {
     ULONG OpenFlags;
     HANDLE Socket1;
     HANDLE Socket2;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SOCKET_CREATE_PAIR,
     *PSYSTEM_CALL_SOCKET_CREATE_PAIR;
 
@@ -2615,8 +2349,6 @@ Members:
     MasterHandle - Stores the returned handle to the master terminal side on
         success.
 
-    Status - Stores the status returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_CREATE_TERMINAL {
@@ -2630,26 +2362,7 @@ typedef struct _SYSTEM_CALL_CREATE_TERMINAL {
     FILE_PERMISSIONS MasterCreatePermissions;
     FILE_PERMISSIONS SlaveCreatePermissions;
     HANDLE MasterHandle;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_CREATE_TERMINAL, *PSYSTEM_CALL_CREATE_TERMINAL;
-
-/*++
-
-Structure Description:
-
-    This structure defines the system call parameters for setting the thread
-    pointer.
-
-Members:
-
-    Pointer - Stores the pointer to set.
-
---*/
-
-typedef struct _SYSTEM_CALL_SET_THREAD_POINTER {
-    PVOID Pointer;
-} SYSCALL_STRUCT SYSTEM_CALL_SET_THREAD_POINTER,
-    *PSYSTEM_CALL_SET_THREAD_POINTER;
 
 /*++
 
@@ -2671,8 +2384,6 @@ Members:
     TimeoutInMilliseconds - Stores the timeout in milliseconds the caller
         should wait. Set to SYS_WAIT_TIME_INDEFINITE to wait forever.
 
-    Status - Stores the status returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_USER_LOCK {
@@ -2680,26 +2391,7 @@ typedef struct _SYSTEM_CALL_USER_LOCK {
     ULONG Value;
     ULONG Operation;
     ULONG TimeoutInMilliseconds;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_USER_LOCK, *PSYSTEM_CALL_USER_LOCK;
-
-/*++
-
-Structure Description:
-
-    This structure defines the system call parameters for setting the thread
-    ID pointer.
-
-Members:
-
-    Pointer - Stores the pointer to set.
-
---*/
-
-typedef struct _SYSTEM_CALL_SET_THREAD_ID_POINTER {
-    PTHREAD_ID Pointer;
-} SYSCALL_STRUCT SYSTEM_CALL_SET_THREAD_ID_POINTER,
-    *PSYSTEM_CALL_SET_THREAD_ID_POINTER;
 
 /*++
 
@@ -2741,15 +2433,12 @@ Members:
         SYS_OPEN_FLAG_CLOSE_ON_EXECUTE is permitted. If not set, the new handle
         will have the close on execute flag cleared.
 
-    Status - Stores the resulting status code returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_DUPLICATE_HANDLE {
     HANDLE OldHandle;
     HANDLE NewHandle;
     ULONG OpenFlags;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_DUPLICATE_HANDLE, *PSYSTEM_CALL_DUPLICATE_HANDLE;
 
 /*++
@@ -2776,8 +2465,6 @@ Members:
         means non-periodic. Units here are processor counter ticks for profile
         and virtual timers, or time counter ticks for real timers.
 
-    Status - Stores the resulting status code returned by the kernel.
-
 --*/
 
 typedef struct _SYSTEM_CALL_SET_ITIMER {
@@ -2785,7 +2472,6 @@ typedef struct _SYSTEM_CALL_SET_ITIMER {
     BOOL Set;
     ULONGLONG DueTime;
     ULONGLONG Period;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SET_ITIMER, *PSYSTEM_CALL_SET_ITIMER;
 
 /*++
@@ -2835,7 +2521,6 @@ typedef struct _SYSTEM_CALL_SET_RESOURCE_LIMIT {
     RESOURCE_LIMIT_TYPE Type;
     BOOL Set;
     RESOURCE_LIMIT Value;
-    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SET_RESOURCE_LIMIT,
     *PSYSTEM_CALL_SET_RESOURCE_LIMIT;
 
@@ -2854,15 +2539,12 @@ Members:
 --*/
 
 typedef union _SYSTEM_CALL_PARAMETER_UNION {
-    SYSTEM_CALL_RESTORE_CONTEXT RestoreContext;
     SYSTEM_CALL_EXIT_THREAD ExitThread;
     SYSTEM_CALL_OPEN Open;
-    SYSTEM_CALL_CLOSE CloseFile;
     SYSTEM_CALL_PERFORM_IO PerformIo;
     SYSTEM_CALL_PERFORM_VECTORED_IO PerformVectoredIo;
     SYSTEM_CALL_CREATE_PIPE CreatePipe;
     SYSTEM_CALL_CREATE_THREAD CreateThread;
-    SYSTEM_CALL_FORK_PROCESS ForkProcess;
     SYSTEM_CALL_EXECUTE_IMAGE ExecuteImage;
     SYSTEM_CALL_CHANGE_DIRECTORY ChangeDirectory;
     SYSTEM_CALL_SET_SIGNAL_HANDLER SetSignalHandler;
@@ -2871,7 +2553,6 @@ typedef union _SYSTEM_CALL_PARAMETER_UNION {
     SYSTEM_CALL_SET_SIGNAL_BEHAVIOR SetSignalBehavior;
     SYSTEM_CALL_WAIT_FOR_CHILD WaitForChild;
     SYSTEM_CALL_SUSPEND_EXECUTION SuspendExecution;
-    SYSTEM_CALL_EXIT_PROCESS ExitProcess;
     SYSTEM_CALL_POLL Poll;
     SYSTEM_CALL_SOCKET_CREATE SocketCreate;
     SYSTEM_CALL_SOCKET_BIND SocketBind;
@@ -2908,7 +2589,6 @@ typedef union _SYSTEM_CALL_PARAMETER_UNION {
     SYSTEM_CALL_GET_SET_DEVICE_INFORMATION GetSetDeviceInformation;
     SYSTEM_CALL_OPEN_DEVICE OpenDevice;
     SYSTEM_CALL_GET_SET_SYSTEM_INFORMATION GetSetSystemInformation;
-    SYSTEM_CALL_RESET_SYSTEM ResetSystem;
     SYSTEM_CALL_SET_SYSTEM_TIME SetSystemTime;
     SYSTEM_CALL_SET_MEMORY_PROTECTION SetMemoryProtection;
     SYSTEM_CALL_SET_THREAD_IDENTITY SetThreadIdentity;
@@ -2917,9 +2597,7 @@ typedef union _SYSTEM_CALL_PARAMETER_UNION {
     SYSTEM_CALL_SOCKET_CREATE_PAIR SocketCreatePair;
     SYSTEM_CALL_CREATE_TERMINAL CreateTerminal;
     SYSTEM_CALL_SOCKET_PERFORM_VECTORED_IO SocketPerformVectoredIo;
-    SYSTEM_CALL_SET_THREAD_POINTER SetThreadPointer;
     SYSTEM_CALL_USER_LOCK UserLock;
-    SYSTEM_CALL_SET_THREAD_ID_POINTER SetThreadIdPointer;
     SYSTEM_CALL_SET_UMASK SetUmask;
     SYSTEM_CALL_DUPLICATE_HANDLE DuplicateHandle;
     SYSTEM_CALL_SET_ITIMER SetITimer;

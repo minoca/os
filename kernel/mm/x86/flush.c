@@ -236,14 +236,10 @@ Return Value:
 
 {
 
-    PSYSTEM_CALL_FLUSH_CACHE Parameters;
-
     //
     // The x86 is cache coherent with all observers of memory.
     //
 
-    Parameters = SystemCallParameter;
-    Parameters->Status = STATUS_SUCCESS;
     return STATUS_SUCCESS;
 }
 

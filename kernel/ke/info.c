@@ -358,7 +358,6 @@ SysGetSetSystemInformationEnd:
         MmFreePagedPool(Buffer);
     }
 
-    Request->Status = Status;
     return Status;
 }
 

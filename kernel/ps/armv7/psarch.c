@@ -545,6 +545,12 @@ Return Value:
         if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
             RtlCopyMemory(StackTrapFrame, TrapFrame, sizeof(TRAP_FRAME));
 
+            //
+            // Return a process ID of 0 to the child on fork.
+            //
+
+            StackTrapFrame->R0 = 0;
+
         } else {
 
             //

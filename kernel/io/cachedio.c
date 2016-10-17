@@ -1090,9 +1090,7 @@ PerformCachedWriteEnd:
 
     if (!KSUCCESS(Status)) {
         READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
-        IopEvictPageCacheEntries(FileObject,
-                                 FileSize,
-                                 PAGE_CACHE_EVICTION_FLAG_TRUNCATE);
+        IopEvictFileObject(FileObject, FileSize, EVICTION_FLAG_TRUNCATE);
     }
 
     //
@@ -1630,12 +1628,6 @@ Return Value:
     }
 
     //
-    // The file object's lock should already be held, if it exists.
-    //
-
-    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
-
-    //
     // This read needs to happen without re-acquiring the I/O lock. So directly
     // call the non-cached read routine.
     //
@@ -1817,9 +1809,7 @@ Return Value:
         if (IoContext->BytesCompleted < IoContext->SizeInBytes) {
             FileOffset = IoContext->Offset + IoContext->BytesCompleted;
             FileOffset = ALIGN_RANGE_DOWN(FileOffset, PageSize);
-            IopEvictPageCacheEntries(FileObject,
-                                     BufferOffset,
-                                     PAGE_CACHE_EVICTION_FLAG_TRUNCATE);
+            IopEvictFileObject(FileObject, FileOffset, EVICTION_FLAG_TRUNCATE);
         }
 
     //

@@ -729,7 +729,6 @@ SysMapOrUnmapMemoryEnd:
         IoIoHandleReleaseReference(IoHandle);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -807,7 +806,6 @@ Return Value:
                                               SectionFlags);
 
 SysSetMemoryProtectionEnd:
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -948,8 +946,6 @@ Return Value:
             continue;
         }
 
-        ASSERT((CurrentSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
-
         //
         // Determine how much of this image section overlaps with the specified
         // region to synchronize.
@@ -972,21 +968,14 @@ Return Value:
         TotalSyncSize += OverlapSize;
 
         //
-        // If the image section is private, then there is nothing to
-        // synchronize.
+        // If the image section is not cache-backed, shared, and writable, then
+        // there is nothing to synchronize.
         //
 
-        if ((CurrentSection->Flags & IMAGE_SECTION_SHARED) == 0) {
-            CurrentEntry = CurrentEntry->Next;
-            continue;
-        }
+        if (((CurrentSection->Flags & IMAGE_SECTION_SHARED) == 0) ||
+            ((CurrentSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+            ((CurrentSection->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0)) {
 
-        //
-        // If the image section isn't or was never writable, then there is
-        // nothing to synchronize.
-        //
-
-        if ((CurrentSection->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0) {
             CurrentEntry = CurrentEntry->Next;
             continue;
         }
@@ -1075,7 +1064,6 @@ SysSyncMemoryEnd:
         MmpImageSectionReleaseReference(ReleaseSection);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 

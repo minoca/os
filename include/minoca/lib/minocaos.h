@@ -885,6 +885,8 @@ Return Value:
 
     STATUS_TIMEOUT if no descriptors were ready in the given amount of time.
 
+    STATUS_INVALID_PARAMETER if more than MAX_LONG descriptors are supplied.
+
 --*/
 
 OS_API
@@ -1078,7 +1080,7 @@ Arguments:
         On output, this parameter will contain the process ID of the child that
         generated the signal activity, and the child signal will be discarded.
         If the wait for child parameter is set to FALSE, then this parameter
-        is ignored. If a non-child signal cause the routine to return, then
+        is ignored. If a non-child signal caused the routine to return, then
         the value at this parameter is undefined.
 
     Reason - Supplies a pointer where the reason for the child event will be
@@ -1092,10 +1094,11 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS if the wait was successfully satisfied. If the
-    SYSTEM_CALL_WAIT_FLAG_RETURN_IMMEDIATELY flag is set and there are no
-    children ready to be reaped, then STATUS_SUCCESS is returned and the child
-    PID is returned as -1.
+    STATUS_SUCCESS if the wait was successfully satisfied.
+
+    STATUS_NO_DATA_AVAILABLE if the SYSTEM_CALL_WAIT_FLAG_RETURN_IMMEDIATELY
+    flag is set and there are no children ready to be reaped. The child PID is
+    returned as -1.
 
     STATUS_INTERRUPTED if the wait was interrupted by a signal.
 

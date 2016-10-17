@@ -884,6 +884,12 @@ Author:
 #define IO_OFFSET_NONE (-1LL)
 
 //
+// Define the maximum I/O offset.
+//
+
+#define IO_OFFSET_MAX MAX_LONGLONG
+
+//
 // Define the set of flags used for read/write IRP preparation and completion.
 //
 
@@ -5445,8 +5451,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This stores the user mode handle returned during the
+        open system call. It is passed to the kernel in a register.
 
 Return Value:
 
@@ -5475,9 +5481,10 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the number of bytes completed (a positive integer) on
+    success.
 
-    Error status code on failure.
+    Error status code (a negative integer) on failure.
 
 --*/
 
@@ -5500,9 +5507,10 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the number of bytes completed (a positive integer) on
+    success.
 
-    Error status code on failure.
+    Error status code (a negative integer) on failure.
 
 --*/
 
@@ -5628,9 +5636,10 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the number of descriptors selected (a positive integer)
+    on success.
 
-    Error status code on failure.
+    Error status code (a negative integer) on failure.
 
 --*/
 
@@ -7356,8 +7365,9 @@ IoPageCacheEntryAddReference (
 Routine Description:
 
     This routine increments the reference count on the given page cache entry.
-    It is assumed that callers of this routine either hold the page cache lock
-    or already hold a reference on the given page cache entry.
+    It is assumed that either the lock for the file object associated with the
+    page cache entry is held or the caller already has a reference on the given
+    page cache entry.
 
 Arguments:
 

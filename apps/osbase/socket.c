@@ -86,15 +86,16 @@ Return Value:
 {
 
     SYSTEM_CALL_SOCKET_CREATE_PAIR Parameters;
+    KSTATUS Status;
 
     Parameters.Domain = Domain;
     Parameters.Type = Type;
     Parameters.Protocol = Protocol;
     Parameters.OpenFlags = OpenFlags;
-    OsSystemCall(SystemCallSocketCreatePair, &Parameters);
+    Status = OsSystemCall(SystemCallSocketCreatePair, &Parameters);
     Sockets[0] = Parameters.Socket1;
     Sockets[1] = Parameters.Socket2;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -138,14 +139,15 @@ Return Value:
 {
 
     SYSTEM_CALL_SOCKET_CREATE Request;
+    KSTATUS Status;
 
     Request.Domain = Domain;
     Request.Type = Type;
     Request.Protocol = Protocol;
     Request.OpenFlags = OpenFlags;
-    OsSystemCall(SystemCallSocketCreate, &Request);
+    Status = OsSystemCall(SystemCallSocketCreate, &Request);
     *Socket = Request.Socket;
-    return Request.Status;
+    return Status;
 }
 
 OS_API
@@ -189,8 +191,7 @@ Return Value:
     RtlCopyMemory(&(Request.Address), Address, sizeof(NETWORK_ADDRESS));
     Request.Path = Path;
     Request.PathSize = PathSize;
-    OsSystemCall(SystemCallSocketBind, &Request);
-    return Request.Status;
+    return OsSystemCall(SystemCallSocketBind, &Request);
 }
 
 OS_API
@@ -227,8 +228,7 @@ Return Value:
 
     Request.Socket = Socket;
     Request.BacklogCount = SuggestedBacklog;
-    OsSystemCall(SystemCallSocketListen, &Request);
-    return Request.Status;
+    return OsSystemCall(SystemCallSocketListen, &Request);
 }
 
 OS_API
@@ -280,6 +280,7 @@ Return Value:
 {
 
     SYSTEM_CALL_SOCKET_ACCEPT Request;
+    KSTATUS Status;
 
     Request.Socket = Socket;
     Request.NewSocket = INVALID_HANDLE;
@@ -290,7 +291,7 @@ Return Value:
     }
 
     Request.OpenFlags = OpenFlags;
-    OsSystemCall(SystemCallSocketAccept, &Request);
+    Status = OsSystemCall(SystemCallSocketAccept, &Request);
     *NewSocket = Request.NewSocket;
     if (Address != NULL) {
         RtlCopyMemory(Address, &(Request.Address), sizeof(NETWORK_ADDRESS));
@@ -300,7 +301,7 @@ Return Value:
         *RemotePathSize = Request.RemotePathSize;
     }
 
-    return Request.Status;
+    return Status;
 }
 
 OS_API
@@ -345,8 +346,7 @@ Return Value:
     RtlCopyMemory(&(Request.Address), Address, sizeof(NETWORK_ADDRESS));
     Request.RemotePath = RemotePath;
     Request.RemotePathSize = RemotePathSize;
-    OsSystemCall(SystemCallSocketConnect, &Request);
-    return Request.Status;
+    return OsSystemCall(SystemCallSocketConnect, &Request);
 }
 
 OS_API
@@ -385,8 +385,7 @@ Return Value:
     Request.Socket = Socket;
     Request.Parameters = Parameters;
     Request.Buffer = Buffer;
-    OsSystemCall(SystemCallSocketPerformIo, &Request);
-    return Request.Status;
+    return OsSystemCall(SystemCallSocketPerformIo, &Request);
 }
 
 OS_API
@@ -428,8 +427,7 @@ Return Value:
     Request.Parameters = Parameters;
     Request.VectorArray = VectorArray;
     Request.VectorCount = VectorCount;
-    OsSystemCall(SystemCallSocketPerformVectoredIo, &Request);
-    return Request.Status;
+    return OsSystemCall(SystemCallSocketPerformVectoredIo, &Request);
 }
 
 OS_API
@@ -480,6 +478,7 @@ Return Value:
 {
 
     SYSTEM_CALL_SOCKET_GET_SET_INFORMATION Request;
+    KSTATUS Status;
 
     Request.Socket = Socket;
     Request.InformationType = InformationType;
@@ -487,9 +486,9 @@ Return Value:
     Request.Data = Data;
     Request.DataSize = *DataSize;
     Request.Set = Set;
-    OsSystemCall(SystemCallSocketGetSetInformation, &Request);
+    Status = OsSystemCall(SystemCallSocketGetSetInformation, &Request);
     *DataSize = Request.DataSize;
-    return Request.Status;
+    return Status;
 }
 
 OS_API
@@ -529,8 +528,7 @@ Return Value:
 
     Parameters.Socket = Socket;
     Parameters.ShutdownType = ShutdownType;
-    OsSystemCall(SystemCallSocketShutdown, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallSocketShutdown, &Parameters);
 }
 
 //

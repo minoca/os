@@ -245,25 +245,6 @@ Return Value:
     }
 
     //
-    // Create the shared memory object directory.
-    //
-
-    IoSharedMemoryObjectDirectory = ObCreateObject(
-                                                 ObjectDirectory,
-                                                 NULL,
-                                                 "SharedMemoryObjects",
-                                                 sizeof("SharedMemoryObjects"),
-                                                 sizeof(OBJECT_HEADER),
-                                                 NULL,
-                                                 OBJECT_FLAG_USE_NAME_DIRECTLY,
-                                                 FI_ALLOCATION_TAG);
-
-    if (IoSharedMemoryObjectDirectory == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeEnd;
-    }
-
-    //
     // Initialize the file system list head and create the lock protecting
     // access to it.
     //
@@ -344,6 +325,15 @@ Return Value:
     //
 
     Status = IopInitializeTerminalSupport();
+    if (!KSUCCESS(Status)) {
+        goto InitializeEnd;
+    }
+
+    //
+    // Initialize shared memory object support.
+    //
+
+    Status = IopInitializeSharedMemoryObjectSupport();
     if (!KSUCCESS(Status)) {
         goto InitializeEnd;
     }

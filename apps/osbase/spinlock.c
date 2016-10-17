@@ -288,14 +288,15 @@ Return Value:
 {
 
     SYSTEM_CALL_USER_LOCK Parameters;
+    KSTATUS Status;
 
     Parameters.Address = Address;
     Parameters.Value = *Value;
     Parameters.Operation = Operation;
     Parameters.TimeoutInMilliseconds = TimeoutInMilliseconds;
-    OsSystemCall(SystemCallUserLock, &Parameters);
+    Status = OsSystemCall(SystemCallUserLock, &Parameters);
     *Value = Parameters.Value;
-    return Parameters.Status;
+    return Status;
 }
 
 //

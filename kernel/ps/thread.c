@@ -597,6 +597,13 @@ Return Value:
     }
 
     //
+    // Update the stack base and size on output.
+    //
+
+    Parameters->StackBase = ThreadParameters.UserStack;
+    Parameters->StackSize = ThreadParameters.StackSize;
+
+    //
     // Null out the name parameters as that memory is now owned by the object
     // manager.
     //
@@ -609,7 +616,6 @@ SysCreateThreadEnd:
         MmFreePagedPool(Name);
     }
 
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -697,8 +703,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This is supplies the thread pointer directly, which is
+        passed from user mode via a register.
 
 Return Value:
 
@@ -710,10 +716,7 @@ Return Value:
 
 {
 
-    PSYSTEM_CALL_SET_THREAD_POINTER Parameters;
-
-    Parameters = SystemCallParameter;
-    ArSetThreadPointer(KeGetCurrentThread(), Parameters->Pointer);
+    ArSetThreadPointer(KeGetCurrentThread(), SystemCallParameter);
     return STATUS_SUCCESS;
 }
 
@@ -731,8 +734,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This is supplies the thread ID pointer directly, which
+        is passed from user mode via a register.
 
 Return Value:
 
@@ -744,13 +747,13 @@ Return Value:
 
 {
 
-    PSYSTEM_CALL_SET_THREAD_ID_POINTER Parameters;
+    PVOID Pointer;
     PKTHREAD Thread;
 
-    Parameters = SystemCallParameter;
+    Pointer = SystemCallParameter;
     Thread = KeGetCurrentThread();
-    if ((PVOID)(Parameters->Pointer) < KERNEL_VA_START) {
-        Thread->ThreadIdPointer = Parameters->Pointer;
+    if (Pointer < KERNEL_VA_START) {
+        Thread->ThreadIdPointer = Pointer;
 
         //
         // As a convenience, also set the thread ID if the pointer is being set
@@ -759,8 +762,8 @@ Return Value:
         // thread structure.
         //
 
-        if (Parameters->Pointer != NULL) {
-            MmUserWrite32(Parameters->Pointer, Thread->ThreadId);
+        if (Pointer != NULL) {
+            MmUserWrite32(Pointer, Thread->ThreadId);
         }
     }
 

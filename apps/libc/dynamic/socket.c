@@ -35,6 +35,7 @@ Environment:
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
+#include <limits.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -753,6 +754,15 @@ Return Value:
     SOCKET_IO_PARAMETERS Parameters;
     KSTATUS Status;
 
+    //
+    // Truncate the byte count, so that it does not exceed the maximum number
+    // of bytes that can be returned.
+    //
+
+    if (Length > (size_t)SSIZE_MAX) {
+        Length = (size_t)SSIZE_MAX;
+    }
+
     Parameters.Size = Length;
     Parameters.BytesCompleted = 0;
     Parameters.IoFlags = SYS_IO_FLAG_WRITE;
@@ -848,6 +858,15 @@ Return Value:
     Parameters.Size = 0;
     for (VectorIndex = 0; VectorIndex < Message->msg_iovlen; VectorIndex += 1) {
         Parameters.Size += Message->msg_iov[VectorIndex].iov_len;
+    }
+
+    //
+    // Truncate the byte count, so that it does not exceed the maximum number
+    // of bytes that can be returned.
+    //
+
+    if (Parameters.Size > (UINTN)SSIZE_MAX) {
+        Parameters.Size = (UINTN)SSIZE_MAX;
     }
 
     ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT();
@@ -984,6 +1003,15 @@ Return Value:
     SOCKET_IO_PARAMETERS Parameters;
     KSTATUS Status;
 
+    //
+    // Truncate the byte count, so that it does not exceed the maximum number
+    // of bytes that can be returned.
+    //
+
+    if (Length > (size_t)SSIZE_MAX) {
+        Length = (size_t)SSIZE_MAX;
+    }
+
     Parameters.Size = Length;
     Parameters.BytesCompleted = 0;
     Parameters.IoFlags = 0;
@@ -1092,6 +1120,15 @@ Return Value:
     Parameters.Size = 0;
     for (VectorIndex = 0; VectorIndex < Message->msg_iovlen; VectorIndex += 1) {
         Parameters.Size += Message->msg_iov[VectorIndex].iov_len;
+    }
+
+    //
+    // Truncate the byte count, so that it does not exceed the maximum number
+    // of bytes that can be returned.
+    //
+
+    if (Parameters.Size > (UINTN)SSIZE_MAX) {
+        Parameters.Size = (UINTN)SSIZE_MAX;
     }
 
     ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT();

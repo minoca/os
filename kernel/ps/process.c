@@ -380,9 +380,9 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    Process ID of the child on success (a positive integer).
 
-    Error status code on failure.
+    Error status code on failure (a negative integer).
 
 --*/
 
@@ -390,11 +390,9 @@ Return Value:
 
     PKTHREAD CurrentThread;
     PKPROCESS NewProcess;
-    PSYSTEM_CALL_FORK_PROCESS Parameters;
+    INTN NewProcessId;
     KSTATUS Status;
 
-    Parameters = (PSYSTEM_CALL_FORK_PROCESS)SystemCallParameter;
-    Parameters->ProcessId = -1;
     CurrentThread = KeGetCurrentThread();
     NewProcess = NULL;
     Status = PspCopyProcess(CurrentThread->OwningProcess,
@@ -404,12 +402,11 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Failed to fork %d\n", Status);
-        goto SysForkProcessEnd;
+        return Status;
     }
 
-    Parameters->ProcessId = NewProcess->Identifiers.ProcessId;
+    NewProcessId = NewProcess->Identifiers.ProcessId;
     ObReleaseReference(NewProcess);
-    Status = STATUS_SUCCESS;
 
     //
     // Yield to the child. This alleviates extra work during image section
@@ -419,10 +416,7 @@ Return Value:
     //
 
     KeYield();
-
-SysForkProcessEnd:
-    Parameters->Status = Status;
-    return Status;
+    return NewProcessId;
 }
 
 INTN
@@ -699,7 +693,7 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the requested process ID on success.
 
     Error status code on failure.
 
@@ -711,6 +705,7 @@ Return Value:
     PSYSTEM_CALL_GET_SET_PROCESS_ID Parameters;
     PKPROCESS Process;
     PROCESS_GROUP_ID ProcessGroupId;
+    INTN Result;
     KSTATUS Status;
     PKTHREAD Thread;
 
@@ -782,6 +777,8 @@ Return Value:
             break;
         }
 
+        Result = Status;
+
     //
     // The caller wants to get an ID.
     //
@@ -789,11 +786,11 @@ Return Value:
     } else {
         switch (Parameters->ProcessIdType) {
         case ProcessIdProcess:
-            Parameters->ProcessId = Process->Identifiers.ProcessId;
+            Result = Process->Identifiers.ProcessId;
             break;
 
         case ProcessIdThread:
-            Parameters->ProcessId = Thread->ThreadId;
+            Result = Thread->ThreadId;
             break;
 
         case ProcessIdProcessGroup:
@@ -802,16 +799,16 @@ Return Value:
                 (Parameters->ProcessId == Process->Identifiers.ProcessId)) {
 
                 if (Parameters->ProcessIdType == ProcessIdProcessGroup) {
-                    Parameters->ProcessId = Process->Identifiers.ProcessGroupId;
+                    Result = Process->Identifiers.ProcessGroupId;
 
                 } else {
-                    Parameters->ProcessId = Process->Identifiers.SessionId;
+                    Result = Process->Identifiers.SessionId;
                 }
 
             } else {
                 OtherProcess = PspGetProcessById(Parameters->ProcessId);
                 if (OtherProcess == NULL) {
-                    Status = STATUS_NO_SUCH_PROCESS;
+                    Result = STATUS_NO_SUCH_PROCESS;
 
                 } else {
 
@@ -825,16 +822,14 @@ Return Value:
                         if (Parameters->ProcessIdType ==
                             ProcessIdProcessGroup) {
 
-                            Parameters->ProcessId =
-                                      OtherProcess->Identifiers.ProcessGroupId;
+                            Result = OtherProcess->Identifiers.ProcessGroupId;
 
                         } else {
-                            Parameters->ProcessId =
-                                           OtherProcess->Identifiers.SessionId;
+                            Result = OtherProcess->Identifiers.SessionId;
                         }
 
                     } else {
-                        Status = STATUS_NO_SUCH_PROCESS;
+                        Result = STATUS_NO_SUCH_PROCESS;
                     }
 
                     ObReleaseReference(OtherProcess);
@@ -844,17 +839,16 @@ Return Value:
             break;
 
         case ProcessIdParentProcess:
-            Parameters->ProcessId = Process->Identifiers.ParentProcessId;
+            Result = Process->Identifiers.ParentProcessId;
             break;
 
         default:
-            Status = STATUS_INVALID_PARAMETER;
+            Result = STATUS_INVALID_PARAMETER;
             break;
         }
     }
 
-    Parameters->Status = Status;
-    return Status;
+    return Result;
 }
 
 INTN
@@ -1010,8 +1004,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This stores the exit status for the process. It is
+        passed to the kernel in a register.
 
 Return Value:
 
@@ -1023,19 +1017,17 @@ Return Value:
 
 {
 
-    PSYSTEM_CALL_EXIT_PROCESS Parameters;
     PKPROCESS Process;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    Parameters = (PSYSTEM_CALL_EXIT_PROCESS)SystemCallParameter;
     Process = PsGetCurrentProcess();
 
     ASSERT(Process != PsGetKernelProcess());
 
     PspSetProcessExitStatus(Process,
                             CHILD_SIGNAL_REASON_EXITED,
-                            Parameters->Status);
+                            (UINTN)SystemCallParameter);
 
     PsSignalProcess(Process, SIGNAL_KILL, NULL);
     return STATUS_SUCCESS;
@@ -1150,7 +1142,6 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 GetResourceUsageEnd:
-    Parameters->Status = Status;
     return Status;
 }
 
@@ -1196,7 +1187,8 @@ PsCreateProcess (
     PSTR CommandLine,
     ULONG CommandLineSize,
     PVOID RootDirectoryPathPoint,
-    PVOID WorkingDirectoryPathPoint
+    PVOID WorkingDirectoryPathPoint,
+    PVOID SharedMemoryDirectoryPathPoint
     )
 
 /*++
@@ -1219,6 +1211,9 @@ Arguments:
 
     WorkingDirectoryPathPoint - Supplies an optional pointer to the path point
         of the working directory to set for the process.
+
+    SharedMemoryDirectoryPathPoint - Supplies an optional pointer to the path
+        point of the shared memory object directory to set for the process.
 
 Return Value:
 
@@ -1320,7 +1315,8 @@ Return Value:
                                   NULL,
                                   NULL,
                                   RootDirectoryPathPoint,
-                                  WorkingDirectoryPathPoint);
+                                  WorkingDirectoryPathPoint,
+                                  SharedMemoryDirectoryPathPoint);
 
     if (NewProcess == NULL) {
         Status = STATUS_UNSUCCESSFUL;
@@ -1708,12 +1704,15 @@ Return Value:
     PKPROCESS NewProcess;
     PPATH_POINT RootDirectory;
     PATH_POINT RootDirectoryCopy;
+    PPATH_POINT SharedMemoryDirectory;
+    PATH_POINT SharedMemoryDirectoryCopy;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     CurrentDirectory = NULL;
     RootDirectory = NULL;
+    SharedMemoryDirectory = NULL;
 
     //
     // Get the processes root and current directories. Add references in case a
@@ -1736,6 +1735,14 @@ Return Value:
         RootDirectory = &RootDirectoryCopy;
     }
 
+    if (Process->Paths.SharedMemoryDirectory.PathEntry != NULL) {
+        IO_COPY_PATH_POINT(&SharedMemoryDirectoryCopy,
+                           &(Process->Paths.SharedMemoryDirectory));
+
+        IO_PATH_POINT_ADD_REFERENCE(&SharedMemoryDirectoryCopy);
+        SharedMemoryDirectory = &SharedMemoryDirectoryCopy;
+    }
+
     KeReleaseQueuedLock(Process->Paths.Lock);
     NewProcess = PspCreateProcess(Process->BinaryName,
                                   Process->BinaryNameSize,
@@ -1743,7 +1750,8 @@ Return Value:
                                   &(Process->Identifiers),
                                   Process->ControllingTerminal,
                                   RootDirectory,
-                                  CurrentDirectory);
+                                  CurrentDirectory,
+                                  SharedMemoryDirectory);
 
     if (CurrentDirectory != NULL) {
         IO_PATH_POINT_RELEASE_REFERENCE(CurrentDirectory);
@@ -1751,6 +1759,10 @@ Return Value:
 
     if (RootDirectory != NULL) {
         IO_PATH_POINT_RELEASE_REFERENCE(RootDirectory);
+    }
+
+    if (SharedMemoryDirectory != NULL) {
+        IO_PATH_POINT_RELEASE_REFERENCE(SharedMemoryDirectory);
     }
 
     if (NewProcess == NULL) {
@@ -1869,7 +1881,8 @@ PspCreateProcess (
     PPROCESS_IDENTIFIERS Identifiers,
     PVOID ControllingTerminal,
     PPATH_POINT RootDirectory,
-    PPATH_POINT WorkingDirectory
+    PPATH_POINT WorkingDirectory,
+    PPATH_POINT SharedMemoryDirectory
     )
 
 /*++
@@ -1904,6 +1917,10 @@ Arguments:
     WorkingDirectory - Supplies a pointer to the path point to use for the
         working directory. A reference will be added to the path entry and
         mount point of this path point.
+
+    SharedMemoryDirectory - Supplies a pointer to the path point to use as the
+        shared memory object root. A reference will be added to the path entry
+        and mount point of this path point.
 
 Return Value:
 
@@ -2090,6 +2107,17 @@ Return Value:
                            WorkingDirectory);
 
         IO_PATH_POINT_ADD_REFERENCE(WorkingDirectory);
+    }
+
+    if (SharedMemoryDirectory != NULL) {
+
+        ASSERT(SharedMemoryDirectory->PathEntry != NULL);
+        ASSERT(SharedMemoryDirectory->MountPoint != NULL);
+
+        IO_COPY_PATH_POINT(&(NewProcess->Paths.SharedMemoryDirectory),
+                           SharedMemoryDirectory);
+
+        IO_PATH_POINT_ADD_REFERENCE(SharedMemoryDirectory);
     }
 
     //
@@ -2782,6 +2810,8 @@ Return Value:
 
 {
 
+    PPATH_POINT PathPoint;
+
     //
     // Proceed to destroy the process structures.
     //
@@ -2813,6 +2843,13 @@ Return Value:
         IO_PATH_POINT_RELEASE_REFERENCE(&(Process->Paths.Root));
         Process->Paths.Root.PathEntry = NULL;
         Process->Paths.Root.MountPoint = NULL;
+    }
+
+    if (Process->Paths.SharedMemoryDirectory.PathEntry != NULL) {
+        PathPoint = (PPATH_POINT)&(Process->Paths.SharedMemoryDirectory);
+        IO_PATH_POINT_RELEASE_REFERENCE(PathPoint);
+        PathPoint->PathEntry = NULL;
+        PathPoint->MountPoint = NULL;
     }
 
     if (Process->Environment != NULL) {
@@ -3161,6 +3198,8 @@ Return Value:
     ASSERT(Process->Paths.CurrentDirectory.MountPoint == NULL);
     ASSERT(Process->Paths.Root.PathEntry == NULL);
     ASSERT(Process->Paths.Root.MountPoint == NULL);
+    ASSERT(Process->Paths.SharedMemoryDirectory.PathEntry == NULL);
+    ASSERT(Process->Paths.SharedMemoryDirectory.MountPoint == NULL);
     ASSERT(Process->Environment == NULL);
     ASSERT(Process->HandleTable == NULL);
 

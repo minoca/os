@@ -694,27 +694,29 @@ Return Value:
     CurrentEntry = MmPhysicalSegmentListHead.Next;
     while (CurrentEntry != &MmPhysicalSegmentListHead) {
         Segment = LIST_VALUE(CurrentEntry, PHYSICAL_MEMORY_SEGMENT, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        if ((PhysicalAddress >= Segment->StartAddress) &&
-            (PhysicalAddress < Segment->EndAddress)) {
+        if ((PhysicalAddress < Segment->StartAddress) ||
+            (PhysicalAddress >= Segment->EndAddress)) {
 
-            Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
-            PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
-            PhysicalPage += Offset;
-
-            //
-            // This request should only be on a non-paged physical page.
-            //
-
-            ASSERT((PhysicalPage->U.Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0);
-            ASSERT(((UINTN)PageCacheEntry & PHYSICAL_PAGE_FLAG_NON_PAGED) == 0);
-
-            PageCacheEntry = (PVOID)((UINTN)PageCacheEntry |
-                                     PHYSICAL_PAGE_FLAG_NON_PAGED);
-
-            PhysicalPage->U.PageCacheEntry = PageCacheEntry;
-            goto SetPageCacheEntryForPhysicalAddressEnd;
+            CurrentEntry = CurrentEntry->Next;
+            continue;
         }
+
+        Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
+        PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
+        PhysicalPage += Offset;
+
+        //
+        // This request should only be on a non-paged physical page.
+        //
+
+        ASSERT((PhysicalPage->U.Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0);
+        ASSERT(((UINTN)PageCacheEntry & PHYSICAL_PAGE_FLAG_NON_PAGED) == 0);
+
+        PageCacheEntry = (PVOID)((UINTN)PageCacheEntry |
+                                 PHYSICAL_PAGE_FLAG_NON_PAGED);
+
+        PhysicalPage->U.PageCacheEntry = PageCacheEntry;
+        goto SetPageCacheEntryForPhysicalAddressEnd;
     }
 
     //
@@ -1301,8 +1303,6 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PHYSICAL_ADDRESS EndAddress;
-    BOOL InRange;
     ULONGLONG PageIndex;
     ULONGLONG PageOffset;
     ULONG PageShift;
@@ -1315,7 +1315,6 @@ Return Value:
 
     ASSERT(IS_ALIGNED(PhysicalAddress, PageSize) != FALSE);
 
-    EndAddress = PhysicalAddress + (PageCount << PageShift);
     if (MmPhysicalPageLock != NULL) {
         KeAcquireQueuedLock(MmPhysicalPageLock);
     }
@@ -1323,61 +1322,53 @@ Return Value:
     CurrentEntry = MmPhysicalSegmentListHead.Next;
     while (CurrentEntry != &MmPhysicalSegmentListHead) {
         Segment = LIST_VALUE(CurrentEntry, PHYSICAL_MEMORY_SEGMENT, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        InRange = TRUE;
-        if (((PhysicalAddress < Segment->StartAddress) &&
-             (EndAddress <= Segment->StartAddress)) ||
-            ((PhysicalAddress >= Segment->EndAddress) &&
-             (EndAddress > Segment->EndAddress))) {
+        if ((PhysicalAddress < Segment->StartAddress) ||
+            (PhysicalAddress >= Segment->EndAddress)) {
 
-            InRange = FALSE;
+            CurrentEntry = CurrentEntry->Next;
+            continue;
         }
 
-        if (InRange != FALSE) {
+        //
+        // Any contiguous memory should be contained in the same memory segment.
+        //
 
-            //
-            // The segment better completely enclose the memory range passed in.
-            //
+        ASSERT((PhysicalAddress + (PageCount << PageShift)) <=
+               Segment->EndAddress);
 
-            ASSERT((Segment->StartAddress <= PhysicalAddress) &&
-                   (EndAddress <= Segment->EndAddress));
+        //
+        // Mark each page in the segment as pagable by adding in the supplied
+        // paging entry.
+        //
 
-            //
-            // Mark each page in the segment as pagable by adding in the
-            // supplied paging entry.
-            //
+        PageOffset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
+        PhysicalPage = ((PPHYSICAL_PAGE)(Segment + 1)) + PageOffset;
+        for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
 
-            PageOffset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
-            PhysicalPage = ((PPHYSICAL_PAGE)(Segment + 1)) + PageOffset;
-            for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
+            ASSERT(PhysicalPage->U.Flags == PHYSICAL_PAGE_FLAG_NON_PAGED);
+            ASSERT(((UINTN)PagingEntries[PageIndex] &
+                    PHYSICAL_PAGE_FLAG_NON_PAGED) == 0);
 
-                ASSERT((PhysicalPage->U.Flags &
-                        PHYSICAL_PAGE_FLAG_NON_PAGED) != 0);
+            PhysicalPage->U.PagingEntry = PagingEntries[PageIndex];
 
-                ASSERT(((UINTN)PagingEntries[PageIndex] &
-                        PHYSICAL_PAGE_FLAG_NON_PAGED) == 0);
+            ASSERT(PagingEntries[PageIndex]->Section != NULL);
+            ASSERT((PagingEntries[PageIndex]->Section->Flags &
+                    IMAGE_SECTION_DESTROYED) == 0);
 
-                PhysicalPage->U.PagingEntry = PagingEntries[PageIndex];
+            if (LockPages != FALSE) {
 
-                ASSERT(PagingEntries[PageIndex]->Section != NULL);
-                ASSERT((PagingEntries[PageIndex]->Section->Flags &
-                        IMAGE_SECTION_DESTROYED) == 0);
+                ASSERT(PhysicalPage->U.PagingEntry->U.LockCount == 0);
 
-                if (LockPages != FALSE) {
+                PhysicalPage->U.PagingEntry->U.LockCount = 1;
 
-                    ASSERT(PhysicalPage->U.PagingEntry->U.LockCount == 0);
-
-                    PhysicalPage->U.PagingEntry->U.LockCount = 1;
-
-                } else {
-                    MmNonPagedPhysicalPages -= 1;
-                }
-
-                PhysicalPage += 1;
+            } else {
+                MmNonPagedPhysicalPages -= 1;
             }
 
-            break;
+            PhysicalPage += 1;
         }
+
+        break;
     }
 
     if (MmPhysicalPageLock != NULL) {
@@ -1441,72 +1432,72 @@ Return Value:
     CurrentEntry = MmPhysicalSegmentListHead.Next;
     while (CurrentEntry != &MmPhysicalSegmentListHead) {
         Segment = LIST_VALUE(CurrentEntry, PHYSICAL_MEMORY_SEGMENT, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        if ((PhysicalAddress >= Segment->StartAddress) &&
-            (PhysicalAddress < Segment->EndAddress)) {
+        if ((PhysicalAddress < Segment->StartAddress) ||
+            (PhysicalAddress >= Segment->EndAddress)) {
 
-            Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
-            MaxOffset = (Segment->EndAddress - Segment->StartAddress) >>
-                        PageShift;
+            CurrentEntry = CurrentEntry->Next;
+            continue;
+        }
 
-            PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
-            PhysicalPage += Offset;
+        Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
+        MaxOffset = (Segment->EndAddress - Segment->StartAddress) >> PageShift;
+        PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
+        PhysicalPage += Offset;
+
+        //
+        // Loop through the number of contiguous pages requested, and mark each
+        // one as locked if it was marked as pagable.
+        //
+
+        for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
+
+            ASSERT((Offset + PageIndex) < MaxOffset);
+            ASSERT(PhysicalPage[PageIndex].U.Free != PHYSICAL_PAGE_FREE);
 
             //
-            // Loop through the number of contiguous pages requested, and mark
-            // each one as locked if it was marked as pagable.
+            // If there is no paging entry and this is just a non-paged
+            // allocation, then it is already locked down.
             //
 
-            for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
-
-                ASSERT((Offset + PageIndex) < MaxOffset);
-                ASSERT(PhysicalPage[PageIndex].U.Free != PHYSICAL_PAGE_FREE);
-
-                //
-                // If there is no paging entry and this is just a non-paged
-                // allocation, then it is already locked down.
-                //
-
-                Flags = PhysicalPage[PageIndex].U.Flags;
-                if ((Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
-                    continue;
-                }
-
-                PagingEntry = PhysicalPage[PageIndex].U.PagingEntry;
-
-                ASSERT(PagingEntry != NULL);
-
-                //
-                // Locking a pageable page should only happen with the
-                // section's lock held.
-                //
-
-                ASSERT(KeIsQueuedLockHeld(PagingEntry->Section->Lock) != FALSE);
-
-                //
-                // Fail if too many callers have attempted to lock this page.
-                //
-
-                if (PagingEntry->U.LockCount == MAX_PHYSICAL_PAGE_LOCK_COUNT) {
-                    Status = STATUS_RESOURCE_IN_USE;
-                    goto LockPhysicalPagesEnd;
-                }
-
-                //
-                // If this is the first request to lock the page, then
-                // increment the non-paged physical page count.
-                //
-
-                if (PagingEntry->U.LockCount == 0) {
-                    MmNonPagedPhysicalPages += 1;
-                }
-
-                PagingEntry->U.LockCount += 1;
+            Flags = PhysicalPage[PageIndex].U.Flags;
+            if ((Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
+                continue;
             }
 
-            Status = STATUS_SUCCESS;
-            goto LockPhysicalPagesEnd;
+            PagingEntry = PhysicalPage[PageIndex].U.PagingEntry;
+
+            ASSERT(PagingEntry != NULL);
+
+            //
+            // Locking a pageable page should only happen with the section's
+            // lock held.
+            //
+
+            ASSERT(KeIsQueuedLockHeld(PagingEntry->Section->Lock) != FALSE);
+
+            //
+            // Fail if too many callers have attempted to lock this page.
+            //
+
+            if (PagingEntry->U.LockCount == MAX_PHYSICAL_PAGE_LOCK_COUNT) {
+                Status = STATUS_RESOURCE_IN_USE;
+                goto LockPhysicalPagesEnd;
+            }
+
+            //
+            // If this is the first request to lock the page, then increment
+            // the non-paged physical page count.
+            //
+
+            if (PagingEntry->U.LockCount == 0) {
+                MmNonPagedPhysicalPages += 1;
+            }
+
+            PagingEntry->U.LockCount += 1;
         }
+
+        Status = STATUS_SUCCESS;
+        goto LockPhysicalPagesEnd;
     }
 
     //
@@ -1587,60 +1578,60 @@ Return Value:
     CurrentEntry = MmPhysicalSegmentListHead.Next;
     while (CurrentEntry != &MmPhysicalSegmentListHead) {
         Segment = LIST_VALUE(CurrentEntry, PHYSICAL_MEMORY_SEGMENT, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        if ((PhysicalAddress >= Segment->StartAddress) &&
-            (PhysicalAddress < Segment->EndAddress)) {
+        if ((PhysicalAddress < Segment->StartAddress) ||
+            (PhysicalAddress >= Segment->EndAddress)) {
 
-            Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
-            MaxOffset = (Segment->EndAddress - Segment->StartAddress) >>
-                                                                     PageShift;
-
-            PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
-            PhysicalPage += Offset;
-
-            //
-            // Loop through and unlock the number of contiguous pages requested.
-            //
-
-            for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
-
-                ASSERT((Offset + PageIndex) < MaxOffset);
-                ASSERT(PhysicalPage[PageIndex].U.Free != PHYSICAL_PAGE_FREE);
-
-                //
-                // If this is a non-paged physical page, then skip it.
-                //
-
-                Flags = PhysicalPage[PageIndex].U.Flags;
-                if ((Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
-                    continue;
-                }
-
-                PagingEntry = PhysicalPage[PageIndex].U.PagingEntry;
-
-                ASSERT(PagingEntry != NULL);
-                ASSERT(PagingEntry->U.LockCount != 0);
-
-                PagingEntry->U.LockCount -= 1;
-                if (PagingEntry->U.LockCount == 0) {
-                    MmNonPagedPhysicalPages -= 1;
-                    if ((PagingEntry->U.Flags & PAGING_ENTRY_FLAG_FREED) != 0) {
-                        PhysicalPage[PageIndex].U.Free = PHYSICAL_PAGE_FREE;
-                        ReleasedCount += 1;
-                        INSERT_BEFORE(&(PagingEntry->U.ListEntry),
-                                      &PagingEntryList);
-                    }
-                }
-            }
-
-            if (ReleasedCount != 0) {
-                Segment->FreePages += ReleasedCount;
-                SignalEvent = MmpUpdatePhysicalMemoryStatistics(ReleasedCount,
-                                                                FALSE);
-            }
-
-            goto UnlockPhysicalPageEnd;
+            CurrentEntry = CurrentEntry->Next;
+            continue;
         }
+
+        Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
+        MaxOffset = (Segment->EndAddress - Segment->StartAddress) >> PageShift;
+        PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
+        PhysicalPage += Offset;
+
+        //
+        // Loop through and unlock the number of contiguous pages requested.
+        //
+
+        for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
+
+            ASSERT((Offset + PageIndex) < MaxOffset);
+            ASSERT(PhysicalPage[PageIndex].U.Free != PHYSICAL_PAGE_FREE);
+
+            //
+            // If this is a non-paged physical page, then skip it.
+            //
+
+            Flags = PhysicalPage[PageIndex].U.Flags;
+            if ((Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
+                continue;
+            }
+
+            PagingEntry = PhysicalPage[PageIndex].U.PagingEntry;
+
+            ASSERT(PagingEntry != NULL);
+            ASSERT(PagingEntry->U.LockCount != 0);
+
+            PagingEntry->U.LockCount -= 1;
+            if (PagingEntry->U.LockCount == 0) {
+                MmNonPagedPhysicalPages -= 1;
+                if ((PagingEntry->U.Flags & PAGING_ENTRY_FLAG_FREED) != 0) {
+                    PhysicalPage[PageIndex].U.Free = PHYSICAL_PAGE_FREE;
+                    ReleasedCount += 1;
+                    INSERT_BEFORE(&(PagingEntry->U.ListEntry),
+                                  &PagingEntryList);
+                }
+            }
+        }
+
+        if (ReleasedCount != 0) {
+            Segment->FreePages += ReleasedCount;
+            SignalEvent = MmpUpdatePhysicalMemoryStatistics(ReleasedCount,
+                                                            FALSE);
+        }
+
+        goto UnlockPhysicalPageEnd;
     }
 
     //
@@ -1712,29 +1703,31 @@ Return Value:
     CurrentEntry = MmPhysicalSegmentListHead.Next;
     while (CurrentEntry != &MmPhysicalSegmentListHead) {
         Segment = LIST_VALUE(CurrentEntry, PHYSICAL_MEMORY_SEGMENT, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        if ((PhysicalAddress >= Segment->StartAddress) &&
-            (PhysicalAddress < Segment->EndAddress)) {
+        if ((PhysicalAddress < Segment->StartAddress) ||
+            (PhysicalAddress >= Segment->EndAddress)) {
 
-            Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
-            PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
-            PhysicalPage += Offset;
-
-            //
-            // If the physical address is a non-paged entry, then get the
-            // associated page cache entry, if any. This might just be a
-            // non-paged physical page without a page cache entry but returning
-            // NULL in that case is expected.
-            //
-
-            if ((PhysicalPage->U.Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
-                PageCacheEntry = PhysicalPage->U.PageCacheEntry;
-                PageCacheEntry = (PVOID)((UINTN)PageCacheEntry &
-                                         ~PHYSICAL_PAGE_FLAG_NON_PAGED);
-            }
-
-            goto GetPageCacheEntryForPhysicalAddressEnd;
+            CurrentEntry = CurrentEntry->Next;
+            continue;
         }
+
+        Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
+        PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
+        PhysicalPage += Offset;
+
+        //
+        // If the physical address is a non-paged entry, then get the
+        // associated page cache entry, if any. This might just be a
+        // non-paged physical page without a page cache entry but returning
+        // NULL in that case is expected.
+        //
+
+        if ((PhysicalPage->U.Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
+            PageCacheEntry = PhysicalPage->U.PageCacheEntry;
+            PageCacheEntry = (PVOID)((UINTN)PageCacheEntry &
+                                     ~PHYSICAL_PAGE_FLAG_NON_PAGED);
+        }
+
+        goto GetPageCacheEntryForPhysicalAddressEnd;
     }
 
     //

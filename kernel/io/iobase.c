@@ -61,6 +61,7 @@ IopClosePagingObject (
 
 KSTATUS
 IopCreateAnonymousObject (
+    BOOL FromKernelMode,
     ULONG Access,
     ULONG Flags,
     IO_OBJECT_TYPE TypeOverride,
@@ -181,29 +182,36 @@ Return Value:
 
 {
 
+    PSTR Separator;
     KSTATUS Status;
 
-    if ((Flags & OPEN_FLAG_SHARED_MEMORY) != 0) {
-        Status = IopOpenSharedMemoryObject(Path,
-                                           PathLength,
-                                           Access,
-                                           Flags,
-                                           CreatePermissions,
-                                           Handle);
+    //
+    // Do not allow shared memory object names with more than a leading slash.
+    //
 
-    } else {
-        Status = IopOpen(FromKernelMode,
-                         Directory,
-                         Path,
-                         PathLength,
-                         Access,
-                         Flags,
-                         IoObjectInvalid,
-                         NULL,
-                         CreatePermissions,
-                         Handle);
+    if ((Flags & OPEN_FLAG_SHARED_MEMORY) != 0) {
+        Separator = RtlStringFindCharacterRight(Path,
+                                                PATH_SEPARATOR,
+                                                PathLength);
+
+        if ((Separator != NULL) && (Separator != Path)) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto OpenEnd;
+        }
     }
 
+    Status = IopOpen(FromKernelMode,
+                     Directory,
+                     Path,
+                     PathLength,
+                     Access,
+                     Flags,
+                     IoObjectInvalid,
+                     NULL,
+                     CreatePermissions,
+                     Handle);
+
+OpenEnd:
     if (IoDebugPrintOpens != FALSE) {
         RtlDebugPrint("Open %s: %d\n", Path, Status);
     }
@@ -1517,13 +1525,61 @@ Return Value:
 
 {
 
+    PPATH_ENTRY DirectoryEntry;
+    PFILE_OBJECT DirectoryFileObject;
+    PPATH_POINT DirectoryPathPoint;
+    ULONG OpenFlags;
+    PATH_POINT PathPoint;
     KSTATUS Status;
 
-    if ((Flags & DELETE_FLAG_SHARED_MEMORY) != 0) {
-        Status = IopDeleteSharedMemoryObject(Path, PathSize);
+    DirectoryPathPoint = NULL;
+    PathPoint.PathEntry = NULL;
 
-    } else {
-        Status = IopDelete(FromKernelMode, Directory, Path, PathSize, Flags);
+    //
+    // If the caller specified a directory, validate that it is a directory.
+    // Search permission checking for the directory is done in the path walk
+    // code.
+    //
+
+    if (Directory != NULL) {
+        DirectoryPathPoint = &(Directory->PathPoint);
+        DirectoryEntry = DirectoryPathPoint->PathEntry;
+        DirectoryFileObject = DirectoryEntry->FileObject;
+        if (DirectoryFileObject->Properties.Type != IoObjectRegularDirectory) {
+            Status = STATUS_NOT_A_DIRECTORY;
+            goto DeleteEnd;
+        }
+
+        ASSERT(Directory->FileObject == DirectoryFileObject);
+    }
+
+    OpenFlags = OPEN_FLAG_SYMBOLIC_LINK | OPEN_FLAG_NO_MOUNT_POINT;
+    if ((Flags & DELETE_FLAG_SHARED_MEMORY) != 0) {
+        OpenFlags |= OPEN_FLAG_SHARED_MEMORY;
+    }
+
+    Status = IopPathWalk(FromKernelMode,
+                         DirectoryPathPoint,
+                         &Path,
+                         &PathSize,
+                         OpenFlags,
+                         IoObjectInvalid,
+                         NULL,
+                         FILE_PERMISSION_NONE,
+                         &PathPoint);
+
+    if (!KSUCCESS(Status)) {
+        goto DeleteEnd;
+    }
+
+    Status = IopDeletePathPoint(FromKernelMode, &PathPoint, Flags);
+    if (!KSUCCESS(Status)) {
+        goto DeleteEnd;
+    }
+
+DeleteEnd:
+    if (PathPoint.PathEntry != NULL) {
+        IO_PATH_POINT_RELEASE_REFERENCE(&PathPoint);
     }
 
     return Status;
@@ -3024,6 +3080,26 @@ Return Value:
     if ((Flags & OPEN_FLAG_CREATE) != 0) {
         Process = PsGetCurrentProcess();
         CreatePermissions &= ~(Process->Umask);
+
+        //
+        // Change the override if the create flag is on.
+        //
+
+        if ((Flags & OPEN_FLAG_DIRECTORY) != 0) {
+
+            ASSERT(TypeOverride == IoObjectInvalid);
+
+            TypeOverride = IoObjectRegularDirectory;
+
+        } else if ((Flags & OPEN_FLAG_SHARED_MEMORY) != 0) {
+
+            ASSERT(TypeOverride == IoObjectInvalid);
+
+            TypeOverride = IoObjectSharedMemoryObject;
+
+        } else if (TypeOverride == IoObjectInvalid) {
+            TypeOverride = IoObjectRegularFile;
+        }
     }
 
     //
@@ -3031,7 +3107,11 @@ Return Value:
     //
 
     if (PathLength == 0) {
-        Status = IopCreateAnonymousObject(Access,
+
+        ASSERT((Flags & OPEN_FLAG_CREATE) != 0);
+
+        Status = IopCreateAnonymousObject(FromKernelMode,
+                                          Access,
                                           Flags,
                                           TypeOverride,
                                           OverrideParameter,
@@ -3043,23 +3123,6 @@ Return Value:
     //
 
     } else {
-
-        //
-        // Change the override if the create flag is on.
-        //
-
-        if ((Flags & OPEN_FLAG_CREATE) != 0) {
-            if ((Flags & OPEN_FLAG_DIRECTORY) != 0) {
-
-                ASSERT(TypeOverride == IoObjectInvalid);
-
-                TypeOverride = IoObjectRegularDirectory;
-
-            } else if (TypeOverride == IoObjectInvalid) {
-                TypeOverride = IoObjectRegularFile;
-            }
-        }
-
         Status = IopPathWalk(FromKernelMode,
                              DirectoryPathPoint,
                              &Path,
@@ -3531,6 +3594,7 @@ OpenDeviceEnd:
 
 KSTATUS
 IopCreateSpecialIoObject (
+    BOOL FromKernelMode,
     ULONG Flags,
     IO_OBJECT_TYPE Type,
     PVOID OverrideParameter,
@@ -3545,6 +3609,9 @@ Routine Description:
     This routine creates a special file object.
 
 Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not the request
+        originated from kernel mode (TRUE) or user mode (FALSE).
 
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
@@ -3591,7 +3658,8 @@ Return Value:
         break;
 
     case IoObjectSharedMemoryObject:
-        Status = IopCreateSharedMemoryObject(NULL,
+        Status = IopCreateSharedMemoryObject(FromKernelMode,
+                                             NULL,
                                              0,
                                              Flags,
                                              CreatePermissions,
@@ -3735,106 +3803,6 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 CloseEnd:
-    return Status;
-}
-
-KSTATUS
-IopDelete (
-    BOOL FromKernelMode,
-    PIO_HANDLE Directory,
-    PSTR Path,
-    ULONG PathSize,
-    ULONG Flags
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to delete the object at the given path. If the path
-    points to a directory, the directory must be empty. If the path points to
-    a file object or shared memory object, its hard link count is decremented.
-    If the hard link count reaches zero and no processes have the object open,
-    the contents of the object are destroyed. If processes have open handles to
-    the object, the destruction of the object contents are deferred until the
-    last handle to the old file is closed. If the path points to a symbolic
-    link, the link itself is removed and not the destination. The removal of
-    the entry from the directory is immediate.
-
-Arguments:
-
-    FromKernelMode - Supplies a boolean indicating the request is coming from
-        kernel mode.
-
-    Directory - Supplies an optional pointer to an open handle to a directory
-        for relative paths. Supply NULL to use the current working directory.
-
-    Path - Supplies a pointer to the path to delete.
-
-    PathSize - Supplies the length of the path buffer in bytes, including the
-        null terminator.
-
-    Flags - Supplies a bitfield of flags. See DELETE_FLAG_* definitions.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PPATH_ENTRY DirectoryEntry;
-    PFILE_OBJECT DirectoryFileObject;
-    PPATH_POINT DirectoryPathPoint;
-    PATH_POINT PathPoint;
-    KSTATUS Status;
-
-    DirectoryPathPoint = NULL;
-    PathPoint.PathEntry = NULL;
-
-    //
-    // If the caller specified a directory, validate that it is a directory.
-    // Search permission checking for the directory is done in the path walk
-    // code.
-    //
-
-    if (Directory != NULL) {
-        DirectoryPathPoint = &(Directory->PathPoint);
-        DirectoryEntry = DirectoryPathPoint->PathEntry;
-        DirectoryFileObject = DirectoryEntry->FileObject;
-        if (DirectoryFileObject->Properties.Type != IoObjectRegularDirectory) {
-            Status = STATUS_NOT_A_DIRECTORY;
-            goto DeleteEnd;
-        }
-
-        ASSERT(Directory->FileObject == DirectoryFileObject);
-    }
-
-    Status = IopPathWalk(FromKernelMode,
-                         DirectoryPathPoint,
-                         &Path,
-                         &PathSize,
-                         OPEN_FLAG_SYMBOLIC_LINK | OPEN_FLAG_NO_MOUNT_POINT,
-                         IoObjectInvalid,
-                         NULL,
-                         FILE_PERMISSION_NONE,
-                         &PathPoint);
-
-    if (!KSUCCESS(Status)) {
-        goto DeleteEnd;
-    }
-
-    Status = IopDeletePathPoint(FromKernelMode, &PathPoint, Flags);
-    if (!KSUCCESS(Status)) {
-        goto DeleteEnd;
-    }
-
-DeleteEnd:
-    if (PathPoint.PathEntry != NULL) {
-        IO_PATH_POINT_RELEASE_REFERENCE(&PathPoint);
-    }
-
     return Status;
 }
 
@@ -3999,18 +3967,19 @@ Return Value:
     }
 
     //
-    // The object file system only allows unlinking of shared memory objects,
-    // pipes, and terminals by kernel mode callers.
+    // The object file system only allows kernel mode to unlink pipes and
+    // terminals. Shared memory objects can be unlinked by both kernel and user
+    // mode.
     //
 
     Device = PathPoint->PathEntry->FileObject->Device;
     SendUnlinkRequest = FALSE;
     if (Device == ObGetRootObject()) {
-        if ((FromKernelMode == FALSE) ||
-            ((FileObject->Properties.Type != IoObjectSharedMemoryObject) &&
-             (FileObject->Properties.Type != IoObjectTerminalMaster) &&
-             (FileObject->Properties.Type != IoObjectTerminalSlave) &&
-             (FileObject->Properties.Type != IoObjectPipe))) {
+        if ((FileObject->Properties.Type != IoObjectSharedMemoryObject) &&
+            ((FromKernelMode == FALSE) ||
+             ((FileObject->Properties.Type != IoObjectTerminalMaster) &&
+              (FileObject->Properties.Type != IoObjectTerminalSlave) &&
+              (FileObject->Properties.Type != IoObjectPipe)))) {
 
             Status = STATUS_ACCESS_DENIED;
             goto DeletePathPointEnd;
@@ -5178,6 +5147,7 @@ ClosePagingObjectEnd:
 
 KSTATUS
 IopCreateAnonymousObject (
+    BOOL FromKernelMode,
     ULONG Access,
     ULONG Flags,
     IO_OBJECT_TYPE TypeOverride,
@@ -5194,6 +5164,9 @@ Routine Description:
     in the global path system.
 
 Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not the request
+        originated from kernel mode (TRUE) or user mode (FALSE).
 
     Access - Supplies the desired access permissions to the object. See
         IO_ACCESS_* definitions.
@@ -5227,7 +5200,8 @@ Return Value:
 
     FileObject = NULL;
     PathEntry = NULL;
-    Status = IopCreateSpecialIoObject(Flags,
+    Status = IopCreateSpecialIoObject(FromKernelMode,
+                                      Flags,
                                       TypeOverride,
                                       OverrideParameter,
                                       CreatePermissions,

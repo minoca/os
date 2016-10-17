@@ -239,8 +239,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This stores the system reset type. It is passed to the
+        kernel in a register.
 
 Return Value:
 
@@ -252,18 +252,18 @@ Return Value:
 
 {
 
-    PSYSTEM_CALL_RESET_SYSTEM Parameters;
+    SYSTEM_RESET_TYPE ResetType;
     KSTATUS Status;
 
-    Parameters = SystemCallParameter;
+    ResetType = (SYSTEM_RESET_TYPE)SystemCallParameter;
 
     //
     // Perform some validation here since the actual return status won't be
     // waited on by this thread.
     //
 
-    if ((Parameters->ResetType == SystemResetInvalid) ||
-        (Parameters->ResetType >= SystemResetTypeCount)) {
+    if ((ResetType == SystemResetInvalid) ||
+        (ResetType >= SystemResetTypeCount)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto SysResetSystemEnd;
@@ -277,10 +277,9 @@ Return Value:
     Status = KeCreateAndQueueWorkItem(NULL,
                                       WorkPriorityNormal,
                                       KepSysResetSystemWorkItem,
-                                      (PVOID)(Parameters->ResetType));
+                                      (PVOID)ResetType);
 
 SysResetSystemEnd:
-    Parameters->Status = Status;
     return Status;
 }
 

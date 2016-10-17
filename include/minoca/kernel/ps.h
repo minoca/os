@@ -927,6 +927,9 @@ Members:
 
     CurrentDirectory - Stores the current directory path point for this process.
 
+    SharedMemoryDirectory - Stores the shared memory directory path point for
+        this process.
+
     Lock - Stores a pointer to a queued lock synchronizing accesses with
         changes.
 
@@ -942,6 +945,11 @@ typedef struct _PROCESS_PATHS {
         PVOID PathEntry;
         PVOID MountPoint;
     } CurrentDirectory;
+
+    struct {
+        PVOID PathEntry;
+        PVOID MountPoint;
+    } SharedMemoryDirectory;
 
     PVOID Lock;
 } PROCESS_PATHS, *PPROCESS_PATHS;
@@ -2168,8 +2176,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This is supplies the thread pointer directly, which is
+        passed from user mode via a register.
 
 Return Value:
 
@@ -2193,8 +2201,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This is supplies the thread ID pointer directly, which
+        is passed from user mode via a register.
 
 Return Value:
 
@@ -2244,14 +2252,16 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. The parameter is a user mode pointer to the signal
+        context to restore.
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
-
-    Error status code on failure.
+    Returns the architecture-specific return register from the thread context.
+    The architecture-specific system call assembly routines do not restore the
+    return register out of the trap frame in order to allow a system call to
+    return a value via a register. The restore context system call, however,
+    must restore the old context, including the return register.
 
 --*/
 
@@ -2322,8 +2332,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This is a pointer to the actual parameters passed from
-        user mode.
+        the system call. This structure will be a stack-local copy of the
+        actual parameters passed from user-mode.
 
 Return Value:
 
@@ -3125,9 +3135,9 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    Process ID of the child on success (a positive integer).
 
-    Error status code on failure.
+    Error status code on failure (a negative integer).
 
 --*/
 
@@ -3182,7 +3192,7 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    STATUS_SUCCESS or the requested process ID on success.
 
     Error status code on failure.
 
@@ -3227,8 +3237,8 @@ Routine Description:
 Arguments:
 
     SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call. This structure will be a stack-local copy of the
-        actual parameters passed from user-mode.
+        the system call. This stores the exit status for the process. It is
+        passed to the kernel in a register.
 
 Return Value:
 
@@ -3293,7 +3303,8 @@ PsCreateProcess (
     PSTR CommandLine,
     ULONG CommandLineSize,
     PVOID RootDirectoryPathPoint,
-    PVOID WorkingDirectoryPathPoint
+    PVOID WorkingDirectoryPathPoint,
+    PVOID SharedMemoryDirectoryPathPoint
     );
 
 /*++
@@ -3316,6 +3327,9 @@ Arguments:
 
     WorkingDirectoryPathPoint - Supplies an optional pointer to the path point
         of the working directory to set for the process.
+
+    SharedMemoryDirectoryPathPoint - Supplies an optional pointer to the path
+        point of the shared memory object directory to set for the process.
 
 Return Value:
 

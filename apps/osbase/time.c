@@ -469,8 +469,7 @@ Return Value:
 
     Parameters.SystemTime = *NewTime;
     Parameters.TimeCounter = TimeCounter;
-    OsSystemCall(SystemCallSetSystemTime, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallSetSystemTime, &Parameters);
 }
 
 OS_API
@@ -511,11 +510,12 @@ Return Value:
 {
 
     SYSTEM_CALL_GET_RESOURCE_USAGE Parameters;
+    KSTATUS Status;
 
     Parameters.Request = Request;
     Parameters.Id = Id;
-    OsSystemCall(SystemCallGetResourceUsage, &Parameters);
-    if (KSUCCESS(Parameters.Status)) {
+    Status = OsSystemCall(SystemCallGetResourceUsage, &Parameters);
+    if (KSUCCESS(Status)) {
         if (Usage != NULL) {
             RtlCopyMemory(Usage, &(Parameters.Usage), sizeof(RESOURCE_USAGE));
         }
@@ -525,7 +525,7 @@ Return Value:
         }
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -747,6 +747,7 @@ Return Value:
 {
 
     SYSTEM_CALL_TIMER_CONTROL Parameters;
+    KSTATUS Status;
 
     RtlZeroMemory(&Parameters, sizeof(SYSTEM_CALL_TIMER_CONTROL));
     Parameters.Operation = TimerOperationCreateTimer;
@@ -763,9 +764,9 @@ Return Value:
         Parameters.Flags |= TIMER_CONTROL_FLAG_SIGNAL_THREAD;
     }
 
-    OsSystemCall(SystemCallTimerControl, &Parameters);
+    Status = OsSystemCall(SystemCallTimerControl, &Parameters);
     *TimerHandle = Parameters.TimerNumber;
-    return Parameters.Status;
+    return Status;
 }
 
 OS_API
@@ -990,8 +991,7 @@ Return Value:
 
     Parameters.TimeTicks = TimeTicks;
     Parameters.Interval = Interval;
-    OsSystemCall(SystemCallDelayExecution, &Parameters);
-    return Parameters.Status;
+    return OsSystemCall(SystemCallDelayExecution, &Parameters);
 }
 
 PUSER_SHARED_DATA
@@ -1067,6 +1067,7 @@ Return Value:
 {
 
     SYSTEM_CALL_TIME_ZONE_CONTROL Parameters;
+    KSTATUS Status;
 
     Parameters.Operation = Operation;
     Parameters.DataBuffer = DataBuffer;
@@ -1083,7 +1084,7 @@ Return Value:
         Parameters.OriginalZoneNameSize = *OriginalZoneNameSize;
     }
 
-    OsSystemCall(SystemCallTimeZoneControl, &Parameters);
+    Status = OsSystemCall(SystemCallTimeZoneControl, &Parameters);
     if (DataBufferSize != NULL) {
         *DataBufferSize = Parameters.DataBufferSize;
     }
@@ -1092,7 +1093,7 @@ Return Value:
         *OriginalZoneNameSize = Parameters.OriginalZoneNameSize;
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 KSTATUS
@@ -1126,6 +1127,7 @@ Return Value:
 {
 
     SYSTEM_CALL_TIMER_CONTROL Parameters;
+    KSTATUS Status;
 
     RtlZeroMemory(&Parameters, sizeof(SYSTEM_CALL_TIMER_CONTROL));
     Parameters.Operation = Operation;
@@ -1136,14 +1138,14 @@ Return Value:
                       sizeof(TIMER_INFORMATION));
     }
 
-    OsSystemCall(SystemCallTimerControl, &Parameters);
+    Status = OsSystemCall(SystemCallTimerControl, &Parameters);
     if (Information != NULL) {
         RtlCopyMemory(Information,
                       &(Parameters.TimerInformation),
                       sizeof(TIMER_INFORMATION));
     }
 
-    return Parameters.Status;
+    return Status;
 }
 
 KSTATUS
@@ -1185,15 +1187,16 @@ Return Value:
 {
 
     SYSTEM_CALL_SET_ITIMER Request;
+    KSTATUS Status;
 
     Request.Set = Set;
     Request.Type = Type;
     Request.DueTime = *DueTime;
     Request.Period = *Period;
-    OsSystemCall(SystemCallSetITimer, &Request);
+    Status = OsSystemCall(SystemCallSetITimer, &Request);
     *DueTime = Request.DueTime;
     *Period = Request.Period;
-    return Request.Status;
+    return Status;
 }
 
 VOID

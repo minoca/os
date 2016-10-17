@@ -224,29 +224,29 @@ Return Value:
             if (!KSUCCESS(Status) && (Status != STATUS_TOO_LATE)) {
 
                 //
-                // If page in failed because the end of the file was found for
-                // a page cache backed section from user mode, then send the
+                // If page in failed for a cache-backed section, then send the
                 // fault error to user mode. Otherwise crash.
                 //
 
                 Flags = ImageSection->Flags;
-                if ((Status == STATUS_END_OF_FILE) &&
-                    ((Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0)) {
+                if ((Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) {
+                    if (Status == STATUS_END_OF_FILE) {
+                        FaultFlags = FAULT_FLAG_OUT_OF_BOUNDS;
+                    }
 
                     MmpHandleBadFault(Process,
                                       FaultingAddress,
                                       TrapFrame,
-                                      FAULT_FLAG_OUT_OF_BOUNDS);
+                                      FaultFlags);
 
                     goto HandleFaultEnd;
-
-                } else {
-                    KeCrashSystem(CRASH_PAGE_IN_ERROR,
-                                  (UINTN)CurrentProcess,
-                                  (UINTN)ImageSection,
-                                  PageOffset,
-                                  Status);
                 }
+
+                KeCrashSystem(CRASH_PAGE_IN_ERROR,
+                              (UINTN)CurrentProcess,
+                              (UINTN)ImageSection,
+                              PageOffset,
+                              Status);
             }
 
         //

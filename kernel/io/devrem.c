@@ -315,7 +315,7 @@ Return Value:
     // should have flushed block devices by this point.
     //
 
-    IopEvictFileObjects(Device->DeviceId, PAGE_CACHE_EVICTION_FLAG_REMOVE);
+    IopEvictFileObjects(Device->DeviceId, EVICTION_FLAG_REMOVE);
 
     //
     // Flush the file objects for the device. Eviction should have removed all

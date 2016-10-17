@@ -373,6 +373,20 @@ PT_TEST_INFORMATION PerformanceTests[PtTestTypeCount] = {
      PtTestMutexContended,
      PtResultIterations,
      MUTEX_CONTENDED_TEST_DEFAULT_DURATION},
+
+    {STAT_TEST_NAME,
+     STAT_TEST_DESCRIPTION,
+     StatMain,
+     PtTestStat,
+     PtResultIterations,
+     STAT_TEST_DEFAULT_DURATION},
+
+    {FSTAT_TEST_NAME,
+     FSTAT_TEST_DESCRIPTION,
+     FstatMain,
+     PtTestFstat,
+     PtResultIterations,
+     FSTAT_TEST_DEFAULT_DURATION},
 };
 
 //

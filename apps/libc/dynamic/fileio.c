@@ -37,6 +37,7 @@ Environment:
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <limits.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -738,6 +739,15 @@ Return Value:
     KSTATUS Status;
 
     //
+    // Truncate the byte count, so that it does not exceed the maximum number
+    // of bytes that can be returned.
+    //
+
+    if (ByteCount > (size_t)SSIZE_MAX) {
+        ByteCount = (size_t)SSIZE_MAX;
+    }
+
+    //
     // Ask the OS to actually do the I/O.
     //
 
@@ -807,6 +817,15 @@ Return Value:
 
     UINTN BytesCompleted;
     KSTATUS Status;
+
+    //
+    // Truncate the byte count, so that it does not exceed the maximum number
+    // of bytes that can be returned.
+    //
+
+    if (ByteCount > (size_t)SSIZE_MAX) {
+        ByteCount = (size_t)SSIZE_MAX;
+    }
 
     //
     // Ask the OS to actually do the I/O.
@@ -990,6 +1009,15 @@ Return Value:
     KSTATUS Status;
 
     //
+    // Truncate the byte count, so that it does not exceed the maximum number
+    // of bytes that can be returned.
+    //
+
+    if (ByteCount > (size_t)SSIZE_MAX) {
+        ByteCount = (size_t)SSIZE_MAX;
+    }
+
+    //
     // Ask the OS to actually do the I/O.
     //
 
@@ -1057,6 +1085,15 @@ Return Value:
 
     UINTN BytesCompleted;
     KSTATUS Status;
+
+    //
+    // Truncate the byte count, so that it does not exceed the maximum number
+    // of bytes that can be returned.
+    //
+
+    if (ByteCount > (size_t)SSIZE_MAX) {
+        ByteCount = (size_t)SSIZE_MAX;
+    }
 
     //
     // Ask the OS to actually do the I/O.
@@ -2696,6 +2733,11 @@ Return Value:
     KSTATUS Status;
     ULONG TimeoutMilliseconds;
 
+    if (DescriptorCount > sysconf(_SC_OPEN_MAX)) {
+        errno = EINVAL;
+        return -1;
+    }
+
     ASSERT_POLL_FLAGS_EQUIVALENT();
     ASSERT_POLL_STRUCTURE_EQUIVALENT();
 
@@ -2727,7 +2769,7 @@ pollEnd:
         return -1;
     }
 
-    return DescriptorsSelected;
+    return (int)DescriptorsSelected;
 }
 
 LIBC_API
@@ -3027,7 +3069,7 @@ pselectEnd:
         }
     }
 
-    return DescriptorsSelected;
+    return (int)DescriptorsSelected;
 }
 
 LIBC_API

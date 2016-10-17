@@ -350,11 +350,7 @@ Return Value:
 
 {
 
-    SYSTEM_CALL_SET_THREAD_POINTER Parameters;
-
-    Parameters.Pointer = Pointer;
-    OsSystemCall(SystemCallSetThreadPointer, &Parameters);
-    return STATUS_SUCCESS;
+    return OsSystemCall(SystemCallSetThreadPointer, Pointer);
 }
 
 VOID
