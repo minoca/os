@@ -80,7 +80,7 @@ Environment:
 // Set this flag if the page cache entry owns the physical page it uses.
 //
 
-#define PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER 0x00000002
+#define PAGE_CACHE_ENTRY_FLAG_OWNER 0x00000002
 
 //
 // Set this flag if the page cache entry is mapped. This needs to be a flag as
@@ -741,10 +741,10 @@ Return Value:
     if ((VirtualAddress == NULL) && (BackingEntry != NULL)) {
 
         ASSERT((PageCacheEntry->Flags &
-                (PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER |
+                (PAGE_CACHE_ENTRY_FLAG_OWNER |
                  PAGE_CACHE_ENTRY_FLAG_MAPPED)) == 0);
 
-        ASSERT((BackingEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
+        ASSERT((BackingEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
 
         //
         // Updating the virtual address in the non-backing entry does not need
@@ -812,7 +812,7 @@ Return Value:
     OldFlags = RtlAtomicOr32(&(UnmappedEntry->Flags),
                              PAGE_CACHE_ENTRY_FLAG_MAPPED);
 
-    ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
+    ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
 
     if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) {
         Set = TRUE;
@@ -2545,7 +2545,7 @@ Return Value:
 
     if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
 
-        ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
+        ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
 
         RtlAtomicAdd(&IoPageCacheDirtyPageCount, (UINTN)-1);
         if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
@@ -2622,7 +2622,7 @@ Return Value:
     // at this page cache entry's layer.
     //
 
-    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) == 0) {
+    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) == 0) {
 
         ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
 
@@ -2647,7 +2647,7 @@ Return Value:
 
     OldFlags = RtlAtomicOr32(&(DirtyEntry->Flags), PAGE_CACHE_ENTRY_FLAG_DIRTY);
 
-    ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
+    ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
 
     if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
 
@@ -2923,7 +2923,7 @@ Return Value:
     //
 
     ASSERT((LowerEntry->Flags & UpperEntry->Flags &
-            PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
+            PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
 
     //
     // Make sure no one has the disk mmaped, since its physical page is about
@@ -2977,7 +2977,7 @@ Return Value:
     //
 
     ClearFlags = PAGE_CACHE_ENTRY_FLAG_MAPPED |
-                 PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER;
+                 PAGE_CACHE_ENTRY_FLAG_OWNER;
 
     OldFlags = RtlAtomicAnd32(&(UpperEntry->Flags), ~ClearFlags);
     if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
@@ -3470,7 +3470,7 @@ Return Value:
     // If this is the page owner, then free the physical page.
     //
 
-    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
+    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0) {
         if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
 
             ASSERT(PageCacheEntry->VirtualAddress != NULL);
@@ -3587,7 +3587,7 @@ Return Value:
         ASSERT(LinkType != NewType);
         ASSERT(IS_IO_OBJECT_TYPE_LINKABLE(LinkType) != FALSE);
         ASSERT(IS_IO_OBJECT_TYPE_LINKABLE(NewType) != FALSE);
-        ASSERT((LinkEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
+        ASSERT((LinkEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
         ASSERT(LinkEntry->PhysicalAddress == NewEntry->PhysicalAddress);
         ASSERT((LinkEntry->VirtualAddress == NewEntry->VirtualAddress) ||
                (NewEntry->VirtualAddress == NULL));
@@ -3605,7 +3605,7 @@ Return Value:
 
             IoPageCacheEntryAddReference(NewEntry);
             LinkEntry->BackingEntry = NewEntry;
-            ClearFlags = PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER |
+            ClearFlags = PAGE_CACHE_ENTRY_FLAG_OWNER |
                          PAGE_CACHE_ENTRY_FLAG_MAPPED;
 
             OldFlags = RtlAtomicAnd32(&(LinkEntry->Flags), ~ClearFlags);
@@ -3617,7 +3617,7 @@ Return Value:
 
             ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
 
-            NewEntry->Flags = PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER;
+            NewEntry->Flags = PAGE_CACHE_ENTRY_FLAG_OWNER;
 
             //
             // If the old entry was mapped, it better be the same mapping as
@@ -3644,7 +3644,7 @@ Return Value:
         }
 
         RtlAtomicAdd(&IoPageCachePhysicalPageCount, 1);
-        NewEntry->Flags |= PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER;
+        NewEntry->Flags |= PAGE_CACHE_ENTRY_FLAG_OWNER;
         MmSetPageCacheEntryForPhysicalAddress(NewEntry->PhysicalAddress,
                                               NewEntry);
     }
@@ -4303,8 +4303,7 @@ Return Value:
             //
 
             if ((PageTakenDown != FALSE) &&
-                ((PageCacheEntry->Flags &
-                  PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0)) {
+                ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0)) {
 
                 if (TargetRemoveCount != NULL) {
                     *TargetRemoveCount -= 1;
@@ -4541,8 +4540,7 @@ Return Value:
 
         if ((PageCacheEntry->Flags &
              (PAGE_CACHE_ENTRY_FLAG_MAPPED |
-              PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER)) ==
-            PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) {
+              PAGE_CACHE_ENTRY_FLAG_OWNER)) == PAGE_CACHE_ENTRY_FLAG_OWNER) {
 
             LIST_REMOVE(&(PageCacheEntry->ListEntry));
             INSERT_BEFORE(&(PageCacheEntry->ListEntry),
@@ -4871,7 +4869,7 @@ Return Value:
     // no references). Freely unmap it.
     //
 
-    if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
+    if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0) {
         OldFlags = RtlAtomicAnd32(&(Entry->Flags),
                                   ~PAGE_CACHE_ENTRY_FLAG_MAPPED);
 
