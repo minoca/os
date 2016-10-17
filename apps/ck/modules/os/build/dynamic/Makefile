@@ -2,13 +2,13 @@
 #
 #   Copyright (c) 2016 Minoca Corp. All Rights Reserved
 #
-#   Module Name:
+#   Binary Name:
 #
-#       Chalk (Build)
+#       OS (Build Shared)
 #
 #   Abstract:
 #
-#       This executable implements the Chalk interactive interpreter.
+#       This shared Chalk module implements core OS level functionality.
 #
 #   Author:
 #
@@ -20,31 +20,30 @@
 #
 ################################################################################
 
-BINARY = chalk
+BINARY := os.so
 
-BINARYTYPE = build
+BINARYTYPE = so
 
 BUILD = yes
 
-BINPLACE = tools/bin
+BINPLACE = tools/lib/chalk1
 
-INCLUDES += $(SRCDIR)/..;
+VPATH += ..:
 
-VPATH += $(SRCDIR)/..:
-
-include $(SRCDIR)/../sources
+include $(SRCDIR)/../../sources
 
 ifeq ($(OS),Windows_NT)
 
-OBJS += $(WIN32_OBJS)
+BINARY := os.dll
+BINARYTYPE := dll
+
+# OBJS += $(WIN32_OBJS)
 
 DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/chalk.dll
 
 else
 
-OBJS += $(POSIX_OBJS)
-
-DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/libchalk.so.1
+# OBJS += $(POSIX_OBJS)
 
 endif
 
@@ -55,3 +54,4 @@ ifeq ($(OS),Darwin)
 DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/libchalk.1.dylib
 
 endif
+

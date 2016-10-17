@@ -4,7 +4,7 @@
 #
 #   Binary Name:
 #
-#       Chalk
+#       Chalk Library
 #
 #   Abstract:
 #
@@ -21,29 +21,25 @@
 #
 ################################################################################
 
-BINARY = libchalk.so.1
+BINARY = libchalk.a
 
-BINARYTYPE = so
-
-BINPLACE = bin
+BINARYTYPE = library
 
 include $(SRCDIR)/sources
 
 OBJS += $(POSIX_OBJS)
 
 DIRS = build \
-       gram
+       dynamic \
+       gram  \
 
 ENTRY := 0
 
-TARGETLIBS = $(OBJROOT)/os/lib/yy/yy.a                     \
-             $(OBJROOT)/os/lib/rtl/base/basertl.a          \
-             $(OBJROOT)/os/lib/rtl/rtlc/rtlc.a             \
-
 include $(SRCROOT)/os/minoca.mk
 
+dynamic: $(BINARY)
 build: gram
-gram.c: gram/gramgen.c
+gram.c: gram/gramgen.c | gram
 	@echo Generating Grammar - $@
 	@./gram/gramgen $@
 

@@ -4,11 +4,11 @@
 #
 #   Binary Name:
 #
-#       OS (Build)
+#       OS (Dynamic)
 #
 #   Abstract:
 #
-#       This Chalk module implements core OS level functionality.
+#       This dynamic Chalk module implements core OS level functionality.
 #
 #   Author:
 #
@@ -20,31 +20,23 @@
 #
 ################################################################################
 
-BINARY := os.a
+BINARY = os.so
 
-BINARYTYPE = library
+BINARYTYPE = so
 
-BUILD = yes
-
-INCLUDES += $(SRCDIR)/..;
-
-VPATH += $(SRCDIR)/..:
+VPATH += ..;
 
 include $(SRCDIR)/../sources
 
-ifeq ($(OS),Windows_NT)
-
-# OBJS += $(WIN32_OBJS)
-
-else
-
 # OBJS += $(POSIX_OBJS)
 
-endif
-
-DIRS := dynamic \
+ENTRY := 0
 
 include $(SRCROOT)/os/minoca.mk
 
-dynamic: $(BINARY)
+postbuild:
+	@mkdir -p $(BINROOT)/chalk1
+	@if test $(BINARY) -nt $(BINROOT)/chalk1/$(BINARY); then \
+	    cp $(BINARY) $(BINROOT)/chalk1/$(BINARY); \
+	fi
 

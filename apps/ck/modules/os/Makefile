@@ -20,25 +20,18 @@
 #
 ################################################################################
 
-BINARY = os.so
+BINARY = os.a
 
-BINARYTYPE = so
+BINARYTYPE = library
 
 include $(SRCDIR)/sources
 
 # OBJS += $(POSIX_OBJS)
 
-DIRS = build \
-
-DYNLIBS = $(OBJROOT)/os/apps/ck/lib/libchalk.so.1
-
-ENTRY := 0
+DIRS = build   \
+       dynamic \
 
 include $(SRCROOT)/os/minoca.mk
 
-postbuild:
-	@mkdir -p $(BINROOT)/chalk1
-	@if test $(BINARY) -nt $(BINROOT)/chalk1/$(BINARY); then \
-	    cp $(BINARY) $(BINROOT)/chalk1/$(BINARY); \
-	fi
+dynamic: $(BINARY)
 

@@ -26,7 +26,7 @@ BINARYTYPE = app
 
 BINPLACE = bin
 
-DYNLIBS = $(OBJROOT)/os/apps/ck/lib/libchalk.so.1
+DYNLIBS = $(OBJROOT)/os/apps/ck/lib/dynamic/libchalk.so.1
 
 include $(SRCDIR)/sources
 
