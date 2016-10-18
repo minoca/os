@@ -363,36 +363,33 @@ Return Value:
                              Directory->Buffer,
                              &BytesRead);
 
-        if ((!KSUCCESS(Status)) &&
-            (Status != STATUS_MORE_PROCESSING_REQUIRED)) {
-
+        if (!KSUCCESS(Status)) {
             goto readdir_rEnd;
         }
 
-        if (Status == STATUS_SUCCESS) {
+        if (BytesRead == 0) {
             Directory->AtEnd = TRUE;
+            goto readdir_rEnd;
         }
 
         Directory->ValidBufferSize = (ULONG)BytesRead;
         Directory->CurrentPosition = 0;
-    }
 
-    //
-    // Grab the next directory entry. Watch for overflows.
-    //
+        //
+        // Make sure there is enough space for a new directory entry.
+        //
 
-    if (Directory->CurrentPosition + sizeof(DIRECTORY_ENTRY) >
-        Directory->ValidBufferSize) {
+        if (Directory->CurrentPosition + sizeof(DIRECTORY_ENTRY) >
+            Directory->ValidBufferSize) {
 
-        if (Directory->AtEnd != FALSE) {
-            Status = STATUS_SUCCESS;
-
-        } else {
             Status = STATUS_BUFFER_OVERRUN;
+            goto readdir_rEnd;
         }
-
-        goto readdir_rEnd;
     }
+
+    //
+    // Grab the next directory entry.
+    //
 
     Entry = (PDIRECTORY_ENTRY)(Directory->Buffer + Directory->CurrentPosition);
     NextEntryOffset = Directory->CurrentPosition + Entry->Size;

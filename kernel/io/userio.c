@@ -619,7 +619,7 @@ SysPerformIoEnd:
     }
 
     Result = Status;
-    if (KSUCCESS(Result)) {
+    if (KSUCCESS(Status) || (Status == STATUS_MORE_PROCESSING_REQUIRED)) {
 
         //
         // The internal APIs allow UINTN sizes, but the system call size was
@@ -777,7 +777,7 @@ SysPerformVectoredIoEnd:
     }
 
     Result = Status;
-    if (KSUCCESS(Result)) {
+    if (KSUCCESS(Status) || (Status == STATUS_MORE_PROCESSING_REQUIRED)) {
 
         //
         // The internal APIs allow UINTN sizes, but the system call size was
@@ -790,7 +790,7 @@ SysPerformVectoredIoEnd:
         Result = (INTN)BytesCompleted;
     }
 
-    return Status;
+    return Result;
 }
 
 INTN
