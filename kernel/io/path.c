@@ -2006,6 +2006,9 @@ Return Value:
             if (Start == NULL) {
                 Start = (PPATH_POINT)&(Process->Paths.CurrentDirectory);
             }
+
+        } else {
+            Start = NULL;
         }
     }
 
