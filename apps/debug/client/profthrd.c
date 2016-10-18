@@ -1519,7 +1519,6 @@ Return Value:
         return NULL;
     }
 
-    memset(IntegerArray, 0, ArgumentCount * sizeof(ULONG));
     for (Index = 0; Index < ArgumentCount; Index += 1) {
         Integer = strtoul(Arguments[Index], &AfterScan, 0);
         if (AfterScan == Arguments[Index]) {

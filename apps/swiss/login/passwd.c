@@ -479,7 +479,7 @@ Return Value:
 MainEnd:
     closelog();
     if (NewPassword != NULL) {
-        memset(NewPassword, 0, strlen(NewPassword));
+        SECURITY_ZERO(NewPassword, strlen(NewPassword));
         free(NewPassword);
     }
 
@@ -563,7 +563,7 @@ Return Value:
         // Zero out the password buffer.
         //
 
-        memset(CurrentPassword, 0, strlen(CurrentPassword));
+        SECURITY_ZERO(CurrentPassword, strlen(CurrentPassword));
         if (Correct == FALSE) {
             sleep(LOGIN_FAIL_DELAY);
             PasswdLogMessage(LOG_WARNING,
@@ -586,7 +586,7 @@ Return Value:
         }
 
         NewPasswordCopy = strdup(NewPassword);
-        memset(NewPassword, 0, strlen(NewPassword));
+        SECURITY_ZERO(NewPassword, strlen(NewPassword));
         if (NewPasswordCopy == NULL) {
             return NULL;
         }
@@ -597,7 +597,7 @@ Return Value:
 
         NewPassword = getpass("Retype new password: ");
         if (NewPassword == NULL) {
-            memset(NewPasswordCopy, 0, strlen(NewPasswordCopy));
+            SECURITY_ZERO(NewPasswordCopy, strlen(NewPasswordCopy));
             free(NewPasswordCopy);
             NewPasswordCopy = NULL;
             return NULL;
@@ -609,7 +609,7 @@ Return Value:
         //
 
         Match = strcmp(NewPassword, NewPasswordCopy);
-        memset(NewPassword, 0, strlen(NewPassword));
+        SECURITY_ZERO(NewPassword, strlen(NewPassword));
         Correct = SwCheckPassword(NewPasswordCopy, OldPasswordHash);
         if ((Match != 0) ||
             (Correct != FALSE) ||
@@ -630,7 +630,7 @@ Return Value:
                              "New password is the same as the old one");
             }
 
-            memset(NewPasswordCopy, 0, strlen(NewPasswordCopy));
+            SECURITY_ZERO(NewPasswordCopy, strlen(NewPasswordCopy));
             free(NewPasswordCopy);
             NewPasswordCopy = NULL;
             continue;
@@ -651,7 +651,7 @@ Return Value:
                                                    0,
                                                    NewPasswordCopy);
 
-        memset(NewPasswordCopy, 0, strlen(NewPasswordCopy));
+        SECURITY_ZERO(NewPasswordCopy, strlen(NewPasswordCopy));
         free(NewPasswordCopy);
 
         //
@@ -659,7 +659,7 @@ Return Value:
         //
 
         NewHashedPasswordCopy = strdup(NewHashedPassword);
-        memset(NewHashedPassword, 0, strlen(NewHashedPassword));
+        SECURITY_ZERO(NewHashedPassword, strlen(NewHashedPassword));
     }
 
     return NewHashedPasswordCopy;

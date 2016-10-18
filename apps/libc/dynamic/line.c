@@ -205,7 +205,7 @@ Return Value:
                     memcpy(NewBuffer, ClGetpassBuffer, ClGetpassBufferSize);
                 }
 
-                memset(ClGetpassBuffer, 0, ClGetpassBufferSize);
+                SECURITY_ZERO(ClGetpassBuffer, ClGetpassBufferSize);
                 free(ClGetpassBuffer);
                 ClGetpassBuffer = NULL;
                 ClGetpassBufferSize = 0;

@@ -435,7 +435,7 @@ Return Value:
     // No security droppings.
     //
 
-    memset(Hash, 0, MD5_HASH_SIZE);
+    SECURITY_ZERO(Hash, MD5_HASH_SIZE);
     return ClCryptBuffer;
 }
 
@@ -830,12 +830,12 @@ Return Value:
     // Clear things out to avoid leaving security context around.
     //
 
-    memset(Hash, 0, SHA256_HASH_SIZE);
-    memset(Hash2, 0, SHA256_HASH_SIZE);
-    memset(PBytes, 0, KeyLength);
-    memset(SBytes, 0, SaltLength);
-    memset(&Context, 0, sizeof(Context));
-    memset(&Context2, 0, sizeof(Context2));
+    SECURITY_ZERO(Hash, SHA256_HASH_SIZE);
+    SECURITY_ZERO(Hash2, SHA256_HASH_SIZE);
+    SECURITY_ZERO(PBytes, KeyLength);
+    SECURITY_ZERO(SBytes, SaltLength);
+    SECURITY_ZERO(&Context, sizeof(Context));
+    SECURITY_ZERO(&Context2, sizeof(Context2));
     return Buffer;
 }
 
@@ -1307,12 +1307,12 @@ Return Value:
     // Clear things out to avoid leaving security context around.
     //
 
-    memset(Hash, 0, SHA512_HASH_SIZE);
-    memset(Hash2, 0, SHA512_HASH_SIZE);
-    memset(PBytes, 0, KeyLength);
-    memset(SBytes, 0, SaltLength);
-    memset(&Context, 0, sizeof(Context));
-    memset(&Context2, 0, sizeof(Context2));
+    SECURITY_ZERO(Hash, SHA512_HASH_SIZE);
+    SECURITY_ZERO(Hash2, SHA512_HASH_SIZE);
+    SECURITY_ZERO(PBytes, KeyLength);
+    SECURITY_ZERO(SBytes, SaltLength);
+    SECURITY_ZERO(&Context, sizeof(Context));
+    SECURITY_ZERO(&Context2, sizeof(Context2));
     return Buffer;
 }
 

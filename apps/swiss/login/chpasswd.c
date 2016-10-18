@@ -317,11 +317,11 @@ Return Value:
     LineNumber = 1;
     while (TRUE) {
         if (Line != NULL) {
-            memset(Line, 0, strlen(Line));
+            SECURITY_ZERO(Line, strlen(Line));
         }
 
         if ((NewPassword != Password) && (NewPassword != NULL)) {
-            memset(NewPassword, 0, strlen(NewPassword));
+            SECURITY_ZERO(NewPassword, strlen(NewPassword));
             NewPassword = NULL;
         }
 
@@ -482,12 +482,12 @@ MainEnd:
     }
 
     if (Line != NULL) {
-        memset(Line, 0, strlen(Line));
+        SECURITY_ZERO(Line, strlen(Line));
         free(Line);
     }
 
     if (NewPassword != NULL) {
-        memset(NewPassword, 0, strlen(NewPassword));
+        SECURITY_ZERO(NewPassword, strlen(NewPassword));
     }
 
     closelog();

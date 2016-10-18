@@ -23,6 +23,21 @@ Author:
 #define LIBCRYPT_API __DLLEXPORT
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro zeros memory and ensures that the compiler doesn't optimize away
+// the memset.
+//
+
+#define SECURITY_ZERO(_Buffer, _Size)                                       \
+    {                                                                       \
+        memset((_Buffer), 0, (_Size));                                      \
+        *(volatile char *)(_Buffer) = *((volatile char *)(_Buffer) + 1);    \
+    }
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
