@@ -2075,16 +2075,6 @@ Return Value:
         }
     }
 
-    //
-    // Validate the dirty lists if the debug flag is set. This is very slow,
-    // and should only be turned on if actively debugging missing dirty page
-    // cache pages.
-    //
-
-    if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_DIRTY_LISTS) != 0) {
-        IopCheckFileObjectPageCache(FileObject);
-    }
-
     Status = STATUS_SUCCESS;
 
 FlushPageCacheEntriesEnd:
@@ -2142,6 +2132,21 @@ FlushPageCacheEntriesEnd:
 
     if (!KSUCCESS(TotalStatus)) {
         IopMarkFileObjectDirty(FileObject);
+    }
+
+    //
+    // Validate the dirty lists if the debug flag is set. This is very slow,
+    // and should only be turned on if actively debugging missing dirty page
+    // cache pages. This must be done after the local list has been returned
+    // to the dirty page list. It also acquires the file object lock
+    // exclusively, to make sure another thread doesn't have the entries on a
+    // local flush list. So, release and reacquire the lock.
+    //
+
+    if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_DIRTY_LISTS) != 0) {
+        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+        IopCheckFileObjectPageCache(FileObject);
+        KeAcquireSharedExclusiveLockShared(FileObject->Lock);
     }
 
     return TotalStatus;
@@ -5204,8 +5209,16 @@ Return Value:
     PPAGE_CACHE_ENTRY Entry;
     PRED_BLACK_TREE_NODE TreeNode;
 
-    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock));
+    //
+    // This routine produces a lot of false negatives for block devices because
+    // flush releases the file object lock before hitting the disk.
+    //
 
+    if (FileObject->Properties.Type == IoObjectBlockDevice) {
+        return;
+    }
+
+    KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
     KeAcquireQueuedLock(IoPageCacheListLock);
     TreeNode = RtlRedBlackTreeGetLowestNode(&(FileObject->PageCacheTree));
     while (TreeNode != NULL) {
@@ -5243,6 +5256,7 @@ Return Value:
     }
 
     KeReleaseQueuedLock(IoPageCacheListLock);
+    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
     return;
 }
 
