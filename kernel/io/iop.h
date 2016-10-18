@@ -629,11 +629,11 @@ Structure Description:
 
 Members:
 
-    IoBuffer - Stores a pointer to an I/O buffer that either contains the data
-        to write or will contain the read data.
-
     Offset - Stores the offset from the beginning of the file or device where
         the I/O should be done.
+
+    IoBuffer - Stores a pointer to an I/O buffer that either contains the data
+        to write or will contain the read data.
 
     SizeInBytes - Stores the number of bytes to read or write.
 
@@ -652,8 +652,8 @@ Members:
 --*/
 
 typedef struct _IO_CONTEXT {
-    PIO_BUFFER IoBuffer;
     IO_OFFSET Offset;
+    PIO_BUFFER IoBuffer;
     UINTN SizeInBytes;
     UINTN BytesCompleted;
     ULONG Flags;

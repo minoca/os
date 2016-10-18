@@ -1425,6 +1425,7 @@ Return Value:
     PVOID Attributes;
     PUSHORT BeaconInterval;
     PNETCON_BSS Bss;
+    PNETCON_BSS *BssArray;
     PVOID BssAttribute;
     USHORT BssAttributeLength;
     ULONG BssCount;
@@ -1601,15 +1602,16 @@ Return Value:
 
     ScanResults = (PNETCON_SCAN_RESULTS)Context->PrivateContext;
     BssCount = ScanResults->BssCount + 1;
-    ScanResults->BssArray = realloc(ScanResults->BssArray,
-                                    BssCount * sizeof(PNETCON_BSS));
+    BssArray = realloc(ScanResults->BssArray,
+                       BssCount * sizeof(PNETCON_BSS));
 
-    if (ScanResults->BssArray == NULL) {
+    if (BssArray == NULL) {
         ScanResults->BssCount = 0;
         Status = -1;
         goto ParseScanResultEnd;
     }
 
+    ScanResults->BssArray = BssArray;
     ScanResults->BssCount = BssCount;
     ScanResults->BssArray[BssCount - 1] = Bss;
     ScanResults->Valid = TRUE;

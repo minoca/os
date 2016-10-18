@@ -155,6 +155,7 @@ Return Value:
     DbgPrimaryImageName = malloc(BufferSize);
     if (DbgPrimaryImageName == NULL) {
         Result = FALSE;
+        goto NtLaunchChildProcessEnd;
     }
 
     strcpy(DbgPrimaryImageName, Arguments[0]);
@@ -928,7 +929,7 @@ Return Value:
     SizeNeeded = 0;
     Result = EnumProcessModules(ProcessHandle,
                                 ModuleHandles,
-                                NT_MAX_MODULE_COUNT * sizeof(HMODULE),
+                                sizeof(HMODULE) * NT_MAX_MODULE_COUNT,
                                 &SizeNeeded);
 
     if (Result == FALSE) {
@@ -1152,7 +1153,7 @@ Return Value:
     SizeNeeded = 0;
     Result = EnumProcessModules(ProcessHandle,
                                 ModuleHandles,
-                                sizeof(ModuleHandles),
+                                sizeof(HMODULE) * NT_MAX_MODULE_COUNT,
                                 &SizeNeeded);
 
     if (Result == FALSE) {

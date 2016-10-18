@@ -698,7 +698,7 @@ Return Value:
 
 {
 
-    return wcsncmp(String1, String2, -1);
+    return wcsncmp(String1, String2, (size_t)-1);
 }
 
 LIBC_API
@@ -733,7 +733,7 @@ Return Value:
 
 {
 
-    return wcsncasecmp(String1, String2, -1);
+    return wcsncasecmp(String1, String2, (size_t)-1);
 }
 
 LIBC_API

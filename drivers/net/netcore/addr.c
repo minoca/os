@@ -2644,7 +2644,6 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     ULONG DnsServerIndex;
     NET_DOMAIN_TYPE Domain;
-    BOOL LockHeld;
     BOOL OriginalConfiguredState;
     BOOL SameAddress;
     BOOL StaticAddress;
@@ -2666,7 +2665,6 @@ Return Value:
     }
 
     KeAcquireQueuedLock(Link->QueuedLock);
-    LockHeld = TRUE;
 
     //
     // If the caller passed in a link address entry, ensure it corresponds to
@@ -2824,7 +2822,6 @@ Return Value:
             OriginalConfiguredState = LinkAddressEntry->Configured;
             LinkAddressEntry->Configured = FALSE;
             KeReleaseQueuedLock(Link->QueuedLock);
-            LockHeld = FALSE;
 
             //
             // Notify DHCP that the link and link address combination is now
@@ -2846,7 +2843,6 @@ Return Value:
 
             NetpDetachSockets(Link, LinkAddressEntry);
             KeAcquireQueuedLock(Link->QueuedLock);
-            LockHeld = TRUE;
             LinkAddressEntry->Configured = OriginalConfiguredState;
         }
     }
@@ -2855,11 +2851,6 @@ Return Value:
     // Now that the information has potentially been set, get the new
     // information.
     //
-
-    if (LockHeld == FALSE) {
-        KeAcquireQueuedLock(Link->QueuedLock);
-        LockHeld = TRUE;
-    }
 
     Information->Flags = 0;
     RtlCopyMemory(&(Information->PhysicalAddress),
@@ -2921,10 +2912,7 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 GetSetNetworkDeviceInformationEnd:
-    if (LockHeld != FALSE) {
-        KeReleaseQueuedLock(Link->QueuedLock);
-    }
-
+    KeReleaseQueuedLock(Link->QueuedLock);
     return Status;
 }
 

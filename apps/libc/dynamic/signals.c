@@ -1354,8 +1354,6 @@ Return Value:
         return -1;
     }
 
-    ChildPid = ProcessOrGroupIdentifier;
-
     //
     // Gather the required options.
     //

@@ -886,7 +886,6 @@ Return Value:
     //
 
     CurrentEntry = Shell->ExecutionStack.Next;
-    CurrentEntry = Shell->ExecutionStack.Next;
     while (CurrentEntry != &(Shell->ExecutionStack)) {
         Node = LIST_VALUE(CurrentEntry, SHELL_EXECUTION_NODE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
@@ -987,7 +986,6 @@ Return Value:
     // until there are none for exit statements.
     //
 
-    CurrentEntry = Shell->ExecutionStack.Next;
     CurrentEntry = Shell->ExecutionStack.Next;
     while (CurrentEntry != &(Shell->ExecutionStack)) {
         Node = LIST_VALUE(CurrentEntry, SHELL_EXECUTION_NODE, ListEntry);
@@ -2471,7 +2469,7 @@ Return Value:
     // If the command is empty, don't do much.
     //
 
-    if ((ArgumentCount == 0) || (strlen(Arguments[0]) == 0)) {
+    if ((ArgumentCount == 0) || (*(Arguments[0]) == '\0')) {
         return 0;
     }
 

@@ -993,7 +993,7 @@ Return Value:
 
         assert(Test->Duration > 0);
 
-        Frequency = (double)Average / Test->Duration;
+        Frequency = (double)Average / (double)(Test->Duration);
         PT_PRINT_RESULT("%s (%ldp):decimal:%.3f\n",
                         Test->Name,
                         ProcessCount,

@@ -1721,7 +1721,7 @@ Return Value:
         // If this isn't the last component, also fail.
         //
 
-        if (strlen(CurrentPath + CurrentPathLength + 1) != 0) {
+        if (CurrentPath[CurrentPathLength + 1] != '\0') {
             goto FatOpenEnd;
         }
 

@@ -1097,6 +1097,7 @@ Return Value:
 {
 
     ssize_t BytesRead;
+    void *NewBuffer;
     PSHELL_NT_OUTPUT_COLLECTION OutputContext;
 
     OutputContext = (PSHELL_NT_OUTPUT_COLLECTION)Context;
@@ -1120,14 +1121,16 @@ Return Value:
                 OutputContext->BufferCapacity *= 2;
             }
 
-            OutputContext->Buffer = realloc(OutputContext->Buffer,
-                                            OutputContext->BufferCapacity);
+            NewBuffer = realloc(OutputContext->Buffer,
+                                OutputContext->BufferCapacity);
 
-            if (OutputContext->Buffer == NULL) {
+            if (NewBuffer == NULL) {
                 OutputContext->BufferCapacity = 0;
                 OutputContext->BufferSize = 0;
                 break;
             }
+
+            OutputContext->Buffer = NewBuffer;
         }
 
         BytesRead = read(OutputContext->Handle,

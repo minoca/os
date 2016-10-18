@@ -458,7 +458,7 @@ Return Value:
     //
 
     if (IsParent != FALSE) {
-        if ((Threads > 1) && (IsParent != FALSE)) {
+        if (Threads > 1) {
             for (ChildIndex = 0; ChildIndex < Threads - 1; ChildIndex += 1) {
                 Child = waitpid(Children[ChildIndex], &Status, 0);
                 if (Child == -1) {
@@ -2226,7 +2226,7 @@ Return Value:
     }
 
     for (FileIndex = 0; FileIndex < UninitializedDataSize; FileIndex += 1) {
-        UninitializedDataBuffer[FileIndex] = UNINITIALIZED_DATA_PATTERN;
+        UninitializedDataBuffer[FileIndex] = (CHAR)UNINITIALIZED_DATA_PATTERN;
     }
 
     snprintf(FileName, sizeof(FileName), "fudt-init%x", Process & 0xFFFF);
@@ -2580,7 +2580,7 @@ Return Value:
 
         Seek = rand() % UNINITIALIZED_DATA_SEEK_MAX;
         Offset = lseek(File, Seek, SEEK_CUR);
-        if (Offset < 0) {
+        if (Offset == (ULONGLONG)-1) {
             PRINT_ERROR("Seek on file %s failed to seek %d from current.\n",
                         FileName,
                         Seek);

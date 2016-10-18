@@ -901,8 +901,6 @@ Return Value:
                           SpaceLevel,
                           RecursionDepth);
 
-    Result = 0;
-
 PrintDataSymbolEnd:
     if (DataStream != NULL) {
         free(DataStream);

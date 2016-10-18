@@ -434,7 +434,7 @@ Return Value:
     //
 
     if (IsParent != FALSE) {
-        if ((Threads > 1) && (IsParent != FALSE)) {
+        if (Threads > 1) {
             for (ChildIndex = 0; ChildIndex < Threads - 1; ChildIndex += 1) {
                 Child = waitpid(Children[ChildIndex], &Status, 0);
                 if (Child == -1) {

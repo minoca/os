@@ -1242,7 +1242,7 @@ Return Value:
     }
 
     Contents = StabString;
-    if ((Contents == NULL) || (strlen(Contents) == 0)) {
+    if ((Contents == NULL) || (*Contents == '\0')) {
         Result = FALSE;
         goto ParseLocalSymbolStabEnd;
     }
@@ -2493,7 +2493,7 @@ Return Value:
     PSTAB_CONTEXT State;
     LONG Type;
 
-    if ((String == NULL) || (strlen(String) == 0)) {
+    if ((String == NULL) || (*String == '\0')) {
         return NULL;
     }
 
@@ -2850,7 +2850,7 @@ Return Value:
     // stabs should not use this mechanism.
     //
 
-    if ((StabString == NULL) || (strlen(StabString) == 0)) {
+    if ((StabString == NULL) || (*StabString == '\0')) {
         if ((Stab != NULL) && (Stab->Type == STAB_INCLUDE_NAME)) {
             Result = FALSE;
 
@@ -3152,7 +3152,7 @@ Return Value:
     // end an open source line, if present.
     //
 
-    if ((StabString == NULL) || (strlen(StabString) == 0)) {
+    if ((StabString == NULL) || (*StabString == '\0')) {
         EndAddress = Stab->Value;
         if (State->CurrentFunction != NULL) {
             EndAddress += State->CurrentFunction->StartAddress;

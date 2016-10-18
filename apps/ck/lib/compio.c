@@ -1750,7 +1750,7 @@ Return Value:
     } else if ((Character >= 'a') && (Character <= 'f')) {
         return Character + 0xA - 'a';
 
-    } else if ((Character >= 'A') && (Character <= 'A')) {
+    } else if ((Character >= 'A') && (Character <= 'F')) {
         return Character + 0xA - 'A';
     }
 

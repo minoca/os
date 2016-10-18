@@ -1031,7 +1031,7 @@ Return Value:
 
     switch (Context->State) {
     case TelnetStateSubnegotiation1:
-        if (Option == IAC) {
+        if ((UCHAR)Option == IAC) {
             Context->State = TelnetStateSubnegotiation2;
             break;
         }
@@ -1045,7 +1045,7 @@ Return Value:
         break;
 
     case TelnetStateSubnegotiation2:
-        if (Option == SE) {
+        if ((UCHAR)Option == SE) {
             Context->State = TelnetStateCopy;
             break;
         }

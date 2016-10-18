@@ -692,6 +692,7 @@ Return Value:
     DummyData = NULL;
     if (Delete != FALSE) {
         DataPointer = NULL;
+        Size = 0;
 
     } else {
         DataPointer = &DummyData;

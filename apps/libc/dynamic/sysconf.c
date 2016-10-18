@@ -186,9 +186,11 @@ Return Value:
     case _SC_BC_BASE_MAX:
     case _SC_BC_SCALE_MAX:
         Value = 99;
+        break;
 
     case _SC_BC_DIM_MAX:
         Value = 2048;
+        break;
 
     case _SC_BC_STRING_MAX:
         Value = 1000;

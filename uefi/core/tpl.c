@@ -140,7 +140,7 @@ Return Value:
     // Dispatch pending events.
     //
 
-    while (((-2 << OldTpl) & EfiEventsPending) != 0) {
+    while ((((UINTN)-2 << OldTpl) & EfiEventsPending) != 0) {
         EfiCurrentTpl = (UINTN)EfiCoreFindHighBitSet64(EfiEventsPending);
         if ((EfiCurrentTpl < TPL_HIGH_LEVEL) &&
             (PreviousTpl >= TPL_HIGH_LEVEL)) {

@@ -439,11 +439,12 @@ Return Value:
         Context->BlockCount = CurrentOffset / Context->BlockSize;
     }
 
+    BufferSize = CurrentOffset;
+
     //
     // Allocate the image buffer.
     //
 
-    BufferSize = CurrentOffset;
     Buffer = malloc(BufferSize);
     if (Buffer == NULL) {
         fprintf(stderr,

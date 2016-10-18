@@ -1703,7 +1703,7 @@ Return Value:
             ShPrintTrace(Shell, "Reached end of arithmetic expression.\n");
 
         } else if (Lexer->TokenType < 0xFF) {
-            if (Lexer->TokenType < 0x20) {
+            if (Lexer->TokenType < ' ') {
                 if (Lexer->TokenType == '\n') {
                     ShPrintTrace(Shell, "%25s: \n", "<newline>");
 
@@ -1762,6 +1762,7 @@ Return Value:
 
 {
 
+    PVOID NewBuffer;
     UINTN NewCapacity;
 
     if (Lexer->TokenBufferSize < Lexer->TokenBufferCapacity) {
@@ -1775,14 +1776,16 @@ Return Value:
     //
 
     NewCapacity = Lexer->TokenBufferCapacity * 2;
-    Lexer->TokenBuffer = realloc(Lexer->TokenBuffer, NewCapacity);
-    if (Lexer->TokenBuffer == NULL) {
+    NewBuffer = realloc(Lexer->TokenBuffer, NewCapacity);
+    if (NewBuffer == NULL) {
         printf("Error: Failed to allocate %ld bytes for expanded token "
                "buffer.\n",
                NewCapacity);
 
         return FALSE;
     }
+
+    Lexer->TokenBuffer = NewBuffer;
 
     //
     // Now add the byte.

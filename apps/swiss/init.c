@@ -512,7 +512,10 @@ Return Value:
         goto MainEnd;
     }
 
-    setsid();
+    if (setsid() < 0) {
+        Status = errno;
+        goto MainEnd;
+    }
 
     //
     // Set some default environment variables.
@@ -1725,7 +1728,14 @@ Return Value:
     // Create a new session and process group.
     //
 
-    setsid();
+    if (setsid() < 0) {
+        InitLog(Context,
+                INIT_LOG_CONSOLE | INIT_LOG_SYSLOG,
+                "Failed to setsid: %s",
+                strerror(errno));
+
+        exit(-1);
+    }
 
     //
     // For certain types of entries, force the console to be the controlling

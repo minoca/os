@@ -284,8 +284,6 @@ Return Value:
                                                   &(Context->RamDisk),
                                                   NULL);
 
-    Status = EFI_SUCCESS;
-
 EnumerateRamDiskEnd:
     if (EFI_ERROR(Status)) {
         if (Context != NULL) {

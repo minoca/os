@@ -268,49 +268,25 @@ Return Value:
     // Get nanoseconds, seconds, minutes, and hours into range.
     //
 
-    if ((EfiTime->Nanosecond >= EFI_NANOSECONDS_PER_SECOND) ||
-        (EfiTime->Nanosecond < 0)) {
-
+    if (EfiTime->Nanosecond >= EFI_NANOSECONDS_PER_SECOND) {
         EfiTime->Second += EfiTime->Nanosecond / EFI_NANOSECONDS_PER_SECOND;
         EfiTime->Nanosecond %= EFI_NANOSECONDS_PER_SECOND;
-        if (EfiTime->Nanosecond < 0) {
-            EfiTime->Nanosecond += EFI_NANOSECONDS_PER_SECOND;
-            EfiTime->Second -= 1;
-        }
     }
 
-    if ((EfiTime->Second >= SECONDS_PER_MINUTE) ||
-        (EfiTime->Second < 0)) {
-
+    if (EfiTime->Second >= SECONDS_PER_MINUTE) {
         EfiTime->Minute += EfiTime->Second / SECONDS_PER_MINUTE;
         EfiTime->Second %= SECONDS_PER_MINUTE;
-        if (EfiTime->Second < 0) {
-            EfiTime->Second += SECONDS_PER_MINUTE;
-            EfiTime->Minute -= 1;
-        }
     }
 
-    if ((EfiTime->Minute >= MINUTES_PER_HOUR) ||
-        (EfiTime->Minute < 0)) {
-
+    if (EfiTime->Minute >= MINUTES_PER_HOUR) {
         EfiTime->Hour += EfiTime->Minute / MINUTES_PER_HOUR;
         EfiTime->Minute %= MINUTES_PER_HOUR;
-        if (EfiTime->Minute < 0) {
-            EfiTime->Minute += MINUTES_PER_HOUR;
-            EfiTime->Hour -= 1;
-        }
     }
 
     Day = 0;
-    if ((EfiTime->Hour >= HOURS_PER_DAY) ||
-        (EfiTime->Hour < 0)) {
-
+    if (EfiTime->Hour >= HOURS_PER_DAY) {
         Day = EfiTime->Hour / HOURS_PER_DAY;
         EfiTime->Hour %= HOURS_PER_DAY;
-        if (EfiTime->Hour < 0) {
-            EfiTime->Hour += HOURS_PER_DAY;
-            Day -= 1;
-        }
     }
 
     //
@@ -321,10 +297,6 @@ Return Value:
     if (EfiTime->Month > MONTHS_PER_YEAR) {
         EfiTime->Year += EfiTime->Month / MONTHS_PER_YEAR;
         EfiTime->Month %= MONTHS_PER_YEAR;
-        if (EfiTime->Month < 0) {
-            EfiTime->Month += MONTHS_PER_YEAR;
-            EfiTime->Year -= 1;
-        }
     }
 
     EfiTime->Month += 1;

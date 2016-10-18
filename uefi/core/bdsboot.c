@@ -1418,7 +1418,7 @@ Return Value:
     EFI_DEVICE_PATH_PROTOCOL *BlockIoDriveNode;
     EFI_DEVICE_PATH_PROTOCOL *DevicePath;
     HARDDRIVE_DEVICE_PATH *DriveNode;
-    BOOLEAN Match;
+    INTN Match;
 
     if ((BlockIoDevicePath == NULL) || (HardDriveDevicePath == NULL)) {
         return FALSE;
@@ -1464,6 +1464,13 @@ Return Value:
             Match = EfiCoreCompareMemory(&(DriveNode->Signature[0]),
                                          &(HardDriveDevicePath->Signature[0]),
                                          sizeof(UINT32));
+
+            if (Match == 0) {
+                Match = TRUE;
+
+            } else {
+                Match = FALSE;
+            }
 
             break;
 
@@ -1708,6 +1715,11 @@ Return Value:
     Status = EfiLocateDevicePath(&EfiDevicePathProtocolGuid,
                                  &UpdatedDevicePath,
                                  &Handle);
+
+    if (EFI_ERROR(Status)) {
+        EfiCoreFreePool(DevicePathCopy);
+        return NULL;
+    }
 
     //
     // If the resulting device path points to a USB node and the USB node is

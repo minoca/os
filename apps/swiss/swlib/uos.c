@@ -1183,6 +1183,7 @@ Return Value:
     INT GroupCount;
     ULONG GroupIndex;
     gid_t *Groups;
+    gid_t *NewGroups;
     BOOL Result;
 
     ErrorResult = 0;
@@ -1223,12 +1224,14 @@ Return Value:
         }
 
         Capacity = GroupCount;
-        Groups = realloc(Groups, Capacity);
-        if (Groups == NULL) {
+        NewGroups = realloc(Groups, Capacity);
+        if (NewGroups == NULL) {
             ErrorResult = ENOMEM;
             Result = FALSE;
             goto IsCurrentUserMemberOfGroupEnd;
         }
+
+        Groups = NewGroups;
     }
 
     //

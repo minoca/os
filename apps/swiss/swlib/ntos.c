@@ -1518,7 +1518,7 @@ Return Value:
 
     DWORD Result;
 
-    if (strlen(SwExecutablePath) != 0) {
+    if (*SwExecutablePath != '\0') {
         return SwExecutablePath;
     }
 

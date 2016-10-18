@@ -552,8 +552,6 @@ Return Value:
         return NULL;
     }
 
-    Status = STATUS_INSUFFICIENT_RESOURCES;
-
     //
     // Work out a reasonable window size.
     //

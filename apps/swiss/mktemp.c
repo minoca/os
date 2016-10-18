@@ -436,7 +436,7 @@ Return Value:
 
         if ((Options & MKTEMP_OPTION_DRY_RUN) != 0) {
             Status = SwStat(AppendedPath, FALSE, &Stat);
-            if ((Status != 0) && (Status == ENOENT)) {
+            if (Status == ENOENT) {
                 Status = 0;
                 break;
             }

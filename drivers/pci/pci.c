@@ -337,7 +337,7 @@ Return Value:
         DeviceType = PciDeviceBus;
 
     } else {
-        if ((Match == FALSE) && (ClassId != NULL)) {
+        if (ClassId != NULL) {
             Match = RtlAreStringsEqual(ClassId,
                                        PCI_BRIDGE_CLASS_ID,
                                        sizeof(PCI_BRIDGE_CLASS_ID));

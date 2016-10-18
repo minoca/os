@@ -94,9 +94,7 @@ Return Value:
     ULONG OldValue;
 
     OldValue = *Once;
-    if ((OldValue < 0) || (OldValue > PTHREAD_ONCE_COMPLETE) ||
-        (Routine == NULL)) {
-
+    if ((OldValue > PTHREAD_ONCE_COMPLETE) || (Routine == NULL)) {
         return EINVAL;
     }
 

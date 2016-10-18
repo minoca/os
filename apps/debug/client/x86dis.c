@@ -1388,7 +1388,7 @@ Return Value:
     // Copy the operand into the buffer, and advance the buffer.
     //
 
-    if (strlen(DbgX86DisassemblyBuffer) > 0) {
+    if (*DbgX86DisassemblyBuffer != '\0') {
         Disassembly->SourceOperand = Buffer;
         strcpy(Disassembly->SourceOperand, DbgX86DisassemblyBuffer);
         Buffer += strlen(DbgX86DisassemblyBuffer) + 1;
@@ -1717,7 +1717,7 @@ Return Value:
             //
 
             if (IndexValue != 4) {
-                if (strlen(Base) != 0) {
+                if (*Base != '\0') {
                     strcat(Operand, "+");
                 }
 

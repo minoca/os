@@ -561,6 +561,7 @@ Return Value:
     PSTR LinkDestination;
     ULONG LinkDestinationSize;
     struct stat LinkStat;
+    PVOID NewBuffer;
     INT Result;
     struct stat Stat;
 
@@ -624,16 +625,17 @@ Return Value:
                 Context->DirectoriesCapacity *= 2;
             }
 
-            Context->Directories = realloc(
-                                  Context->Directories,
-                                  Context->DirectoriesCapacity * sizeof(PSTR));
+            NewBuffer = realloc(Context->Directories,
+                                Context->DirectoriesCapacity * sizeof(PSTR));
 
-            if (Context->Directories == NULL) {
+            if (NewBuffer == NULL) {
                 Context->DirectoriesSize = 0;
                 Context->DirectoriesCapacity = 0;
                 Result = ENOMEM;
                 goto CategorizeEnd;
             }
+
+            Context->Directories = NewBuffer;
         }
 
         Context->Directories[Context->DirectoriesSize] = Argument;
@@ -662,15 +664,17 @@ Return Value:
                 Context->FilesCapacity *= 2;
             }
 
-            Context->Files = realloc(Context->Files,
-                                     Context->FilesCapacity * sizeof(PLS_FILE));
+            NewBuffer = realloc(Context->Files,
+                                Context->FilesCapacity * sizeof(PLS_FILE));
 
-            if (Context->Files == NULL) {
+            if (NewBuffer == NULL) {
                 Context->FilesSize = 0;
                 Context->FilesCapacity = 0;
                 Result = ENOMEM;
                 goto CategorizeEnd;
             }
+
+            Context->Files = NewBuffer;
         }
 
         Context->Files[Context->FilesSize] = File;
@@ -784,6 +788,7 @@ Return Value:
     PSTR LinkDestination;
     ULONG LinkDestinationSize;
     struct stat LinkStat;
+    PLS_FILE *NewFileArray;
     BOOL PrintTotal;
     INT Result;
     struct dirent *ReturnedPointer;
@@ -919,13 +924,15 @@ Return Value:
                 FileArrayCapacity *= 2;
             }
 
-            FileArray = realloc(FileArray,
-                                FileArrayCapacity * sizeof(PLS_FILE));
+            NewFileArray = realloc(FileArray,
+                                   FileArrayCapacity * sizeof(PLS_FILE));
 
-            if (FileArray == NULL) {
+            if (NewFileArray == NULL) {
                 Result = ENOMEM;
                 goto ListDirectoryEnd;
             }
+
+            FileArray = NewFileArray;
         }
 
         //
@@ -1017,6 +1024,14 @@ ListDirectoryEnd:
 
     if (Directory != NULL) {
         closedir(Directory);
+    }
+
+    if (FileArray != NULL) {
+        for (FileIndex = 0; FileIndex < FileArraySize; FileIndex += 1) {
+            LsDestroyFileInformation(FileArray[FileIndex]);
+        }
+
+        free(FileArray);
     }
 
     return Result;
@@ -2209,6 +2224,7 @@ Return Value:
 
 {
 
+    ino_t *NewBuffer;
     ULONG NewCapacity;
 
     if ((Context->Flags & LS_OPTION_RECURSIVE) == 0) {
@@ -2229,15 +2245,16 @@ Return Value:
 
         assert(NewCapacity > Context->TraversedDirectoriesSize);
 
-        Context->TraversedDirectories = realloc(Context->TraversedDirectories,
-                                                NewCapacity * sizeof(ino_t));
+        NewBuffer = realloc(Context->TraversedDirectories,
+                            NewCapacity * sizeof(ino_t));
 
-        if (Context->TraversedDirectories == NULL) {
+        if (NewBuffer == NULL) {
             Context->TraversedDirectoriesSize = 0;
             Context->TraversedDirectoriesCapacity = 0;
             return;
         }
 
+        Context->TraversedDirectories = NewBuffer;
         Context->TraversedDirectoriesCapacity = NewCapacity;
     }
 

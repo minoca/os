@@ -332,7 +332,7 @@ Return Value:
             break;
 
         case 'd':
-            if (strlen(optarg) == 0) {
+            if (*optarg == '\0') {
                 SwPrintError(0, NULL, "Empty delimiter");
                 Status = 1;
                 goto MainEnd;

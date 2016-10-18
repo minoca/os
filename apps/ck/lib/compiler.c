@@ -865,7 +865,7 @@ Return Value:
                                      Token->Size);
 
         CkpEmitConstant(Compiler, NameString);
-        CkpEmitMethodCall(Compiler, 1, "get@1", 21);
+        CkpEmitMethodCall(Compiler, 1, "get@1", 5);
         if (IdentifierList->Children > 1) {
             IdentifierList = CK_GET_AST_NODE(Compiler,
                                              IdentifierList->ChildIndex);

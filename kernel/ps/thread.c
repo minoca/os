@@ -859,6 +859,7 @@ Return Value:
     //
 
     if (NewStackSize <= Thread->UserStackSize) {
+        Status = STATUS_SUCCESS;
         if ((Thread->UserStackSize != 0) &&
             (NewStackSize != Thread->UserStackSize)) {
 
@@ -958,9 +959,8 @@ Return Value:
 
         Thread->UserStack = VaRequest.Address;
         Thread->UserStackSize = NewStackSize;
+        Status = STATUS_SUCCESS;
     }
-
-    Status = STATUS_SUCCESS;
 
 SetThreadUserStackSizeEnd:
     return Status;

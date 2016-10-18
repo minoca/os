@@ -118,7 +118,6 @@ Return Value:
         //
 
         BopEfiGetDebugDevice();
-        Status = STATUS_SUCCESS;
 
     //
     // Phase 1 initialization comes after the debugger comes online. This is

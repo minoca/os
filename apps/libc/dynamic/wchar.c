@@ -251,7 +251,7 @@ Return Value:
 
     memset(&State, 0, sizeof(mbstate_t));
     Result = wcrtomb(MultibyteCharacter, Character, &State);
-    if ((Result < 0) || (Result > 1)) {
+    if ((Result == -1) || (Result > 1)) {
         return EOF;
     }
 
@@ -650,7 +650,7 @@ Return Value:
     MultibyteString = *Source;
     while ((Destination == NULL) || (DestinationSize > 0)) {
         Result = mbrtowc(&WideCharacter, MultibyteString, MB_LEN_MAX, State);
-        if (Result < 0) {
+        if (Result == -1) {
             return -1;
         }
 

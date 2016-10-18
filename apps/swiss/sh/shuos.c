@@ -273,6 +273,7 @@ Return Value:
     unsigned long BufferSize;
     ssize_t BytesRead;
     int Descriptor;
+    char *NewBuffer;
     int Result;
 
     Buffer = NULL;
@@ -296,13 +297,15 @@ Return Value:
                 BufferCapacity *= 2;
             }
 
-            Buffer = realloc(Buffer, BufferCapacity);
-            if (Buffer == NULL) {
+            NewBuffer = realloc(Buffer, BufferCapacity);
+            if (NewBuffer == NULL) {
                 BufferCapacity = 0;
                 BufferSize = 0;
                 Result = 0;
                 break;
             }
+
+            Buffer = NewBuffer;
         }
 
         do {

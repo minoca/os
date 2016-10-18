@@ -474,7 +474,7 @@ Return Value:
     PSTR AfterScan;
     ULONGLONG DeviceId;
 
-    if (strlen(Argument) == 0) {
+    if (*Argument == '\0') {
         return NULL;
     }
 
@@ -482,7 +482,7 @@ Return Value:
         ((Argument[1] == 'x') || (Argument[1] == 'X'))) {
 
         DeviceId = strtoull(Argument, &AfterScan, 16);
-        if (strlen(AfterScan) != 0) {
+        if (*AfterScan != '\0') {
             return NULL;
         }
 

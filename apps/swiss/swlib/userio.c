@@ -545,7 +545,7 @@ Return Value:
         GroupName = Separator + 1;
     }
 
-    if (strlen(String) != 0) {
+    if (*String != '\0') {
         Result = SwGetUserIdFromName(String, User);
         if (Result != 0) {
             *User = strtoul(String, &AfterScan, 10);

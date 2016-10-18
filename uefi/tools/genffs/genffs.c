@@ -272,6 +272,7 @@ Return Value:
     UINT8 *InputFileSectionType;
     UINT64 LogLevel;
     UINT32 MaxAlignment;
+    VOID *NewBuffer;
     UINTN NewSize;
     CHAR8 *OutputFileName;
     EFI_STATUS Status;
@@ -558,12 +559,13 @@ Return Value:
                 NewSize = (InputFileCount + MAXIMUM_INPUT_FILE_COUNT) *
                           sizeof(CHAR8 *);
 
-                InputFileName = (CHAR8 **)realloc(InputFileName, NewSize);
-                if (InputFileName == NULL) {
+                NewBuffer = (CHAR8 **)realloc(InputFileName, NewSize);
+                if (NewBuffer == NULL) {
                     GffsErrorOccurred = TRUE;
                     goto mainEnd;
                 }
 
+                InputFileName = NewBuffer;
                 memset(&(InputFileName[InputFileCount]),
                        0,
                        (MAXIMUM_INPUT_FILE_COUNT * sizeof(CHAR8 *)));
@@ -571,14 +573,13 @@ Return Value:
                 NewSize = (InputFileCount + MAXIMUM_INPUT_FILE_COUNT) *
                           sizeof(UINT32);
 
-                InputFileAlignment = (UINT32 *)realloc(InputFileAlignment,
-                                                       NewSize);
-
-                if (InputFileAlignment == NULL) {
+                NewBuffer = (UINT32 *)realloc(InputFileAlignment, NewSize);
+                if (NewBuffer == NULL) {
                     GffsErrorOccurred = TRUE;
                     goto mainEnd;
                 }
 
+                InputFileAlignment = NewBuffer;
                 memset(&(InputFileAlignment[InputFileCount]),
                        0,
                        (MAXIMUM_INPUT_FILE_COUNT * sizeof(UINT32)));
@@ -586,14 +587,13 @@ Return Value:
                 NewSize = (InputFileCount + MAXIMUM_INPUT_FILE_COUNT) *
                           sizeof(UINT8);
 
-                InputFileSectionType = (UINT8 *)realloc(InputFileSectionType,
-                                                        NewSize);
-
-                if (InputFileSectionType == NULL) {
+                NewBuffer = (UINT8 *)realloc(InputFileSectionType, NewSize);
+                if (NewBuffer == NULL) {
                     GffsErrorOccurred = TRUE;
                     goto mainEnd;
                 }
 
+                InputFileSectionType = NewBuffer;
                 memset(&(InputFileSectionType[InputFileCount]),
                        0,
                        (MAXIMUM_INPUT_FILE_COUNT * sizeof(UINT8)));

@@ -200,9 +200,7 @@ Return Value:
             goto CreateAddressSpaceEnd;
         }
 
-        AccountingFlags = MEMORY_ACCOUNTING_FLAG_USER |
-                          MEMORY_ACCOUNTING_FLAG_NO_MAP;
-
+        AccountingFlags = MEMORY_ACCOUNTING_FLAG_NO_MAP;
         Status = MmInitializeMemoryAccounting(Space->Accountant,
                                               AccountingFlags);
 
@@ -1628,7 +1626,6 @@ Return Value:
 
     ASSERT(Section->AddressSpace == PsGetCurrentProcess()->AddressSpace);
 
-    LockHeld = FALSE;
     ReferenceAdded = FALSE;
     PageShift = MmPageShift();
     KeAcquireQueuedLock(Section->Lock);

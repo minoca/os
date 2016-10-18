@@ -1039,13 +1039,13 @@ Return Value:
     // with the host name or the host address if it started empty.
     //
 
-    if ((Client->UserName == NULL) || (strlen(Client->UserName) == 0)) {
+    if ((Client->UserName == NULL) || (*(Client->UserName) == '\0')) {
         if (Client->UserName != NULL) {
             free(Client->UserName);
             Client->UserName = NULL;
         }
 
-        if ((Client->HostName != NULL) && (strlen(Client->HostName) != 0)) {
+        if ((Client->HostName != NULL) && (*(Client->HostName) != '\0')) {
             Client->UserName = strdup(Client->HostName);
 
         } else {

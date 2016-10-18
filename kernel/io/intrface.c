@@ -258,6 +258,7 @@ Return Value:
 
     if (InterfaceInstance == NULL) {
         Status = STATUS_NO_MEMORY;
+        goto CreateInterfaceEnd;
     }
 
     InterfaceInstance->Device = Device;

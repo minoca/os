@@ -265,7 +265,7 @@ Return Value:
     char *ErrorString;
 
     ErrorString = strerror(errno);
-    if ((String != NULL) && (strlen(String) != 0)) {
+    if ((String != NULL) && (*String != '\0')) {
         fprintf(stderr, "%s: %s\n", String, ErrorString);
 
     } else {

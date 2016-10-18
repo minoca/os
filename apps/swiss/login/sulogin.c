@@ -561,7 +561,7 @@ Return Value:
     // Print the prompt.
     //
 
-    fprintf(stderr, Prompt);
+    fprintf(stderr, "%s", Prompt);
     fflush(stderr);
 
     //

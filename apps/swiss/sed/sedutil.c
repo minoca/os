@@ -294,6 +294,7 @@ Return Value:
 {
 
     UINTN Index;
+    PSTR NewBuffer;
     BOOL NullTerminated;
     BOOL Result;
 
@@ -316,13 +317,13 @@ Return Value:
             String->Capacity *= 2;
         }
 
-        String->Data = realloc(String->Data, String->Capacity);
-        if (String->Data == NULL) {
-            String->Size = 0;
-            String->Capacity = 0;
+        NewBuffer = realloc(String->Data, String->Capacity);
+        if (NewBuffer == NULL) {
             Result = FALSE;
             goto AppendStringEnd;
         }
+
+        String->Data = NewBuffer;
     }
 
     for (Index = 0; Index < Size; Index += 1) {

@@ -76,6 +76,7 @@ Environment:
 
 #define RTF_FOOTER "}"
 #define RTF_NEWLINE "\\highlight0\\par"
+#define RTF_NEWLINE_SIZE 15
 #define RTF_PLAIN_TEXT "\\cf1 "
 #define RTF_CONSTANT "\\cf2 "
 #define RTF_KEYWORD "\\cf3 "
@@ -83,6 +84,7 @@ Environment:
 #define RTF_BRACE "\\cf5 "
 #define RTF_QUOTE "\\cf6 "
 #define RTF_DISABLED "\\cf7 "
+#define RTF_COLOR_SIZE 5
 
 #define RTF_TEST "{\\rtf1\\ansi\\ansicpg1252\\deff0\\deftab720{\\fonttbl{\\f0" \
                  "\\fmodern\\fcharset1 Courier New;}}\\deflang1033\\pard"      \
@@ -1152,7 +1154,7 @@ Return Value:
 {
 
     DWORD BytesWritten;
-    char Message[2];
+    unsigned char Message[2];
 
     //
     // Write the escaped "remote" sequence into the input pipe funnel.
@@ -2431,7 +2433,6 @@ Return Value:
     STREAM_IN_DATA StreamData;
     BOOL Success;
 
-    Success = FALSE;
     memset(&StreamData, 0, sizeof(STREAM_IN_DATA));
 
     //
@@ -2627,9 +2628,9 @@ Return Value:
 
             if (InSingleQuotes == FALSE) {
                 InSingleQuotes = TRUE;
-                strcpy(FileBuffer, RTF_QUOTE);
-                FileBuffer += strlen(RTF_QUOTE);
-                BytesOut += strlen(RTF_QUOTE);
+                memcpy(FileBuffer, RTF_QUOTE, RTF_COLOR_SIZE);
+                FileBuffer += RTF_COLOR_SIZE;
+                BytesOut += RTF_COLOR_SIZE;
 
             } else {
                 InSingleQuotes = FALSE;
@@ -2652,9 +2653,9 @@ Return Value:
 
             if (InDoubleQuotes == FALSE) {
                 InDoubleQuotes = TRUE;
-                strcpy(FileBuffer, RTF_QUOTE);
-                FileBuffer += strlen(RTF_QUOTE);
-                BytesOut += strlen(RTF_QUOTE);
+                memcpy(FileBuffer, RTF_QUOTE, RTF_COLOR_SIZE);
+                FileBuffer += RTF_COLOR_SIZE;
+                BytesOut += RTF_COLOR_SIZE;
 
             } else {
                 InDoubleQuotes = FALSE;
@@ -2693,13 +2694,13 @@ Return Value:
             (FileByte == '/') &&
             (PreviousCharacter == '/')) {
 
-            FileBuffer -= strlen(RTF_PLAIN_TEXT) + 1;
-            strcpy(FileBuffer, RTF_COMMENT);
-            FileBuffer += strlen(RTF_COMMENT);
-            BytesOut += strlen(RTF_COMMENT);
+            FileBuffer -= RTF_COLOR_SIZE + 1;
+            memcpy(FileBuffer, RTF_COMMENT, RTF_COLOR_SIZE);
+            FileBuffer += RTF_COLOR_SIZE;
+            BytesOut += RTF_COLOR_SIZE;
             *FileBuffer = '/';
             FileBuffer += 1;
-            BytesOut -= strlen(RTF_PLAIN_TEXT);
+            BytesOut -= RTF_COLOR_SIZE;
             InSingleLineComment = TRUE;
         }
 
@@ -2716,13 +2717,13 @@ Return Value:
             (InDoubleQuotes == FALSE) &&
             (InDisabledCode == FALSE)) {
 
-            FileBuffer -= strlen(RTF_PLAIN_TEXT) + 1;
-            strcpy(FileBuffer, RTF_COMMENT);
-            FileBuffer += strlen(RTF_COMMENT);
-            BytesOut += strlen(RTF_COMMENT);
+            FileBuffer -= RTF_COLOR_SIZE + 1;
+            memcpy(FileBuffer, RTF_COMMENT, RTF_COLOR_SIZE);
+            FileBuffer += RTF_COLOR_SIZE;
+            BytesOut += RTF_COLOR_SIZE;
             *FileBuffer = '/';
             FileBuffer += 1;
-            BytesOut -= strlen(RTF_PLAIN_TEXT);
+            BytesOut -= RTF_COLOR_SIZE;
             InMultiLineComment = TRUE;
         }
 
@@ -2779,7 +2780,7 @@ Return Value:
                     // also the reason for copying backwards).
                     //
 
-                    ColorChangeLength = strlen(RTF_DISABLED);
+                    ColorChangeLength = RTF_COLOR_SIZE;
                     KeywordLength = (ULONG)FileBuffer - (ULONG)PoundIfStart;
                     Source = PoundIfStart + KeywordLength - 1;
                     Destination = FileBuffer + ColorChangeLength - 1;
@@ -2836,7 +2837,7 @@ Return Value:
                     // operation is safe.
                     //
 
-                    ColorChangeLength = strlen(RTF_KEYWORD);
+                    ColorChangeLength = RTF_COLOR_SIZE;
                     KeywordLength = strlen(Keyword);
                     Destination = FileBuffer + ColorChangeLength - 1;
                     Source = KeywordStart + KeywordLength - 1;
@@ -2918,9 +2919,9 @@ Return Value:
                 case ';':
                 case '~':
                 case '%':
-                    strcpy(FileBuffer, RTF_CONSTANT);
-                    FileBuffer += strlen(RTF_CONSTANT);
-                    BytesOut += strlen(RTF_CONSTANT);
+                    memcpy(FileBuffer, RTF_CONSTANT, RTF_COLOR_SIZE);
+                    FileBuffer += RTF_COLOR_SIZE;
+                    BytesOut += RTF_COLOR_SIZE;
                     ResetColor = TRUE;
                     break;
 
@@ -2935,9 +2936,9 @@ Return Value:
                 case ']':
                 case '{':
                 case '}':
-                    strcpy(FileBuffer, RTF_BRACE);
-                    FileBuffer += strlen(RTF_BRACE);
-                    BytesOut += strlen(RTF_BRACE);
+                    memcpy(FileBuffer, RTF_BRACE, RTF_COLOR_SIZE);
+                    FileBuffer += RTF_COLOR_SIZE;
+                    BytesOut += RTF_COLOR_SIZE;
                     ResetColor = TRUE;
                     break;
 
@@ -2954,9 +2955,9 @@ Return Value:
         //
 
         if (FileByte == '\n') {
-            strcpy(FileBuffer, RTF_NEWLINE);
-            FileBuffer += strlen(RTF_NEWLINE);
-            BytesOut += strlen(RTF_NEWLINE);
+            memcpy(FileBuffer, RTF_NEWLINE, RTF_NEWLINE_SIZE);
+            FileBuffer += RTF_NEWLINE_SIZE;
+            BytesOut += RTF_NEWLINE_SIZE;
         }
 
         //
@@ -3004,9 +3005,9 @@ Return Value:
 
         if (ResetColor != FALSE) {
             ResetColor = FALSE;
-            strcpy(FileBuffer, RTF_PLAIN_TEXT);
-            FileBuffer += strlen(RTF_PLAIN_TEXT);
-            BytesOut += strlen(RTF_PLAIN_TEXT);
+            memcpy(FileBuffer, RTF_PLAIN_TEXT, RTF_COLOR_SIZE);
+            FileBuffer += RTF_COLOR_SIZE;
+            BytesOut += RTF_COLOR_SIZE;
         }
 
         //

@@ -3773,7 +3773,6 @@ Return Value:
         //
 
         while (TRUE) {
-            Status = STATUS_SUCCESS;
 
             //
             // Blast away the list of page cache entries that are ready for

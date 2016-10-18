@@ -130,6 +130,7 @@ Return Value:
     UINTN GroupIndex;
     gid_t *Groups;
     PSTR Home;
+    gid_t *NewGroups;
     INT Option;
     ULONG Options;
     PSTR RootDirectory;
@@ -255,12 +256,13 @@ Return Value:
             // things shift a bit in the meantime.
             //
 
-            Groups = realloc(Groups, (GroupCount + 5) * sizeof(gid_t));
-            if (Groups == NULL) {
+            NewGroups = realloc(Groups, (GroupCount + 5) * sizeof(gid_t));
+            if (NewGroups == NULL) {
                 Status = ENOMEM;
                 goto MainEnd;
             }
 
+            Groups = NewGroups;
             Status = getgrouplist(UserName,
                                   UserCopy.pw_gid,
                                   Groups,

@@ -627,7 +627,6 @@ Return Value:
 
     Children = NULL;
     Device = (PUSB_DEVICE)(Hub->DeviceHandle);
-    DeviceLockHeld = FALSE;
 
     //
     // Loop over all possible ports in the hub.

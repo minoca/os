@@ -1058,7 +1058,7 @@ Return Value:
 
     Failures = 0;
     BreakRange.BreakRangeStart = (PVOID)0;
-    BreakRange.BreakRangeEnd = (PVOID)MAX_ULONG;
+    BreakRange.BreakRangeEnd = (PVOID)(UINTN)MAX_ULONGLONG;
     BreakRange.RangeHoleStart = NULL;
     BreakRange.RangeHoleEnd = NULL;
 

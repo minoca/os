@@ -240,7 +240,7 @@ Return Value:
     // If it's a control character, return it as normal.
     //
 
-    if ((Character < ' ') || (Character > 0x7F)) {
+    if ((Character < ' ') || ((UCHAR)Character > 0x7F)) {
         return TerminalParseResultNormalCharacter;
     }
 

@@ -932,28 +932,28 @@ ArmDisassembleEnd:
         Disassembly->Mnemonic = Buffer;
         Buffer += strlen(Context.Mnemonic) + 1;
         BufferLength -= strlen(Context.Mnemonic) + 1;
-        if (strlen(Context.Operand1) != 0) {
+        if (*(Context.Operand1) != '\0') {
             strcpy(Buffer, Context.Operand1);
             Disassembly->DestinationOperand = Buffer;
             Buffer += strlen(Context.Operand1) + 1;
             BufferLength -= strlen(Context.Operand1) + 1;
         }
 
-        if (strlen(Context.Operand2) != 0) {
+        if (*(Context.Operand2) != '\0') {
             strcpy(Buffer, Context.Operand2);
             Disassembly->SourceOperand = Buffer;
             Buffer += strlen(Context.Operand2) + 1;
             BufferLength -= strlen(Context.Operand2) + 1;
         }
 
-        if (strlen(Context.Operand3) != 0) {
+        if (*(Context.Operand3) != '\0') {
             strcpy(Buffer, Context.Operand3);
             Disassembly->ThirdOperand = Buffer;
             Buffer += strlen(Context.Operand3) + 1;
             BufferLength -= strlen(Context.Operand3) + 1;
         }
 
-        if (strlen(Context.Operand4) != 0) {
+        if (*(Context.Operand4) != '\0') {
             strcpy(Buffer, Context.Operand4);
             Disassembly->FourthOperand = Buffer;
         }
@@ -3618,7 +3618,7 @@ Return Value:
     //
 
     DbgpArmDecodeRegisterList(RegisterListString,
-                              sizeof(RegisterListString),
+                              ARM_OPERAND_LENGTH,
                               RegisterList);
 
     //
@@ -3670,7 +3670,6 @@ Return Value:
     CHAR ShiftString[35];
     PSTR ShiftType;
 
-    BaseMnemonic = "ERR";
     Instruction = Context->Instruction;
     MnemonicSuffix = "";
     ShiftString[0] = '\0';
@@ -7454,7 +7453,6 @@ Return Value:
     PSTR VectorMTypeString;
 
     SourceSizeSuffix = "";
-    SourceTypeSuffix = "";
 
     //
     // Gather the information that is shared by most of the two register shift

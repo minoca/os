@@ -1457,7 +1457,7 @@ Return Value:
     // the current directory.
     //
 
-    if ((strlen(Command + LastFieldIndex) == 0) ||
+    if ((Command[LastFieldIndex] == '\0') ||
         (LastFieldIndex == CommandEnd)) {
 
         LastField = strdup("./");

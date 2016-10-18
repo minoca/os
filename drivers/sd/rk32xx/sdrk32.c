@@ -4993,6 +4993,6 @@ Return Value:
     }
 
     SD_DWC_WRITE_REGISTER(Device, SdDwcUhs, Value);
-    return Status;
+    return STATUS_SUCCESS;
 }
 

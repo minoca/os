@@ -921,14 +921,8 @@ Return Value:
         }
     }
 
-    if (Endpoint->Speed == DebugUsbDeviceSpeedHigh) {
-        EhciTransfer->Queue->SplitInformation =
-                                     EHCI_QUEUE_1_TRANSACTION_PER_MICRO_FRAME;
-
-    } else {
-        EhciTransfer->Queue->SplitInformation =
+    EhciTransfer->Queue->SplitInformation =
                                       EHCI_QUEUE_1_TRANSACTION_PER_MICRO_FRAME;
-    }
 
     if ((Endpoint->Speed == DebugUsbDeviceSpeedLow) ||
         (Endpoint->Speed == DebugUsbDeviceSpeedFull)) {

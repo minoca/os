@@ -470,9 +470,6 @@ Return Value:
                                            ListEntry);
 
                 if (LocalVariable->LocationType == DataLocationRegister) {
-
-                    assert(LocalVariable->Location.Register >= 0);
-
                     if (PrintLocalVariables != FALSE) {
                         RegisterName = NULL;
                         Register = LocalVariable->Location.Register;

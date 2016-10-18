@@ -104,7 +104,6 @@ Return Value:
     // become just 'sh'.
     //
 
-    CommandName = Arguments[0];
     LastSlash = strrchr(Arguments[0], '/');
     if (LastSlash == NULL) {
         LastSlash = strrchr(Arguments[0], '\\');

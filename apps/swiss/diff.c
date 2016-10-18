@@ -251,7 +251,7 @@ Members:
 typedef struct _DIFF_CONTEXT {
     ULONG Options;
     DIFF_OUTPUT_TYPE OutputType;
-    ULONG ContextLines;
+    LONG ContextLines;
     DIFF_FILE EmptyFile;
     PSTR *FileExclusions;
     UINTN FileExclusionCount;
@@ -1027,7 +1027,6 @@ Return Value:
     INT Status;
     INT TotalStatus;
 
-    Status = 0;
     TotalStatus = 0;
 
     //

@@ -608,19 +608,12 @@ Return Value:
 
     char *AfterScan;
     const char *Current;
-    char *OriginalBuffer;
-    size_t OriginalBufferSize;
-
-    OriginalBuffer = Buffer;
-    OriginalBufferSize = BufferSize;
 
     //
     // Loop trying to scan a good line.
     //
 
     *ReturnPointer = NULL;
-    Buffer = OriginalBuffer;
-    BufferSize = OriginalBufferSize;
 
     //
     // Skip any spaces.

@@ -575,12 +575,12 @@ Return Value:
     //
 
     case ExprOr:
-        if ((strlen(Left) != 0) &&
+        if ((*Left != '\0') &&
             ((GotIntegers == FALSE) || (LeftInteger != 0))) {
 
             Answer = SwStringDuplicate(Left, strlen(Left) + 1);
 
-        } else if ((strlen(Right) != 0) &&
+        } else if ((*Right != '\0') &&
                    ((GotIntegers == FALSE) || (RightInteger != 0))) {
 
             Answer = SwStringDuplicate(Right, strlen(Right) + 1);
@@ -598,9 +598,9 @@ Return Value:
     //
 
     case ExprAnd:
-        if ((strlen(Left) != 0) &&
+        if ((*Left != '\0') &&
             ((GotIntegers == FALSE) || (LeftInteger != 0)) &&
-            (strlen(Right) != 0) &&
+            (*Right != '\0') &&
             ((GotIntegers == FALSE) || (RightInteger != 0))) {
 
             Answer = SwStringDuplicate(Left, strlen(Left) + 1);

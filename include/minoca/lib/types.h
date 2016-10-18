@@ -128,7 +128,7 @@ Author:
 
 typedef unsigned char BYTE, *PBYTE;
 typedef unsigned short WORD, *PWORD;
-typedef unsigned long DWORD, *PDWORD;
+typedef unsigned int DWORD, *PDWORD;
 
 typedef char CHAR, *PCHAR;
 typedef signed char SCHAR, *PSCHAR;

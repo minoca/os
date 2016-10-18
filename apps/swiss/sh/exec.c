@@ -1245,7 +1245,7 @@ Return Value:
     // If the command is empty, don't do much.
     //
 
-    if ((ArgumentCount == 0) || (strlen(Arguments[0]) == 0)) {
+    if ((ArgumentCount == 0) || (*(Arguments[0]) == '\0')) {
         Result = TRUE;
         goto ExecuteSimpleCommandEnd;
     }

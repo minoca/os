@@ -2002,7 +2002,6 @@ Return Value:
     LONG End;
     REGULAR_EXPRESSION_STATUS Status;
 
-    Begin = Entry->DuplicateMin;
     End = Entry->DuplicateMax;
 
     //
@@ -2543,6 +2542,7 @@ Return Value:
 
 {
 
+    PVOID NewBuffer;
     ULONG NewCapacity;
 
     //
@@ -2559,12 +2559,13 @@ Return Value:
             NewCapacity *= 2;
         }
 
-        String->Data = realloc(String->Data, NewCapacity);
-        if (String->Data == NULL) {
+        NewBuffer = realloc(String->Data, NewCapacity);
+        if (NewBuffer == NULL) {
             String->Capacity = 0;
             return FALSE;
         }
 
+        String->Data = NewBuffer;
         String->Capacity = NewCapacity;
     }
 

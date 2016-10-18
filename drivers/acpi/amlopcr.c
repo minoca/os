@@ -3336,7 +3336,7 @@ Return Value:
 
 {
 
-    NextStatement->Type = AmlStatementRelease;
+    NextStatement->Type = AmlStatementReset;
     Context->CurrentOffset += 1;
     NextStatement->ArgumentsNeeded = 1;
     NextStatement->ArgumentsAcquired = 0;

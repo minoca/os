@@ -2472,7 +2472,7 @@ Return Value:
     CurrentAddress = ListEntry[0];
     PreviousAddress = ListHeadAddress;
     while (CurrentAddress != ListHeadAddress) {
-        if (CurrentAddress == (ULONG)NULL) {
+        if (CurrentAddress == (UINTN)NULL) {
             DbgOut("Error: Found NULL list entry Next pointer\n");
             break;
         }
@@ -2533,7 +2533,6 @@ Return Value:
                 Status = EINVAL;
             }
 
-            Status = Status;
             DbgOut("Error: Unable to read data at address 0x%I64x\n",
                    CurrentAddress);
 
@@ -5943,7 +5942,7 @@ Return Value:
     UINTN PrefixLength;
     INT Status;
 
-    if (strlen(PathString) == 0) {
+    if (*PathString == '\0') {
         return 0;
     }
 

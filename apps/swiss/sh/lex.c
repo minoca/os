@@ -938,7 +938,7 @@ GetTokenEnd:
                 ShPrintTrace(Shell, "Reached end of file.\n");
 
             } else if (Lexer->TokenType < 0xFF) {
-                if (Lexer->TokenType < 0x20) {
+                if (Lexer->TokenType < ' ') {
                     if (Lexer->TokenType == '\n') {
                         ShPrintTrace(Shell,
                                      "%20s: Line %d\n",
@@ -1566,6 +1566,7 @@ Return Value:
 {
 
     PSHELL_LEXER_STATE Lexer;
+    PSTR NewBuffer;
     UINTN NewCapacity;
 
     Lexer = &(Shell->Lexer);
@@ -1580,8 +1581,8 @@ Return Value:
     //
 
     NewCapacity = Lexer->TokenBufferCapacity * 2;
-    Lexer->TokenBuffer = realloc(Lexer->TokenBuffer, NewCapacity);
-    if (Lexer->TokenBuffer == NULL) {
+    NewBuffer = realloc(Lexer->TokenBuffer, NewCapacity);
+    if (NewBuffer == NULL) {
         printf("Error: Failed to allocate %ld bytes for expanded token "
                "buffer.\n",
                NewCapacity);
@@ -1593,6 +1594,7 @@ Return Value:
     // Now add the byte.
     //
 
+    Lexer->TokenBuffer = NewBuffer;
     Lexer->TokenBufferCapacity = NewCapacity;
     Lexer->TokenBuffer[Lexer->TokenBufferSize] = Character;
     Lexer->TokenBufferSize += 1;

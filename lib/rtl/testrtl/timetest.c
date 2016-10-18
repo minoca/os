@@ -2417,7 +2417,6 @@ Return Value:
         Failures += 1;
     }
 
-    Failures = 0;
     SystemTime.Nanoseconds = 0;
     TestCount = sizeof(TestCalendarCase) / sizeof(TestCalendarCase[0]);
     for (TestIndex = 0; TestIndex < TestCount; TestIndex += 1) {

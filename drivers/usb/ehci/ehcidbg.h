@@ -70,13 +70,13 @@ Members:
     ReclamationQueue - Stores a pointer to the reclamation queue head. The
         debugger places its transfer queue heads after this queue.
 
-    ReclamationQueuePhysical - Stores the physical address of the reclamation
-        queue head.
-
     EndQueue - Stores a pointer to an empty unused queue head. The debugger
         places all its queue heads before this queue head, so if EHCI gets
         interrupted anywhere in the queue head removal process the debugger
         won't point new queue heads at the queue head EHCI is trying to remove.
+
+    ReclamationQueuePhysical - Stores the physical address of the reclamation
+        queue head.
 
     EndQueuePhysical - Stores the physical address of the end queue head.
 
@@ -84,8 +84,8 @@ Members:
 
 typedef struct _EHCI_DEBUG_HANDOFF_DATA {
     PEHCI_QUEUE_HEAD ReclamationQueue;
-    PHYSICAL_ADDRESS ReclamationQueuePhysical;
     PEHCI_QUEUE_HEAD EndQueue;
+    PHYSICAL_ADDRESS ReclamationQueuePhysical;
     PHYSICAL_ADDRESS EndQueuePhysical;
 } EHCI_DEBUG_HANDOFF_DATA, *PEHCI_DEBUG_HANDOFF_DATA;
 
@@ -97,15 +97,15 @@ Structure Description:
 
 Members:
 
-    Queue - Stores the transfer queue head.
-
     QueuePhysical - Stores the physical address of the transfer queue
         head.
 
+    BufferPhysical - Stores the physical address of the transfer buffer.
+
+    Queue - Stores the transfer queue head.
+
     Buffer - Stores the buffer that gets chopped up into transfer descriptors
         and data.
-
-    BufferPhysical - Stores the physical address of the transfer buffer.
 
     BufferSize - Stores the size of the transfer buffer in bytes.
 
@@ -116,10 +116,10 @@ Members:
 --*/
 
 typedef struct _EHCI_DEBUG_TRANSFER {
-    PEHCI_QUEUE_HEAD Queue;
     PHYSICAL_ADDRESS QueuePhysical;
-    PVOID Buffer;
     PHYSICAL_ADDRESS BufferPhysical;
+    PEHCI_QUEUE_HEAD Queue;
+    PVOID Buffer;
     ULONG BufferSize;
     BOOL Allocated;
     ULONG CheckIndex;

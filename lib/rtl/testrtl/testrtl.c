@@ -1226,7 +1226,7 @@ Return Value:
 
     Node = TestRedBlackTreeNodes;
     TestsFailed = 0;
-    RtlZeroMemory(Node, sizeof(Node));
+    RtlZeroMemory(Node, sizeof(TEST_RED_BLACK_TREE_NODE) * TEST_NODE_COUNT);
 
     //
     // Initialize the nodes.

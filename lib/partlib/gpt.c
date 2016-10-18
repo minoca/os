@@ -123,12 +123,12 @@ Return Value:
 
     FoundEfiEntry = FALSE;
     for (Index = 0; Index < PARTITION_TABLE_SIZE; Index += 1) {
-        if (Entry->SystemId == PARTITION_ID_EMPTY) {
+        if (Entry[Index].SystemId == PARTITION_ID_EMPTY) {
             continue;
         }
 
-        if ((Entry->SystemId == PARTITION_ID_EFI_GPT) &&
-            (Entry->StartingLba == 1)) {
+        if ((Entry[Index].SystemId == PARTITION_ID_EFI_GPT) &&
+            (Entry[Index].StartingLba == 1)) {
 
             FoundEfiEntry = TRUE;
 

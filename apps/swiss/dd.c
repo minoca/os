@@ -927,7 +927,7 @@ Return Value:
             Context->OutPartialBlocks);
 
     Unit = "B";
-    Seconds = Time.tv_sec - Context->StartTime.tv_sec;
+    Seconds = (double)(Time.tv_sec - Context->StartTime.tv_sec);
     if (Seconds < 3600 * 24) {
         Seconds += (Time.tv_nsec - Context->StartTime.tv_nsec) /
                    1000000000.0;

@@ -1629,10 +1629,10 @@ Return Value:
 
     } else {
         printf("M-");
-        if (Character < 0x80 + ' ') {
+        if ((UCHAR)Character < 0x80 + ' ') {
             printf("^%c", Character - 0x80 + '@');
 
-        } else if (Character < 0x80 + 0x7F) {
+        } else if ((UCHAR)Character < 0x80 + 0x7F) {
             printf("%c", Character - 0x80);
 
         } else {

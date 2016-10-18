@@ -112,7 +112,7 @@ Return Value:
 
 {
 
-    memset(Attribute, 0xFE, sizeof(PTHREAD_ATTRIBUTE));
+    memset(Attribute, 0xFE, sizeof(pthread_attr_t));
     return 0;
 }
 

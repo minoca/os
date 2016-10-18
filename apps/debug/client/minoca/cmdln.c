@@ -368,7 +368,7 @@ Return Value:
 
     Information = getpwuid(geteuid());
     if ((Information == NULL) || (Information->pw_name == NULL) ||
-        (strlen(Information->pw_name) == 0)) {
+        (*(Information->pw_name) == '\0')) {
 
         return getenv("USER");
     }

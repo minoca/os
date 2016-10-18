@@ -332,7 +332,7 @@ Members:
 --*/
 
 typedef struct _PROFILER_THREAD_TIME_COUNTER {
-    CHAR EventType;
+    UCHAR EventType;
     ULONGLONG TimeCounter;
     ULONGLONG TimeCounterFrequency;
     ULONGLONG SystemTimeSeconds;
@@ -363,7 +363,7 @@ Members:
 --*/
 
 typedef struct _PROFILER_THREAD_NEW_PROCESS {
-    CHAR EventType;
+    UCHAR EventType;
     ULONG StructureSize;
     ULONG ProcessId;
     ULONGLONG TimeCounter;
@@ -394,7 +394,7 @@ Members:
 --*/
 
 typedef struct _PROFILER_THREAD_NEW_THREAD {
-    CHAR EventType;
+    UCHAR EventType;
     ULONG StructureSize;
     ULONG ProcessId;
     ULONG ThreadId;

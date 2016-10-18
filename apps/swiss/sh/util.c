@@ -853,6 +853,7 @@ Return Value:
 
 {
 
+    PSTR NewBuffer;
     UINTN NewBufferSize;
     UINTN SizeNeeded;
 
@@ -890,13 +891,14 @@ Return Value:
     //
 
     if (NewBufferSize != *StringBufferCapacity) {
-        *StringBufferAddress = realloc(*StringBufferAddress, NewBufferSize);
-        if (*StringBufferAddress == NULL) {
+        NewBuffer = realloc(*StringBufferAddress, NewBufferSize);
+        if (NewBuffer == NULL) {
             *StringBufferSize = 0;
             *StringBufferCapacity = 0;
             return FALSE;
         }
 
+        *StringBufferAddress = NewBuffer;
         *StringBufferCapacity = NewBufferSize;
     }
 

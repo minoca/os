@@ -1234,13 +1234,7 @@ Return Value:
     // Set the split information in the hardware queue entry.
     //
 
-    if (NewEndpoint->Speed == UsbDeviceSpeedHigh) {
-        SplitInformation = EHCI_QUEUE_1_TRANSACTION_PER_MICRO_FRAME;
-
-    } else {
-        SplitInformation = EHCI_QUEUE_1_TRANSACTION_PER_MICRO_FRAME;
-    }
-
+    SplitInformation = EHCI_QUEUE_1_TRANSACTION_PER_MICRO_FRAME;
     if ((NewEndpoint->Speed == UsbDeviceSpeedLow) ||
         (NewEndpoint->Speed == UsbDeviceSpeedFull)) {
 

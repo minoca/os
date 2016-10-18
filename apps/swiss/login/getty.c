@@ -871,7 +871,7 @@ Return Value:
     PSTR Result;
     size_t Size;
 
-    Result = malloc(strlen(String));
+    Result = malloc(strlen(String) + 1);
     if (Result == NULL) {
         return NULL;
     }

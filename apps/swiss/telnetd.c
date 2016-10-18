@@ -422,7 +422,6 @@ Return Value:
     PTELNETD_SESSION Session;
     struct sockaddr_in SocketAddress;
     int Status;
-    int TotalStatus;
     int Value;
 
     ChildActionSet = FALSE;
@@ -436,7 +435,6 @@ Return Value:
     ListenSocket = -1;
     ListenSocketPoll = NULL;
     ListenSocketPollIndex = -1;
-    TotalStatus = 0;
 
     //
     // Process the control arguments.
@@ -559,7 +557,10 @@ Return Value:
         // Become a session leader, detaching from the controlling terminal.
         //
 
-        setsid();
+        if (setsid() < 0) {
+            Status = errno;
+            goto MainEnd;
+        }
 
         //
         // Point standard in, out, and error at /dev/null.
@@ -804,6 +805,8 @@ Return Value:
         }
     }
 
+    Status = 0;
+
 MainEnd:
     while (!LIST_EMPTY(&(Context.SessionList))) {
         Session = LIST_VALUE(Context.SessionList.Next,
@@ -827,11 +830,7 @@ MainEnd:
     }
 
     TelnetdContext = NULL;
-    if ((TotalStatus == 0) && (Status != 0)) {
-        TotalStatus = Status;
-    }
-
-    return TotalStatus;
+    return Status;
 }
 
 //

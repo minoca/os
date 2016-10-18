@@ -239,7 +239,7 @@ Return Value:
         goto MainEnd;
     }
 
-    if (BytesRead < sizeof(PT_TEST_RESULT)) {
+    if (BytesRead != sizeof(PT_TEST_RESULT)) {
         Result->Status = EIO;
         goto MainEnd;
     }

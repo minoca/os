@@ -169,6 +169,7 @@ Return Value:
 
     PSTR Buffer;
     UINTN Capacity;
+    PSTR NewBuffer;
     unsigned long PathSize;
 
     *Directory = NULL;
@@ -187,10 +188,12 @@ Return Value:
             }
 
             Capacity *= 2;
-            Buffer = realloc(Buffer, Capacity);
-            if (Buffer == NULL) {
+            NewBuffer = realloc(Buffer, Capacity);
+            if (NewBuffer == NULL) {
                 return FALSE;
             }
+
+            Buffer = NewBuffer;
 
         } else {
             *Directory = Buffer;
@@ -257,6 +260,7 @@ Return Value:
     UINTN FileNamesSize;
     ULONG FixIndex;
     UINTN NameSize;
+    PVOID NewBuffer;
     UINTN NewBufferSize;
     UINTN OriginalFileNames;
     BOOL Result;
@@ -311,12 +315,13 @@ Return Value:
             }
 
             OriginalFileNames = (UINTN)FileNames;
-            FileNames = realloc(FileNames, NewBufferSize);
-            if (FileNames == NULL) {
+            NewBuffer = realloc(FileNames, NewBufferSize);
+            if (NewBuffer == NULL) {
                 Result = FALSE;
                 goto GetDirectoryListingEnd;
             }
 
+            FileNames = NewBuffer;
             FileNamesCapacity = NewBufferSize;
 
             //
@@ -349,14 +354,15 @@ Return Value:
                 NewBufferSize = SHELL_DIRECTORY_INITIAL_ELEMENT_COUNT;
             }
 
-            Entries = realloc(Entries,
-                              NewBufferSize * sizeof(SHELL_DIRECTORY_ENTRY));
+            NewBuffer = realloc(Entries,
+                                NewBufferSize * sizeof(SHELL_DIRECTORY_ENTRY));
 
-            if (Entries == NULL) {
+            if (NewBuffer == NULL) {
                 Result = FALSE;
                 goto GetDirectoryListingEnd;
             }
 
+            Entries = NewBuffer;
             EntryCapacity = NewBufferSize;
         }
 
@@ -1933,11 +1939,11 @@ Return Value:
     ULONG NewListCapacity;
     ULONG NewListSize;
     UINTN OriginalBufferAddress;
+    PSTR *ReallocatedList;
     BOOL Result;
     ULONG SizeNeeded;
 
-    NewBuffer = *ListBuffer;
-    OriginalBufferAddress = (UINTN)NewBuffer;
+    OriginalBufferAddress = (UINTN)*ListBuffer;
     NewBufferCapacity = *ListBufferCapacity;
     NewBufferSize = *ListBufferSize;
     NewList = *List;
@@ -1958,11 +1964,14 @@ Return Value:
         NewBufferCapacity *= 2;
     }
 
-    if (NewBufferCapacity != *ListBufferCapacity) {
-        NewBuffer = realloc(NewBuffer, NewBufferCapacity);
+    if (NewBufferCapacity > *ListBufferCapacity) {
+        NewBuffer = realloc(*ListBuffer, NewBufferCapacity);
         if (NewBuffer == NULL) {
             goto PathCombineListsEnd;
         }
+
+    } else {
+        NewBuffer = *ListBuffer;
     }
 
     memcpy(NewBuffer + *ListBufferSize, SecondListBuffer, SecondListBufferSize);
@@ -1981,11 +1990,13 @@ Return Value:
         NewListCapacity *= 2;
     }
 
-    if (NewListCapacity != *ListCapacity) {
-        NewList = realloc(NewList, NewListCapacity * sizeof(PSTR));
-        if (NewList == NULL) {
+    if (NewListCapacity > *ListCapacity) {
+        ReallocatedList = realloc(NewList, NewListCapacity * sizeof(PSTR));
+        if (ReallocatedList == NULL) {
             goto PathCombineListsEnd;
         }
+
+        NewList = ReallocatedList;
     }
 
     NewListSize = SizeNeeded;

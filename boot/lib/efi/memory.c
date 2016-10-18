@@ -217,7 +217,7 @@ Return Value:
                       EFI_LOADER_DESCRIPTOR_ESTIMATE;
 
     LoaderDescriptorSize = DescriptorCount * sizeof(MEMORY_DESCRIPTOR);
-    LoaderDescriptorSize = ALIGN_RANGE_UP(DescriptorCount, EFI_PAGE_SIZE);
+    LoaderDescriptorSize = ALIGN_RANGE_UP(LoaderDescriptorSize, EFI_PAGE_SIZE);
     LoaderDescriptorPageCount = LoaderDescriptorSize >> EFI_PAGE_SHIFT;
     LoaderDescriptorAllocation = MAX_UINTN;
     EfiStatus = BopEfiAllocatePages(AllocateMaxAddress,

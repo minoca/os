@@ -440,7 +440,7 @@ Return Value:
     //
 
     } else if (ArgumentCount == 1) {
-        if (strlen(Arguments[0]) != 0) {
+        if (*(Arguments[0]) != '\0') {
             return TEST_UTILITY_TRUE;
 
         } else {
@@ -455,7 +455,7 @@ Return Value:
     } else if (ArgumentCount == 2) {
         Operator = TestGetOperator(Arguments[0]);
         if (Operator == TestUtilityBang) {
-            if (strlen(Arguments[1]) != 0) {
+            if (*(Arguments[1]) != '\0') {
                 return TEST_UTILITY_FALSE;
 
             } else {
@@ -1560,11 +1560,11 @@ Return Value:
     } else if ((Operator == TestUtilityAnd) || (Operator == TestUtilityOr)) {
         LeftResult = TEST_UTILITY_FALSE;
         RightResult = TEST_UTILITY_FALSE;
-        if (strlen(LeftOperand) != 0) {
+        if (*LeftOperand != '\0') {
             LeftResult = TEST_UTILITY_TRUE;
         }
 
-        if (strlen(RightOperand) != 0) {
+        if (*RightOperand != '\0') {
             RightResult = TEST_UTILITY_TRUE;
         }
 
@@ -1625,14 +1625,14 @@ Return Value:
     ReturnValue = TEST_UTILITY_FALSE;
     switch (Operator) {
     case TestStringNonZeroLength:
-        if (strlen(String1) != 0) {
+        if (*String1 != '\0') {
             ReturnValue = TEST_UTILITY_TRUE;
         }
 
         break;
 
     case TestStringZeroLength:
-        if (strlen(String1) == 0) {
+        if (*String1 == '\0') {
             ReturnValue = TEST_UTILITY_TRUE;
         }
 
@@ -1871,7 +1871,7 @@ Return Value:
 
     assert(Element->Type == TestParseElementToken);
 
-    if (strlen(Element->Token) != 0) {
+    if (*(Element->Token) != '\0') {
         Element->Result = TEST_UTILITY_TRUE;
 
     } else {

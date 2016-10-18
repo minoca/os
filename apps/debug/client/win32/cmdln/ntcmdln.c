@@ -260,13 +260,13 @@ Return Value:
     // escape or just a poke from the remote threads.
     //
 
-    if (Character == 0xFF) {
+    if ((UCHAR)Character == 0xFF) {
         BytesRead = read(DbgStandardInPipe[0], &Character, 1);
         if (BytesRead != 1) {
             return FALSE;
         }
 
-        if (Character != 0xFF) {
+        if ((UCHAR)Character != 0xFF) {
             Character = 0;
             ControlKeyValue = KEY_REMOTE;
         }
@@ -317,7 +317,7 @@ Return Value:
 
 {
 
-    char Message[2];
+    unsigned char Message[2];
 
     //
     // Write the escaped "remote" sequence into the input pipe funnel.
@@ -609,7 +609,7 @@ Return Value:
 
     ssize_t BytesWritten;
     int Character;
-    char Characters[2];
+    unsigned char Characters[2];
 
     while (DbgStandardInPipe[0] != -1) {
         Character = fgetc(stdin);

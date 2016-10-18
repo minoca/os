@@ -463,7 +463,6 @@ Return Value:
     if ((optind <= 0) || (optreset != 0) || (ClOptionEndIndex <= 0) ||
         (ClOptionEndIndex >= ArgumentCount)) {
 
-        ClOptionIndexCopy = optind;
         optind = 1;
         optreset = 0;
         ClOptionIndexCopy = 1;

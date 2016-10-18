@@ -3437,7 +3437,6 @@ Return Value:
         StringSize -= 1;
     }
 
-    Ones = Value;
     Billions = Value / 1000000000;
     Ones = Value % 1000000000;
     Millions = Ones / 1000000;

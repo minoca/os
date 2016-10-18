@@ -1140,7 +1140,7 @@ Return Value:
 
 {
 
-    UINT Character;
+    INT Character;
     INTN Index;
     PCK_STRING String;
 
@@ -1399,7 +1399,7 @@ Return Value:
 
 {
 
-    UINTN Index;
+    CK_INTEGER Index;
     PCK_STRING String;
 
     String = CK_AS_STRING(Arguments[0]);

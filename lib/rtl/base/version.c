@@ -109,7 +109,6 @@ Return Value:
 
     ULONG BytesWritten;
     PSTR DebugString;
-    BOOL PrintBuildString;
     BOOL PrintDebugLevel;
     BOOL PrintReleaseLevel;
     BOOL PrintRevision;
@@ -121,7 +120,6 @@ Return Value:
     PrintSerial = TRUE;
     PrintReleaseLevel = TRUE;
     PrintDebugLevel = TRUE;
-    PrintBuildString = TRUE;
     ReleaseString = RtlGetReleaseLevelString(VersionInformation->ReleaseLevel);
     DebugString = RtlGetBuildDebugLevelString(VersionInformation->DebugLevel);
     switch (Level) {
@@ -255,9 +253,7 @@ Return Value:
         }
     }
 
-    if ((PrintBuildString != FALSE) &&
-        (VersionInformation->BuildString != NULL)) {
-
+    if (VersionInformation->BuildString != NULL) {
         BytesWritten = RtlPrintToString(Buffer,
                                         BufferSize,
                                         CharacterEncodingDefault,

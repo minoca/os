@@ -191,7 +191,7 @@ Return Value:
     Address.sin_family = AF_INET;
     Address.sin_port = htons(Port);
     Address.sin_addr.s_addr = INADDR_ANY;
-    if ((Host != NULL) && (strlen(Host) != 0)) {
+    if ((Host != NULL) && (*Host != '\0')) {
         Address.sin_addr.s_addr = inet_addr(Host);
         if (Address.sin_addr.s_addr == INADDR_NONE) {
             return 1;

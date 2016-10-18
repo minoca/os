@@ -481,7 +481,7 @@ Return Value:
         break;
 
     case DataTypeEnumeration:
-        if ((Type->Name == NULL) || (strlen(Type->Name) == 0) ||
+        if ((Type->Name == NULL) || (*(Type->Name) == '\0') ||
             (strcmp(Type->Name, " ") == 0)) {
 
             DbgOut("(unnamed enum)");
@@ -493,7 +493,7 @@ Return Value:
         break;
 
     case DataTypeNumeric:
-        if ((Type->Name == NULL) || (strlen(Type->Name) == 0) ||
+        if ((Type->Name == NULL) || (*(Type->Name) == '\0') ||
             (strcmp(Type->Name, " ") == 0)) {
 
             DbgOut("(unnamed numeric)");
@@ -505,7 +505,7 @@ Return Value:
         break;
 
     case DataTypeRelation:
-        if ((Type->Name == NULL) || (strlen(Type->Name) == 0)) {
+        if ((Type->Name == NULL) || (*(Type->Name) == '\0')) {
             RelationData = &(Type->U.Relation);
             Relative = DbgGetType(RelationData->OwningFile,
                                   RelationData->TypeNumber);

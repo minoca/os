@@ -325,7 +325,6 @@ Return Value:
 
         PartitionInfo = &(Partitions[PartitionIndex]);
         PartitionConfig = &(DiskConfiguration->Partitions[PartitionIndex]);
-        PartitionInfo->StartOffset = BlockOffset;
         Start = BlockOffset;
         if (PartitionConfig->Alignment > SETUP_BLOCK_SIZE) {
             Start =

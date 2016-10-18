@@ -241,6 +241,7 @@ Return Value:
             }
 
             SystemInformation = (PSMBIOS_SYSTEM_INFORMATION)(CurrentString + 2);
+            continue;
         }
 
         break;

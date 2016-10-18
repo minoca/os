@@ -43,8 +43,9 @@ Environment:
 // This macro returns the semaphore state for a given count.
 //
 
-#define PTHREAD_SEMAPHORE_SET_COUNT(_Count) \
-    (((_Count) << PTHREAD_SEMAPHORE_VALUE_SHIFT) & PTHREAD_SEMAPHORE_VALUE_MASK)
+#define PTHREAD_SEMAPHORE_SET_COUNT(_Count)                 \
+    (((ULONG)(_Count) << PTHREAD_SEMAPHORE_VALUE_SHIFT) &   \
+     PTHREAD_SEMAPHORE_VALUE_MASK)
 
 //
 // These macros increment and decrement the count in the given state.

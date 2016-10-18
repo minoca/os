@@ -1292,12 +1292,12 @@ Return Value:
         (Exception == EXCEPTION_SINGLE_STEP)) {
 
         InsideRange =
-                 (InstructionPointer >= (ULONG)KdBreakRange.BreakRangeStart) &&
-                 (InstructionPointer < (ULONG)KdBreakRange.BreakRangeEnd);
+                 (InstructionPointer >= (UINTN)KdBreakRange.BreakRangeStart) &&
+                 (InstructionPointer < (UINTN)KdBreakRange.BreakRangeEnd);
 
         OutsideHole =
-                   (InstructionPointer < (ULONG)KdBreakRange.RangeHoleStart) ||
-                   (InstructionPointer >= (ULONG)KdBreakRange.RangeHoleEnd);
+                   (InstructionPointer < (UINTN)KdBreakRange.RangeHoleStart) ||
+                   (InstructionPointer >= (UINTN)KdBreakRange.RangeHoleEnd);
 
         if ((OutsideHole != FALSE) && (InsideRange != FALSE)) {
 
@@ -2762,7 +2762,7 @@ Return Value:
     // access violation.
     //
 
-    AddressByte = (PVOID)(ULONG)Request->Address;
+    AddressByte = (PVOID)(UINTN)Request->Address;
     AddressNatural = (PUINTN)AddressByte;
     ValidSize = KdpValidateMemoryAccess(AddressByte,
                                         Request->Size,
@@ -2776,7 +2776,7 @@ Return Value:
         KdTxPacket.Header.Command = DbgMemoryContents;
         KdTxPacket.Header.PayloadSize = sizeof(MEMORY_CONTENTS) + ValidSize;
         Response = (PMEMORY_CONTENTS)KdTxPacket.Payload;
-        Response->Address = (ULONGLONG)(ULONG)AddressByte;
+        Response->Address = (UINTN)AddressByte;
         Response->Size = ValidSize;
         Buffer = (PVOID)KdTxPacket.Payload + sizeof(MEMORY_CONTENTS);
 
@@ -2818,7 +2818,7 @@ Return Value:
         WriteAcknowledgement =
                         (PWRITE_REQUEST_ACKNOWLEDGEMENT)KdTxPacket.Payload;
 
-        WriteAcknowledgement->Address = (ULONGLONG)(ULONG)AddressByte;
+        WriteAcknowledgement->Address = (UINTN)AddressByte;
         WriteAcknowledgement->BytesWritten = ValidSize;
         WriteSourceByte = (PBYTE)KdRxPacket.Payload + sizeof(MEMORY_REQUEST);
         WriteSourceNatural = (PUINTN)WriteSourceByte;

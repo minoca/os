@@ -455,7 +455,7 @@ Return Value:
     // Skip any leading zeros.
     //
 
-    while ((Value != 0) && ((LONG)Value == 0)) {
+    while ((Value != 0.0) && ((LONG)Value == 0)) {
         Value *= 10.0;
         Exponent -= 1;
         TenPower *= 10.0;
@@ -3161,7 +3161,7 @@ Return Value:
 
         } else if ((*Format == FORMAT_LONGLONG_START) &&
                    (*(Format + 1) == '6') &&
-                   (*(Format + 1) == '4')) {
+                   (*(Format + 2) == '4')) {
 
             Format += 3;
             CurrentArgumentSize = sizeof(LONGLONG);

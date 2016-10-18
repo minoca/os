@@ -249,7 +249,10 @@ Return Value:
 
 {
 
-    setsid();
+    if (setsid() < 0) {
+        return -1;
+    }
+
     if (ioctl(TerminalDescriptor, TIOCSCTTY, NULL) < 0) {
         return -1;
     }

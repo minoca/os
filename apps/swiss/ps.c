@@ -1628,7 +1628,7 @@ Return Value:
         Minutes = TimeData / PS_SECONDS_PER_MINUTE;
         Seconds = TimeData - (Minutes * PS_SECONDS_PER_MINUTE);
 
-        assert((Seconds >= 0) && (Seconds < PS_SECONDS_PER_MINUTE));
+        assert(Seconds < PS_SECONDS_PER_MINUTE);
 
         if (Days != 0) {
             StringDataSize = strlen(PS_ELAPSED_TIME_DAYS_FORMAT) + 1;
@@ -1691,7 +1691,7 @@ Return Value:
         Minutes = TimeData / PS_SECONDS_PER_MINUTE;
         Seconds = TimeData - (Minutes * PS_SECONDS_PER_MINUTE);
 
-        assert((Seconds >= 0) && (Seconds < PS_SECONDS_PER_MINUTE));
+        assert(Seconds < PS_SECONDS_PER_MINUTE);
 
         if (Days != 0) {
             StringDataSize = strlen(PS_CPU_TIME_DAYS_FORMAT) + 1;

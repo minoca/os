@@ -1401,7 +1401,6 @@ Return Value:
     //
 
     GuardSize = 0;
-    MapSize = 0;
     NewThread = NULL;
     PageSize = sysconf(_SC_PAGE_SIZE);
     AttributeInternal = (PPTHREAD_ATTRIBUTE)Attribute;

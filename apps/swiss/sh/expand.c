@@ -3051,7 +3051,6 @@ Return Value:
     ArgumentCount = 0;
     ArgumentList = ShGetCurrentArgumentList(Shell);
     Line = NULL;
-    BufferSize = 0;
     Result = FALSE;
 
     //

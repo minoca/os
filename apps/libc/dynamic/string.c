@@ -906,7 +906,7 @@ Return Value:
 
 {
 
-    return strncmp(String1, String2, -1);
+    return strncmp(String1, String2, (size_t)-1);
 }
 
 LIBC_API
@@ -941,7 +941,7 @@ Return Value:
 
 {
 
-    return strncasecmp(String1, String2, -1);
+    return strncasecmp(String1, String2, (size_t)-1);
 }
 
 LIBC_API
@@ -1672,6 +1672,9 @@ Return Value:
     char *DestinationBytes;
     ssize_t Index;
     const char *SourceBytes;
+
+    DestinationBytes = Destination;
+    SourceBytes = Source;
 
     //
     // Truncate down to an even boundary.

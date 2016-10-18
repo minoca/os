@@ -420,8 +420,6 @@ Return Value:
              CharacterIndex >= OverlapIndex;
              CharacterIndex -= 1) {
 
-            assert(CharacterIndex - OverlapCount >= 0);
-
             Buffer[CharacterIndex] = Buffer[CharacterIndex - OverlapCount];
         }
 

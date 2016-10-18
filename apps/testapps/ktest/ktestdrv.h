@@ -89,7 +89,7 @@ Members:
 
 typedef struct _KTEST_PARAMETERS {
     KTEST_TYPE TestType;
-    UINTN Iterations;
+    INTN Iterations;
     UINTN Threads;
     UINTN Parameters[KTEST_PARAMETER_COUNT];
 } KTEST_PARAMETERS, *PKTEST_PARAMETERS;

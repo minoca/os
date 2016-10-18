@@ -234,8 +234,8 @@ Return Value:
 
     Enabled = EfiDisableInterrupts();
     HardwareValue = EfiReadTimerRoutine();
-    HardwareMask = (1 << EfiReadTimerWidth) - 1;
-    HighBit = 1 << (EfiReadTimerWidth - 1);
+    HardwareMask = (1ULL << EfiReadTimerWidth) - 1;
+    HighBit = 1ULL << (EfiReadTimerWidth - 1);
 
     //
     // If the high bit flipped from one to zero, add one to the software
@@ -245,7 +245,7 @@ Return Value:
     if (((EfiTimeCounterValue & HighBit) != 0) &&
         ((HardwareValue & HighBit) == 0)) {
 
-        EfiTimeCounterValue += 1 << EfiReadTimerWidth;
+        EfiTimeCounterValue += 1ULL << EfiReadTimerWidth;
     }
 
     Value = (EfiTimeCounterValue & (~HardwareMask)) | HardwareValue;

@@ -177,7 +177,6 @@ Return Value:
         }
     }
 
-    Status = STATUS_SUCCESS;
     RtlHeapInitialize(&BoHeap,
                       BoExpandHeap,
                       NULL,

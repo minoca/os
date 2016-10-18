@@ -748,7 +748,7 @@ Return Value:
     //
 
     if ((strchr(File, '/') != NULL) || (PathVariable == NULL) ||
-        (strlen(PathVariable) == 0)) {
+        (*PathVariable == '\0')) {
 
         return execve(File, Arguments, Environment);
     }

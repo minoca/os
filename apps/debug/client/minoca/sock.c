@@ -172,7 +172,7 @@ Return Value:
     Address.sin_family = AF_INET;
     Address.sin_port = htons(Port);
     Address.sin_addr.s_addr = INADDR_ANY;
-    if ((Host != NULL) && (strlen(Host) != 0)) {
+    if ((Host != NULL) && (*Host != '\0')) {
         Result = inet_pton(AF_INET, Host, &(Address.sin_addr));
         if (Result == 0) {
             return 1;

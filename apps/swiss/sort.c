@@ -1337,8 +1337,7 @@ Return Value:
             // Peel off a carraige return too if it's there.
             //
 
-            if ((Character == '\n') &&
-                (Holding->Size != 0) &&
+            if ((Holding->Size != 0) &&
                 (Holding->Data[Holding->Size - 1] == '\r')) {
 
                 Holding->Size -= 1;

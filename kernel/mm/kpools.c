@@ -411,7 +411,6 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     NonPagedPoolBuffer = NULL;
-    NonPagedPoolLockHeld = FALSE;
     PagedPoolBuffer = NULL;
     PagedPoolLockHeld = FALSE;
     TotalBuffer = NULL;

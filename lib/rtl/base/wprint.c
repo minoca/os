@@ -3048,7 +3048,7 @@ Return Value:
 
         } else if ((*Format == FORMAT_LONGLONG_START) &&
                    (*(Format + 1) == L'6') &&
-                   (*(Format + 1) == L'4')) {
+                   (*(Format + 2) == L'4')) {
 
             Format += 3;
             CurrentArgumentSize = sizeof(LONGLONG);

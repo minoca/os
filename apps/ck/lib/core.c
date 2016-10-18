@@ -589,8 +589,8 @@ Return Value:
         if (ObjectClass == QueryClass) {
             return TRUE;
 
-        } else if ((ObjectClass->Super == ObjectClass) ||
-                   (ObjectClass == NULL)) {
+        } else if ((ObjectClass == NULL) ||
+                   (ObjectClass->Super == ObjectClass)) {
 
             break;
         }

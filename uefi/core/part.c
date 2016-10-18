@@ -832,6 +832,10 @@ Return Value:
         Status = EfipPartitionProbeMediaStatus(Private->ParentDiskIo,
                                                MediaId,
                                                EFI_INVALID_PARAMETER);
+
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
     }
 
     //

@@ -837,7 +837,6 @@ Return Value:
     UINT32 TotalSize;
     UBOOT_FIT_HEADER UBootFitHeader;
 
-    Result = 0;
     Strings = NULL;
 
     //

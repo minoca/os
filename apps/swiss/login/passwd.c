@@ -182,7 +182,6 @@ Return Value:
     UPDATE_PASSWORD_OPERATION ShadowOperation;
     int Status;
     PSTR ThisUserName;
-    int TotalStatus;
     struct passwd *User;
     uid_t UserId;
     PSTR UserName;
@@ -193,7 +192,6 @@ Return Value:
     RootDirectory = NULL;
     ShadowOperation = UpdatePasswordUpdateLine;
     ThisUserName = NULL;
-    TotalStatus = 0;
     UserName = NULL;
 
     //
@@ -489,11 +487,7 @@ MainEnd:
         free(ThisUserName);
     }
 
-    if ((TotalStatus == 0) && (Status != 0)) {
-        TotalStatus = Status;
-    }
-
-    return TotalStatus;
+    return Status;
 }
 
 //

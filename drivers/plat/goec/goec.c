@@ -1404,11 +1404,11 @@ Return Value:
         Controller->KeyColumns = GOEC_MAX_COLUMNS;
     }
 
+    Controller->KeyRows = KeyboardInfo.Rows;
     if (Controller->KeyRows > BITS_PER_BYTE) {
         Controller->KeyRows = BITS_PER_BYTE;
     }
 
-    Controller->KeyRows = KeyboardInfo.Rows;
     return Status;
 }
 

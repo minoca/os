@@ -98,6 +98,7 @@ Return Value:
     ULONG Capacity;
     ULONG CharacterIndex;
     PSTR FreeValue;
+    PSTR NewBuffer;
     BOOL Physical;
     INT Result;
     PSTR Search;
@@ -173,11 +174,13 @@ Return Value:
             }
 
             Capacity *= 2;
-            FreeValue = realloc(FreeValue, Capacity);
-            if (FreeValue == NULL) {
+            NewBuffer = realloc(FreeValue, Capacity);
+            if (NewBuffer == NULL) {
                 Result = ENOMEM;
                 goto PwdCommandEnd;
             }
+
+            FreeValue = NewBuffer;
 
         } else {
 

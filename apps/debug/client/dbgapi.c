@@ -1268,9 +1268,10 @@ Return Value:
         Result = DbgpKdReboot(RebootType);
         if (Result == FALSE) {
             Result = EINVAL;
-        }
 
-        Result = 0;
+        } else {
+            Result = 0;
+        }
 
     } else if (Context->ConnectionType == DebugConnectionUser) {
         DbgOut("Reboot is only supported on kernel debug targets.\n");
@@ -2553,6 +2554,7 @@ Return Value:
     PMODULE_LIST_HEADER List;
     ULONG ModuleCount;
     PMODULE_LIST_HEADER ModuleListHeader;
+    PMODULE_LIST_HEADER NewList;
     ULONG Offset;
     PLOADED_MODULE_ENTRY PacketModuleEntry;
     BOOL Result;
@@ -2627,8 +2629,8 @@ Return Value:
         }
 
         AllocationSize += PacketModuleEntry->StructureSize;
-        List = realloc(List, AllocationSize);
-        if (List == NULL) {
+        NewList = realloc(List, AllocationSize);
+        if (NewList == NULL) {
             DbgOut("Error: Failed to realloc %d bytes (for entry of %d "
                    "bytes).\n",
                    AllocationSize,
@@ -2638,6 +2640,7 @@ Return Value:
             goto KdGetLoadedModuleListEnd;
         }
 
+        List = NewList;
         RtlCopyMemory((PUCHAR)List + Offset,
                       DbgRxPacket.Payload,
                       PacketModuleEntry->StructureSize);

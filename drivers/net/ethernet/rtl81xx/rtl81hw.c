@@ -1850,7 +1850,7 @@ Return Value:
     USHORT AlignedOffset;
     USHORT BytesReaped;
     BYTE CommandRegister;
-    USHORT CurrentOffset;
+    ULONG CurrentOffset;
     BYTE EarlyStatus;
     USHORT EndOffset;
     PIO_BUFFER_FRAGMENT Fragment;

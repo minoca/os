@@ -61,6 +61,10 @@ Structure Description:
 
 Members:
 
+    Total - Stores the running total of the data.
+
+    Data - Stores the array of data elements.
+
     Shift - Stores the bit shift of the number of buckets. That is, 1 << Shift
         equals the number of buckets in the history.
 
@@ -69,18 +73,14 @@ Members:
     Flags - Stores a bitfield of flags about the history. See IDLE_HISTORY_*
         definitions.
 
-    Total - Stores the running total of the data.
-
-    Data - Stores the array of data elements.
-
 --*/
 
 typedef struct _IDLE_HISTORY {
+    ULONGLONG Total;
+    PULONGLONG Data;
     ULONG Shift;
     ULONG NextIndex;
     ULONG Flags;
-    ULONGLONG Total;
-    PULONGLONG Data;
 } IDLE_HISTORY, *PIDLE_HISTORY;
 
 /*++

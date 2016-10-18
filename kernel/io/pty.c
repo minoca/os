@@ -2228,7 +2228,6 @@ Return Value:
 
         KeAcquireQueuedLock(Terminal->Lock);
         if (CodeNumber == TerminalControlSetSoftCarrier) {
-            Terminal->ModemStatus |= ModemStatus;
             if (Argument != 0) {
                 Terminal->Settings.ControlFlags |= TERMINAL_CONTROL_NO_HANGUP;
 
@@ -2438,6 +2437,7 @@ Return Value:
         //
 
         Process = PsGetCurrentProcess();
+        CurrentSessionId = Process->Identifiers.SessionId;
         KeAcquireQueuedLock(Terminal->Lock);
         if (Terminal->SessionId != CurrentSessionId) {
             Status = STATUS_NOT_A_TERMINAL;
@@ -3944,7 +3944,6 @@ Return Value:
     TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
     AnythingRead = FALSE;
     BytesRead = 0;
-    LockHeld = FALSE;
 
     //
     // Synchronize the checks on the terminal attachment and the owning session

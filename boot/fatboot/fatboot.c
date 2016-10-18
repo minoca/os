@@ -592,7 +592,6 @@ Return Value:
     }
 
     BoStepNumber += 1;
-    Status = STATUS_SUCCESS;
 
     //
     // Jump into the loader. This is not expected to return.

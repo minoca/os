@@ -2756,7 +2756,7 @@ Return Value:
     ULONG DefaultFileNumber;
     PSTR FileName;
     UINTN FileNameSize;
-    ULONG FileNumber;
+    LONG FileNumber;
     BOOL Result;
     SHELL_IO_REDIRECTION_TYPE Type;
 

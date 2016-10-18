@@ -1644,7 +1644,7 @@ Return Value:
 
 {
 
-    double Base;
+    LONG Base;
     WCHAR Character;
     ULONG CharacterCount;
     WCHAR DecasedCharacter;
@@ -1666,7 +1666,7 @@ Return Value:
     BOOL ValidCharacterFound;
     double Value;
 
-    Base = 10.0;
+    Base = 10;
     OneOverBase = 1.0E-1;
     *CharactersConsumed = 0;
     CharacterCount = 0;
@@ -1906,7 +1906,7 @@ Return Value:
             }
 
             if ((Character == L'x') || (Character == L'X')) {
-                Base = 16.0;
+                Base = 16;
                 OneOverBase = 0.0625;
                 Result = RtlpScannerGetInputWide(Input, &Character);
 
@@ -1960,7 +1960,7 @@ Return Value:
         // It could also be a letter digit.
         //
 
-        } else if ((Base == 16.0) &&
+        } else if ((Base == 16) &&
                    (Character >= L'A') && (Character <= L'F')) {
 
             Digit = Character - L'A' + 10;
@@ -1994,7 +1994,7 @@ Return Value:
             //
 
             if (SeenDecimal == FALSE) {
-                Value = (Value * Base) + Digit;
+                Value = (Value * (double)Base) + Digit;
 
             //
             // This is a fractional part, so multiply it by the current
@@ -2041,8 +2041,8 @@ Return Value:
     //
 
     ExponentCharacter = 0;
-    if (((Base == 10.0) && ((Character == L'e') || (Character == L'E'))) ||
-        ((Base == 16.0) && ((Character == L'p') || (Character == L'P')))) {
+    if (((Base == 10) && ((Character == L'e') || (Character == L'E'))) ||
+        ((Base == 16) && ((Character == L'p') || (Character == L'P')))) {
 
         ExponentCharacter = Character;
     }
@@ -2153,7 +2153,7 @@ Return Value:
     // Create a value with the desired exponent.
     //
 
-    if (Base == 10.0) {
+    if (Base == 10) {
 
         //
         // Put together the approximation using powers of 2.

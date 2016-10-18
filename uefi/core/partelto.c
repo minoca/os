@@ -251,6 +251,8 @@ Return Value:
                 break;
             }
 
+            VolumeSpaceSize += SectorCount * SubBlockSize;
+
             //
             // Create a child device handle.
             //

@@ -591,7 +591,7 @@ Return Value:
     // Create the section headers.
     //
 
-    if (Context->DataOffset - Context->TextOffset > 0) {
+    if (Context->DataOffset > Context->TextOffset) {
         Flags = EFI_IMAGE_SCN_CNT_CODE |
                 EFI_IMAGE_SCN_MEM_EXECUTE |
                 EFI_IMAGE_SCN_MEM_READ;
@@ -606,7 +606,7 @@ Return Value:
         NtHeader->Pe32.FileHeader.NumberOfSections -= 1;
     }
 
-    if (Context->HiiRsrcOffset - Context->DataOffset > 0) {
+    if (Context->HiiRsrcOffset > Context->DataOffset) {
         Flags = EFI_IMAGE_SCN_CNT_INITIALIZED_DATA |
                 EFI_IMAGE_SCN_MEM_WRITE |
                 EFI_IMAGE_SCN_MEM_READ;
@@ -621,7 +621,7 @@ Return Value:
         NtHeader->Pe32.FileHeader.NumberOfSections -= 1;
     }
 
-    if (Context->RelocationOffset - Context->HiiRsrcOffset > 0) {
+    if (Context->RelocationOffset > Context->HiiRsrcOffset) {
         Flags = EFI_IMAGE_SCN_CNT_INITIALIZED_DATA |
                 EFI_IMAGE_SCN_MEM_READ;
 

@@ -303,7 +303,6 @@ Return Value:
     assert(AddressSpace.Accountant != NULL);
 
     Status = MmInitializeMemoryAccounting(AddressSpace.Accountant,
-                                          MEMORY_ACCOUNTING_FLAG_USER |
                                           MEMORY_ACCOUNTING_FLAG_NO_MAP);
 
     if (!KSUCCESS(Status)) {
@@ -553,7 +552,6 @@ Return Value:
     BOOL Valid;
     VM_ALLOCATION_PARAMETERS VaRequest;
 
-    Allocation = RequestedAddress;
     Strategy = AllocationStrategyAnyAddress;
     if (RequestedAddress != NULL) {
         Strategy = AllocationStrategyFixedAddress;

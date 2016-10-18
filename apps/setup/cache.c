@@ -430,7 +430,7 @@ Return Value:
 
 {
 
-    size_t BytesRead;
+    ssize_t BytesRead;
     size_t BytesThisRound;
     PSETUP_CACHE_DATA CacheData;
     size_t CacheDataOffset;

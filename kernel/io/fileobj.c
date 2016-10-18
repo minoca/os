@@ -1012,14 +1012,12 @@ Return Value:
 
 {
 
-    BOOL Cancelled;
     IRP_CLOSE CloseIrp;
     PDEVICE Device;
     IRP_MINOR_CODE MinorCode;
     ULONG OldCount;
     KSTATUS Status;
 
-    Cancelled = FALSE;
     Status = STATUS_SUCCESS;
 
     //
@@ -1256,7 +1254,7 @@ FileObjectReleaseReferenceEnd:
     // free to use.
     //
 
-    if ((!KSUCCESS(Status)) && (Cancelled == FALSE)) {
+    if (!KSUCCESS(Status)) {
 
         ASSERT((Object->Flags & FILE_OBJECT_FLAG_CLOSE_FAILED) != 0);
         ASSERT(Object->ListEntry.Next == NULL);

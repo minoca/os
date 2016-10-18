@@ -39,7 +39,7 @@ Environment:
 //
 
 #define GLOB_CHARACTER(_Value) ((_Value) & GLOB_META_CHARACTER_MASK)
-#define GLOB_MAKE_META(_Character) ((_Character) | GLOB_META_QUOTE)
+#define GLOB_MAKE_META(_Character) (CHAR)((_Character) | GLOB_META_QUOTE)
 
 #define GLOB_IS_META(_Character) (((_Character) & GLOB_META_QUOTE) != 0)
 
@@ -602,7 +602,7 @@ Return Value:
                 Search += 1;
             }
 
-            if (Search != '\0') {
+            if (*Search != '\0') {
                 CurrentPattern = Search;
             }
 
@@ -793,7 +793,7 @@ Return Value:
             //
 
             if ((CurrentBuffer == PatternBuffer) ||
-                (*(CurrentBuffer - 1) != GLOB_META_ALL)) {
+                ((UCHAR)*(CurrentBuffer - 1) != GLOB_META_ALL)) {
 
                 *CurrentBuffer = GLOB_META_ALL;
                 CurrentBuffer += 1;

@@ -2469,9 +2469,6 @@ Return Value:
 
     ASSERT(Context->Ptk != NULL);
 
-    KeyFrameLength = sizeof(EAPOL_KEY_FRAME) +
-                     NETWORK_TO_CPU16(KeyFrame->KeyDataLength);
-
     //
     // Compute the MIC. The algorithm depends on the key version.
     //

@@ -2347,12 +2347,12 @@ Return Value:
                                    (BYTE *)Event,
                                    Event->StructureSize);
 
+    Status = STATUS_SUCCESS;
     if (Added == FALSE) {
         Status = STATUS_BUFFER_TOO_SMALL;
     }
 
     KeLowerRunLevel(OldRunLevel);
-    Status = STATUS_SUCCESS;
 
 ProcessNewProcessEnd:
     if (!KSUCCESS(Status)) {
@@ -2442,12 +2442,12 @@ Return Value:
                                    (BYTE *)Event,
                                    Event->StructureSize);
 
+    Status = STATUS_SUCCESS;
     if (Added == FALSE) {
         Status = STATUS_BUFFER_TOO_SMALL;
     }
 
     KeLowerRunLevel(OldRunLevel);
-    Status = STATUS_SUCCESS;
 
 ProcessNewThreadEnd:
     if (!KSUCCESS(Status)) {

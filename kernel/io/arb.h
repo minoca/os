@@ -86,10 +86,23 @@ Members:
 
     Type - Stores the nature of the allocation (free, occupied, etc.)
 
+    Flags - Stores a bitfield about the allocation. See ARBITER_ENTRY_FLAG_*
+        definitions.
+
     Device - Stores a pointer to the device that this entry was allocated to.
 
     CorrespondingRequirement - Stores a pointer to the root requirement that is
         utiliizing this resource.
+
+    SourceAllocation - Stores an optional pointer to the resource that this
+        allocation is derived from.
+
+    DependentEntry - Stores a pointer to an arbiter entry that is dependent on
+        this entry in some way. For example, an interrupt vector arbiter entry
+        may be dependent on an interrupt line arbiter entry because the same
+        line cannot be allocated to more than one vector. Once a line arbiter
+        allocation is made, the vector allocation depends on the result of the
+        line entry.
 
     Allocation - Stores the starting value of the allocation.
 
@@ -100,21 +113,8 @@ Members:
     FreeCharacteristics - Stores the characteristics of the region when it was
         free.
 
-    Flags - Stores a bitfield about the allocation. See ARBITER_ENTRY_FLAG_*
-        definitions.
-
-    SourceAllocation - Stores an optional pointer to the resource that this
-        allocation is derived from.
-
     TranslationOffset - Stores the offset that must be added to this allocation
         to get an allocation in the source allocation space.
-
-    DependentEntry - Stores a pointer to an arbiter entry that is dependent on
-        this entry in some way. For example, an interrupt vector arbiter entry
-        may be dependent on an interrupt line arbiter entry because the same
-        line cannot be allocated to more than one vector. Once a line arbiter
-        allocation is made, the vector allocation depends on the result of the
-        line entry.
 
 --*/
 
@@ -123,16 +123,16 @@ struct _ARBITER_ENTRY {
     LIST_ENTRY ListEntry;
     LIST_ENTRY ConfigurationListEntry;
     ARBITER_SPACE_TYPE Type;
+    ULONG Flags;
     PDEVICE Device;
     PRESOURCE_REQUIREMENT CorrespondingRequirement;
+    PRESOURCE_ALLOCATION SourceAllocation;
+    PARBITER_ENTRY DependentEntry;
     ULONGLONG Allocation;
     ULONGLONG Length;
     ULONGLONG Characteristics;
     ULONGLONG FreeCharacteristics;
-    ULONG Flags;
-    PRESOURCE_ALLOCATION SourceAllocation;
     ULONGLONG TranslationOffset;
-    PARBITER_ENTRY DependentEntry;
 };
 
 /*++

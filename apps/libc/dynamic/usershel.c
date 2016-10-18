@@ -92,7 +92,7 @@ Return Value:
 
 {
 
-    size_t LineSize;
+    ssize_t LineSize;
     char *Result;
 
     if (ClUserShellsFile == NULL) {

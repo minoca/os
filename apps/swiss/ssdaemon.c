@@ -769,7 +769,10 @@ Return Value:
         // Become a session leader, detaching from the controlling terminal.
         //
 
-        setsid();
+        if (setsid() < 0) {
+            Status = errno;
+            goto MainEnd;
+        }
 
         //
         // Point standard in, out, and error at /dev/null.

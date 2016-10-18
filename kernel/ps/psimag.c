@@ -1100,7 +1100,6 @@ Return Value:
     Buffer->Context = IoBuffer;
     Buffer->Data = IoBuffer->Fragment[0].VirtualAddress;
     Buffer->Size = BytesComplete;
-    Status = STATUS_SUCCESS;
 
 ImReadFileEnd:
     if (!KSUCCESS(Status)) {
@@ -1385,10 +1384,6 @@ Return Value:
     Reservation = AddressSpaceHandle;
     KernelMode = FALSE;
     KernelProcess = PsGetKernelProcess();
-    MapFlags = SYS_MAP_FLAG_READ;
-    if ((Segment->Flags & IMAGE_MAP_FLAG_WRITE) != 0) {
-        MapFlags |= SYS_MAP_FLAG_WRITE;
-    }
 
     //
     // Map everything writable for now, it will get fixed up during

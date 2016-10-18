@@ -1641,12 +1641,12 @@ Return Value:
             // this was the last line, stop.
             //
 
-            if ((ULONG)NewLine - (ULONG)DriverName < 2) {
+            if ((UINTN)NewLine - (UINTN)DriverName < 2) {
                 if (NewLine + 1 == StringEnd) {
                     break;
                 }
 
-                StringLength -= (ULONG)((NewLine + 1) - DriverName);
+                StringLength -= (UINTN)((NewLine + 1) - DriverName);
                 DriverName = NewLine + 1;
                 continue;
             }

@@ -2141,6 +2141,7 @@ Return Value:
     PSTR FunctionString;
     PSTR IndentString;
     ULONG IndentStringLength;
+    PSTR NewIndentString;
     PSTACK_DATA_ENTRY NextEntry;
     ULONG NextPercent;
     ULONG Percent;
@@ -2226,7 +2227,14 @@ Return Value:
                 //
 
                 IndentStringLength += PROFILER_STACK_INDENT_LENGTH;
-                IndentString = realloc(IndentString, IndentStringLength);
+                NewIndentString = realloc(IndentString, IndentStringLength);
+                if (NewIndentString == NULL) {
+                    DbgOut("Allocation failure\n");
+                    free(IndentString);
+                    return;
+                }
+
+                IndentString = NewIndentString;
                 AddVerticalBar = FALSE;
 
                 //

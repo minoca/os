@@ -961,9 +961,6 @@ Return Value:
     if ((Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0) {
         Source = MdlAllocationSourceNone;
 
-    } else if ((Flags & MEMORY_ACCOUNTING_FLAG_USER) != 0) {
-        Source = MdlAllocationSourcePagedPool;
-
     } else {
         Source = MdlAllocationSourcePagedPool;
     }

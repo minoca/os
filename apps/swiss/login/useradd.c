@@ -220,7 +220,6 @@ Return Value:
     PSTR Skeleton;
     struct stat Stat;
     int Status;
-    int TotalStatus;
     struct passwd User;
     PSTR UserName;
 
@@ -237,7 +236,6 @@ Return Value:
     Password = NULL;
     RootDirectory = NULL;
     Skeleton = USERADD_DEFAULT_SKELETON;
-    TotalStatus = 0;
     UserName = NULL;
     User.pw_gecos = USERADD_DEFAULT_GECOS;
     User.pw_passwd = USERADD_DEFAULT_PASSWORD;
@@ -631,11 +629,7 @@ MainEnd:
         free(Home);
     }
 
-    if ((TotalStatus == 0) && (Status != 0)) {
-        TotalStatus = Status;
-    }
-
-    return TotalStatus;
+    return Status;
 }
 
 //
