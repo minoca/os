@@ -24,7 +24,7 @@ BINARY = os.so
 
 BINARYTYPE = so
 
-VPATH += ..;
+VPATH += ..:
 
 include $(SRCDIR)/../sources
 
