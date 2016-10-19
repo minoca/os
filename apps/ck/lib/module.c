@@ -52,6 +52,12 @@ CkpModuleGetVariable (
     );
 
 BOOL
+CkpModuleSetVariable (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpModuleToString (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -63,7 +69,9 @@ CkpModuleToString (
 
 CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[] = {
     {"run@0", 0, CkpModuleRun},
-    {"get@1", 1, CkpModuleGetVariable},
+    {"__get@1", 1, CkpModuleGetVariable},
+    {"__set@2", 2, CkpModuleSetVariable},
+    {"__repr@0", 0, CkpModuleToString},
     {"__str@0", 0, CkpModuleToString},
     {NULL, 0, NULL}
 };
@@ -363,6 +371,7 @@ Return Value:
             goto ModuleLoadSourceEnd;
         }
 
+        Module->CompiledVariableCount = Module->VariableNames.List.Count;
         CkpPushRoot(Vm, &(Function->Header));
         Closure = CkpClosureCreate(Vm, Function, NULL);
         CkpPopRoot(Vm);
@@ -809,6 +818,55 @@ Return Value:
     }
 
     Arguments[0] = *Variable;
+    return TRUE;
+}
+
+BOOL
+CkpModuleSetVariable (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets a module level variable.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_MODULE Module;
+    PCK_STRING Name;
+    PCK_VALUE Variable;
+
+    Module = CK_AS_MODULE(Arguments[0]);
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
+        return FALSE;
+    }
+
+    Name = CK_AS_STRING(Arguments[1]);
+    Variable = CkpFindModuleVariable(Vm, Module, Name->Value, TRUE);
+    if (Variable == NULL) {
+        return FALSE;
+    }
+
+    *Variable = Arguments[2];
+    Arguments[0] = Arguments[2];
     return TRUE;
 }
 

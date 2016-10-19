@@ -2,17 +2,18 @@
 #
 #   Copyright (c) 2016 Minoca Corp. All Rights Reserved
 #
-#   Module Name:
+#   Binary Name:
 #
-#       Chalk
+#       app
 #
 #   Abstract:
 #
-#       This executable implements the Chalk interactive interpreter.
+#       This Chalk module implements application support module, which enables
+#       interaction with the outer application.
 #
 #   Author:
 #
-#       Evan Green 26-May-2016
+#       Evan Green 19-Oct-2016
 #
 #   Environment:
 #
@@ -20,21 +21,13 @@
 #
 ################################################################################
 
-BINARY = chalk
+BINARY = app.a
 
-BINARYTYPE = app
-
-BINPLACE = bin
-
-DYNLIBS = $(OBJROOT)/os/apps/ck/lib/dynamic/libchalk.so.1
-
-TARGETLIBS = $(OBJROOT)/os/apps/ck/modules/app/app.a
+BINARYTYPE = library
 
 include $(SRCDIR)/sources
 
-OBJS += $(POSIX_OBJS)
-
-DIRS = build
+DIRS = build   \
 
 include $(SRCROOT)/os/minoca.mk
 

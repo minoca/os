@@ -223,6 +223,7 @@ CK_PRIMITIVE_DESCRIPTION CkObjectPrimitives[] = {
     {"__ne@1", 1, CkpObjectIsNotEqual},
     {"__is@1", 1, CkpObjectIs},
     {"__str@0", 0, CkpObjectToString},
+    {"__repr@0", 0, CkpObjectToString},
     {"__get@1", 1, CkpObjectGet},
     {"__set@2", 2, CkpObjectSet},
     {"implements@2", 2, CkpObjectImplements},
@@ -238,13 +239,14 @@ CK_PRIMITIVE_DESCRIPTION CkObjectMetaPrimitives[] = {
 CK_PRIMITIVE_DESCRIPTION CkClassPrimitives[] = {
     {"name@0", 0, CkpClassName},
     {"superType@0", 0, CkpClassSuper},
-    {"__str@0", 0, CkpClassName},
+    {"__repr@0", 0, CkpClassName},
     {NULL, 0, NULL}
 };
 
 CK_PRIMITIVE_DESCRIPTION CkNullPrimitives[] = {
     {"__lnot@0", 0, CkpNullLogicalNot},
     {"__str@0", 0, CkpNullToString},
+    {"__repr@0", 0, CkpNullToString},
     {NULL, 0, NULL}
 };
 

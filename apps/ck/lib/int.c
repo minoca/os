@@ -292,6 +292,7 @@ CK_PRIMITIVE_DESCRIPTION CkIntPrimitives[] = {
     {"__inc@0", 0, CkpIntIncrement},
     {"__dec@0", 0, CkpIntDecrement},
     {"__str@0", 0, CkpIntToString},
+    {"__repr@0", 0, CkpIntToString},
     {"base@2", 2, CkpIntToBaseString},
     {NULL, 0, NULL}
 };
@@ -309,7 +310,7 @@ CK_PRIMITIVE_DESCRIPTION CkRangePrimitives[] = {
     {"isInclusive@0", 0, CkpRangeIsInclusive},
     {"iterate@1", 1, CkpRangeIterate},
     {"iteratorValue@1", 1, CkpRangeIteratorValue},
-    {"__str@0", 0, CkpRangeToString},
+    {"__repr@0", 0, CkpRangeToString},
     {NULL, 0, NULL}
 };
 

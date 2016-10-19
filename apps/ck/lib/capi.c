@@ -2112,6 +2112,7 @@ Return Value:
     PCK_CLASS Class;
     PCK_CLOSURE Closure;
     PCK_FIBER Fiber;
+    BOOL FramePushed;
 
     Fiber = Vm->Fiber;
 
@@ -2120,7 +2121,7 @@ Return Value:
     Callable = *(Fiber->StackTop - 1 - ArgumentCount);
     if (CK_IS_CLOSURE(Callable)) {
         Closure = CK_AS_CLOSURE(Callable);
-        CkpCallFunction(Vm, Closure, ArgumentCount + 1);
+        FramePushed = CkpCallFunction(Vm, Closure, ArgumentCount + 1);
 
     //
     // Calling a class is the official method of constructing a new object.
@@ -2129,7 +2130,7 @@ Return Value:
 
     } else if (CK_IS_CLASS(Callable)) {
         Class = CK_AS_CLASS(Callable);
-        CkpInstantiateClass(Vm, Class, ArgumentCount + 1);
+        FramePushed = CkpInstantiateClass(Vm, Class, ArgumentCount + 1);
 
     } else {
         CkpRuntimeError(Vm, "TypeError", "Object is not callable");
@@ -2140,7 +2141,13 @@ Return Value:
         goto CallEnd;
     }
 
-    CkpRunInterpreter(Vm, Fiber);
+    //
+    // If a new call frame was pushed, run the interpreter now.
+    //
+
+    if (FramePushed != FALSE) {
+        CkpRunInterpreter(Vm, Fiber);
+    }
 
 CallEnd:
 
@@ -2237,11 +2244,16 @@ Return Value:
         goto CallMethodEnd;
     }
 
+    //
+    // Call the method. If it pushed a call frame, run the interpreter.
+    //
+
     CK_ASSERT(CK_IS_CLOSURE(Method));
 
     Closure = CK_AS_CLOSURE(Method);
-    CkpCallFunction(Vm, Closure, ArgumentCount + 1);
-    CkpRunInterpreter(Vm, Fiber);
+    if (CkpCallFunction(Vm, Closure, ArgumentCount + 1) != FALSE) {
+        CkpRunInterpreter(Vm, Fiber);
+    }
 
 CallMethodEnd:
 

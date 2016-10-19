@@ -2,26 +2,35 @@
 #
 #   Copyright (c) 2016 Minoca Corp. All Rights Reserved
 #
-#   Module Name:
+#   Binary Name:
 #
-#       Chalk Modules
+#       app (Build)
 #
 #   Abstract:
 #
-#       This directory builds the Chalk modules.
+#       This Chalk module implements the app interface module.
 #
 #   Author:
 #
-#       Evan Green 28-Aug-2016
+#       Evan Green 19-Oct-2016
 #
 #   Environment:
 #
-#       User
+#       POSIX
 #
 ################################################################################
 
-DIRS = app       \
-       os        \
+BINARY := app.a
+
+BINARYTYPE = library
+
+BUILD = yes
+
+INCLUDES += $(SRCDIR)/..;
+
+VPATH += $(SRCDIR)/..:
+
+include $(SRCDIR)/../sources
 
 include $(SRCROOT)/os/minoca.mk
 

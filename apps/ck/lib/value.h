@@ -636,6 +636,9 @@ Members:
     Run - Stores a boolean indicating whether or not the module closure has
         been run.
 
+    CompiledVariableCount - Stores the number of module level variables at the
+        time the module was compiled.
+
 --*/
 
 struct _CK_MODULE {
@@ -648,6 +651,7 @@ struct _CK_MODULE {
     PVOID Handle;
     PCK_CLOSURE Closure;
     BOOL Run;
+    UINTN CompiledVariableCount;
 };
 
 /*++

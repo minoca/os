@@ -1472,7 +1472,7 @@ ClassCreateEnd:
     return;
 }
 
-VOID
+BOOL
 CkpInstantiateClass (
     PCK_VM Vm,
     PCK_CLASS Class,
@@ -1497,7 +1497,11 @@ Arguments:
 
 Return Value:
 
-    None. The fiber error will be set on failure.
+    TRUE if a new frame was pushed onto the stack and needs to be run by the
+    interpreter.
+
+    FALSE if the call completed already (primitive and foreign functions fit
+    this category).
 
 --*/
 
@@ -1520,7 +1524,7 @@ Return Value:
 
     Arguments[0] = CkpCreateInstance(Vm, Class);
     if (!CK_IS_NULL(Fiber->Error)) {
-        return;
+        return FALSE;
     }
 
     //
@@ -1535,11 +1539,10 @@ Return Value:
     CkpPrintSignature(&Signature, Name, &Length);
     CkpStringFake(&FakeString, Name, Length);
     CK_OBJECT_VALUE(NameValue, &FakeString);
-    CkpCallMethod(Vm, Class, NameValue, Arity);
-    return;
+    return CkpCallMethod(Vm, Class, NameValue, Arity);
 }
 
-VOID
+BOOL
 CkpCallMethod (
     PCK_VM Vm,
     PCK_CLASS Class,
@@ -1566,7 +1569,11 @@ Arguments:
 
 Return Value:
 
-    None. The fiber error will be set on failure.
+    TRUE if a new frame was pushed onto the stack and needs to be run by the
+    interpreter.
+
+    FALSE if the call completed already (primitive and foreign functions fit
+    this category).
 
 --*/
 
@@ -1591,15 +1598,14 @@ Return Value:
                         Class->Name->Value,
                         NameString->Value);
 
-        return;
+        return FALSE;
     }
 
     Closure = CK_AS_CLOSURE(Method);
-    CkpCallFunction(Vm, Closure, Arity);
-    return;
+    return CkpCallFunction(Vm, Closure, Arity);
 }
 
-VOID
+BOOL
 CkpCallFunction (
     PCK_VM Vm,
     PCK_CLOSURE Closure,
@@ -1623,7 +1629,11 @@ Arguments:
 
 Return Value:
 
-    None. The fiber error will be set on failure.
+    TRUE if a new frame was pushed onto the stack and needs to be run by the
+    interpreter.
+
+    FALSE if the call completed already (primitive and foreign functions fit
+    this category).
 
 --*/
 
@@ -1632,12 +1642,14 @@ Return Value:
     PCK_VALUE Arguments;
     PCK_FIBER Fiber;
     UINTN FrameCount;
+    BOOL FramePushed;
     CK_ARITY FunctionArity;
     PCK_STRING Name;
     UINTN RequiredStackSize;
     UINTN StackSize;
 
     Fiber = Vm->Fiber;
+    FramePushed = FALSE;
 
     CK_ASSERT(Closure->Header.Type == CkObjectClosure);
 
@@ -1655,7 +1667,7 @@ Return Value:
                         Name->Value,
                         Arity - 1);
 
-        return;
+        return FramePushed;
     }
 
     //
@@ -1676,11 +1688,13 @@ Return Value:
             CkpEnsureStack(Vm, Fiber, RequiredStackSize);
         }
 
+        FramePushed = TRUE;
+
     } else if (Closure->Type == CkClosureForeign) {
         FrameCount = Fiber->FrameCount;
         CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
         if (FrameCount == Fiber->FrameCount) {
-            return;
+            return FALSE;
         }
 
         CkpEnsureStack(Vm,
@@ -1688,7 +1702,7 @@ Return Value:
                        (Fiber->StackTop - Fiber->Stack) + CK_MIN_FOREIGN_STACK);
 
         if (!CK_IS_NULL(Fiber->Error)) {
-            return;
+            return FALSE;
         }
 
         //
@@ -1709,7 +1723,7 @@ Return Value:
 
     }
 
-    return;
+    return FramePushed;
 }
 
 //

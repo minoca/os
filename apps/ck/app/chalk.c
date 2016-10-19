@@ -26,6 +26,7 @@ Environment:
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/chalk.h>
+#include <minoca/lib/chalk/app.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -234,7 +235,13 @@ Return Value:
 
     Context.Vm = CkCreateVm(&(Context.Configuration));
     if (Context.Vm == NULL) {
-        fprintf(stderr, "Error: Failed to create VM\n");
+        fprintf(stderr, "Error: Failed to create VM.\n");
+        Status = 2;
+        goto MainEnd;
+    }
+
+    if (!CkPreloadAppModule(Context.Vm)) {
+        fprintf(stderr, "Error: Failed to load app module.\n");
         Status = 2;
         goto MainEnd;
     }
@@ -276,7 +283,8 @@ Return Value:
             goto MainEnd;
         }
 
-        ArgumentIndex += 1;
+        CkAppArgc = ArgumentCount - ArgumentIndex;
+        CkAppArgv = Arguments + ArgumentIndex;
         Status = CkInterpret(Context.Vm, ScriptPath, FileBuffer, FileSize, 1);
 
     //

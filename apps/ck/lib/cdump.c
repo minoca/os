@@ -66,6 +66,7 @@ CkpFreezeList (
     PCK_VM Vm,
     PCK_BYTE_ARRAY String,
     PCK_VALUE_ARRAY List,
+    UINTN Count,
     UINTN StartIndex
     );
 
@@ -260,10 +261,16 @@ Return Value:
     CkpFreezeList(Vm,
                   &String,
                   &(Module->VariableNames.List),
+                  Module->CompiledVariableCount,
                   CoreVariableCount);
 
     CkpFreezeAdd(Vm, &String, "Strings: ", 9);
-    CkpFreezeList(Vm, &String, &(Module->Strings.List), 0);
+    CkpFreezeList(Vm,
+                  &String,
+                  &(Module->Strings.List),
+                  Module->Strings.List.Count,
+                  0);
+
     CkpFreezeAdd(Vm, &String, "Closure: ", 9);
     Closure = Module->Closure;
 
@@ -573,6 +580,7 @@ CkpFreezeList (
     PCK_VM Vm,
     PCK_BYTE_ARRAY String,
     PCK_VALUE_ARRAY List,
+    UINTN Count,
     UINTN StartIndex
     )
 
@@ -590,6 +598,9 @@ Arguments:
 
     List - Supplies a pointer to the list to print.
 
+    Count - Supplies the number of elements in the list. Set this to the List
+        count.
+
     StartIndex - Supplies the index to start from, in cases where the entire
         list is not saved.
 
@@ -603,14 +614,14 @@ Return Value:
 
     UINTN Index;
 
-    CK_ASSERT(StartIndex <= List->Count);
+    CK_ASSERT((Count <= List->Count) && (StartIndex <= Count));
 
     CkpFreezeAdd(Vm, String, "l", 1);
-    CkpFreezeRawInteger(Vm, String, List->Count - StartIndex);
+    CkpFreezeRawInteger(Vm, String, Count - StartIndex);
     CkpFreezeAdd(Vm, String, "[", 1);
-    for (Index = StartIndex; Index < List->Count; Index += 1) {
+    for (Index = StartIndex; Index < Count; Index += 1) {
         CkpFreezeValue(Vm, String, List->Data[Index]);
-        if (Index < List->Count - 1) {
+        if (Index < Count - 1) {
             CkpFreezeAdd(Vm, String, ",\n", 2);
         }
     }
@@ -813,7 +824,12 @@ Return Value:
     CkpFreezeAdd(Vm, String, "f{\nCode: ", 9);
     CkpFreezeBuffer(Vm, String, Function->Code.Count, Function->Code.Data);
     CkpFreezeAdd(Vm, String, "\nConstants: ", 12);
-    CkpFreezeList(Vm, String, &(Function->Constants), 0);
+    CkpFreezeList(Vm,
+                  String,
+                  &(Function->Constants),
+                  Function->Constants.Count,
+                  0);
+
     CkpFreezeAdd(Vm, String, "MaxStack: ", 10);
     CkpFreezeInteger(Vm, String, Function->MaxStack);
     CkpFreezeAdd(Vm, String, "\nUpvalueCount: ", 15);

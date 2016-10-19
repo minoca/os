@@ -754,8 +754,8 @@ Return Value:
     // from mydir.mymodule import thing1, thing2 compiles to:
     //     var mymodule = Core.importModule("mydir.mymodule");
     //     mymodule.run();
-    //     thing1 = mymodule.get("thing1");
-    //     thing2 = mymodule.get("thing2");
+    //     thing1 = mymodule.__get("thing1");
+    //     thing2 = mymodule.__get("thing2");
     // from mydir.mymodule import * compiles to:
     //     var mymodule = Core.importModule("mydir.mymodule");
     //     mymodule.run();
@@ -865,7 +865,7 @@ Return Value:
                                      Token->Size);
 
         CkpEmitConstant(Compiler, NameString);
-        CkpEmitMethodCall(Compiler, 1, "get@1", 5);
+        CkpEmitMethodCall(Compiler, 1, "__get@1", 7);
         if (IdentifierList->Children > 1) {
             IdentifierList = CK_GET_AST_NODE(Compiler,
                                              IdentifierList->ChildIndex);

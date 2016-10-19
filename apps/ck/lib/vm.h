@@ -637,7 +637,7 @@ Return Value:
 
 --*/
 
-VOID
+BOOL
 CkpInstantiateClass (
     PCK_VM Vm,
     PCK_CLASS Class,
@@ -662,11 +662,15 @@ Arguments:
 
 Return Value:
 
-    None. The fiber error will be set on failure.
+    TRUE if a new frame was pushed onto the stack and needs to be run by the
+    interpreter.
+
+    FALSE if the call completed already (primitive and foreign functions fit
+    this category).
 
 --*/
 
-VOID
+BOOL
 CkpCallMethod (
     PCK_VM Vm,
     PCK_CLASS Class,
@@ -693,11 +697,15 @@ Arguments:
 
 Return Value:
 
-    None. The fiber error will be set on failure.
+    TRUE if a new frame was pushed onto the stack and needs to be run by the
+    interpreter.
+
+    FALSE if the call completed already (primitive and foreign functions fit
+    this category).
 
 --*/
 
-VOID
+BOOL
 CkpCallFunction (
     PCK_VM Vm,
     PCK_CLOSURE Closure,
@@ -721,7 +729,11 @@ Arguments:
 
 Return Value:
 
-    None. The fiber error will be set on failure.
+    TRUE if a new frame was pushed onto the stack and needs to be run by the
+    interpreter.
+
+    FALSE if the call completed already (primitive and foreign functions fit
+    this category).
 
 --*/
 

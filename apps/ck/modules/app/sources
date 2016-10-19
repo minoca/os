@@ -2,31 +2,23 @@
 #
 #   Copyright (c) 2016 Minoca Corp. All Rights Reserved
 #
-#   Module Name:
+#   Binary Name:
 #
-#       Chalk
+#       app Sources
 #
 #   Abstract:
 #
-#       This directory builds the Chalk language library and command line
-#       app.
+#       This file describes the common app module source files.
 #
 #   Author:
 #
-#       Evan Green 9-Jun-2016
+#       Evan Green 19-Oct-2016
 #
 #   Environment:
 #
-#       User
+#       POSIX
 #
 ################################################################################
 
-DIRS = app       \
-       lib       \
-       modules   \
-
-include $(SRCROOT)/os/minoca.mk
-
-modules: lib
-app: modules lib
+OBJS = app.o          \
 

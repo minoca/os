@@ -34,6 +34,8 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
+TARGETLIBS = $(OBJROOT)/os/apps/ck/modules/app/build/app.a
+
 ifeq ($(OS),Windows_NT)
 
 OBJS += $(WIN32_OBJS)

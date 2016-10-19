@@ -137,6 +137,12 @@ CkpStringToString (
     PCK_VALUE Arguments
     );
 
+BOOL
+CkpStringRepresentation (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -157,6 +163,7 @@ CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[] = {
     {"__mul@1", 1, CkpStringMultiply},
     {"__slice@1", 1, CkpStringSlice},
     {"__str@0", 0, CkpStringToString},
+    {"__repr@0", 0, CkpStringRepresentation},
     {NULL, 0, NULL}
 };
 
@@ -164,6 +171,8 @@ CK_PRIMITIVE_DESCRIPTION CkStringStaticPrimitives[] = {
     {"fromCharacter@1", 1, CkpStringFromCharacter},
     {NULL, 0, NULL}
 };
+
+PCSTR CkStringEscapes = "0??????abtnvfr";
 
 //
 // ------------------------------------------------------------------ Functions
@@ -1813,6 +1822,133 @@ Return Value:
 
 {
 
+    return TRUE;
+}
+
+BOOL
+CkpStringRepresentation (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the string representation function, which can be
+    evaluated back into the interpreter.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PSTR Destination;
+    CHAR Digit;
+    PCSTR End;
+    UINTN Length;
+    PCK_STRING Result;
+    PCSTR Source;
+    PCK_STRING SourceString;
+
+    SourceString = CK_AS_STRING(Arguments[0]);
+
+    //
+    // Figure out how long the string is.
+    //
+
+    Source = SourceString->Value;
+    End = Source + SourceString->Length;
+    Length = 2;
+    while (Source < End) {
+        if (*Source == '"') {
+            Length += 2;
+
+        } else if ((*Source >= ' ') && (*Source < 0x7F)) {
+            Length += 1;
+
+        } else if ((*Source <= '\r') &&
+                   (CkStringEscapes[(INT)*Source] != '?')) {
+
+            Length += 2;
+
+        } else {
+            Length += 4;
+        }
+
+        Source += 1;
+    }
+
+    Result = CkpStringAllocate(Vm, Length);
+    if (Result == NULL) {
+        return FALSE;
+    }
+
+    Destination = (PSTR)(Result->Value);
+    Source = SourceString->Value;
+    *Destination = '"';
+    Destination += 1;
+    while (Source < End) {
+        if (*Source == '"') {
+            *Destination = '\\';
+            Destination += 1;
+            *Destination = '"';
+
+        } else if ((*Source >= ' ') && (*Source < 0x7F)) {
+            *Destination = *Source;
+
+        } else if ((*Source <= '\r') &&
+                   (CkStringEscapes[(INT)*Source] != '?')) {
+
+            *Destination = '\\';
+            Destination += 1;
+            *Destination = CkStringEscapes[(INT)*Source];
+
+        } else {
+            *Destination = '\\';
+            Destination += 1;
+            *Destination = 'x';
+            Destination += 1;
+            Digit = *Source >> 4;
+            if (Digit > 9) {
+                *Destination = 'A' + Digit - 0xA;
+
+            } else {
+                *Destination = '0' + Digit;
+            }
+
+            Destination += 1;
+            Digit = *Source & 0x0F;
+            if (Digit > 9) {
+                *Destination = 'A' + Digit - 0xA;
+
+            } else {
+                *Destination = '0' + Digit;
+            }
+        }
+
+        Destination += 1;
+        Source += 1;
+    }
+
+    *Destination = '"';
+    Destination += 1;
+
+    CK_ASSERT(Destination == Result->Value + Result->Length);
+
+    CkpStringHash(Result);
+    CK_OBJECT_VALUE(Arguments[0], Result);
     return TRUE;
 }
 

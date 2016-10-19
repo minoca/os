@@ -61,7 +61,7 @@ class List {
             }
 
             first = 0;
-            result += element.__str();
+            result += element.__repr();
         }
 
         result += end;
@@ -211,7 +211,7 @@ class Int {
 
 class String {
     function __format(flags, width, precision, specifier) {
-        if (specifier != "s") {
+        if ((specifier != "s") && (specifier != "r")) {
             var errorDescription = "Invalid specifier \"" + specifier +
                                    "\" for String";
 
@@ -319,8 +319,26 @@ class String {
                 }
 
                 var object = arguments[argumentIndex];
+
+                //
+                // If the object doesn't implement format, convert it to a
+                // string and then run the standard string format.
+                //
+
                 if (!object.implements("__format", 4)) {
-                    object = object.__str();
+                    if (specifier == "r") {
+                        object = object.__repr();
+                        specifier = "s";
+
+                    } else if (specifier == "s") {
+                        object = object.__str();
+
+                    } else {
+                        var error = "Specifier is " + specifier +
+                                    " and object does not respond to __format";
+
+                        Core.raise(FormatError(error));
+                    }
                 }
 
                 result += object.__format(flags, width, precision, specifier);
