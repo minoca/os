@@ -2541,8 +2541,6 @@ Members:
     Version - Stores the version information for this structure. Set this to
         IO_CACHE_STATISTICS_VERSION.
 
-    EntryCount - Stores the number of page cache entries.
-
     HeadroomPagesTrigger - Stores the number of free physical pages in the
         system below which the page count will begin evicting entries to
         conserve memory.
@@ -2571,7 +2569,6 @@ Members:
 
 typedef struct _IO_CACHE_STATISTICS {
     ULONG Version;
-    ULONGLONG EntryCount;
     ULONGLONG HeadroomPagesTrigger;
     ULONGLONG HeadroomPagesRetreat;
     ULONGLONG MinimumPagesTarget;

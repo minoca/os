@@ -366,13 +366,6 @@ LIST_ENTRY IoPageCacheRemovalList;
 PQUEUED_LOCK IoPageCacheListLock;
 
 //
-// The count tracks the current number of entries in the cache's tree. This is
-// protected by the tree lock.
-//
-
-UINTN IoPageCacheEntryCount = 0;
-
-//
 // Store the target number of free pages in the system the page cache shoots
 // for once low-memory eviction of page cache entries kicks in.
 //
@@ -571,7 +564,6 @@ Return Value:
     }
 
     READ_INT64_SYNC(&IoPageCacheLastCleanTime, &LastCleanTime);
-    Statistics->EntryCount = IoPageCacheEntryCount;
     Statistics->HeadroomPagesTrigger = IoPageCacheHeadroomPagesTrigger;
     Statistics->HeadroomPagesRetreat = IoPageCacheHeadroomPagesRetreat;
     Statistics->MinimumPagesTarget = IoPageCacheMinimumPagesTarget;
@@ -3559,8 +3551,6 @@ Return Value:
     RtlRedBlackTreeInsert(&(NewEntry->FileObject->PageCacheTree),
                           &(NewEntry->Node));
 
-    IoPageCacheEntryCount += 1;
-
     //
     // Now link the new entry to the supplied link entry based on their I/O
     // types.
@@ -4974,7 +4964,6 @@ Return Value:
                           &(PageCacheEntry->Node));
 
     PageCacheEntry->Node.Parent = NULL;
-    IoPageCacheEntryCount -= 1;
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
         RtlDebugPrint("PAGE CACHE: Remove PAGE_CACHE_ENTRY 0x%08x: FILE_OBJECT "
                       "0x%08x, offset 0x%I64x, physical address "
