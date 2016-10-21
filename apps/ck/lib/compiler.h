@@ -75,7 +75,7 @@ PCK_FUNCTION
 CkpCompile (
     PCK_VM Vm,
     PCK_MODULE Module,
-    PSTR Source,
+    PCSTR Source,
     UINTN Length,
     LONG Line,
     BOOL PrintErrors

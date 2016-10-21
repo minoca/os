@@ -413,7 +413,7 @@ Members:
 
 typedef struct _LEXER {
     ULONG Flags;
-    PSTR Input;
+    PCSTR Input;
     ULONG InputSize;
     ULONG Position;
     ULONG Line;

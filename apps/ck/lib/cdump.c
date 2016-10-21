@@ -253,11 +253,17 @@ Return Value:
     CoreModule = CkpModuleGet(Vm, CkNullValue);
     if (CoreModule != NULL) {
         CoreVariableCount = CoreModule->Variables.Count;
+
+        CK_ASSERT(CoreVariableCount == CoreModule->CompiledVariableCount);
+
         CkpFreezeAdd(Vm, &String, "\nCoreVariableCount: ", 20);
         CkpFreezeInteger(Vm, &String, CoreVariableCount);
     }
 
     CkpFreezeAdd(Vm, &String, "\nVariableNames: ", 16);
+
+    CK_ASSERT(CoreVariableCount <= Module->CompiledVariableCount);
+
     CkpFreezeList(Vm,
                   &String,
                   &(Module->VariableNames.List),
@@ -271,12 +277,12 @@ Return Value:
                   Module->Strings.List.Count,
                   0);
 
-    CkpFreezeAdd(Vm, &String, "Closure: ", 9);
     Closure = Module->Closure;
+    if ((Closure != NULL) && (Closure->Type == CkClosureBlock)) {
+        CkpFreezeAdd(Vm, &String, "Closure: ", 9);
+        CkpFreezeFunction(Vm, &String, Closure->U.Block.Function);
+    }
 
-    CK_ASSERT(Closure->Type == CkClosureBlock);
-
-    CkpFreezeFunction(Vm, &String, Closure->U.Block.Function);
     CkpFreezeAdd(Vm, &String, "}\n", 2);
     Value = CkNullValue;
     if (String.Count != 0) {

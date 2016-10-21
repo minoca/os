@@ -27,10 +27,12 @@ Environment:
 #include <minoca/lib/types.h>
 #include <minoca/lib/chalk.h>
 #include <minoca/lib/chalk/app.h>
+#include <minoca/lib/chalk/bundle.h>
 
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
+#include <libgen.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,6 +169,7 @@ Return Value:
 {
 
     ULONG ArgumentIndex;
+    PSTR BaseName;
     CK_APP_CONTEXT Context;
     PSTR FileBuffer;
     UINTN FileSize;
@@ -240,12 +243,16 @@ Return Value:
         goto MainEnd;
     }
 
-    if (!CkPreloadAppModule(Context.Vm)) {
-        fprintf(stderr, "Error: Failed to load app module.\n");
+    if ((!CkPreloadAppModule(Context.Vm)) ||
+        (!CkPreloadBundleModule(Context.Vm))) {
+
+        fprintf(stderr, "Error: Failed to preload builtin modules.\n");
         Status = 2;
         goto MainEnd;
     }
 
+    CkBundleExecName = Arguments[0];
+    CkAppExecName = Arguments[0];
     ArgumentIndex = optind;
     ScriptPath = NULL;
     if (ArgumentIndex < ArgumentCount) {
@@ -266,6 +273,21 @@ Return Value:
     CkPushModulePath(Context.Vm);
     ChalkSetupModulePath(Context.Vm, ScriptPath);
     CkStackPop(Context.Vm);
+
+    //
+    // If the app doesn't start with the name chalk, try to load a bundle from
+    // the app.
+    //
+
+    BaseName = basename(Arguments[0]);
+    if (strncasecmp(BaseName, "chalk", 5) != 0) {
+        CkAppArgv = Arguments + 1;
+        CkAppArgc = ArgumentCount - 1;
+        Status = CkBundleThaw(Context.Vm);
+        if (Status != -1) {
+            goto MainEnd;
+        }
+    }
 
     //
     // Run the script if there was one.
@@ -326,8 +348,6 @@ Arguments:
 
     ChalkDirectory - Supplies the directory to tack on to the base. If this
         is supplied, the major version number will be appended to it.
-
-    MajorVersion - Supplies the major version number to tack on the end.
 
 Return Value:
 

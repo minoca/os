@@ -231,7 +231,7 @@ PSTR CkLexerIgnoreExpressions[] = {
 VOID
 CkpInitializeLexer (
     PLEXER Lexer,
-    PSTR Source,
+    PCSTR Source,
     UINTN Length,
     LONG Line
     )

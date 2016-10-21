@@ -257,3 +257,35 @@ Return Value:
 
 --*/
 
+VOID
+CkpRaiseInternalException (
+    PCK_VM Vm,
+    PCSTR Type,
+    PCSTR Format,
+    va_list Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine raises an exception from within the Chalk interpreter core.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Type - Supplies a pointer to the name of the exception class to raise. This
+        must be visible in the current module.
+
+    Format - Supplies a printf-style format string containing the
+        description of the exception.
+
+    Arguments - Supplies any remaining arguments according to the format string.
+
+Return Value:
+
+    None.
+
+--*/
+

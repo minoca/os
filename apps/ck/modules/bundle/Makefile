@@ -2,27 +2,32 @@
 #
 #   Copyright (c) 2016 Minoca Corp. All Rights Reserved
 #
-#   Module Name:
+#   Binary Name:
 #
-#       Chalk Modules
+#       bundle
 #
 #   Abstract:
 #
-#       This directory builds the Chalk modules.
+#       This Chalk module implements support for creating a single specialized
+#       binary out of an existing Chalk environment.
 #
 #   Author:
 #
-#       Evan Green 28-Aug-2016
+#       Evan Green 19-Oct-2016
 #
 #   Environment:
 #
-#       User
+#       POSIX
 #
 ################################################################################
 
-DIRS = app       \
-       bundle    \
-       os        \
+BINARY = bundle.a
+
+BINARYTYPE = library
+
+include $(SRCDIR)/sources
+
+DIRS = build   \
 
 include $(SRCROOT)/os/minoca.mk
 

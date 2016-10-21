@@ -60,6 +60,12 @@ INT CkAppArgc;
 PSTR *CkAppArgv;
 
 //
+// Define the original application name.
+//
+
+PCSTR CkAppExecName = "";
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -101,7 +107,7 @@ CkpAppModuleInit (
 
 Routine Description:
 
-    This routine populates the OS module namespace.
+    This routine populates the module namespace.
 
 Arguments:
 
@@ -133,6 +139,13 @@ Return Value:
     }
 
     CkSetVariable(Vm, 0, "argv");
+
+    //
+    // Set the original exec name.
+    //
+
+    CkPushString(Vm, CkAppExecName, strlen(CkAppExecName));
+    CkSetVariable(Vm, 0, "execName");
     return;
 }
 

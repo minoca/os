@@ -25,7 +25,6 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <stdarg.h>
 #include <stdio.h>
 
 #include "chalkp.h"
@@ -274,7 +273,7 @@ PCK_FUNCTION
 CkpCompile (
     PCK_VM Vm,
     PCK_MODULE Module,
-    PSTR Source,
+    PCSTR Source,
     UINTN Length,
     LONG Line,
     BOOL PrintErrors
@@ -866,6 +865,7 @@ Return Value:
 
         CkpEmitConstant(Compiler, NameString);
         CkpEmitMethodCall(Compiler, 1, "__get@1", 7);
+        CkpDefineVariable(Compiler, NameVariable);
         if (IdentifierList->Children > 1) {
             IdentifierList = CK_GET_AST_NODE(Compiler,
                                              IdentifierList->ChildIndex);
@@ -873,8 +873,6 @@ Return Value:
         } else {
             break;
         }
-
-        CkpDefineVariable(Compiler, NameVariable);
     }
 
     return;
@@ -2218,7 +2216,7 @@ Return Value:
 
     PLEXER_TOKEN Name;
     ULONG NameIndex;
-    PSTR NameString;
+    PCSTR NameString;
     PLEXER_TOKEN Static;
     CK_SYMBOL_INDEX Symbol;
 

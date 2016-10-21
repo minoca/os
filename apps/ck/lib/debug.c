@@ -24,7 +24,6 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <stdarg.h>
 #include <stdio.h>
 
 #include "chalkp.h"

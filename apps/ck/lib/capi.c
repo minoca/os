@@ -183,6 +183,68 @@ Return Value:
 }
 
 CK_API
+BOOL
+CkLoadModule (
+    PCK_VM Vm,
+    PCSTR ModuleName,
+    PCSTR Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine loads (but does not run) the given module, and pushes it on
+    the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies a pointer to the full "dotted.module.name". A copy of
+        this memory will be made.
+
+    Path - Supplies an optional pointer to the full path of the module. A copy
+        of this memory will be made. If this is supplied, then this is the only
+        path that is attempted when opening the module. If this is not supplied,
+        then the standard load paths will be used. If a module by the given
+        name is already loaded, this is ignored.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure. In this case, an exception will have been thrown. The
+    caller should not modify the stack anymore, and should return as soon as
+    possible.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    CK_VALUE Module;
+    CK_VALUE NameString;
+
+    NameString = CkpStringCreate(Vm, ModuleName, strlen(ModuleName));
+    if (CK_IS_NULL(NameString)) {
+        return FALSE;
+    }
+
+    Module = CkpModuleLoad(Vm, NameString, Path);
+    if (CK_IS_NULL(Module)) {
+        return FALSE;
+    }
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_PUSH(Fiber, 1));
+
+    CK_PUSH(Vm->Fiber, Module);
+    return TRUE;
+}
+
+CK_API
 UINTN
 CkGetStackSize (
     PCK_VM Vm
@@ -2112,9 +2174,11 @@ Return Value:
     PCK_CLASS Class;
     PCK_CLOSURE Closure;
     PCK_FIBER Fiber;
+    UINTN FrameCount;
     BOOL FramePushed;
 
     Fiber = Vm->Fiber;
+    FrameCount = Fiber->FrameCount;
 
     CK_ASSERT(CK_CAN_POP(Fiber, ArgumentCount + 1));
 
@@ -2158,7 +2222,7 @@ CallEnd:
 
     CK_ASSERT((Vm->Fiber == Fiber) || (Vm->Fiber == NULL));
 
-    if ((Vm->Fiber == NULL) || (!CK_IS_NULL(Vm->Fiber->Error))) {
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
         return FALSE;
     }
 
@@ -2205,6 +2269,7 @@ Return Value:
     PCK_CLOSURE Closure;
     CK_STRING FakeString;
     PCK_FIBER Fiber;
+    UINTN FrameCount;
     UINTN Length;
     CK_VALUE Method;
     CHAR Name[CK_MAX_METHOD_SIGNATURE];
@@ -2213,6 +2278,7 @@ Return Value:
     CK_VALUE Value;
 
     Fiber = Vm->Fiber;
+    FrameCount = Fiber->FrameCount;
 
     CK_ASSERT(CK_CAN_POP(Fiber, ArgumentCount + 1));
 
@@ -2262,13 +2328,98 @@ CallMethodEnd:
     // is tied with the C stack.
     //
 
-    CK_ASSERT((Vm->Fiber == Fiber) || (Vm->Fiber == NULL));
-
-    if ((Vm->Fiber == NULL) || (!CK_IS_NULL(Vm->Fiber->Error))) {
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
         return FALSE;
     }
 
     return TRUE;
+}
+
+CK_API
+VOID
+CkRaiseException (
+    PCK_VM Vm,
+    INTN StackIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine raises an exception. The caller must not make any more
+    modifications to the stack, and should return as soon as possible.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the exception to raise. Negative
+        values reference stack indices from the end of the stack.
+
+Return Value:
+
+    None. The foreign function call frame is no longer on the execution stack.
+
+--*/
+
+{
+
+    PCK_VALUE Exception;
+
+    Exception = CkpGetStackIndex(Vm, StackIndex);
+    if (!CkpObjectIsClass(CkpGetClass(Vm, *Exception), Vm->Class.Exception)) {
+        CkpRuntimeError(Vm, "TypeError", "Expected an Exception");
+
+    } else {
+        CkpRaiseException(Vm, *Exception, 0);
+    }
+
+    return;
+}
+
+CK_API
+VOID
+CkRaiseBasicException (
+    PCK_VM Vm,
+    PCSTR Type,
+    PCSTR MessageFormat,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reports a runtime error in the current fiber. The caller must
+    not make any more modifications to the stack, and should return as soon as
+    possible.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Type - Supplies the name of a builtin exception type. This type must
+        already be in scope.
+
+    MessageFormat - Supplies the printf message format string. The total size
+        of the resulting string is limited, so please be succinct.
+
+    ... - Supplies the remaining arguments.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    va_list ArgumentList;
+
+    va_start(ArgumentList, MessageFormat);
+    CkpRaiseInternalException(Vm, Type, MessageFormat, ArgumentList);
+    va_end(ArgumentList);
+    return;
 }
 
 CK_API

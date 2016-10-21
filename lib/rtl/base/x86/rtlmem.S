@@ -179,8 +179,8 @@ END_FUNCTION(RtlSetMemory)
 ## RTL_API
 ## BOOL
 ## RtlCompareMemory (
-##     PVOID FirstBuffer,
-##     PVOID SecondBuffer,
+##     PCVOID FirstBuffer,
+##     PCVOID SecondBuffer,
 ##     UINTN Size
 ##     )
 ##

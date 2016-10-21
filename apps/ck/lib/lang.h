@@ -262,7 +262,7 @@ Members:
 typedef struct _CK_PARSER {
     PCK_VM Vm;
     PCK_MODULE Module;
-    PSTR Source;
+    PCSTR Source;
     UINTN SourceLength;
     PCK_SYMBOL_UNION Nodes;
     UINTN NodeCount;

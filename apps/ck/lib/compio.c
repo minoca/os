@@ -1117,9 +1117,9 @@ Return Value:
 {
 
     CK_VALUE CkValue;
-    PSTR Current;
+    PCSTR Current;
     INT Digit;
-    PSTR End;
+    PCSTR End;
     ULONGLONG PreviousValue;
     ULONGLONG Value;
 
@@ -1193,12 +1193,12 @@ Return Value:
 
 {
 
-    PSTR BasicStart;
+    PCSTR BasicStart;
     CK_BYTE_ARRAY ByteArray;
     INT Character;
-    PSTR Current;
-    PSTR End;
-    PSTR Start;
+    PCSTR Current;
+    PCSTR End;
+    PCSTR Start;
     CK_VALUE StringValue;
 
     CkpInitializeArray(&ByteArray);
@@ -1687,7 +1687,7 @@ Return Value:
 
     INT Digit;
     ULONG Index;
-    PSTR String;
+    PCSTR String;
     INT Value;
 
     String = Compiler->Parser->Source + Token->Position + Offset;

@@ -27,7 +27,6 @@ Environment:
 #include "chalkp.h"
 #include "debug.h"
 
-#include <stdarg.h>
 #include <stdio.h>
 
 //
@@ -48,14 +47,6 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-VOID
-CkpRaiseInternalException (
-    PCK_VM Vm,
-    PCSTR Type,
-    PCSTR Format,
-    va_list Arguments
-    );
 
 CK_VALUE
 CkpExceptionGetField (
@@ -408,10 +399,6 @@ RaiseExceptionEnd:
     return;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
 VOID
 CkpRaiseInternalException (
     PCK_VM Vm,
@@ -530,6 +517,10 @@ Return Value:
     CkpPopRoot(Vm);
     return;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 CK_VALUE
 CkpExceptionGetField (

@@ -89,7 +89,10 @@ Return Value:
 
 {
 
+    PSTR Copy;
     CHAR Directory[MAX_PATH];
+    PSTR Next;
+    PSTR Path;
     HRESULT Result;
     PSTR ScriptBase;
 
@@ -98,7 +101,7 @@ Return Value:
     //
 
     if (Script != NULL) {
-        ScriptBase = basename(Script);
+        ScriptBase = dirname(Script);
         ChalkAddSearchPath(Vm, ScriptBase, NULL);
 
     //
@@ -116,7 +119,24 @@ Return Value:
     //
 
     if (GetEnvironmentVariable("CK_LIBRARY_PATH", Directory, MAX_PATH) != 0) {
-        ChalkAddSearchPath(Vm, Directory, NULL);
+        Copy = strdup(Directory);
+        if (Copy == NULL) {
+            return;
+        }
+
+        Path = Copy;
+        while (Path != NULL) {
+            Next = strchr(Path, ';');
+            if (Next != NULL) {
+                *Next = '\0';
+                Next += 1;
+            }
+
+            ChalkAddSearchPath(Vm, Path, NULL);
+            Path = Next;
+        }
+
+        free(Copy);
 
     } else {
 

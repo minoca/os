@@ -160,7 +160,7 @@ Members:
 --*/
 
 typedef struct _CK_LOCAL {
-    PSTR Name;
+    PCSTR Name;
     ULONG Length;
     LONG Scope;
     BOOL IsUpvalue;
@@ -825,7 +825,7 @@ Return Value:
 CK_VARIABLE
 CkpResolveNonGlobal (
     PCK_COMPILER Compiler,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length
     );
 
@@ -1019,7 +1019,7 @@ Return Value:
 CK_SYMBOL_INDEX
 CkpAddLocal (
     PCK_COMPILER Compiler,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length
     );
 
@@ -1608,7 +1608,7 @@ Return Value:
 VOID
 CkpInitializeLexer (
     PLEXER Lexer,
-    PSTR Source,
+    PCSTR Source,
     UINTN Length,
     LONG Line
     );

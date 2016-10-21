@@ -29,6 +29,16 @@ Author:
     (((*(PUCHAR)(_Bytes)) << 8) | *(((PUCHAR)(_Bytes)) + 1))
 
 //
+// This macro determines whether or not the fiber has errored out. Users of
+// this macro must save the fiber frame count before attempting the operation
+// that might have generated an exception.
+//
+
+#define CK_EXCEPTION_RAISED(_Vm, _Fiber, _FrameCount) \
+    (((_Vm)->Fiber == NULL) || ((_Vm)->Fiber != (_Fiber)) || \
+     ((_Vm)->Fiber->FrameCount < (_FrameCount)))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -37,7 +47,7 @@ Author:
 // object stack.
 //
 
-#define CK_MAX_WORKING_OBJECTS 5
+#define CK_MAX_WORKING_OBJECTS 6
 
 //
 // Define a reasonable size for error messages.
@@ -547,9 +557,9 @@ Return Value:
 CK_ERROR_TYPE
 CkpInterpret (
     PCK_VM Vm,
-    PSTR ModuleName,
-    PSTR ModulePath,
-    PSTR Source,
+    PCSTR ModuleName,
+    PCSTR ModulePath,
+    PCSTR Source,
     UINTN Length,
     LONG Line
     );
@@ -744,7 +754,8 @@ Return Value:
 CK_VALUE
 CkpModuleLoad (
     PCK_VM Vm,
-    CK_VALUE ModuleName
+    CK_VALUE ModuleName,
+    PCSTR ForcedPath
     );
 
 /*++
@@ -759,6 +770,8 @@ Arguments:
 
     ModuleName - Supplies the module name value.
 
+    ForcedPath - Supplies an optional pointer to the path to load.
+
 Return Value:
 
     Returns the newly loaded module value on success.
@@ -772,9 +785,10 @@ CkpModuleLoadSource (
     PCK_VM Vm,
     CK_VALUE ModuleName,
     CK_VALUE Path,
-    PSTR Source,
+    PCSTR Source,
     UINTN Length,
-    LONG Line
+    LONG Line,
+    PBOOL WasPrecompiled
     );
 
 /*++
@@ -799,6 +813,9 @@ Arguments:
 
     Line - Supplies the line number this code starts on. Supply 1 to start at
         the beginning.
+
+    WasPrecompiled - Supplies a pointer where a boolean will be returned
+        indicating if this was precompiled code or not.
 
 Return Value:
 

@@ -49,7 +49,7 @@ Environment:
 CK_SYMBOL_INDEX
 CkpFindUpvalue (
     PCK_COMPILER Compiler,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length
     );
 
@@ -63,7 +63,7 @@ CkpAddUpvalue (
 CK_SYMBOL_INDEX
 CkpResolveLocal (
     PCK_COMPILER Compiler,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length
     );
 
@@ -363,7 +363,7 @@ Return Value:
 CK_VARIABLE
 CkpResolveNonGlobal (
     PCK_COMPILER Compiler,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length
     )
 
@@ -528,7 +528,7 @@ Return Value:
 
     CK_SYMBOL_INDEX Index;
     PCK_LOCAL Local;
-    PSTR Name;
+    PCSTR Name;
     CK_SYMBOL_INDEX Symbol;
 
     if (Token->Size > CK_MAX_NAME) {
@@ -742,7 +742,7 @@ Return Value:
 CK_SYMBOL_INDEX
 CkpAddLocal (
     PCK_COMPILER Compiler,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length
     )
 
@@ -957,7 +957,7 @@ Return Value:
 CK_SYMBOL_INDEX
 CkpFindUpvalue (
     PCK_COMPILER Compiler,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length
     )
 
@@ -1105,7 +1105,7 @@ Return Value:
 CK_SYMBOL_INDEX
 CkpResolveLocal (
     PCK_COMPILER Compiler,
-    PSTR Name,
+    PCSTR Name,
     UINTN Length
     )
 

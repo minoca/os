@@ -26,7 +26,6 @@ Environment:
 //
 
 #include "chalkp.h"
-#include <stdarg.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -377,6 +376,48 @@ Return Value:
     CkPushString(Vm, String, Length);
     CkStackReplace(Vm, 0);
     return;
+}
+
+CK_API
+BOOL
+CkGetLength (
+    PCK_VM Vm,
+    INTN StackIndex,
+    PCK_INTEGER Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of elements in the given list or dict by
+    calling its length method.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the list to get the length of.
+
+    Length - Supplies a pointer where the result of the length method will be
+        returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CkPushValue(Vm, StackIndex);
+    if (!CkCallMethod(Vm, "length", 0)) {
+        return FALSE;
+    }
+
+    *Length = CkGetInteger(Vm, -1);
+    CkStackPop(Vm);
+    return TRUE;
 }
 
 //

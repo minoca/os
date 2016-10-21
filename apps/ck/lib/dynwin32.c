@@ -78,12 +78,21 @@ Return Value:
 {
 
     HMODULE NewHandle;
+    UINT OldFlags;
+
+    //
+    // Avoid an annoying dialog if the image turns out to be bogus, since on
+    // direct loads the foreign load is attempted first.
+    //
+
+    OldFlags = SetErrorMode(SEM_NOOPENFILEERRORBOX | SEM_FAILCRITICALERRORS);
 
     //
     // Attempt to load the library. Bail on failure.
     //
 
     NewHandle = LoadLibrary(BinaryName);
+    SetErrorMode(OldFlags);
     return NewHandle;
 }
 

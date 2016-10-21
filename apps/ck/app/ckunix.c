@@ -87,8 +87,10 @@ Return Value:
 
 {
 
+    PSTR Copy;
     PSTR CurrentDirectory;
     PSTR Home;
+    PSTR Next;
     PSTR Path;
     PSTR ScriptBase;
 
@@ -97,7 +99,7 @@ Return Value:
     //
 
     if (Script != NULL) {
-        ScriptBase = basename(Script);
+        ScriptBase = dirname(Script);
         if (ScriptBase != NULL) {
             ChalkAddSearchPath(Vm, ScriptBase, NULL);
         }
@@ -120,7 +122,24 @@ Return Value:
 
     Path = getenv("CK_LIBRARY_PATH");
     if (Path != NULL) {
-        ChalkAddSearchPath(Vm, Path, NULL);
+        Copy = strdup(Path);
+        if (Copy == NULL) {
+            return;
+        }
+
+        Path = Copy;
+        while (Path != NULL) {
+            Next = strchr(Path, ':');
+            if (Next != NULL) {
+                *Next = '\0';
+                Next += 1;
+            }
+
+            ChalkAddSearchPath(Vm, Path, NULL);
+            Path = Next;
+        }
+
+        free(Copy);
 
     } else {
 

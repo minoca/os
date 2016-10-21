@@ -1619,7 +1619,7 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PSTR Input;
+    PCSTR Input;
     BOOL Match;
     PC_TYPE Type;
 
@@ -1782,7 +1782,7 @@ Return Value:
     LEXER_TOKEN Token;
 
     Failures = 0;
-    Input = Lexer->Input;
+    Input = (PSTR)(Lexer->Input);
     KStatus = YyLexInitialize(Lexer);
     if (!KSUCCESS(KStatus)) {
         Failures += 1;
@@ -1980,7 +1980,7 @@ Return Value:
     printf("%*s%s\n", RecursionDepth, "", Grammar->Name);
     for (Index = 0; Index < Node->TokenCount; Index += 1) {
         Token = Node->Tokens[Index];
-        Input = Lexer->Input + Token->Position;
+        Input = (PSTR)(Lexer->Input + Token->Position);
         Original = Input[Token->Size];
         Input[Token->Size] = '\0';
         printf("%*s%s (%d:%d)\n",

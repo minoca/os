@@ -25,7 +25,6 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <stdarg.h>
 #include <stdio.h>
 
 #include "chalkp.h"
@@ -1654,7 +1653,7 @@ Return Value:
         return FALSE;
     }
 
-    Arguments[0] = CkpModuleLoad(Vm, Arguments[1]);
+    Arguments[0] = CkpModuleLoad(Vm, Arguments[1], NULL);
     if (CK_IS_NULL(Arguments[0])) {
         return FALSE;
     }

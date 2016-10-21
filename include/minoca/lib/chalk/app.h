@@ -41,6 +41,12 @@ extern INT CkAppArgc;
 extern PSTR *CkAppArgv;
 
 //
+// Define the original application name.
+//
+
+extern PCSTR CkAppExecName;
+
+//
 // -------------------------------------------------------- Function Prototypes
 //
 

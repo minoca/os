@@ -2,27 +2,23 @@
 #
 #   Copyright (c) 2016 Minoca Corp. All Rights Reserved
 #
-#   Module Name:
+#   Binary Name:
 #
-#       Chalk Modules
+#       bundle Sources
 #
 #   Abstract:
 #
-#       This directory builds the Chalk modules.
+#       This file describes the module source files.
 #
 #   Author:
 #
-#       Evan Green 28-Aug-2016
+#       Evan Green 19-Oct-2016
 #
 #   Environment:
 #
-#       User
+#       POSIX
 #
 ################################################################################
 
-DIRS = app       \
-       bundle    \
-       os        \
-
-include $(SRCROOT)/os/minoca.mk
+OBJS = bundle.o       \
 

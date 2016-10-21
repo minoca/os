@@ -476,8 +476,8 @@ CK_API
 CK_ERROR_TYPE
 CkInterpret (
     PCK_VM Vm,
-    PSTR Path,
-    PSTR Source,
+    PCSTR Path,
+    PCSTR Source,
     UINTN Length,
     LONG Line
     )
@@ -736,9 +736,9 @@ Return Value:
 CK_ERROR_TYPE
 CkpInterpret (
     PCK_VM Vm,
-    PSTR ModuleName,
-    PSTR ModulePath,
-    PSTR Source,
+    PCSTR ModuleName,
+    PCSTR ModulePath,
+    PCSTR Source,
     UINTN Length,
     LONG Line
     )
@@ -801,7 +801,8 @@ Return Value:
                                  PathValue,
                                  Source,
                                  Length,
-                                 Line);
+                                 Line,
+                                 NULL);
 
     if (!CK_IS_NULL(PathValue)) {
         CkpPopRoot(Vm);
@@ -1510,12 +1511,14 @@ Return Value:
     PCK_VALUE Arguments;
     CK_STRING FakeString;
     PCK_FIBER Fiber;
+    UINTN FrameCount;
     UINTN Length;
     CHAR Name[CK_MAX_METHOD_SIGNATURE];
     CK_VALUE NameValue;
     CK_FUNCTION_SIGNATURE Signature;
 
     Fiber = Vm->Fiber;
+    FrameCount = Fiber->FrameCount;
     Arguments = Fiber->StackTop - Arity;
 
     //
@@ -1523,7 +1526,7 @@ Return Value:
     //
 
     Arguments[0] = CkpCreateInstance(Vm, Class);
-    if (!CK_IS_NULL(Fiber->Error)) {
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
         return FALSE;
     }
 
@@ -1693,15 +1696,11 @@ Return Value:
     } else if (Closure->Type == CkClosureForeign) {
         FrameCount = Fiber->FrameCount;
         CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
-        if (FrameCount == Fiber->FrameCount) {
-            return FALSE;
-        }
-
         CkpEnsureStack(Vm,
                        Fiber,
                        (Fiber->StackTop - Fiber->Stack) + CK_MIN_FOREIGN_STACK);
 
-        if (!CK_IS_NULL(Fiber->Error)) {
+        if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
             return FALSE;
         }
 
@@ -1714,6 +1713,16 @@ Return Value:
         Fiber->ForeignCalls += 1;
         Closure->U.Foreign.Function(Vm);
         Fiber->ForeignCalls -= 1;
+
+        //
+        // If an exception was raised by the foreign function, don't restore
+        // the frame count or mess with the stack.
+        //
+
+        if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
+            return FALSE;
+        }
+
         Fiber->FrameCount = FrameCount;
         Fiber->StackTop -= Arity - 1;
 

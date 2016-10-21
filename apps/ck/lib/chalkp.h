@@ -38,6 +38,7 @@ Author:
 #include <minoca/lib/chalk.h>
 
 #include <assert.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include "value.h"

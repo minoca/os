@@ -29,6 +29,7 @@ Environment:
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -104,6 +105,16 @@ CkpLoadSourceFile (
     PCK_VM Vm,
     PCSTR Directory,
     PCSTR ModulePath,
+    PCK_MODULE_HANDLE ModuleData
+    );
+
+CK_LOAD_MODULE_RESULT
+CkpReadSource (
+    PCK_VM Vm,
+    PCSTR ModulePath,
+    UINTN PathLength,
+    FILE *File,
+    UINTN Size,
     PCK_MODULE_HANDLE ModuleData
     );
 
@@ -189,7 +200,8 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     ModulePath - Supplies a pointer to the module path to load. Directories
-        will be separated with dots.
+        will be separated with dots. If this contains a slash, then it is an
+        absolute path that should be loaded directly.
 
     ModuleData - Supplies a pointer where the loaded module information will
         be returned on success.
@@ -211,6 +223,19 @@ Return Value:
 
     if (!CkEnsureStack(Vm, 2)) {
         return CkLoadModuleNoMemory;
+    }
+
+    //
+    // If the module path contains a slash, just try to load it directly.
+    //
+
+    if (strchr(ModulePath, '/') != NULL) {
+        Result = CkpLoadDynamicModule(Vm, NULL, ModulePath, ModuleData);
+        if (Result != CkLoadModuleForeign) {
+            Result = CkpLoadSourceFile(Vm, NULL, ModulePath, ModuleData);
+        }
+
+        return Result;
     }
 
     //
@@ -236,18 +261,23 @@ Return Value:
     Result = CkLoadModuleNotFound;
     if (PathCount == 0) {
         CkStackPop(Vm);
+        free(ModuleCopy);
         return Result;
     }
 
     for (PathIndex = 0; PathIndex < PathCount; PathIndex += 1) {
         CkListGet(Vm, -1, PathIndex);
         Directory = CkGetString(Vm, -1, NULL);
-        Result = CkpLoadSourceFile(Vm, Directory, ModulePath, ModuleData);
+        if (Directory == NULL) {
+            Directory = "";
+        }
+
+        Result = CkpLoadSourceFile(Vm, Directory, ModuleCopy, ModuleData);
         if (Result != CkLoadModuleNotFound) {
             break;
         }
 
-        Result = CkpLoadDynamicModule(Vm, Directory, ModulePath, ModuleData);
+        Result = CkpLoadDynamicModule(Vm, Directory, ModuleCopy, ModuleData);
         if (Result != CkLoadModuleNotFound) {
             break;
         }
@@ -261,6 +291,7 @@ Return Value:
 
     CkStackPop(Vm);
     CkStackPop(Vm);
+    free(ModuleCopy);
     return Result;
 }
 
@@ -524,8 +555,7 @@ Arguments:
 
     Directory - Supplies a pointer to the directory to find the module in.
 
-    ModulePath - Supplies a pointer to the module path to load. Directories
-        will be separated with dots.
+    ModulePath - Supplies a pointer to the module path to load.
 
     ModuleData - Supplies a pointer where the loaded module information will
         be returned on success.
@@ -544,15 +574,23 @@ Return Value:
     CHAR ObjectPath[PATH_MAX];
     INT ObjectPathLength;
     struct stat ObjectStat;
+    INT ObjectStatus;
     CHAR Path[PATH_MAX];
     INT PathLength;
-    PSTR Source;
+    INT SourceStatus;
     struct stat Stat;
 
     File = NULL;
     LoadStatus = CkLoadModuleStaticError;
-    Source = NULL;
-    if ((Directory == NULL) || (*Directory == '\0')) {
+
+    //
+    // Get the full path to the source file.
+    //
+
+    if (Directory == NULL) {
+        PathLength = snprintf(Path, PATH_MAX, "%s", ModulePath);
+
+    } else if (*Directory == '\0') {
         PathLength = snprintf(Path,
                               PATH_MAX,
                               "%s.%s",
@@ -574,20 +612,15 @@ Return Value:
     }
 
     Path[PATH_MAX - 1] = '\0';
-    if (stat(Path, &Stat) != 0) {
-        goto LoadSourceFileEnd;
-    }
-
-    if (!S_ISREG(Stat.st_mode)) {
-        return CkLoadModuleNotFound;
-    }
 
     //
-    // Check to see if there's a pre-compiled object there, and load that
-    // instead if it checks out.
+    // Get the path to the pre-compiled object.
     //
 
-    if ((Directory == NULL) || (*Directory == '\0')) {
+    if (Directory == NULL) {
+        ObjectPathLength = -1;
+
+    } else if (*Directory == '\0') {
         ObjectPathLength = snprintf(ObjectPath,
                                     PATH_MAX,
                                     "%s.%s",
@@ -605,30 +638,61 @@ Return Value:
 
     if ((ObjectPathLength < 0) || (ObjectPathLength > PATH_MAX)) {
         ObjectPath[0] = '\0';
+        ObjectPathLength = 0;
     }
 
     //
-    // If the object path exists, is a file, is not empty, and is newer than
-    // its corresponding source, then use it instead.
+    // Stat both the source and the object. Both must be files, and the object
+    // must have a non-zero size.
+    //
+
+    SourceStatus = stat(Path, &Stat);
+    if ((SourceStatus == 0) && (!S_ISREG(Stat.st_mode))) {
+        SourceStatus = -1;
+    }
+
+    ObjectStatus = -1;
+    if (ObjectPathLength != 0) {
+        ObjectStatus = stat(ObjectPath, &ObjectStat);
+        if ((ObjectStatus == 0) &&
+            ((!S_ISREG(ObjectStat.st_mode)) || (ObjectStat.st_size == 0))) {
+
+            ObjectStatus = -1;
+        }
+    }
+
+    //
+    // If neither exists, the the module can't be found.
+    //
+
+    if ((SourceStatus != 0) && (ObjectStatus != 0)) {
+        LoadStatus = CkLoadModuleNotFound;
+        goto LoadSourceFileEnd;
+    }
+
+    //
+    // If the object path exists and is either 1) the only thing that exists or
+    // 2) is newer than the source, then try to open the object file.
     //
 
     FileSize = Stat.st_size;
-    if ((stat(ObjectPath, &ObjectStat) == 0) &&
-        (S_ISREG(ObjectStat.st_mode)) &&
-        (ObjectStat.st_size > 0) &&
-        (ObjectStat.st_mtime >= Stat.st_mtime)) {
+    if ((ObjectStatus == 0) &&
+        ((SourceStatus != 0) || (ObjectStat.st_mtime >= Stat.st_mtime))) {
 
-        LoadStatus = CkLoadModuleObject;
         File = fopen(ObjectPath, "rb");
         if (File != NULL) {
             FileSize = ObjectStat.st_size;
-
-        } else {
-            File = fopen(Path, "rb");
+            PathLength = ObjectPathLength;
         }
 
-    } else {
-        LoadStatus = CkLoadModuleSource;
+    }
+
+    //
+    // Try to open the source if opening the object file was not an option or
+    // failed.
+    //
+
+    if ((File == NULL) && (SourceStatus == 0)) {
         File = fopen(Path, "rb");
     }
 
@@ -637,29 +701,12 @@ Return Value:
         goto LoadSourceFileEnd;
     }
 
-    Source = CkAllocate(Vm, FileSize + 1);
-    if (Source == NULL) {
-        LoadStatus = CkLoadModuleNoMemory;
-        goto LoadSourceFileEnd;
-    }
-
-    if (fread(Source, 1, FileSize, File) != FileSize) {
-        LoadStatus = CkLoadModuleStaticError;
-        goto LoadSourceFileEnd;
-    }
-
-    Source[FileSize] = '\0';
-    ModuleData->Source.Path = CkAllocate(Vm, PathLength + 1);
-    if (ModuleData->Source.Path == NULL) {
-        LoadStatus = CkLoadModuleNoMemory;
-        goto LoadSourceFileEnd;
-    }
-
-    CkCopy(ModuleData->Source.Path, Path, PathLength + 1);
-    ModuleData->Source.PathLength = PathLength;
-    ModuleData->Source.Text = Source;
-    Source = NULL;
-    ModuleData->Source.Length = FileSize;
+    LoadStatus = CkpReadSource(Vm,
+                               Path,
+                               PathLength,
+                               File,
+                               FileSize,
+                               ModuleData);
 
 LoadSourceFileEnd:
     if (LoadStatus == CkLoadModuleStaticError) {
@@ -670,12 +717,85 @@ LoadSourceFileEnd:
         ModuleData->Error = strerror(errno);
     }
 
-    if (Source != NULL) {
-        CkFree(Vm, Source);
-    }
-
     if (File != NULL) {
         fclose(File);
+    }
+
+    return LoadStatus;
+}
+
+CK_LOAD_MODULE_RESULT
+CkpReadSource (
+    PCK_VM Vm,
+    PCSTR ModulePath,
+    UINTN PathLength,
+    FILE *File,
+    UINTN Size,
+    PCK_MODULE_HANDLE ModuleData
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to read in the contents of a Chalk source file.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModulePath - Supplies a pointer to the opened path.
+
+    PathLength - Supplies the length of the opened path in bytes, not including
+        the null terminator.
+
+    File - Supplies a pointer to the open file.
+
+    Size - Supplies the size of the file in bytes.
+
+    ModuleData - Supplies a pointer where the loaded module information will
+        be returned on success.
+
+Return Value:
+
+    Returns a load module error code.
+
+--*/
+
+{
+
+    CK_LOAD_MODULE_RESULT LoadStatus;
+    PSTR Source;
+
+    LoadStatus = CkLoadModuleStaticError;
+    Source = CkAllocate(Vm, Size + 1);
+    if (Source == NULL) {
+        LoadStatus = CkLoadModuleNoMemory;
+        goto ReadSourceEnd;
+    }
+
+    if (fread(Source, 1, Size, File) != Size) {
+        LoadStatus = CkLoadModuleStaticError;
+        goto ReadSourceEnd;
+    }
+
+    Source[Size] = '\0';
+    ModuleData->Source.Path = CkAllocate(Vm, PathLength + 1);
+    if (ModuleData->Source.Path == NULL) {
+        LoadStatus = CkLoadModuleNoMemory;
+        goto ReadSourceEnd;
+    }
+
+    CkCopy(ModuleData->Source.Path, ModulePath, PathLength + 1);
+    ModuleData->Source.PathLength = PathLength;
+    ModuleData->Source.Text = Source;
+    Source = NULL;
+    ModuleData->Source.Length = Size;
+    LoadStatus = CkLoadModuleSource;
+
+ReadSourceEnd:
+    if (Source != NULL) {
+        CkFree(Vm, Source);
     }
 
     return LoadStatus;
@@ -699,10 +819,10 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    Directory - Supplies a pointer to the directory to find the module in.
+    Directory - Supplies a pointer to the directory to find the module in. If
+        this is NULL, then the module path will be used without modification.
 
-    ModulePath - Supplies a pointer to the module path to load. Directories
-        will be separated with dots.
+    ModulePath - Supplies a pointer to the module path to load.
 
     ModuleData - Supplies a pointer where the loaded module information will
         be returned on success.
@@ -725,7 +845,10 @@ Return Value:
     Handle = NULL;
     LoadStatus = CkLoadModuleStaticError;
     ModuleData->Error = NULL;
-    if ((Directory == NULL) || (*Directory == '\0')) {
+    if (Directory == NULL) {
+        PathLength = snprintf(Path, PATH_MAX, "%s", ModulePath);
+
+    } else if (*Directory == '\0') {
         PathLength = snprintf(Path,
                               PATH_MAX,
                               "%s%s",

@@ -46,6 +46,30 @@ CkpModuleRun (
     );
 
 BOOL
+CkpModuleName (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpModulePath (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpModuleFreezePrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
+CkpModuleIsForeign (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpModuleGetVariable (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -69,6 +93,10 @@ CkpModuleToString (
 
 CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[] = {
     {"run@0", 0, CkpModuleRun},
+    {"name@0", 0, CkpModuleName},
+    {"path@0", 0, CkpModulePath},
+    {"freeze@0", 0, CkpModuleFreezePrimitive},
+    {"isForeign@0", 0, CkpModuleIsForeign},
     {"__get@1", 1, CkpModuleGetVariable},
     {"__set@2", 2, CkpModuleSetVariable},
     {"__repr@0", 0, CkpModuleToString},
@@ -83,7 +111,8 @@ CK_PRIMITIVE_DESCRIPTION CkModulePrimitives[] = {
 CK_VALUE
 CkpModuleLoad (
     PCK_VM Vm,
-    CK_VALUE ModuleName
+    CK_VALUE ModuleName,
+    PCSTR ForcedPath
     )
 
 /*++
@@ -98,6 +127,8 @@ Arguments:
 
     ModuleName - Supplies the module name value.
 
+    ForcedPath - Supplies an optional pointer to the path to load.
+
 Return Value:
 
     Returns the newly loaded module value on success.
@@ -108,19 +139,25 @@ Return Value:
 
 {
 
+    PCK_FIBER Fiber;
+    UINTN FrameCount;
     PCK_STRING Frozen;
     CK_LOAD_MODULE_RESULT LoadStatus;
     PCK_MODULE Module;
     CK_MODULE_HANDLE ModuleData;
+    PCSTR NameOrPath;
     PCK_STRING NameString;
     CK_VALUE PathValue;
     INT SaveError;
     CK_VALUE Value;
+    BOOL WasPrecompiled;
 
     CK_ASSERT(CK_IS_STRING(ModuleName));
 
     NameString = CK_AS_STRING(ModuleName);
     PathValue = CkNullValue;
+    Fiber = Vm->Fiber;
+    FrameCount = Fiber->FrameCount;
 
     //
     // If the module already exists, just return it.
@@ -137,14 +174,16 @@ Return Value:
         return CkNullValue;
     }
 
+    NameOrPath = ForcedPath;
+    if (NameOrPath == NULL) {
+        NameOrPath = NameString->Value;
+    }
+
     //
     // Call out to the big city to actually go get the module.
     //
 
-    LoadStatus = Vm->Configuration.LoadModule(Vm,
-                                              NameString->Value,
-                                              &ModuleData);
-
+    LoadStatus = Vm->Configuration.LoadModule(Vm, NameOrPath, &ModuleData);
     switch (LoadStatus) {
 
     //
@@ -152,7 +191,6 @@ Return Value:
     //
 
     case CkLoadModuleSource:
-    case CkLoadModuleObject:
         if (ModuleData.Source.PathLength != 0) {
             PathValue = CkpStringCreate(Vm,
                                         ModuleData.Source.Path,
@@ -166,20 +204,15 @@ Return Value:
                                      PathValue,
                                      ModuleData.Source.Text,
                                      ModuleData.Source.Length,
-                                     1);
+                                     1,
+                                     &WasPrecompiled);
 
         CkFree(Vm, ModuleData.Source.Text);
         if (Module == NULL) {
-            if (LoadStatus == CkLoadModuleObject) {
+            if (WasPrecompiled != FALSE) {
                 CkpRuntimeError(Vm,
                                 "ValueError",
                                 "Module object load error: %s",
-                                NameString->Value);
-
-            } else {
-                CkpRuntimeError(Vm,
-                                "CompileError",
-                                "Module compile error: %s",
                                 NameString->Value);
             }
 
@@ -191,7 +224,7 @@ Return Value:
         // that representation if it cares to.
         //
 
-        if ((LoadStatus == CkLoadModuleSource) &&
+        if ((WasPrecompiled == FALSE) &&
             (Vm->Configuration.SaveModule != NULL)) {
 
             Value = CkpModuleFreeze(Vm, Module);
@@ -261,7 +294,7 @@ Return Value:
         return CkNullValue;
 
     case CkLoadModuleNoMemory:
-        if (!CK_IS_NULL(Vm->Fiber->Error)) {
+        if (!CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
             CkpRuntimeError(Vm, "MemoryError", "Allocation failure");
         }
 
@@ -294,9 +327,10 @@ CkpModuleLoadSource (
     PCK_VM Vm,
     CK_VALUE ModuleName,
     CK_VALUE Path,
-    PSTR Source,
+    PCSTR Source,
     UINTN Length,
-    LONG Line
+    LONG Line,
+    PBOOL WasPrecompiled
     )
 
 /*++
@@ -322,6 +356,9 @@ Arguments:
     Line - Supplies the line number this code starts on. Supply 1 to start at
         the beginning.
 
+    WasPrecompiled - Supplies a pointer where a boolean will be returned
+        indicating if this was precompiled code or not.
+
 Return Value:
 
     Returns a pointer to the newly loaded module on success.
@@ -343,6 +380,10 @@ Return Value:
         PathString = CK_AS_STRING(Path);
     }
 
+    if (WasPrecompiled != NULL) {
+        *WasPrecompiled = FALSE;
+    }
+
     Module = CkpModuleGet(Vm, ModuleName);
     if (Module == NULL) {
         Module = CkpModuleCreate(Vm, CK_AS_STRING(ModuleName), PathString);
@@ -356,6 +397,10 @@ Return Value:
         (CkCompareMemory(Source,
                          CkModuleFreezeSignature,
                          CK_FREEZE_SIGNATURE_SIZE) == 0)) {
+
+        if (WasPrecompiled != NULL) {
+            *WasPrecompiled = TRUE;
+        }
 
         if (CkpModuleThaw(Vm, Module, Source, Length) == FALSE) {
             goto ModuleLoadSourceEnd;
@@ -371,7 +416,6 @@ Return Value:
             goto ModuleLoadSourceEnd;
         }
 
-        Module->CompiledVariableCount = Module->VariableNames.List.Count;
         CkpPushRoot(Vm, &(Function->Header));
         Closure = CkpClosureCreate(Vm, Function, NULL);
         CkpPopRoot(Vm);
@@ -382,6 +426,7 @@ Return Value:
         Module->Closure = Closure;
     }
 
+    Module->CompiledVariableCount = Module->VariableNames.List.Count;
     Result = TRUE;
 
 ModuleLoadSourceEnd:
@@ -768,6 +813,172 @@ Return Value:
 }
 
 BOOL
+CkpModuleName (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the full name of the given module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_MODULE Module;
+
+    Module = CK_AS_MODULE(Arguments[0]);
+    if (Module->Name == NULL) {
+        Arguments[0] = CkNullValue;
+
+    } else {
+        CK_OBJECT_VALUE(Arguments[0], Module->Name);
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpModulePath (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the path of the given module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_MODULE Module;
+
+    Module = CK_AS_MODULE(Arguments[0]);
+    if (Module->Path == NULL) {
+        Arguments[0] = CkNullValue;
+
+    } else {
+        CK_OBJECT_VALUE(Arguments[0], Module->Path);
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpModuleFreezePrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the freeze module primitive.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    UINTN FrameCount;
+    PCK_MODULE Module;
+
+    Fiber = Vm->Fiber;
+    FrameCount = Fiber->FrameCount;
+    Module = CK_AS_MODULE(Arguments[0]);
+    Arguments[0] = CkpModuleFreeze(Vm, Module);
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+BOOL
+CkpModuleIsForeign (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not the given module is foreign.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_MODULE Module;
+
+    Module = CK_AS_MODULE(Arguments[0]);
+    if (Module->Closure->Type == CkClosureBlock) {
+        Arguments[0] = CkZeroValue;
+
+    } else {
+        Arguments[0] = CkOneValue;
+    }
+
+    return TRUE;
+}
+
+BOOL
 CkpModuleGetVariable (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -854,6 +1065,17 @@ Return Value:
     PCK_VALUE Variable;
 
     Module = CK_AS_MODULE(Arguments[0]);
+
+    //
+    // Variables cannot be added to the core module because it would affect the
+    // core module variable count saved in frozen modules.
+    //
+
+    if (Module == CkpModuleGet(Vm, CkNullValue)) {
+        CkpRuntimeError(Vm, "ValueError", "Cannot change Core module");
+        return FALSE;
+    }
+
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;

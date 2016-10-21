@@ -28,7 +28,8 @@ BINPLACE = bin
 
 DYNLIBS = $(OBJROOT)/os/apps/ck/lib/dynamic/libchalk.so.1
 
-TARGETLIBS = $(OBJROOT)/os/apps/ck/modules/app/app.a
+TARGETLIBS = $(OBJROOT)/os/apps/ck/modules/app/app.a       \
+             $(OBJROOT)/os/apps/ck/modules/bundle/bundle.a \
 
 include $(SRCDIR)/sources
 

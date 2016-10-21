@@ -152,7 +152,7 @@ Return Value:
     CHAR Character;
     ULONG Current;
     BOOL Ignore;
-    PSTR Input;
+    PCSTR Input;
     PSTR Literals;
     BOOL Match;
     ULONG Position;

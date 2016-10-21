@@ -112,7 +112,6 @@ typedef enum _CK_ERROR_TYPE {
 
 typedef enum _CK_LOAD_MODULE_RESULT {
     CkLoadModuleSource,
-    CkLoadModuleObject,
     CkLoadModuleForeign,
     CkLoadModuleNotFound,
     CkLoadModuleNoMemory,
@@ -319,7 +318,8 @@ Arguments:
     Vm - Supplies a pointer to the virtual machine.
 
     ModulePath - Supplies a pointer to the module path to load. Directories
-        will be separated with dots.
+        will be separated with dots. If this contains a slash, then it is an
+        absolute path that should be loaded directly.
 
     ModuleData - Supplies a pointer where the loaded module information will
         be returned on success.
@@ -592,8 +592,8 @@ CK_API
 CK_ERROR_TYPE
 CkInterpret (
     PCK_VM Vm,
-    PSTR Path,
-    PSTR Source,
+    PCSTR Path,
+    PCSTR Source,
     UINTN Length,
     LONG Line
     );
@@ -694,6 +694,44 @@ Return Value:
     TRUE on success.
 
     FALSE on failure (usually allocation failure).
+
+--*/
+
+CK_API
+BOOL
+CkLoadModule (
+    PCK_VM Vm,
+    PCSTR ModuleName,
+    PCSTR Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads (but does not run) the given module, and pushes it on
+    the stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies a pointer to the full "dotted.module.name". A copy of
+        this memory will be made.
+
+    Path - Supplies an optional pointer to the full path of the module. A copy
+        of this memory will be made. If this is supplied, then this is the only
+        path that is attempted when opening the module. If this is not supplied,
+        then the standard load paths will be used. If a module by the given
+        name is already loaded, this is ignored.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure. In this case, an exception will have been thrown. The
+    caller should not modify the stack anymore, and should return as soon as
+    possible.
 
 --*/
 
@@ -1752,6 +1790,68 @@ Return Value:
 
 CK_API
 VOID
+CkRaiseException (
+    PCK_VM Vm,
+    INTN StackIndex
+    );
+
+/*++
+
+Routine Description:
+
+    This routine raises an exception. The caller must not make any more
+    modifications to the stack, and should return as soon as possible.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the exception to raise. Negative
+        values reference stack indices from the end of the stack.
+
+Return Value:
+
+    None. The foreign function call frame is no longer on the execution stack.
+
+--*/
+
+CK_API
+VOID
+CkRaiseBasicException (
+    PCK_VM Vm,
+    PCSTR Type,
+    PCSTR MessageFormat,
+    ...
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reports a runtime error in the current fiber. The caller must
+    not make any more modifications to the stack, and should return as soon as
+    possible.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Type - Supplies the name of a builtin exception type. This type must
+        already be in scope.
+
+    MessageFormat - Supplies the printf message format string. The total size
+        of the resulting string is limited, so please be succinct.
+
+    ... - Supplies the remaining arguments.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
 CkPushCurrentModule (
     PCK_VM Vm
     );
@@ -1964,6 +2064,36 @@ Arguments:
 
     Length - Supplies the length of the buffer, in bytes, not including the
         null terminator.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+BOOL
+CkGetLength (
+    PCK_VM Vm,
+    INTN StackIndex,
+    PCK_INTEGER Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of elements in the given list or dict by
+    calling its length method.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the list to get the length of.
+
+    Length - Supplies a pointer where the result of the length method will be
+        returned.
 
 Return Value:
 

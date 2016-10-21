@@ -1039,7 +1039,7 @@ Return Value:
 {
 
     PCK_CLASS_COMPILER ClassCompiler;
-    PSTR Name;
+    PCSTR Name;
     CK_OPCODE Op;
     CK_VARIABLE Variable;
 
