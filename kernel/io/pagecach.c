@@ -254,7 +254,7 @@ IopDestroyPageCacheEntries (
 
 VOID
 IopDestroyPageCacheEntry (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     );
 
 VOID
@@ -320,7 +320,7 @@ IopRemovePageCacheEntryVirtualAddress (
 
 VOID
 IopRemovePageCacheEntryFromTree (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     );
 
 VOID
@@ -597,7 +597,7 @@ Return Value:
 
 VOID
 IoPageCacheEntryAddReference (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -611,8 +611,8 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry whose reference
-        count should be incremented.
+    Entry - Supplies a pointer to the page cache entry whose reference count
+        should be incremented.
 
 Return Value:
 
@@ -624,7 +624,7 @@ Return Value:
 
     ULONG OldReferenceCount;
 
-    OldReferenceCount = RtlAtomicAdd32(&(PageCacheEntry->ReferenceCount), 1);
+    OldReferenceCount = RtlAtomicAdd32(&(Entry->ReferenceCount), 1);
 
     ASSERT(OldReferenceCount < 0x1000);
 
@@ -633,7 +633,7 @@ Return Value:
 
 VOID
 IoPageCacheEntryReleaseReference (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -644,8 +644,8 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry whose reference
-        count should be incremented.
+    Entry - Supplies a pointer to the page cache entry whose reference count
+        should be incremented.
 
 Return Value:
 
@@ -657,7 +657,7 @@ Return Value:
 
     ULONG OldReferenceCount;
 
-    OldReferenceCount = RtlAtomicAdd32(&(PageCacheEntry->ReferenceCount), -1);
+    OldReferenceCount = RtlAtomicAdd32(&(Entry->ReferenceCount), -1);
 
     ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x1000));
 
@@ -667,8 +667,8 @@ Return Value:
     //
 
     if ((OldReferenceCount == 1) &&
-        (PageCacheEntry->ListEntry.Next == NULL) &&
-        ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0)) {
+        (Entry->ListEntry.Next == NULL) &&
+        ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0)) {
 
         KeAcquireQueuedLock(IoPageCacheListLock);
 
@@ -676,10 +676,10 @@ Return Value:
         // Double check to make sure it's not on a list or dirty now.
         //
 
-        if ((PageCacheEntry->ListEntry.Next == NULL) &&
-            ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0)) {
+        if ((Entry->ListEntry.Next == NULL) &&
+            ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0)) {
 
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry), &IoPageCacheCleanList);
+            INSERT_BEFORE(&(Entry->ListEntry), &IoPageCacheCleanList);
         }
 
         KeReleaseQueuedLock(IoPageCacheListLock);
@@ -690,7 +690,7 @@ Return Value:
 
 PHYSICAL_ADDRESS
 IoGetPageCacheEntryPhysicalAddress (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -701,7 +701,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -711,12 +711,12 @@ Return Value:
 
 {
 
-    return PageCacheEntry->PhysicalAddress;
+    return Entry->PhysicalAddress;
 }
 
 PVOID
 IoGetPageCacheEntryVirtualAddress (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -727,7 +727,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -745,8 +745,8 @@ Return Value:
     // backing entry, then synchronize the two.
     //
 
-    VirtualAddress = PageCacheEntry->VirtualAddress;
-    BackingEntry = PageCacheEntry->BackingEntry;
+    VirtualAddress = Entry->VirtualAddress;
+    BackingEntry = Entry->BackingEntry;
 
     ASSERT((VirtualAddress == NULL) ||
            (BackingEntry == NULL) ||
@@ -754,7 +754,7 @@ Return Value:
 
     if ((VirtualAddress == NULL) && (BackingEntry != NULL)) {
 
-        ASSERT((PageCacheEntry->Flags &
+        ASSERT((Entry->Flags &
                 (PAGE_CACHE_ENTRY_FLAG_OWNER |
                  PAGE_CACHE_ENTRY_FLAG_MAPPED)) == 0);
 
@@ -768,7 +768,7 @@ Return Value:
         //
 
         VirtualAddress = BackingEntry->VirtualAddress;
-        PageCacheEntry->VirtualAddress = VirtualAddress;
+        Entry->VirtualAddress = VirtualAddress;
     }
 
     return VirtualAddress;
@@ -776,7 +776,7 @@ Return Value:
 
 BOOL
 IoSetPageCacheEntryVirtualAddress (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     PVOID VirtualAddress
     )
 
@@ -790,7 +790,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies as pointer to the page cache entry.
+    Entry - Supplies as pointer to the page cache entry.
 
     VirtualAddress - Supplies the virtual address to set in the page cache
         entry.
@@ -811,13 +811,13 @@ Return Value:
     ASSERT((VirtualAddress != NULL) &&
            (IS_POINTER_ALIGNED(VirtualAddress, MmPageSize()) != FALSE));
 
-    if ((PageCacheEntry->VirtualAddress != NULL) ||
+    if ((Entry->VirtualAddress != NULL) ||
         (IoPageCacheDisableVirtualAddresses != FALSE)) {
 
         return FALSE;
     }
 
-    UnmappedEntry = PageCacheEntry;
+    UnmappedEntry = Entry;
     if (UnmappedEntry->BackingEntry != NULL) {
         UnmappedEntry = UnmappedEntry->BackingEntry;
     }
@@ -851,7 +851,7 @@ Return Value:
     // the VA.
     //
 
-    if (UnmappedEntry != PageCacheEntry) {
+    if (UnmappedEntry != Entry) {
         VirtualAddress = UnmappedEntry->VirtualAddress;
         if (VirtualAddress != NULL) {
 
@@ -859,12 +859,11 @@ Return Value:
             // Everyone racing should be trying to set the same value.
             //
 
-            ASSERT(((PageCacheEntry->Flags &
-                     PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
-                   ((PageCacheEntry->VirtualAddress == NULL) ||
-                    (PageCacheEntry->VirtualAddress == VirtualAddress)));
+            ASSERT(((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
+                   ((Entry->VirtualAddress == NULL) ||
+                    (Entry->VirtualAddress == VirtualAddress)));
 
-            PageCacheEntry->VirtualAddress = VirtualAddress;
+            Entry->VirtualAddress = VirtualAddress;
         }
     }
 
@@ -873,7 +872,7 @@ Return Value:
 
 VOID
 IoMarkPageCacheEntryDirty (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -884,7 +883,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -902,7 +901,7 @@ Return Value:
     // Try to get the backing entry if possible.
     //
 
-    DirtyEntry = PageCacheEntry;
+    DirtyEntry = Entry;
     if (DirtyEntry->BackingEntry != NULL) {
         DirtyEntry = DirtyEntry->BackingEntry;
     }
@@ -1278,7 +1277,7 @@ Return Value:
 {
 
     BOOL Created;
-    PPAGE_CACHE_ENTRY PageCacheEntry;
+    PPAGE_CACHE_ENTRY NewEntry;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
     ASSERT((LinkEntry == NULL) ||
@@ -1291,14 +1290,14 @@ Return Value:
     //
 
     Created = FALSE;
-    PageCacheEntry = IopLookupPageCacheEntryHelper(FileObject, Offset);
-    if (PageCacheEntry == NULL) {
-        PageCacheEntry = IopCreatePageCacheEntry(FileObject,
-                                                 VirtualAddress,
-                                                 PhysicalAddress,
-                                                 Offset);
+    NewEntry = IopLookupPageCacheEntryHelper(FileObject, Offset);
+    if (NewEntry == NULL) {
+        NewEntry = IopCreatePageCacheEntry(FileObject,
+                                           VirtualAddress,
+                                           PhysicalAddress,
+                                           Offset);
 
-        if (PageCacheEntry == NULL) {
+        if (NewEntry == NULL) {
             goto CreateOrLookupPageCacheEntryEnd;
         }
 
@@ -1307,7 +1306,7 @@ Return Value:
         // sneak into the cache. Insert this new entry.
         //
 
-        IopInsertPageCacheEntry(PageCacheEntry, LinkEntry);
+        IopInsertPageCacheEntry(NewEntry, LinkEntry);
         Created = TRUE;
     }
 
@@ -1315,7 +1314,7 @@ Return Value:
     // Put the page cache entry on the appropriate list.
     //
 
-    IopUpdatePageCacheEntryList(PageCacheEntry, Created);
+    IopUpdatePageCacheEntryList(NewEntry, Created);
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_INSERTION) != 0) {
         if (Created != FALSE) {
             RtlDebugPrint("PAGE CACHE: Inserted new entry for file object "
@@ -1324,10 +1323,10 @@ Return Value:
                           "flags 0x%08x.\n",
                           FileObject,
                           Offset,
-                          PageCacheEntry,
-                          PageCacheEntry->PhysicalAddress,
-                          PageCacheEntry->ReferenceCount,
-                          PageCacheEntry->Flags);
+                          NewEntry,
+                          NewEntry->PhysicalAddress,
+                          NewEntry->ReferenceCount,
+                          NewEntry->Flags);
 
         } else {
             RtlDebugPrint("PAGE CACHE: Insert found existing entry for file "
@@ -1336,10 +1335,10 @@ Return Value:
                           "%d, flags 0x%08x.\n",
                           FileObject,
                           Offset,
-                          PageCacheEntry,
-                          PageCacheEntry->PhysicalAddress,
-                          PageCacheEntry->ReferenceCount,
-                          PageCacheEntry->Flags);
+                          NewEntry,
+                          NewEntry->PhysicalAddress,
+                          NewEntry->ReferenceCount,
+                          NewEntry->Flags);
         }
     }
 
@@ -1348,7 +1347,7 @@ CreateOrLookupPageCacheEntryEnd:
         *EntryCreated = Created;
     }
 
-    return PageCacheEntry;
+    return NewEntry;
 }
 
 PPAGE_CACHE_ENTRY
@@ -1392,7 +1391,7 @@ Return Value:
 
 {
 
-    PPAGE_CACHE_ENTRY PageCacheEntry;
+    PPAGE_CACHE_ENTRY NewEntry;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
     ASSERT((LinkEntry == NULL) ||
@@ -1402,12 +1401,12 @@ Return Value:
     // Allocate and initialize a new page cache entry.
     //
 
-    PageCacheEntry = IopCreatePageCacheEntry(FileObject,
-                                             VirtualAddress,
-                                             PhysicalAddress,
-                                             Offset);
+    NewEntry = IopCreatePageCacheEntry(FileObject,
+                                       VirtualAddress,
+                                       PhysicalAddress,
+                                       Offset);
 
-    if (PageCacheEntry == NULL) {
+    if (NewEntry == NULL) {
         goto CreateAndInsertPageCacheEntryEnd;
     }
 
@@ -1417,13 +1416,13 @@ Return Value:
 
     ASSERT(IopLookupPageCacheEntryHelper(FileObject, Offset) == NULL);
 
-    IopInsertPageCacheEntry(PageCacheEntry, LinkEntry);
+    IopInsertPageCacheEntry(NewEntry, LinkEntry);
 
     //
     // Add the newly created page cach entry to the appropriate list.
     //
 
-    IopUpdatePageCacheEntryList(PageCacheEntry, TRUE);
+    IopUpdatePageCacheEntryList(NewEntry, TRUE);
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_INSERTION) != 0) {
         RtlDebugPrint("PAGE CACHE: Inserted new entry for file object "
                       "(0x%08x) at offset 0x%I64x: cache entry 0x%08x, "
@@ -1431,14 +1430,14 @@ Return Value:
                       "flags 0x%08x.\n",
                       FileObject,
                       Offset,
-                      PageCacheEntry,
-                      PageCacheEntry->PhysicalAddress,
-                      PageCacheEntry->ReferenceCount,
-                      PageCacheEntry->Flags);
+                      NewEntry,
+                      NewEntry->PhysicalAddress,
+                      NewEntry->ReferenceCount,
+                      NewEntry->Flags);
     }
 
 CreateAndInsertPageCacheEntryEnd:
-    return PageCacheEntry;
+    return NewEntry;
 }
 
 KSTATUS
@@ -1495,10 +1494,10 @@ Return Value:
 {
 
     BOOL Created;
+    PPAGE_CACHE_ENTRY DestinationEntry;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
     UINTN FragmentOffset;
-    PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
     PPAGE_CACHE_ENTRY SourceEntry;
@@ -1564,14 +1563,14 @@ Return Value:
         // Try to create a page cache entry for this fragment of the source.
         //
 
-        PageCacheEntry = IopCreateOrLookupPageCacheEntry(FileObject,
-                                                         VirtualAddress,
-                                                         PhysicalAddress,
-                                                         FileOffset,
-                                                         SourceEntry,
-                                                         &Created);
+        DestinationEntry = IopCreateOrLookupPageCacheEntry(FileObject,
+                                                           VirtualAddress,
+                                                           PhysicalAddress,
+                                                           FileOffset,
+                                                           SourceEntry,
+                                                           &Created);
 
-        if (PageCacheEntry == NULL) {
+        if (DestinationEntry == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto CopyAndCacheIoBufferEnd;
         }
@@ -1585,7 +1584,7 @@ Return Value:
         //
 
         if ((Created != FALSE) && (SourceEntry == NULL)) {
-            MmSetIoBufferPageCacheEntry(Source, SourceOffset, PageCacheEntry);
+            MmSetIoBufferPageCacheEntry(Source, SourceOffset, DestinationEntry);
         }
 
         //
@@ -1596,7 +1595,7 @@ Return Value:
 
         if ((SourceOffset == SourceCopyOffset) && (CopySize != 0)) {
             MmIoBufferAppendPage(Destination,
-                                 PageCacheEntry,
+                                 DestinationEntry,
                                  NULL,
                                  INVALID_PHYSICAL_ADDRESS);
 
@@ -1610,7 +1609,7 @@ Return Value:
         // buffer initialization routines took the necessary references.
         //
 
-        IoPageCacheEntryReleaseReference(PageCacheEntry);
+        IoPageCacheEntryReleaseReference(DestinationEntry);
         FileOffset += PageSize;
         SourceOffset += PageSize;
         SourceSize -= PageSize;
@@ -2485,7 +2484,7 @@ Return Value:
 
 IO_OFFSET
 IopGetPageCacheEntryOffset (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -2496,7 +2495,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -2506,12 +2505,12 @@ Return Value:
 
 {
 
-    return PageCacheEntry->Offset;
+    return Entry->Offset;
 }
 
 BOOL
 IopMarkPageCacheEntryClean (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     BOOL MoveToCleanList
     )
 
@@ -2523,7 +2522,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
     MoveToCleanList - Supplies a boolean indicating if the page cache entry
         should be moved to the list of clean page cache entries.
@@ -2545,17 +2544,17 @@ Return Value:
     // entry dirty.
     //
 
-    ASSERT(KeIsSharedExclusiveLockHeld(PageCacheEntry->FileObject->Lock));
+    ASSERT(KeIsSharedExclusiveLockHeld(Entry->FileObject->Lock));
 
     //
     // Quick exit check before banging around atomically.
     //
 
-    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
+    if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
         return FALSE;
     }
 
-    OldFlags = RtlAtomicAnd32(&(PageCacheEntry->Flags),
+    OldFlags = RtlAtomicAnd32(&(Entry->Flags),
                               ~PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK);
 
     //
@@ -2585,7 +2584,7 @@ Return Value:
 
         KeAcquireQueuedLock(IoPageCacheListLock);
 
-        ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
+        ASSERT((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
 
         //
         // As a page cache entry can be marked dirty-pending without the file
@@ -2594,12 +2593,10 @@ Return Value:
         // list.
         //
 
-        if ((PageCacheEntry->Flags &
-             PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING) == 0) {
-
-            if (PageCacheEntry->ListEntry.Next != NULL) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                PageCacheEntry->ListEntry.Next = NULL;
+        if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING) == 0) {
+            if (Entry->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(Entry->ListEntry));
+                Entry->ListEntry.Next = NULL;
             }
 
             //
@@ -2610,8 +2607,7 @@ Return Value:
             //
 
             if (MoveToCleanList != FALSE) {
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                              &IoPageCacheCleanList);
+                INSERT_BEFORE(&(Entry->ListEntry), &IoPageCacheCleanList);
             }
         }
 
@@ -2627,7 +2623,7 @@ Return Value:
 
 BOOL
 IopMarkPageCacheEntryDirty (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -2639,7 +2635,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -2655,7 +2651,7 @@ Return Value:
     BOOL MarkedDirty;
     ULONG OldFlags;
 
-    FileObject = PageCacheEntry->FileObject;
+    FileObject = Entry->FileObject;
 
     //
     // The page cache entry's file object lock must be held exclusive. This is
@@ -2672,15 +2668,15 @@ Return Value:
     // at this page cache entry's layer.
     //
 
-    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) == 0) {
+    if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) == 0) {
 
-        ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
-        ASSERT(PageCacheEntry->BackingEntry != NULL);
+        ASSERT((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
+        ASSERT(Entry->BackingEntry != NULL);
 
-        DirtyEntry = PageCacheEntry->BackingEntry;
+        DirtyEntry = Entry->BackingEntry;
 
     } else {
-        DirtyEntry = PageCacheEntry;
+        DirtyEntry = Entry;
     }
 
     //
@@ -2692,7 +2688,7 @@ Return Value:
     }
 
     FileObject = DirtyEntry->FileObject;
-    if (DirtyEntry != PageCacheEntry) {
+    if (DirtyEntry != Entry) {
         KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
     }
 
@@ -2702,8 +2698,8 @@ Return Value:
 
     if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
 
-        ASSERT((DirtyEntry->VirtualAddress == PageCacheEntry->VirtualAddress) ||
-               (PageCacheEntry->VirtualAddress == NULL));
+        ASSERT((DirtyEntry->VirtualAddress == Entry->VirtualAddress) ||
+               (Entry->VirtualAddress == NULL));
 
         RtlAtomicAdd(&IoPageCacheDirtyPageCount, 1);
         if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
@@ -2735,7 +2731,7 @@ Return Value:
         MarkedDirty = FALSE;
     }
 
-    if (DirtyEntry != PageCacheEntry) {
+    if (DirtyEntry != Entry) {
         KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
     }
 
@@ -2744,7 +2740,7 @@ Return Value:
 
 KSTATUS
 IopCopyIoBufferToPageCacheEntry (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     ULONG PageOffset,
     PIO_BUFFER SourceBuffer,
     UINTN SourceOffset,
@@ -2760,7 +2756,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
     PageOffset - Supplies an offset into the page where the copy should begin.
 
@@ -2799,7 +2795,7 @@ Return Value:
     }
 
     MmIoBufferAppendPage(&PageCacheBuffer,
-                         PageCacheEntry,
+                         Entry,
                          NULL,
                          INVALID_PHYSICAL_ADDRESS);
 
@@ -2817,7 +2813,7 @@ Return Value:
         goto CopyIoBufferToPageCacheEntryEnd;
     }
 
-    IopMarkPageCacheEntryDirty(PageCacheEntry);
+    IopMarkPageCacheEntryDirty(Entry);
 
 CopyIoBufferToPageCacheEntryEnd:
     MmFreeIoBuffer(&PageCacheBuffer);
@@ -2826,7 +2822,7 @@ CopyIoBufferToPageCacheEntryEnd:
 
 BOOL
 IopCanLinkPageCacheEntry (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     PFILE_OBJECT FileObject
     )
 
@@ -2839,7 +2835,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
     FileObject - Supplies a pointer to a file object.
 
@@ -2856,7 +2852,7 @@ Return Value:
 
     ASSERT(IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE);
 
-    PageCacheType = PageCacheEntry->FileObject->Properties.Type;
+    PageCacheType = Entry->FileObject->Properties.Type;
     if (IS_IO_OBJECT_TYPE_LINKABLE(PageCacheType) == FALSE) {
         return FALSE;
     }
@@ -3376,7 +3372,7 @@ Return Value:
 
 {
 
-    PPAGE_CACHE_ENTRY PageCacheEntry;
+    PPAGE_CACHE_ENTRY NewEntry;
 
     ASSERT(IS_ALIGNED(PhysicalAddress, MmPageSize()) != FALSE);
     ASSERT((FileObject->Properties.Type != IoObjectBlockDevice) ||
@@ -3387,26 +3383,26 @@ Return Value:
     // Allocate and initialize a new page cache entry.
     //
 
-    PageCacheEntry = MmAllocateBlock(IoPageCacheBlockAllocator, NULL);
-    if (PageCacheEntry == NULL) {
+    NewEntry = MmAllocateBlock(IoPageCacheBlockAllocator, NULL);
+    if (NewEntry == NULL) {
         goto CreatePageCacheEntryEnd;
     }
 
-    RtlZeroMemory(PageCacheEntry, sizeof(PAGE_CACHE_ENTRY));
+    RtlZeroMemory(NewEntry, sizeof(PAGE_CACHE_ENTRY));
     IopFileObjectAddReference(FileObject);
-    PageCacheEntry->FileObject = FileObject;
-    PageCacheEntry->Offset = Offset;
-    PageCacheEntry->PhysicalAddress = PhysicalAddress;
+    NewEntry->FileObject = FileObject;
+    NewEntry->Offset = Offset;
+    NewEntry->PhysicalAddress = PhysicalAddress;
     if (VirtualAddress != NULL) {
         if (IoPageCacheDisableVirtualAddresses == FALSE) {
-            PageCacheEntry->VirtualAddress = VirtualAddress;
+            NewEntry->VirtualAddress = VirtualAddress;
         }
     }
 
-    PageCacheEntry->ReferenceCount = 1;
+    NewEntry->ReferenceCount = 1;
 
 CreatePageCacheEntryEnd:
-    return PageCacheEntry;
+    return NewEntry;
 }
 
 VOID
@@ -3436,8 +3432,8 @@ Return Value:
 
 {
 
+    PPAGE_CACHE_ENTRY CacheEntry;
     PLIST_ENTRY CurrentEntry;
-    PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN RemovedCount;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -3445,26 +3441,26 @@ Return Value:
     RemovedCount = 0;
     while (LIST_EMPTY(ListHead) == FALSE) {
         CurrentEntry = ListHead->Next;
-        PageCacheEntry = LIST_VALUE(CurrentEntry, PAGE_CACHE_ENTRY, ListEntry);
+        CacheEntry = LIST_VALUE(CurrentEntry, PAGE_CACHE_ENTRY, ListEntry);
         LIST_REMOVE(CurrentEntry);
         CurrentEntry->Next = NULL;
 
-        ASSERT(PageCacheEntry->ReferenceCount == 0);
-        ASSERT(PageCacheEntry->Node.Parent == NULL);
+        ASSERT(CacheEntry->ReferenceCount == 0);
+        ASSERT(CacheEntry->Node.Parent == NULL);
 
         if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
             RtlDebugPrint("PAGE CACHE: Destroy entry 0x%08x: file object "
                           "0x%08x, offset 0x%I64x, physical address 0x%I64x, "
                           "reference count %d, flags 0x%08x.\n",
-                          PageCacheEntry,
-                          PageCacheEntry->FileObject,
-                          PageCacheEntry->Offset,
-                          PageCacheEntry->PhysicalAddress,
-                          PageCacheEntry->ReferenceCount,
-                          PageCacheEntry->Flags);
+                          CacheEntry,
+                          CacheEntry->FileObject,
+                          CacheEntry->Offset,
+                          CacheEntry->PhysicalAddress,
+                          CacheEntry->ReferenceCount,
+                          CacheEntry->Flags);
         }
 
-        IopDestroyPageCacheEntry(PageCacheEntry);
+        IopDestroyPageCacheEntry(CacheEntry);
         RemovedCount += 1;
     }
 
@@ -3484,7 +3480,7 @@ Return Value:
 
 VOID
 IopDestroyPageCacheEntry (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -3497,7 +3493,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry.
+    Entry - Supplies a pointer to the page cache entry.
 
 Return Value:
 
@@ -3511,41 +3507,39 @@ Return Value:
     PFILE_OBJECT FileObject;
     ULONG PageSize;
 
-    FileObject = PageCacheEntry->FileObject;
+    FileObject = Entry->FileObject;
 
-    ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
-    ASSERT(PageCacheEntry->ListEntry.Next == NULL);
-    ASSERT(PageCacheEntry->ReferenceCount == 0);
-    ASSERT(PageCacheEntry->Node.Parent == NULL);
+    ASSERT((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
+    ASSERT(Entry->ListEntry.Next == NULL);
+    ASSERT(Entry->ReferenceCount == 0);
+    ASSERT(Entry->Node.Parent == NULL);
 
     //
     // If this is the page owner, then free the physical page.
     //
 
-    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0) {
-        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
+    if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0) {
+        if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
 
-            ASSERT(PageCacheEntry->VirtualAddress != NULL);
+            ASSERT(Entry->VirtualAddress != NULL);
 
             PageSize = MmPageSize();
-            MmUnmapAddress(PageCacheEntry->VirtualAddress, PageSize);
+            MmUnmapAddress(Entry->VirtualAddress, PageSize);
             RtlAtomicAdd(&IoPageCacheMappedPageCount, (UINTN)-1);
-            RtlAtomicAnd32(&(PageCacheEntry->Flags),
-                           ~PAGE_CACHE_ENTRY_FLAG_MAPPED);
-
-            PageCacheEntry->VirtualAddress = NULL;
+            RtlAtomicAnd32(&(Entry->Flags), ~PAGE_CACHE_ENTRY_FLAG_MAPPED);
+            Entry->VirtualAddress = NULL;
         }
 
-        MmFreePhysicalPage(PageCacheEntry->PhysicalAddress);
+        MmFreePhysicalPage(Entry->PhysicalAddress);
         RtlAtomicAdd(&IoPageCachePhysicalPageCount, (UINTN)-1);
-        PageCacheEntry->PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+        Entry->PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
 
     //
     // Otherwise release the reference on the page cache owner if it exists.
     //
 
-    } else if (PageCacheEntry->BackingEntry != NULL) {
-        BackingEntry = PageCacheEntry->BackingEntry;
+    } else if (Entry->BackingEntry != NULL) {
+        BackingEntry = Entry->BackingEntry;
 
         //
         // The virtual address must either be NULL or match the backing entry's
@@ -3553,15 +3547,12 @@ Return Value:
         // is not mapped while the non-backing entry is mapped.
         //
 
-        ASSERT((PageCacheEntry->VirtualAddress == NULL) ||
-               (PageCacheEntry->VirtualAddress ==
-                BackingEntry->VirtualAddress));
-
-        ASSERT(PageCacheEntry->PhysicalAddress ==
-               BackingEntry->PhysicalAddress);
+        ASSERT(Entry->PhysicalAddress == BackingEntry->PhysicalAddress);
+        ASSERT((Entry->VirtualAddress == NULL) ||
+               (Entry->VirtualAddress == BackingEntry->VirtualAddress));
 
         IoPageCacheEntryReleaseReference(BackingEntry);
-        PageCacheEntry->BackingEntry = NULL;
+        Entry->BackingEntry = NULL;
     }
 
     //
@@ -3574,7 +3565,7 @@ Return Value:
     // With the final reference gone, free the page cache entry.
     //
 
-    MmFreeBlock(IoPageCacheBlockAllocator, PageCacheEntry);
+    MmFreeBlock(IoPageCacheBlockAllocator, Entry);
     return;
 }
 
@@ -4212,12 +4203,12 @@ Return Value:
 
 {
 
+    PPAGE_CACHE_ENTRY CacheEntry;
     PFILE_OBJECT FileObject;
     ULONG Flags;
     LIST_ENTRY LocalList;
     PSHARED_EXCLUSIVE_LOCK Lock;
     PLIST_ENTRY MoveList;
-    PPAGE_CACHE_ENTRY PageCacheEntry;
     BOOL PageTakenDown;
     KSTATUS Status;
 
@@ -4238,18 +4229,15 @@ Return Value:
     while ((!LIST_EMPTY(&LocalList)) &&
            ((TargetRemoveCount == NULL) || (*TargetRemoveCount != 0))) {
 
-        PageCacheEntry = LIST_VALUE(LocalList.Next,
-                                    PAGE_CACHE_ENTRY,
-                                    ListEntry);
-
-        FileObject = PageCacheEntry->FileObject;
-        Flags = PageCacheEntry->Flags;
+        CacheEntry = LIST_VALUE(LocalList.Next, PAGE_CACHE_ENTRY, ListEntry);
+        FileObject = CacheEntry->FileObject;
+        Flags = CacheEntry->Flags;
 
         //
         // If the page cache entry has not been evicted, potentially skip it.
         //
 
-        if (PageCacheEntry->Node.Parent != NULL) {
+        if (CacheEntry->Node.Parent != NULL) {
 
             //
             // Remove anything with a reference to avoid iterating through it
@@ -4257,9 +4245,9 @@ Return Value:
             // put back on.
             //
 
-            if (PageCacheEntry->ReferenceCount != 0) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                PageCacheEntry->ListEntry.Next = NULL;
+            if (CacheEntry->ReferenceCount != 0) {
+                LIST_REMOVE(&(CacheEntry->ListEntry));
+                CacheEntry->ListEntry.Next = NULL;
 
                 //
                 // Double check the reference count. If it dropped to zero
@@ -4269,8 +4257,8 @@ Return Value:
                 //
 
                 RtlMemoryBarrier();
-                if (PageCacheEntry->ReferenceCount == 0) {
-                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                if (CacheEntry->ReferenceCount == 0) {
+                    INSERT_BEFORE(&(CacheEntry->ListEntry),
                                   &IoPageCacheCleanList);
                 }
 
@@ -4284,8 +4272,8 @@ Return Value:
             //
 
             if ((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                PageCacheEntry->ListEntry.Next = NULL;
+                LIST_REMOVE(&(CacheEntry->ListEntry));
+                CacheEntry->ListEntry.Next = NULL;
                 continue;
             }
         }
@@ -4300,13 +4288,13 @@ Return Value:
         Lock = FileObject->Lock;
         if (TimidEffort != FALSE) {
             if (KeTryToAcquireSharedExclusiveLockExclusive(Lock) == FALSE) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                if (PageCacheEntry->Node.Parent != NULL) {
-                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                LIST_REMOVE(&(CacheEntry->ListEntry));
+                if (CacheEntry->Node.Parent != NULL) {
+                    INSERT_BEFORE(&(CacheEntry->ListEntry),
                                   &IoPageCacheCleanList);
 
                 } else {
-                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                    INSERT_BEFORE(&(CacheEntry->ListEntry),
                                   &IoPageCacheRemovalList);
                 }
 
@@ -4319,7 +4307,7 @@ Return Value:
         // file object lock to prevent lock ordering trouble.
         //
 
-        IoPageCacheEntryAddReference(PageCacheEntry);
+        IoPageCacheEntryAddReference(CacheEntry);
         KeReleaseQueuedLock(IoPageCacheListLock);
 
         //
@@ -4331,15 +4319,15 @@ Return Value:
         }
 
         PageTakenDown = FALSE;
-        if (PageCacheEntry->ReferenceCount == 1) {
+        if (CacheEntry->ReferenceCount == 1) {
 
             //
             // If the page cache entry is already removed from the tree, then
             // just mark it clean and grab the flags.
             //
 
-            if (PageCacheEntry->Node.Parent == NULL) {
-                IopMarkPageCacheEntryClean(PageCacheEntry, FALSE);
+            if (CacheEntry->Node.Parent == NULL) {
+                IopMarkPageCacheEntryClean(CacheEntry, FALSE);
                 PageTakenDown = TRUE;
 
             //
@@ -4351,12 +4339,12 @@ Return Value:
             //
 
             } else {
-                Status = IopUnmapPageCacheEntrySections(PageCacheEntry);
+                Status = IopUnmapPageCacheEntrySections(CacheEntry);
                 if (KSUCCESS(Status)) {
-                    if ((PageCacheEntry->Flags &
+                    if ((CacheEntry->Flags &
                          PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
 
-                        IopRemovePageCacheEntryFromTree(PageCacheEntry);
+                        IopRemovePageCacheEntryFromTree(CacheEntry);
                         PageTakenDown = TRUE;
                     }
                 }
@@ -4368,7 +4356,7 @@ Return Value:
             //
 
             if ((PageTakenDown != FALSE) &&
-                ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0)) {
+                ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0)) {
 
                 if (TargetRemoveCount != NULL) {
                     *TargetRemoveCount -= 1;
@@ -4391,10 +4379,9 @@ Return Value:
 
         MoveList = NULL;
         if ((PageTakenDown != FALSE) &&
-            (PageCacheEntry->ReferenceCount == 1)) {
+            (CacheEntry->ReferenceCount == 1)) {
 
-            ASSERT((PageCacheEntry->Flags &
-                    PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
+            ASSERT((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
 
             MoveList = DestroyListHead;
 
@@ -4402,7 +4389,7 @@ Return Value:
         // If the page cache has been evicted, move it to the removal list.
         //
 
-        } else if (PageCacheEntry->Node.Parent == NULL) {
+        } else if (CacheEntry->Node.Parent == NULL) {
             MoveList = &IoPageCacheRemovalList;
 
         //
@@ -4415,22 +4402,20 @@ Return Value:
         //
 
         } else {
-            if ((PageCacheEntry->Flags &
-                 PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
-
+            if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
                 MoveList = &IoPageCacheCleanList;
             }
         }
 
         if (MoveList != NULL) {
-            if (PageCacheEntry->ListEntry.Next != NULL) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+            if (CacheEntry->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(CacheEntry->ListEntry));
             }
 
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry), MoveList);
+            INSERT_BEFORE(&(CacheEntry->ListEntry), MoveList);
         }
 
-        IoPageCacheEntryReleaseReference(PageCacheEntry);
+        IoPageCacheEntryReleaseReference(CacheEntry);
     }
 
     //
@@ -4473,13 +4458,13 @@ Return Value:
 
 {
 
+    PPAGE_CACHE_ENTRY CacheEntry;
     PLIST_ENTRY CurrentEntry;
     PFILE_OBJECT FileObject;
     UINTN FreeVirtualPages;
     PSHARED_EXCLUSIVE_LOCK Lock;
     UINTN MappedCleanPageCount;
     PLIST_ENTRY MoveList;
-    PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     LIST_ENTRY ReturnList;
     UINTN TargetUnmapCount;
@@ -4562,16 +4547,16 @@ Return Value:
             (MmGetVirtualMemoryWarningLevel() != MemoryWarningLevelNone))) {
 
         CurrentEntry = IoPageCacheCleanList.Next;
-        PageCacheEntry = LIST_VALUE(CurrentEntry, PAGE_CACHE_ENTRY, ListEntry);
+        CacheEntry = LIST_VALUE(CurrentEntry, PAGE_CACHE_ENTRY, ListEntry);
 
         //
         // Skip over all page cache entries with references, removing them from
         // this list. They cannot be unmapped at the moment.
         //
 
-        if (PageCacheEntry->ReferenceCount != 0) {
-            LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            PageCacheEntry->ListEntry.Next = NULL;
+        if (CacheEntry->ReferenceCount != 0) {
+            LIST_REMOVE(&(CacheEntry->ListEntry));
+            CacheEntry->ListEntry.Next = NULL;
 
             //
             // Double check the reference count. If it dropped to zero while
@@ -4581,9 +4566,8 @@ Return Value:
             //
 
             RtlMemoryBarrier();
-            if (PageCacheEntry->ReferenceCount == 0) {
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                              &IoPageCacheCleanList);
+            if (CacheEntry->ReferenceCount == 0) {
+                INSERT_BEFORE(&(CacheEntry->ListEntry), &IoPageCacheCleanList);
             }
 
             continue;
@@ -4594,9 +4578,9 @@ Return Value:
         // dirty but has yet to remove it from the list. Remove it and move on.
         //
 
-        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0) {
-            LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            PageCacheEntry->ListEntry.Next = NULL;
+        if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0) {
+            LIST_REMOVE(&(CacheEntry->ListEntry));
+            CacheEntry->ListEntry.Next = NULL;
             continue;
         }
 
@@ -4606,18 +4590,18 @@ Return Value:
         // subsequent invocations of this function.
         //
 
-        if ((PageCacheEntry->Flags &
+        if ((CacheEntry->Flags &
              (PAGE_CACHE_ENTRY_FLAG_MAPPED |
               PAGE_CACHE_ENTRY_FLAG_OWNER)) == PAGE_CACHE_ENTRY_FLAG_OWNER) {
 
-            LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+            LIST_REMOVE(&(CacheEntry->ListEntry));
+            INSERT_BEFORE(&(CacheEntry->ListEntry),
                           &IoPageCacheCleanUnmappedList);
 
             continue;
         }
 
-        FileObject = PageCacheEntry->FileObject;
+        FileObject = CacheEntry->FileObject;
         Lock = FileObject->Lock;
 
         //
@@ -4629,8 +4613,8 @@ Return Value:
 
         if (TimidEffort != FALSE) {
             if (KeTryToAcquireSharedExclusiveLockExclusive(Lock) == FALSE) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry), &ReturnList);
+                LIST_REMOVE(&(CacheEntry->ListEntry));
+                INSERT_BEFORE(&(CacheEntry->ListEntry), &ReturnList);
                 continue;
             }
         }
@@ -4641,13 +4625,13 @@ Return Value:
         // while the VA is being torn down.
         //
 
-        IoPageCacheEntryAddReference(PageCacheEntry);
+        IoPageCacheEntryAddReference(CacheEntry);
         KeReleaseQueuedLock(IoPageCacheListLock);
         if (TimidEffort == FALSE) {
             KeAcquireSharedExclusiveLockExclusive(Lock);
         }
 
-        IopRemovePageCacheEntryVirtualAddress(PageCacheEntry, &VirtualAddress);
+        IopRemovePageCacheEntryVirtualAddress(CacheEntry, &VirtualAddress);
         if (VirtualAddress != NULL) {
             UnmapCount += 1;
 
@@ -4691,16 +4675,13 @@ Return Value:
         //
 
         MoveList = NULL;
-        if (PageCacheEntry->Node.Parent == NULL) {
+        if (CacheEntry->Node.Parent == NULL) {
             MoveList = &IoPageCacheRemovalList;
 
         } else {
-            if ((PageCacheEntry->Flags &
-                 PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
-
-                if (((PageCacheEntry->Flags &
-                      PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
-                    (PageCacheEntry->BackingEntry == NULL)) {
+            if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
+                if (((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
+                    (CacheEntry->BackingEntry == NULL)) {
 
                     MoveList = &IoPageCacheCleanUnmappedList;
 
@@ -4711,14 +4692,14 @@ Return Value:
         }
 
         if (MoveList != NULL) {
-            if (PageCacheEntry->ListEntry.Next != NULL) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+            if (CacheEntry->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(CacheEntry->ListEntry));
             }
 
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry), MoveList);
+            INSERT_BEFORE(&(CacheEntry->ListEntry), MoveList);
         }
 
-        IoPageCacheEntryReleaseReference(PageCacheEntry);
+        IoPageCacheEntryReleaseReference(CacheEntry);
     }
 
     //
@@ -4792,7 +4773,7 @@ Return Value:
 {
 
     UINTN BufferOffset;
-    PPAGE_CACHE_ENTRY PageCacheEntry;
+    PPAGE_CACHE_ENTRY CacheEntry;
     ULONG PageSize;
 
     PageSize = MmPageSize();
@@ -4808,11 +4789,11 @@ Return Value:
         // return FALSE if the offsets do not agree.
         //
 
-        PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, BufferOffset);
-        if ((PageCacheEntry == NULL) ||
-            (PageCacheEntry->FileObject != FileObject) ||
-            (PageCacheEntry->Node.Parent == NULL) ||
-            (PageCacheEntry->Offset != Offset)) {
+        CacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, BufferOffset);
+        if ((CacheEntry == NULL) ||
+            (CacheEntry->FileObject != FileObject) ||
+            (CacheEntry->Node.Parent == NULL) ||
+            (CacheEntry->Offset != Offset)) {
 
             return FALSE;
         }
@@ -5012,7 +4993,7 @@ RemovePageCacheEntryVirtualAddressEnd:
 
 VOID
 IopRemovePageCacheEntryFromTree (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -5024,7 +5005,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry to be removed.
+    Entry - Supplies a pointer to the page cache entry to be removed.
 
 Return Value:
 
@@ -5034,35 +5015,31 @@ Return Value:
 
 {
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(
-                                            PageCacheEntry->FileObject->Lock));
-
-    ASSERT(PageCacheEntry->Node.Parent != NULL);
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(Entry->FileObject->Lock));
+    ASSERT(Entry->Node.Parent != NULL);
 
     //
     // If a backing entry exists, then MM needs to know that the backing entry
     // now owns the page. It may have always been the owner, but just make sure.
     //
 
-    if (PageCacheEntry->BackingEntry != NULL) {
-        MmSetPageCacheEntryForPhysicalAddress(PageCacheEntry->PhysicalAddress,
-                                              PageCacheEntry->BackingEntry);
+    if (Entry->BackingEntry != NULL) {
+        MmSetPageCacheEntryForPhysicalAddress(Entry->PhysicalAddress,
+                                              Entry->BackingEntry);
     }
 
-    RtlRedBlackTreeRemove(&(PageCacheEntry->FileObject->PageCacheTree),
-                          &(PageCacheEntry->Node));
-
-    PageCacheEntry->Node.Parent = NULL;
+    RtlRedBlackTreeRemove(&(Entry->FileObject->PageCacheTree), &(Entry->Node));
+    Entry->Node.Parent = NULL;
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
         RtlDebugPrint("PAGE CACHE: Remove PAGE_CACHE_ENTRY 0x%08x: FILE_OBJECT "
                       "0x%08x, offset 0x%I64x, physical address "
                       "0x%I64x, reference count %d, flags 0x%08x.\n",
-                      PageCacheEntry,
-                      PageCacheEntry->FileObject,
-                      PageCacheEntry->Offset,
-                      PageCacheEntry->PhysicalAddress,
-                      PageCacheEntry->ReferenceCount,
-                      PageCacheEntry->Flags);
+                      Entry,
+                      Entry->FileObject,
+                      Entry->Offset,
+                      Entry->PhysicalAddress,
+                      Entry->ReferenceCount,
+                      Entry->Flags);
     }
 
     return;
@@ -5070,7 +5047,7 @@ Return Value:
 
 VOID
 IopUpdatePageCacheEntryList (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     BOOL Created
     )
 
@@ -5084,8 +5061,8 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry whose list
-        entry needs to be updated.
+    Entry - Supplies a pointer to the page cache entry whose list entry needs
+        to be updated.
 
     Created - Supplies a boolean indicating if the page cache entry was just
         created or not.
@@ -5113,16 +5090,14 @@ Return Value:
         // If it's dirty, it should always be on the dirty list.
         //
 
-        ASSERT(((PageCacheEntry->Flags &
-                 PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) ||
-               (PageCacheEntry->ListEntry.Next != NULL));
+        ASSERT(((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) ||
+               (Entry->ListEntry.Next != NULL));
 
-        if (((PageCacheEntry->Flags &
-              PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) &&
-            (PageCacheEntry->ListEntry.Next != NULL)) {
+        if (((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) &&
+            (Entry->ListEntry.Next != NULL)) {
 
-            LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry), &IoPageCacheCleanList);
+            LIST_REMOVE(&(Entry->ListEntry));
+            INSERT_BEFORE(&(Entry->ListEntry), &IoPageCacheCleanList);
         }
 
     //
@@ -5132,10 +5107,10 @@ Return Value:
 
     } else {
 
-        ASSERT(PageCacheEntry->ListEntry.Next == NULL);
-        ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
+        ASSERT(Entry->ListEntry.Next == NULL);
+        ASSERT((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
 
-        INSERT_BEFORE(&(PageCacheEntry->ListEntry), &IoPageCacheCleanList);
+        INSERT_BEFORE(&(Entry->ListEntry), &IoPageCacheCleanList);
     }
 
     KeReleaseQueuedLock(IoPageCacheListLock);

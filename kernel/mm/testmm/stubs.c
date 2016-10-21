@@ -2417,7 +2417,7 @@ Return Value:
 
 VOID
 IoMarkPageCacheEntryDirty (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -2428,7 +2428,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -2870,7 +2870,7 @@ Return Value:
 
 VOID
 IoPageCacheEntryAddReference (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -2881,8 +2881,8 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry whose reference
-        count should be incremented.
+    Entry - Supplies a pointer to the page cache entry whose reference count
+        should be incremented.
 
 Return Value:
 
@@ -2897,7 +2897,7 @@ Return Value:
 
 VOID
 IoPageCacheEntryReleaseReference (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -2908,8 +2908,8 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry whose reference
-        count should be incremented.
+    Entry - Supplies a pointer to the page cache entry whose reference count
+        should be incremented.
 
 Return Value:
 
@@ -2924,7 +2924,7 @@ Return Value:
 
 PHYSICAL_ADDRESS
 IoGetPageCacheEntryPhysicalAddress (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -2935,7 +2935,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -2950,7 +2950,7 @@ Return Value:
 
 PVOID
 IoGetPageCacheEntryVirtualAddress (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -2961,7 +2961,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -2976,7 +2976,7 @@ Return Value:
 
 BOOL
 IoSetPageCacheEntryVirtualAddress (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     PVOID VirtualAddress
     )
 
@@ -2990,7 +2990,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies as pointer to the page cache entry.
+    Entry - Supplies as pointer to the page cache entry.
 
     VirtualAddress - Supplies the virtual address to set in the page cache
         entry.

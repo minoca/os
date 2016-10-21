@@ -363,7 +363,7 @@ Return Value:
 
 IO_OFFSET
 IopGetPageCacheEntryOffset (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     );
 
 /*++
@@ -374,7 +374,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -384,7 +384,7 @@ Return Value:
 
 BOOL
 IopMarkPageCacheEntryClean (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     BOOL MoveToCleanList
     );
 
@@ -396,7 +396,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
     MoveToCleanList - Supplies a boolean indicating if the page cache entry
         should be moved to the list of clean page cache entries.
@@ -410,7 +410,7 @@ Return Value:
 
 BOOL
 IopMarkPageCacheEntryDirty (
-    PPAGE_CACHE_ENTRY PageCacheEntry
+    PPAGE_CACHE_ENTRY Entry
     );
 
 /*++
@@ -422,7 +422,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
 Return Value:
 
@@ -433,7 +433,7 @@ Return Value:
 
 KSTATUS
 IopCopyIoBufferToPageCacheEntry (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     ULONG PageOffset,
     PIO_BUFFER SourceBuffer,
     UINTN SourceOffset,
@@ -449,7 +449,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
     PageOffset - Supplies an offset into the page where the copy should begin.
 
@@ -469,7 +469,7 @@ Return Value:
 
 BOOL
 IopCanLinkPageCacheEntry (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
+    PPAGE_CACHE_ENTRY Entry,
     PFILE_OBJECT FileObject
     );
 
@@ -482,7 +482,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to a page cache entry.
+    Entry - Supplies a pointer to a page cache entry.
 
     FileObject - Supplied a pointer to a file object.
 
