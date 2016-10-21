@@ -3619,8 +3619,7 @@ MmUnmapImageSectionList (
     PIMAGE_SECTION_LIST ImageSectionList,
     IO_OFFSET Offset,
     ULONGLONG Size,
-    ULONG Flags,
-    PBOOL PageWasDirty
+    ULONG Flags
     );
 
 /*++

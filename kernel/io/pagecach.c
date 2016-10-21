@@ -77,10 +77,17 @@ Environment:
 #define PAGE_CACHE_ENTRY_FLAG_DIRTY 0x00000001
 
 //
+// Set this flag if the page cache entry contains dirty data, but the correct
+// locks may not be held. The page cache will make sure it gets cleaned.
+//
+
+#define PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING 0x00000002
+
+//
 // Set this flag if the page cache entry owns the physical page it uses.
 //
 
-#define PAGE_CACHE_ENTRY_FLAG_OWNER 0x00000002
+#define PAGE_CACHE_ENTRY_FLAG_OWNER 0x00000004
 
 //
 // Set this flag if the page cache entry is mapped. This needs to be a flag as
@@ -90,7 +97,15 @@ Environment:
 // count", and so it is not set on non page owners.
 //
 
-#define PAGE_CACHE_ENTRY_FLAG_MAPPED 0x00000004
+#define PAGE_CACHE_ENTRY_FLAG_MAPPED 0x00000008
+
+//
+// If any of the dirty mask bits are set, then the page cache entry needs to
+// be cleaned and flushed.
+//
+
+#define PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK \
+    (PAGE_CACHE_ENTRY_FLAG_DIRTY | PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING)
 
 //
 // Define page cache debug flags.
@@ -294,8 +309,7 @@ IopIsIoBufferPageCacheBackedHelper (
 
 KSTATUS
 IopUnmapPageCacheEntrySections (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
-    PBOOL PageWasDirty
+    PPAGE_CACHE_ENTRY Entry
     );
 
 KSTATUS
@@ -414,6 +428,14 @@ volatile UINTN IoPageCachePhysicalPageCount = 0;
 //
 
 volatile UINTN IoPageCacheDirtyPageCount = 0;
+
+//
+// Stores the number of pages in the cache that are marked pending dirty. This
+// value may become negative but it's only used for debugging. It should be 0
+// on an idle system.
+//
+
+volatile UINTN IoPageCacheDirtyPendingPageCount = 0;
 
 //
 // Stores the number of page cache pages that are currently mapped.
@@ -646,7 +668,7 @@ Return Value:
 
     if ((OldReferenceCount == 1) &&
         (PageCacheEntry->ListEntry.Next == NULL) &&
-        ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0)) {
+        ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0)) {
 
         KeAcquireQueuedLock(IoPageCacheListLock);
 
@@ -655,7 +677,7 @@ Return Value:
         //
 
         if ((PageCacheEntry->ListEntry.Next == NULL) &&
-            ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0)) {
+            ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0)) {
 
             INSERT_BEFORE(&(PageCacheEntry->ListEntry), &IoPageCacheCleanList);
         }
@@ -849,7 +871,7 @@ Return Value:
     return Set;
 }
 
-BOOL
+VOID
 IoMarkPageCacheEntryDirty (
     PPAGE_CACHE_ENTRY PageCacheEntry
     )
@@ -866,57 +888,84 @@ Arguments:
 
 Return Value:
 
-    Returns TRUE if it marked the entry dirty or FALSE if the entry was already
-    dirty.
+    None.
 
 --*/
 
 {
 
-    PPAGE_CACHE_ENTRY BackingEntry;
     PPAGE_CACHE_ENTRY DirtyEntry;
-    PFILE_OBJECT FileObject;
-    BOOL MarkedDirty;
+    BOOL MarkDirty;
+    ULONG OldFlags;
 
     //
     // Try to get the backing entry if possible.
     //
 
     DirtyEntry = PageCacheEntry;
-    BackingEntry = PageCacheEntry->BackingEntry;
-    if (BackingEntry != NULL) {
-        DirtyEntry = BackingEntry;
+    if (DirtyEntry->BackingEntry != NULL) {
+        DirtyEntry = DirtyEntry->BackingEntry;
     }
 
     //
-    // Quick exit if the page cache entry is already dirty.
+    // Quick exit if the page cache entry is already dirty or pending dirty.
     //
 
-    if ((DirtyEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
-        return FALSE;
+    if ((DirtyEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0) {
+        return;
     }
 
-    FileObject = DirtyEntry->FileObject;
-    KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-    BackingEntry = DirtyEntry->BackingEntry;
-
     //
-    // Double check the backing entry to make sure the right lock was acquired.
+    // Attempt to set the dirty pending bit. This routine cannot set the real
+    // dirty bit because it does not have the correct locks to safely increment
+    // the dirty page count. To acquire the correct locks would be a lock
+    // inversion as this routine is usually called while an image section lock
+    // is held.
     //
 
-    if (BackingEntry != NULL) {
+    OldFlags = RtlAtomicOr32(&(DirtyEntry->Flags),
+                             PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING);
 
-        ASSERT(DirtyEntry == PageCacheEntry);
+    if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
+        RtlAtomicAdd(&IoPageCacheDirtyPendingPageCount, 1);
 
-        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-        DirtyEntry = BackingEntry;
-        FileObject = DirtyEntry->FileObject;
-        KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
+        //
+        // Put the page cache entry on the dirty list so that it gets picked up
+        // by flush and then mark the file object dirty so it will be flushed.
+        // This can race with an attempt to mark the entry clean or dirty. If
+        // it's already clean, then it's about to be flushed by another thread
+        // and should be on a clean list. If it's already dirty, then another
+        // thread is moving it to the dirty list.
+        //
+
+        MarkDirty = FALSE;
+        KeAcquireQueuedLock(IoPageCacheListLock);
+        if (((DirtyEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING) != 0) &&
+            ((DirtyEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0)) {
+
+            if (DirtyEntry->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(DirtyEntry->ListEntry));
+            }
+
+            INSERT_BEFORE(&(DirtyEntry->ListEntry),
+                          &(DirtyEntry->FileObject->DirtyPageList));
+
+            MarkDirty = TRUE;
+        }
+
+        KeReleaseQueuedLock(IoPageCacheListLock);
+
+        //
+        // Marking the file object dirty is only useful if this routine put the
+        // page cache entry on the file object's dirty list.
+        //
+
+        if (MarkDirty != FALSE) {
+            IopMarkFileObjectDirty(DirtyEntry->FileObject);
+        }
     }
 
-    MarkedDirty = IopMarkPageCacheEntryDirty(DirtyEntry);
-    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-    return MarkedDirty;
+    return;
 }
 
 KSTATUS
@@ -1834,7 +1883,7 @@ Return Value:
         // If the entry is clean, then it can probably be skipped.
         //
 
-        if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+        if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
             SkipEntry = TRUE;
 
             //
@@ -1844,7 +1893,8 @@ Return Value:
 
             if (((Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) &&
                 (BackingEntry != NULL) &&
-                ((BackingEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0)) {
+                ((BackingEntry->Flags &
+                  PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0)) {
 
                 SkipEntry = FALSE;
             }
@@ -1935,15 +1985,12 @@ Return Value:
         FlushSize -= CleanStreak << PageShift;
 
         //
-        // Flush the buffer. Note that for block devices this does drop and
-        // reacquire the file object lock. As a result, the left over cache
-        // entry that is not in the I/O buffer may disappear. It does not have
-        // a reference. Take one now.
+        // Flush the buffer, which may drop and then reacquire the lock. As a
+        // result, the left over cache entry that is not in the I/O buffer may
+        // disappear. It does not have a reference. Take one now.
         //
 
-        if ((CacheEntry != NULL) &&
-            (FileObject->Properties.Type == IoObjectBlockDevice)) {
-
+        if (CacheEntry != NULL) {
             IoPageCacheEntryAddReference(CacheEntry);
         }
 
@@ -1968,9 +2015,7 @@ Return Value:
         //
 
         if ((PageCount != NULL) && (PagesFlushed >= *PageCount)) {
-            if ((CacheEntry != NULL) &&
-                (FileObject->Properties.Type == IoObjectBlockDevice)) {
-
+            if (CacheEntry != NULL) {
                 IoPageCacheEntryReleaseReference(CacheEntry);
             }
 
@@ -2025,9 +2070,7 @@ Return Value:
         // on the next cache entry.
         //
 
-        if ((CacheEntry != NULL) &&
-            (FileObject->Properties.Type == IoObjectBlockDevice)) {
-
+        if (CacheEntry != NULL) {
             IoPageCacheEntryReleaseReference(CacheEntry);
         }
 
@@ -2498,64 +2541,82 @@ Return Value:
     ULONG OldFlags;
 
     //
+    // The file object lock must be held to synchronize with marking the cache
+    // entry dirty.
+    //
+
+    ASSERT(KeIsSharedExclusiveLockHeld(PageCacheEntry->FileObject->Lock));
+
+    //
     // Quick exit check before banging around atomically.
     //
 
-    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
         return FALSE;
     }
 
-    //
-    // Marking a page cache entry clean requires having a reference on the
-    // entry or holding the tree lock.
-    //
-
-    ASSERT((PageCacheEntry->ReferenceCount != 0) ||
-           (KeIsSharedExclusiveLockHeld(PageCacheEntry->FileObject->Lock)));
-
     OldFlags = RtlAtomicAnd32(&(PageCacheEntry->Flags),
-                              ~PAGE_CACHE_ENTRY_FLAG_DIRTY);
+                              ~PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK);
 
     //
     // Return that this routine marked the page clean based on the old value.
-    // Additional decrement the dirty page count if this entry owns the page.
+    // Additional decrement the dirty page count if this entry was dirty.
     //
 
-    if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
+    if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0) {
+        if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
 
-        ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
+            ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
 
-        RtlAtomicAdd(&IoPageCacheDirtyPageCount, (UINTN)-1);
-        if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
-            RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, (UINTN)-1);
+            RtlAtomicAdd(&IoPageCacheDirtyPageCount, (UINTN)-1);
+            if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
+                RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, (UINTN)-1);
+            }
         }
 
-        MarkedClean = TRUE;
+        if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING) != 0) {
+            RtlAtomicAdd(&IoPageCacheDirtyPendingPageCount, (UINTN)-1);
+        }
 
         //
-        // Remove the entry from the dirty list.
+        // Remove the entry from the dirty list. This needs to be done even if
+        // it only transitioned from dirty-pending to clean.
         //
 
         KeAcquireQueuedLock(IoPageCacheListLock);
 
-        ASSERT((PageCacheEntry->ListEntry.Next != NULL) &&
-               ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0));
-
-        LIST_REMOVE(&(PageCacheEntry->ListEntry));
-        PageCacheEntry->ListEntry.Next = NULL;
+        ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
 
         //
-        // If requested, move the page cache entry to the back of the LRU list;
-        // assume that this page has been fairly recently used on account of it
-        // having been dirty. If the page is already on a list, then leave it
-        // as its current location.
+        // As a page cache entry can be marked dirty-pending without the file
+        // object lock, double check the flags. Do not put the cache entry on
+        // the clean list if it's dirty pending. It needs to be on the dirty
+        // list.
         //
 
-        if (MoveToCleanList != FALSE) {
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry), &IoPageCacheCleanList);
+        if ((PageCacheEntry->Flags &
+             PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING) == 0) {
+
+            if (PageCacheEntry->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+                PageCacheEntry->ListEntry.Next = NULL;
+            }
+
+            //
+            // If requested, move the page cache entry to the back of the LRU
+            // list; assume that this page has been fairly recently used on
+            // account of it having been dirty. If the page is already on a
+            // list, then leave it as its current location.
+            //
+
+            if (MoveToCleanList != FALSE) {
+                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                              &IoPageCacheCleanList);
+            }
         }
 
         KeReleaseQueuedLock(IoPageCacheListLock);
+        MarkedClean = TRUE;
 
     } else {
         MarkedClean = FALSE;
@@ -2594,6 +2655,17 @@ Return Value:
     BOOL MarkedDirty;
     ULONG OldFlags;
 
+    FileObject = PageCacheEntry->FileObject;
+
+    //
+    // The page cache entry's file object lock must be held exclusive. This is
+    // required to synchronize with cleaning the page cache entry and with the
+    // link operation. Without this protection, the counters could become
+    // negative.
+    //
+
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
+
     //
     // If this page cache entry does not own the physical page then directly
     // mark the backing entry dirty. This causes the system to skip the flush
@@ -2603,6 +2675,7 @@ Return Value:
     if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_OWNER) == 0) {
 
         ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
+        ASSERT(PageCacheEntry->BackingEntry != NULL);
 
         DirtyEntry = PageCacheEntry->BackingEntry;
 
@@ -2908,7 +2981,7 @@ Return Value:
     // to be destroyed.
     //
 
-    Status = IopUnmapPageCacheEntrySections(LowerEntry, NULL);
+    Status = IopUnmapPageCacheEntrySections(LowerEntry);
     if (!KSUCCESS(Status)) {
         Result = FALSE;
         goto LinkPageCacheEntriesEnd;
@@ -2917,7 +2990,8 @@ Return Value:
     //
     // The upper entry better not be dirty, because the accounting numbers
     // would be off otherwise, and it would result in a dirty non page owner.
-    // It cannot become dirty because its file object lock is held.
+    // It cannot become dirty because its file object lock is held and the link
+    // operation should only happen after it has been cleaned for a flush.
     //
 
     ASSERT((UpperEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
@@ -3439,7 +3513,7 @@ Return Value:
 
     FileObject = PageCacheEntry->FileObject;
 
-    ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
+    ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
     ASSERT(PageCacheEntry->ListEntry.Next == NULL);
     ASSERT(PageCacheEntry->ReferenceCount == 0);
     ASSERT(PageCacheEntry->Node.Parent == NULL);
@@ -3568,19 +3642,32 @@ Return Value:
         ASSERT((LinkEntry->VirtualAddress == NewEntry->VirtualAddress) ||
                (NewEntry->VirtualAddress == NULL));
 
+        //
+        // If the link is a block device, then this insert is the result of a
+        // read miss on the file layer. Freely link the two.
+        //
+
         if ((LinkType == IoObjectBlockDevice) &&
             (IO_IS_CACHEABLE_FILE(NewType))) {
 
             IoPageCacheEntryAddReference(LinkEntry);
             NewEntry->BackingEntry = LinkEntry;
 
+        //
+        // Otherwise the link is a file type and the insert is a result of a
+        // write miss to the block device during a flush or synchronized write.
+        // The file's file object lock better be held.
+        //
+
         } else {
 
+            ASSERT(KeIsSharedExclusiveLockHeld(LinkEntry->FileObject->Lock));
             ASSERT((IO_IS_CACHEABLE_FILE(LinkType)) &&
                    (NewType == IoObjectBlockDevice));
 
             IoPageCacheEntryAddReference(NewEntry);
             LinkEntry->BackingEntry = NewEntry;
+            NewEntry->Flags = PAGE_CACHE_ENTRY_FLAG_OWNER;
             ClearFlags = PAGE_CACHE_ENTRY_FLAG_OWNER |
                          PAGE_CACHE_ENTRY_FLAG_MAPPED;
 
@@ -3589,11 +3676,12 @@ Return Value:
             //
             // The link entry had better not be dirty, because then it would be
             // a dirty non-page-owner entry, which messes up the accounting.
+            // The link entry's lock is held prevent it from being marked dirty
+            // by another thread and this thread should have already cleaned it
+            // before reaching this point.
             //
 
             ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
-
-            NewEntry->Flags = PAGE_CACHE_ENTRY_FLAG_OWNER;
 
             //
             // If the old entry was mapped, it better be the same mapping as
@@ -3998,14 +4086,23 @@ FlushPageCacheBufferEnd:
     if (!KSUCCESS(Status)) {
 
         //
-        // Mark the non-written pages as dirty again.
+        // Mark the non-written pages as dirty again. This must hold the file
+        // object lock exclusive.
         //
 
         BufferOffset = ALIGN_RANGE_DOWN(IoContext.BytesCompleted, PageSize);
-        while (BufferOffset < BytesToWrite) {
-            CacheEntry = MmGetIoBufferPageCacheEntry(FlushBuffer, BufferOffset);
-            IopMarkPageCacheEntryDirty(CacheEntry);
-            BufferOffset += PageSize;
+        if (BufferOffset < BytesToWrite) {
+            KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
+            while (BufferOffset < BytesToWrite) {
+                CacheEntry = MmGetIoBufferPageCacheEntry(FlushBuffer,
+                                                         BufferOffset);
+
+                IopMarkPageCacheEntryDirty(CacheEntry);
+                BufferOffset += PageSize;
+            }
+
+            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+            KeAcquireSharedExclusiveLockShared(FileObject->Lock);
         }
 
         if (IoContext.BytesCompleted != BytesToWrite) {
@@ -4122,7 +4219,6 @@ Return Value:
     PLIST_ENTRY MoveList;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     BOOL PageTakenDown;
-    BOOL PageWasDirty;
     KSTATUS Status;
 
     KeAcquireQueuedLock(IoPageCacheListLock);
@@ -4187,7 +4283,7 @@ Return Value:
             // it and move on.
             //
 
-            if ((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
+            if ((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0) {
                 LIST_REMOVE(&(PageCacheEntry->ListEntry));
                 PageCacheEntry->ListEntry.Next = NULL;
                 continue;
@@ -4248,24 +4344,17 @@ Return Value:
 
             //
             // Otherwise the page is not evicted and may still be live in some
-            // image sections. Unmap it to see if it is dirty. If the mappings
-            // note that the page is dirty, then mark it dirty and skip
-            // removing the page if it became dirty. The file object lock holds
-            // off any new mappings from getting at this entry. Unmapping a
-            // page cache entry can fail if a non-paged image sections maps it.
+            // image sections. Unmap it to see if it is dirty and skip removing
+            // the page if it became dirty. The file object lock holds off any
+            // new mappings from getting at this entry. Unmapping a page cache
+            // entry can fail if a non-paged image sections maps it.
             //
 
             } else {
-                Status = IopUnmapPageCacheEntrySections(PageCacheEntry,
-                                                        &PageWasDirty);
-
+                Status = IopUnmapPageCacheEntrySections(PageCacheEntry);
                 if (KSUCCESS(Status)) {
-                    if (PageWasDirty != FALSE) {
-                        IopMarkPageCacheEntryDirty(PageCacheEntry);
-                    }
-
                     if ((PageCacheEntry->Flags &
-                         PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+                         PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
 
                         IopRemovePageCacheEntryFromTree(PageCacheEntry);
                         PageTakenDown = TRUE;
@@ -4304,7 +4393,8 @@ Return Value:
         if ((PageTakenDown != FALSE) &&
             (PageCacheEntry->ReferenceCount == 1)) {
 
-            ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
+            ASSERT((PageCacheEntry->Flags &
+                    PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
 
             MoveList = DestroyListHead;
 
@@ -4325,7 +4415,9 @@ Return Value:
         //
 
         } else {
-            if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+            if ((PageCacheEntry->Flags &
+                 PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
+
                 MoveList = &IoPageCacheCleanList;
             }
         }
@@ -4502,7 +4594,7 @@ Return Value:
         // dirty but has yet to remove it from the list. Remove it and move on.
         //
 
-        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
+        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0) {
             LIST_REMOVE(&(PageCacheEntry->ListEntry));
             PageCacheEntry->ListEntry.Next = NULL;
             continue;
@@ -4603,7 +4695,9 @@ Return Value:
             MoveList = &IoPageCacheRemovalList;
 
         } else {
-            if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+            if ((PageCacheEntry->Flags &
+                 PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
+
                 if (((PageCacheEntry->Flags &
                       PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
                     (PageCacheEntry->BackingEntry == NULL)) {
@@ -4733,8 +4827,7 @@ Return Value:
 
 KSTATUS
 IopUnmapPageCacheEntrySections (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
-    PBOOL PageWasDirty
+    PPAGE_CACHE_ENTRY Entry
     )
 
 /*++
@@ -4746,11 +4839,7 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry to be unmapped.
-
-    PageWasDirty - Supplies a pointer where a boolean will be returned
-        indicating if the page that was unmapped was dirty. This parameter is
-        optional.
+    Entry - Supplies a pointer to the page cache entry to be unmapped.
 
 Return Value:
 
@@ -4760,33 +4849,25 @@ Return Value:
 
 {
 
-    ULONG Flags;
-    PIMAGE_SECTION_LIST ImageSectionList;
     KSTATUS Status;
 
     //
     // The page cache entry shouldn't be referenced by random I/O buffers
-    // because they could add mappings after this work is done. A reference
-    // count of 1 is accepted for link, which has a reference but isn't doing
-    // anything wild with it.
+    // because they could add mappings after this work is done. The current
+    // thread better have the one and only reference.
     //
 
-    ASSERT(PageCacheEntry->ReferenceCount <= 1);
+    ASSERT(Entry->ReferenceCount == 1);
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(Entry->FileObject->Lock));
 
-    Status = STATUS_SUCCESS;
-    if (PageWasDirty != NULL) {
-        *PageWasDirty = FALSE;
+    if (Entry->FileObject->ImageSectionList == NULL) {
+        return STATUS_SUCCESS;
     }
 
-    ImageSectionList = PageCacheEntry->FileObject->ImageSectionList;
-    if (ImageSectionList != NULL) {
-        Flags = IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY;
-        Status = MmUnmapImageSectionList(ImageSectionList,
-                                         PageCacheEntry->Offset,
-                                         MmPageSize(),
-                                         Flags,
-                                         PageWasDirty);
-    }
+    Status = MmUnmapImageSectionList(Entry->FileObject->ImageSectionList,
+                                     Entry->Offset,
+                                     MmPageSize(),
+                                     IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY);
 
     return Status;
 }
@@ -4833,8 +4914,16 @@ Return Value:
     Status = STATUS_RESOURCE_IN_USE;
     *VirtualAddress = NULL;
     BackingEntry = NULL;
+
+    //
+    // This routine can race with attempts to mark the entry or backing entry
+    // dirty-pending. It just makes a best effort to not unmap dirty-pending
+    // pages, but it may end up doing so. That's OK. It'll just get mapped
+    // again.
+    //
+
     if ((Entry->ReferenceCount != 1) ||
-        ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0)) {
+        ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0)) {
 
         goto RemovePageCacheEntryVirtualAddressEnd;
     }
@@ -4872,7 +4961,7 @@ Return Value:
                 Entry->VirtualAddress));
 
         if ((BackingEntry->ReferenceCount != 1) ||
-            ((BackingEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0)) {
+            ((BackingEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0)) {
 
             goto RemovePageCacheEntryVirtualAddressEnd;
         }
@@ -5025,15 +5114,15 @@ Return Value:
         //
 
         ASSERT(((PageCacheEntry->Flags &
-                 PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) ||
+                 PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) ||
                (PageCacheEntry->ListEntry.Next != NULL));
 
-        if (((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) &&
+        if (((PageCacheEntry->Flags &
+              PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) &&
             (PageCacheEntry->ListEntry.Next != NULL)) {
 
             LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                          &IoPageCacheCleanList);
+            INSERT_BEFORE(&(PageCacheEntry->ListEntry), &IoPageCacheCleanList);
         }
 
     //
@@ -5044,7 +5133,7 @@ Return Value:
     } else {
 
         ASSERT(PageCacheEntry->ListEntry.Next == NULL);
-        ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
+        ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
 
         INSERT_BEFORE(&(PageCacheEntry->ListEntry), &IoPageCacheCleanList);
     }
@@ -5211,7 +5300,7 @@ Return Value:
     TreeNode = RtlRedBlackTreeGetLowestNode(&(FileObject->PageCacheTree));
     while (TreeNode != NULL) {
         Entry = RED_BLACK_TREE_VALUE(TreeNode, PAGE_CACHE_ENTRY, Node);
-        if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
+        if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) != 0) {
             if (Entry->ListEntry.Next == NULL) {
                 RtlDebugPrint("PAGE_CACHE_ENTRY 0x%x for FILE_OBJECT 0x%x "
                               "Offset 0x%I64x dirty but not in list.\n",

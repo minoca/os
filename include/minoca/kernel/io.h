@@ -7469,7 +7469,7 @@ Return Value:
 
 --*/
 
-BOOL
+VOID
 IoMarkPageCacheEntryDirty (
     PPAGE_CACHE_ENTRY PageCacheEntry
     );
@@ -7486,8 +7486,7 @@ Arguments:
 
 Return Value:
 
-    Returns TRUE if it marked the entry dirty or FALSE if the entry was already
-    dirty.
+    None.
 
 --*/
 

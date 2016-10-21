@@ -1747,10 +1747,6 @@ Return Value:
     volatile SECOND_LEVEL_TABLE *SecondLevelEntry;
     volatile SECOND_LEVEL_TABLE *SecondLevelTable;
 
-    if (Attributes != NULL) {
-        *Attributes = MAP_FLAG_DIRTY;
-    }
-
     Process = PsGetCurrentProcess();
     ProcessFirstLevelTable = NULL;
     if (Process != NULL) {

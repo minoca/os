@@ -1724,8 +1724,7 @@ Return Value:
         MmUnmapImageSectionList(FileObject->ImageSectionList,
                                 Offset,
                                 -1,
-                                UnmapFlags,
-                                NULL);
+                                UnmapFlags);
     }
 
     //

@@ -118,8 +118,7 @@ MmpUnmapImageSection (
     PIMAGE_SECTION Section,
     UINTN PageOffset,
     UINTN PageCount,
-    ULONG Flags,
-    PBOOL PageWasDirty
+    ULONG Flags
     );
 
 BOOL
@@ -345,8 +344,7 @@ MmUnmapImageSectionList (
     PIMAGE_SECTION_LIST ImageSectionList,
     IO_OFFSET Offset,
     ULONGLONG Size,
-    ULONG Flags,
-    PBOOL PageWasDirty
+    ULONG Flags
     )
 
 /*++
@@ -369,10 +367,6 @@ Arguments:
     Flags - Supplies a bitmask of flags for the unmap. See
         IMAGE_SECTION_UNMAP_FLAG_* for definitions.
 
-    PageWasDirty - Supplies a pointer where a boolean will be returned
-        indicating if any page that was unmapped was dirty. This parameter is
-        optional.
-
 Return Value:
 
     Status code.
@@ -383,7 +377,6 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PIMAGE_SECTION CurrentSection;
-    BOOL Dirty;
     IO_OFFSET EndOffset;
     UINTN PageCount;
     UINTN PageOffset;
@@ -393,10 +386,6 @@ Return Value:
     KSTATUS Status;
     IO_OFFSET UnmapEndOffset;
     IO_OFFSET UnmapStartOffset;
-
-    if (PageWasDirty != NULL) {
-        *PageWasDirty = FALSE;
-    }
 
     if (LIST_EMPTY(&(ImageSectionList->ListHead))) {
         return STATUS_SUCCESS;
@@ -496,24 +485,12 @@ Return Value:
         Status = MmpUnmapImageSection(CurrentSection,
                                       PageOffset,
                                       PageCount,
-                                      Flags,
-                                      &Dirty);
+                                      Flags);
 
         KeReleaseQueuedLock(CurrentSection->Lock);
         if (!KSUCCESS(Status)) {
             MmpImageSectionReleaseReference(CurrentSection);
             goto UnmapImageSectionListEnd;
-        }
-
-        if ((Dirty != FALSE) && (PageWasDirty != NULL)) {
-
-            //
-            // Truncate should not be interested in dirty pages.
-            //
-
-            ASSERT((Flags & IMAGE_SECTION_UNMAP_FLAG_TRUNCATE) == 0);
-
-            *PageWasDirty = TRUE;
         }
 
         //
@@ -1610,7 +1587,6 @@ Return Value:
 
     PPAGE_CACHE_ENTRY CacheEntry;
     PVOID CurrentAddress;
-    ULONG DirtyPageCount;
     ULONGLONG DirtySize;
     ULONG FirstDirtyPage;
     ULONG LastDirtyPage;
@@ -1630,17 +1606,17 @@ Return Value:
     PageShift = MmPageShift();
     KeAcquireQueuedLock(Section->Lock);
     LockHeld = TRUE;
+    Status = STATUS_SUCCESS;
 
     //
-    // There is nothing to flush if the image section is cache-backed, shared,
-    // and writable.
+    // There is nothing to flush if the image section is not cache-backed,
+    // shared, and writable.
     //
 
     if (((Section->Flags & IMAGE_SECTION_SHARED) == 0) ||
         ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
         ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0)) {
 
-        Status = STATUS_SUCCESS;
         goto FlushImageSectionRegionEnd;
     }
 
@@ -1653,12 +1629,10 @@ Return Value:
     FirstDirtyPage = RegionEndOffset;
     LastDirtyPage = PageOffset;
     if ((Section->Flags & IMAGE_SECTION_DESTROYED) != 0) {
-        Status = STATUS_SUCCESS;
         goto FlushImageSectionRegionEnd;
     }
 
     if (Section->MinTouched >= Section->MaxTouched) {
-        Status = STATUS_SUCCESS;
         goto FlushImageSectionRegionEnd;
     }
 
@@ -1666,7 +1640,6 @@ Return Value:
 
     MmpImageSectionAddImageBackingReference(Section);
     ReferenceAdded = TRUE;
-    DirtyPageCount = 0;
     for (PageIndex = PageOffset; PageIndex < RegionEndOffset; PageIndex += 1) {
 
         //
@@ -1682,8 +1655,7 @@ Return Value:
 
         PhysicalAddress = MmpVirtualToPhysical(CurrentAddress, &PageAttributes);
         if ((PhysicalAddress == INVALID_PHYSICAL_ADDRESS) ||
-            ((PageAttributes & MAP_FLAG_DIRTY) == 0) ||
-            ((PageAttributes & MAP_FLAG_READ_ONLY) != 0)) {
+            ((PageAttributes & MAP_FLAG_DIRTY) == 0)) {
 
             continue;
         }
@@ -1721,7 +1693,6 @@ Return Value:
         //
 
         IoMarkPageCacheEntryDirty(CacheEntry);
-        DirtyPageCount += 1;
     }
 
     //
@@ -1730,24 +1701,17 @@ Return Value:
 
     KeReleaseQueuedLock(Section->Lock);
     LockHeld = FALSE;
-    if (DirtyPageCount == 0) {
-        Status = STATUS_SUCCESS;
+    if (FirstDirtyPage == RegionEndOffset) {
         goto FlushImageSectionRegionEnd;
     }
 
     //
-    // If performing an asynchronous flush, then just schedule the whole page
-    // cache to be flushed.
+    // If performing an synchronous flush, then make sure the dirty bits hit
+    // permanent storage before returning. If it's an async flush, the mark
+    // dirty routine already scheduled the page cache to be flushed.
     //
 
-    if ((Flags & IMAGE_SECTION_FLUSH_FLAG_ASYNC) != 0) {
-        Status = IoFlush(INVALID_HANDLE, 0, 0, FLUSH_FLAG_ALL);
-
-    //
-    // Otherwise flush the necessary region of the file.
-    //
-
-    } else {
+    if ((Flags & IMAGE_SECTION_FLUSH_FLAG_ASYNC) == 0) {
 
         //
         // The last dirty page records the start of the page. Increment it by
@@ -1765,10 +1729,10 @@ Return Value:
                          Offset,
                          DirtySize,
                          0);
-    }
 
-    if (!KSUCCESS(Status)) {
-        goto FlushImageSectionRegionEnd;
+        if (!KSUCCESS(Status)) {
+            goto FlushImageSectionRegionEnd;
+        }
     }
 
 FlushImageSectionRegionEnd:
@@ -2711,7 +2675,8 @@ Return Value:
         // are released when the section is destroyed.
         //
 
-        if ((Flags & IMAGE_SECTION_NON_PAGED) != 0) {
+        if (((Flags & IMAGE_SECTION_NON_PAGED) != 0) &&
+            ((Flags & IMAGE_SECTION_SHARED) == 0)) {
 
             ASSERT(BitmapCount == 0);
 
@@ -3149,7 +3114,7 @@ Return Value:
                          PageShift;
 
         HolePageCount = ((UINTN)HoleEnd - (UINTN)HoleBegin) >> PageShift;
-        MmpUnmapImageSection(Section, HolePageOffset, HolePageCount, 0, NULL);
+        MmpUnmapImageSection(Section, HolePageOffset, HolePageCount, 0);
 
         ASSERT(HolePageOffset + HolePageCount <= (Section->Size >> PageShift));
 
@@ -3621,8 +3586,7 @@ MmpUnmapImageSection (
     PIMAGE_SECTION Section,
     UINTN PageOffset,
     UINTN PageCount,
-    ULONG Flags,
-    PBOOL PageWasDirty
+    ULONG Flags
     )
 
 /*++
@@ -3646,9 +3610,6 @@ Arguments:
     Flags - Supplies a bitmask of flags for the unmap. See
         IMAGE_SECTION_UNMAP_FLAG_* for definitions.
 
-    PageWasDirty - Supplies an optional pointer to a boolean that receives
-        whether or not any of the unmapped pages were dirty.
-
 Return Value:
 
     Status code.
@@ -3660,24 +3621,20 @@ Return Value:
     UINTN BitmapIndex;
     ULONG BitmapMask;
     UINTN Boundary;
-    BOOL Dirty;
+    UINTN CurrentPageOffset;
     PULONG DirtyPageBitmap;
-    ULONG DirtyPageCount;
     BOOL FreePhysicalPage;
     PIMAGE_SECTION OwningSection;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN PageIndex;
     BOOL PageMapped;
     ULONG PageShift;
+    BOOL PageWasDirty;
     PHYSICAL_ADDRESS PhysicalAddress;
     KSTATUS Status;
 
     ASSERT(((Flags & IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY) == 0) ||
            ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0));
-
-    if (PageWasDirty != NULL) {
-        *PageWasDirty = FALSE;
-    }
 
     ASSERT(KeIsQueuedLockHeld(Section->Lock) != FALSE);
 
@@ -3740,30 +3697,25 @@ Return Value:
 
     ASSERT(IS_ALIGNED((UINTN)Section->VirtualAddress, MmPageSize()) != FALSE);
 
-    DirtyPageCount = 0;
     for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
         BitmapIndex = IMAGE_SECTION_BITMAP_INDEX(PageOffset + PageIndex);
         BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageOffset + PageIndex);
+        CurrentPageOffset = PageOffset + PageIndex;
 
         //
-        // If the section that owns this page is dirty, it's a private page. If
-        // only unmapping page cache pages, skip this one, as it's not page
-        // cache backed.
+        // If only unmapping page cache pages, skip the page if the owner is
+        // dirty, as it could only be mapping a private page. Shared sections
+        // never map private pages.
         //
 
-        if ((Flags & IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY) != 0) {
+        if (((Flags & IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY) != 0) &&
+            ((Section->Flags & IMAGE_SECTION_SHARED) == 0)) {
 
             ASSERT((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
 
-            OwningSection = MmpGetOwningSection(Section,
-                                                PageOffset + PageIndex);
-
+            OwningSection = MmpGetOwningSection(Section, CurrentPageOffset);
             DirtyPageBitmap = OwningSection->DirtyPageBitmap;
-            if ((DirtyPageBitmap != NULL) &&
-                ((DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)) {
-
-                ASSERT((Section->Flags & IMAGE_SECTION_SHARED) == 0);
-
+            if ((DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0) {
                 MmpImageSectionReleaseReference(OwningSection);
                 OwningSection = NULL;
                 continue;
@@ -3779,7 +3731,7 @@ Return Value:
         //
 
         PageMapped = MmpIsImageSectionMapped(Section,
-                                             PageOffset + PageIndex,
+                                             CurrentPageOffset,
                                              &PhysicalAddress);
 
         if (PageMapped == FALSE) {
@@ -3817,7 +3769,7 @@ Return Value:
         //
         // If the section is mapped shared or the section is backed by the page
         // cache and isn't dirty (i.e. it still maps the page cache), then do
-        // not free the physical page on unmap.
+        // not free the physical page.
         //
 
         FreePhysicalPage = TRUE;
@@ -3833,45 +3785,30 @@ Return Value:
         //
 
         MmpModifySectionMapping(Section,
-                                PageOffset + PageIndex,
+                                CurrentPageOffset,
                                 INVALID_PHYSICAL_ADDRESS,
                                 FALSE,
-                                &Dirty,
+                                &PageWasDirty,
                                 TRUE);
 
         //
-        // Only record the dirty status if the section was writable. Some
-        // architectures do not have a dirty bit in their page table entries,
-        // forcing unmap to assume every page is dirty. Also check the dirty
-        // page bitmap, as a child might acquire a dirty page from a parent
-        // during isolation without the page table entry ever being set dirty.
+        // If this is a shared, writable image section and the mapping was
+        // dirty, then mark the associated page cache entry dirty. As this
+        // routine does not handle paging out, the callers must not care about
+        // the dirty state of any other image section type (e.g. clip and
+        // truncate don't need to save private dirty pages).
         //
 
-        if (((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
-            ((Dirty != FALSE) ||
-             ((Section->DirtyPageBitmap != NULL) &&
-              ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)))) {
+        if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) &&
+            ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
+            (PageWasDirty != FALSE)) {
 
-            //
-            // If this is a shared section, mark the page cache entry dirty.
-            //
-
-            if ((Section->Flags & IMAGE_SECTION_SHARED) != 0) {
-
-                ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
-
-                PageCacheEntry = MmpGetPageCacheEntryForPhysicalAddress(
+            PageCacheEntry = MmpGetPageCacheEntryForPhysicalAddress(
                                                               PhysicalAddress);
 
-                ASSERT(PageCacheEntry != NULL);
+            ASSERT(PageCacheEntry != NULL);
 
-                IoMarkPageCacheEntryDirty(PageCacheEntry);
-                DirtyPageCount += 1;
-            }
-
-            if (PageWasDirty != NULL) {
-                *PageWasDirty = TRUE;
-            }
+            IoMarkPageCacheEntryDirty(PageCacheEntry);
         }
 
         //
@@ -3901,10 +3838,6 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 UnmapImageSectionEnd:
-    if (DirtyPageCount != 0) {
-        IoFlush(INVALID_HANDLE, 0, 0, FLUSH_FLAG_ALL);
-    }
-
     return Status;
 }
 
@@ -4018,7 +3951,6 @@ Return Value:
     ULONG BitmapMask;
     PVOID CurrentAddress;
     PKPROCESS CurrentProcess;
-    UINTN DirtyPageCount;
     UINTN MinOffset;
     BOOL MultipleIpisRequired;
     BOOL OtherProcess;
@@ -4050,7 +3982,6 @@ Return Value:
     }
 
     CurrentProcess = PsGetCurrentProcess();
-    DirtyPageCount = 0;
     AddressSpace = Section->AddressSpace;
 
     //
@@ -4236,9 +4167,9 @@ Return Value:
         // then the page cache needs to be notified about this dirty page.
         //
 
-        if ((PageWasDirty != FALSE) &&
-            ((Section->Flags & IMAGE_SECTION_SHARED) != 0) &&
-            ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0)) {
+        if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) &&
+            ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
+            (PageWasDirty != FALSE)) {
 
             ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
             ASSERT((UnmapFlags & UNMAP_FLAG_FREE_PHYSICAL_PAGES) == 0);
@@ -4266,7 +4197,6 @@ Return Value:
             //
 
             IoMarkPageCacheEntryDirty(PageCacheEntry);
-            DirtyPageCount += 1;
         }
 
         CurrentAddress += PageSize;
@@ -4290,10 +4220,6 @@ Return Value:
     }
 
 DestroyImageSectionMappingsEnd:
-    if (DirtyPageCount != 0) {
-        IoFlush(INVALID_HANDLE, 0, 0, FLUSH_FLAG_ALL);
-    }
-
     return;
 }
 
