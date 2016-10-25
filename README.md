@@ -5,9 +5,9 @@ Minoca OS is a general purpose operating system written from scratch. It aims to
 Minoca OS is event driven, preemptible, SMP ready, and network capable. It currently runs on x86 PCs and a range of ARM boards.
 
 ### Screenshots
-![Installing Git on Minoca OS](doc/screenshots/InstallingGit.png)
-![Memory Profiler](doc/screenshots/MemoryProfiler.png)
-![Stack Profiler](doc/screenshots/StackProfiler.png)
+![Installing Git on Minoca OS](docs/screenshots/Installing-Git.png)
+![Memory Profiler](docs/screenshots/Memory-Profiler.png)
+![Stack Profiler](docs/screenshots/Stack-Profiler.png)
 
 ### Getting Started
 If you're just looking to try out Minoca OS, head over to our [download](https://www.minocacorp.com/download/) page to grab the latest stable images. The rest of this page describes how to use this repository to build your own custom image of Minoca OS.
