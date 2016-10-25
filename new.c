@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2015 Minoca Corp.
+Copyright (c) 2016 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -17,7 +17,7 @@ Abstract:
 
 Author:
 
-    Evan Green
+    Your Name <you@example.com> 1-Jan-2016
 
 Environment:
 
@@ -27,6 +27,10 @@ Environment:
 
 //
 // ------------------------------------------------------------------- Includes
+//
+
+//
+// --------------------------------------------------------------------- Macros
 //
 
 //
