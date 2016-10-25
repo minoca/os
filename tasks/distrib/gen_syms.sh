@@ -68,7 +68,7 @@ done
 ## Copy the debugger in as well.
 ##
 
-cd "$SRCROOT/x86$DEBUG/bin"
+cd "$SRCROOT/x86$DEBUG/tools/bin"
 for file in debugui.exe debug.exe kexts.dll ; do
     cp -pv ./$file "$WORKING/"
 done
