@@ -486,7 +486,7 @@ Members:
 
 typedef struct _SYSTEM_CALL_OPEN {
     HANDLE Directory;
-    PSTR Path;
+    PCSTR Path;
     ULONG PathBufferLength;
     ULONG Flags;
     FILE_PERMISSIONS CreatePermissions;

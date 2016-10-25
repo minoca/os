@@ -58,7 +58,7 @@ ImpOpenLibrary (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Parent,
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File,
     PSTR *Path
     );
@@ -89,7 +89,7 @@ ImpOpenImport (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Parent,
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File,
     PSTR *Path
     );
@@ -126,7 +126,7 @@ ImpRelocateSelf (
 PLOADED_IMAGE
 ImpFindImageByLibraryName (
     PLIST_ENTRY ListHead,
-    PSTR Name
+    PCSTR Name
     );
 
 PLOADED_IMAGE
@@ -313,7 +313,7 @@ GetExecutableFormatEnd:
 KSTATUS
 ImLoad (
     PLIST_ENTRY ListHead,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION BinaryFile,
     PIMAGE_BUFFER ImageBuffer,
     PVOID SystemContext,
@@ -1138,7 +1138,7 @@ Return Value:
 KSTATUS
 ImpLoad (
     PLIST_ENTRY ListHead,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION BinaryFile,
     PIMAGE_BUFFER ImageBuffer,
     PVOID SystemContext,
@@ -1535,7 +1535,7 @@ ImpOpenLibrary (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Parent,
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File,
     PSTR *Path
     )
@@ -1781,7 +1781,7 @@ ImpOpenImport (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Parent,
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File,
     PSTR *Path
     )
@@ -2099,7 +2099,7 @@ Return Value:
 PLOADED_IMAGE
 ImpFindImageByLibraryName (
     PLIST_ENTRY ListHead,
-    PSTR Name
+    PCSTR Name
     )
 
 /*++

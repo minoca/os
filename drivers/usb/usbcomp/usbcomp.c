@@ -77,9 +77,9 @@ typedef struct _USB_COMPOUND_DEVICE {
 KSTATUS
 UsbCmpAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     );
 
@@ -196,9 +196,9 @@ Return Value:
 KSTATUS
 UsbCmpAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     )
 

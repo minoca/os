@@ -117,9 +117,9 @@ typedef struct _SPECIAL_DEVICE {
 KSTATUS
 SpecialAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     );
 
@@ -287,9 +287,9 @@ Return Value:
 KSTATUS
 SpecialAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     )
 

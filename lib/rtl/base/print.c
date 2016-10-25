@@ -142,7 +142,7 @@ RtlpGetPositionalArgument (
 
 ULONG
 RtlpGetPositionalArgumentSize (
-    PSTR Format,
+    PCSTR Format,
     ULONG ArgumentNumber
     );
 
@@ -507,7 +507,7 @@ Return Value:
 {
 
     CHAR CharacterArgument;
-    PSTR CurrentFormat;
+    PCSTR CurrentFormat;
     DOUBLE_PARTS DoubleParts;
     LONGLONG Integer;
     ULONGLONG IntegerArgument;
@@ -2946,7 +2946,7 @@ Return Value:
 
 ULONG
 RtlpGetPositionalArgumentSize (
-    PSTR Format,
+    PCSTR Format,
     ULONG ArgumentNumber
     )
 

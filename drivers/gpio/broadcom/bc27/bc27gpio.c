@@ -100,9 +100,9 @@ typedef struct _BCM27_GPIO_CONTROLLER {
 KSTATUS
 Bcm27GpioAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     );
 
@@ -286,9 +286,9 @@ Return Value:
 KSTATUS
 Bcm27GpioAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     )
 

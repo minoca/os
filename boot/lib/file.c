@@ -212,7 +212,7 @@ KSTATUS
 BoLookupPath (
     PBOOT_VOLUME Volume,
     PFILE_ID StartingDirectory,
-    PSTR Path,
+    PCSTR Path,
     PFILE_PROPERTIES FileProperties
     )
 

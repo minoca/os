@@ -142,7 +142,7 @@ RtlpGetPositionalArgumentWide (
 
 ULONG
 RtlpGetPositionalArgumentSizeWide (
-    PWSTR Format,
+    PCWSTR Format,
     ULONG ArgumentNumber
     );
 
@@ -409,7 +409,7 @@ Return Value:
     CHAR ByteCharacterArgument;
     PSTR ByteStringArgument;
     WCHAR CharacterArgument;
-    PWSTR CurrentFormat;
+    PCWSTR CurrentFormat;
     DOUBLE_PARTS DoubleParts;
     LONGLONG Integer;
     ULONGLONG IntegerArgument;
@@ -2833,7 +2833,7 @@ Return Value:
 
 ULONG
 RtlpGetPositionalArgumentSizeWide (
-    PWSTR Format,
+    PCWSTR Format,
     ULONG ArgumentNumber
     )
 

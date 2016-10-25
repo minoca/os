@@ -65,7 +65,7 @@ KSTATUS
 IopPathWalkWorker (
     BOOL FromKernelMode,
     PPATH_POINT Start,
-    PSTR *Path,
+    PCSTR *Path,
     PULONG PathSize,
     ULONG OpenFlags,
     IO_OBJECT_TYPE TypeOverride,
@@ -79,7 +79,7 @@ KSTATUS
 IopPathLookupThroughFileSystem (
     BOOL FromKernelMode,
     PPATH_POINT Directory,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG Hash,
     ULONG OpenFlags,
@@ -101,8 +101,8 @@ IopFollowSymbolicLink (
 
 BOOL
 IopArePathsEqual (
-    PSTR ExistingPath,
-    PSTR QueryPath,
+    PCSTR ExistingPath,
+    PCSTR QueryPath,
     ULONG QuerySize
     );
 
@@ -110,7 +110,7 @@ BOOL
 IopFindPathPoint (
     PPATH_POINT Parent,
     ULONG OpenFlags,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG Hash,
     PPATH_POINT Result
@@ -518,7 +518,7 @@ KSTATUS
 IopPathWalk (
     BOOL FromKernelMode,
     PPATH_POINT Directory,
-    PSTR *Path,
+    PCSTR *Path,
     PULONG PathSize,
     ULONG OpenFlags,
     IO_OBJECT_TYPE TypeOverride,
@@ -677,7 +677,7 @@ Return Value:
 
 KSTATUS
 IopPathSplit (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathSize,
     PSTR *DirectoryComponent,
     PULONG DirectoryComponentSize,
@@ -867,7 +867,7 @@ PathSplitEnd:
 
 PPATH_ENTRY
 IopCreatePathEntry (
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG Hash,
     PPATH_ENTRY Parent,
@@ -956,7 +956,7 @@ Return Value:
 
 ULONG
 IopHashPathString (
-    PSTR String,
+    PCSTR String,
     ULONG StringSize
     )
 
@@ -1370,7 +1370,7 @@ IopPathLookup (
     PPATH_POINT Root,
     PPATH_POINT Directory,
     BOOL DirectoryLockHeld,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG OpenFlags,
     IO_OBJECT_TYPE TypeOverride,
@@ -1863,7 +1863,7 @@ KSTATUS
 IopPathWalkWorker (
     BOOL FromKernelMode,
     PPATH_POINT Start,
-    PSTR *Path,
+    PCSTR *Path,
     PULONG PathSize,
     ULONG OpenFlags,
     IO_OBJECT_TYPE TypeOverride,
@@ -1925,14 +1925,14 @@ Return Value:
 
     ULONG ComponentSize;
     BOOL Create;
-    PSTR CurrentPath;
+    PCSTR CurrentPath;
     ULONG CurrentPathSize;
     PATH_POINT Entry;
     PFILE_OBJECT FileObject;
     BOOL FollowLink;
     PATH_POINT LinkEntry;
     PATH_POINT NextEntry;
-    PSTR NextSeparator;
+    PCSTR NextSeparator;
     PKPROCESS Process;
     ULONG RemainingSize;
     PPATH_POINT Root;
@@ -2239,7 +2239,7 @@ KSTATUS
 IopPathLookupThroughFileSystem (
     BOOL FromKernelMode,
     PPATH_POINT Directory,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG Hash,
     ULONG OpenFlags,
@@ -3070,7 +3070,7 @@ Return Value:
     ULONG LinkOpenFlags;
     PSTR LinkTarget;
     ULONG LinkTargetSize;
-    PSTR RemainingPath;
+    PCSTR RemainingPath;
     ULONG RemainingPathSize;
     KSTATUS Status;
 
@@ -3143,8 +3143,8 @@ FollowSymbolicLinkEnd:
 
 BOOL
 IopArePathsEqual (
-    PSTR ExistingPath,
-    PSTR QueryPath,
+    PCSTR ExistingPath,
+    PCSTR QueryPath,
     ULONG QuerySize
     )
 
@@ -3192,7 +3192,7 @@ BOOL
 IopFindPathPoint (
     PPATH_POINT Parent,
     ULONG OpenFlags,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG Hash,
     PPATH_POINT Result

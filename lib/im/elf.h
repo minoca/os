@@ -848,7 +848,7 @@ KSTATUS
 ImpElf32OpenLibrary (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Parent,
-    PSTR LibraryName,
+    PCSTR LibraryName,
     PIMAGE_FILE_INFORMATION File,
     PSTR *Path
     );
@@ -1237,7 +1237,7 @@ KSTATUS
 ImpElf64OpenLibrary (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Parent,
-    PSTR LibraryName,
+    PCSTR LibraryName,
     PIMAGE_FILE_INFORMATION File,
     PSTR *Path
     );

@@ -601,7 +601,7 @@ Return Value:
     PSTR Line;
     PSTR LineCopy;
     PSTR Name;
-    PSTR OriginalString;
+    PCSTR OriginalString;
     ULONG Pass;
     UINTN StringSize;
     ULONG ValueIndex;

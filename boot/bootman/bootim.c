@@ -84,7 +84,7 @@ BmpImFreeMemory (
 KSTATUS
 BmpImOpenFile (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     );
 
@@ -323,7 +323,7 @@ Return Value:
 KSTATUS
 BmpImOpenFile (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     )
 

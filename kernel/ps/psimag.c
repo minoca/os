@@ -79,7 +79,7 @@ PspImFreeMemory (
 KSTATUS
 PspImOpenFile (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     );
 
@@ -820,7 +820,7 @@ Return Value:
 KSTATUS
 PspImOpenFile (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     )
 

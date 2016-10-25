@@ -124,9 +124,9 @@ typedef struct _RK3_I2C_CONTROLLER {
 KSTATUS
 Rk3I2cAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     );
 
@@ -283,9 +283,9 @@ Return Value:
 KSTATUS
 Rk3I2cAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     )
 

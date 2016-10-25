@@ -392,9 +392,9 @@ typedef struct _AM335_PERFORMANCE_CONFIGURATION {
 KSTATUS
 Am3SocAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     );
 
@@ -685,9 +685,9 @@ Return Value:
 KSTATUS
 Am3SocAddDevice (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     )
 

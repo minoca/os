@@ -1182,9 +1182,9 @@ typedef
 KSTATUS
 (*PDRIVER_ADD_DEVICE) (
     PVOID Driver,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PVOID DeviceToken
     );
 
@@ -2165,7 +2165,7 @@ typedef struct _SYSTEM_CONTROL_LOOKUP {
     BOOL Root;
     ULONG Flags;
     PFILE_PROPERTIES DirectoryProperties;
-    PSTR FileName;
+    PCSTR FileName;
     ULONG FileNameSize;
     FILE_PROPERTIES Properties;
 } SYSTEM_CONTROL_LOOKUP, *PSYSTEM_CONTROL_LOOKUP;
@@ -2227,7 +2227,7 @@ Members:
 typedef struct _SYSTEM_CONTROL_CREATE {
     PFILE_PROPERTIES DirectoryProperties;
     ULONGLONG DirectorySize;
-    PSTR Name;
+    PCSTR Name;
     ULONG NameSize;
     FILE_PROPERTIES FileProperties;
 } SYSTEM_CONTROL_CREATE, *PSYSTEM_CONTROL_CREATE;
@@ -2263,7 +2263,7 @@ Members:
 typedef struct _SYSTEM_CONTROL_UNLINK {
     PFILE_PROPERTIES DirectoryProperties;
     PFILE_PROPERTIES FileProperties;
-    PSTR Name;
+    PCSTR Name;
     ULONG NameSize;
     BOOL Unlinked;
 } SYSTEM_CONTROL_UNLINK, *PSYSTEM_CONTROL_UNLINK;
@@ -2941,8 +2941,8 @@ Return Value:
 KERNEL_API
 BOOL
 IoAreDeviceIdsEqual (
-    PSTR DeviceIdOne,
-    PSTR DeviceIdTwo
+    PCSTR DeviceIdOne,
+    PCSTR DeviceIdTwo
     );
 
 /*++
@@ -2967,7 +2967,7 @@ Return Value:
 --*/
 
 KERNEL_API
-PSTR
+PCSTR
 IoGetDeviceId (
     PDEVICE Device
     );
@@ -3912,7 +3912,7 @@ KSTATUS
 IoOpen (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,
@@ -4394,7 +4394,7 @@ KSTATUS
 IoDelete (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathSize,
     ULONG Flags
     );
@@ -4439,10 +4439,10 @@ KSTATUS
 IoRename (
     BOOL FromKernelMode,
     PIO_HANDLE SourceStartDirectory,
-    PSTR SourcePath,
+    PCSTR SourcePath,
     ULONG SourcePathSize,
     PIO_HANDLE DestinationStartDirectory,
-    PSTR DestinationPath,
+    PCSTR DestinationPath,
     ULONG DestinationPathSize
     );
 
@@ -4619,9 +4619,9 @@ KERNEL_API
 KSTATUS
 IoMount (
     BOOL FromKernelMode,
-    PSTR MountPointPath,
+    PCSTR MountPointPath,
     ULONG MountPointPathSize,
-    PSTR TargetPath,
+    PCSTR TargetPath,
     ULONG TargetPathSize,
     ULONG MountFlags,
     ULONG AccessFlags
@@ -4667,7 +4667,7 @@ KERNEL_API
 KSTATUS
 IoUnmount (
     BOOL FromKernelMode,
-    PSTR MountPointPath,
+    PCSTR MountPointPath,
     ULONG MountPointPathSize,
     ULONG MountFlags,
     ULONG AccessFlags

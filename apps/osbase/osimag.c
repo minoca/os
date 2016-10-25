@@ -97,7 +97,7 @@ OspImFreeMemory (
 KSTATUS
 OspImOpenFile (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     );
 
@@ -1136,7 +1136,7 @@ Return Value:
 KSTATUS
 OspImOpenFile (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     )
 

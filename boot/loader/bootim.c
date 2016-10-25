@@ -106,7 +106,7 @@ BopImFreeMemory (
 KSTATUS
 BopImOpenFile (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     );
 
@@ -257,7 +257,7 @@ Return Value:
     PSTR DriversDirectoryPath;
     FILE_PROPERTIES Properties;
     KSTATUS Status;
-    PSTR SystemRootPath;
+    PCSTR SystemRootPath;
 
     INITIALIZE_LIST_HEAD(&BoLoadedImageList);
 
@@ -376,7 +376,7 @@ Return Value:
 KSTATUS
 BopImOpenFile (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     )
 

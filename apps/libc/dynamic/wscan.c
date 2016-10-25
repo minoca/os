@@ -513,7 +513,7 @@ Return Value:
 {
 
     double Double;
-    PWSTR RemainingString;
+    PCWSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -521,7 +521,7 @@ Return Value:
     RemainingString = (PWSTR)String;
     Status = RtlStringScanDoubleWide(&RemainingString, &StringLength, &Double);
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PWSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
@@ -623,7 +623,7 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PWSTR RemainingString;
+    PCWSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -636,7 +636,7 @@ Return Value:
                                       &Integer);
 
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PWSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
@@ -718,7 +718,7 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PWSTR RemainingString;
+    PCWSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -731,7 +731,7 @@ Return Value:
                                       &Integer);
 
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PWSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
@@ -793,7 +793,7 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PWSTR RemainingString;
+    PCWSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -806,7 +806,7 @@ Return Value:
                                       &Integer);
 
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PWSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
@@ -874,7 +874,7 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PWSTR RemainingString;
+    PCWSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -887,7 +887,7 @@ Return Value:
                                       &Integer);
 
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PWSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {

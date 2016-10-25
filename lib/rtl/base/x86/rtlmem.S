@@ -44,7 +44,7 @@ Environment:
 ## PVOID
 ## RtlCopyMemory (
 ##     PVOID Destination,
-##     PVOID Source,
+##     PCVOID Source,
 ##     UINTN ByteCount
 ##     )
 ##

@@ -95,9 +95,9 @@ RtlpStringScannerGetInputWide (
 RTL_API
 KSTATUS
 RtlStringScanWide (
-    PWSTR Input,
+    PCWSTR Input,
     ULONG InputSize,
-    PWSTR Format,
+    PCWSTR Format,
     ULONG FormatSize,
     CHARACTER_ENCODING Encoding,
     PULONG ItemsScanned,
@@ -170,9 +170,9 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanVaListWide (
-    PWSTR Input,
+    PCWSTR Input,
     ULONG InputSize,
-    PWSTR Format,
+    PCWSTR Format,
     ULONG FormatSize,
     CHARACTER_ENCODING Encoding,
     PULONG ItemsScanned,
@@ -251,7 +251,7 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanIntegerWide (
-    PWSTR *String,
+    PCWSTR *String,
     PULONG StringSize,
     ULONG Base,
     BOOL Signed,
@@ -334,7 +334,7 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanDoubleWide (
-    PWSTR *String,
+    PCWSTR *String,
     PULONG StringSize,
     double *Double
     )
@@ -403,7 +403,7 @@ RTL_API
 KSTATUS
 RtlScanWide (
     PSCAN_INPUT Input,
-    PWSTR Format,
+    PCWSTR Format,
     ULONG FormatLength,
     PULONG ItemsScanned,
     va_list ArgumentList
@@ -469,7 +469,7 @@ Return Value:
     BOOL LongSpecified;
     ULONG Position;
     BOOL Result;
-    PWSTR ScanSetBegin;
+    PCWSTR ScanSetBegin;
     BOOL ScanSetGotSomething;
     ULONG ScanSetIndex;
     ULONG ScanSetLength;

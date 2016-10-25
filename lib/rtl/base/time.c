@@ -58,7 +58,7 @@ Environment:
 
 KSTATUS
 RtlpScanTimeStrings (
-    PSTR Input,
+    PCSTR Input,
     PSTR *Strings,
     ULONG StringCount,
     PLONG Index,
@@ -918,8 +918,8 @@ Return Value:
 RTL_API
 PSTR
 RtlScanDate (
-    PSTR StringBuffer,
-    PSTR Format,
+    PCSTR StringBuffer,
+    PCSTR Format,
     PCALENDAR_TIME CalendarTime
     )
 
@@ -996,12 +996,12 @@ Return Value:
     BOOL Evening;
     LONG Integer;
     LONGLONG LongLong;
-    PSTR SavedFormat;
+    PCSTR SavedFormat;
     BOOL ScanInteger;
     LONG Size;
     CHAR Specifier;
     KSTATUS Status;
-    PSTR String;
+    PCSTR String;
     ULONG StringSize;
 
     Evening = FALSE;
@@ -1417,7 +1417,7 @@ ScanTimeEnd:
         return NULL;
     }
 
-    return String;
+    return (PSTR)String;
 }
 
 LONG
@@ -1941,7 +1941,7 @@ Return Value:
 
 KSTATUS
 RtlpScanTimeStrings (
-    PSTR Input,
+    PCSTR Input,
     PSTR *Strings,
     ULONG StringCount,
     PLONG Index,

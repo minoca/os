@@ -154,6 +154,7 @@ typedef const void *PCVOID;
 typedef char *PSTR;
 typedef const char *PCSTR;
 typedef WCHAR *PWSTR;
+typedef const WCHAR *PCWSTR;
 
 typedef PVOID HANDLE, *PHANDLE;
 

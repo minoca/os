@@ -41,7 +41,7 @@ Author:
 KSTATUS
 ImpElfOpenWithPathList (
     PLOADED_IMAGE Parent,
-    PSTR LibraryName,
+    PCSTR LibraryName,
     PSTR PathList,
     PIMAGE_FILE_INFORMATION File,
     PSTR *Path

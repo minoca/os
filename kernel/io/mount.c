@@ -193,9 +193,9 @@ KERNEL_API
 KSTATUS
 IoMount (
     BOOL FromKernelMode,
-    PSTR MountPointPath,
+    PCSTR MountPointPath,
     ULONG MountPointPathSize,
-    PSTR TargetPath,
+    PCSTR TargetPath,
     ULONG TargetPathSize,
     ULONG MountFlags,
     ULONG AccessFlags
@@ -525,7 +525,7 @@ KERNEL_API
 KSTATUS
 IoUnmount (
     BOOL FromKernelMode,
-    PSTR MountPointPath,
+    PCSTR MountPointPath,
     ULONG MountPointPathSize,
     ULONG MountFlags,
     ULONG AccessFlags

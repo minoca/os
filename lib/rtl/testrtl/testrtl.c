@@ -1889,7 +1889,7 @@ Return Value:
     ULONG Failures;
     PSTR InputString;
     KSTATUS Status;
-    PSTR String;
+    PCSTR String;
     ULONG StringSize;
     LONGLONG Value;
 
@@ -2077,7 +2077,7 @@ Return Value:
 
 {
 
-    PSTR AfterScan;
+    PCSTR AfterScan;
     DOUBLE_PARTS AnswerParts;
     ULONGLONG Difference;
     ULONG Failures;
@@ -2664,9 +2664,9 @@ Return Value:
 {
 
     ULONG Failures;
-    PWSTR InputString;
+    PCWSTR InputString;
     KSTATUS Status;
-    PWSTR String;
+    PCWSTR String;
     ULONG StringSize;
     LONGLONG Value;
 
@@ -2854,7 +2854,7 @@ Return Value:
 
 {
 
-    PWSTR AfterScan;
+    PCWSTR AfterScan;
     DOUBLE_PARTS AnswerParts;
     ULONGLONG Difference;
     ULONG Failures;

@@ -75,7 +75,7 @@ PspCreateThread (
     ULONG KernelStackSize,
     PTHREAD_ENTRY_ROUTINE ThreadRoutine,
     PVOID ThreadParameter,
-    PSTR Name,
+    PCSTR Name,
     ULONG Flags
     );
 
@@ -1441,7 +1441,7 @@ PspCreateThread (
     ULONG KernelStackSize,
     PTHREAD_ENTRY_ROUTINE ThreadRoutine,
     PVOID ThreadParameter,
-    PSTR Name,
+    PCSTR Name,
     ULONG Flags
     )
 

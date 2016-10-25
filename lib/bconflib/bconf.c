@@ -78,13 +78,13 @@ KSTATUS
 BcpReadString (
     PBOOT_CONFIGURATION_CONTEXT Context,
     ULONG StringOffset,
-    PSTR *String
+    PCSTR *String
     );
 
 KSTATUS
 BcpAddToStringTable (
     PBOOT_CONFIGURATION_CONTEXT Context,
-    PSTR String,
+    PCSTR String,
     PULONG StringIndex,
     PVOID *StringTable,
     PULONG StringTableSize,
@@ -94,7 +94,7 @@ BcpAddToStringTable (
 PSTR
 BcpCopyString (
     PBOOT_CONFIGURATION_CONTEXT Context,
-    PSTR String
+    PCSTR String
     );
 
 //
@@ -204,27 +204,27 @@ Return Value:
 {
 
     if (Entry->Name != NULL) {
-        BcFree(Context, Entry->Name);
+        BcFree(Context, (PSTR)(Entry->Name));
     }
 
     if (Entry->LoaderArguments != NULL) {
-        BcFree(Context, Entry->LoaderArguments);
+        BcFree(Context, (PSTR)(Entry->LoaderArguments));
     }
 
     if (Entry->KernelArguments != NULL) {
-        BcFree(Context, Entry->KernelArguments);
+        BcFree(Context, (PSTR)(Entry->KernelArguments));
     }
 
     if (Entry->LoaderPath != NULL) {
-        BcFree(Context, Entry->LoaderPath);
+        BcFree(Context, (PSTR)(Entry->LoaderPath));
     }
 
     if (Entry->KernelPath != NULL) {
-        BcFree(Context, Entry->KernelPath);
+        BcFree(Context, (PSTR)(Entry->KernelPath));
     }
 
     if (Entry->SystemPath != NULL) {
-        BcFree(Context, Entry->SystemPath);
+        BcFree(Context, (PSTR)(Entry->SystemPath));
     }
 
     BcFree(Context, Entry);
@@ -761,7 +761,7 @@ Return Value:
 
     PBOOT_ENTRY Entry;
     KSTATUS Status;
-    PSTR String;
+    PCSTR String;
 
     Status = STATUS_INSUFFICIENT_RESOURCES;
     Entry = BcAllocate(Context, sizeof(BOOT_ENTRY));
@@ -1152,7 +1152,7 @@ KSTATUS
 BcpReadString (
     PBOOT_CONFIGURATION_CONTEXT Context,
     ULONG StringOffset,
-    PSTR *String
+    PCSTR *String
     )
 
 /*++
@@ -1200,7 +1200,7 @@ Return Value:
 KSTATUS
 BcpAddToStringTable (
     PBOOT_CONFIGURATION_CONTEXT Context,
-    PSTR String,
+    PCSTR String,
     PULONG StringIndex,
     PVOID *StringTable,
     PULONG StringTableSize,
@@ -1313,7 +1313,7 @@ Return Value:
 PSTR
 BcpCopyString (
     PBOOT_CONFIGURATION_CONTEXT Context,
-    PSTR String
+    PCSTR String
     )
 
 /*++

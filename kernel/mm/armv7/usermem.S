@@ -49,7 +49,7 @@ ASSEMBLY_FILE_HEADER
 ## BOOL
 ## MmpCopyUserModeMemory (
 ##     PVOID Destination,
-##     PVOID Source,
+##     PCVOID Source,
 ##     ULONG ByteCount
 ##     )
 ##

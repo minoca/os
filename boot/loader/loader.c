@@ -240,7 +240,7 @@ Return Value:
     PLOADED_IMAGE KernelImage;
     PDEBUG_MODULE KernelModule;
     PKERNEL_INITIALIZATION_BLOCK KernelParameters;
-    PSTR KernelPath;
+    PCSTR KernelPath;
     PHYSICAL_ADDRESS KernelStackPhysical;
     PDEBUG_MODULE LoaderModule;
     ULONG LoaderModuleNameLength;

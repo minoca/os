@@ -113,7 +113,7 @@ Return Value:
 KSTATUS
 ImpLoad (
     PLIST_ENTRY ListHead,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION BinaryFile,
     PIMAGE_BUFFER ImageBuffer,
     PVOID SystemContext,

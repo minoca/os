@@ -136,7 +136,7 @@ KSTATUS
 IoOpen (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,
@@ -1483,7 +1483,7 @@ KSTATUS
 IoDelete (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathSize,
     ULONG Flags
     )
@@ -1590,10 +1590,10 @@ KSTATUS
 IoRename (
     BOOL FromKernelMode,
     PIO_HANDLE SourceStartDirectory,
-    PSTR SourcePath,
+    PCSTR SourcePath,
     ULONG SourcePathSize,
     PIO_HANDLE DestinationStartDirectory,
-    PSTR DestinationPath,
+    PCSTR DestinationPath,
     ULONG DestinationPathSize
     )
 
@@ -1658,9 +1658,9 @@ Return Value:
     PPATH_POINT DestinationStartPathPoint;
     PDEVICE Device;
     PATH_POINT FoundPathPoint;
-    PSTR LocalDestinationPath;
+    PCSTR LocalDestinationPath;
     ULONG LocalDestinationPathSize;
-    PSTR LocalSourcePath;
+    PCSTR LocalSourcePath;
     ULONG LocalSourcePathSize;
     BOOL LocksHeld;
     ULONG NameHash;
@@ -2979,7 +2979,7 @@ KSTATUS
 IopOpen (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,
@@ -4179,7 +4179,7 @@ KSTATUS
 IopSendLookupRequest (
     PDEVICE Device,
     PFILE_OBJECT Directory,
-    PSTR FileName,
+    PCSTR FileName,
     ULONG FileNameSize,
     PFILE_PROPERTIES Properties
     )
@@ -4283,7 +4283,7 @@ KSTATUS
 IopSendCreateRequest (
     PDEVICE Device,
     PFILE_OBJECT Directory,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     PFILE_PROPERTIES Properties
     )
@@ -4360,7 +4360,7 @@ IopSendUnlinkRequest (
     PDEVICE Device,
     PFILE_OBJECT FileObject,
     PFILE_OBJECT DirectoryObject,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     PBOOL Unlinked
     )

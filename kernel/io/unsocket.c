@@ -585,7 +585,7 @@ Return Value:
     PSOCKET Socket;
     KSTATUS Status;
     PUNIX_SOCKET UnixSocket;
-    PSTR WalkedPath;
+    PCSTR WalkedPath;
     ULONG WalkedPathSize;
 
     PathCopy = NULL;
@@ -1033,7 +1033,7 @@ Return Value:
     PUNIX_SOCKET ServerUnixSocket;
     KSTATUS Status;
     PUNIX_SOCKET UnixSocket;
-    PSTR WalkedPath;
+    PCSTR WalkedPath;
     ULONG WalkedPathSize;
 
     NewSocketHandle = NULL;
@@ -1359,7 +1359,7 @@ Return Value:
     PKTHREAD Thread;
     PUNIX_SOCKET UnixSocket;
     BOOL UnixSocketLockHeld;
-    PSTR WalkedPath;
+    PCSTR WalkedPath;
     UINTN WalkedPathSize;
 
     BytesCompleted = 0;

@@ -886,8 +886,8 @@ struct _SCAN_INPUT {
     } ReadU;
 
     union {
-        PSTR String;
-        PWSTR WideString;
+        PCSTR String;
+        PCWSTR WideString;
         PVOID Context;
     } DataU;
 
@@ -1573,7 +1573,7 @@ RTL_API
 ULONG
 RtlComputeCrc32 (
     ULONG InitialCrc,
-    PVOID Buffer,
+    PCVOID Buffer,
     ULONG Size
     );
 
@@ -2233,8 +2233,8 @@ Return Value:
 RTL_API
 BOOL
 RtlAreStringsEqual (
-    PSTR String1,
-    PSTR String2,
+    PCSTR String1,
+    PCSTR String2,
     ULONG MaxLength
     );
 
@@ -2295,7 +2295,7 @@ Return Value:
 RTL_API
 PSTR
 RtlStringFindCharacter (
-    PSTR String,
+    PCSTR String,
     CHAR Character,
     ULONG StringLength
     );
@@ -2328,7 +2328,7 @@ Return Value:
 RTL_API
 PSTR
 RtlStringFindCharacterRight (
-    PSTR String,
+    PCSTR String,
     CHAR Character,
     ULONG StringLength
     );
@@ -2611,9 +2611,9 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScan (
-    PSTR Input,
+    PCSTR Input,
     ULONG InputSize,
-    PSTR Format,
+    PCSTR Format,
     ULONG FormatSize,
     CHARACTER_ENCODING Encoding,
     PULONG ItemsScanned,
@@ -2668,9 +2668,9 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanVaList (
-    PSTR Input,
+    PCSTR Input,
     ULONG InputSize,
-    PSTR Format,
+    PCSTR Format,
     ULONG FormatSize,
     CHARACTER_ENCODING Encoding,
     PULONG ItemsScanned,
@@ -2725,7 +2725,7 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanInteger (
-    PSTR *String,
+    PCSTR *String,
     PULONG StringSize,
     ULONG Base,
     BOOL Signed,
@@ -2780,7 +2780,7 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanDouble (
-    PSTR *String,
+    PCSTR *String,
     PULONG StringSize,
     double *Double
     );
@@ -2825,7 +2825,7 @@ RTL_API
 KSTATUS
 RtlScan (
     PSCAN_INPUT Input,
-    PSTR Format,
+    PCSTR Format,
     ULONG FormatLength,
     PULONG ItemsScanned,
     va_list ArgumentList
@@ -2874,9 +2874,9 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanWide (
-    PWSTR Input,
+    PCWSTR Input,
     ULONG InputSize,
-    PWSTR Format,
+    PCWSTR Format,
     ULONG FormatSize,
     CHARACTER_ENCODING Encoding,
     PULONG ItemsScanned,
@@ -2931,9 +2931,9 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanVaListWide (
-    PWSTR Input,
+    PCWSTR Input,
     ULONG InputSize,
-    PWSTR Format,
+    PCWSTR Format,
     ULONG FormatSize,
     CHARACTER_ENCODING Encoding,
     PULONG ItemsScanned,
@@ -2988,7 +2988,7 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanIntegerWide (
-    PWSTR *String,
+    PCWSTR *String,
     PULONG StringSize,
     ULONG Base,
     BOOL Signed,
@@ -3043,7 +3043,7 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanDoubleWide (
-    PWSTR *String,
+    PCWSTR *String,
     PULONG StringSize,
     double *Double
     );
@@ -3086,7 +3086,7 @@ RTL_API
 KSTATUS
 RtlScanWide (
     PSCAN_INPUT Input,
-    PWSTR Format,
+    PCWSTR Format,
     ULONG FormatLength,
     PULONG ItemsScanned,
     va_list ArgumentList
@@ -3189,7 +3189,7 @@ RTL_API
 PVOID
 RtlCopyMemory (
     PVOID Destination,
-    PVOID Source,
+    PCVOID Source,
     UINTN ByteCount
     );
 
@@ -5083,8 +5083,8 @@ Return Value:
 RTL_API
 PSTR
 RtlScanDate (
-    PSTR StringBuffer,
-    PSTR Format,
+    PCSTR StringBuffer,
+    PCSTR Format,
     PCALENDAR_TIME CalendarTime
     );
 

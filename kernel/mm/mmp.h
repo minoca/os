@@ -2386,7 +2386,7 @@ Return Value:
 BOOL
 MmpCopyUserModeMemory (
     PVOID Destination,
-    PVOID Source,
+    PCVOID Source,
     ULONG ByteCount
     );
 

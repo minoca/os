@@ -193,8 +193,8 @@ Return Value:
 RTL_API
 BOOL
 RtlAreStringsEqual (
-    PSTR String1,
-    PSTR String2,
+    PCSTR String1,
+    PCSTR String2,
     ULONG MaxLength
     )
 
@@ -320,7 +320,7 @@ Return Value:
 RTL_API
 PSTR
 RtlStringFindCharacter (
-    PSTR String,
+    PCSTR String,
     CHAR Character,
     ULONG StringLength
     )
@@ -359,7 +359,7 @@ Return Value:
 
     while ((StringLength != 0) && (*String != STRING_TERMINATOR)) {
         if (*String == Character) {
-            return String;
+            return (PSTR)String;
         }
 
         String += 1;
@@ -372,7 +372,7 @@ Return Value:
 RTL_API
 PSTR
 RtlStringFindCharacterRight (
-    PSTR String,
+    PCSTR String,
     CHAR Character,
     ULONG StringLength
     )
@@ -405,7 +405,7 @@ Return Value:
 
 {
 
-    PSTR Current;
+    PCSTR Current;
 
     if ((String == NULL) || (StringLength == 0)) {
         return NULL;
@@ -428,14 +428,14 @@ Return Value:
 
     while (Current != String) {
         if (*Current == Character) {
-            return Current;
+            return (PSTR)Current;
         }
 
         Current -= 1;
     }
 
     if (*Current == Character) {
-        return String;
+        return (PSTR)String;
     }
 
     return NULL;

@@ -416,7 +416,7 @@ KSTATUS
 FatpLookupDirectoryEntry (
     PFAT_VOLUME Volume,
     PFAT_DIRECTORY_CONTEXT Directory,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameLength,
     PFAT_DIRECTORY_ENTRY Entry,
     PULONGLONG EntryOffset
@@ -455,7 +455,7 @@ KSTATUS
 FatpCreateFile (
     PFAT_VOLUME Volume,
     FILE_ID DirectoryFileId,
-    PSTR FileName,
+    PCSTR FileName,
     ULONG FileNameLength,
     PULONGLONG DirectorySize,
     PFILE_PROPERTIES FileProperties
@@ -498,7 +498,7 @@ KSTATUS
 FatpCreateDirectoryEntry (
     PFAT_VOLUME Volume,
     FILE_ID DirectoryFileId,
-    PSTR FileName,
+    PCSTR FileName,
     ULONG FileNameLength,
     PULONGLONG DirectorySize,
     PFAT_DIRECTORY_ENTRY Entry

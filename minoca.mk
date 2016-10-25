@@ -130,9 +130,10 @@ else
 CECHO_CYAN ?= echo
 endif
 
+RCC := windres
+
 ifeq (x86, $(ARCH)$(VARIANT))
 CC := i686-pc-minoca-gcc
-RCC := windres
 AR := i686-pc-minoca-ar
 OBJCOPY := i686-pc-minoca-objcopy
 STRIP := i686-pc-minoca-strip

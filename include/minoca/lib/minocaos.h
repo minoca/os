@@ -317,7 +317,7 @@ OS_API
 KSTATUS
 OsOpen (
     HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG Flags,
     FILE_PERMISSIONS CreatePermissions,

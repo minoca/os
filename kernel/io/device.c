@@ -496,8 +496,8 @@ Return Value:
 KERNEL_API
 BOOL
 IoAreDeviceIdsEqual (
-    PSTR DeviceIdOne,
-    PSTR DeviceIdTwo
+    PCSTR DeviceIdOne,
+    PCSTR DeviceIdTwo
     )
 
 /*++
@@ -525,7 +525,7 @@ Return Value:
 
     ULONG DeviceIdOneLength;
     ULONG DeviceIdTwoLength;
-    PSTR LastHash;
+    PCSTR LastHash;
     BOOL Result;
 
     //
@@ -572,7 +572,7 @@ Return Value:
 }
 
 KERNEL_API
-PSTR
+PCSTR
 IoGetDeviceId (
     PDEVICE Device
     )

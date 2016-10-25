@@ -112,7 +112,7 @@ RTL_API
 ULONG
 RtlComputeCrc32 (
     ULONG InitialCrc,
-    PVOID Buffer,
+    PCVOID Buffer,
     ULONG Size
     )
 

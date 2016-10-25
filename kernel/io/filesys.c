@@ -1195,7 +1195,7 @@ Return Value:
 {
 
     PSTR DevicePath;
-    PSTR Path;
+    PCSTR Path;
     ULONG PathSize;
     PATH_POINT RootPathPoint;
     KSTATUS Status;

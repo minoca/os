@@ -186,7 +186,7 @@ RtlZeroMemory (
 PVOID
 RtlCopyMemory (
     PVOID Destination,
-    PVOID Source,
+    PCVOID Source,
     UINTN ByteCount
     );
 
@@ -1288,7 +1288,7 @@ Return Value:
 PVOID
 RtlCopyMemory (
     PVOID Destination,
-    PVOID Source,
+    PCVOID Source,
     UINTN ByteCount
     )
 

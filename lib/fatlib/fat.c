@@ -1600,7 +1600,7 @@ FatLookup (
     PVOID Volume,
     BOOL Root,
     FILE_ID DirectoryFileId,
-    PSTR FileName,
+    PCSTR FileName,
     ULONG FileNameSize,
     PFILE_PROPERTIES Properties
     )
@@ -1838,7 +1838,7 @@ KSTATUS
 FatCreate (
     PVOID Volume,
     FILE_ID DirectoryFileId,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     PULONGLONG DirectorySize,
     PFILE_PROPERTIES Properties
@@ -2255,7 +2255,7 @@ KSTATUS
 FatUnlink (
     PVOID Volume,
     FILE_ID DirectoryFileId,
-    PSTR FileName,
+    PCSTR FileName,
     ULONG FileNameSize,
     FILE_ID FileId,
     PBOOL Unlinked

@@ -37,7 +37,7 @@ ASSEMBLY_FILE_HEADER
 ## PVOID
 ## RtlCopyMemory (
 ##     PVOID Destination,
-##     PVOID Source,
+##     PCVOID Source,
 ##     ULONG ByteCount
 ##     )
 ##

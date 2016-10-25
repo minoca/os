@@ -382,7 +382,7 @@ Return Value:
 
 KSTATUS
 MmCreateCopyOfUserModeString (
-    PSTR UserModeString,
+    PCSTR UserModeString,
     ULONG UserModeStringBufferLength,
     ULONG AllocationTag,
     PSTR *CreatedCopy
@@ -473,7 +473,7 @@ KERNEL_API
 KSTATUS
 MmCopyFromUserMode (
     PVOID KernelModePointer,
-    PVOID UserModePointer,
+    PCVOID UserModePointer,
     UINTN Size
     )
 
@@ -524,7 +524,7 @@ KERNEL_API
 KSTATUS
 MmCopyToUserMode (
     PVOID UserModePointer,
-    PVOID KernelModePointer,
+    PCVOID KernelModePointer,
     UINTN Size
     )
 

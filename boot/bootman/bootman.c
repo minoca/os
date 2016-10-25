@@ -115,7 +115,7 @@ Return Value:
     PDEBUG_DEVICE_DESCRIPTION DebugDevice;
     PDEBUG_MODULE DebugModule;
     PLOADED_IMAGE LoaderImage;
-    PSTR LoaderName;
+    PCSTR LoaderName;
     UINTN LoaderNameSize;
     PBOOT_INITIALIZATION_BLOCK LoaderParameters;
     ULONG LoadFlags;

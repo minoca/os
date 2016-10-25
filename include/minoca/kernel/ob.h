@@ -297,7 +297,7 @@ typedef struct _OBJECT_HEADER OBJECT_HEADER, *POBJECT_HEADER;
 struct _OBJECT_HEADER {
     OBJECT_TYPE Type;
     ULONG NameLength;
-    PSTR Name;
+    PCSTR Name;
     POBJECT_HEADER Parent;
     LIST_ENTRY SiblingEntry;
     LIST_ENTRY ChildListHead;
@@ -388,7 +388,7 @@ PVOID
 ObCreateObject (
     OBJECT_TYPE Type,
     PVOID Parent,
-    PSTR ObjectName,
+    PCSTR ObjectName,
     ULONG NameLength,
     ULONG DataSize,
     PDESTROY_OBJECT_ROUTINE DestroyRoutine,
@@ -849,7 +849,7 @@ Return Value:
 
 PVOID
 ObFindObject (
-    PSTR ObjectName,
+    PCSTR ObjectName,
     ULONG BufferLength,
     POBJECT_HEADER ParentObject
     );

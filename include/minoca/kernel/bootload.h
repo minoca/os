@@ -155,10 +155,10 @@ typedef struct _BOOT_INITIALIZATION_BLOCK {
     PVOID EfiSystemTable;
     ULONGLONG PartitionOffset;
     ULONG DriveNumber;
-    PSTR ApplicationName;
+    PCSTR ApplicationName;
     PVOID ApplicationLowestAddress;
     UINTN ApplicationSize;
-    PSTR ApplicationArguments;
+    PCSTR ApplicationArguments;
     ULONG Flags;
 } BOOT_INITIALIZATION_BLOCK, *PBOOT_INITIALIZATION_BLOCK;
 

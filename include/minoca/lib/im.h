@@ -628,7 +628,7 @@ typedef
 KSTATUS
 (*PIM_OPEN_FILE) (
     PVOID SystemContext,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File
     );
 
@@ -1192,7 +1192,7 @@ Return Value:
 KSTATUS
 ImLoad (
     PLIST_ENTRY ListHead,
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION BinaryFile,
     PIMAGE_BUFFER ImageBuffer,
     PVOID SystemContext,

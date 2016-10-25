@@ -250,7 +250,7 @@ Return Value:
 
 KSTATUS
 IopCreatePipe (
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     FILE_PERMISSIONS Permissions,
     PFILE_OBJECT *FileObject

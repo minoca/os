@@ -257,7 +257,7 @@ Return Value:
 KSTATUS
 IopCreateSharedMemoryObject (
     BOOL FromKernelMode,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG Flags,
     FILE_PERMISSIONS Permissions,

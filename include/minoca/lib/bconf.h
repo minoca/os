@@ -199,12 +199,12 @@ typedef struct _BOOT_ENTRY {
     ULONG Id;
     UCHAR DiskId[BOOT_DISK_ID_SIZE];
     UCHAR PartitionId[BOOT_PARTITION_ID_SIZE];
-    PSTR Name;
-    PSTR LoaderArguments;
-    PSTR KernelArguments;
-    PSTR LoaderPath;
-    PSTR KernelPath;
-    PSTR SystemPath;
+    PCSTR Name;
+    PCSTR LoaderArguments;
+    PCSTR KernelArguments;
+    PCSTR LoaderPath;
+    PCSTR KernelPath;
+    PCSTR SystemPath;
     ULONGLONG Flags;
     ULONG DebugDevice;
 } BOOT_ENTRY, *PBOOT_ENTRY;

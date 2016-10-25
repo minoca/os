@@ -123,9 +123,9 @@ double RtlNegativePowersOf2[5] = {
 RTL_API
 KSTATUS
 RtlStringScan (
-    PSTR Input,
+    PCSTR Input,
     ULONG InputSize,
-    PSTR Format,
+    PCSTR Format,
     ULONG FormatSize,
     CHARACTER_ENCODING Encoding,
     PULONG ItemsScanned,
@@ -198,9 +198,9 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanVaList (
-    PSTR Input,
+    PCSTR Input,
     ULONG InputSize,
-    PSTR Format,
+    PCSTR Format,
     ULONG FormatSize,
     CHARACTER_ENCODING Encoding,
     PULONG ItemsScanned,
@@ -279,7 +279,7 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanInteger (
-    PSTR *String,
+    PCSTR *String,
     PULONG StringSize,
     ULONG Base,
     BOOL Signed,
@@ -362,7 +362,7 @@ Return Value:
 RTL_API
 KSTATUS
 RtlStringScanDouble (
-    PSTR *String,
+    PCSTR *String,
     PULONG StringSize,
     double *Double
     )
@@ -429,7 +429,7 @@ RTL_API
 KSTATUS
 RtlScan (
     PSCAN_INPUT Input,
-    PSTR Format,
+    PCSTR Format,
     ULONG FormatLength,
     PULONG ItemsScanned,
     va_list ArgumentList
@@ -493,7 +493,7 @@ Return Value:
     BOOL LongSpecified;
     ULONG Position;
     BOOL Result;
-    PSTR ScanSetBegin;
+    PCSTR ScanSetBegin;
     BOOL ScanSetGotSomething;
     ULONG ScanSetIndex;
     ULONG ScanSetLength;

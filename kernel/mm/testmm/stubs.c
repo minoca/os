@@ -127,7 +127,7 @@ Return Value:
 BOOL
 MmpCopyUserModeMemory (
     PVOID Destination,
-    PVOID Source,
+    PCVOID Source,
     ULONG ByteCount
     )
 
@@ -2100,7 +2100,7 @@ KSTATUS
 IoOpen (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,

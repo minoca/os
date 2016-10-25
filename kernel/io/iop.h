@@ -1796,7 +1796,7 @@ KSTATUS
 IopOpen (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,
@@ -2082,7 +2082,7 @@ KSTATUS
 IopSendLookupRequest (
     PDEVICE Device,
     PFILE_OBJECT Directory,
-    PSTR FileName,
+    PCSTR FileName,
     ULONG FileNameSize,
     PFILE_PROPERTIES Properties
     );
@@ -2148,7 +2148,7 @@ KSTATUS
 IopSendCreateRequest (
     PDEVICE Device,
     PFILE_OBJECT Directory,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     PFILE_PROPERTIES Properties
     );
@@ -2188,7 +2188,7 @@ IopSendUnlinkRequest (
     PDEVICE Device,
     PFILE_OBJECT FileObject,
     PFILE_OBJECT DirectoryObject,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     PBOOL Unlinked
     );
@@ -3065,7 +3065,7 @@ Return Value:
 
 KSTATUS
 IopCreatePipe (
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     FILE_PERMISSIONS Permissions,
     PFILE_OBJECT *FileObject
@@ -3678,7 +3678,7 @@ Return Value:
 KSTATUS
 IopCreateSharedMemoryObject (
     BOOL FromKernelMode,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG Flags,
     FILE_PERMISSIONS Permissions,
@@ -3823,7 +3823,7 @@ KSTATUS
 IopPathWalk (
     BOOL FromKernelMode,
     PPATH_POINT Directory,
-    PSTR *Path,
+    PCSTR *Path,
     PULONG PathSize,
     ULONG OpenFlags,
     IO_OBJECT_TYPE TypeOverride,
@@ -3933,7 +3933,7 @@ Return Value:
 
 KSTATUS
 IopPathSplit (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathSize,
     PSTR *DirectoryComponent,
     PULONG DirectoryComponentSize,
@@ -3978,7 +3978,7 @@ Return Value:
 
 PPATH_ENTRY
 IopCreatePathEntry (
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG Hash,
     PPATH_ENTRY Parent,
@@ -4017,7 +4017,7 @@ Return Value:
 
 ULONG
 IopHashPathString (
-    PSTR String,
+    PCSTR String,
     ULONG StringSize
     );
 
@@ -4163,7 +4163,7 @@ IopPathLookup (
     PPATH_POINT Root,
     PPATH_POINT Directory,
     BOOL DirectoryLockHeld,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG OpenFlags,
     IO_OBJECT_TYPE TypeOverride,

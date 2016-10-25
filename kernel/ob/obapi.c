@@ -66,8 +66,8 @@ ObpCleanUpWaitBlock (
 
 BOOL
 ObpAreObjectNamesEqual (
-    PSTR ExistingObject,
-    PSTR QueryObject,
+    PCSTR ExistingObject,
+    PCSTR QueryObject,
     ULONG QuerySize
     );
 
@@ -268,7 +268,7 @@ PVOID
 ObCreateObject (
     OBJECT_TYPE Type,
     PVOID Parent,
-    PSTR ObjectName,
+    PCSTR ObjectName,
     ULONG NameLength,
     ULONG DataSize,
     PDESTROY_OBJECT_ROUTINE DestroyRoutine,
@@ -364,8 +364,8 @@ Return Value:
             goto CreateObjectEnd;
         }
 
-        RtlStringCopy(NewObject->Name, ObjectName, NameLength);
-        NewObject->Name[NameLength - 1] = '\0';
+        RtlStringCopy((PSTR)(NewObject->Name), ObjectName, NameLength);
+        ((PSTR)(NewObject->Name))[NameLength - 1] = '\0';
     }
 
     NewObject->NameLength = NameLength;
@@ -399,7 +399,7 @@ CreateObjectEnd:
             if (((Flags & OBJECT_FLAG_USE_NAME_DIRECTLY) == 0) &&
                 (NewObject->Name != NULL)) {
 
-                MmFreeNonPagedPool(NewObject->Name);
+                MmFreeNonPagedPool((PVOID)(NewObject->Name));
             }
 
             MmFreeNonPagedPool(NewObject);
@@ -532,7 +532,7 @@ Return Value:
             if (((CurrentObject->Flags & OBJECT_FLAG_USE_NAME_DIRECTLY) == 0) &&
                 (CurrentObject->Name != NULL)) {
 
-                MmFreeNonPagedPool(CurrentObject->Name);
+                MmFreeNonPagedPool((PVOID)(CurrentObject->Name));
             }
 
             MmFreeNonPagedPool(CurrentObject);
@@ -601,7 +601,7 @@ Return Value:
     if ((ObjectHeader->Name != NULL) &&
         ((ObjectHeader->Flags & OBJECT_FLAG_USE_NAME_DIRECTLY) == 0)) {
 
-        NameToFree = ObjectHeader->Name;
+        NameToFree = (PSTR)(ObjectHeader->Name);
     }
 
     ObjectHeader->Name = NULL;
@@ -1965,7 +1965,7 @@ Return Value:
 
 PVOID
 ObFindObject (
-    PSTR ObjectName,
+    PCSTR ObjectName,
     ULONG BufferLength,
     POBJECT_HEADER ParentObject
     )
@@ -2003,8 +2003,8 @@ Return Value:
     ULONG ElementLength;
     BOOL LockHeld;
     BOOL Match;
-    PSTR Name;
-    PSTR NextDelimiter;
+    PCSTR Name;
+    PCSTR NextDelimiter;
     ULONG OldReferenceCount;
     RUNLEVEL OldRunLevel;
 
@@ -2626,8 +2626,8 @@ Return Value:
 
 BOOL
 ObpAreObjectNamesEqual (
-    PSTR ExistingObject,
-    PSTR QueryObject,
+    PCSTR ExistingObject,
+    PCSTR QueryObject,
     ULONG QuerySize
     )
 

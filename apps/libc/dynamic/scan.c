@@ -644,7 +644,7 @@ Return Value:
 {
 
     double Double;
-    PSTR RemainingString;
+    PCSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -652,7 +652,7 @@ Return Value:
     RemainingString = (PSTR)String;
     Status = RtlStringScanDouble(&RemainingString, &StringLength, &Double);
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
@@ -758,7 +758,7 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PSTR RemainingString;
+    PCSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -771,7 +771,7 @@ Return Value:
                                   &Integer);
 
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
@@ -853,7 +853,7 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PSTR RemainingString;
+    PCSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -866,7 +866,7 @@ Return Value:
                                   &Integer);
 
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
@@ -928,7 +928,7 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PSTR RemainingString;
+    PCSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -941,7 +941,7 @@ Return Value:
                                   &Integer);
 
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
@@ -1009,7 +1009,7 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PSTR RemainingString;
+    PCSTR RemainingString;
     KSTATUS Status;
     ULONG StringLength;
 
@@ -1022,7 +1022,7 @@ Return Value:
                                   &Integer);
 
     if (StringAfterScan != NULL) {
-        *StringAfterScan = RemainingString;
+        *StringAfterScan = (PSTR)RemainingString;
     }
 
     if (!KSUCCESS(Status)) {
