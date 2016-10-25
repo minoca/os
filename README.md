@@ -21,10 +21,10 @@ The Minoca OS build environment is keyed off of a few environment variables you'
  - `ARCH` - Contains the architecture to build Minoca OS for (aka the target architecture). Valid values are `armv6`, `armv7`, and `x86`.
  - `VARIANT` - Contains the architecture variant, if any. Leave this unset most of the time. Currently the only valid value is `q` for the `x86` architecture, which builds for the Intel Quark.
  - `DEBUG` - Describes whether to build Minoca OS for debugging or release. Valid values are `dbg` for debug or `rel` for release. We always build `dbg`.
- - `PATH` - You'll need to have `$SRCROOT/$ARCH$VARIANT$DEBUG/tools/bin` your path to build successfully.
+ - `PATH` - You'll need to have `$SRCROOT/$ARCH$VARIANT$DEBUG/tools/bin` in your path to build successfully.
 
 ### Prerequisites
-To build Minoca OS you'll need a Minoca-specific toolchain for the particular architecture you're building. Prebuilt toolchains can be found [here](https://www.minocacorp.com/download/). If you want to build the toolchain from sources, you'll need to check out the [third-party](https://github.com/minoca/third-party) repository and run "make tools" in there.
+To build Minoca OS you'll need a Minoca-specific toolchain for the particular architecture you're building. Prebuilt toolchains can be found [here](https://www.minocacorp.com/download/#toolchain). If you want to build the toolchain from sources, you'll need to check out the [third-party](https://github.com/minoca/third-party) repository and run "make tools" in there.
 > Note: If you want to build your own toolchain on Windows, you may find the [tools](https://github.com/minoca/tools) repository helpful, as it contains a native MinGW compiler, make, and other tools needed to bootstrap a toolchain on Windows.
 
 ### Build
