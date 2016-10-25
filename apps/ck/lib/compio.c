@@ -148,8 +148,8 @@ CHAR CkOpcodeStackEffects[CkOpcodeCount] = {
     0,  // CkOpJump
     0,  // CkOpLoop
     -1, // CkOpJumpIf
-    0,  // CkOpAnd
-    0,  // CkOpOr
+    -1, // CkOpAnd
+    -1, // CkOpOr
     -1, // CkOpCloseUpvalue
     0,  // CkOpReturn
     1,  // CkOpClosure
@@ -1125,12 +1125,25 @@ Return Value:
 
     Current = Compiler->Parser->Source + Token->Position;
     End = Current + Token->Size;
+    if (Base == 16) {
+
+        CK_ASSERT((Token->Size > 2) &&
+                  ((Current[1] == 'x') || (Current[1] == 'X')));
+
+        Current += 2;
+
+    } else if (Base == 2) {
+
+        CK_ASSERT((Token->Size > 2) &&
+                  ((Current[1] == 'b') || (Current[1] == 'B')));
+
+        Current += 2;
+    }
+
     Value = 0;
     while (Current < End) {
         if ((*Current >= '0') && (*Current <= '9')) {
             Digit = *Current - '0';
-
-            CK_ASSERT(Digit < Base);
 
         } else if (Base >= 10) {
             if ((*Current >= 'a') && (*Current <= ('a' + Base - 10))) {
@@ -1147,6 +1160,14 @@ Return Value:
         } else {
             CkpCompileError(Compiler, Token, "Invalid number");
             break;
+        }
+
+        if (Digit >= Base) {
+            CkpCompileError(Compiler,
+                            Token,
+                            "Invalid digit %d for base %d integer",
+                            Digit,
+                            Base);
         }
 
         PreviousValue = Value;

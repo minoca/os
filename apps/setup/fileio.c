@@ -91,7 +91,7 @@ INT
 SetupFatOpen (
     PSETUP_VOLUME Volume,
     PSETUP_FILE NewFile,
-    PSTR Path,
+    PCSTR Path,
     INT Flags,
     INT CreatePermissions,
     BOOL Directory
@@ -99,7 +99,7 @@ SetupFatOpen (
 
 PSTR
 SetupFatCopyPath (
-    PSTR InputPath
+    PCSTR InputPath
     );
 
 //
@@ -351,7 +351,7 @@ Return Value:
 INT
 SetupFileReadLink (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     PSTR *LinkTarget,
     INT *LinkTargetSize
     )
@@ -466,7 +466,7 @@ FileReadLinkEnd:
 INT
 SetupFileSymlink (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     PSTR LinkTarget,
     INT LinkTargetSize
     )
@@ -562,7 +562,7 @@ FileSymlinkEnd:
 PVOID
 SetupFileOpen (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     INT Flags,
     INT CreatePermissions
     )
@@ -1117,7 +1117,7 @@ Return Value:
 INT
 SetupFileEnumerateDirectory (
     PVOID VolumeHandle,
-    PSTR DirectoryPath,
+    PCSTR DirectoryPath,
     PSTR *Enumeration
     )
 
@@ -1314,7 +1314,7 @@ EnumerateFileDirectoryEnd:
 INT
 SetupFileCreateDirectory (
     PVOID VolumeHandle,
-    PSTR Path,
+    PCSTR Path,
     mode_t Permissions
     )
 
@@ -1387,7 +1387,7 @@ Return Value:
 INT
 SetupFileSetAttributes (
     PVOID VolumeHandle,
-    PSTR Path,
+    PCSTR Path,
     time_t ModificationDate,
     mode_t Permissions
     )
@@ -1481,7 +1481,7 @@ Return Value:
 VOID
 SetupFileDetermineExecuteBit (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     mode_t *Mode
     )
 
@@ -1537,7 +1537,7 @@ INT
 SetupFatOpen (
     PSETUP_VOLUME Volume,
     PSETUP_FILE NewFile,
-    PSTR Path,
+    PCSTR Path,
     INT Flags,
     INT CreatePermissions,
     BOOL Directory
@@ -1880,7 +1880,7 @@ FatOpenEnd:
 
 PSTR
 SetupFatCopyPath (
-    PSTR InputPath
+    PCSTR InputPath
     )
 
 /*++
@@ -1905,7 +1905,7 @@ Return Value:
 
 {
 
-    PSTR CurrentInput;
+    PCSTR CurrentInput;
     PSTR CurrentOutput;
     UINTN Length;
     PSTR NewPath;

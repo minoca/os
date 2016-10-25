@@ -528,6 +528,13 @@ Return Value:
     CkCallMethod(Vm, "__str", 0);
     String = CkGetString(Vm, -1, &Length);
     fprintf(stderr, "%s\n", String);
+    CkStackPop(Vm);
+
+    //
+    // Set the exception as the return value.
+    //
+
+    CkStackReplace(Vm, 0);
     return;
 }
 

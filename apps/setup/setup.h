@@ -20,11 +20,12 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define RTL_API __DLLEXPORT
+#define RTL_API
+#define CK_API
 
 #include <minoca/lib/minocaos.h>
 #include <minoca/lib/partlib.h>
-#include "chalk.h"
+#include <minoca/lib/chalk.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -87,6 +88,12 @@ Author:
 #define SETUP_PAGE_FILE_PATH "pagefile.sys"
 
 //
+// Define the path of the configuration file in the install image.
+//
+
+#define SETUP_CONFIGURATION_PATH "bin/install.ck"
+
+//
 // This flag is set if this is the system disk or partition.
 //
 
@@ -115,6 +122,12 @@ Author:
 
 #endif
 
+#ifndef O_BINARY
+
+#define O_BINARY 0x0000
+
+#endif
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -126,7 +139,6 @@ Author:
 typedef enum _SETUP_RECIPE_ID {
     SetupRecipeNone,
     SetupRecipeBeagleBoneBlack,
-    SetupRecipeCommon,
     SetupRecipeGalileo,
     SetupRecipeInstallArmv6,
     SetupRecipeInstallArmv7,
@@ -158,14 +170,6 @@ typedef enum _SETUP_VOLUME_FORMAT_CHOICE {
     SetupVolumeFormatNever,
     SetupVolumeFormatIfIncompatible,
 } SETUP_VOLUME_FORMAT_CHOICE, *PSETUP_VOLUME_FORMAT_CHOICE;
-
-typedef enum _SETUP_SCRIPT_ORDER {
-    SetupScriptOrderNow,
-    SetupScriptOrderInitialization,
-    SetupScriptOrderUserInitialization,
-    SetupScriptOrderPlatform,
-    SetupScriptOrderUserCustomization
-} SETUP_SCRIPT_ORDER, *PSETUP_SCRIPT_ORDER;
 
 typedef struct _SETUP_CONFIGURATION SETUP_CONFIGURATION, *PSETUP_CONFIGURATION;
 
@@ -260,9 +264,13 @@ Members:
 
     PageFileSize - Stores the size in megabytes of the page file.
 
-    Interpreter - Stores the interpreter context.
+    ChalkVm - Stores a pointer to the Chalk virtual machine.
 
     Configuration - Stores the installation configuration.
+
+    PlatformName - Stores a pointer to the selected platform name.
+
+    ArchName - Stores a pointer to the selected architecture name.
 
 --*/
 
@@ -281,8 +289,10 @@ typedef struct _SETUP_CONTEXT {
     PVOID HostFileSystem;
     LONG RecipeIndex;
     ULONGLONG PageFileSize;
-    CHALK_INTERPRETER Interpreter;
+    PCK_VM ChalkVm;
     PSETUP_CONFIGURATION Configuration;
+    PSTR PlatformName;
+    PSTR ArchName;
 } SETUP_CONTEXT, *PSETUP_CONTEXT;
 
 /*++
@@ -785,7 +795,7 @@ Return Value:
 VOID
 SetupOsDetermineExecuteBit (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     mode_t *Mode
     );
 
@@ -1125,7 +1135,7 @@ Return Value:
 VOID
 SetupDetermineExecuteBit (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     mode_t *Mode
     );
 
@@ -1216,7 +1226,7 @@ Return Value:
 INT
 SetupFileReadLink (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     PSTR *LinkTarget,
     INT *LinkTargetSize
     );
@@ -1250,7 +1260,7 @@ Return Value:
 INT
 SetupFileSymlink (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     PSTR LinkTarget,
     INT LinkTargetSize
     );
@@ -1282,7 +1292,7 @@ Return Value:
 PVOID
 SetupFileOpen (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     INT Flags,
     INT CreatePermissions
     );
@@ -1479,7 +1489,7 @@ Return Value:
 INT
 SetupFileEnumerateDirectory (
     PVOID VolumeHandle,
-    PSTR DirectoryPath,
+    PCSTR DirectoryPath,
     PSTR *Enumeration
     );
 
@@ -1512,7 +1522,7 @@ Return Value:
 INT
 SetupFileCreateDirectory (
     PVOID VolumeHandle,
-    PSTR Path,
+    PCSTR Path,
     mode_t Permissions
     );
 
@@ -1541,7 +1551,7 @@ Return Value:
 INT
 SetupFileSetAttributes (
     PVOID VolumeHandle,
-    PSTR Path,
+    PCSTR Path,
     time_t ModificationDate,
     mode_t Permissions
     );
@@ -1573,7 +1583,7 @@ Return Value:
 VOID
 SetupFileDetermineExecuteBit (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     mode_t *Mode
     );
 
@@ -1851,52 +1861,6 @@ Return Value:
 
 --*/
 
-INT
-SetupAddRecipeScript (
-    PSETUP_CONTEXT Context
-    );
-
-/*++
-
-Routine Description:
-
-    This routine adds the platform recipe script.
-
-Arguments:
-
-    Context - Supplies a pointer to the setup context.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-INT
-SetupAddCommonScripts (
-    PSETUP_CONTEXT Context
-    );
-
-/*++
-
-Routine Description:
-
-    This routine adds the common scripts that are added no matter what.
-
-Arguments:
-
-    Context - Supplies a pointer to the setup context.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
 //
 // Utility functions
 //
@@ -2080,8 +2044,8 @@ Return Value:
 
 PSTR
 SetupAppendPaths (
-    PSTR Path1,
-    PSTR Path2
+    PCSTR Path1,
+    PCSTR Path2
     );
 
 /*++
@@ -2107,7 +2071,7 @@ Return Value:
 
 INT
 SetupConvertStringArrayToLines (
-    PSTR *StringArray,
+    PCSTR *StringArray,
     PSTR *ResultBuffer,
     PUINTN ResultBufferSize
     );
@@ -2144,8 +2108,8 @@ SetupCopyFile (
     PSETUP_CONTEXT Context,
     PVOID Destination,
     PVOID Source,
-    PSTR DestinationPath,
-    PSTR SourcePath,
+    PCSTR DestinationPath,
+    PCSTR SourcePath,
     ULONG Flags
     );
 
@@ -2186,7 +2150,7 @@ INT
 SetupCreateAndWriteFile (
     PSETUP_CONTEXT Context,
     PVOID Destination,
-    PSTR DestinationPath,
+    PCSTR DestinationPath,
     PVOID Contents,
     ULONG ContentsSize
     );
@@ -2223,7 +2187,7 @@ INT
 SetupCreateDirectories (
     PSETUP_CONTEXT Context,
     PVOID Volume,
-    PSTR Path
+    PCSTR Path
     );
 
 /*++

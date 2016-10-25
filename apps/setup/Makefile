@@ -27,8 +27,6 @@ BINPLACE = bin
 BINARYTYPE = app
 
 INCLUDES += $(SRCROOT)/os/apps/libc/include;    \
-            $(SRCROOT)/os/apps/lib/chalk;       \
-            $(SRCDIR)/config;                   \
 
 include $(SRCDIR)/sources
 
@@ -42,7 +40,7 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/partlib.a            \
              $(OBJROOT)/os/lib/bconflib/bconflib.a          \
              $(OBJROOT)/os/lib/rtl/base/basertl.a           \
              $(OBJROOT)/os/apps/osbase/urtl/urtl.a          \
-             $(OBJROOT)/os/apps/lib/chalk/chalk.a           \
+             $(OBJROOT)/os/apps/ck/lib/libchalk.a           \
              $(OBJROOT)/os/lib/yy/yy.a                      \
 
 DYNLIBS = -lminocaos
@@ -66,6 +64,7 @@ postbuild:
 	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/$(BINARY); then \
 	    $(STRIP) -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY); \
 	fi
-
-config.o: $(CONFIG_FILES)
+	@if test $(SRCDIR)/install.ck -nt $(BINROOT)/install.ck; then \
+	    cp -pv $(SRCDIR)/install.ck $(BINROOT)/install.ck ; \
+	fi
 

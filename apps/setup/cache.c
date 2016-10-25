@@ -707,7 +707,7 @@ Return Value:
 VOID
 SetupDetermineExecuteBit (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     mode_t *Mode
     )
 

@@ -129,6 +129,8 @@ YY_VALUE CkgDict[] = {
 YY_VALUE CkgPrimaryExpression[] = {
     CkTokenIdentifier, -1,
     CkTokenConstant, -1,
+    CkTokenHexConstant, -1,
+    CkTokenBinaryConstant, -1,
     CkTokenString, -1,
     CkTokenNull, -1,
     CkTokenThis, -1,
@@ -479,6 +481,8 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"finally", 0, 0, NULL},
     {"Identifier", 0, 0, NULL},
     {"Constant", 0, 0, NULL},
+    {"Hex", 0, 0, NULL},
+    {"Binary", 0, 0, NULL},
     {"String", 0, 0, NULL},
     {">>=", 0, 0, NULL},
     {"<<=", 0, 0, NULL},

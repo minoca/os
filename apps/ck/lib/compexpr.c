@@ -44,6 +44,12 @@ Environment:
 //
 
 VOID
+CkpEmitNumericConstant (
+    PCK_COMPILER Compiler,
+    CK_VALUE Integer
+    );
+
+VOID
 CkpCompilePrimaryIdentifier (
     PCK_COMPILER Compiler,
     PLEXER_TOKEN Token,
@@ -688,7 +694,9 @@ Return Value:
 
 {
 
+    INT Base;
     PCK_AST_NODE Constant;
+    PCSTR Digit;
     PLEXER_TOKEN Token;
     CK_VALUE Value;
 
@@ -714,14 +722,24 @@ Return Value:
         break;
 
     case CkTokenConstant:
-        Value = CkpReadSourceInteger(Compiler, Token, 10);
-        if (CK_AS_INTEGER(Value) <= 8) {
-            CkpEmitOp(Compiler, CkOpLiteral0 + CK_AS_INTEGER(Value));
-
-        } else {
-            CkpEmitConstant(Compiler, Value);
+        Base = 10;
+        Digit = Compiler->Parser->Source + Token->Position;
+        if (*Digit == '0') {
+            Base = 8;
         }
 
+        Value = CkpReadSourceInteger(Compiler, Token, Base);
+        CkpEmitNumericConstant(Compiler, Value);
+        break;
+
+    case CkTokenHexConstant:
+        Value = CkpReadSourceInteger(Compiler, Token, 16);
+        CkpEmitNumericConstant(Compiler, Value);
+        break;
+
+    case CkTokenBinaryConstant:
+        Value = CkpReadSourceInteger(Compiler, Token, 2);
+        CkpEmitNumericConstant(Compiler, Value);
         break;
 
     case CkTokenString:
@@ -1004,6 +1022,42 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+CkpEmitNumericConstant (
+    PCK_COMPILER Compiler,
+    CK_VALUE Integer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine emits a numeric constant.
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Integer - Supplies the integer value to emit.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (CK_AS_INTEGER(Integer) <= 8) {
+        CkpEmitOp(Compiler, CkOpLiteral0 + CK_AS_INTEGER(Integer));
+
+    } else {
+        CkpEmitConstant(Compiler, Integer);
+    }
+
+    return;
+}
 
 VOID
 CkpCompilePrimaryIdentifier (

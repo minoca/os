@@ -175,6 +175,7 @@ Return Value:
 
     PSTR AfterScan;
     PVOID BootVolume;
+    CK_CONFIGURATION ChalkConfiguration;
     SETUP_CONTEXT Context;
     ULONG DeviceCount;
     ULONG DeviceIndex;
@@ -203,11 +204,11 @@ Return Value:
     SourcePath = NULL;
     srand(time(NULL) ^ getpid());
     memset(&Context, 0, sizeof(SETUP_CONTEXT));
-    Context.RecipeIndex = -1;
     Context.PageFileSize = -1ULL;
-    ChalkInitializeInterpreter(&(Context.Interpreter));
-    Status = SetupAddCommonScripts(&Context);
-    if (Status != 0) {
+    CkInitializeConfiguration(&ChalkConfiguration);
+    Context.ChalkVm = CkCreateVm(&ChalkConfiguration);
+    if (Context.ChalkVm == NULL) {
+        Status = ENOMEM;
         goto mainEnd;
     }
 
@@ -234,16 +235,6 @@ Return Value:
         switch (Option) {
         case 'A':
             Context.Flags |= SETUP_FLAG_AUTO_DEPLOY;
-            Status = SetupAddExtraPartition(&Context,
-                                            ExtraPartitionIndex,
-                                            -1LL);
-
-            if (Status != 0) {
-                fprintf(stderr, "Error: Failed to add extra partition.\n");
-                goto mainEnd;
-            }
-
-            ExtraPartitionIndex += 1;
             break;
 
         case 'a':
@@ -344,21 +335,11 @@ Return Value:
 
             break;
 
+        //
+        // User scripts are handled later.
+        //
+
         case 's':
-            Status = ChalkLoadScriptFile(&(Context.Interpreter),
-                                         optarg,
-                                         SetupScriptOrderUserCustomization,
-                                         NULL);
-
-            if (Status != 0) {
-                fprintf(stderr,
-                        "Error: Failed to load script %s: %s.\n",
-                        optarg,
-                        strerror(Status));
-
-                goto mainEnd;
-            }
-
             break;
 
         case 'q':
@@ -373,24 +354,11 @@ Return Value:
             Context.Flags |= SETUP_FLAG_VERBOSE;
             break;
 
+        //
+        // Extra partitions are handled later.
+        //
+
         case 'x':
-            ExtraPartitionSize = strtoll(optarg, &AfterScan, 0);
-            if (AfterScan == optarg) {
-                fprintf(stderr, "Error: Invalid Size %s.\n", optarg);
-                Status = EINVAL;
-                goto mainEnd;
-            }
-
-            Status = SetupAddExtraPartition(&Context,
-                                            ExtraPartitionIndex,
-                                            ExtraPartitionSize);
-
-            if (Status != 0) {
-                fprintf(stderr, "Error: Failed to add extra partition.\n");
-                goto mainEnd;
-            }
-
-            ExtraPartitionIndex += 1;
             break;
 
         case 'V':
@@ -573,7 +541,7 @@ Return Value:
     // Detect the platform type if it was not yet done.
     //
 
-    if (Context.RecipeIndex == -1) {
+    if (Context.PlatformName == NULL) {
         Status = SetupDeterminePlatform(&Context);
         if (Status != 0) {
             fprintf(stderr,
@@ -584,29 +552,91 @@ Return Value:
         }
     }
 
-    Status = SetupAddRecipeScript(&Context);
+    //
+    // Read in and run the configuration script.
+    //
+
+    Status = SetupLoadConfiguration(&Context);
     if (Status != 0) {
         goto mainEnd;
     }
 
     //
-    // Execute the user customization scripts.
+    // Go through the options again now that the configuration has been loaded
+    // so it can potentially be tweaked by the user.
     //
 
-    Status = ChalkExecuteDeferredScripts(&(Context.Interpreter),
-                                         SetupScriptOrderUserCustomization);
+    optind = 1;
+    while (TRUE) {
+        Option = getopt_long(ArgumentCount,
+                             Arguments,
+                             SETUP_OPTIONS_STRING,
+                             SetupLongOptions,
+                             NULL);
 
-    if (Status != 0) {
-        goto mainEnd;
+        if (Option == -1) {
+            break;
+        }
+
+        assert((Option != '?') && (Option != ':'));
+
+        switch (Option) {
+        case 'A':
+            Status = SetupAddExtraPartition(&Context,
+                                            ExtraPartitionIndex,
+                                            -1LL);
+
+            if (Status != 0) {
+                fprintf(stderr, "Error: Failed to add extra partition.\n");
+                goto mainEnd;
+            }
+
+            ExtraPartitionIndex += 1;
+            break;
+
+        case 's':
+            Status = SetupLoadUserScript(&Context, optarg);
+            if (Status != 0) {
+                fprintf(stderr,
+                        "Error: Failed to load script %s: %s.\n",
+                        optarg,
+                        strerror(Status));
+
+                goto mainEnd;
+            }
+
+            break;
+
+        case 'x':
+            ExtraPartitionSize = strtoll(optarg, &AfterScan, 0);
+            if (AfterScan == optarg) {
+                fprintf(stderr, "Error: Invalid Size %s.\n", optarg);
+                Status = EINVAL;
+                goto mainEnd;
+            }
+
+            Status = SetupAddExtraPartition(&Context,
+                                            ExtraPartitionIndex,
+                                            ExtraPartitionSize);
+
+            if (Status != 0) {
+                fprintf(stderr, "Error: Failed to add extra partition.\n");
+                goto mainEnd;
+            }
+
+            ExtraPartitionIndex += 1;
+            break;
+
+        //
+        // Ignore everything else, assume it was handled in the first loop.
+        //
+
+        default:
+            break;
+        }
     }
 
-    //
-    // Read in the configuration details now that all scripts have been read.
-    //
-
-    Status = SetupReadConfiguration(&(Context.Interpreter),
-                                    &(Context.Configuration));
-
+    Status = SetupReadConfiguration(Context.ChalkVm, &(Context.Configuration));
     if (Status != 0) {
         perror("Failed to read configuration");
         goto mainEnd;
@@ -700,7 +730,10 @@ mainEnd:
         Context.Configuration = NULL;
     }
 
-    ChalkDestroyInterpreter(&(Context.Interpreter));
+    if (Context.ChalkVm != NULL) {
+        CkDestroyVm(Context.ChalkVm);
+    }
+
     if (Context.SourceVolume != NULL) {
         if (Context.SourceVolume != Context.HostFileSystem) {
             SetupVolumeClose(&Context, Context.SourceVolume);
@@ -826,8 +859,7 @@ Return Value:
 {
 
     CHAR ScriptBuffer[512];
-    ULONG ScriptSize;
-    INT Status;
+    INT ScriptSize;
 
     ScriptSize = snprintf(ScriptBuffer,
                           sizeof(ScriptBuffer),
@@ -835,14 +867,9 @@ Return Value:
                           Index,
                           Size);
 
-    Status = ChalkLoadScriptBuffer(&(Context->Interpreter),
-                                   "extrapartition",
-                                   ScriptBuffer,
-                                   ScriptSize,
-                                   SetupScriptOrderUserCustomization,
-                                   NULL);
+    assert((ScriptSize > 0) && (ScriptSize < sizeof(ScriptBuffer)));
 
-    return Status;
+    return SetupLoadUserExpression(Context, ScriptBuffer);
 }
 
 INT

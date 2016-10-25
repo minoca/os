@@ -29,9 +29,6 @@ BUILD = yes
 
 BINARYTYPE = ntconsole
 
-INCLUDES += $(SRCROOT)/os/apps/lib/chalk;       \
-            $(SRCDIR)/../config;                \
-
 VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
@@ -49,21 +46,9 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a         \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a        \
              $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a           \
              $(OBJROOT)/os/lib/yy/build/yy.a                   \
-             $(OBJROOT)/os/apps/lib/chalk/build/chalk.a        \
+             $(OBJROOT)/os/apps/ck/lib/build/libchalk.a        \
 
 DYNLIBS = -lsetupapi
 
 include $(SRCROOT)/os/minoca.mk
-
-config.o: $(CONFIG_FILES)
-
-##
-## Override the compiler since this is a Windows app.
-##
-
-CC := gcc
-LD := ld
-RCC := windres
-AR := ar
-AS := as
 

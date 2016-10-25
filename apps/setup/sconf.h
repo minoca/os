@@ -71,11 +71,11 @@ Members:
 --*/
 
 typedef struct _SETUP_COPY {
-    PSTR Destination;
+    PCSTR Destination;
     ULONG Offset;
-    PSTR Source;
+    PCSTR Source;
     LONG SourceVolume;
-    PSTR *Files;
+    PCSTR *Files;
     ULONG Flags;
 } SETUP_COPY, *PSETUP_COPY;
 
@@ -189,9 +189,9 @@ struct _SETUP_CONFIGURATION {
     BOOT_CONFIGURATION_GLOBAL GlobalBootConfiguration;
     PBOOT_ENTRY BootEntries;
     ULONG BootEntryCount;
-    PSTR *BootDrivers;
-    PSTR BootDriversPath;
-    PSTR BootDataPath;
+    PCSTR *BootDrivers;
+    PCSTR BootDriversPath;
+    PCSTR BootDataPath;
 };
 
 //
@@ -203,8 +203,83 @@ struct _SETUP_CONFIGURATION {
 //
 
 INT
+SetupLoadConfiguration (
+    PSETUP_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prepares to run the configuration specialization script.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+Return Value:
+
+    0 on success.
+
+    Returns a non-zero value on failure.
+
+--*/
+
+INT
+SetupLoadUserScript (
+    PSETUP_CONTEXT Context,
+    PCSTR Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads and runs a user customization script in the setup app.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Path - Supplies a pointer to the path of the custom script to run.
+
+Return Value:
+
+    0 on success.
+
+    Returns a non-zero value on failure.
+
+--*/
+
+INT
+SetupLoadUserExpression (
+    PSETUP_CONTEXT Context,
+    PCSTR Expression
+    );
+
+/*++
+
+Routine Description:
+
+    This routine runs a user customization script expression in the setup app.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Expression - Supplies a pointer to the script fragment to evaluate.
+
+Return Value:
+
+    0 on success.
+
+    Returns a non-zero value on failure.
+
+--*/
+
+INT
 SetupReadConfiguration (
-    PCHALK_INTERPRETER Interpreter,
+    PCK_VM Vm,
     PSETUP_CONFIGURATION *NewConfiguration
     );
 
@@ -217,7 +292,7 @@ Routine Description:
 
 Arguments:
 
-    Interpreter - Supplies a pointer to the Chalk interpreter.
+    Vm - Supplies a pointer to the Chalk virtual machine.
 
     NewConfiguration - Supplies a pointer where a pointer to the new
         configuration will be returned on success.

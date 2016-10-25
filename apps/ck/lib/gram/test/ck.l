@@ -40,7 +40,8 @@ void count();
 
 {L}({L}|{D})*       { count(); return(IDENTIFIER); }
 
-0[xX]{H}+?      { count(); return(CONSTANT); }
+0[xX]{H}+?      { count(); return(HEX_CONSTANT); }
+0[bB][01]+?     { count(); return(BINARY_CONSTANT); }
 0{D}+?      { count(); return(CONSTANT); }
 {D}+?       { count(); return(CONSTANT); }
 

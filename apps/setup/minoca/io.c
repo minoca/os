@@ -801,7 +801,7 @@ Return Value:
 VOID
 SetupOsDetermineExecuteBit (
     PVOID Handle,
-    PSTR Path,
+    PCSTR Path,
     mode_t *Mode
     )
 

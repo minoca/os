@@ -366,13 +366,20 @@ RaiseExceptionEnd:
             if (Vm->UnhandledException != NULL) {
                 Fiber = Vm->Fiber;
 
-                CK_ASSERT(Fiber->StackTop + 2 <=
+                CK_ASSERT(Fiber->StackTop + 3 <=
                           Fiber->Stack + Fiber->StackCapacity);
 
+                //
+                // Push the exception an extra time to hold onto it, then push
+                // null as the receiver, then the exception as the argument.
+                //
+
+                CK_PUSH(Fiber, Exception);
                 CK_PUSH(Fiber, CkNullValue);
                 CK_PUSH(Fiber, Exception);
                 Fiber->Error = CkNullValue;
                 CkpCallFunction(Vm, Vm->UnhandledException, 2);
+                Fiber->Error = CK_POP(Fiber);
 
             } else {
                 CkpError(Vm,

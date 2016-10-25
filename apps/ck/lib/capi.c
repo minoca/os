@@ -96,6 +96,71 @@ const CK_API_TYPE CkApiObjectTypes[CkObjectTypeCount] = {
 //
 
 CK_API
+PVOID
+CkGetContext (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the context pointer stored inside the Chalk VM. This
+    pointer is not used at all by Chalk, and can be used by the surrounding
+    environment integrating Chalk.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    Returns the user context pointer.
+
+--*/
+
+{
+
+    return Vm->Context;
+}
+
+CK_API
+PVOID
+CkSetContext (
+    PCK_VM Vm,
+    PVOID NewValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the context pointer stored inside the Chalk VM. This
+    pointer is not used at all by Chalk, and can be used by the surrounding
+    environment integrating Chalk.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    NewValue - Supplies the new context pointer value to set.
+
+Return Value:
+
+    Returns the previous value.
+
+--*/
+
+{
+
+    PVOID Previous;
+
+    Previous = Vm->Context;
+    Vm->Context = NewValue;
+    return Previous;
+}
+
+CK_API
 BOOL
 CkPreloadForeignModule (
     PCK_VM Vm,
@@ -2419,6 +2484,53 @@ Return Value:
     va_start(ArgumentList, MessageFormat);
     CkpRaiseInternalException(Vm, Type, MessageFormat, ArgumentList);
     va_end(ArgumentList);
+    return;
+}
+
+CK_API
+VOID
+CkPushModule (
+    PCK_VM Vm,
+    PSTR ModuleName
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pushes the module with the given full.dotted.name onto the
+    stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies the name of the module to push. If no module by the
+        given name can be found, null is pushed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CK_VALUE Key;
+    CK_STRING String;
+    CK_VALUE Value;
+
+    CK_ASSERT(CK_CAN_PUSH(Vm->Fiber, 1));
+
+    Key = CkpStringFake(&String, ModuleName, strlen(ModuleName));
+    Value = CkpDictGet(Vm->Modules, Key);
+    if (CK_IS_UNDEFINED(Value)) {
+        CK_PUSH(Vm->Fiber, CkNullValue);
+
+    } else {
+        CK_PUSH(Vm->Fiber, Value);
+    }
+
     return;
 }
 

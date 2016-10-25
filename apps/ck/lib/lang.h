@@ -60,6 +60,8 @@ typedef enum _CK_SYMBOL {
     CkTokenFinally,
     CkTokenIdentifier,
     CkTokenConstant,
+    CkTokenHexConstant,
+    CkTokenBinaryConstant,
     CkTokenString,
     CkTokenRightAssign,
     CkTokenLeftAssign,

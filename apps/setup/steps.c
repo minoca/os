@@ -88,7 +88,7 @@ INT
 SetupReadEntireFile (
     PSETUP_CONTEXT Context,
     PVOID Source,
-    PSTR SourcePath,
+    PCSTR SourcePath,
     PVOID *FileContents,
     PULONG FileContentsSize
     );
@@ -680,7 +680,7 @@ Return Value:
 
     BOOT_CONFIGURATION_CONTEXT BootConfiguration;
     BOOL BootConfigurationInitialized;
-    PSTR BootDataPath;
+    PCSTR BootDataPath;
     PBOOT_ENTRY BootEntries;
     PBOOT_ENTRY BootEntry;
     ULONG BootEntryCount;
@@ -1210,7 +1210,7 @@ Return Value:
 
     PSTR AppendedDestination;
     PSTR AppendedSource;
-    PSTR File;
+    PCSTR File;
     UINTN Index;
     PVOID Source;
     INT Status;
@@ -1561,7 +1561,7 @@ INT
 SetupReadEntireFile (
     PSETUP_CONTEXT Context,
     PVOID Source,
-    PSTR SourcePath,
+    PCSTR SourcePath,
     PVOID *FileContents,
     PULONG FileContentsSize
     )

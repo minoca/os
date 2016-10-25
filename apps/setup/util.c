@@ -494,8 +494,8 @@ Return Value:
 
 PSTR
 SetupAppendPaths (
-    PSTR Path1,
-    PSTR Path2
+    PCSTR Path1,
+    PCSTR Path2
     )
 
 /*++
@@ -548,7 +548,7 @@ Return Value:
 
 INT
 SetupConvertStringArrayToLines (
-    PSTR *StringArray,
+    PCSTR *StringArray,
     PSTR *ResultBuffer,
     PUINTN ResultBufferSize
     )
@@ -583,7 +583,7 @@ Return Value:
 {
 
     UINTN AllocationSize;
-    PSTR *Array;
+    PCSTR *Array;
     PSTR Buffer;
     PSTR Current;
     size_t Length;
@@ -621,8 +621,8 @@ SetupCopyFile (
     PSETUP_CONTEXT Context,
     PVOID Destination,
     PVOID Source,
-    PSTR DestinationPath,
-    PSTR SourcePath,
+    PCSTR DestinationPath,
+    PCSTR SourcePath,
     ULONG Flags
     )
 
@@ -1092,7 +1092,7 @@ INT
 SetupCreateAndWriteFile (
     PSETUP_CONTEXT Context,
     PVOID Destination,
-    PSTR DestinationPath,
+    PCSTR DestinationPath,
     PVOID Contents,
     ULONG ContentsSize
     )
@@ -1192,7 +1192,7 @@ INT
 SetupCreateDirectories (
     PSETUP_CONTEXT Context,
     PVOID Volume,
-    PSTR Path
+    PCSTR Path
     )
 
 /*++

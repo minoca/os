@@ -65,10 +65,7 @@ Members:
 
     Flags - Stores a bitfield of flags. See SETUP_RECIPE_FLAG_* definitions.
 
-    Script - Stores a pointer to the script corresponding to this recipe.
-
-    ScriptEnd - Stores the pointer to the end of the script (the first invalid
-        character). It's assumed there is no null terminator.
+    Architecture - Stores a pointer to the architecture of the platform.
 
 --*/
 
@@ -78,8 +75,7 @@ typedef struct _SETUP_RECIPE {
     PSTR Description;
     PSTR SmbiosProductName;
     ULONG Flags;
-    PVOID Script;
-    PVOID ScriptEnd;
+    PSTR Architecture;
 } SETUP_RECIPE, *PSETUP_RECIPE;
 
 //
@@ -89,43 +85,6 @@ typedef struct _SETUP_RECIPE {
 //
 // -------------------------------------------------------------------- Globals
 //
-
-//
-// The objcopy utility provides symbols for the start, size, and end of the
-// text files converted to object files. These correspond directly to the
-// file names in the config directory, and are alphabetized.
-//
-
-extern PVOID _binary_bbone_txt_start;
-extern PVOID _binary_bbone_txt_end;
-extern PVOID _binary_common_txt_start;
-extern PVOID _binary_common_txt_end;
-extern PVOID _binary_galileo_txt_start;
-extern PVOID _binary_galileo_txt_end;
-extern PVOID _binary_instarv6_txt_start;
-extern PVOID _binary_instarv6_txt_end;
-extern PVOID _binary_instarv7_txt_start;
-extern PVOID _binary_instarv7_txt_end;
-extern PVOID _binary_instx86_txt_start;
-extern PVOID _binary_instx86_txt_end;
-extern PVOID _binary_integrd_txt_start;
-extern PVOID _binary_integrd_txt_end;
-extern PVOID _binary_panda_txt_start;
-extern PVOID _binary_panda_txt_end;
-extern PVOID _binary_pandausb_txt_start;
-extern PVOID _binary_pandausb_txt_end;
-extern PVOID _binary_pc_txt_start;
-extern PVOID _binary_pc_txt_end;
-extern PVOID _binary_pcefi_txt_start;
-extern PVOID _binary_pcefi_txt_end;
-extern PVOID _binary_pctiny_txt_start;
-extern PVOID _binary_pctiny_txt_end;
-extern PVOID _binary_rpi2_txt_start;
-extern PVOID _binary_rpi2_txt_end;
-extern PVOID _binary_rpi_txt_start;
-extern PVOID _binary_rpi_txt_end;
-extern PVOID _binary_veyron_txt_start;
-extern PVOID _binary_veyron_txt_end;
 
 //
 // Define the recipes used to install to specific platforms. These are kept
@@ -139,8 +98,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "Complete user customization",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
-        NULL,
-        NULL
+        "None"
     },
 
     {
@@ -149,18 +107,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "TI BeagleBone Black",
         "A335BNLT",
         0,
-        &_binary_bbone_txt_start,
-        &_binary_bbone_txt_end
-    },
-
-    {
-        SetupRecipeCommon,
-        "common",
-        "Common initialization",
-        NULL,
-        SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_common_txt_start,
-        &_binary_common_txt_end
+        "armv7"
     },
 
     {
@@ -169,8 +116,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "Intel Galileo",
         "QUARK",
         0,
-        &_binary_galileo_txt_start,
-        &_binary_galileo_txt_end
+        "x86"
     },
 
     {
@@ -179,8 +125,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "ARMv6 Install Image Recipe",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_instarv6_txt_start,
-        &_binary_instarv6_txt_end
+        "armv6"
     },
 
     {
@@ -189,8 +134,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "ARMv7 Install Image Recipe",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_instarv7_txt_start,
-        &_binary_instarv7_txt_end
+        "armv7"
     },
 
     {
@@ -199,8 +143,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "x86 Install Image Recipe",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_instx86_txt_start,
-        &_binary_instx86_txt_end
+        "x86"
     },
 
     {
@@ -209,8 +152,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "Integrator/CP RAM Disk Recipe",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_integrd_txt_start,
-        &_binary_integrd_txt_end
+        "armv7"
     },
 
     {
@@ -219,8 +161,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "TI PandaBoard",
         "PandaBoard",
         0,
-        &_binary_panda_txt_start,
-        &_binary_panda_txt_end
+        "armv7"
     },
 
     {
@@ -229,8 +170,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "TI PandaBoard ES",
         "PandaBoard ES",
         SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_panda_txt_start,
-        &_binary_panda_txt_end
+        "armv7"
     },
 
     {
@@ -239,8 +179,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "TI PandaBoard USB Image Recipe",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_pandausb_txt_start,
-        &_binary_pandausb_txt_end
+        "armv7"
     },
 
     {
@@ -249,8 +188,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "Standard x86 BIOS PC",
         NULL,
         0,
-        &_binary_pc_txt_start,
-        &_binary_pc_txt_end
+        "x86"
     },
 
     {
@@ -259,8 +197,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "Standard x86 UEFI-based PC",
         NULL,
         0,
-        &_binary_pcefi_txt_start,
-        &_binary_pcefi_txt_end
+        "x86"
     },
 
     {
@@ -269,8 +206,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "Minimal PC installation for Qemu",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_pctiny_txt_start,
-        &_binary_pctiny_txt_end
+        "x86"
     },
 
     {
@@ -279,8 +215,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "Raspberry Pi 2",
         "Raspberry Pi 2",
         0,
-        &_binary_rpi2_txt_start,
-        &_binary_rpi2_txt_end
+        "armv7"
     },
 
     {
@@ -289,8 +224,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "Raspberry Pi",
         "Raspberry Pi",
         0,
-        &_binary_rpi_txt_start,
-        &_binary_rpi_txt_end
+        "armv6"
     },
 
     {
@@ -299,8 +233,7 @@ SETUP_RECIPE SetupRecipes[] = {
         "ASUS C201",
         "C201",
         0,
-        &_binary_veyron_txt_start,
-        &_binary_veyron_txt_end
+        "armv7"
     },
 };
 
@@ -350,7 +283,8 @@ Return Value:
             ((Recipe->Description != NULL) &&
              (strcasecmp(PlatformString, Recipe->Description) == 0))) {
 
-            Context->RecipeIndex = RecipeIndex;
+            Context->PlatformName = Recipe->ShortName;
+            Context->ArchName = Recipe->Architecture;
             return TRUE;
         }
     }
@@ -441,7 +375,7 @@ Return Value:
     // If the user specified a platform, just use it.
     //
 
-    if (Context->RecipeIndex != -1) {
+    if (Context->PlatformName != NULL) {
         return 0;
     }
 
@@ -481,13 +415,14 @@ Return Value:
         if ((PlatformName != NULL) && (SmbiosName != NULL)) {
             SmbiosLength = strlen(SmbiosName);
             if (strncasecmp(SmbiosName, PlatformName, SmbiosLength) == 0) {
-                Context->RecipeIndex = RecipeIndex;
+                Context->PlatformName = Recipe->ShortName;
+                Context->ArchName = Recipe->Architecture;
                 break;
             }
         }
     }
 
-    if (Context->RecipeIndex == -1) {
+    if (Context->PlatformName == NULL) {
         if (FallbackRecipeIndex == -1) {
             fprintf(stderr,
                     "Failed to convert platform name %s to recipe.\n",
@@ -497,11 +432,13 @@ Return Value:
             goto DeterminePlatformEnd;
         }
 
-        Context->RecipeIndex = FallbackRecipeIndex;
+        RecipeIndex = FallbackRecipeIndex;
+        Context->PlatformName = SetupRecipes[RecipeIndex].ShortName;
+        Context->ArchName = SetupRecipes[RecipeIndex].Architecture;
     }
 
     if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-        Recipe = &(SetupRecipes[Context->RecipeIndex]);
+        Recipe = &(SetupRecipes[RecipeIndex]);
         printf("Platform: %s\n", Recipe->Description);
     }
 
@@ -513,111 +450,6 @@ DeterminePlatformEnd:
     }
 
     return Result;
-}
-
-INT
-SetupAddRecipeScript (
-    PSETUP_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds the platform recipe script.
-
-Arguments:
-
-    Context - Supplies a pointer to the setup context.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    PSETUP_RECIPE Recipe;
-    UINTN ScriptSize;
-    INT Status;
-
-    if (Context->RecipeIndex == -1) {
-        return 0;
-    }
-
-    Recipe = &(SetupRecipes[Context->RecipeIndex]);
-    if (Recipe->Script == NULL) {
-        return 0;
-    }
-
-    ScriptSize = (UINTN)(Recipe->ScriptEnd) - (UINTN)(Recipe->Script);
-    Status = ChalkLoadScriptBuffer(&(Context->Interpreter),
-                                   Recipe->ShortName,
-                                   Recipe->Script,
-                                   ScriptSize,
-                                   0,
-                                   NULL);
-
-    return Status;
-}
-
-INT
-SetupAddCommonScripts (
-    PSETUP_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds the common scripts that are added no matter what.
-
-Arguments:
-
-    Context - Supplies a pointer to the setup context.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    PSETUP_RECIPE Recipe;
-    ULONG RecipeCount;
-    ULONG RecipeIndex;
-    UINTN ScriptSize;
-    INT Status;
-
-    Status = 0;
-    RecipeCount = sizeof(SetupRecipes) / sizeof(SetupRecipes[0]);
-    for (RecipeIndex = 0; RecipeIndex < RecipeCount; RecipeIndex += 1) {
-        Recipe = &(SetupRecipes[RecipeIndex]);
-        if (Recipe->Id != SetupRecipeCommon) {
-            continue;
-        }
-
-        ScriptSize = (UINTN)(Recipe->ScriptEnd) - (UINTN)(Recipe->Script);
-        Status = ChalkLoadScriptBuffer(&(Context->Interpreter),
-                                       Recipe->ShortName,
-                                       Recipe->Script,
-                                       ScriptSize,
-                                       0,
-                                       NULL);
-
-        if (Status != 0) {
-            fprintf(stderr, "Failed to add common scripts.\n");
-            break;
-        }
-    }
-
-    return Status;
 }
 
 //

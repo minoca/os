@@ -95,7 +95,7 @@ Environment:
 // debugging the interpreter.
 //
 
-#if 1
+#if 0
 
 #define CKI_DEBUG_DUMP()                                                    \
     {                                                                       \

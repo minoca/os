@@ -414,6 +414,9 @@ Members:
     UnhandledException - Stores a pointer to a function used to catch any
         unhandled exceptions.
 
+    Context - Stores an opaque user context pointer that can be used by whoever
+        is integrating the Chalk library.
+
 --*/
 
 struct _CK_VM {
@@ -434,6 +437,7 @@ struct _CK_VM {
     LONG ForeignCalls;
     INT MemoryException;
     PCK_CLOSURE UnhandledException;
+    PVOID Context;
 };
 
 //

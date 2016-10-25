@@ -653,6 +653,57 @@ Return Value:
 --*/
 
 CK_API
+PVOID
+CkGetContext (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the context pointer stored inside the Chalk VM. This
+    pointer is not used at all by Chalk, and can be used by the surrounding
+    environment integrating Chalk.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    Returns the user context pointer.
+
+--*/
+
+CK_API
+PVOID
+CkSetContext (
+    PCK_VM Vm,
+    PVOID NewValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the context pointer stored inside the Chalk VM. This
+    pointer is not used at all by Chalk, and can be used by the surrounding
+    environment integrating Chalk.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    NewValue - Supplies the new context pointer value to set.
+
+Return Value:
+
+    Returns the previous value.
+
+--*/
+
+CK_API
 BOOL
 CkPreloadForeignModule (
     PCK_VM Vm,
@@ -1843,6 +1894,33 @@ Arguments:
         of the resulting string is limited, so please be succinct.
 
     ... - Supplies the remaining arguments.
+
+Return Value:
+
+    None.
+
+--*/
+
+CK_API
+VOID
+CkPushModule (
+    PCK_VM Vm,
+    PSTR ModuleName
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pushes the module with the given full.dotted.name onto the
+    stack.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    ModuleName - Supplies the name of the module to push. If no module by the
+        given name can be found, null is pushed.
 
 Return Value:
 
