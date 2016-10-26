@@ -64,7 +64,8 @@ postbuild:
 	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/$(BINARY); then \
 	    $(STRIP) -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY); \
 	fi
-	@if test $(SRCDIR)/install.ck -nt $(BINROOT)/install.ck; then \
+	@if ! [ -f "$(BINROOT)/install.ck" ] || \
+	   [ $(SRCDIR)/install.ck -nt $(BINROOT)/install.ck ]; then \
 	    cp -pv $(SRCDIR)/install.ck $(BINROOT)/install.ck ; \
 	fi
 

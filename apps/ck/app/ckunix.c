@@ -33,6 +33,7 @@ Environment:
 #include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <minoca/lib/types.h>

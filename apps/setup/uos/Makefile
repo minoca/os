@@ -33,7 +33,7 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
-ifeq ($(OS),Minoca)
+ifeq ($(shell uname -s),Minoca)
 
 OBJS = $(COMMON_OBJS)   \
        minoca/io.o      \
@@ -48,6 +48,8 @@ OBJS = $(COMMON_OBJS)   \
        io.o      \
        misc.o    \
        part.o    \
+
+DYNLIBS = -ldl
 
 endif
 
