@@ -3147,7 +3147,7 @@ PVOID
 ObCreateObject (
     OBJECT_TYPE Type,
     PVOID Parent,
-    PSTR ObjectName,
+    PCSTR ObjectName,
     ULONG NameLength,
     ULONG DataSize,
     PDESTROY_OBJECT_ROUTINE DestroyRoutine,
