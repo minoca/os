@@ -38,12 +38,12 @@ To boot your built images, you can write the appropriate image for the platform 
 If you're building Minoca OS on Windows and have downloaded the [tools](https://gitlab.com/minoca/tools) repository, several shortcuts have been set up to allow you to quickly run a Qemu instance with the images you've just built. Make sure you fired up the development environment with the setenv.cmd script. Type `run`, then `dx` to fire up an x86 Qemu instance of pc.img with a kernel debugger attached. We use this internally for faster development. If building for ARM, it's `runarm` and `da`.
 
 ### Nickel Tour
-Below if a brief orientation of a few of the directories in the repository. Check the Makefile in each directory for a more detailed description of what that directory contains.
+Below is a brief orientation of a few of the directories in the repository. Check the Makefile in each directory for a more detailed description of what that directory contains.
  * `apps` - User mode applications and libraries
    * `ck` - Chalk, an embeddable scripting language
    * `debug` - Debugger application
    * `libc` - The Minoca OS C Library
-   * `osbase` - The Minoca OS API library
+   * `osbase` - The Minoca kernel API library
    * `setup` - The msetup build tool
    * `swiss` - POSIX tools in a box
  * `boot` - Executables used during system boot
@@ -73,7 +73,7 @@ Below if a brief orientation of a few of the directories in the repository. Chec
      * `usbmass` - USB mass storage support
    * `usrinput` - User input device support
    * `videocon` - Video terminal console driver
- * `images` - Build recipes to create the final images for each platform
+ * `images` - Recipes to create the final images for each supported platform
  * `include` - Public header files
  * `kernel` - The Minoca OS kernel
    * `ke` - High level executive functions
@@ -89,7 +89,7 @@ Below if a brief orientation of a few of the directories in the repository. Chec
    * `fatlib` - FAT file system library
    * `im` - ELF/PE image library
    * `partlib` - Partition library
-   * `rtl` - General runtime library, implements support like printf and date/time conversion
+   * `rtl` - General runtime library (printf, date/time, memcpy, etc)
    * `termlib` - Terminal support library
  * `tasks` - Internal automation configuration
  * `uefi` - Minimal UEFI implementation for platforms supported by Minoca OS.

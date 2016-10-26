@@ -1,8 +1,8 @@
 # Contributing to Minoca OS
 
-Minoca OS is a new project, and there is a ton of work to do. We need your help! If you're interested in writing features, porting drivers, fixing bux, writing tests, creating documentation, filling out examples, or helping out in any other way, we'd love the help.
+Minoca OS is a new project, and there is a ton of work to do. We need your help! If you're interested in writing features, porting drivers, fixing bugs, writing tests, creating documentation, filling out examples, or helping out in any other way, we'd love the help.
 
-If you've already got an idea of what you'd like to work on, great. Check out our [wish list](https://github.com/minoca/os/WISHLIST.md) page if you're looking for ideas on what to work on.
+If you've already got an idea of what you'd like to work on, great. Check out our [wish list](https://github.com/minoca/os/blob/master/WISHLIST.md) page if you're looking for ideas on what to work on.
 
 ### Contributor Agreement
 
