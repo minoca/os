@@ -86,7 +86,7 @@ if [ -n "$AUTO_ROOT" ]; then
     ##
 
     cat > ./auto_root_script <<_EOS
-AutoRootCopy = {
+var AutoRootCopy = {
     "Destination": "/apps/auto/auto_root",
     "Source": "./auto_root",
     "SourceVolume": -1,
