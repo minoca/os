@@ -846,7 +846,7 @@ Return Value:
         return errno;
     }
 
-    if (fprintf(File, "\"", Size) < 0) {
+    if (fprintf(File, "\"") < 0) {
         return errno;
     }
 

@@ -46,7 +46,7 @@ OBJS = $(COMMON_OBJS)   \
 ## Add the login related apps on everything except Mac OS.
 ##
 
-ifneq ($(uname -s),Darwin)
+ifneq ($(shell uname -s),Darwin)
 OBJS += $(LOGIN_OBJS)
 endif
 

@@ -859,7 +859,7 @@ Return Value:
         if (Status != 0) {
             fprintf(stderr,
                     "Error: Failed to read partition %d configuration.\n",
-                    Index);
+                    (int)Index);
 
             return Status;
         }
