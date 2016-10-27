@@ -878,7 +878,8 @@ Arguments:
     IrpReadWrite - Supplies a pointer to the IRP read/write context that needs
         to be prepared for data transfer.
 
-    Alignment - Supplies the required physical alignment of the I/O buffer.
+    Alignment - Supplies the required physical alignment of the I/O buffer, in
+        bytes.
 
     MinimumPhysicalAddress - Supplies the minimum allowed physical address for
         the I/O buffer.

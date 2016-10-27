@@ -183,7 +183,7 @@ typedef struct _PHYSICAL_MEMORY_SEGMENT {
     LIST_ENTRY ListEntry;
     PHYSICAL_ADDRESS StartAddress;
     PHYSICAL_ADDRESS EndAddress;
-    ULONGLONG FreePages;
+    UINTN FreePages;
 } PHYSICAL_MEMORY_SEGMENT, *PPHYSICAL_MEMORY_SEGMENT;
 
 /*++
@@ -219,8 +219,8 @@ typedef struct _INIT_PHYSICAL_MEMORY_ITERATOR {
     PHYSICAL_ADDRESS LastEnd;
     PPHYSICAL_PAGE CurrentPage;
     PPHYSICAL_MEMORY_SEGMENT CurrentSegment;
-    ULONGLONG PagesInitialized;
-    ULONGLONG TotalMemoryPages;
+    UINTN PagesInitialized;
+    UINTN TotalMemoryPages;
 } INIT_PHYSICAL_MEMORY_ITERATOR, *PINIT_PHYSICAL_MEMORY_ITERATOR;
 
 //
@@ -229,11 +229,11 @@ typedef struct _INIT_PHYSICAL_MEMORY_ITERATOR {
 
 PPHYSICAL_MEMORY_SEGMENT
 MmpFindPhysicalPages (
-    ULONGLONG PageCount,
-    ULONGLONG PageAlignment,
+    UINTN PageCount,
+    UINTN PageAlignment,
     PHYSICAL_MEMORY_SEARCH_TYPE SearchType,
-    PULONGLONG SelectedPageOffset,
-    PULONGLONG PagesFound
+    PUINTN SelectedPageOffset,
+    PUINTN PagesFound
     );
 
 VOID
@@ -245,7 +245,7 @@ MmpInitializePhysicalAllocatorIterationRoutine (
 
 BOOL
 MmpUpdatePhysicalMemoryStatistics (
-    ULONGLONG PageCount,
+    UINTN PageCount,
     BOOL Allocation
     );
 
@@ -306,7 +306,7 @@ UINTN MmLastAllocatedSegmentOffset;
 //
 
 PPHYSICAL_MEMORY_SEGMENT MmLastPagedSegment;
-ULONGLONG MmLastPagedSegmentOffset;
+UINTN MmLastPagedSegmentOffset;
 
 //
 // Stores the lock protecting access to physical page data structures.
@@ -343,10 +343,10 @@ MEMORY_WARNING_LEVEL MmPhysicalMemoryWarningLevel;
 // Store the number physical pages for each warning level's threshold.
 //
 
-ULONGLONG MmPhysicalMemoryWarningLevel1HighPages;
-ULONGLONG MmPhysicalMemoryWarningLevel1LowPages;
-ULONGLONG MmPhysicalMemoryWarningLevel2HighPages;
-ULONGLONG MmPhysicalMemoryWarningLevel2LowPages;
+UINTN MmPhysicalMemoryWarningLevel1HighPages;
+UINTN MmPhysicalMemoryWarningLevel1LowPages;
+UINTN MmPhysicalMemoryWarningLevel2HighPages;
+UINTN MmPhysicalMemoryWarningLevel2LowPages;
 
 //
 // Store the mask that determines how often physical warning levels are checked.
@@ -485,7 +485,7 @@ Return Value:
 VOID
 MmFreePhysicalPages (
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG PageCount
+    UINTN PageCount
     )
 
 /*++
@@ -510,13 +510,13 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    ULONGLONG Index;
-    ULONGLONG Offset;
+    UINTN Index;
+    UINTN Offset;
     ULONG PageShift;
     PPAGING_ENTRY PagingEntry;
     LIST_ENTRY PagingEntryList;
     PPHYSICAL_PAGE PhysicalPage;
-    ULONGLONG ReleasedCount;
+    UINTN ReleasedCount;
     PPHYSICAL_MEMORY_SEGMENT Segment;
     BOOL SignalEvent;
 
@@ -686,7 +686,7 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    ULONGLONG Offset;
+    UINTN Offset;
     ULONG PageShift;
     PPHYSICAL_PAGE PhysicalPage;
     PPHYSICAL_MEMORY_SEGMENT Segment;
@@ -803,7 +803,9 @@ Return Value:
     // Allocate space for the memory structures.
     //
 
-    Context.TotalMemoryPages = Context.TotalMemoryBytes >> PageShift;
+    ASSERT((Context.TotalMemoryBytes >> PageShift) <= MAX_UINTN);
+
+    Context.TotalMemoryPages = (UINTN)(Context.TotalMemoryBytes >> PageShift);
     if ((MmLimitTotalPhysicalPages != 0) &&
         (Context.TotalMemoryPages > MmLimitTotalPhysicalPages)) {
 
@@ -926,8 +928,8 @@ Return Value:
 
 PHYSICAL_ADDRESS
 MmpAllocatePhysicalPages (
-    ULONGLONG PageCount,
-    ULONGLONG Alignment
+    UINTN PageCount,
+    UINTN Alignment
     )
 
 /*++
@@ -943,7 +945,7 @@ Arguments:
 
     PageCount - Supplies the number of consecutive physical pages required.
 
-    Alignment - Supplies the alignment requirement of the allocation, in bytes.
+    Alignment - Supplies the alignment requirement of the allocation, in pages.
         Valid values are powers of 2. Values of 1 or 0 indicate no alignment
         requirement.
 
@@ -956,13 +958,13 @@ Return Value:
 
 {
 
-    ULONGLONG FreePageTarget;
+    UINTN FreePageTarget;
     BOOL LockHeld;
-    ULONGLONG PageIndex;
+    UINTN PageIndex;
     ULONG PageShift;
     volatile PPHYSICAL_PAGE PhysicalPage;
     PPHYSICAL_MEMORY_SEGMENT Segment;
-    ULONGLONG SegmentOffset;
+    UINTN SegmentOffset;
     BOOL SignalEvent;
     ULONGLONG Timeout;
     PHYSICAL_ADDRESS WorkingAllocation;
@@ -975,7 +977,6 @@ Return Value:
     PageShift = MmPageShift();
     SignalEvent = FALSE;
     WorkingAllocation = INVALID_PHYSICAL_ADDRESS;
-    Alignment = Alignment >> PageShift;
     if (Alignment == 0) {
         Alignment = 1;
     }
@@ -1030,8 +1031,8 @@ Return Value:
         //
 
         FreePageTarget = MmMinimumFreePhysicalPages;
-        if (FreePageTarget < PageCount + (Alignment >> PageShift)) {
-            FreePageTarget = PageCount + (Alignment >> PageShift);
+        if (FreePageTarget < (PageCount + Alignment)) {
+            FreePageTarget = PageCount + Alignment;
         }
 
         if (LockHeld != FALSE) {
@@ -1100,8 +1101,8 @@ AllocatePhysicalPagesEnd:
 
 PHYSICAL_ADDRESS
 MmpAllocateIdentityMappablePhysicalPages (
-    ULONG PageCount,
-    ULONGLONG Alignment
+    UINTN PageCount,
+    UINTN Alignment
     )
 
 /*++
@@ -1117,7 +1118,7 @@ Arguments:
 
     PageCount - Supplies the number of consecutive physical pages required.
 
-    Alignment - Supplies the alignment requirement of the allocation, in bytes.
+    Alignment - Supplies the alignment requirement of the allocation, in pages.
         Valid values are powers of 2. Values of 1 or 0 indicate no alignment
         requirement.
 
@@ -1129,16 +1130,15 @@ Return Value:
 
 {
 
-    ULONGLONG PageIndex;
+    UINTN PageIndex;
     ULONG PageShift;
     PPHYSICAL_PAGE PhysicalPage;
     PPHYSICAL_MEMORY_SEGMENT Segment;
-    ULONGLONG SegmentOffset;
+    UINTN SegmentOffset;
     PHYSICAL_ADDRESS WorkingAllocation;
 
     PageShift = MmPageShift();
     WorkingAllocation = INVALID_PHYSICAL_ADDRESS;
-    Alignment = Alignment >> PageShift;
     if (Alignment == 0) {
         Alignment = 1;
     }
@@ -1190,8 +1190,8 @@ Return Value:
 KSTATUS
 MmpEarlyAllocatePhysicalMemory (
     PMEMORY_DESCRIPTOR_LIST MemoryMap,
-    ULONG PageCount,
-    ULONGLONG Alignment,
+    UINTN PageCount,
+    UINTN Alignment,
     ALLOCATION_STRATEGY Strategy,
     PPHYSICAL_ADDRESS Allocation
     )
@@ -1211,8 +1211,9 @@ Arguments:
 
     PageCount - Supplies the number of physical pages needed.
 
-    Alignment - Supplies the required alignment of the physical pages. Valid
-        values are powers of 2. Supply 0 or 1 for no alignment requirement.
+    Alignment - Supplies the required alignment of the allocation, in pagse.
+        Valid values are powers of 2. Supply 0 or 1 for no alignment
+        requirement.
 
     Strategy - Supplies the memory allocation strategy to employ.
 
@@ -1231,11 +1232,11 @@ Return Value:
 
 {
 
-    ULONG PageSize;
+    ULONG PageShift;
     KSTATUS Status;
 
     *Allocation = INVALID_PHYSICAL_ADDRESS;
-    PageSize = MmPageSize();
+    PageShift = MmPageShift();
 
     //
     // This routine should not be used if the real physical allocator has been
@@ -1249,14 +1250,14 @@ Return Value:
         goto EarlyAllocatePhysicalMemoryEnd;
     }
 
-    if (Alignment < PageSize) {
-        Alignment = PageSize;
+    if (Alignment == 0) {
+        Alignment = 1;
     }
 
     Status = MmMdAllocateFromMdl(MemoryMap,
                                  Allocation,
-                                 PageCount << MmPageShift(),
-                                 Alignment,
+                                 PageCount << PageShift,
+                                 Alignment << PageShift,
                                  0,
                                  MAX_ULONGLONG,
                                  MemoryTypeMmStructures,
@@ -1273,7 +1274,7 @@ EarlyAllocatePhysicalMemoryEnd:
 VOID
 MmpEnablePagingOnPhysicalAddress (
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG PageCount,
+    UINTN PageCount,
     PPAGING_ENTRY *PagingEntries,
     BOOL LockPages
     )
@@ -1308,8 +1309,8 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    ULONGLONG PageIndex;
-    ULONGLONG PageOffset;
+    UINTN PageIndex;
+    UINTN PageOffset;
     ULONG PageShift;
     ULONG PageSize;
     PPHYSICAL_PAGE PhysicalPage;
@@ -1386,7 +1387,7 @@ Return Value:
 KSTATUS
 MmpLockPhysicalPages (
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG PageCount
+    UINTN PageCount
     )
 
 /*++
@@ -1412,9 +1413,9 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     UINTN Flags;
-    ULONGLONG MaxOffset;
-    ULONGLONG Offset;
-    ULONG PageIndex;
+    UINTN MaxOffset;
+    UINTN Offset;
+    UINTN PageIndex;
     ULONG PageShift;
     PPAGING_ENTRY PagingEntry;
     PPHYSICAL_PAGE PhysicalPage;
@@ -1535,7 +1536,7 @@ LockPhysicalPagesEnd:
 VOID
 MmpUnlockPhysicalPages (
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG PageCount
+    UINTN PageCount
     )
 
 /*++
@@ -1561,14 +1562,14 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     UINTN Flags;
-    ULONGLONG MaxOffset;
-    ULONGLONG Offset;
-    ULONG PageIndex;
+    UINTN MaxOffset;
+    UINTN Offset;
+    UINTN PageIndex;
     ULONG PageShift;
     PPAGING_ENTRY PagingEntry;
     LIST_ENTRY PagingEntryList;
     PPHYSICAL_PAGE PhysicalPage;
-    ULONGLONG ReleasedCount;
+    UINTN ReleasedCount;
     PPHYSICAL_MEMORY_SEGMENT Segment;
     BOOL SignalEvent;
 
@@ -1693,7 +1694,7 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    ULONGLONG Offset;
+    UINTN Offset;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageShift;
     PPHYSICAL_PAGE PhysicalPage;
@@ -1884,9 +1885,9 @@ Return Value:
     return;
 }
 
-ULONGLONG
+UINTN
 MmpPageOutPhysicalPages (
-    ULONGLONG FreePagesTarget,
+    UINTN FreePagesTarget,
     PIO_BUFFER IoBuffer,
     PMEMORY_RESERVATION SwapRegion
     )
@@ -1918,21 +1919,21 @@ Return Value:
 
     BOOL Failure;
     ULONG FailureCount;
-    ULONGLONG FreePages;
+    UINTN FreePages;
     BOOL LockHeld;
-    ULONGLONG PageCountSinceEvent;
-    ULONGLONG PagesFound;
-    ULONGLONG PageShift;
-    ULONGLONG PagesPaged;
+    UINTN PageCountSinceEvent;
+    UINTN PagesFound;
+    ULONG PageShift;
+    UINTN PagesPaged;
     PPAGING_ENTRY PagingEntry;
     PHYSICAL_ADDRESS PhysicalAddress;
     PPHYSICAL_PAGE PhysicalPage;
     PIMAGE_SECTION Section;
     UINTN SectionOffset;
     PPHYSICAL_MEMORY_SEGMENT Segment;
-    ULONGLONG SegmentOffset;
+    UINTN SegmentOffset;
     KSTATUS Status;
-    ULONGLONG TotalPagesPaged;
+    UINTN TotalPagesPaged;
 
     LockHeld = FALSE;
     PageShift = MmPageShift();
@@ -2079,11 +2080,11 @@ Return Value:
 
 PPHYSICAL_MEMORY_SEGMENT
 MmpFindPhysicalPages (
-    ULONGLONG PageCount,
-    ULONGLONG PageAlignment,
+    UINTN PageCount,
+    UINTN PageAlignment,
     PHYSICAL_MEMORY_SEARCH_TYPE SearchType,
-    PULONGLONG SelectedPageOffset,
-    PULONGLONG PagesFound
+    PUINTN SelectedPageOffset,
+    PUINTN PagesFound
     )
 
 /*++
@@ -2120,21 +2121,21 @@ Return Value:
 
 {
 
-    ULONGLONG AlignedSegmentStartPage;
+    UINTN AlignedSegmentStartPage;
     BOOL ExitCheck;
     BOOL FirstIteration;
-    ULONGLONG FirstOffset;
+    UINTN FirstOffset;
     UINTN Flags;
     PPHYSICAL_MEMORY_SEGMENT LastSegment;
-    ULONGLONG LastSegmentOffset;
-    ULONGLONG Offset;
+    UINTN LastSegmentOffset;
+    UINTN Offset;
     ULONG PageShift;
     PPAGING_ENTRY PagingEntry;
     PPHYSICAL_PAGE PhysicalPage;
     PPHYSICAL_MEMORY_SEGMENT Segment;
-    ULONGLONG SegmentPageCount;
-    ULONGLONG SpanCount;
-    ULONGLONG SpanPageCount;
+    UINTN SegmentPageCount;
+    UINTN SpanCount;
+    UINTN SpanPageCount;
     PVOID VirtualAddress;
     BOOL VirtualAddressInUse;
 
@@ -2460,12 +2461,12 @@ Return Value:
     BOOL FreePage;
     PHYSICAL_ADDRESS LowestPhysicalAddress;
     PINIT_PHYSICAL_MEMORY_ITERATOR MemoryContext;
-    ULONGLONG OutOfBoundsAllocatedPageCount;
-    ULONGLONG PageCount;
+    UINTN OutOfBoundsAllocatedPageCount;
+    UINTN PageCount;
     UINTN PageShift;
     UINTN PageSize;
     ULONGLONG TrimmedSize;
-    ULONGLONG TruncatePageCount;
+    UINTN TruncatePageCount;
 
     LowestPhysicalAddress = 0;
     MemoryContext = Context;
@@ -2528,6 +2529,8 @@ Return Value:
         if (!IS_MEMORY_FREE_TYPE(Descriptor->Type) &&
             !IS_BOOT_TEMPORARY_MEMORY_TYPE(Descriptor->Type)) {
 
+            ASSERT((Descriptor->Size >> PageShift) <= MAX_UINTN);
+
             OutOfBoundsAllocatedPageCount += Descriptor->Size >> PageShift;
         }
 
@@ -2589,6 +2592,8 @@ Return Value:
 
             if (!IS_MEMORY_FREE_TYPE(Descriptor->Type) &&
                 !IS_BOOT_TEMPORARY_MEMORY_TYPE(Descriptor->Type)) {
+
+                ASSERT((TrimmedSize >> PageShift) <= MAX_UINTN);
 
                 OutOfBoundsAllocatedPageCount += TrimmedSize >> PageShift;
             }
@@ -2654,7 +2659,10 @@ Return Value:
 
     if (MemoryContext->CurrentPage != NULL) {
         CurrentSegment = MemoryContext->CurrentSegment;
-        PageCount = Descriptor->Size >> PageShift;
+
+        ASSERT((Descriptor->Size >> PageShift) <= MAX_UINTN);
+
+        PageCount = (UINTN)(Descriptor->Size >> PageShift);
         FreePage = FALSE;
         if (IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
             FreePage = TRUE;
@@ -2763,7 +2771,7 @@ InitializePhysicalAllocatorIterationRoutineEnd:
 
 BOOL
 MmpUpdatePhysicalMemoryStatistics (
-    ULONGLONG PageCount,
+    UINTN PageCount,
     BOOL Allocation
     )
 

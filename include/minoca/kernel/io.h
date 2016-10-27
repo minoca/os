@@ -2574,12 +2574,12 @@ Members:
 
 typedef struct _IO_CACHE_STATISTICS {
     ULONG Version;
-    ULONGLONG HeadroomPagesTrigger;
-    ULONGLONG HeadroomPagesRetreat;
-    ULONGLONG MinimumPagesTarget;
-    ULONGLONG MinimumPages;
-    ULONGLONG PhysicalPageCount;
-    ULONGLONG DirtyPageCount;
+    UINTN HeadroomPagesTrigger;
+    UINTN HeadroomPagesRetreat;
+    UINTN MinimumPagesTarget;
+    UINTN MinimumPages;
+    UINTN PhysicalPageCount;
+    UINTN DirtyPageCount;
     ULONGLONG LastCleanTime;
 } IO_CACHE_STATISTICS, *PIO_CACHE_STATISTICS;
 
@@ -3672,7 +3672,8 @@ Arguments:
     IrpReadWrite - Supplies a pointer to the IRP read/write context that needs
         to be prepared for data transfer.
 
-    Alignment - Supplies the required physical alignment of the I/O buffer.
+    Alignment - Supplies the required physical alignment of the I/O buffer, in
+        bytes.
 
     MinimumPhysicalAddress - Supplies the minimum allowed physical address for
         the I/O buffer.

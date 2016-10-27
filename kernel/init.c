@@ -805,7 +805,7 @@ Return Value:
     ULONGLONG Minutes;
     CHAR NonPagedPoolString[16];
     CHAR PagedPoolString[16];
-    ULONG PageSize;
+    ULONG PageShift;
     PSTR PagingFormat;
     CHAR PagingString[24];
     CHAR PagingValueString[16];
@@ -826,7 +826,7 @@ Return Value:
     ULONGLONG WriteDifference;
 
     Frequency = HlQueryTimeCounterFrequency();
-    PageSize = MmPageSize();
+    PageShift = MmPageShift();
     RtlZeroMemory(&Memory, sizeof(MM_STATISTICS));
     RtlZeroMemory(&Cache, sizeof(IO_CACHE_STATISTICS));
     RtlZeroMemory(&UsageContext, sizeof(SYSTEM_USAGE_CONTEXT));
@@ -893,8 +893,8 @@ Return Value:
         Hours %= 24;
         KepPrintFormattedMemoryUsage(TotalMemoryString,
                                      sizeof(TotalMemoryString),
-                                     Memory.AllocatedPhysicalPages * PageSize,
-                                     Memory.PhysicalPages * PageSize);
+                                     Memory.AllocatedPhysicalPages << PageShift,
+                                     Memory.PhysicalPages << PageShift);
 
         UsedSize = Memory.PagedPool.TotalHeapSize -
                    Memory.PagedPool.FreeListSize;
@@ -914,8 +914,8 @@ Return Value:
 
         KepPrintFormattedMemoryUsage(CacheString,
                                      sizeof(CacheString),
-                                     Cache.DirtyPageCount * PageSize,
-                                     Cache.PhysicalPageCount * PageSize);
+                                     Cache.DirtyPageCount << PageShift,
+                                     Cache.PhysicalPageCount << PageShift);
 
         if (Width >= KE_BANNER_SHORT_WIDTH) {
             Size = RtlPrintToString(BannerString,

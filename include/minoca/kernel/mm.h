@@ -644,9 +644,9 @@ typedef struct _MM_STATISTICS {
     ULONG PageSize;
     MEMORY_HEAP_STATISTICS NonPagedPool;
     MEMORY_HEAP_STATISTICS PagedPool;
-    ULONGLONG PhysicalPages;
-    ULONGLONG AllocatedPhysicalPages;
-    ULONGLONG NonPagedPhysicalPages;
+    UINTN PhysicalPages;
+    UINTN AllocatedPhysicalPages;
+    UINTN NonPagedPhysicalPages;
 } MM_STATISTICS, *PMM_STATISTICS;
 
 /*++
@@ -937,7 +937,8 @@ Arguments:
     MaximumPhysicalAddress - Supplies the maximum physical address of the
         allocation.
 
-    Alignment - Supplies the required physical alignment of the buffer.
+    Alignment - Supplies the required physical alignment of the buffer, in
+        bytes.
 
     Size - Supplies the minimum size of the buffer, in bytes.
 
@@ -3253,7 +3254,7 @@ Return Value:
 
 BOOL
 MmRequestPagingOut (
-    ULONGLONG FreePageTarget
+    UINTN FreePageTarget
     );
 
 /*++
@@ -3874,7 +3875,7 @@ Return Value:
 VOID
 MmFreePhysicalPages (
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG PageCount
+    UINTN PageCount
     );
 
 /*++

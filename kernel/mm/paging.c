@@ -322,8 +322,7 @@ BOOL MmPagingThreadCreated = FALSE;
 PKTHREAD MmPagingThread;
 PKEVENT MmPagingEvent;
 PKEVENT MmPagingFreePagesEvent;
-ULONGLONG MmPagingFreeTarget;
-KSPIN_LOCK MmPagingLock;
+volatile UINTN MmPagingFreeTarget;
 
 //
 // Store the block allocator used for allocating paging entries.
@@ -337,7 +336,7 @@ PBLOCK_ALLOCATOR MmPagingEntryBlockAllocator;
 
 BOOL
 MmRequestPagingOut (
-    ULONGLONG FreePageTarget
+    UINTN FreePageTarget
     )
 
 /*++
@@ -363,7 +362,8 @@ Return Value:
 
 {
 
-    RUNLEVEL OldRunLevel;
+    UINTN PagingFreeTarget;
+    UINTN PreviousPagingFreeTarget;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -379,14 +379,18 @@ Return Value:
     // Set the supplied page count if it is larger than the current value.
     //
 
-    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-    KeAcquireSpinLock(&MmPagingLock);
-    if (FreePageTarget > MmPagingFreeTarget) {
-        MmPagingFreeTarget = FreePageTarget;
-    }
+    PreviousPagingFreeTarget = MmPagingFreeTarget;
+    while (FreePageTarget > PreviousPagingFreeTarget) {
+        PagingFreeTarget = RtlAtomicCompareExchange(&MmPagingFreeTarget,
+                                                    FreePageTarget,
+                                                    PreviousPagingFreeTarget);
 
-    KeReleaseSpinLock(&MmPagingLock);
-    KeLowerRunLevel(OldRunLevel);
+        if (PagingFreeTarget == PreviousPagingFreeTarget) {
+            break;
+        }
+
+        PreviousPagingFreeTarget = PagingFreeTarget;
+    }
 
     //
     // Unsignal the free pages event. This will allow the caller to wait until
@@ -691,7 +695,6 @@ Return Value:
     // handles paging and releasing memory pressure.
     //
 
-    KeInitializeSpinLock(&MmPagingLock);
     MmPagingFreePagesEvent = KeCreateEvent(NULL);
     if (MmPagingFreePagesEvent == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1131,7 +1134,7 @@ MmpPageOut (
     PHYSICAL_ADDRESS PhysicalAddress,
     PIO_BUFFER IoBuffer,
     PMEMORY_RESERVATION SwapRegion,
-    PULONGLONG PagesPaged
+    PUINTN PagesPaged
     )
 
 /*++
@@ -2440,9 +2443,8 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    ULONGLONG FreePagesTarget;
+    UINTN FreePagesTarget;
     PIO_BUFFER IoBuffer;
-    RUNLEVEL OldRunLevel;
     UINTN PageCount;
     PKEVENT PhysicalMemoryWarningEvent;
     PVOID SignalingObject;
@@ -2541,12 +2543,7 @@ Return Value:
         // Snap and reset the target free page count, then go for it.
         //
 
-        OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-        KeAcquireSpinLock(&MmPagingLock);
-        FreePagesTarget = MmPagingFreeTarget;
-        MmPagingFreeTarget = 0;
-        KeReleaseSpinLock(&MmPagingLock);
-        KeLowerRunLevel(OldRunLevel);
+        FreePagesTarget = RtlAtomicExchange(&MmPagingFreeTarget, 0);
         MmpPageOutPhysicalPages(FreePagesTarget, IoBuffer, SwapRegion);
     }
 

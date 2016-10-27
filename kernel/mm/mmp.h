@@ -460,8 +460,8 @@ Return Value:
 
 PHYSICAL_ADDRESS
 MmpAllocatePhysicalPages (
-    ULONGLONG PageCount,
-    ULONGLONG Alignment
+    UINTN PageCount,
+    UINTN Alignment
     );
 
 /*++
@@ -477,7 +477,7 @@ Arguments:
 
     PageCount - Supplies the number of consecutive physical pages required.
 
-    Alignment - Supplies the alignment requirement of the allocation, in bytes.
+    Alignment - Supplies the alignment requirement of the allocation, in pages.
         Valid values are powers of 2. Values of 1 or 0 indicate no alignment
         requirement.
 
@@ -490,8 +490,8 @@ Return Value:
 
 PHYSICAL_ADDRESS
 MmpAllocateIdentityMappablePhysicalPages (
-    ULONG PageCount,
-    ULONGLONG Alignment
+    UINTN PageCount,
+    UINTN Alignment
     );
 
 /*++
@@ -507,7 +507,7 @@ Arguments:
 
     PageCount - Supplies the number of consecutive physical pages required.
 
-    Alignment - Supplies the alignment requirement of the allocation, in bytes.
+    Alignment - Supplies the alignment requirement of the allocation, in pages.
         Valid values are powers of 2. Values of 1 or 0 indicate no alignment
         requirement.
 
@@ -520,8 +520,8 @@ Return Value:
 KSTATUS
 MmpEarlyAllocatePhysicalMemory (
     PMEMORY_DESCRIPTOR_LIST MemoryMap,
-    ULONG PageCount,
-    ULONGLONG Alignment,
+    UINTN PageCount,
+    UINTN Alignment,
     ALLOCATION_STRATEGY Strategy,
     PPHYSICAL_ADDRESS Allocation
     );
@@ -541,8 +541,9 @@ Arguments:
 
     PageCount - Supplies the number of physical pages needed.
 
-    Alignment - Supplies the required alignment of the physical pages. Valid
-        values are powers of 2. Supply 0 or 1 for no alignment requirement.
+    Alignment - Supplies the required alignment of the allocation, in pagse.
+        Valid values are powers of 2. Supply 0 or 1 for no alignment
+        requirement.
 
     Strategy - Supplies the memory allocation strategy to employ.
 
@@ -562,7 +563,7 @@ Return Value:
 VOID
 MmpEnablePagingOnPhysicalAddress (
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG PageCount,
+    UINTN PageCount,
     PPAGING_ENTRY *PagingEntries,
     BOOL LockPages
     );
@@ -597,7 +598,7 @@ Return Value:
 KSTATUS
 MmpLockPhysicalPages (
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG PageCount
+    UINTN PageCount
     );
 
 /*++
@@ -622,7 +623,7 @@ Return Value:
 VOID
 MmpUnlockPhysicalPages (
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG PageCount
+    UINTN PageCount
     );
 
 /*++
@@ -701,9 +702,9 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 MmpPageOutPhysicalPages (
-    ULONGLONG FreePagesTarget,
+    UINTN FreePagesTarget,
     PIO_BUFFER IoBuffer,
     PMEMORY_RESERVATION SwapRegion
     );
@@ -2173,7 +2174,7 @@ MmpPageOut (
     PHYSICAL_ADDRESS PhysicalAddress,
     PIO_BUFFER IoBuffer,
     PMEMORY_RESERVATION SwapRegion,
-    PULONGLONG PagesPaged
+    PUINTN PagesPaged
     );
 
 /*++

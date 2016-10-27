@@ -144,7 +144,8 @@ Arguments:
     MaximumPhysicalAddress - Supplies the maximum physical address of the
         allocation.
 
-    Alignment - Supplies the required physical alignment of the buffer.
+    Alignment - Supplies the required physical alignment of the buffer, in
+        bytes.
 
     Size - Supplies the minimum size of the buffer, in bytes.
 
@@ -3533,7 +3534,8 @@ Arguments:
     MaximumPhysicalAddress - Supplies the maximum physical address of the
         extension.
 
-    Alignment - Supplies the required physical alignment.
+    Alignment - Supplies the required physical alignment of the I/O buffer, in
+        bytes.
 
     Size - Supplies the number of bytes by which the I/O buffer needs to be
         extended.
@@ -3579,6 +3581,12 @@ Return Value:
 
     PageShift = MmPageShift();
     PageSize = MmPageSize();
+
+    //
+    // Convert the byte alignment to pages.
+    //
+
+    Alignment = Alignment >> PageShift;
 
     //
     // TODO: Implement support for honoring the minimum and maximum physical

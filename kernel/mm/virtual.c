@@ -1888,7 +1888,7 @@ Arguments:
     RangeSize - Supplies the size of the virtual range to map, in bytes.
 
     PhysicalRunAlignment - Supplies the required alignment of the runs of
-        physical pages.
+        physical pages, in bytes.
 
     PhysicalRunSize - Supplies the size of each run of physically contiguous
         pages.
@@ -1946,6 +1946,7 @@ Return Value:
 
     PageCount = RangeSize >> PageShift;
     RunPageCount = PhysicalRunSize >> PageShift;
+    PhysicalRunAlignment >>= PageShift;
     Status = STATUS_SUCCESS;
     VirtualAddress = RangeAddress;
     for (PageIndex = 0; PageIndex < PageCount; PageIndex += RunPageCount) {
