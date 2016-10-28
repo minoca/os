@@ -30,7 +30,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#define _FILE_OFFSET_BITS 64
+#define _LARGEFILE64_SOURCE 1
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/chalk.h>
@@ -458,7 +458,7 @@ Return Value:
         goto BundleCreateEnd;
     }
 
-    ChecksumOffset = fseeko(File, 0, SEEK_CUR);
+    ChecksumOffset = fseeko64(File, 0, SEEK_CUR);
     if (ChecksumOffset == -1) {
         Status = errno;
         goto BundleCreateEnd;
@@ -689,7 +689,7 @@ Return Value:
     // Write the length in its final place place.
     //
 
-    EndOffset = fseeko(File, 0, SEEK_CUR);
+    EndOffset = fseeko64(File, 0, SEEK_CUR);
     if ((EndOffset == -1) || (EndOffset < ChecksumOffset)) {
         Status = EINVAL;
         goto BundleCreateEnd;
@@ -697,7 +697,7 @@ Return Value:
 
     TotalSize = EndOffset - ChecksumOffset;
     Value64 = TotalSize;
-    if ((fseeko(File, ChecksumOffset + sizeof(Value32), SEEK_SET) < 0) ||
+    if ((fseeko64(File, ChecksumOffset + sizeof(Value32), SEEK_SET) < 0) ||
         (fwrite(&Value64, 1, sizeof(Value64), File) != sizeof(Value64))) {
 
         Status = errno;
@@ -718,7 +718,7 @@ Return Value:
         }
     }
 
-    if ((fseeko(File, ChecksumOffset, SEEK_SET) < 0) ||
+    if ((fseeko64(File, ChecksumOffset, SEEK_SET) < 0) ||
         (fread(Buffer, 1, TotalSize, File) != TotalSize)) {
 
         Status = errno;
@@ -730,7 +730,7 @@ Return Value:
     //
 
     Value32 = CkpBundleChecksum(Buffer, TotalSize);
-    if ((fseeko(File, ChecksumOffset, SEEK_SET) < 0) ||
+    if ((fseeko64(File, ChecksumOffset, SEEK_SET) < 0) ||
         (fwrite(&Value32, 1, sizeof(Value32), File) != sizeof(Value32))) {
 
         Status = errno;
