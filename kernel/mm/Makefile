@@ -62,9 +62,8 @@ EXTRA_SRC_DIRS = x86 armv7 armv6
 
 DIRS = boot
 
-boot: $(BINARY)
-
 TESTDIRS = testmm
 
 include $(SRCROOT)/os/minoca.mk
 
+boot: $(BINARY)
