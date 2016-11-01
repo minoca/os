@@ -61,7 +61,7 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a         \
              $(OBJROOT)/os/apps/ck/lib/build/libchalk.a        \
              $(OBJROOT)/os/lib/yy/build/yy.a                   \
 
-EXTRA_SRC_DIRS = ../minoca
+EXTRA_SRC_DIRS = minoca
 
 include $(SRCROOT)/os/minoca.mk
 
