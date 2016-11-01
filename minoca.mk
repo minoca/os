@@ -335,7 +335,9 @@ endif
 ## Assembler flags
 ##
 
-EXTRA_ASFLAGS += -Wa,-g -Wa,-I$(SRCDIR)
+EXTRA_ASFLAGS += -Wa,-I$(SRCDIR)
+EXTRA_ASFLAGS_FOR_BUILD := $(EXTRA_ASFLAGS)
+EXTRA_ASFLAGS += -Wa,-g
 
 ##
 ## For build executables, override the names even if set on the command line.
@@ -354,7 +356,7 @@ endif
 
 override EXTRA_CFLAGS := $(EXTRA_CFLAGS_FOR_BUILD)
 override EXTRA_CPPFLAGS := $(EXTRA_CPPFLAGS_FOR_BUILD)
-override EXTRA_ASFLAGS :=
+override EXTRA_ASFLAGS := $(EXTRA_ASFLAGS_FOR_BUILD)
 override CPPFLAGS :=
 override LDFLAGS :=
 override EXTRA_LDFLAGS := $(EXTRA_LDFLAGS_FOR_BUILD)
