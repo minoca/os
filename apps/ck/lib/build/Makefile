@@ -45,6 +45,8 @@ endif
 
 DIRS = dynamic \
 
+EXTRA_ASFLAGS += -Wa,-I$(SRCDIR)/..
+
 include $(SRCROOT)/os/minoca.mk
 
 dynamic: $(BINARY)
