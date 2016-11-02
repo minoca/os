@@ -54,6 +54,12 @@ Environment:
 
 #endif
 
+#ifdef __APPLE__
+
+#define fseeko64 fseeko
+
+#endif
+
 //
 // ---------------------------------------------------------------- Definitions
 //
