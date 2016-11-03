@@ -3754,7 +3754,8 @@ Return Value:
         RtlZeroMemory(&Alias, sizeof(ACPI_ALIAS_OBJECT));
         PackageIndex = (ULONG)Statement->Argument[1]->U.Integer.Value;
         Alias.DestinationObject = AcpipGetPackageObject(Statement->Argument[0],
-                                                        PackageIndex);
+                                                        PackageIndex,
+                                                        TRUE);
 
         if (Alias.DestinationObject == NULL) {
             return STATUS_NOT_FOUND;
@@ -4100,24 +4101,30 @@ Return Value:
 {
 
     BOOL PrintParentheses;
+    PACPI_OBJECT Reduction;
     ULONGLONG Value;
 
+    Reduction = NULL;
     PrintParentheses = FALSE;
     switch (Statement->Type) {
     case AmlStatementZero:
         Value = 0;
+        Reduction = &AcpiZero;
         break;
 
     case AmlStatementOne:
         Value = 1;
+        Reduction = &AcpiOne;
         break;
 
     case AmlStatementOnes:
         if (Context->CurrentMethod->IntegerWidthIs32 != FALSE) {
             Value = 0xFFFFFFFF;
+            Reduction = &AcpiOnes32;
 
         } else {
             Value = 0xFFFFFFFFFFFFFFFFULL;
+            Reduction = &AcpiOnes64;
         }
 
         break;
@@ -4155,15 +4162,22 @@ Return Value:
     }
 
     if (Context->ExecuteStatements != FALSE) {
-        Statement->Reduction = AcpipCreateNamespaceObject(Context,
-                                                          AcpiObjectInteger,
-                                                          NULL,
-                                                          &Value,
-                                                          sizeof(ULONGLONG));
+        if (Reduction != NULL) {
+            AcpipObjectAddReference(Reduction);
 
-        if (Statement->Reduction == NULL) {
-            return STATUS_UNSUCCESSFUL;
+        } else {
+            Reduction = AcpipCreateNamespaceObject(Context,
+                                                   AcpiObjectInteger,
+                                                   NULL,
+                                                   &Value,
+                                                   sizeof(ULONGLONG));
+
+            if (Reduction == NULL) {
+                return STATUS_UNSUCCESSFUL;
+            }
         }
+
+        Statement->Reduction = Reduction;
     }
 
     return STATUS_SUCCESS;
@@ -4999,7 +5013,7 @@ Return Value:
     ItemIndex = StartIndex->U.Integer.Value;
     ItemCount = Package->U.Package.ElementCount;
     while (ItemIndex < ItemCount) {
-        PackageElement = AcpipGetPackageObject(Package, ItemIndex);
+        PackageElement = AcpipGetPackageObject(Package, ItemIndex, FALSE);
         Match = AcpipEvaluateMatchComparison(Context,
                                              PackageElement,
                                              Operand1,
@@ -5020,24 +5034,27 @@ Return Value:
     //
 
     if (ItemIndex == ItemCount) {
-        ItemIndex = (ULONGLONG)-1;
-        if (Context->CurrentMethod->IntegerWidthIs32) {
-            ItemIndex = (ULONG)-1;
+        Statement->Reduction = &AcpiOnes64;
+        if (Context->CurrentMethod->IntegerWidthIs32 != FALSE) {
+            Statement->Reduction = &AcpiOnes32;
         }
-    }
+
+        AcpipObjectAddReference(Statement->Reduction);
 
     //
-    // Return the result value.
+    // Otherwise, return the result value.
     //
 
-    Statement->Reduction = AcpipCreateNamespaceObject(Context,
-                                                      AcpiObjectInteger,
-                                                      NULL,
-                                                      &ItemIndex,
-                                                      sizeof(ULONGLONG));
+    } else {
+        Statement->Reduction = AcpipCreateNamespaceObject(Context,
+                                                          AcpiObjectInteger,
+                                                          NULL,
+                                                          &ItemIndex,
+                                                          sizeof(ULONGLONG));
 
-    if (Statement->Reduction == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        if (Statement->Reduction == NULL) {
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
     }
 
     return STATUS_SUCCESS;

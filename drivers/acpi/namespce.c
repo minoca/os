@@ -37,6 +37,21 @@ Environment:
 #include "namespce.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro determines whether or not an ACPI object is one of the interger
+// constants.
+//
+
+#define IS_ACPI_CONSTANT(_AcpiObject)  \
+    (((_AcpiObject) == &AcpiZero) ||   \
+     ((_AcpiObject) == &AcpiOne) ||    \
+     ((_AcpiObject) == &AcpiOnes32) || \
+     ((_AcpiObject) == &AcpiOnes64))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -1285,6 +1300,17 @@ Return Value:
     }
 
     //
+    // The ACPI spec states that storing to constants is fatal, but also states
+    // that it is a no-op and not an error. Go with the more lenient option. A
+    // lot of operators use a store to Zero to indicate a no-op.
+    //
+
+    if (IS_ACPI_CONSTANT(Destination) != FALSE) {
+        Status = STATUS_SUCCESS;
+        goto PerformStoreOperationEnd;
+    }
+
+    //
     // Perform a conversion if necessary. Integers, Buffers, and Strings can
     // be stored into a Field/Buffer unit. Count strings as buffers.
     //
@@ -1927,7 +1953,8 @@ Return Value:
 PACPI_OBJECT
 AcpipGetPackageObject (
     PACPI_OBJECT Package,
-    ULONG Index
+    ULONG Index,
+    BOOL ConvertConstants
     )
 
 /*++
@@ -1942,6 +1969,10 @@ Arguments:
 
     Index - Supplies the index of the element to get.
 
+    ConvertConstants - Supplies a boolean indicating whether or not constant
+        integers should be converted to non-constant integers before being
+        returned.
+
 Return Value:
 
     Returns a pointer to the element in the package at the given index.
@@ -1954,6 +1985,8 @@ Return Value:
 {
 
     PACPI_OBJECT *Array;
+    PVOID Buffer;
+    PACPI_OBJECT NewObject;
     PACPI_OBJECT ResolvedName;
 
     ASSERT(Package->Type == AcpiObjectPackage);
@@ -1996,6 +2029,30 @@ Return Value:
         }
 
         return ResolvedName;
+
+    //
+    // If constant conversion is requested, convert Zero, One, and Ones into
+    // private integers and set it in the package.
+    //
+
+    } else if ((ConvertConstants != FALSE) &&
+               (Array[Index]->Type == AcpiObjectInteger)) {
+
+        if (IS_ACPI_CONSTANT(Array[Index]) != FALSE) {
+            Buffer = &(Array[Index]->U.Integer.Value),
+            NewObject = AcpipCreateNamespaceObject(NULL,
+                                                   AcpiObjectInteger,
+                                                   NULL,
+                                                   Buffer,
+                                                   sizeof(ULONGLONG));
+
+            if (NewObject == NULL) {
+                return NULL;
+            }
+
+            AcpipSetPackageObject(Package, Index, NewObject);
+            AcpipObjectReleaseReference(NewObject);
+        }
     }
 
     return Array[Index];
@@ -2229,8 +2286,13 @@ Return Value:
 
             break;
 
-        case AcpiObjectUninitialized:
         case AcpiObjectInteger:
+
+            ASSERT(IS_ACPI_CONSTANT(Object) == FALSE);
+
+            break;
+
+        case AcpiObjectUninitialized:
         case AcpiObjectDevice:
         case AcpiObjectPowerResource:
         case AcpiObjectProcessor:

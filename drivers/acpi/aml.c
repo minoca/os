@@ -165,6 +165,54 @@ ULONG AcpiDebugExecutionOptions = 0x0;
 LIST_ENTRY AcpiLoadedDefinitionBlockList;
 
 //
+// Store globals for the read-only ACPI objects Zero, One and Ones.
+//
+
+ACPI_OBJECT AcpiZero = {
+   AcpiObjectInteger,
+   0,
+   1,
+   NULL,
+   {NULL, NULL},
+   {NULL, NULL},
+   {NULL, NULL},
+   {{0ULL}}
+};
+
+ACPI_OBJECT AcpiOne = {
+   AcpiObjectInteger,
+   0,
+   1,
+   NULL,
+   {NULL, NULL},
+   {NULL, NULL},
+   {NULL, NULL},
+   {{1ULL}}
+};
+
+ACPI_OBJECT AcpiOnes32 = {
+   AcpiObjectInteger,
+   0,
+   1,
+   NULL,
+   {NULL, NULL},
+   {NULL, NULL},
+   {NULL, NULL},
+   {{0xFFFFFFFFULL}}
+};
+
+ACPI_OBJECT AcpiOnes64 = {
+   AcpiObjectInteger,
+   0,
+   1,
+   NULL,
+   {NULL, NULL},
+   {NULL, NULL},
+   {NULL, NULL},
+   {{0xFFFFFFFFFFFFFFFFULL}}
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 

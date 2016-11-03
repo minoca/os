@@ -307,6 +307,15 @@ extern LIST_ENTRY AcpiDeviceDependencyList;
 extern KSPIN_LOCK AcpiDeviceListLock;
 
 //
+// Store the global ACPI objects for Zero, One, and Ones.
+//
+
+extern ACPI_OBJECT AcpiZero;
+extern ACPI_OBJECT AcpiOne;
+extern ACPI_OBJECT AcpiOnes32;
+extern ACPI_OBJECT AcpiOnes64;
+
+//
 // -------------------------------------------------------- Function Prototypes
 //
 
