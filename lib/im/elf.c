@@ -163,6 +163,7 @@ ImpElfLoadImportsForImage (
 KSTATUS
 ImpElfGatherExportInformation (
     PLOADED_IMAGE Image,
+    PIM_RESOLVE_PLT_ENTRY PltResolver,
     BOOL UseLoadedAddress
     );
 
@@ -866,7 +867,10 @@ Return Value:
     // resolving exports from this image.
     //
 
-    Status = ImpElfGatherExportInformation(Image, FALSE);
+    Status = ImpElfGatherExportInformation(Image,
+                                           ImImportTable->ResolvePltEntry,
+                                           FALSE);
+
     if (!KSUCCESS(Status)) {
         goto LoadImageEnd;
     }
@@ -1120,7 +1124,10 @@ Return Value:
     }
 
     Image->EntryPoint = (PVOID)(UINTN)(ElfHeader->EntryPoint + BaseDifference);
-    Status = ImpElfGatherExportInformation(Image, TRUE);
+    Status = ImpElfGatherExportInformation(Image,
+                                           ImImportTable->ResolvePltEntry,
+                                           TRUE);
+
     if (!KSUCCESS(Status)) {
         goto AddImageEnd;
     }
@@ -1592,6 +1599,7 @@ RelocateImagesEnd:
 VOID
 ImpElfRelocateSelf (
     PIMAGE_BUFFER Buffer,
+    PIM_RESOLVE_PLT_ENTRY PltResolver,
     PLOADED_IMAGE Image
     )
 
@@ -1604,6 +1612,9 @@ Routine Description:
 Arguments:
 
     Buffer - Supplies a pointer to the image buffer.
+
+    PltResolver - Supplies a pointer to the function used to resolve PLT
+        entries.
 
     Image - Supplies a pointer to the zeroed but otherwise uninitialized
         image buffer.
@@ -1649,7 +1660,7 @@ Return Value:
     Image->BaseDifference = Buffer->Data - Image->PreferredLowestAddress;
     Image->LoadedImageBuffer = Buffer->Data;
     Image->ImageContext = &LoadingImage;
-    Status = ImpElfGatherExportInformation(Image, TRUE);
+    Status = ImpElfGatherExportInformation(Image, PltResolver, TRUE);
     if (!KSUCCESS(Status)) {
         goto ElfRelocateSelfEnd;
     }
@@ -2140,6 +2151,7 @@ LoadImportsForImageEnd:
 KSTATUS
 ImpElfGatherExportInformation (
     PLOADED_IMAGE Image,
+    PIM_RESOLVE_PLT_ENTRY PltResolver,
     BOOL UseLoadedAddress
     )
 
@@ -2153,6 +2165,9 @@ Routine Description:
 Arguments:
 
     Image - Supplies a pointer to the loaded image.
+
+    PltResolver - Supplies a pointer to the function used to resolve PLT
+        entries.
 
     UseLoadedAddress - Supplies a boolean indicating whether to use the file
         offset (FALSE) or the final virtual address (TRUE).
@@ -2409,7 +2424,7 @@ Return Value:
         case ELF_DYNAMIC_PLT_GOT:
             Got = Address;
             Got[1] = (UINTN)Image;
-            Got[2] = (UINTN)(ImImportTable->ResolvePltEntry);
+            Got[2] = (UINTN)PltResolver;
             break;
 
         //

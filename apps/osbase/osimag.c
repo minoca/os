@@ -321,7 +321,9 @@ Return Value:
     // can be touched.
     //
 
-    ImRelocateSelf(Environment->StartData->OsLibraryBase);
+    ImRelocateSelf(Environment->StartData->OsLibraryBase,
+                   OspImArchResolvePltEntry);
+
     OsInitializeLibrary(Environment);
     OsImExecutableLoaded = FALSE;
     Status = OspLoadInitialImageList(TRUE);
