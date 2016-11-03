@@ -26,7 +26,11 @@ someone to write the AMD PCNet32 LANCE Ethernet driver.
 Creating a disk:
 A vmdk file (used to specify the hard disk to VirtualBox and VMWare) is just a
 text file. To create a .vmdk disk file from a flat image, you can use the
-following template (between the #### lines).
+following command with Virtual Box
+
+$ VBoxManage internalcommands createrawvmdk -filename pc.vmdk -rawdisk pc.img
+
+it will generate a file that has simular content as follows
 
 ####
 # Disk DescriptorFile
@@ -56,10 +60,5 @@ ddb.uuid.parent="00000000-0000-0000-0000-000000000000"
 ddb.uuid.parentmodification="00000000-0000-0000-0000-000000000000"
 ####
 
-Put the contents of the above template in a file called pc.vmdk in the same
-directory as pc.img (or whichever image you're trying to create a vmdk for).
-
-If your pc.img is not 512MB, change the 1048576 in the line RW 1048576 FLAT ...
-to the number of sectors in your disk. The number of sectors is the size of
-the image in bytes divided by 512. Also change ddb.geometry.cylinders to be
-equal to sectors/16/63.
+createrawvmdk should be able to do the correct geometry and size for your pc.img
+if that did not work, you may want to tweak with the ddb.geometry numbers abit. 
