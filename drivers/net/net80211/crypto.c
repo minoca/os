@@ -1102,12 +1102,12 @@ Return Value:
 
     if (AadLength != 0) {
         if (AadLength <= NET80211_CCM_AAD_MAX_SHORT_LENGTH) {
-            *((PUSHORT)&(BlockIn[0])) = CPU_TO_NETWORK16(AadLength);
+            WRITE_UNALIGNED16(&(BlockIn[0]), CPU_TO_NETWORK16(AadLength));
             BlockIndex = 2;
 
         } else {
-            *((PUSHORT)&(BlockIn[0])) = NET80211_CCM_AAD_LONG_ENCODING;
-            *((PULONG)&(BlockIn[2])) = CPU_TO_NETWORK32(AadLength);
+            WRITE_UNALIGNED16(&(BlockIn[0]), NET80211_CCM_AAD_LONG_ENCODING);
+            WRITE_UNALIGNED32(&(BlockIn[2]), CPU_TO_NETWORK32(AadLength));
             BlockIndex = 6;
         }
 

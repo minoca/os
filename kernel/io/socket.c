@@ -2434,6 +2434,8 @@ Return Value:
 
     ASSERT(Handle != NULL);
 
+    Socket = NULL;
+
     //
     // If bytes were actually completed, return success.
     //
