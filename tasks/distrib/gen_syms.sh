@@ -34,7 +34,7 @@ fi
 
 mkdir "$WORKING"
 OLDPWD="$PWD"
-for arch in x86 x86q armv7 armv6; do
+for arch in x86 x86q armv7; do
     BINROOT=$SRCROOT/${arch}dbg/bin
     if ! [ -d $BINROOT ] ; then
         continue
