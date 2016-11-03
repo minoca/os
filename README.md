@@ -17,7 +17,7 @@ The paragraphs below will get you from a fresh clone to a built image.
 
 ### Environment
 The Minoca OS build environment is keyed off of a few environment variables you'll need to set in order to orient the build system:
- - `SRCROOT` - Contains the absolute path to the base source directory. This respository is expected to be in a directory called `os` inside `SRCROOT`. If the third-party or tools repositories are present, they should be in directories called `third-party` and `tools` respectively underneath `SRCROOT`. For example, if you had checked out this repository into `~/src/os`, then in your shell you'd run `export SRCROOT=~/src`.
+ - `SRCROOT` - Contains the absolute path to the base source directory. This repository is expected to be in a directory called `os` inside `SRCROOT`. If the third-party or tools repositories are present, they should be in directories called `third-party` and `tools` respectively underneath `SRCROOT`. For example, if you had checked out this repository into `~/src/os`, then in your shell you'd run `export SRCROOT=~/src`.
  - `ARCH` - Contains the architecture to build Minoca OS for (aka the target architecture). Valid values are `armv6`, `armv7`, and `x86`.
  - `VARIANT` - Contains the architecture variant, if any. Leave this unset most of the time. Currently the only valid value is `q` for the `x86` architecture, which builds for the Intel Quark.
  - `DEBUG` - Describes whether to build Minoca OS for debugging or release. Valid values are `dbg` for debug or `rel` for release. We always build `dbg`.
@@ -114,7 +114,7 @@ Minoca OS is licensed to the public under the terms of the GNU General Public Li
 ## Contact
  * Email: minoca-dev@googlegroups.com
    * Contact security@minocacorp.com for security related issues.
-   * Contact info@minocacorp.com for private or business inquries.
+   * Contact info@minocacorp.com for private or business inquiries.
  * Website: [http://www.minocacorp.com/](http://www.minocacorp.com)
  * Github: [https://github.com/minoca](https://github.com/minoca)
  * Gitlab: [https://gitlab.com/minoca](https://gitlab.com/minoca)
