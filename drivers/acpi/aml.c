@@ -34,6 +34,7 @@ Environment:
 #include "amlos.h"
 #include "amlops.h"
 #include "namespce.h"
+#include "oprgn.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -528,6 +529,26 @@ Return Value:
                 ReturnObject = ConvertedReturnObject;
 
             } else {
+
+                //
+                // Dereference field units, since no one ever wants to get one
+                // of those back.
+                //
+
+                if (ReturnObject->Type == AcpiObjectFieldUnit) {
+                    Status = AcpipReadFromField(ExecutionContext,
+                                                ReturnObject,
+                                                &ReturnObject);
+
+                    if (!KSUCCESS(Status)) {
+                        RtlDebugPrint("ACPI: Failed to read from field for "
+                                      "return value conversion: %x.\n",
+                                      Status);
+
+                        goto ExecuteMethodEnd;
+                    }
+                }
+
                 AcpipObjectAddReference(ReturnObject);
             }
         }
