@@ -1380,7 +1380,19 @@ Return Value:
     Statement->Reduction = NULL;
     if (Context->ExecuteStatements != FALSE) {
         Source = Statement->Argument[0];
+
+        //
+        // This needs to perform an implicit source converstion into a
+        // DataRefObject (i.e. a DataObject or Reference Object).
+        //
+
+        Status = AcpipConvertToDataReferenceObject(Context, Source, &Source);
+        if (!KSUCCESS(Status)) {
+            goto EvaluateCopyObjectStatementEnd;
+        }
+
         Statement->Reduction = AcpipCopyObject(Source);
+        AcpipObjectReleaseReference(Source);
 
         //
         // If the target is supplied, replace it with the copy.
@@ -8629,6 +8641,131 @@ Return Value:
     AcpipObjectAddReference(ResolvedObject);
     *ResolvedDestination = ResolvedObject;
     return STATUS_SUCCESS;
+}
+
+KSTATUS
+AcpipConvertToDataReferenceObject (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Object,
+    PACPI_OBJECT *ResultObject
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a conversion of an object to a type in the set of
+    DataRefObject types.
+
+Arguments:
+
+    Context - Supplies a pointer to the current execution context.
+
+    Object - Supplies a pointer to the object to convert.
+
+    ResultObject - Supplies a pointer that receives a pointer to the result
+        object after the conversion. If no conversion is necessary, then this
+        may be a pointer to the original object. If a conversion is necessary,
+        then this will be a pointer to a new object. Either way the caller is
+        responsible for releasing one reference on the result object on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PACPI_OBJECT DataReferenceObject;
+    KSTATUS Status;
+
+    //
+    // Get the real object being pointed to here.
+    //
+
+    while (Object->Type == AcpiObjectAlias) {
+        Object = Object->U.Alias.DestinationObject;
+    }
+
+    DataReferenceObject = NULL;
+    Status = STATUS_SUCCESS;
+    switch (Object->Type) {
+
+    //
+    // Convert a field unit to an integer or buffer.
+    //
+
+    case AcpiObjectFieldUnit:
+        Status = AcpipReadFromField(Context, Object, &DataReferenceObject);
+        if (!KSUCCESS(Status)) {
+            goto ConvertToDataReferenceObjectEnd;
+        }
+
+        ASSERT((DataReferenceObject->Type == AcpiObjectInteger) ||
+               (DataReferenceObject->Type == AcpiObjectBuffer));
+
+        break;
+
+    //
+    // Convert a buffer field into an integer or buffer.
+    //
+
+    case AcpiObjectBufferField:
+        Status = AcpipReadFromBufferField(Context,
+                                          Object,
+                                          &DataReferenceObject);
+
+        if (!KSUCCESS(Status)) {
+            goto ConvertToDataReferenceObjectEnd;
+        }
+
+        ASSERT((DataReferenceObject->Type == AcpiObjectInteger) ||
+               (DataReferenceObject->Type == AcpiObjectBuffer));
+
+        break;
+
+    //
+    // Just add a new reference if it is already a DataReferenceObject type.
+    //
+
+    case AcpiObjectInteger:
+    case AcpiObjectString:
+    case AcpiObjectBuffer:
+    case AcpiObjectPackage:
+    case AcpiObjectDdbHandle:
+        DataReferenceObject = Object;
+        AcpipObjectAddReference(DataReferenceObject);
+        break;
+
+    //
+    // Anything else cannot be converted and results in failure.
+    //
+
+    default:
+        RtlDebugPrint("\nACPI: Unable to convert object of type %d to a "
+                      "DataRefObject. Context: 0x%08x, Object 0x%08x.\n",
+                      Object->Type,
+                      Context,
+                      Object);
+
+        ASSERT(FALSE);
+
+        Status = STATUS_NOT_SUPPORTED;
+        break;
+    }
+
+ConvertToDataReferenceObjectEnd:
+    if (!KSUCCESS(Status)) {
+        if (DataReferenceObject != NULL) {
+            AcpipObjectReleaseReference(DataReferenceObject);
+            DataReferenceObject = NULL;
+        }
+    }
+
+    *ResultObject = DataReferenceObject;
+    return Status;
 }
 
 //

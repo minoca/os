@@ -4382,6 +4382,39 @@ Return Value:
 
 --*/
 
+KSTATUS
+AcpipConvertToDataReferenceObject (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Object,
+    PACPI_OBJECT *ResultObject
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a conversion of an object to a type in the set of
+    DataRefObject types.
+
+Arguments:
+
+    Context - Supplies a pointer to the current execution context.
+
+    Object - Supplies a pointer to the object to convert.
+
+    ResultObject - Supplies a pointer that receives a pointer to the result
+        object after the conversion. If no conversion is necessary, then this
+        may be a pointer to the original object. If a conversion is necessary,
+        then this will be a pointer to a new object. Either way the caller is
+        responsible for releasing one reference on the result object on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 PACPI_OBJECT
 AcpipParseNameString (
     PAML_EXECUTION_CONTEXT Context
