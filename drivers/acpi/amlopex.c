@@ -4434,6 +4434,15 @@ Return Value:
     }
 
     //
+    // Run any _INI methods.
+    //
+
+    Status = AcpipRunInitializationMethods(NULL);
+    if (!KSUCCESS(Status)) {
+        goto EvaluateLoadStatementEnd;
+    }
+
+    //
     // The definition block owns the buffer now.
     //
 

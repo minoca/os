@@ -1054,3 +1054,27 @@ Return Value:
 
 --*/
 
+KSTATUS
+AcpipRunInitializationMethods (
+    PACPI_OBJECT RootObject
+    );
+
+/*++
+
+Routine Description:
+
+    This routine runs immediately after a definition block has been loaded. As
+    defined by the ACPI spec, it runs all applicable _INI methods on devices.
+
+Arguments:
+
+    RootObject - Supplies a pointer to the object to start from. If NULL is
+        supplied, the root system bus object \_SB will be used.
+
+Return Value:
+
+    Status code. Failure means something serious went wrong, not just that some
+    device returned a non-functioning status.
+
+--*/
+

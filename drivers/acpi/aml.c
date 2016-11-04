@@ -136,11 +136,6 @@ AcpipCreateExecutingMethodStatement (
     );
 
 KSTATUS
-AcpipRunInitializationMethods (
-    PACPI_OBJECT RootObject
-    );
-
-KSTATUS
 AcpipRunDeviceInitialization (
     PACPI_OBJECT Device,
     PBOOL TraverseDown
@@ -339,15 +334,6 @@ Return Value:
     }
 
     Status = AcpipExecuteAml(ExecutionContext);
-    if (!KSUCCESS(Status)) {
-        goto LoadDefinitionBlockEnd;
-    }
-
-    //
-    // Run any _INI methods.
-    //
-
-    Status = AcpipRunInitializationMethods(NULL);
     if (!KSUCCESS(Status)) {
         goto LoadDefinitionBlockEnd;
     }
@@ -694,6 +680,16 @@ Return Value:
         if (!KSUCCESS(Status)) {
             goto InitializeAmlInterpreterEnd;
         }
+    }
+
+    //
+    // Run any _INI methods. The DSDT may depend on the SSDT, so the _INI
+    // methods cannot be run until after all tables have loaded.
+    //
+
+    Status = AcpipRunInitializationMethods(NULL);
+    if (!KSUCCESS(Status)) {
+        goto InitializeAmlInterpreterEnd;
     }
 
     //
@@ -1188,6 +1184,142 @@ Return Value:
 
     AcpipFreeMemory(Method);
     return;
+}
+
+KSTATUS
+AcpipRunInitializationMethods (
+    PACPI_OBJECT RootObject
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs immediately after a definition block has been loaded. As
+    defined by the ACPI spec, it runs all applicable _INI methods on devices.
+
+Arguments:
+
+    RootObject - Supplies a pointer to the object to start from. If NULL is
+        supplied, the root system bus object \_SB will be used.
+
+Return Value:
+
+    Status code. Failure means something serious went wrong, not just that some
+    device returned a non-functioning status.
+
+--*/
+
+{
+
+    PACPI_OBJECT CurrentObject;
+    PACPI_OBJECT PreviousObject;
+    PACPI_OBJECT PreviousSibling;
+    KSTATUS Status;
+    BOOL TraverseDown;
+
+    if (RootObject == NULL) {
+        RootObject = AcpipGetSystemBusRoot();
+    }
+
+    CurrentObject = RootObject;
+    PreviousObject = CurrentObject->Parent;
+    while (CurrentObject != NULL) {
+
+        //
+        // If this is the first time the node is being visited (via parent or
+        // sibling, but not child), then process it.
+        //
+
+        PreviousSibling = LIST_VALUE(CurrentObject->SiblingListEntry.Previous,
+                                     ACPI_OBJECT,
+                                     SiblingListEntry);
+
+        if ((PreviousObject == CurrentObject->Parent) ||
+            ((CurrentObject->SiblingListEntry.Previous != NULL) &&
+             (PreviousObject == PreviousSibling))) {
+
+            TraverseDown = TRUE;
+            if (CurrentObject->Type == AcpiObjectDevice) {
+                Status = AcpipRunDeviceInitialization(CurrentObject,
+                                                      &TraverseDown);
+
+                if (!KSUCCESS(Status)) {
+                    goto RunInitializationMethodsEnd;
+                }
+            }
+
+            //
+            // Move to the first child if eligible.
+            //
+
+            PreviousObject = CurrentObject;
+            if ((TraverseDown != FALSE) &&
+                (LIST_EMPTY(&(CurrentObject->ChildListHead)) == FALSE)) {
+
+                CurrentObject = LIST_VALUE(CurrentObject->ChildListHead.Next,
+                                           ACPI_OBJECT,
+                                           SiblingListEntry);
+
+            //
+            // Move to the next sibling if possible.
+            //
+
+            } else if ((CurrentObject != RootObject) &&
+                       (CurrentObject->SiblingListEntry.Next !=
+                        &(CurrentObject->Parent->ChildListHead))) {
+
+                CurrentObject = LIST_VALUE(CurrentObject->SiblingListEntry.Next,
+                                           ACPI_OBJECT,
+                                           SiblingListEntry);
+
+            //
+            // There are no children and this is the last sibling, move up to
+            // the parent.
+            //
+
+            } else {
+
+                //
+                // This case only gets hit if the root is the only node in the
+                // tree.
+                //
+
+                if (CurrentObject == RootObject) {
+                    CurrentObject = NULL;
+
+                } else {
+                    CurrentObject = CurrentObject->Parent;
+                }
+            }
+
+        //
+        // If the node is popping up from the previous, attempt to move to
+        // the next sibling, or up the tree.
+        //
+
+        } else {
+            PreviousObject = CurrentObject;
+            if (CurrentObject == RootObject) {
+                CurrentObject = NULL;
+
+            } else if (CurrentObject->SiblingListEntry.Next !=
+                       &(CurrentObject->Parent->ChildListHead)) {
+
+                CurrentObject = LIST_VALUE(CurrentObject->SiblingListEntry.Next,
+                                           ACPI_OBJECT,
+                                           SiblingListEntry);
+
+            } else {
+                CurrentObject = CurrentObject->Parent;
+            }
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+RunInitializationMethodsEnd:
+    return Status;
 }
 
 //
@@ -1751,142 +1883,6 @@ Return Value:
 
 CreateExecutingMethodStatementEnd:
     *NextStatement = Statement;
-    return Status;
-}
-
-KSTATUS
-AcpipRunInitializationMethods (
-    PACPI_OBJECT RootObject
-    )
-
-/*++
-
-Routine Description:
-
-    This routine runs immediately after a definition block has been loaded. As
-    defined by the ACPI spec, it runs all applicable _INI methods on devices.
-
-Arguments:
-
-    RootObject - Supplies a pointer to the object to start from. If NULL is
-        supplied, the root system bus object \_SB will be used.
-
-Return Value:
-
-    Status code. Failure means something serious went wrong, not just that some
-    device returned a non-functioning status.
-
---*/
-
-{
-
-    PACPI_OBJECT CurrentObject;
-    PACPI_OBJECT PreviousObject;
-    PACPI_OBJECT PreviousSibling;
-    KSTATUS Status;
-    BOOL TraverseDown;
-
-    if (RootObject == NULL) {
-        RootObject = AcpipGetSystemBusRoot();
-    }
-
-    CurrentObject = RootObject;
-    PreviousObject = CurrentObject->Parent;
-    while (CurrentObject != NULL) {
-
-        //
-        // If this is the first time the node is being visited (via parent or
-        // sibling, but not child), then process it.
-        //
-
-        PreviousSibling = LIST_VALUE(CurrentObject->SiblingListEntry.Previous,
-                                     ACPI_OBJECT,
-                                     SiblingListEntry);
-
-        if ((PreviousObject == CurrentObject->Parent) ||
-            ((CurrentObject->SiblingListEntry.Previous != NULL) &&
-             (PreviousObject == PreviousSibling))) {
-
-            TraverseDown = TRUE;
-            if (CurrentObject->Type == AcpiObjectDevice) {
-                Status = AcpipRunDeviceInitialization(CurrentObject,
-                                                      &TraverseDown);
-
-                if (!KSUCCESS(Status)) {
-                    goto RunInitializationMethodsEnd;
-                }
-            }
-
-            //
-            // Move to the first child if eligible.
-            //
-
-            PreviousObject = CurrentObject;
-            if ((TraverseDown != FALSE) &&
-                (LIST_EMPTY(&(CurrentObject->ChildListHead)) == FALSE)) {
-
-                CurrentObject = LIST_VALUE(CurrentObject->ChildListHead.Next,
-                                           ACPI_OBJECT,
-                                           SiblingListEntry);
-
-            //
-            // Move to the next sibling if possible.
-            //
-
-            } else if ((CurrentObject != RootObject) &&
-                       (CurrentObject->SiblingListEntry.Next !=
-                        &(CurrentObject->Parent->ChildListHead))) {
-
-                CurrentObject = LIST_VALUE(CurrentObject->SiblingListEntry.Next,
-                                           ACPI_OBJECT,
-                                           SiblingListEntry);
-
-            //
-            // There are no children and this is the last sibling, move up to
-            // the parent.
-            //
-
-            } else {
-
-                //
-                // This case only gets hit if the root is the only node in the
-                // tree.
-                //
-
-                if (CurrentObject == RootObject) {
-                    CurrentObject = NULL;
-
-                } else {
-                    CurrentObject = CurrentObject->Parent;
-                }
-            }
-
-        //
-        // If the node is popping up from the previous, attempt to move to
-        // the next sibling, or up the tree.
-        //
-
-        } else {
-            PreviousObject = CurrentObject;
-            if (CurrentObject == RootObject) {
-                CurrentObject = NULL;
-
-            } else if (CurrentObject->SiblingListEntry.Next !=
-                       &(CurrentObject->Parent->ChildListHead)) {
-
-                CurrentObject = LIST_VALUE(CurrentObject->SiblingListEntry.Next,
-                                           ACPI_OBJECT,
-                                           SiblingListEntry);
-
-            } else {
-                CurrentObject = CurrentObject->Parent;
-            }
-        }
-    }
-
-    Status = STATUS_SUCCESS;
-
-RunInitializationMethodsEnd:
     return Status;
 }
 
