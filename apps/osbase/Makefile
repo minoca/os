@@ -78,8 +78,5 @@ $(OBJROOT)/os/apps/osbase/urtl/urtl.a: urtl
 
 postbuild:
 	@mkdir -p $(BINROOT)/skel/lib
-	@if test -d $(BINROOT)/skel/lib && \
-	    test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/lib/$(BINARY); then \
-	    cp $(BINROOT)/$(BINARY) $(BINROOT)/skel/lib/ ; \
-	fi
+	@cp -p $(BINROOT)/$(BINARY) $(BINROOT)/skel/lib
 

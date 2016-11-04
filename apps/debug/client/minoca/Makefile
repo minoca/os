@@ -48,7 +48,5 @@ include $(SRCROOT)/os/minoca.mk
 
 postbuild:
 	@mkdir -p $(BINROOT)/skel/bin
-	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/$(BINARY); then \
-	    $(STRIP) -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY); \
-	fi
+	@$(STRIP) -p -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY)
 

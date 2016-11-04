@@ -36,7 +36,5 @@ include $(SRCROOT)/os/minoca.mk
 
 postbuild:
 	@mkdir -p $(BINROOT)/chalk1
-	@if test $(BINARY) -nt $(BINROOT)/chalk1/$(BINARY); then \
-	    cp $(BINARY) $(BINROOT)/chalk1/$(BINARY); \
-	fi
+	@cp -p $(BINARY) $(BINROOT)/chalk1/$(BINARY)
 

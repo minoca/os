@@ -61,11 +61,6 @@ include $(SRCROOT)/os/minoca.mk
 
 postbuild:
 	@mkdir -p $(BINROOT)/skel/bin
-	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/$(BINARY); then \
-	    $(STRIP) -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY); \
-	fi
-	@if ! [ -f "$(BINROOT)/install.ck" ] || \
-	   [ $(SRCDIR)/install.ck -nt $(BINROOT)/install.ck ]; then \
-	    cp -pv $(SRCDIR)/install.ck $(BINROOT)/install.ck ; \
-	fi
+	@$(STRIP) -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY)
+	@cp -p $(SRCDIR)/install.ck $(BINROOT)/install.ck
 
