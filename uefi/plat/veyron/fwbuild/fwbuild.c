@@ -456,6 +456,10 @@ mainEnd:
         fclose(FirmwareImage);
     }
 
+    if (KeyBlockFile != NULL) {
+        fclose(KeyBlockFile);
+    }
+
     if (FirmwareImageBuffer != NULL) {
         free(FirmwareImageBuffer);
     }

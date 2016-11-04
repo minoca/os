@@ -244,6 +244,7 @@ Return Value:
 
                     PathCopy = strdup(Destination->Path);
                     if (PathCopy == NULL) {
+                        free(IoHandle);
                         return NULL;
                     }
 

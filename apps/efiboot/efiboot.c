@@ -553,7 +553,8 @@ Return Value:
     if ((VariableDataSize % sizeof(UINT16)) != 0) {
         fprintf(stderr,
                 "efiboot: Warning: BootOrder variable size was %d, not a "
-                "multiple of 2!\n");
+                "multiple of 2!\n",
+                VariableDataSize);
     }
 
     Count = VariableDataSize / sizeof(UINT16);

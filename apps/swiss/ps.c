@@ -1545,6 +1545,9 @@ Return Value:
     case PsDataEffectiveUserIdentifier:
         Result = SwGetUserNameFromId(Information->EffectiveUserId, &StringData);
         if (Result != 0) {
+
+            assert(StringData == NULL);
+
             DataAvailable = FALSE;
             break;
         }
@@ -1555,6 +1558,9 @@ Return Value:
     case PsDataRealUserIdentifier:
         Result = SwGetUserNameFromId(Information->RealUserId, &StringData);
         if (Result != 0) {
+
+            assert(StringData == NULL);
+
             DataAvailable = FALSE;
             break;
         }
@@ -1565,6 +1571,9 @@ Return Value:
     case PsDataRealGroupIdentifier:
         Result = SwGetGroupNameFromId(Information->RealGroupId, &StringData);
         if (Result != 0) {
+
+            assert(StringData == NULL);
+
             DataAvailable = FALSE;
             break;
         }
@@ -1577,6 +1586,9 @@ Return Value:
                                       &StringData);
 
         if (Result != 0) {
+
+            assert(StringData == NULL);
+
             DataAvailable = FALSE;
             break;
         }
@@ -2131,6 +2143,9 @@ Return Value:
                                                       &GroupName);
 
                             if (Result != 0) {
+
+                                assert(GroupName == NULL);
+
                                 continue;
                             }
                         }
@@ -2237,6 +2252,9 @@ Return Value:
                                                   &UserName);
 
                             if (Result != 0) {
+
+                                assert(UserName == NULL);
+
                                 continue;
                             }
                         }
@@ -2283,6 +2301,9 @@ Return Value:
                                                        &UserName);
 
                             if (Result != 0) {
+
+                                assert(UserName == NULL);
+
                                 continue;
                             }
                         }

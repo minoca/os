@@ -1006,6 +1006,7 @@ Return Value:
         Count += 1;
     }
 
+    va_end(ArgumentList);
     Status = ChalkExecuteFunction(Interpreter, Function, List, ReturnValue);
 
 CExecuteFunctionEnd:

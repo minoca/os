@@ -2130,8 +2130,16 @@ Return Value:
         if (((Context->Flags & LS_OPTION_LONG_FORMAT) != 0) &&
             ((Context->Flags & LS_OPTION_PRINT_USER_GROUP_NUMBERS) == 0)) {
 
-            SwGetUserNameFromId(Stat->st_uid, &(NewFile->OwnerName));
-            SwGetGroupNameFromId(Stat->st_gid, &(NewFile->GroupName));
+            if (SwGetUserNameFromId(Stat->st_uid, &(NewFile->OwnerName)) != 0) {
+
+                assert(NewFile->OwnerName == NULL);
+            }
+
+            if (SwGetGroupNameFromId(Stat->st_gid, &(NewFile->GroupName)) !=
+                0) {
+
+                assert(NewFile->GroupName == NULL);
+            }
         }
 
     } else {
