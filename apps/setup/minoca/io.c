@@ -608,19 +608,12 @@ Return Value:
     PVOID NewBuffer;
     size_t NewCapacity;
     INT Result;
-    struct dirent *ResultPointer;
     size_t UsedSize;
 
     Array = NULL;
     ArrayCapacity = 0;
     Directory = NULL;
     UsedSize = 0;
-    DirectoryEntry = malloc(sizeof(struct dirent));
-    if (DirectoryEntry == NULL) {
-        Result = ENOMEM;
-        goto OsEnumerateDirectoryEnd;
-    }
-
     Directory = opendir(DirectoryPath);
     if (Directory == NULL) {
         Result = errno;
@@ -632,12 +625,14 @@ Return Value:
     //
 
     while (TRUE) {
-        Result = readdir_r(Directory, DirectoryEntry, &ResultPointer);
-        if (Result != 0) {
-            goto OsEnumerateDirectoryEnd;
-        }
+        errno = 0;
+        DirectoryEntry = readdir(Directory);
+        if (DirectoryEntry == NULL) {
+            if (errno != 0) {
+                Result = errno;
+                goto OsEnumerateDirectoryEnd;
+            }
 
-        if (ResultPointer == NULL) {
             NameSize = 1;
 
         } else {
@@ -678,7 +673,7 @@ Return Value:
         // Copy the entry (or an empty file if this is the end).
         //
 
-        if (ResultPointer == NULL) {
+        if (DirectoryEntry == NULL) {
             strcpy(Array + UsedSize, "");
             UsedSize += 1;
             break;
@@ -692,10 +687,6 @@ Return Value:
     Result = 0;
 
 OsEnumerateDirectoryEnd:
-    if (DirectoryEntry != NULL) {
-        free(DirectoryEntry);
-    }
-
     if (Directory != NULL) {
         closedir(Directory);
     }

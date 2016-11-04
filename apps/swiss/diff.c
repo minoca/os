@@ -1282,8 +1282,7 @@ Return Value:
 
     PDIFF_DIRECTORY Directory;
     DIR *DirectoryFile;
-    struct dirent Entry;
-    struct dirent *EntryPointer;
+    struct dirent *Entry;
     PVOID NewBuffer;
     UINTN NewCapacity;
     PDIFF_FILE NewFile;
@@ -1311,18 +1310,20 @@ Return Value:
     }
 
     while (TRUE) {
-        Status = SwReadDirectory(DirectoryFile, &Entry, &EntryPointer);
-        if (Status != 0) {
-            SwPrintError(Status, Path, "Unable to read directory");
-            goto GetDirectoryListingEnd;
-        }
+        errno = 0;
+        Entry = readdir(DirectoryFile);
+        if (Entry == NULL) {
+            Status = errno;
+            if (Status != 0) {
+                SwPrintError(Status, Path, "Unable to read directory");
+                goto GetDirectoryListingEnd;
+            }
 
-        if (EntryPointer == NULL) {
             break;
         }
 
-        if ((strcmp(Entry.d_name, ".") == 0) ||
-            (strcmp(Entry.d_name, "..") == 0)) {
+        if ((strcmp(Entry->d_name, ".") == 0) ||
+            (strcmp(Entry->d_name, "..") == 0)) {
 
             continue;
         }
@@ -1331,7 +1332,7 @@ Return Value:
         // Skip the file if it's excluded.
         //
 
-        if (DiffIsFileNameExcluded(Context, Entry.d_name) != 0) {
+        if (DiffIsFileNameExcluded(Context, Entry->d_name) != 0) {
             continue;
         }
 
@@ -1361,7 +1362,7 @@ Return Value:
         // Create the file and add it to the array.
         //
 
-        Status = DiffCreateFile(Context, Path, Entry.d_name, &NewFile);
+        Status = DiffCreateFile(Context, Path, Entry->d_name, &NewFile);
         if (Status != 0) {
             goto GetDirectoryListingEnd;
         }

@@ -743,8 +743,7 @@ Return Value:
     PSTR AppendedPath;
     ULONG AppendedPathSize;
     DIR *Directory;
-    struct dirent Entry;
-    struct dirent *EntryPointer;
+    struct dirent *Entry;
     BOOL FollowLinks;
     BOOL Prune;
     INT Result;
@@ -848,26 +847,28 @@ Return Value:
     //
 
     while (TRUE) {
-        Result = SwReadDirectory(Directory, &Entry, &EntryPointer);
-        if (Result != 0) {
-            SwPrintError(Result, Path, "Unable to read directory");
-            goto FindExecuteSearchEnd;
-        }
+        errno = 0;
+        Entry = readdir(Directory);
+        if (Entry == NULL) {
+            Result = errno;
+            if (Result != 0) {
+                SwPrintError(Result, Path, "Unable to read directory");
+                goto FindExecuteSearchEnd;
+            }
 
-        if (EntryPointer == NULL) {
             break;
         }
 
-        if ((strcmp(Entry.d_name, ".") == 0) ||
-            (strcmp(Entry.d_name, "..") == 0)) {
+        if ((strcmp(Entry->d_name, ".") == 0) ||
+            (strcmp(Entry->d_name, "..") == 0)) {
 
             continue;
         }
 
         Result = SwAppendPath(Path,
                               strlen(Path) + 1,
-                              Entry.d_name,
-                              strlen(Entry.d_name) + 1,
+                              Entry->d_name,
+                              strlen(Entry->d_name) + 1,
                               &AppendedPath,
                               &AppendedPathSize);
 

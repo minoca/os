@@ -1217,9 +1217,8 @@ Return Value:
 
     DIR *Directory;
     size_t DirectoryLength;
-    struct dirent Entry;
+    struct dirent *Entry;
     size_t EntryLength;
-    struct dirent *EntryPointer;
     size_t FileNameLength;
     PSTR FullPath;
     PSTR *MatchArray;
@@ -1245,23 +1244,25 @@ Return Value:
     //
 
     while (TRUE) {
-        Result = SwReadDirectory(Directory, &Entry, &EntryPointer);
-        if (Result != 0) {
-            goto GetFileMatchesInDirectoryEnd;
-        }
+        errno = 0;
+        Entry = readdir(Directory);
+        if (Entry == NULL) {
+            Result = errno;
+            if (Result != 0) {
+                goto GetFileMatchesInDirectoryEnd;
+            }
 
-        if (EntryPointer == NULL) {
             break;
         }
 
-        if ((strcmp(Entry.d_name, ".") == 0) ||
-            (strcmp(Entry.d_name, "..") == 0)) {
+        if ((strcmp(Entry->d_name, ".") == 0) ||
+            (strcmp(Entry->d_name, "..") == 0)) {
 
             continue;
         }
 
-        if (strncasecmp(FileName, Entry.d_name, FileNameLength) == 0) {
-            EntryLength = strlen(Entry.d_name);
+        if (strncasecmp(FileName, Entry->d_name, FileNameLength) == 0) {
+            EntryLength = strlen(Entry->d_name);
             FullPath = malloc(DirectoryLength + EntryLength + 3);
             if (FullPath == NULL) {
                 continue;
@@ -1276,7 +1277,7 @@ Return Value:
                 SlashSize = 1;
             }
 
-            strcpy(FullPath + DirectoryLength + SlashSize, Entry.d_name);
+            strcpy(FullPath + DirectoryLength + SlashSize, Entry->d_name);
             Result = SwStat(FullPath, TRUE, &Stat);
             if ((Result == 0) && (S_ISDIR(Stat.st_mode))) {
                 strcpy(FullPath + DirectoryLength + SlashSize + EntryLength,

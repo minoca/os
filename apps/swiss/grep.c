@@ -1129,8 +1129,7 @@ Return Value:
     PSTR AppendedPath;
     ULONG AppendedPathSize;
     DIR *Directory;
-    struct dirent Entry;
-    struct dirent *EntryPointer;
+    struct dirent *Entry;
     PGREP_INPUT InputEntry;
     struct stat Stat;
     INT Status;
@@ -1173,26 +1172,28 @@ Return Value:
         //
 
         while (TRUE) {
-            Status = SwReadDirectory(Directory, &Entry, &EntryPointer);
-            if (Status != 0) {
-                SwPrintError(Status, Path, "Unable to read directory");
-                goto AddInputFileEnd;
-            }
+            errno = 0;
+            Entry = readdir(Directory);
+            if (Entry == NULL) {
+                Status = errno;
+                if (Status != 0) {
+                    SwPrintError(Status, Path, "Unable to read directory");
+                    goto AddInputFileEnd;
+                }
 
-            if (EntryPointer == NULL) {
                 break;
             }
 
-            if ((strcmp(Entry.d_name, ".") == 0) ||
-                (strcmp(Entry.d_name, "..") == 0)) {
+            if ((strcmp(Entry->d_name, ".") == 0) ||
+                (strcmp(Entry->d_name, "..") == 0)) {
 
                 continue;
             }
 
             Status = SwAppendPath(Path,
                                   strlen(Path) + 1,
-                                  Entry.d_name,
-                                  strlen(Entry.d_name) + 1,
+                                  Entry->d_name,
+                                  strlen(Entry->d_name) + 1,
                                   &AppendedPath,
                                   &AppendedPathSize);
 
