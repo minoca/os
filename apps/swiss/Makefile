@@ -63,9 +63,7 @@ include $(SRCROOT)/os/minoca.mk
 
 postbuild:
 	@mkdir -p $(BINROOT)/skel/bin
-	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/sh; then \
-	    $(STRIP) -o $(BINROOT)/skel/bin/sh $(BINROOT)/$(BINARY); \
-	fi
+	@$(STRIP) -p -o $(BINROOT)/skel/bin/sh $(BINROOT)/$(BINARY)
 
 ##
 ## Generate the version header for the commit information.
