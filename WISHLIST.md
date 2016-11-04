@@ -67,6 +67,7 @@ Questions or patches can be submitted to minoca-dev@googlegroups.com. Good luck!
  - x86-64 architecture port
  - AARCH64 architecture port
  - CD boot
+ - Accelerated graphics
 
 Below is a list of platforms that might be interesting to port to.
 ### Interesting Platform Ports
