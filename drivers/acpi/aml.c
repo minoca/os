@@ -595,9 +595,10 @@ Return Value:
 
                         goto ExecuteMethodEnd;
                     }
-                }
 
-                AcpipObjectAddReference(ReturnObject);
+                } else {
+                    AcpipObjectAddReference(ReturnObject);
+                }
             }
         }
     }
