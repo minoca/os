@@ -32,6 +32,8 @@ Run `make` to build the OS for the particular architecture you've supplied. Para
 
 Object files are generated in `$SRCROOT/$ARCH$VARIANT$DEBUG/obj/os`. You can run `make clean`, or simply delete this directory, to cause the os repository to completely rebuild. Alternatively, you can run `make wipe` to delete all generated files, including the third-party tools you built or downloaded. Running `make wipe` simply deletes `$SRCROOT/$ARCH$VARIANT$DEBUG/`. We usually stick to `make clean` since `make wipe` requires a complete rebuild of the toolchain.
 
+A note for macOS users: We've managed to build successfully using both GCC from XCode 8 (really clang) and Homebrew GCC, both using the 10.12 SDK. Some users have reported that they need to export `SDKROOT=$(xcrun --show-sdk-path)` to build properly.
+
 ### Running
 To boot your built images, you can write the appropriate image for the platform you're trying to boot to a USB flash drive or hard disk. On Windows, you can use the Win32DiskImager tool (included in the [tools](https://gitlab.com/minoca/tools) repository under win32/Win32DiskImager). You can also use the msetup tool to build custom images. If you use the msetup tool to install Minoca OS onto a partition of a disk containing other partitions that you care about (such as on the same machine you're building from), we highly recommend making a complete backup of your disk. Minoca OS is still new, and we wouldn't want a bad bug to wipe out all your data.
 
