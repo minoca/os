@@ -54,6 +54,12 @@ Author:
 #define MAX_AML_LOCAL_COUNT 8
 
 //
+// Define an invalid AML local index constant.
+//
+
+#define AML_INVALID_LOCAL_INDEX (ULONG)-1
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -705,6 +711,9 @@ Members:
     SavedIndentationLevel - Stores the indentation level immediately before
         this method was executed.
 
+    LastLocalIndex - Stores an index into the local variable array of the last
+        local statement evaluated.
+
     SavedCurrentScope - Stores the current scope immeidately before this
         function was called.
 
@@ -724,6 +733,7 @@ typedef struct _AML_METHOD_EXECUTION_CONTEXT {
     ULONG SavedAmlCodeSize;
     ULONG SavedCurrentOffset;
     ULONG SavedIndentationLevel;
+    ULONG LastLocalIndex;
     PACPI_OBJECT SavedCurrentScope;
     PACPI_OBJECT LocalVariable[MAX_AML_LOCAL_COUNT];
     PACPI_OBJECT Argument[MAX_AML_METHOD_ARGUMENT_COUNT];

@@ -4351,6 +4351,37 @@ Return Value:
 
 --*/
 
+KSTATUS
+AcpipResolveStoreDestination (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Destination,
+    PACPI_OBJECT *ResolvedDestination
+    );
+
+/*++
+
+Routine Description:
+
+    This routine resolves a store destination to the proper ACPI object based
+    on its type and the statement type.
+
+Arguments:
+
+    Context - Supplies a pointer to the current AML execution context.
+
+    Destination - Supplies a pointer to the original store destination object.
+
+    ResolvedDestination - Supplies a pointer that receives a pointer to the
+        resolved destination object. This may return a pointer to the
+        original destination, but with an extra reference. The caller is always
+        responsible for releasing a reference on this object.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 PACPI_OBJECT
 AcpipParseNameString (
     PAML_EXECUTION_CONTEXT Context

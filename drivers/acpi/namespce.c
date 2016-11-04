@@ -1286,18 +1286,26 @@ Return Value:
 {
 
     BOOL NewObjectCreated;
+    PACPI_OBJECT ResolvedDestination;
     ULONG Size;
     KSTATUS Status;
 
     NewObjectCreated = FALSE;
 
     //
-    // Storing to an alias actually writes to its destination.
+    // Resolve to the correct destination.
     //
 
-    while (Destination->Type == AcpiObjectAlias) {
-        Destination = Destination->U.Alias.DestinationObject;
+    ResolvedDestination = NULL;
+    Status = AcpipResolveStoreDestination(Context,
+                                          Destination,
+                                          &ResolvedDestination);
+
+    if (!KSUCCESS(Status)) {
+        goto PerformStoreOperationEnd;
     }
+
+    Destination = ResolvedDestination;
 
     //
     // The ACPI spec states that storing to constants is fatal, but also states
@@ -1499,6 +1507,10 @@ Return Value:
 PerformStoreOperationEnd:
     if (NewObjectCreated != FALSE) {
         AcpipObjectReleaseReference(Source);
+    }
+
+    if (ResolvedDestination != NULL) {
+        AcpipObjectReleaseReference(ResolvedDestination);
     }
 
     return Status;

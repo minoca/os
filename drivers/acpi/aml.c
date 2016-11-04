@@ -1033,6 +1033,7 @@ Return Value:
     NewMethod->SavedCurrentOffset = Context->CurrentOffset;
     NewMethod->SavedIndentationLevel = Context->IndentationLevel;
     NewMethod->SavedCurrentScope = Context->CurrentScope;
+    NewMethod->LastLocalIndex = AML_INVALID_LOCAL_INDEX;
     if (ArgumentCount != 0) {
         for (ArgumentIndex = 0;
              ArgumentIndex < ArgumentCount;
@@ -1630,6 +1631,17 @@ Return Value:
         ASSERT(FALSE);
 
         goto EvaluateStatementEnd;
+    }
+
+    //
+    // If the statement is not a local type, then the local index needs to be
+    // cleared. It should not persist to the next statement.
+    //
+
+    if ((Statement->Type != AmlStatementLocal) &&
+        (Context->CurrentMethod != NULL)) {
+
+        Context->CurrentMethod->LastLocalIndex = AML_INVALID_LOCAL_INDEX;
     }
 
 EvaluateStatementEnd:
