@@ -737,6 +737,7 @@ Return Value:
     UCHAR Byte;
     PI8042_DEVICE Device;
     INTERRUPT_STATUS InterruptStatus;
+    UCHAR Status;
     ULONG WriteIndex;
 
     Device = (PI8042_DEVICE)Context;
@@ -760,10 +761,25 @@ Return Value:
 
         KeAcquireSpinLock(&(Device->InterruptLock));
         WriteIndex = Device->WriteIndex;
-        while ((READ_STATUS_REGISTER(Device) &
-                I8042_STATUS_OUTPUT_BUFFER_FULL) != 0) {
+        while (TRUE) {
+            Status = READ_STATUS_REGISTER(Device);
+            if ((Status & I8042_STATUS_OUTPUT_BUFFER_FULL) == 0) {
+                break;
+            }
 
             Byte = READ_DATA_REGISTER(Device);
+
+            //
+            // Toss out all mouse data. Mice are not yet supported.
+            //
+
+            if ((Status & I8042_STATUS_DATA_FROM_MOUSE) != 0) {
+
+                ASSERT(Device->IsMouse == FALSE);
+
+                continue;
+            }
+
             if (((WriteIndex + 1) % I8042_BUFFER_SIZE) != Device->ReadIndex) {
                 Device->DataBuffer[WriteIndex] = Byte;
 
