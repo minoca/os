@@ -3415,6 +3415,7 @@ Return Value:
         Result = DbgpKdSendBytes(&SynchronizeByte, 1);
         if (Result == FALSE) {
             Status = EPIPE;
+            Retries -= 1;
             continue;
         }
 

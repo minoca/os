@@ -544,6 +544,42 @@ Return Value:
     return recv(Socket, Buffer, Length, 0);
 }
 
+int
+DbgrSocketPeek (
+    int Socket,
+    void *Buffer,
+    int Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine peeks at data from a received socket, but does not remove it
+    from the queue.
+
+Arguments:
+
+    Socket - Supplies the file descriptor of the socket to receive data from.
+
+    Buffer - Supplies a pointer to a buffer where the peeked data will be
+        returned.
+
+    Length - Supplies the length of the data buffer, in bytes.
+
+Return Value:
+
+    Returns the number of bytes received on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+{
+
+    return recvfrom(Socket, Buffer, Length, MSG_PEEK, NULL, NULL);
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
