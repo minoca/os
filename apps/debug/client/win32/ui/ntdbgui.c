@@ -221,6 +221,18 @@ Members:
     MainPaneXPosition - Stores the X position of the divider between the two
         main panes.
 
+    MainPainXPositionWidth - Stores the width of the main pane at the time the
+        X position was stored. The X position is used to create a percentage of
+        the current width and is only relevant if the old width is saved.
+
+    ProfilerPaneYPosition - Stores the Y position of the diveder between the
+        profiler and source code.
+
+    ProfilerPaneYPositionHeight - Store the height of the left pain at the time
+        the Y position for the profiler was stored. The Y position is used to
+        create a percentage of the current height and is only relevant if the
+        old height is stored.
+
 --*/
 
 typedef struct _DEBUGGER_UI_PREFERENCES {
@@ -230,6 +242,9 @@ typedef struct _DEBUGGER_UI_PREFERENCES {
     DWORD WindowWidth;
     DWORD WindowHeight;
     DWORD MainPaneXPosition;
+    DWORD MainPaneXPositionWidth;
+    DWORD ProfilerPaneYPosition;
+    DWORD ProfilerPaneYPositionHeight;
 } DEBUGGER_UI_PREFERENCES, *PDEBUGGER_UI_PREFERENCES;
 
 //
@@ -555,6 +570,11 @@ GetUlongValue (
     );
 
 VOID
+UiGetWindowPreferences (
+    HWND Dialog
+    );
+
+VOID
 UiLoadPreferences (
     HWND Dialog
     );
@@ -758,10 +778,10 @@ BOOL SortAscending = TRUE;
 BOOL WindowSizesInitialized = FALSE;
 BOOL ResizingMainPanes = FALSE;
 LONG MainPaneXPosition;
-LONG MainPaneXPositionDialogWidth;
+LONG MainPaneXPositionWidth;
 BOOL ResizingProfilerPane = FALSE;
 LONG ProfilerPaneYPosition;
-LONG ProfilerPaneYPositionDialogHeight;
+LONG ProfilerPaneYPositionHeight;
 LONG ProfilerPaneCurrentYPosition;
 
 //
@@ -2226,13 +2246,13 @@ Return Value:
         if (ResizingMainPanes != FALSE) {
             NewDivider = (SHORT)Point.x;
             MainPaneXPosition = NewDivider;
-            MainPaneXPositionDialogWidth = DialogRect.right;
+            MainPaneXPositionWidth = DialogRect.right;
             HandleResize(DialogHandle);
 
         } else if (ResizingProfilerPane != FALSE) {
             NewDivider = (SHORT)Point.y;
             ProfilerPaneYPosition = NewDivider;
-            ProfilerPaneYPositionDialogHeight = DialogRect.bottom;
+            ProfilerPaneYPositionHeight = DialogRect.bottom;
             HandleResize(DialogHandle);
         }
 
@@ -2263,16 +2283,6 @@ Return Value:
     //
 
     case WM_SIZE:
-
-        //
-        // Save the state unless this is a minimize or maximize. Restarting
-        // the debugger in the minimized or maximized state is not good design.
-        //
-
-        if ((WParam != SIZE_MINIMIZED) && (WParam != SIZE_MAXIMIZED)) {
-            GetWindowRect(DialogHandle, &CurrentWindowRect);
-        }
-
         HandleResize(DialogHandle);
         Result = TRUE;
         break;
@@ -2283,7 +2293,7 @@ Return Value:
     //
 
     case WM_EXITSIZEMOVE:
-        GetWindowRect(DialogHandle, &CurrentWindowRect);
+        UiGetWindowPreferences(DialogHandle);
         Result = TRUE;
         break;
 
@@ -3422,9 +3432,9 @@ Return Value:
 
     if (WindowSizesInitialized == FALSE) {
         MainPaneXPosition = (DialogWidth / 2) - (UI_BORDER / 2);
-        MainPaneXPositionDialogWidth = DialogWidth;
+        MainPaneXPositionWidth = DialogWidth;
         ProfilerPaneYPosition = (DialogHeight / 2) + (UI_BORDER / 2);
-        ProfilerPaneYPositionDialogHeight = DialogHeight;
+        ProfilerPaneYPositionHeight = DialogHeight;
         WindowSizesInitialized = TRUE;
     }
 
@@ -3451,10 +3461,10 @@ Return Value:
     }
 
     PaneXPosition = (AdjustedMainPaneXPosition * DialogWidth) /
-                    MainPaneXPositionDialogWidth;
+                    MainPaneXPositionWidth;
 
     ProfilerYPosition = (AdjustedProfilerPaneYPosition * DialogHeight) /
-                         ProfilerPaneYPositionDialogHeight;
+                         ProfilerPaneYPositionHeight;
 
     ProfilerPaneCurrentYPosition = ProfilerYPosition;
 
@@ -6463,6 +6473,46 @@ Return Value:
 }
 
 VOID
+UiGetWindowPreferences (
+    HWND Dialog
+    )
+
+/*++
+
+Routine Description:
+
+    This routine saves the given window's current rect information so that it
+    can be written to the preferences file on exit.
+
+Arguments:
+
+    Dialog - Supplies the dialog window handle.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    RECT WindowRect;
+
+    //
+    // Only save the window rect if it has a non-zero height and width.
+    //
+
+    GetWindowRect(Dialog, &WindowRect);
+    if ((WindowRect.left != WindowRect.right) &&
+        (WindowRect.top != WindowRect.bottom)) {
+
+        memcpy(&CurrentWindowRect, &WindowRect, sizeof(RECT));
+    }
+
+    return;
+}
+
+VOID
 UiLoadPreferences (
     HWND Dialog
     )
@@ -6497,21 +6547,27 @@ Return Value:
         return;
     }
 
-    MainPaneXPosition = Preferences.MainPaneXPosition;
-    MainPaneXPositionDialogWidth = Preferences.WindowWidth;
-    SetWindowPos(Dialog,
-                 HWND_TOP,
-                 Preferences.WindowX,
-                 Preferences.WindowY,
-                 Preferences.WindowWidth,
-                 Preferences.WindowHeight,
-                 0);
+    if ((Preferences.WindowWidth != 0) && (Preferences.WindowHeight != 0)) {
+        MainPaneXPosition = Preferences.MainPaneXPosition;
+        MainPaneXPositionWidth = Preferences.MainPaneXPositionWidth;
+        ProfilerPaneYPosition = Preferences.ProfilerPaneYPosition;
+        ProfilerPaneYPositionHeight = Preferences.ProfilerPaneYPositionHeight;
+        SetWindowPos(Dialog,
+                     HWND_TOP,
+                     Preferences.WindowX,
+                     Preferences.WindowY,
+                     Preferences.WindowWidth,
+                     Preferences.WindowHeight,
+                     0);
+
+        WindowSizesInitialized = TRUE;
+    }
 
     //
     // Save the initial UI preferences. In case the window is never moved.
     //
 
-    GetWindowRect(Dialog, &CurrentWindowRect);
+    UiGetWindowPreferences(Dialog);
     return;
 }
 
@@ -6548,6 +6604,9 @@ Return Value:
     Preferences.WindowWidth = CurrentWindowRect.right - CurrentWindowRect.left;
     Preferences.WindowHeight = CurrentWindowRect.bottom - CurrentWindowRect.top;
     Preferences.MainPaneXPosition = MainPaneXPosition;
+    Preferences.MainPaneXPositionWidth = MainPaneXPositionWidth;
+    Preferences.ProfilerPaneYPosition = ProfilerPaneYPosition;
+    Preferences.ProfilerPaneYPositionHeight = ProfilerPaneYPositionHeight;
     UiWritePreferences(&Preferences);
     return;
 }
