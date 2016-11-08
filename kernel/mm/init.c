@@ -507,7 +507,7 @@ Return Value:
 
     PMEMORY_DESCRIPTOR CurrentDescriptor;
     ULONG DescriptorIndex;
-    ULONG PageCount;
+    ULONGLONG PageCount;
     ULONG PageShift;
     PHYSICAL_ADDRESS PhysicalAddress;
     ULONG PhysicalDescriptorCount;
@@ -639,10 +639,15 @@ Return Value:
         CurrentDescriptor = &(PhysicalDescriptors[DescriptorIndex]);
         PhysicalAddress = CurrentDescriptor->BaseAddress;
         PageCount = CurrentDescriptor->Size >> PageShift;
+        while (PageCount > MAX_UINTN) {
+            MmFreePhysicalPages(PhysicalAddress, MAX_UINTN);
+            PhysicalAddress += MAX_UINTN << PageShift;
+            PageCount -= MAX_UINTN;
+        }
 
-        ASSERT((PageCount << PageShift) == CurrentDescriptor->Size);
-
-        MmFreePhysicalPages(PhysicalAddress, PageCount);
+        if (PageCount != 0) {
+            MmFreePhysicalPages(PhysicalAddress, PageCount);
+        }
     }
 
     Status = STATUS_SUCCESS;
