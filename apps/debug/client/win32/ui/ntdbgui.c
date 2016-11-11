@@ -124,7 +124,7 @@ Environment:
 // Define the current debugger UI preferences version number.
 //
 
-#define DEBUGGER_UI_PREFERENCES_VERSION 1
+#define DEBUGGER_UI_PREFERENCES_VERSION 2
 
 //
 // ------------------------------------------------------ Data Type Definitions
