@@ -37,7 +37,7 @@ Author:
 #define E1000_READ(_Controller, _Register) \
     HlReadRegister32((PUCHAR)(_Controller)->ControllerBase + (_Register))
 
-#define E1000_WRITE(_Controller, _Register, _Value)                      \
+#define E1000_WRITE(_Controller, _Register, _Value)                        \
     HlWriteRegister32((PUCHAR)(_Controller)->ControllerBase + (_Register), \
                       (_Value))
 
@@ -610,7 +610,7 @@ Author:
 //
 
 typedef enum _E1000_REGISTER {
-    E1000DeviceControl = 0x0004,
+    E1000DeviceControl = 0x0000,
     E1000DeviceStatus = 0x0008,
     E1000EepromControl = 0x0010,
     E1000EepromRead = 0x0014,
@@ -896,7 +896,7 @@ Members:
 
     TxPacketList - Stores a list of network packets waiting to be sent.
 
-    LinkActive - Stores a boolean indicating if there is an active network link.
+    LinkSpeed - Stores the current link speed. If 0, the link is not active.
 
     LinkCheckTimer - Stores a pointer to the timer that fires periodically to
         see if the link is active.
@@ -939,7 +939,7 @@ typedef struct _E1000_DEVICE {
     ULONG TxNextToUse;
     PQUEUED_LOCK TxListLock;
     NET_PACKET_LIST TxPacketList;
-    BOOL LinkActive;
+    ULONGLONG LinkSpeed;
     PKTIMER LinkCheckTimer;
     ULONG PendingStatusBits;
     E1000_MAC_TYPE MacType;

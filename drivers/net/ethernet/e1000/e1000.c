@@ -122,7 +122,7 @@ PDRIVER E1000Driver = NULL;
 //
 
 E1000_DEVICE_ENTRY E1000Devices[] = {
-    {0x1004, E1000Mac82545},
+    {0x1004, E1000Mac82543},
     {0x100E, E1000Mac82540},
     {0x100F, E1000Mac82545},
     {0x10D3, E1000Mac82574},
@@ -818,7 +818,8 @@ Return Value:
     // Map the other BAR if needed.
     //
 
-    if ((Device->FlashBase == NULL) && (FlashBase != NULL)) {
+    if ((Device->FlashBase == NULL) && (FlashBase != NULL) &&
+        (FlashBase->Length != 0)) {
 
         //
         // Page align the mapping request.

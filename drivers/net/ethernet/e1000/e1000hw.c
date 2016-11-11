@@ -255,7 +255,7 @@ Return Value:
 
     Device = (PE1000_DEVICE)DeviceContext;
     KeAcquireQueuedLock(Device->TxListLock);
-    if (Device->LinkActive == FALSE) {
+    if (Device->LinkSpeed == 0) {
         Status = STATUS_NO_NETWORK_CONNECTION;
         goto SendEnd;
     }
@@ -931,8 +931,8 @@ Return Value:
         E1000_WRITE(Device, E1000DeviceControl, Control);
 
     } else {
-        Control = E1000_DEVICE_CONTROL_FORCE_SPEED |
-                  E1000_DEVICE_CONTROL_FORCE_DUPLEX;
+        Control |= E1000_DEVICE_CONTROL_FORCE_SPEED |
+                   E1000_DEVICE_CONTROL_FORCE_DUPLEX;
 
         E1000_WRITE(Device, E1000DeviceControl, Control);
         E1000pResetPhyHardware(Device);
@@ -1081,12 +1081,16 @@ Return Value:
             break;
         }
 
-        Device->LinkActive = TRUE;
-        NetSetLinkState(Device->NetworkLink, TRUE, Speed);
+        if (Speed != Device->LinkSpeed) {
+            Device->LinkSpeed = Speed;
+            NetSetLinkState(Device->NetworkLink, TRUE, Speed);
+        }
 
     } else {
-        NetSetLinkState(Device->NetworkLink, FALSE, 0);
-        Device->LinkActive = FALSE;
+        if (Device->LinkSpeed != 0) {
+            NetSetLinkState(Device->NetworkLink, FALSE, 0);
+            Device->LinkSpeed = 0;
+        }
     }
 
 CheckLinkEnd:
@@ -1576,9 +1580,27 @@ Return Value:
 {
 
     ULONG ByteIndex;
+    ULONG MacHigh;
+    ULONG MacLow;
     USHORT Register;
     KSTATUS Status;
     USHORT Value;
+
+    //
+    // See if there's already a MAC address in there, and use that if there is.
+    //
+
+    MacLow = E1000_READ_ARRAY(Device, E1000RxAddressLow, 0);
+    MacHigh = E1000_READ_ARRAY(Device, E1000RxAddressHigh, 0);
+    if ((MacHigh & E1000_RECEIVE_ADDRESS_HIGH_VALID) != 0) {
+        RtlCopyMemory(&(Device->EepromMacAddress[0]), &MacLow, sizeof(ULONG));
+        RtlCopyMemory(&(Device->EepromMacAddress[4]), &MacHigh, sizeof(USHORT));
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Read from the EEPROM.
+    //
 
     Value = 0;
     for (ByteIndex = 0;
