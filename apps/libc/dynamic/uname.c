@@ -86,6 +86,7 @@ Return Value:
 
 {
 
+    CHAR EndTag[32];
     KSTATUS Status;
     SYSTEM_VERSION_INFORMATION Version;
 
@@ -101,15 +102,39 @@ Return Value:
 
     strcpy(Name->sysname, UNAME_SYSTEM_NAME);
     strcpy(Name->nodename, UNAME_NODE_NAME);
+    if ((Version.ReleaseLevel == SystemReleaseFinal) &&
+        (Version.DebugLevel == SystemBuildRelease)) {
+
+        EndTag[0] = '\0';
+
+    } else if (Version.ReleaseLevel == SystemReleaseFinal) {
+        snprintf(EndTag,
+                 sizeof(EndTag),
+                 "-%s",
+                 RtlGetBuildDebugLevelString(Version.DebugLevel));
+
+    } else if (Version.DebugLevel == SystemBuildRelease) {
+        snprintf(EndTag,
+                 sizeof(EndTag),
+                 "-%s",
+                 RtlGetReleaseLevelString(Version.ReleaseLevel));
+
+    } else {
+        snprintf(EndTag,
+                 sizeof(EndTag),
+                 "-%s-%s",
+                 RtlGetReleaseLevelString(Version.ReleaseLevel),
+                 RtlGetBuildDebugLevelString(Version.DebugLevel));
+    }
+
     snprintf(Name->release,
              sizeof(Name->release),
-             "%d.%d.%d.%lld-%s-%s",
+             "%d.%d.%d.%lld%s",
              Version.MajorVersion,
              Version.MinorVersion,
              Version.Revision,
              Version.SerialVersion,
-             RtlGetReleaseLevelString(Version.ReleaseLevel),
-             RtlGetBuildDebugLevelString(Version.DebugLevel));
+             EndTag);
 
     if (Version.BuildString == NULL) {
         Version.BuildString = "";
