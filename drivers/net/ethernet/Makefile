@@ -24,6 +24,7 @@ DIRS = am3eth    \
        atl1c     \
        dwceth    \
        e100      \
+       e1000     \
        rtl81xx   \
        smsc91c1  \
        smsc95xx  \

@@ -123,6 +123,7 @@ if (arch == "x86") {
         "atl1c.drv",
         "dwceth.drv",
         "e100.drv",
+        "e1000.drv",
         "i8042.drv",
         "rtl81xx.drv",
         "uhci.drv",
@@ -702,6 +703,7 @@ if (plat == "install-x86") {
         "devrem.drv",
         "dwceth.drv",
         "e100.drv",
+        "e1000.drv",
         "ehci.drv",
         "fat.drv",
         "fatboot.bin",
@@ -1006,6 +1008,7 @@ if (plat == "pc-tiny") {
         "videocon.drv",
         "ata.drv",
         "e100.drv",
+        "e1000.drv",
         "i8042.drv",
     ];
 
