@@ -389,6 +389,15 @@ Author:
 #define E1000_RX_CONTROL_STRIP_CRC (1 << 26)
 
 //
+// Receive checksum control register bits.
+//
+
+#define E1000_RX_CHECKSUM_START 14
+#define E1000_RX_CHECKSUM_IP_OFFLOAD (1 << 8)
+#define E1000_RX_CHECKSUM_TCP_UDP_OFFLOAD (1 << 9)
+#define E1000_RX_CHECKSUM_IPV6_OFFLOAD (1 << 10)
+
+//
 // Transmit control register bits.
 //
 
@@ -916,6 +925,9 @@ Members:
 
     PhyRevision - Stores the revision ID of the PHY.
 
+    ChecksumFlags - Stores the flags of currently enabled checksum offloading
+        features.
+
 --*/
 
 typedef struct _E1000_DEVICE {
@@ -948,6 +960,7 @@ typedef struct _E1000_DEVICE {
     E1000_PHY_TYPE PhyType;
     ULONG PhyId;
     ULONG PhyRevision;
+    ULONG ChecksumFlags;
 } E1000_DEVICE, *PE1000_DEVICE;
 
 //

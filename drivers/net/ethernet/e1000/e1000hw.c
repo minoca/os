@@ -380,6 +380,10 @@ Return Value:
     KSTATUS Status;
     ULONG TxDescriptorSize;
 
+    Device->ChecksumFlags = NET_LINK_CHECKSUM_FLAG_RECEIVE_IP_OFFLOAD |
+                            NET_LINK_CHECKSUM_FLAG_RECEIVE_TCP_OFFLOAD |
+                            NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD;
+
     //
     // Initialize the transmit and receive list locks.
     //
@@ -748,6 +752,11 @@ Return Value:
     E1000_WRITE(Device, E1000RxDescriptorHead0, 0);
     RxControl |= E1000_RX_CONTROL_ENABLE;
     E1000_WRITE(Device, E1000RxControl, RxControl);
+    RxControl = E1000_RX_CHECKSUM_START | E1000_RX_CHECKSUM_IP_OFFLOAD |
+                E1000_RX_CHECKSUM_TCP_UDP_OFFLOAD |
+                E1000_RX_CHECKSUM_IPV6_OFFLOAD;
+
+    E1000_WRITE(Device, E1000RxChecksumControl, RxControl);
 
     //
     // Enable interrupts.
@@ -2343,6 +2352,7 @@ Return Value:
 
     PE1000_RX_DESCRIPTOR Descriptor;
     ULONG DescriptorIndex;
+    ULONG Flags;
     ULONG NewTail;
     PNET_PACKET_BUFFER Packet;
 
@@ -2369,6 +2379,46 @@ Return Value:
         Packet->DataSize = Descriptor->Length;
         Packet->DataOffset = 0;
         Packet->FooterOffset = Packet->DataSize;
+
+        //
+        // Determine the checksum offload flags, if the hardware computed them.
+        //
+
+        Flags = 0;
+        if ((Descriptor->Status & E1000_RX_STATUS_IGNORE_CHECKSUM) == 0) {
+            if ((Descriptor->Status & E1000_RX_STATUS_IP4_CHECKSUM) != 0) {
+                if ((Descriptor->Errors & E1000_RX_ERROR_IP_CHECKSUM) != 0) {
+                    Flags |= NET_PACKET_FLAG_IP_CHECKSUM_FAILED;
+
+                } else {
+                    Flags |= NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD;
+                }
+            }
+
+            if ((Descriptor->Status & E1000_RX_STATUS_TCP_CHECKSUM) != 0) {
+                if ((Descriptor->Errors &
+                     E1000_RX_ERROR_TCP_UDP_CHECKSUM) != 0) {
+
+                    Flags |= NET_PACKET_FLAG_TCP_CHECKSUM_FAILED;
+
+                } else {
+                    Flags |= NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD;
+                }
+            }
+
+            if ((Descriptor->Status & E1000_RX_STATUS_UDP_CHECKSUM) != 0) {
+                if ((Descriptor->Errors &
+                     E1000_RX_ERROR_TCP_UDP_CHECKSUM) != 0) {
+
+                    Flags |= NET_PACKET_FLAG_UDP_CHECKSUM_FAILED;
+
+                } else {
+                    Flags |= NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD;
+                }
+            }
+        }
+
+        Packet->Flags = Flags;
         NetProcessReceivedPacket(Device->NetworkLink, Packet);
         Descriptor->Status = 0;
         DescriptorIndex += 1;

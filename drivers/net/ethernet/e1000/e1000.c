@@ -600,6 +600,7 @@ Return Value:
     Properties.Interface.Send = E1000Send;
     Properties.Interface.GetSetInformation = E1000GetSetInformation;
     Properties.Interface.DestroyLink = E1000DestroyLink;
+    Properties.ChecksumFlags = Device->ChecksumFlags;
     Status = NetAddLink(&Properties, &(Device->NetworkLink));
     if (!KSUCCESS(Status)) {
         goto AddNetworkDeviceEnd;
