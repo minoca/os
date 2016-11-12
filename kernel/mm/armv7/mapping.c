@@ -1759,6 +1759,10 @@ Return Value:
         ProcessFirstLevelTable = AddressSpace->PageDirectory;
     }
 
+    if (Attributes != NULL) {
+        *Attributes = MAP_FLAG_DIRTY;
+    }
+
     FirstIndex = FLT_INDEX(VirtualAddress);
     if (VirtualAddress >= KERNEL_VA_START) {
         FirstLevelTable = MmKernelFirstLevelTable;
@@ -1800,8 +1804,6 @@ Return Value:
 
             *Attributes |= MAP_FLAG_READ_ONLY;
         }
-
-        *Attributes |= MAP_FLAG_DIRTY;
     }
 
     return PhysicalAddress;
