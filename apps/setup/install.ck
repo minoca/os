@@ -127,6 +127,7 @@ if (arch == "x86") {
         "i8042.drv",
         "rtl81xx.drv",
         "uhci.drv",
+        "pcnet32.drv",
     ];
 
 } else if ((arch == "armv7") || (arch == "armv6")) {
@@ -725,6 +726,7 @@ if (plat == "install-x86") {
         "onering.drv",
         "part.drv",
         "pci.drv",
+        "pcnet32.drv",
         "qrkhostb.drv",
         "rtl81xx.drv",
         "rtlw81xx.drv",

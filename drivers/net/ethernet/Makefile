@@ -25,6 +25,7 @@ DIRS = am3eth    \
        dwceth    \
        e100      \
        e1000     \
+       pcnet32   \
        rtl81xx   \
        smsc91c1  \
        smsc95xx  \

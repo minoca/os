@@ -47,6 +47,7 @@ function build() {
             "//drivers/net/ethernet/dwceth:dwceth",
             "//drivers/net/ethernet/e100:e100",
             "//drivers/net/ethernet/e1000:e1000",
+            "//drivers/net/ethernet/pcnet32:pcnet32",
             "//drivers/net/ethernet/rtl81xx:rtl81xx",
         ];
     }
