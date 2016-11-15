@@ -1,6 +1,11 @@
 /*++
 
-Copyright (c) 2015 Minoca Corp. All Rights Reserved
+Copyright (c) 2015 Minoca Corp.
+
+    This file is licensed under the terms of the GNU General Public License
+    version 3. Alternative licensing terms are available. Contact
+    info@minocacorp.com for details. See the LICENSE file at the root of this
+    project for complete licensing information.
 
 Module Name:
 
@@ -109,7 +114,7 @@ Environment:
 //
 // Processor 0 information. See BCM2709_CPU_ENTRY.
 //
-                                   
+
                                     UINT8 : 00
                                     UINT8 : 18
                                    UINT16 : 0000
@@ -121,7 +126,7 @@ Environment:
 //
 // Processor 1 information. See BCM2709_CPU_ENTRY.
 //
-                                   
+
                                     UINT8 : 00
                                     UINT8 : 18
                                    UINT16 : 0000
@@ -129,11 +134,11 @@ Environment:
                                    UINT32 : 00000001
                                    UINT32 : 00000000
                                    UINT64 : 0000000001FFB000
-                                   
+
 //
 // Processor 2 information. See BCM2709_CPU_ENTRY.
 //
-                                   
+
                                     UINT8 : 00
                                     UINT8 : 18
                                    UINT16 : 0000
@@ -145,7 +150,7 @@ Environment:
 //
 // Processor 3 information. See BCM2709_CPU_ENTRY.
 //
-                                   
+
                                     UINT8 : 00
                                     UINT8 : 18
                                    UINT16 : 0000
