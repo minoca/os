@@ -13,7 +13,7 @@ Module Name:
 
 Abstract:
 
-    This module memory routines in assembly, for speed.
+    This module contains memory routines in assembly, for speed.
 
 Author:
 
