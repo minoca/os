@@ -13,9 +13,9 @@ Module Name:
 
 Abstract:
 
-    This module memory manipulation routines to and from user mode buffers.
-    The page fault handler knows about these functions specifically and may
-    manipulate the instruction pointer if it is found in one of these
+    This module contains memory manipulation routines to and from user mode
+    buffers. The page fault handler knows about these functions specifically
+    and may manipulate the instruction pointer if it is found in one of these
     functions. These routines may fail if user mode passes a bad buffer.
 
 Author:
