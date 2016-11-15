@@ -1,5 +1,10 @@
 ##
-## Copyright (c) 2014 Minoca Corp. All Rights Reserved.
+## Copyright (c) 2014 Minoca Corp.
+##
+##    This file is licensed under the terms of the GNU General Public License
+##    version 3. Alternative licensing terms are available. Contact
+##    info@minocacorp.com for details. See the LICENSE file at the root of this
+##    project for complete licensing information..
 ##
 ## Script Name:
 ##
@@ -133,11 +138,11 @@ index = """
 profile_page = """
 <h1>Profiling Puzzler</h1>
 <p>You've just built a new board that changes a traffic light via USB, but you
-suspect your driver is taking longer than it should when sending I/O. So you 
+suspect your driver is taking longer than it should when sending I/O. So you
 design a test to change the light rapidly, and enable Minoca's stack sampling
 profiler.</p>
 <p>Take a look at the profiling data collected on the touchscreen PC in the
-lower left pane of the debugger. Can you find out where all the CPU time is 
+lower left pane of the debugger. Can you find out where all the CPU time is
 going in your "onering" driver?
 </p>
 <p>Hint: Follow the hit counts starting at AySysenterHandlerAsm until you find
@@ -154,7 +159,7 @@ sys 8.12
 </pre>
 
 <p>
-*Comparison run on Minoca OS r867. Results are averaged (mean) across 10 runs, 
+*Comparison run on Minoca OS r867. Results are averaged (mean) across 10 runs,
 standard deviations 1.18, 0.0135, and 0.046.
 </p>
 """
@@ -182,33 +187,33 @@ class MinocaHTTPRequestHandler(BaseHTTPRequestHandler):
         send_end = True
         if self.path == '/':
             self.wfile.write(index)
-          
-        elif self.path == '/activity/':        
+
+        elif self.path == '/activity/':
             self.run_activity()
-            
+
         elif self.path == '/build_zlib/':
             self.run_compile()
-            
+
         elif self.path == '/compress_file/':
             self.run_compress()
-            
+
         elif self.path == '/calculate_primes/':
             self.run_calc_primes()
-            
+
         elif self.path == '/profile_test/':
             self.run_profile_test()
-            
+
         elif self.path == '/exit/':
             self.socket.close()
-            
+
         else:
             self.send_error(404, 'File not found!!')
             send_end = False
-            
+
         if send_end:
             self.wfile.write(html_end);
-            
-        return     
+
+        return
 
     def run_activity(self):
         nth, start, prime, tdelta = calc_primes()
@@ -216,7 +221,7 @@ class MinocaHTTPRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write("<br /><br /><h2>Last Prime Calculation:</h2>")
         self.display_calc_primes(nth, start, prime, tdelta)
         return
-                
+
     def run_compile(self):
         self.wfile.write("<h1>Compiling zlib</h1>")
         print("Compiling zlib...")
@@ -225,7 +230,7 @@ class MinocaHTTPRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(compile_compare)
         print("Done")
         return
-        
+
     def run_compress(self):
         self.wfile.write("<h1>Compressing some files</h1>")
         print("Compressing some files...")
@@ -240,7 +245,7 @@ class MinocaHTTPRequestHandler(BaseHTTPRequestHandler):
         nth, start, prime, tdelta = calc_primes()
         self.display_calc_primes(nth, start, prime, tdelta)
         return
-       
+
     def run_profile_test(self):
         print("Enabling kernel stack sampling")
         print("Changing light rapidly to aggregate samples.")
@@ -253,40 +258,40 @@ class MinocaHTTPRequestHandler(BaseHTTPRequestHandler):
             i += 1
             time.sleep(0.1)
             t1 = datetime.datetime.now()
-            
+
         print("Disabling kernel stack sampling")
         minoca_set_profiling(False)
         self.wfile.write(profile_page)
         return
-        
+
     def run_command(self, args):
         process = subprocess.Popen(args=args,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE,
                                    shell=False,
                                    env=os.environ)
-                                   
+
         out, err = process.communicate()
         result = "<pre>"
         result += "Process %d exited with status %d\n" % \
                  (process.pid, process.returncode)
-                 
+
         result += out
         if err:
             result += "stderr: " + err
-            
+
         result += "</pre>"
         self.wfile.write(result)
         return
-        
+
     def display_calc_primes(self, nth, start, prime, tdelta):
         result = "<p>The %dth prime number starting at %d is %d.</p>" % \
                  (nth, start, prime)
-                     
+
         result += "<p>Calculated in %f seconds.</p>" % tdelta
-        self.wfile.write(result)        
+        self.wfile.write(result)
         return
-        
+
 def change_light(value):
     value = int(value) % 8
     os.system("./usbrelay %d" % value)
@@ -299,7 +304,7 @@ def calc_primes():
     t1 = datetime.datetime.now()
     tdelta = (t1 - t0).total_seconds()
     return (nth, start, prime, tdelta)
-    
+
 def is_prime(num):
     for j in range(2,int(math.sqrt(num)+1)):
         if (num % j) == 0:
@@ -319,23 +324,23 @@ def calc_nth_prime(start, nth):
     while i < nth:
         if is_prime(num):
             i += 1
-            
+
             ##
             ## Periodically update the light.
             ##
-            
+
             if i >= update:
                 change_light(num / 4)
                 print "%d: %d" % (i, num)
                 update += random.randint(300, 2500)
-                
+
             if i == nth:
                 return num
-                
+
         num += 1
-        
+
     return 0
-    
+
 ##
 ## Define some Minoca specific C constants.
 ##
@@ -359,14 +364,14 @@ class SP_GET_SET_STATE_INFORMATION(ctypes.Structure):
         ("operation", ctypes.c_ulong),
         ("profilertypeflags", ctypes.c_ulong)
     ]
-    
+
 def minoca_set_profiling(enable):
     information = SP_GET_SET_STATE_INFORMATION()
     information.operation = SpGetSetStateOperationDisable
     information.profilertypeflags = PROFILER_TYPE_FLAG_STACK_SAMPLING;
     if enable:
         information.operation = SpGetSetStateOperationEnable
-        
+
     information_pointer = ctypes.cast(ctypes.addressof(information),
                                       ctypes.c_char_p)
 
@@ -379,9 +384,9 @@ def minoca_set_profiling(enable):
 
     if result != STATUS_SUCCESS:
         print("Failed to get profiling: %d" % result)
-        
+
     return
-        
+
 def minoca_get_set_system_information(c_type,
                                       c_subtype,
                                       c_buffer,
@@ -416,8 +421,8 @@ if __name__ == '__main__':
     ##
     ## Symlink /bin/time in case I forget.
     ##
-    
+
     if (not os.path.exists('/bin/time')) and (os.path.exists('/bin/swiss')):
         os.symlink('swiss', '/bin/time')
-        
+
     run()

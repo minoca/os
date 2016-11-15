@@ -1,6 +1,11 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp. All Rights Reserved.
+Copyright (c) 2014 Minoca Corp.
+
+    This file is licensed under the terms of the GNU General Public License
+    version 3. Alternative licensing terms are available. Contact
+    info@minocacorp.com for details. See the LICENSE file at the root of this
+    project for complete licensing information..
 
 Module Name:
 
@@ -41,7 +46,7 @@ DefinitionBlock (
             Name(_UID, 0)
 
             /*
-             * Define the operation region to access the DWC configuration 
+             * Define the operation region to access the DWC configuration
              * space.
              */
 
@@ -55,7 +60,7 @@ DefinitionBlock (
                 SKP2, 8,
                 USRP, 1,
                 UHNP, 1,
-                Offset(0x24),                 
+                Offset(0x24),
                 RXFS, 16,
                 Offset(0x28),
                 NPFO, 16,
@@ -67,15 +72,15 @@ DefinitionBlock (
 
             /*
              * Set the AHB configuration register to have a single burst length
-             * and to wait on all writes. Also set the receive FIFO to 774 
+             * and to wait on all writes. Also set the receive FIFO to 774
              * bytes, the non-periodic transmit FIFO to 256 bytes, and the
              * periodic transmit FIFO to 512 bytes. The Raspberry Pi's DWC USB
-             * controller allows dynamic FIFO sizes and the maximum FIFO depth 
+             * controller allows dynamic FIFO sizes and the maximum FIFO depth
              * is greater than the total FIFO sizes programmed here. Lastly,
              * the host is both SRP and HNP capable.
-             */       
-            
-            Method(_INI, 0) {                        
+             */
+
+            Method(_INI, 0) {
                 Store(0x306, RXFS)
                 Store(0x306, NPFO)
                 Store(0x100, NPFS)
