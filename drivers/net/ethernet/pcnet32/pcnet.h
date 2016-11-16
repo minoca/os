@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2016 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -13,8 +13,7 @@ Module Name:
 
 Abstract:
 
-    This header contains internal definitions for the AMD 79C9xx PCnet32 LANCE
-    driver.
+    This header contains internal definitions for the Am79C9xx PCnet driver.
 
 Author:
 
@@ -25,6 +24,8 @@ Author:
 //
 // ------------------------------------------------------------------- Includes
 //
+
+#include <minoca/net/mii.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -69,6 +70,12 @@ Author:
 #define PCNET_ALLOCATION_TAG 0x746E4350 // 'tnCP'
 
 //
+// Define how often to check the link for connect/disconnect, in seconds.
+//
+
+#define PCNET_LINK_CHECK_INTERVAL 5
+
+//
 // Define the amount of time to wait in microseconds for initialization to
 // complete.
 //
@@ -110,9 +117,19 @@ Author:
 
 #define PCNET_CSR0_INTERRUPT_MASK   \
     (PCNET_CSR0_ERROR |             \
+     PCNET_CSR0_BABBLE |            \
+     PCNET_CSR0_COLLISION |         \
+     PCNET_CSR0_MISSED_FRAME |      \
      PCNET_CSR0_INTERRUPT |         \
      PCNET_CSR0_RECEIVE_INTERRUPT | \
      PCNET_CSR0_TRANSMIT_INTERRUPT)
+
+//
+// Define a software-only bit that is set in the device's pending status
+// bitmask to indicate that the link status needs to be checked.
+//
+
+#define PCNET_CSR0_SOFTWARE_INTERRUPT_LINK_STATUS (1 << 31)
 
 //
 // Define the bits for the lower initialization block address register - CSR1.
@@ -161,13 +178,53 @@ Author:
 #define PCNET_CSR4_JABBER_MASK                        (1 << 0)
 
 //
-// Define the bits for the transmit and receive table length register - CSR6.
+// Device the bits for the chip ID registers - CSR88 and CSR89.
 //
 
-#define PCNET_CSR6_TRANSMIT_RING_LENGTH_MASK  (0xF << 12)
-#define PCNET_CSR6_TRANSMIT_RING_LENGTH_SHIFT 12
-#define PCNET_CSR6_RECEIVE_RING_LENGTH_MASK   (0xF << 8)
-#define PCNET_CSR6_RECEIVE_RING_LENGTH_SHIFT  8
+#define PCNET_CHIP_ID_MANUFACTURER_ID_MASK  (0xFFE << 1)
+#define PCNET_CHIP_ID_MANUFACTURER_ID_SHIFT 1
+#define PCNET_CHIP_ID_PART_ID_MASK          (0xFFFF << 12)
+#define PCNET_CHIP_ID_PART_ID_SHIFT         12
+#define PCNET_CHIP_ID_VERSION_MASK          (0xF << 28)
+#define PCNET_CHIP_ID_VERSION_SHIFT         28
+
+//
+// Define the bits for the miscellaneous configuration register - BCR2.
+//
+
+#define PCNET_BCR2_TMAU_LOOP                 (1 << 14)
+#define PCNET_BCR2_ADDRESS_PROM_WRITE_ENABLE (1 << 8)
+#define PCNET_BCR2_INTERRUPT_LEVEL           (1 << 7)
+#define PCNET_BCR2_DXCVR_CONTROL             (1 << 5)
+#define PCNET_BCR2_DXCVR_POLARITY            (1 << 4)
+#define PCNET_BCR2_EADI_SELECT               (1 << 3)
+#define PCNET_BCR2_AWAKE                     (1 << 2)
+#define PCNET_BCR2_AUTO_SELECT               (1 << 1)
+#define PCNET_BCR2_XMAU_SELECT               (1 << 0)
+
+//
+// Define the bits for the link status LED register - BCR4.
+//
+
+#define PCNET_BCR4_LED_OUT (1 << 15)
+#define PCNET_BCR4_LED_POLARITY (1 << 14)
+#define PCNET_BCR4_LED_DISABLE (1 << 13)
+#define PCNET_BCR4_PULSE_STRETCH_ENABLE (1 << 7)
+#define PCNET_BCR4_LINK_STATUS_ENABLE (1 << 6)
+#define PCNET_BCR4_RECEIVE_MATCH_ENABLE (1 << 5)
+#define PCNET_BCR4_TRANSMIT_ENABLE (1 << 4)
+#define PCNET_BCR4_RECEIVE_POLARITY_ENABLE (1 << 3)
+#define PCNET_BCR4_RECEIVE_ENABLE (1 << 2)
+#define PCNET_BCR4_JABBER_ENABLE (1 << 1)
+#define PCNET_BCR4_COLLISION_ENABLE (1 << 0)
+
+//
+// Define the bits for the full duplex control register - BCR9.
+//
+
+#define PCNET_BCR9_FULL_DUPEX_RUNT_PACKET_DISABLE (1 << 2)
+#define PCNET_BCR9_AUI_FULL_DUPLEX                (1 << 1)
+#define PCNET_BCR9_FULL_DUPLEX_ENABLE             (1 << 0)
 
 //
 // Define the bits for the burst and bus control register - BCR18.
@@ -194,6 +251,38 @@ Author:
 #define PCNET_BCR20_SOFTWARE_STYLE_PCNET_PCI_II           0x03
 #define PCNET_BCR20_SOFTWARE_STYLE_MASK                   (0xFF << 0)
 #define PCNET_BCR20_SOFTWARE_STYLE_SHIFT                  0
+
+//
+// Define the bits for the PHY control register - BCR32.
+//
+
+#define PCNET_BCR32_MII_PHY_DETECT                      (1 << 14)
+#define PCNET_BCR32_FAST_MGMT_DATA_CLOCK_MASK           (0x3 << 12)
+#define PCNET_BCR32_FAST_MGMT_DATA_CLOCK_SHIFT          12
+#define PCNET_BCR32_AUTO_POLL_PHY                       (1 << 11)
+#define PCNET_BCR32_AUTO_POLL_TIME_MASK                 (0x7 << 8)
+#define PCNET_BCR32_AUTO_POLL_TIME_SHIFT                8
+#define PCNET_BCR32_DISABLE_AUTO_NEGOTIATION_AUTO_SETUP (1 << 7)
+#define PCNET_BCR32_RESET                               (1 << 6)
+#define PCNET_BCR32_AUTO_NEGOTIATION_ENABLE             (1 << 5)
+#define PCNET_BCR32_FULL_DUPLEX                         (1 << 4)
+#define PCNET_BCR32_100_MBPS                            (1 << 3)
+#define PCNET_BCR32_MII_LOOPBACK                        (1 << 1)
+
+#define PCNET_BCR32_INIT_CLEAR_MASK                    \
+    (PCNET_BCR32_DISABLE_AUTO_NEGOTIATION_AUTO_SETUP | \
+     PCNET_BCR32_AUTO_NEGOTIATION_ENABLE |             \
+     PCNET_BCR32_FULL_DUPLEX |                         \
+     PCNET_BCR32_100_MBPS)
+
+//
+// Define the bits for the PHY address register - BCR33.
+//
+
+#define PCNET_BCR33_PHY_ADDRESS_MASK  (0x1F << 5)
+#define PCNET_BCR33_PHY_ADDRESS_SHIFT 5
+#define PCNET_BCR33_REG_ADDRESS_MASK  (0x1F << 0)
+#define PCNET_BCR33_REG_ADDRESS_SHIFT 0
 
 //
 // Define the two descriptor ring alignment options.
@@ -317,6 +406,9 @@ Author:
 #define PCNET_MODE_MENDEC_LOOPBACK                  (1 << 10)
 #define PCNET_MODE_LOW_RECEIVE_THRESHOLD            (1 << 9)
 #define PCNET_MODE_TRANSMIT_MODE_SELECT             (1 << 9)
+#define PCNET_MODE_PORT_SELECT_AUI                  0x0
+#define PCNET_MODE_PORT_SELECT_10BASE_T             0x1
+#define PCNET_MODE_PORT_SELECT_PHY                  0x3
 #define PCNET_MODE_PORT_SELECT_MASK                 (0x3 << 7)
 #define PCNET_MODE_PORT_SELECT_SHIFT                7
 #define PCNET_MODE_INTERNAL_LOOPBACK                (1 << 6)
@@ -342,6 +434,16 @@ Author:
 #define PCNET_INIT32_TRANSMIT_RING_LENGTH_SHIFT 28
 
 //
+// Define the PCnet device property flags.
+//
+
+#define PCNET_DEVICE_FLAG_AUTO_SELECT 0x00000001
+#define PCNET_DEVICE_FLAG_FULL_DUPLEX 0x00000002
+#define PCNET_DEVICE_FLAG_PHY         0x00000004
+#define PCNET_DEVICE_FLAG_100_MBPS    0x00000008
+#define PCNET_DEVICE_FLAG_AUI         0x00000010
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -350,11 +452,19 @@ typedef enum _PCNET_CSR {
     PcnetCsr1InitBlockAddress0 = 1,
     PcnetCsr2InitBlockAddress1 = 2,
     PcnetCsr4FeatureControl = 4,
+    PcnetCsr88ChipIdLower = 88,
+    PcnetCsr89ChipIdUpper = 89
 } PCNET_CSR, *PPCNET_CSR;
 
 typedef enum _PCNET_BCR {
+    PcnetBcr2Miscellaneous = 2,
+    PcnetBcr4LinkStatus = 4,
+    PcnetBcr9FullDuplex = 9,
     PcnetBcr18BusControl = 18,
     PcnetBcr20SoftwareStyle = 20,
+    PcnetBcr32PhyControl = 32,
+    PcnetBcr33PhyAddress = 33,
+    PcnetBcr34PhyData = 34,
 } PCNET_BCR, *PPCNET_PCR;
 
 typedef enum _PCNET_WIO_REGISTER {
@@ -371,6 +481,14 @@ typedef enum _PCNET_DWIO_REGISTER {
     PcnetDwioReset = 0x18,
     PcnetDwioBusDataPort = 0x1C,
 } PCNET_DWIO_REGISTER, *PPCNET_DWIO_REGISTER;
+
+typedef enum _PCNET_DEVICE_TYPE {
+    PcnetAmInvalid,
+    PcnetAm79C970,
+    PcnetAm79C970A,
+    PcnetAm79C973,
+    PcnetAm79C975
+} PCNET_DEVICE_TYPE, *PPCNET_DEVICE_TYPE;
 
 /*++
 
@@ -537,7 +655,30 @@ typedef struct _PCNET_TRANSMIT_DESCRIPTOR_32 {
 
 Structure Description:
 
-    This structure defines an PCnet32 LANCE device.
+    This structure defines feature details about the PCnet device.
+
+Members:
+
+    DeviceType - Stores the PCnet entry's device type.
+
+    PartId - Stores the device's part ID, as recorded in the chip ID registers.
+
+    Flags - Stores device property flags. See PCNET_DEVICE_FLAG_* for
+        definitions.
+
+--*/
+
+typedef struct _PCNET_DEVICE_INFORMATION {
+    PCNET_DEVICE_TYPE DeviceType;
+    USHORT PartId;
+    ULONG Flags;
+} PCNET_DEVICE_INFORMATION, *PPCNET_DEVICE_INFORMATION;
+
+/*++
+
+Structure Description:
+
+    This structure defines an PCnet device.
 
 Members:
 
@@ -593,6 +734,11 @@ Members:
 
     LinkActive - Stores a boolean indicating if there is an active network link.
 
+    FullDuplex - Stores a boolean indicating if the device is in full-duplex
+        mode.
+
+    LinkSpeed - Stores a the current link speed of the device.
+
     PendingStatusBits - Stores the bitfield of status bits that have yet to be
         dealt with by software.
 
@@ -603,6 +749,19 @@ Members:
 
     Software32 - Stores a boolean indicating whether or not this device is
         operating with 32-bit structures (TRUE) or 16-bit structures (FALSE).
+
+    PhyId - Stores the ID of the active PHY for the PCnet device.
+
+    DeviceInformation - Stores a pointer to the PCnet device information, which
+        stores feature details about the device.
+
+    LinkCheckTimer - Stores a pointer to the timer that fires periodically to
+        see if the link is active.
+
+    LinkCheckDpc - Stores a pointer to the DPC associated with the link check
+        timer.
+
+    WorkItem - Stores a pointer to the work item queued from the DPC.
 
 --*/
 
@@ -627,10 +786,17 @@ typedef struct _PCNET_DEVICE {
     PQUEUED_LOCK TransmitListLock;
     NET_PACKET_LIST TransmitPacketList;
     BOOL LinkActive;
+    BOOL FullDuplex;
+    ULONGLONG LinkSpeed;
     ULONG PendingStatusBits;
     BYTE EepromMacAddress[ETHERNET_ADDRESS_SIZE];
     BOOL Registers32;
     BOOL Software32;
+    USHORT PhyId;
+    PPCNET_DEVICE_INFORMATION DeviceInformation;
+    PKTIMER LinkCheckTimer;
+    PDPC LinkCheckDpc;
+    PWORK_ITEM WorkItem;
 } PCNET_DEVICE, *PPCNET_DEVICE;
 
 //

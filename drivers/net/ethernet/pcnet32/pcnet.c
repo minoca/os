@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2016 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -13,7 +13,7 @@ Module Name:
 
 Abstract:
 
-    This module implements the AMD 79C9xx PCnet32 LANCE driver.
+    This module implements the Am79C9xx PCnet driver.
 
 Author:
 

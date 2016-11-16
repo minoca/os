@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2016 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -13,7 +13,7 @@ Module Name:
 
 Abstract:
 
-    This module implements the portion of the PCnet32 LANCE driver that
+    This module implements the portion of the Am79C9xx PCnet driver that
     actually interacts with the hardware.
 
 Author:
@@ -52,6 +52,29 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+PcnetpLinkCheckDpc (
+    PDPC Dpc
+    );
+
+KSTATUS
+PcnetpInitializePhy (
+    PPCNET_DEVICE Device
+    );
+
+KSTATUS
+PcnetpCheckLink (
+    PPCNET_DEVICE Device
+    );
+
+KSTATUS
+PcnetpDetermineLinkParameters (
+    PPCNET_DEVICE Device,
+    PBOOL LinkUp,
+    PULONGLONG Speed,
+    PBOOL FullDuplex
+    );
 
 VOID
 PcnetpReapReceivedDescriptors (
@@ -94,11 +117,57 @@ PcnetpWriteBcr (
     USHORT Value
     );
 
+USHORT
+PcnetpReadMii (
+    PPCNET_DEVICE Device,
+    USHORT PhyId,
+    USHORT Register
+    );
+
+VOID
+PcnetpWriteMii (
+    PPCNET_DEVICE Device,
+    USHORT PhyId,
+    USHORT Register,
+    USHORT Value
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 BOOL PcnetDisablePacketDropping = FALSE;
+
+//
+// List the supported PCnet devices.
+//
+
+PCNET_DEVICE_INFORMATION PcnetDevices[] = {
+    {PcnetAm79C970,
+     0x243b,
+     (PCNET_DEVICE_FLAG_AUTO_SELECT |
+      PCNET_DEVICE_FLAG_AUI)},
+
+    {PcnetAm79C970A,
+     0x2621,
+     (PCNET_DEVICE_FLAG_AUTO_SELECT |
+      PCNET_DEVICE_FLAG_AUI |
+      PCNET_DEVICE_FLAG_FULL_DUPLEX)},
+
+    {PcnetAm79C973,
+     0x2625,
+     (PCNET_DEVICE_FLAG_FULL_DUPLEX |
+      PCNET_DEVICE_FLAG_PHY |
+      PCNET_DEVICE_FLAG_100_MBPS)},
+
+    {PcnetAm79C975,
+     0x2627,
+     (PCNET_DEVICE_FLAG_FULL_DUPLEX |
+      PCNET_DEVICE_FLAG_PHY |
+      PCNET_DEVICE_FLAG_100_MBPS)},
+
+    {PcnetAmInvalid, 0x0, }
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -266,7 +335,10 @@ Return Value:
 
 {
 
+    ULONG ChipId;
+    PPCNET_DEVICE_INFORMATION DeviceInformation;
     ULONG Index;
+    USHORT PartId;
     USHORT Style;
     USHORT Value;
 
@@ -289,6 +361,42 @@ Return Value:
     }
 
     //
+    // Reading the chip ID register is only allowed if the stop bit is set.
+    //
+
+    Value = PcnetpReadCsr(Device, PcnetCsr0Status);
+    if ((Value & PCNET_CSR0_STOP) == 0) {
+        return STATUS_INVALID_CONFIGURATION;
+    }
+
+    //
+    // Read the chip ID to determine which PCnet device is running.
+    //
+
+    ChipId = PcnetpReadCsr(Device, PcnetCsr88ChipIdLower);
+    ChipId |= PcnetpReadCsr(Device, PcnetCsr89ChipIdUpper) << 16;
+    PartId = (ChipId & PCNET_CHIP_ID_PART_ID_MASK) >>
+             PCNET_CHIP_ID_PART_ID_SHIFT;
+
+    DeviceInformation = &(PcnetDevices[0]);
+    while (DeviceInformation->DeviceType != PcnetAmInvalid) {
+        if (DeviceInformation->PartId == PartId) {
+            Device->DeviceInformation = DeviceInformation;
+            break;
+        }
+
+        DeviceInformation += 1;
+    }
+
+    if (DeviceInformation->DeviceType == PcnetAmInvalid) {
+        RtlDebugPrint("PCNET: untested PCnet device 0x%04x, treating it like "
+                      "Am79C970.\n",
+                      PartId);
+
+        Device->DeviceInformation = &(PcnetDevices[0]);
+    }
+
+    //
     // Read the MAC address. This can be done via byte access.
     //
 
@@ -298,7 +406,10 @@ Return Value:
     }
 
     //
-    // Switch to 32-bit mode. This is only supported on the newer chips.
+    // Switch to 32-bit mode. Older chips like the Am79C90 only support 16-bit
+    // mode. This driver could be easily adapted to run on such devices, but
+    // they lack the chip ID register. It would need a way to detect the older
+    // chips.
     //
 
     Style = (PCNET_BCR20_SOFTWARE_STYLE_PCNET_PCI <<
@@ -341,6 +452,7 @@ Return Value:
     PVOID Descriptor;
     PPCNET_RECEIVE_DESCRIPTOR_16 Descriptor16;
     PPCNET_RECEIVE_DESCRIPTOR_32 Descriptor32;
+    ULONG DeviceFlags;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentOffset;
     ULONG FrameSize;
@@ -351,6 +463,7 @@ Return Value:
     ULONG IoBufferFlags;
     ULONG IoBufferSize;
     PHYSICAL_ADDRESS MaxBufferAddress;
+    USHORT Mode;
     PHYSICAL_ADDRESS PhysicalAddress;
     ULONG ReceiveBufferSize;
     ULONG ReceiveDescriptorSize;
@@ -434,10 +547,23 @@ Return Value:
 
     ASSERT((PhysicalAddress + IoBufferSize) <= MaxBufferAddress);
 
+    DeviceFlags = Device->DeviceInformation->Flags;
+
+    //
+    // Devices with integrated PHYs do not have the auto-select bit in BCR2, so
+    // they must set auto-select in the mode register (CSR15).
+    //
+
+    Mode = 0;
+    if ((DeviceFlags & PCNET_DEVICE_FLAG_PHY) != 0) {
+        Mode = (PCNET_MODE_PORT_SELECT_PHY << PCNET_MODE_PORT_SELECT_SHIFT) &
+               PCNET_MODE_PORT_SELECT_MASK;
+    }
+
     PhysicalAddress += InitBlockSize;
     if (Device->Software32 == FALSE) {
         InitBlock16 = Device->InitializationBlock;
-        InitBlock16->Mode = 0;
+        InitBlock16->Mode = Mode;
         RtlCopyMemory(InitBlock16->PhysicalAddress,
                       Device->EepromMacAddress,
                       ETHERNET_ADDRESS_SIZE);
@@ -458,7 +584,7 @@ Return Value:
 
     } else {
         InitBlock32 = Device->InitializationBlock;
-        InitBlock32->Mode = 0;
+        InitBlock32->Mode = Mode;
         RingLength = RtlCountTrailingZeros32(PCNET_RECEIVE_RING_LENGTH);
         InitBlock32->Mode |= (RingLength <<
                               PCNET_INIT32_RECEIVE_RING_LENGTH_SHIFT) &
@@ -567,6 +693,30 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
+    Device->WorkItem = KeCreateWorkItem(
+                              NULL,
+                              WorkPriorityNormal,
+                              (PWORK_ITEM_ROUTINE)PcnetpInterruptServiceWorker,
+                              Device,
+                              PCNET_ALLOCATION_TAG);
+
+    if (Device->WorkItem == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->LinkCheckTimer = KeCreateTimer(PCNET_ALLOCATION_TAG);
+    if (Device->LinkCheckTimer == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->LinkCheckDpc = KeCreateDpc(PcnetpLinkCheckDpc, Device);
+    if (Device->LinkCheckDpc == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
     Status = STATUS_SUCCESS;
 
 InitializeDeviceStructuresEnd:
@@ -597,6 +747,21 @@ InitializeDeviceStructuresEnd:
             MmFreePagedPool(Device->TransmitPacket);
             Device->TransmitPacket = NULL;
         }
+
+        if (Device->WorkItem != NULL) {
+            KeDestroyWorkItem(Device->WorkItem);
+            Device->WorkItem = NULL;
+        }
+
+        if (Device->LinkCheckTimer != NULL) {
+            KeDestroyTimer(Device->LinkCheckTimer);
+            Device->LinkCheckTimer = NULL;
+        }
+
+        if (Device->LinkCheckDpc != NULL) {
+            KeDestroyDpc(Device->LinkCheckDpc);
+            Device->LinkCheckDpc = NULL;
+        }
     }
 
     return Status;
@@ -625,7 +790,9 @@ Return Value:
 
 {
 
-    ULONGLONG LinkSpeed;
+    ULONG DeviceFlags;
+    ULONGLONG Frequency;
+    ULONGLONG Interval;
     PHYSICAL_ADDRESS PhysicalAddress;
     KSTATUS Status;
     ULONGLONG Timeout;
@@ -640,6 +807,31 @@ Return Value:
 
     } else {
         PCNET_READ_REGISTER32(Device, PcnetDwioReset);
+    }
+
+    //
+    // Set auto-select if necessary.
+    //
+
+    DeviceFlags = Device->DeviceInformation->Flags;
+    if ((DeviceFlags & PCNET_DEVICE_FLAG_AUTO_SELECT) != 0) {
+        Value = PcnetpReadBcr(Device, PcnetBcr2Miscellaneous);
+        Value |= PCNET_BCR2_AUTO_SELECT;
+        PcnetpWriteBcr(Device, PcnetBcr2Miscellaneous, Value);
+    }
+
+    //
+    // Enable full-duplex mode if the device supports it.
+    //
+
+    if ((DeviceFlags & PCNET_DEVICE_FLAG_FULL_DUPLEX) != 0) {
+        Value = PcnetpReadBcr(Device, PcnetBcr9FullDuplex);
+        Value |= PCNET_BCR9_FULL_DUPLEX_ENABLE;
+        if ((DeviceFlags & PCNET_DEVICE_FLAG_AUI) != 0) {
+            Value |= PCNET_BCR9_AUI_FULL_DUPLEX;
+        }
+
+        PcnetpWriteBcr(Device, PcnetBcr9FullDuplex, Value);
     }
 
     //
@@ -686,11 +878,13 @@ Return Value:
     PcnetpWriteCsr(Device, PcnetCsr0Status, PCNET_CSR0_INIT_DONE);
 
     //
-    // Enable interrupts and fire up the controller.
+    // Initialize the PHY.
     //
 
-    Value = PCNET_CSR0_START | PCNET_CSR0_INTERRUPT_ENABLED;
-    PcnetpWriteCsr(Device, PcnetCsr0Status, Value);
+    Status = PcnetpInitializePhy(Device);
+    if (!KSUCCESS(Status)){
+        goto ResetDeviceEnd;
+    }
 
     //
     // Notify the networking core of this new link now that the device is ready
@@ -704,9 +898,32 @@ Return Value:
         }
     }
 
-    LinkSpeed = NET_SPEED_10_MBPS;
-    Device->LinkActive = TRUE;
-    NetSetLinkState(Device->NetworkLink, TRUE, LinkSpeed);
+    //
+    // Enable interrupts and fire up the controller.
+    //
+
+    Value = PCNET_CSR0_START | PCNET_CSR0_INTERRUPT_ENABLED;
+    PcnetpWriteCsr(Device, PcnetCsr0Status, Value);
+
+    //
+    // Check to see if the link is up.
+    //
+
+    PcnetpCheckLink(Device);
+
+    //
+    // Fire up the link check timer.
+    //
+
+    Frequency = HlQueryTimeCounterFrequency();
+    Interval = Frequency * PCNET_LINK_CHECK_INTERVAL;
+    KeQueueTimer(Device->LinkCheckTimer,
+                 TimerQueueSoft,
+                 0,
+                 Interval,
+                 0,
+                 Device->LinkCheckDpc);
+
     Status = STATUS_SUCCESS;
 
 ResetDeviceEnd:
@@ -814,10 +1031,14 @@ Return Value:
     }
 
     //
-    // Handle receive descriptors.
+    // Reap the receive descriptors. A missed frame interrupt indicates that a
+    // packet came in but couldn't find a descriptor. Try to alleviate the
+    // pressure.
     //
 
-    if ((PendingBits & PCNET_CSR0_RECEIVE_INTERRUPT) != 0) {
+    if (((PendingBits & PCNET_CSR0_RECEIVE_INTERRUPT) != 0) ||
+        ((PendingBits & PCNET_CSR0_MISSED_FRAME) != 0)) {
+
         PcnetpReapReceivedDescriptors(Device);
     }
 
@@ -829,12 +1050,321 @@ Return Value:
         PcnetpReapTransmittedDescriptors(Device);
     }
 
+    //
+    // If the software-only link status bit is set, the link check timer went
+    // off.
+    //
+
+    if ((PendingBits & PCNET_CSR0_SOFTWARE_INTERRUPT_LINK_STATUS) != 0) {
+        PcnetpCheckLink(Device);
+    }
+
     return InterruptStatusClaimed;
 }
 
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+PcnetpLinkCheckDpc (
+    PDPC Dpc
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the PCnet DPC that is queued when a link check
+    timer expires.
+
+Arguments:
+
+    Dpc - Supplies a pointer to the DPC that is running.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PPCNET_DEVICE Device;
+    ULONG OldPendingBits;
+    KSTATUS Status;
+
+    Device = (PPCNET_DEVICE)(Dpc->UserData);
+    OldPendingBits = RtlAtomicOr32(&(Device->PendingStatusBits),
+                                   PCNET_CSR0_SOFTWARE_INTERRUPT_LINK_STATUS);
+
+    if ((OldPendingBits & PCNET_CSR0_SOFTWARE_INTERRUPT_LINK_STATUS) == 0) {
+        Status = KeQueueWorkItem(Device->WorkItem);
+        if (!KSUCCESS(Status)) {
+            RtlAtomicAnd32(&(Device->PendingStatusBits),
+                           ~PCNET_CSR0_SOFTWARE_INTERRUPT_LINK_STATUS);
+        }
+    }
+
+    return;
+}
+
+KSTATUS
+PcnetpInitializePhy (
+    PPCNET_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initialized the PCnet device's PHY.
+
+Arguments:
+
+    Device - Supplies a pointer to the device to initialize.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    USHORT BasicMask;
+    USHORT PhyId;
+    USHORT Value;
+
+    if ((Device->DeviceInformation->Flags & PCNET_DEVICE_FLAG_PHY) == 0) {
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Find the PHY.
+    //
+
+    Device->PhyId = -1;
+    BasicMask = MII_BASIC_STATUS_MEDIA_MASK | MII_BASIC_STATUS_EXTENDED_STATUS;
+    for (PhyId = 0; PhyId < MII_PHY_COUNT; PhyId += 1) {
+        Value = PcnetpReadMii(Device, PhyId, MiiRegisterBasicStatus);
+        if ((Value != MAX_USHORT) && ((Value & BasicMask) != 0)) {
+            Device->PhyId = PhyId;
+            break;
+        }
+    }
+
+    if (Device->PhyId == -1) {
+        return STATUS_NO_SUCH_DEVICE;
+    }
+
+    //
+    // Enabling auto-negotiation via the normal MII registers does not appear
+    // to work. Make use of the PCnet's PHY control and status register.
+    //
+
+    Value = PcnetpReadBcr(Device, PcnetBcr32PhyControl);
+    Value &= ~PCNET_BCR32_INIT_CLEAR_MASK;
+    Value |= PCNET_BCR32_AUTO_NEGOTIATION_ENABLE;
+    PcnetpWriteBcr(Device, PcnetBcr32PhyControl, Value);
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+PcnetpCheckLink (
+    PPCNET_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine checks whether or not a PCnet device's media is still
+    attached.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG DeviceFlags;
+    BOOL FullDuplex;
+    BOOL LinkActive;
+    ULONGLONG Speed;
+    KSTATUS Status;
+    USHORT Value;
+
+    //
+    // If there is no PHY, then the link state needs to be taken from the BCRs.
+    //
+
+    DeviceFlags = Device->DeviceInformation->Flags;
+    if ((DeviceFlags & PCNET_DEVICE_FLAG_PHY) == 0) {
+        Speed = NET_SPEED_10_MBPS;
+        FullDuplex = FALSE;
+        if ((DeviceFlags & PCNET_DEVICE_FLAG_FULL_DUPLEX) != 0) {
+            FullDuplex = TRUE;
+        }
+
+        LinkActive = FALSE;
+        Value = PcnetpReadBcr(Device, PcnetBcr4LinkStatus);
+        if ((Value & PCNET_BCR4_LINK_STATUS_ENABLE) != 0) {
+            LinkActive = TRUE;
+        }
+
+    //
+    // Otherwise read the PHY to determine the link status. The basic status
+    // register must be read twice to get the most up to date data.
+    //
+
+    } else {
+        Status = PcnetpDetermineLinkParameters(Device,
+                                               &LinkActive,
+                                               &Speed,
+                                               &FullDuplex);
+
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
+    }
+
+    //
+    // If the link state's do not match, make some changes.
+    //
+
+    if ((Device->LinkActive != LinkActive) ||
+        (Device->LinkSpeed != Speed) ||
+        (Device->FullDuplex != FullDuplex)) {
+
+        Device->LinkActive = LinkActive;
+        Device->FullDuplex = FullDuplex;
+        Device->LinkSpeed = Speed;
+        NetSetLinkState(Device->NetworkLink, LinkActive, Speed);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+PcnetpDetermineLinkParameters (
+    PPCNET_DEVICE Device,
+    PBOOL LinkUp,
+    PULONGLONG Speed,
+    PBOOL FullDuplex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the link parameters out of the PHY.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+    LinkUp - Supplies a pointer where a boolean will be returned indicating if
+        the media is connected or not.
+
+    Speed - Supplies a pointer where the link speed will be returned if
+        connected.
+
+    FullDuplex - Supplies a pointer where a boolean will be returned indicating
+        if the connection is full duplex (TRUE) or half duplex (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    USHORT BasicControl;
+    USHORT BasicStatus;
+    USHORT BasicStatus2;
+    USHORT CommonLink;
+    USHORT PartnerAbility;
+
+    *LinkUp = FALSE;
+    *Speed = NET_SPEED_NONE;
+    *FullDuplex = FALSE;
+    BasicStatus = PcnetpReadMii(Device, Device->PhyId, MiiRegisterBasicStatus);
+    BasicStatus2 = PcnetpReadMii(Device, Device->PhyId, MiiRegisterBasicStatus);
+    BasicStatus |= BasicStatus2;
+    if ((BasicStatus & MII_BASIC_STATUS_LINK_STATUS) == 0) {
+        goto DetermineLinkParametersEnd;
+    }
+
+    BasicControl = PcnetpReadMii(Device,
+                                 Device->PhyId,
+                                 MiiRegisterBasicControl);
+
+    if ((BasicControl & MII_BASIC_CONTROL_ISOLATE) != 0) {
+        goto DetermineLinkParametersEnd;
+    }
+
+    if ((BasicControl & MII_BASIC_CONTROL_LOOPBACK) != 0) {
+        RtlDebugPrint("MII Loopback enabled!\n");
+    }
+
+    //
+    // The link status bit is set, so media is connected. Determine what type.
+    //
+
+    *LinkUp = TRUE;
+    if ((BasicControl & MII_BASIC_CONTROL_ENABLE_AUTONEGOTIATION) != 0) {
+        if ((BasicStatus & MII_BASIC_STATUS_AUTONEGOTIATE_COMPLETE) == 0) {
+            *LinkUp = FALSE;
+            goto DetermineLinkParametersEnd;
+        }
+
+        //
+        // Take the common set of the advertised abilities and the partner's
+        // abilities.
+        //
+
+        CommonLink = PcnetpReadMii(Device, Device->PhyId, MiiRegisterAdvertise);
+        PartnerAbility = PcnetpReadMii(Device,
+                                       Device->PhyId,
+                                       MiiRegisterLinkPartnerAbility);
+
+        CommonLink &= PartnerAbility;
+        if ((CommonLink & MII_ADVERTISE_100_FULL) != 0) {
+            *Speed = NET_SPEED_100_MBPS;
+            *FullDuplex = TRUE;
+
+        } else if ((CommonLink & MII_ADVERTISE_100_BASE4) != 0) {
+            *Speed = NET_SPEED_100_MBPS;
+            *FullDuplex = TRUE;
+
+        } else if ((CommonLink & MII_ADVERTISE_100_HALF) != 0) {
+            *Speed = NET_SPEED_100_MBPS;
+            *FullDuplex = FALSE;
+
+        } else if ((CommonLink & MII_ADVERTISE_10_FULL) != 0) {
+            *Speed = NET_SPEED_10_MBPS;
+            *FullDuplex = TRUE;
+
+        } else if ((CommonLink & MII_ADVERTISE_10_HALF) != 0) {
+            *Speed = NET_SPEED_10_MBPS;
+            *FullDuplex = FALSE;
+
+        } else {
+            *LinkUp = FALSE;
+        }
+    }
+
+DetermineLinkParametersEnd:
+    return STATUS_SUCCESS;
+}
 
 VOID
 PcnetpReapReceivedDescriptors (
@@ -1358,6 +1888,92 @@ Return Value:
         PCNET_WRITE_REGISTER32(Device, PcnetDwioBusDataPort, Value);
     }
 
+    return;
+}
+
+USHORT
+PcnetpReadMii (
+    PPCNET_DEVICE Device,
+    USHORT PhyId,
+    USHORT Register
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads a register from the PHY.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+    PhyId - Supplies the address of the PHY.
+
+    Register - Supplies the MDIO register to read.
+
+Return Value:
+
+    Returns the value read from the register.
+
+--*/
+
+{
+
+    USHORT Address;
+
+    Address = (PhyId << PCNET_BCR33_PHY_ADDRESS_SHIFT) &
+              PCNET_BCR33_PHY_ADDRESS_MASK;
+
+    Address |= (Register << PCNET_BCR33_REG_ADDRESS_SHIFT) &
+               PCNET_BCR33_REG_ADDRESS_MASK;
+
+    PcnetpWriteBcr(Device, PcnetBcr33PhyAddress, Address);
+    return PcnetpReadBcr(Device, PcnetBcr34PhyData);
+}
+
+VOID
+PcnetpWriteMii (
+    PPCNET_DEVICE Device,
+    USHORT PhyId,
+    USHORT Register,
+    USHORT Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes a PHY register.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+    PhyId - Supplies the address of the PHY.
+
+    Register - Supplies the MDIO register to write.
+
+    Value - Supplies the value to write to the MDIO register.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    USHORT Address;
+
+    Address = (PhyId << PCNET_BCR33_PHY_ADDRESS_SHIFT) &
+              PCNET_BCR33_PHY_ADDRESS_MASK;
+
+    Address |= (Register << PCNET_BCR33_REG_ADDRESS_SHIFT) &
+               PCNET_BCR33_REG_ADDRESS_MASK;
+
+    PcnetpWriteBcr(Device, PcnetBcr33PhyAddress, Address);
+    PcnetpWriteBcr(Device, PcnetBcr34PhyData, Value);
     return;
 }
 

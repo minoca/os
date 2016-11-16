@@ -4,11 +4,11 @@
 #
 #   Module Name:
 #
-#       AMD PCnet32 LANCE
+#       AMD PCnet32
 #
 #   Abstract:
 #
-#       This module implements the AMD 79C9xx PCnet32 LANCE driver.
+#       This module implements the Am79C9xx PCnet driver.
 #
 #   Author:
 #

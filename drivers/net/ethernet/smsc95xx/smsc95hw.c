@@ -1382,9 +1382,9 @@ Return Value:
 
     do {
         Status = Sm95pReadMdio(Device,
-                                Device->PhyId,
-                                MiiRegisterBasicControl,
-                                &Value);
+                               Device->PhyId,
+                               MiiRegisterBasicControl,
+                               &Value);
 
         if (!KSUCCESS(Status)) {
             return Status;
