@@ -160,6 +160,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/ninja-1.7.1 tools"
         },
         {
+            "name": "Make pkg-config (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/pkg-config-0.29.1 tools"
+        },
+        {
             "name": "Make awk",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/awk"
@@ -573,6 +578,11 @@
             "name": "Make pth",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/pth-2.0.7"
+        },
+        {
+            "name": "Make irssi",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/irssi-0.8.20"
         },
         {
             "name": "Make OS",

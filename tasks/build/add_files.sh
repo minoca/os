@@ -158,7 +158,8 @@ libncurses
 libreadline
 libopenssl
 libpcre
-ca-certificates"
+ca-certificates
+pkgconfig"
 
 mkdir -p "$DEST/usr/lib/opkg/"
 
