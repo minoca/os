@@ -1135,6 +1135,21 @@ Return Value:
         goto StartDeviceEnd;
     }
 
+    //
+    // Clear out any queued up bytes, as they might prevent future interrupts
+    // from firing.
+    //
+
+    while (TRUE) {
+        if ((READ_STATUS_REGISTER(Device) &
+             I8042_STATUS_OUTPUT_BUFFER_FULL) == 0) {
+
+            break;
+        }
+
+        READ_DATA_REGISTER(Device);
+    }
+
 StartDeviceEnd:
     if (!KSUCCESS(Status)) {
         Device->InterruptResourcesFound = FALSE;
