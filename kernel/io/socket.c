@@ -664,6 +664,12 @@ Return Value:
         }
     }
 
+    if (((Parameters->SocketIoFlags & SOCKET_IO_NON_BLOCKING) != 0) &&
+        (Status == STATUS_TIMEOUT)) {
+
+        Status = STATUS_OPERATION_WOULD_BLOCK;
+    }
+
 SocketSendData:
     return Status;
 }
@@ -740,6 +746,12 @@ Return Value:
                                             Parameters,
                                             IoBuffer);
         }
+    }
+
+    if (((Parameters->SocketIoFlags & SOCKET_IO_NON_BLOCKING) != 0) &&
+        (Status == STATUS_TIMEOUT)) {
+
+        Status = STATUS_OPERATION_WOULD_BLOCK;
     }
 
 SocketReceiveDataEnd:

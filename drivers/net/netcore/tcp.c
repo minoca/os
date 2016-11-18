@@ -1742,10 +1742,6 @@ Return Value:
                                         &ReturnedEvents);
 
         if (!KSUCCESS(Status)) {
-            if ((Status == STATUS_TIMEOUT) && (Timeout == 0)) {
-                Status = STATUS_OPERATION_WOULD_BLOCK;
-            }
-
             goto TcpSendEnd;
         }
 
@@ -1986,10 +1982,6 @@ Return Value:
                                             &ReturnedEvents);
 
             if (!KSUCCESS(Status)) {
-                if ((Status == STATUS_TIMEOUT) && (Timeout == 0)) {
-                    Status = STATUS_OPERATION_WOULD_BLOCK;
-                }
-
                 goto TcpSendEnd;
             }
 
