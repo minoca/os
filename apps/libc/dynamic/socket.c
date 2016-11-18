@@ -414,6 +414,10 @@ Return Value:
 
     KSTATUS Status;
 
+    if (Backlog < 0) {
+        Backlog = 0;
+    }
+
     Status = OsSocketListen((HANDLE)(UINTN)Socket, Backlog);
     if (!KSUCCESS(Status)) {
         if (Status == STATUS_NOT_SUPPORTED) {
