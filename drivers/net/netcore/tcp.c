@@ -897,6 +897,7 @@ Return Value:
     ASSERT(TcpSocket->ListEntry.Next == NULL);
     ASSERT(LIST_EMPTY(&(TcpSocket->ReceivedSegmentList)) != FALSE);
     ASSERT(LIST_EMPTY(&(TcpSocket->OutgoingSegmentList)) != FALSE);
+    ASSERT(TcpSocket->TimerReferenceCount == 0);
 
     KeDestroyQueuedLock(TcpSocket->Lock);
     TcpSocket->Lock = NULL;
@@ -6604,6 +6605,7 @@ Return Value:
                    Socket->SendFinalSequence);
 
             Socket->SendNextNetworkSequence += 1;
+            NetpTcpTimerReleaseReference(Socket);
             NetpTcpSendControlPacket(Socket, TCP_HEADER_FLAG_FIN);
             if (Socket->State == TcpStateCloseWait) {
                 NetpTcpSetState(Socket, TcpStateLastAcknowledge);
@@ -7924,6 +7926,7 @@ Return Value:
 
 {
 
+    ULONG Flags;
     PNET_SOCKET NetSocket;
     TCP_STATE OldState;
 
@@ -8139,14 +8142,32 @@ Return Value:
     //
 
     case TcpStateClosed:
+        if ((TCP_IS_SYN_RETRY_STATE(OldState) != FALSE) ||
+            ((TCP_IS_FIN_RETRY_STATE(OldState) != FALSE) &&
+             ((Socket->Flags & TCP_SOCKET_FLAG_SEND_FIN_WITH_DATA) == 0)) ||
+            (OldState == TcpStateTimeWait)) {
+
+            NetpTcpTimerReleaseReference(Socket);
+        }
 
         //
-        // Release all TCP timer references.
+        // If a more forceful close arrives after a transmit shutdown, the
+        // socket still have a reference on the timer in order to send a FIN
+        // once all the data has been sent. That's not going to happen now.
         //
 
-        Socket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-        if (Socket->TimerReferenceCount >= 1) {
-            Socket->TimerReferenceCount = 1;
+        Flags = Socket->Flags;
+        if (((Flags & TCP_SOCKET_FLAG_SEND_FINAL_SEQUENCE_VALID) != 0) &&
+            ((Flags & TCP_SOCKET_FLAG_SEND_FIN_WITH_DATA) == 0) &&
+            ((OldState == TcpStateEstablished) ||
+             (OldState == TcpStateCloseWait) ||
+             (OldState == TcpStateSynReceived))) {
+
+            NetpTcpTimerReleaseReference(Socket);
+        }
+
+        if ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) != 0) {
+            Socket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
             NetpTcpTimerReleaseReference(Socket);
         }
 
