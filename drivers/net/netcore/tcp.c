@@ -8222,6 +8222,8 @@ Return Value:
     PNET_PACKET_BUFFER Packet;
     PUCHAR PacketBuffer;
     NET_PACKET_LIST PacketList;
+    ULONG SavedWindowScale;
+    ULONG SavedWindowSize;
     KSTATUS Status;
 
     NetSocket = &(Socket->NetSocket);
@@ -8311,6 +8313,19 @@ Return Value:
     ASSERT(Packet->DataOffset >= sizeof(TCP_HEADER));
 
     Packet->DataOffset -= sizeof(TCP_HEADER);
+
+    //
+    // The SYN packet's window field should never be scaled. Temporarily
+    // disable the receive window scale and cap the size.
+    //
+
+    SavedWindowScale = Socket->ReceiveWindowScale;
+    Socket->ReceiveWindowScale = 0;
+    SavedWindowSize = Socket->ReceiveWindowFreeSize;
+    if (Socket->ReceiveWindowFreeSize > MAX_USHORT) {
+        Socket->ReceiveWindowFreeSize = MAX_USHORT;
+    }
+
     NetpTcpFillOutHeader(Socket,
                          Packet,
                          Socket->SendInitialSequence,
@@ -8319,6 +8334,8 @@ Return Value:
                          0,
                          0);
 
+    Socket->ReceiveWindowScale = SavedWindowScale;
+    Socket->ReceiveWindowFreeSize = SavedWindowSize;
     Status = NetSocket->Network->Interface.Send(NetSocket,
                                                 &(NetSocket->RemoteAddress),
                                                 NULL,
