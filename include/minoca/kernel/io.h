@@ -1955,6 +1955,9 @@ Members:
     IoBuffer - Stores a pointer to the read or write buffer supplied by the
         caller.
 
+    IoBufferState - Stoers a pointer to the internal state used for bounce
+        buffering.
+
     IoFlags - Stores flags governing the behavior of the I/O. See
         IO_FLAG_* definitions.
 
@@ -2067,6 +2070,11 @@ Members:
         use to store context for the completion callback routine. It will be
         passed to the completion routine.
 
+    ListEntry - Stores a list entry that the current driver processing the IRP
+        can use to put the IRP on a list. Drivers that have just gained control
+        of the IRP in either direction should not make assumptions about its
+        state.
+
     QueryResources - Stores the results from a Query Resources IRP.
 
     StartDevice - Stores the parameters to a Start Device IRP.
@@ -2100,6 +2108,7 @@ struct _IRP {
     KSTATUS Status;
     PIRP_COMPLETION_ROUTINE CompletionRoutine;
     PVOID CompletionContext;
+    LIST_ENTRY ListEntry;
     union {
         IRP_QUERY_RESOURCES QueryResources;
         IRP_START_DEVICE StartDevice;

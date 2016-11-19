@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2016 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -17,7 +17,7 @@ Abstract:
 
 Author:
 
-    Evan Green 4-Apr-2013
+    Evan Green 8-Nov-2016
 
 Environment:
 

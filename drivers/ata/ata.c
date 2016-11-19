@@ -32,6 +32,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/intrface/disk.h>
 #include <minoca/intrface/pci.h>
+#include <minoca/storage/ata.h>
 #include "ata.h"
 
 //

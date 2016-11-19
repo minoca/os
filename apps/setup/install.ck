@@ -119,6 +119,7 @@ var DriverFiles = [
 
 if (arch == "x86") {
     DriverFiles += [
+        "ahci.drv",
         "ata.drv",
         "atl1c.drv",
         "dwceth.drv",
@@ -149,6 +150,7 @@ var BootDrivers = [
 
 if (arch == "x86") {
     BootDrivers += [
+        "ahci.drv",
         "ata.drv",
         "pci.drv",
         "ehci.drv",
@@ -449,6 +451,7 @@ if (plat == "install-armv6") {
 
     var Files = [
         "acpi.drv",
+        "ahci.drv",
         "am3eth.drv",
         "am3i2c.drv",
         "am3soc.drv",
@@ -568,6 +571,7 @@ if (plat == "install-armv7") {
 
     var Files = [
         "acpi.drv",
+        "ahci.drv",
         "am3eth.drv",
         "am3i2c.drv",
         "am3soc.drv",
@@ -695,6 +699,7 @@ if (plat == "install-x86") {
 
     var Files = [
         "acpi.drv",
+        "ahci.drv",
         "ata.drv",
         "atl1c.drv",
         "bootman.bin",
@@ -995,7 +1000,8 @@ if (plat == "pcefi") {
 if (plat == "pc-tiny") {
 
     //
-    // Completely clobber the drivers list with one that fits x86 Qemu perfectly.
+    // Completely clobber the drivers list with one that fits x86 Qemu
+    // perfectly.
     //
 
     DriversCopy["Files"] = [
