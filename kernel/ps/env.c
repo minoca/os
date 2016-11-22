@@ -490,7 +490,7 @@ CopyEnvironmentEnd:
 
 KSTATUS
 PsCreateEnvironment (
-    PSTR CommandLine,
+    PCSTR CommandLine,
     ULONG CommandLineSize,
     PSTR *EnvironmentVariables,
     ULONG EnvironmentVariableCount,
@@ -564,7 +564,7 @@ Return Value:
     // Discount any spaces at the end.
     //
 
-    CurrentCommand = CommandLine + CommandLineSize - 1;
+    CurrentCommand = (PSTR)CommandLine + CommandLineSize - 1;
     while (*CurrentCommand == ' ') {
         CommandLineSize -= 1;
         CurrentCommand -= 1;
@@ -574,7 +574,7 @@ Return Value:
     // Loop through once to get the number of arguments.
     //
 
-    CurrentCommand = CommandLine;
+    CurrentCommand = (PSTR)CommandLine;
     CurrentSize = CommandLineSize;
     ArgumentCount = 0;
     while (TRUE) {

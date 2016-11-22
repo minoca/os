@@ -627,7 +627,7 @@ Return Value:
 KSTATUS
 ObNameObject (
     PVOID Object,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameLength,
     ULONG Tag,
     BOOL UseNameDirectly
@@ -684,7 +684,7 @@ Return Value:
     //
 
     if (UseNameDirectly != FALSE) {
-        NameToSet = Name;
+        NameToSet = (PSTR)Name;
 
     } else {
         NameToSet = MmAllocateNonPagedPool(NameLength, Tag);
