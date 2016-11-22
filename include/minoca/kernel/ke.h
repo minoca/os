@@ -2066,7 +2066,7 @@ Return Value:
 KERNEL_API
 KSTATUS
 KeSetSystemTimeZone (
-    PSTR ZoneName,
+    PCSTR ZoneName,
     PSTR OriginalZoneBuffer,
     PULONG OriginalZoneBufferSize
     );
@@ -2178,8 +2178,8 @@ KERNEL_API
 PKERNEL_ARGUMENT
 KeGetKernelArgument (
     PKERNEL_ARGUMENT Start,
-    PSTR Component,
-    PSTR Name
+    PCSTR Component,
+    PCSTR Name
     );
 
 /*++
@@ -2596,7 +2596,7 @@ KERNEL_API
 PWORK_QUEUE
 KeCreateWorkQueue (
     ULONG Flags,
-    PSTR Name
+    PCSTR Name
     );
 
 /*++
@@ -3449,7 +3449,7 @@ VOID
 KeVideoPrintString (
     ULONG XCoordinate,
     ULONG YCoordinate,
-    PSTR String
+    PCSTR String
     );
 
 /*++

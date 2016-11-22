@@ -57,7 +57,7 @@ Environment:
 RTL_API
 VOID
 RtlDebugPrint (
-    PSTR Format,
+    PCSTR Format,
     ...
     )
 

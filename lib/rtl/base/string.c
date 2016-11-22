@@ -255,8 +255,8 @@ Return Value:
 RTL_API
 BOOL
 RtlAreStringsEqualIgnoringCase (
-    PSTR String1,
-    PSTR String2,
+    PCSTR String1,
+    PCSTR String2,
     ULONG MaxLength
     )
 

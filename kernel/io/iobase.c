@@ -2388,7 +2388,7 @@ KSTATUS
 IoCreateSymbolicLink (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR LinkName,
+    PCSTR LinkName,
     ULONG LinkNameSize,
     PSTR LinkTarget,
     ULONG LinkTargetSize
@@ -2844,7 +2844,7 @@ Return Value:
 
 KSTATUS
 IoOpenPageFile (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathSize,
     ULONG Access,
     ULONG Flags,
@@ -4798,7 +4798,7 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoLoadFile (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     PLOAD_FILE_COMPLETION_ROUTINE CompletionRoutine,
     PVOID CompletionContext

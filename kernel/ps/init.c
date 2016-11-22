@@ -322,7 +322,7 @@ InitializeEnd:
 
 VOID
 PsVolumeArrival (
-    PSTR VolumeName,
+    PCSTR VolumeName,
     ULONG VolumeNameLength,
     BOOL SystemVolume
     )

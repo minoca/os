@@ -439,7 +439,7 @@ Return Value:
 
 PKPROCESS
 PspCreateProcess (
-    PSTR CommandLine,
+    PCSTR CommandLine,
     ULONG CommandLineSize,
     PPROCESS_ENVIRONMENT SourceEnvironment,
     PPROCESS_IDENTIFIERS Identifiers,

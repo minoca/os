@@ -872,7 +872,7 @@ typedef struct _DEVICE_PROBLEM_STATE {
     KSTATUS Status;
     ULONG DriverCode;
     ULONG Line;
-    PSTR File;
+    PCSTR File;
     PDRIVER Driver;
 } DEVICE_PROBLEM_STATE, *PDEVICE_PROBLEM_STATE;
 
@@ -1226,9 +1226,9 @@ IopCreateDevice (
     PDRIVER BusDriver,
     PVOID BusDriverContext,
     PDEVICE ParentDevice,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     OBJECT_TYPE DeviceType,
     ULONG DeviceSize,
     PDEVICE *NewDevice
@@ -1372,7 +1372,7 @@ IopSetDeviceProblemEx (
     KSTATUS Status,
     PDRIVER Driver,
     ULONG DriverCode,
-    PSTR SourceFile,
+    PCSTR SourceFile,
     ULONG LineNumber
     );
 
@@ -3591,7 +3591,7 @@ Return Value:
 
 KSTATUS
 IopOpenSharedMemoryObject (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,
@@ -3631,7 +3631,7 @@ Return Value:
 
 KSTATUS
 IopDeleteSharedMemoryObject (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength
     );
 
@@ -4231,7 +4231,7 @@ IopPathLookupUnlocked (
     PPATH_POINT Root,
     PPATH_POINT Directory,
     BOOL DirectoryLockHeld,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameSize,
     ULONG OpenFlags,
     IO_OBJECT_TYPE TypeOverride,

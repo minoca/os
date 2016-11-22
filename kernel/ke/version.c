@@ -113,8 +113,8 @@ ULONG KeEncodedVersion = ENCODE_VERSION_INFORMATION(VERSION_MAJOR,
 
 ULONG KeVersionSerial = VERSION_SERIAL;
 ULONG KeBuildTime = VERSION_BUILD_TIME;
-PSTR KeBuildString = VERSION_BUILD_STRING;
-PSTR KeProductName = PRODUCT_NAME;
+PCSTR KeBuildString = VERSION_BUILD_STRING;
+PCSTR KeProductName = PRODUCT_NAME;
 
 //
 // ------------------------------------------------------------------ Functions

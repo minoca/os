@@ -60,7 +60,7 @@ VOID
 KeVideoPrintString (
     ULONG XCoordinate,
     ULONG YCoordinate,
-    PSTR String
+    PCSTR String
     )
 
 /*++

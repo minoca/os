@@ -99,7 +99,7 @@ volatile RUNLEVEL KeTimeZoneLockOldRunLevel;
 KERNEL_API
 KSTATUS
 KeSetSystemTimeZone (
-    PSTR ZoneName,
+    PCSTR ZoneName,
     PSTR OriginalZoneBuffer,
     PULONG OriginalZoneBufferSize
     )
