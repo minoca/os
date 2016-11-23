@@ -573,7 +573,7 @@ Return Value:
 
 VOID
 KdPrintWithArgumentList (
-    PSTR Format,
+    PCSTR Format,
     va_list ArgumentList
     )
 

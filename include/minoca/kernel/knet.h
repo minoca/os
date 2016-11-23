@@ -1422,7 +1422,7 @@ IoSocketBindToAddress (
     PIO_HANDLE Handle,
     PVOID Link,
     PNETWORK_ADDRESS Address,
-    PSTR Path,
+    PCSTR Path,
     UINTN PathSize
     );
 
@@ -1490,7 +1490,7 @@ IoSocketAccept (
     PIO_HANDLE Handle,
     PIO_HANDLE *NewConnectionSocket,
     PNETWORK_ADDRESS RemoteAddress,
-    PSTR *RemotePath,
+    PCSTR *RemotePath,
     PUINTN RemotePathSize
     );
 
@@ -1532,7 +1532,7 @@ IoSocketConnect (
     BOOL FromKernelMode,
     PIO_HANDLE Handle,
     PNETWORK_ADDRESS Address,
-    PSTR RemotePath,
+    PCSTR RemotePath,
     UINTN RemotePathSize
     );
 

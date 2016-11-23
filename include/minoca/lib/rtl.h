@@ -1636,7 +1636,7 @@ Return Value:
 RTL_API
 VOID
 RtlDebugPrint (
-    PSTR Format,
+    PCSTR Format,
     ...
     );
 
@@ -1931,7 +1931,7 @@ RtlPrintToString (
     PSTR Destination,
     ULONG DestinationSize,
     CHARACTER_ENCODING Encoding,
-    PSTR Format,
+    PCSTR Format,
     ...
     );
 
@@ -1970,7 +1970,7 @@ RtlFormatString (
     PSTR Destination,
     ULONG DestinationSize,
     CHARACTER_ENCODING Encoding,
-    PSTR Format,
+    PCSTR Format,
     va_list ArgumentList
     );
 
@@ -2011,7 +2011,7 @@ RTL_API
 BOOL
 RtlFormat (
     PPRINT_FORMAT_CONTEXT Context,
-    PSTR Format,
+    PCSTR Format,
     va_list ArgumentList
     );
 
@@ -2044,7 +2044,7 @@ RtlPrintToStringWide (
     PWSTR Destination,
     ULONG DestinationSize,
     CHARACTER_ENCODING Encoding,
-    PWSTR Format,
+    PCWSTR Format,
     ...
     );
 
@@ -2083,7 +2083,7 @@ RtlFormatStringWide (
     PWSTR Destination,
     ULONG DestinationSize,
     CHARACTER_ENCODING Encoding,
-    PWSTR Format,
+    PCWSTR Format,
     va_list ArgumentList
     );
 
@@ -2125,7 +2125,7 @@ RTL_API
 BOOL
 RtlFormatWide (
     PPRINT_FORMAT_CONTEXT Context,
-    PWSTR Format,
+    PCWSTR Format,
     va_list ArgumentList
     );
 
@@ -2269,8 +2269,8 @@ Return Value:
 RTL_API
 BOOL
 RtlAreStringsEqualIgnoringCase (
-    PSTR String1,
-    PSTR String2,
+    PCSTR String1,
+    PCSTR String2,
     ULONG MaxLength
     );
 
@@ -5198,7 +5198,7 @@ KSTATUS
 RtlFilterTimeZoneData (
     PVOID TimeZoneData,
     ULONG TimeZoneDataSize,
-    PSTR TimeZoneName,
+    PCSTR TimeZoneName,
     PVOID FilteredData,
     PULONG FilteredDataSize
     );
@@ -5275,7 +5275,7 @@ KSTATUS
 RtlSetTimeZoneData (
     PVOID Data,
     ULONG DataSize,
-    PSTR ZoneName,
+    PCSTR ZoneName,
     PVOID *OldData,
     PULONG OldDataSize,
     PSTR OriginalZoneBuffer,
@@ -5371,8 +5371,8 @@ Return Value:
 RTL_API
 VOID
 RtlGetTimeZoneNames (
-    PSTR *StandardName,
-    PSTR *DaylightName,
+    PCSTR *StandardName,
+    PCSTR *DaylightName,
     PLONG StandardGmtOffset,
     PLONG DaylightGmtOffset
     );

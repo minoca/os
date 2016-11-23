@@ -1383,7 +1383,7 @@ Members:
 
 struct _KPROCESS {
     OBJECT_HEADER Header;
-    PSTR BinaryName;
+    PCSTR BinaryName;
     ULONG BinaryNameSize;
     ULONG Flags;
     PVOID QueuedLock;
@@ -1887,7 +1887,7 @@ Members:
 
 typedef struct _THREAD_CREATION_PARAMETERS {
     PKPROCESS Process;
-    PSTR Name;
+    PCSTR Name;
     UINTN NameSize;
     PTHREAD_ENTRY_ROUTINE ThreadRoutine;
     PVOID Parameter;
@@ -1912,7 +1912,7 @@ KSTATUS
 PsCreateKernelThread (
     PTHREAD_ENTRY_ROUTINE ThreadRoutine,
     PVOID ThreadParameter,
-    PSTR Name
+    PCSTR Name
     );
 
 /*++
@@ -2882,7 +2882,7 @@ Return Value:
 
 VOID
 PsVolumeArrival (
-    PSTR VolumeName,
+    PCSTR VolumeName,
     ULONG VolumeNameLength,
     BOOL SystemVolume
     );
@@ -3305,7 +3305,7 @@ Return Value:
 
 PKPROCESS
 PsCreateProcess (
-    PSTR CommandLine,
+    PCSTR CommandLine,
     ULONG CommandLineSize,
     PVOID RootDirectoryPathPoint,
     PVOID WorkingDirectoryPathPoint,
@@ -3565,7 +3565,7 @@ Return Value:
 
 KSTATUS
 PsCreateEnvironment (
-    PSTR CommandLine,
+    PCSTR CommandLine,
     ULONG CommandLineSize,
     PSTR *EnvironmentVariables,
     ULONG EnvironmentVariableCount,

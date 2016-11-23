@@ -513,7 +513,7 @@ Return Value:
 KSTATUS
 ObNameObject (
     PVOID Object,
-    PSTR Name,
+    PCSTR Name,
     ULONG NameLength,
     ULONG Tag,
     BOOL UseNameDirectly

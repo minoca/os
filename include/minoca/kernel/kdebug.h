@@ -363,7 +363,7 @@ Return Value:
 
 VOID
 KdPrint (
-    PSTR Format,
+    PCSTR Format,
     ...
     );
 
@@ -388,7 +388,7 @@ Return Value:
 
 VOID
 KdPrintWithArgumentList (
-    PSTR Format,
+    PCSTR Format,
     va_list ArgumentList
     );
 

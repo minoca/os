@@ -462,7 +462,7 @@ VidPrintString (
     PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
-    PSTR String
+    PCSTR String
     )
 
 /*++

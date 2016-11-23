@@ -149,7 +149,7 @@ KSTATUS
 PsCreateKernelThread (
     PTHREAD_ENTRY_ROUTINE ThreadRoutine,
     PVOID ThreadParameter,
-    PSTR Name
+    PCSTR Name
     )
 
 /*++

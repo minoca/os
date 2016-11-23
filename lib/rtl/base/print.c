@@ -86,7 +86,7 @@ Environment:
 BOOL
 RtlpConvertFormatSpecifier (
     PPRINT_FORMAT_CONTEXT Context,
-    PSTR Format,
+    PCSTR Format,
     PULONG Index,
     va_list *Arguments
     );
@@ -140,7 +140,7 @@ RtlpFormatWriteCharacter (
 
 ULONGLONG
 RtlpGetPositionalArgument (
-    PSTR Format,
+    PCSTR Format,
     ULONG ArgumentNumber,
     va_list *Arguments
     );
@@ -171,7 +171,7 @@ RtlPrintToString (
     PSTR Destination,
     ULONG DestinationSize,
     CHARACTER_ENCODING Encoding,
-    PSTR Format,
+    PCSTR Format,
     ...
     )
 
@@ -226,7 +226,7 @@ RtlFormatString (
     PSTR Destination,
     ULONG DestinationSize,
     CHARACTER_ENCODING Encoding,
-    PSTR Format,
+    PCSTR Format,
     va_list ArgumentList
     )
 
@@ -294,7 +294,7 @@ RTL_API
 BOOL
 RtlFormat (
     PPRINT_FORMAT_CONTEXT Context,
-    PSTR Format,
+    PCSTR Format,
     va_list ArgumentList
     )
 
@@ -477,7 +477,7 @@ Return Value:
 BOOL
 RtlpConvertFormatSpecifier (
     PPRINT_FORMAT_CONTEXT Context,
-    PSTR Format,
+    PCSTR Format,
     PULONG Index,
     va_list *Arguments
     )
@@ -511,8 +511,11 @@ Return Value:
 
 {
 
-    CHAR CharacterArgument;
     PCSTR CurrentFormat;
+    WCHAR WideCharacterArgument;
+    PWSTR WideStringArgument;
+    CHAR CharacterArgument;
+    PSTR StringArgument;
     DOUBLE_PARTS DoubleParts;
     LONGLONG Integer;
     ULONGLONG IntegerArgument;
@@ -526,9 +529,6 @@ Return Value:
     BOOL Result;
     CHAR Specifier;
     KSTATUS Status;
-    PSTR StringArgument;
-    WCHAR WideCharacterArgument;
-    PWSTR WideStringArgument;
 
     CurrentFormat = Format + *Index;
     RtlZeroMemory(&Properties, sizeof(PRINT_FORMAT_PROPERTIES));
@@ -2835,7 +2835,7 @@ Return Value:
 
 ULONGLONG
 RtlpGetPositionalArgument (
-    PSTR Format,
+    PCSTR Format,
     ULONG ArgumentNumber,
     va_list *Arguments
     )

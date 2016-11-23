@@ -197,7 +197,7 @@ KERNEL_API
 PWORK_QUEUE
 KeCreateWorkQueue (
     ULONG Flags,
-    PSTR Name
+    PCSTR Name
     )
 
 /*++

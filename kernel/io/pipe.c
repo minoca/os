@@ -125,7 +125,7 @@ KSTATUS
 IoCreatePipe (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG OpenFlags,
     FILE_PERMISSIONS CreatePermissions,

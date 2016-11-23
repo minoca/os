@@ -169,9 +169,9 @@ UINTN IoPathEntryListMaxSize;
 
 KSTATUS
 IoPathAppend (
-    PSTR Prefix,
+    PCSTR Prefix,
     ULONG PrefixSize,
-    PSTR Component,
+    PCSTR Component,
     ULONG ComponentSize,
     ULONG AllocationTag,
     PSTR *AppendedPath,
@@ -199,7 +199,7 @@ Arguments:
     AllocationTag - Supplies the tag to use for the combined allocation.
 
     AppendedPath - Supplies a pointer where the new path will be returned. The
-        caller is responsible for freeing this memory..
+        caller is responsible for freeing this memory.
 
     AppendedPathSize - Supplies a pointer where the size of the appended bath
         buffer in bytes including the null terminator will be returned.
@@ -1574,6 +1574,10 @@ Return Value:
 
     return Status;
 }
+
+//
+// TODO: Implement IopPathLookupUnlocked.
+//
 
 VOID
 IopPathCleanCache (

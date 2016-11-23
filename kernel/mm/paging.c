@@ -416,7 +416,7 @@ Return Value:
 
 VOID
 MmVolumeArrival (
-    PSTR VolumeName,
+    PCSTR VolumeName,
     ULONG VolumeNameLength,
     BOOL SystemVolume
     )

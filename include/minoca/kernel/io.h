@@ -2732,9 +2732,9 @@ IoCreateDevice (
     PDRIVER BusDriver,
     PVOID BusDriverContext,
     PDEVICE ParentDevice,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PDEVICE *NewDevice
     );
 
@@ -3003,7 +3003,7 @@ Return Value:
 --*/
 
 KERNEL_API
-PSTR
+PCSTR
 IoGetCompatibleDeviceIds (
     PDEVICE Device
     );
@@ -3029,7 +3029,7 @@ Return Value:
 --*/
 
 KERNEL_API
-PSTR
+PCSTR
 IoGetDeviceClassId (
     PDEVICE Device
     );
@@ -3055,7 +3055,7 @@ Return Value:
 KERNEL_API
 BOOL
 IoIsDeviceIdInCompatibleIdList (
-    PSTR DeviceId,
+    PCSTR DeviceId,
     PDEVICE Device
     );
 
@@ -3227,7 +3227,7 @@ IoSetDeviceDriverErrorEx (
     KSTATUS Status,
     PDRIVER Driver,
     ULONG DriverCode,
-    PSTR SourceFile,
+    PCSTR SourceFile,
     ULONG LineNumber
     );
 
@@ -4512,7 +4512,7 @@ KSTATUS
 IoCreateSymbolicLink (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR LinkName,
+    PCSTR LinkName,
     ULONG LinkNameSize,
     PSTR LinkTarget,
     ULONG LinkTargetSize
@@ -4958,7 +4958,7 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoLoadFile (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     PLOAD_FILE_COMPLETION_ROUTINE CompletionRoutine,
     PVOID CompletionContext
@@ -5021,7 +5021,7 @@ KSTATUS
 IoCreatePipe (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG OpenFlags,
     FILE_PERMISSIONS CreatePermissions,
@@ -5073,9 +5073,9 @@ IoCreateTerminal (
     BOOL FromKernelMode,
     PIO_HANDLE MasterDirectory,
     PIO_HANDLE SlaveDirectory,
-    PSTR MasterPath,
+    PCSTR MasterPath,
     UINTN MasterPathLength,
-    PSTR SlavePath,
+    PCSTR SlavePath,
     UINTN SlavePathLength,
     ULONG MasterAccess,
     ULONG MasterOpenFlags,
@@ -6525,7 +6525,7 @@ Return Value:
 
 KSTATUS
 IoOpenPageFile (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathSize,
     ULONG Access,
     ULONG Flags,
@@ -6567,9 +6567,9 @@ Return Value:
 
 KSTATUS
 IoPathAppend (
-    PSTR Prefix,
+    PCSTR Prefix,
     ULONG PrefixSize,
-    PSTR Component,
+    PCSTR Component,
     ULONG ComponentSize,
     ULONG AllocationTag,
     PSTR *AppendedPath,
@@ -6597,7 +6597,7 @@ Arguments:
     AllocationTag - Supplies the tag to use for the combined allocation.
 
     AppendedPath - Supplies a pointer where the new path will be returned. The
-        caller is responsible for freeing this memory..
+        caller is responsible for freeing this memory.
 
     AppendedPathSize - Supplies a pointer where the size of the appended bath
         buffer in bytes including the null terminator will be returned.
@@ -6676,7 +6676,7 @@ Return Value:
 
 KSTATUS
 IoLoadDriver (
-    PSTR DriverName,
+    PCSTR DriverName,
     PDRIVER *DriverOut
     );
 
@@ -6702,8 +6702,8 @@ Return Value:
 
 KSTATUS
 IoAddDeviceDatabaseEntry (
-    PSTR DeviceId,
-    PSTR DriverName
+    PCSTR DeviceId,
+    PCSTR DriverName
     );
 
 /*++
@@ -6738,8 +6738,8 @@ Return Value:
 
 KSTATUS
 IoAddDeviceClassDatabaseEntry (
-    PSTR ClassId,
-    PSTR DriverName
+    PCSTR ClassId,
+    PCSTR DriverName
     );
 
 /*++
