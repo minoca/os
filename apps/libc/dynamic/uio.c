@@ -109,10 +109,6 @@ Return Value:
                                  &BytesCompleted);
 
     if (Status == STATUS_TIMEOUT) {
-        if (BytesCompleted != 0) {
-            return (ssize_t)BytesCompleted;
-        }
-
         errno = EAGAIN;
         return -1;
 
@@ -180,10 +176,6 @@ Return Value:
                                  &BytesCompleted);
 
     if (Status == STATUS_TIMEOUT) {
-        if (BytesCompleted != 0) {
-            return (ssize_t)BytesCompleted;
-        }
-
         errno = EAGAIN;
         return -1;
 
