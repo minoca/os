@@ -120,5 +120,5 @@ Minoca OS is licensed to the public under the terms of the GNU General Public Li
  * Website: [http://www.minocacorp.com/](http://www.minocacorp.com)
  * Github: [https://github.com/minoca](https://github.com/minoca)
  * Gitlab: [https://gitlab.com/minoca](https://gitlab.com/minoca)
- * IRC: [ircs://irc.oftc.net:6697/minoca-os](ircs://irc.oftc.net:6697/minoca-os)
+ * IRC: [ircs://irc.oftc.net:6667/minoca-os](ircs://irc.oftc.net:6667/minoca-os)
 
