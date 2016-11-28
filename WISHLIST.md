@@ -77,3 +77,4 @@ Below is a list of platforms that might be interesting to port to.
 ### Community feature requests
  - PowerPC architecture port
  - MIPS architecture port
+ - Asynchronous I/O mechanism
