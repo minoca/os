@@ -1019,7 +1019,7 @@ KSTATUS
 PsCreateKernelThread (
     PTHREAD_ENTRY_ROUTINE ThreadRoutine,
     PVOID ThreadParameter,
-    PSTR Name
+    PCSTR Name
     )
 
 /*++
@@ -1744,7 +1744,7 @@ Return Value:
 VOID
 KeCrashSystemEx (
     ULONG CrashCode,
-    PSTR CrashCodeString,
+    PCSTR CrashCodeString,
     ULONGLONG Parameter1,
     ULONGLONG Parameter2,
     ULONGLONG Parameter3,
@@ -2160,7 +2160,7 @@ Return Value:
 
 KSTATUS
 IoOpenPageFile (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathSize,
     ULONG Access,
     ULONG Flags,
@@ -2624,9 +2624,9 @@ Return Value:
 
 KSTATUS
 IoPathAppend (
-    PSTR Prefix,
+    PCSTR Prefix,
     ULONG PrefixSize,
-    PSTR Component,
+    PCSTR Component,
     ULONG ComponentSize,
     ULONG AllocationTag,
     PSTR *AppendedPath,

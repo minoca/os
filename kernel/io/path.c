@@ -1575,10 +1575,6 @@ Return Value:
     return Status;
 }
 
-//
-// TODO: Implement IopPathLookupUnlocked.
-//
-
 VOID
 IopPathCleanCache (
     PPATH_ENTRY RootPath

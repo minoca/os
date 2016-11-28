@@ -59,7 +59,7 @@ ULONG KeActiveProcessorCount = 1;
 
 VOID
 RtlDebugPrint (
-    PSTR Format,
+    PCSTR Format,
     ...
     )
 
@@ -268,7 +268,7 @@ Return Value:
 VOID
 KeCrashSystemEx (
     ULONG CrashCode,
-    PSTR CrashCodeString,
+    PCSTR CrashCodeString,
     ULONGLONG Parameter1,
     ULONGLONG Parameter2,
     ULONGLONG Parameter3,

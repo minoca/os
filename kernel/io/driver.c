@@ -51,8 +51,8 @@ IopInitializeImages (
 
 KSTATUS
 IopAddDeviceDatabaseEntry (
-    PSTR DeviceOrClassId,
-    PSTR DriverName,
+    PCSTR DeviceOrClassId,
+    PCSTR DriverName,
     PLIST_ENTRY DatabaseListHead
     );
 
@@ -355,7 +355,7 @@ SysLoadDriverEnd:
 
 KSTATUS
 IoLoadDriver (
-    PSTR DriverName,
+    PCSTR DriverName,
     PDRIVER *DriverOut
     )
 
@@ -435,8 +435,8 @@ LoadDriverEnd:
 
 KSTATUS
 IoAddDeviceDatabaseEntry (
-    PSTR DeviceId,
-    PSTR DriverName
+    PCSTR DeviceId,
+    PCSTR DriverName
     )
 
 /*++
@@ -484,8 +484,8 @@ Return Value:
 
 KSTATUS
 IoAddDeviceClassDatabaseEntry (
-    PSTR ClassId,
-    PSTR DriverName
+    PCSTR ClassId,
+    PCSTR DriverName
     )
 
 /*++
@@ -755,8 +755,8 @@ Return Value:
 
 KSTATUS
 IopAddDeviceDatabaseEntry (
-    PSTR DeviceOrClassId,
-    PSTR DriverName,
+    PCSTR DeviceOrClassId,
+    PCSTR DriverName,
     PLIST_ENTRY DatabaseListHead
     )
 

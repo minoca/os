@@ -210,11 +210,6 @@ InitializeSharedMemoryObjectSupportEnd:
     return Status;
 }
 
-//
-// TODO: Implement IopOpenSharedMemoryObject.
-// TODO: Implement IopDeleteSharedMemoryObject.
-//
-
 PPATH_POINT
 IopGetSharedMemoryDirectory (
     BOOL FromKernelMode

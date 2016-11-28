@@ -411,11 +411,10 @@ Return Value:
 
 {
 
-    PCWSTR CurrentFormat;
     CHAR ByteCharacterArgument;
     PSTR ByteStringArgument;
     WCHAR CharacterArgument;
-    PWSTR StringArgument;
+    PCWSTR CurrentFormat;
     DOUBLE_PARTS DoubleParts;
     LONGLONG Integer;
     ULONGLONG IntegerArgument;
@@ -429,6 +428,7 @@ Return Value:
     BOOL Result;
     WCHAR Specifier;
     KSTATUS Status;
+    PWSTR StringArgument;
 
     CurrentFormat = Format + *Index;
     RtlZeroMemory(&Properties, sizeof(PRINT_FORMAT_PROPERTIES));

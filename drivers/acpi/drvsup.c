@@ -2583,7 +2583,7 @@ Return Value:
 
 {
 
-    PSTR ClassId;
+    PCSTR ClassId;
     BOOL Match;
 
     ClassId = IoGetDeviceClassId(Device);
