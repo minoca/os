@@ -1789,7 +1789,7 @@ LIBC_API
 wchar_t *
 wmemchr (
     const wchar_t *Buffer,
-    int Character,
+    wchar_t Character,
     size_t Size
     );
 
