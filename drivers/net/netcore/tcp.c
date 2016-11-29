@@ -57,6 +57,11 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef enum _TCP_TIMER_STATE {
+    TcpTimerNotQueued,
+    TcpTimerQueued,
+} TPC_TIMER_STATE, *PTCP_TIMER_STATE;
+
 /*++
 
 Structure Description:
@@ -407,6 +412,7 @@ NetpTcpFreeSegment (
 PKTIMER NetTcpTimer;
 ULONGLONG NetTcpTimerPeriod;
 volatile ULONG NetTcpTimerReferenceCount;
+volatile ULONG NetTcpTimerState = TcpTimerNotQueued;
 
 //
 // Store a pointer to the global TCP keep alive timer.
@@ -3695,7 +3701,6 @@ Return Value:
     BOOL KeepAliveTimeout;
     PSOCKET KernelSocket;
     BOOL LinkUp;
-    ULONG OldReferenceCount;
     ULONGLONG RecentTime;
     PVOID SignalingObject;
     PVOID WaitObjectArray[2];
@@ -3730,12 +3735,25 @@ Return Value:
             KeSignalTimer(NetTcpKeepAliveTimer, SignalOptionUnsignal);
 
         //
-        // If the TCP time signaled, determine whether or not work needs to be
-        // done. Start by decrementing a reference for the now expired timer.
-        // If the old reference count is 1 then none of the sockets need
-        // processing. If there is still more than 1 reference, however, at
-        // least one socket is hanging around. Queue the timer and process the
-        // sockets.
+        // If the TCP timer signaled, determine whether or not work needs to be
+        // done. Start by setting the timer state to "not queued" as it just
+        // expired. Next, check the timer reference count. If there are no
+        // references, then no sockets need processing. If there are
+        // references, then at least one socket is hanging around. Attempt to
+        // queue the timer for the next round of work.
+        //
+        // Sockets may be racing to increment the timer reference count from 0
+        // to 1 and queue the timer. The timer state variable synchronizes
+        // this. If the increment comes before the setting of the state to
+        // "not queued", the socket will see that the timer is already queued
+        // and the worker will see the timer reference and requeue the timer.
+        // If the increment comes after the setting of the state to "not
+        // queued" but before the worker checks the reference count, then the
+        // worker and socket will race to requeue the timer by performing
+        // atomic compare-exchanges on the timer state. If the increment comes
+        // after the setting of the state to "not queued" and after the worker
+        // sees the reference as 0, then the socket is free and clear to win
+        // the compare-exchange and queue the timer.
         //
 
         } else {
@@ -3743,8 +3761,8 @@ Return Value:
             ASSERT(SignalingObject == NetTcpTimer);
 
             KeSignalTimer(NetTcpTimer, SignalOptionUnsignal);
-            OldReferenceCount = NetpTcpTimerReleaseReference(NULL);
-            if (OldReferenceCount == 1) {
+            RtlAtomicExchange32(&NetTcpTimerState, TcpTimerNotQueued);
+            if (NetTcpTimerReferenceCount == 0) {
                 continue;
             }
 
@@ -8485,26 +8503,33 @@ Return Value:
 {
 
     ULONGLONG DueTime;
+    ULONG OldState;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     //
-    // Add a reference for the TCP worker and queue the timer.
+    // Attempt to queue the timer. The TCP worker may race with sockets adding
+    // the first reference to the timer and then trying to queue it.
     //
 
-    RtlAtomicAdd32(&NetTcpTimerReferenceCount, 1);
-    DueTime = KeGetRecentTimeCounter();
-    DueTime += NetTcpTimerPeriod;
-    Status = KeQueueTimer(NetTcpTimer,
-                          TimerQueueSoftWake,
-                          DueTime,
-                          0,
-                          0,
-                          NULL);
+    OldState = RtlAtomicCompareExchange32(&NetTcpTimerState,
+                                          TcpTimerQueued,
+                                          TcpTimerNotQueued);
 
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Error: Failed to queue TCP timer: %d\n", Status);
+    if (OldState == TcpTimerNotQueued) {
+        DueTime = KeGetRecentTimeCounter();
+        DueTime += NetTcpTimerPeriod;
+        Status = KeQueueTimer(NetTcpTimer,
+                              TimerQueueSoftWake,
+                              DueTime,
+                              0,
+                              0,
+                              NULL);
+
+        if (!KSUCCESS(Status)) {
+            RtlDebugPrint("Error: Failed to queue TCP timer: %d\n", Status);
+        }
     }
 
     return;
