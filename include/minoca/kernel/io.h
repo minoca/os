@@ -515,19 +515,19 @@ Author:
 #define TERMINAL_INPUT_STRIP 0x00000020
 
 //
-// Set this flag to map newlines (\n) to carraige returns (\r) on input.
+// Set this flag to map newlines (\n) to carriage returns (\r) on input.
 //
 
 #define TERMINAL_INPUT_NEWLINE_TO_CR 0x00000040
 
 //
-// Set this flag to ignore carraige returns.
+// Set this flag to ignore carriage returns.
 //
 
 #define TERMINAL_INPUT_IGNORE_CR 0x00000080
 
 //
-// Set this flag to map carraige return (\r) characters to newlines (\n) on
+// Set this flag to map carriage return (\r) characters to newlines (\n) on
 // input.
 //
 
@@ -577,19 +577,19 @@ Author:
 #define TERMINAL_OUTPUT_NEWLINE_TO_CRLF 0x00000002
 
 //
-// Set this flag to map carraige returns (\r) to newlines (\n) on output.
+// Set this flag to map carriage returns (\r) to newlines (\n) on output.
 //
 
 #define TERMINAL_OUTPUT_CR_TO_NEWLINE 0x00000004
 
 //
-// Set this flag to avoid carraige return output at column 0.
+// Set this flag to avoid carriage return output at column 0.
 //
 
 #define TERMINAL_OUTPUT_NO_CR_AT_COLUMN_ZERO 0x00000008
 
 //
-// Set this flag to have newline perform carraige return functionality.
+// Set this flag to have newline perform carriage return functionality.
 //
 
 #define TERMINAL_OUTPUT_NEWLINE_IS_CR 0x00000010
@@ -607,7 +607,7 @@ Author:
 #define TERMINAL_OUTPUT_NEWLINE_DELAY 0x00000040
 
 //
-// Set this flag to select carraige return delays, types 0 through 3.
+// Set this flag to select carriage return delays, types 0 through 3.
 // Type 1 delays for an amount dependent on column position. Type 2 is about
 // 0.1 seconds, and type 3 is about 0.15 seconds. If OFILL is set, type 1
 // transmits two fill characters and type 2 transmits four fill characters.
