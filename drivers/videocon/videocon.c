@@ -1410,7 +1410,7 @@ Return Value:
                 Line = NULL;
 
             //
-            // Handle a carraige return.
+            // Handle a carriage return.
             //
 
             } else if (Character == '\r') {

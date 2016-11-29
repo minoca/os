@@ -81,19 +81,19 @@ extern "C" {
 #define ISTRIP 0x00000020
 
 //
-// Set this flag to map newlines (\n) to carraige returns (\r) on input.
+// Set this flag to map newlines (\n) to carriage returns (\r) on input.
 //
 
 #define INLCR 0x00000040
 
 //
-// Set this flag to ignore carraige returns.
+// Set this flag to ignore carriage returns.
 //
 
 #define IGNCR 0x00000080
 
 //
-// Set this flag to map carraige return (\r) characters to newlines (\n) on
+// Set this flag to map carriage return (\r) characters to newlines (\n) on
 // input.
 //
 
@@ -143,19 +143,19 @@ extern "C" {
 #define ONLCR 0x00000002
 
 //
-// Set this flag to map carraige returns (\r) to newlines (\n) on output.
+// Set this flag to map carriage returns (\r) to newlines (\n) on output.
 //
 
 #define OCRNL 0x00000004
 
 //
-// Set this flag to avoid carraige return output at column 0.
+// Set this flag to avoid carriage return output at column 0.
 //
 
 #define ONOCR 0x00000008
 
 //
-// Set this flag to have newline perform carraige return functionality.
+// Set this flag to have newline perform carriage return functionality.
 //
 
 #define ONLRET 0x00000010
@@ -175,7 +175,7 @@ extern "C" {
 #define NL1 0x00000040
 
 //
-// Set this flag to select carraige return delays, types 0 through 3.
+// Set this flag to select carriage return delays, types 0 through 3.
 // Type 1 delays for an amount dependent on column position. Type 2 is about
 // 0.1 seconds, and type 3 is about 0.15 seconds. If OFILL is set, type 1
 // transmits two fill characters and type 2 transmits four fill characters.

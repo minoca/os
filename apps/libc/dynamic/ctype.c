@@ -370,7 +370,7 @@ isspace (
 Routine Description:
 
     This routine returns non-zero if the given character is white space. In the
-    default locale, this is the characters space, tab, newline (\n) carraige
+    default locale, this is the characters space, tab, newline (\n) carriage
     return (\r), form feed (\f), and vertical tab (\v).
 
 Arguments:

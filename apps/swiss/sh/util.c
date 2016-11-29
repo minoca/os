@@ -1295,7 +1295,7 @@ Return Value:
                      SeparatorIndex += 1) {
 
                     //
-                    // Treat carraige returns as equal to newlines. This is
+                    // Treat carriage returns as equal to newlines. This is
                     // cheating a bit, but the hope is it fixes up CRLFs
                     // seamlessly without causing much other damage.
                     //

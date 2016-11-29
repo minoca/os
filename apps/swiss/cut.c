@@ -691,7 +691,7 @@ Return Value:
     }
 
     //
-    // Remove the newline and maybe a carraige return before that.
+    // Remove the newline and maybe a carriage return before that.
     //
 
     if ((Index != 0) && (Line[Index - 1] == '\n')) {
