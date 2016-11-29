@@ -275,11 +275,6 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/acpica-unix-20140424"
         },
         {
-            "name": "Make SQLite",
-            "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/sqlite-autoconf-3080500"
-        },
-        {
             "name": "Make NCurses",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/ncurses-5.9"
@@ -288,6 +283,11 @@
             "name": "Make readline",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/readline-6.3"
+        },
+        {
+            "name": "Make SQLite",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/sqlite-autoconf-3080500"
         },
         {
             "name": "Make nano",
@@ -583,6 +583,16 @@
             "name": "Make irssi",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/irssi-0.8.20"
+        },
+        {
+            "name": "Make cpio",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/cpio-2.12"
+        },
+        {
+            "name": "Make mc",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mc-4.8.18"
         },
         {
             "name": "Make OS",
