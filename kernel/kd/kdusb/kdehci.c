@@ -1459,7 +1459,8 @@ KdEhciRetireTransfer (
 
 Routine Description:
 
-    This routine retires an EHCI. This frees the buffer allocated during setup.
+    This routine retires an EHCI USB transfer. This frees the buffer allocated
+    during setup.
 
 Arguments:
 
