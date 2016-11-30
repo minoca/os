@@ -37,8 +37,8 @@ BINARYTYPE = library
 
 VERSION_MAJOR := 0
 VERSION_MINOR := 3
-VERSION_REVISION := 0
-VERSION_RELEASE := SystemReleaseBeta
+VERSION_REVISION := 1
+VERSION_RELEASE := SystemReleaseDevelopment
 
 OBJS = crash.o    \
        crashdmp.o \
