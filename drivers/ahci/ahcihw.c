@@ -306,7 +306,7 @@ Return Value:
                              AHCI_HOST_CAPABILITY_PORT_COUNT_MASK) + 1;
 
     if (Controller->PortCount < AHCI_PORT_COUNT) {
-        ImplementedPorts &= ~((1 << Controller->PortCount) - 1);
+        ImplementedPorts &= (1 << Controller->PortCount) - 1;
     }
 
     Controller->ImplementedPorts = ImplementedPorts;
@@ -524,43 +524,38 @@ Return Value:
     // If the drive is already up and running, return now.
     //
 
-    if ((SataStatus & AHCI_PORT_SATA_STATUS_DETECTION_MASK) ==
+    if ((SataStatus & AHCI_PORT_SATA_STATUS_DETECTION_MASK) !=
         AHCI_PORT_SATA_STATUS_DETECTION_PHY) {
 
-        TaskFile = AHCI_READ(Port, AhciPortTaskFile);
-        if ((TaskFile & AHCI_PORT_TASK_ERROR_MASK) == 0) {
-            return STATUS_SUCCESS;
-        }
-    }
+        //
+        // Set the spin-up bit. For controllers that don't support staggered
+        // spin-up this will already be 1, so it does no harm to set.
+        //
 
-    //
-    // Set the spin-up bit. For controllers that don't support staggered spin-
-    // up this will already be 1, so it does no harm to set.
-    //
+        Command = AHCI_READ(Port, AhciPortCommand);
+        Command |= AHCI_PORT_COMMAND_SPIN_UP_DEVICE;
+        AHCI_WRITE(Port, AhciPortCommand, Command);
 
-    Command = AHCI_READ(Port, AhciPortCommand);
-    Command |= AHCI_PORT_COMMAND_SPIN_UP_DEVICE;
-    AHCI_WRITE(Port, AhciPortCommand, Command);
+        //
+        // Wait up to 50 milliseconds for the PHY to come up.
+        //
 
-    //
-    // Wait up to 50 milliseconds for the PHY to come up.
-    //
-
-    Time = 0;
-    Timeout = 0;
-    SataStatus = AHCI_READ(Port, AhciPortSataStatus);
-    while (((SataStatus & AHCI_PORT_SATA_STATUS_DETECTION_MASK) !=
-            AHCI_PORT_SATA_STATUS_DETECTION_PHY) &&
-           (Time <= Timeout)) {
-
-        Time = HlQueryTimeCounter();
-        if (Timeout == 0) {
-            Timeout = Time + ((AHCI_PHY_DETECT_TIMEOUT_MS *
-                               HlQueryTimeCounterFrequency()) /
-                              MILLISECONDS_PER_SECOND);
-        }
-
+        Time = 0;
+        Timeout = 0;
         SataStatus = AHCI_READ(Port, AhciPortSataStatus);
+        while (((SataStatus & AHCI_PORT_SATA_STATUS_DETECTION_MASK) !=
+                AHCI_PORT_SATA_STATUS_DETECTION_PHY) &&
+               (Time <= Timeout)) {
+
+            Time = HlQueryTimeCounter();
+            if (Timeout == 0) {
+                Timeout = Time + ((AHCI_PHY_DETECT_TIMEOUT_MS *
+                                   HlQueryTimeCounterFrequency()) /
+                                  MILLISECONDS_PER_SECOND);
+            }
+
+            SataStatus = AHCI_READ(Port, AhciPortSataStatus);
+        }
     }
 
     if ((SataStatus & AHCI_PORT_SATA_STATUS_DETECTION_MASK) !=
@@ -568,11 +563,6 @@ Return Value:
 
         return STATUS_NO_MEDIA;
     }
-
-    //
-    // TODO: I think drives can be busy and still be there...
-    // Return STATUS_SUCCESS always here.
-    //
 
     TaskFile = AHCI_READ(Port, AhciPortTaskFile);
     if ((TaskFile & AHCI_PORT_TASK_ERROR_MASK) != 0) {
@@ -654,18 +644,18 @@ Return Value:
     Command = &(Port->Tables[HeaderIndex]);
     RtlZeroMemory(&(Command->CommandFis), sizeof(Command->CommandFis));
     Fis = (PSATA_FIS_REGISTER_H2D)&(Command->CommandFis);
-    Fis->Type = SataFisRegisterH2d | SATA_FIS_REGISTER_H2D_FLAG_COMMAND;
+    Fis->Type = SataFisRegisterH2d;
+    Fis->Flags = SATA_FIS_REGISTER_H2D_FLAG_COMMAND;
     Fis->Command = AtaCommandIdentify;
     Fis->Device = ATA_DRIVE_SELECT_LBA;
     SATA_SET_FIS_COUNT(Fis, 1);
     Header->Control = AHCI_COMMAND_FIS_SIZE(sizeof(SATA_FIS_REGISTER_H2D));
     Header->PrdtLength = 1;
-    Header->Size = sizeof(ATA_IDENTIFY_PACKET);
     Prdt = &(Command->Prdt[0]);
     Prdt->AddressLow = (ULONG)(IoBuffer->Fragment[0].PhysicalAddress);
     Prdt->AddressHigh = (ULONG)(IoBuffer->Fragment[0].PhysicalAddress >> 32);
     Prdt->Reserved = 0;
-    Prdt->Count = ATA_SECTOR_SIZE;
+    Prdt->Count = ATA_SECTOR_SIZE - 1;
 
     //
     // Submit the command for execution.
@@ -677,15 +667,21 @@ Return Value:
     // Wait for the command to complete.
     //
 
+    KeReleaseSpinLock(&(Port->DpcLock));
+    KeLowerRunLevel(OldRunLevel);
     while ((Port->PendingCommands & (1 << HeaderIndex)) != 0) {
         KeYield();
     }
 
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    KeAcquireSpinLock(&(Port->DpcLock));
     TaskFile = AHCI_READ(Port, AhciPortTaskFile);
     if ((TaskFile & AHCI_PORT_TASK_ERROR_MASK) != 0) {
         Status = STATUS_DEVICE_IO_ERROR;
         goto EnumeratePortEnd;
     }
+
+    ASSERT(Header->Size == ATA_SECTOR_SIZE);
 
     //
     // Get the total capacity of the disk.
@@ -969,7 +965,7 @@ Return Value:
     Status = STATUS_SUCCESS;
     if ((TaskFile & AHCI_PORT_TASK_ERROR_MASK) != 0) {
         RtlDebugPrint("AHCI: I/O Error status: %x\n", TaskFile);
-        TaskFile = STATUS_DEVICE_IO_ERROR;
+        Status = STATUS_DEVICE_IO_ERROR;
     }
 
     Port->PendingCommands = NewPending;
@@ -987,19 +983,20 @@ Return Value:
         IoSize = Port->CommandState[Bit].IoSize;
         Port->CommandState[Bit].IoSize = 0;
         CommandInUse = FALSE;
-        CompleteIrp = TRUE;
+        CompleteIrp = FALSE;
 
         //
-        // There should not be a case where a command completed without an IRP.
+        // If there was no IRP, assume things are being handled manually. This
+        // happens during the IDENTIFY command.
         //
 
         if (Irp == NULL) {
-            RtlDebugPrint("AHCI: Command without IRP.\n");
-            CompleteIrp = FALSE;
-
-            ASSERT(FALSE);
+            CommandInUse = TRUE;
 
         } else if (KSUCCESS(Status)) {
+
+            ASSERT(Port->Commands[Bit].Size == IoSize);
+
             if (Irp->MajorCode == IrpMajorIo) {
                 Irp->U.ReadWrite.IoBytesCompleted += IoSize;
                 Irp->U.ReadWrite.NewIoOffset += IoSize;
@@ -1037,7 +1034,21 @@ Return Value:
 
                     AhcipPerformDmaIo(Port, Irp, Bit);
                     CommandInUse = TRUE;
+
+                //
+                // The IRP completed all its I/O.
+                //
+
+                } else {
+                    CompleteIrp = TRUE;
                 }
+
+            //
+            // Non I/O IRPs like flush just complete.
+            //
+
+            } else {
+                CompleteIrp = TRUE;
             }
         }
 
@@ -1220,7 +1231,8 @@ Routine Description:
 
     This routine begins processing for the next queued I/O IRP given a
     command index and table already (reused from the previous command). If
-    there is no work left to do, the command is freed.
+    there is no work left to do, the command is freed. The port lock must be
+    held.
 
 Arguments:
 
@@ -1239,18 +1251,23 @@ Return Value:
 
     PIRP Irp;
 
-    ASSERT(KeGetRunLevel() == RunLevelDispatch);
+    ASSERT(KeIsSpinLockHeld(&(Port->DpcLock)) != FALSE);
 
-    KeAcquireSpinLock(&(Port->DpcLock));
     if (!LIST_EMPTY(&(Port->IrpQueue))) {
         Irp = LIST_VALUE(Port->IrpQueue.Next, IRP, ListEntry);
         LIST_REMOVE(&(Irp->ListEntry));
-        KeReleaseSpinLock(&(Port->DpcLock));
         Port->CommandState[HeaderIndex].Irp = Irp;
-        AhcipPerformDmaIo(Port, Irp, HeaderIndex);
+        if (Irp->MajorCode == IrpMajorIo) {
+            AhcipPerformDmaIo(Port, Irp, HeaderIndex);
+
+        } else if (Irp->MajorCode == IrpMajorSystemControl) {
+
+            ASSERT(Irp->MinorCode == IrpMinorSystemControlSynchronize);
+
+            AhcipExecuteCacheFlush(Port, HeaderIndex);
+        }
 
     } else {
-        KeReleaseSpinLock(&(Port->DpcLock));
         Port->CommandState[HeaderIndex].Irp = NULL;
         AhcipFreeCommand(Port, HeaderIndex);
     }
@@ -1423,6 +1440,7 @@ Return Value:
     TransferSize -= TransferSizeRemaining;
     BlockAddress = IoOffset / ATA_SECTOR_SIZE;
     SectorCount = TransferSize / ATA_SECTOR_SIZE;
+    Port->CommandState[HeaderIndex].IoSize = TransferSize;
 
     //
     // Use LBA48 if the block address is too high or the sector size is too
@@ -1466,8 +1484,12 @@ Return Value:
     Fis->Device = ATA_DRIVE_SELECT_LBA;
     Header = &(Port->Commands[HeaderIndex]);
     Header->Control = AHCI_COMMAND_FIS_SIZE(sizeof(SATA_FIS_REGISTER_H2D));
+    if (Write != FALSE) {
+        Header->Control |= AHCI_COMMAND_HEADER_WRITE;
+    }
+
     Header->PrdtLength = PrdtIndex;
-    Header->Size = TransferSize;
+    Header->Size = 0;
     AhcipSubmitCommand(Port, 1 << HeaderIndex);
     return;
 }
@@ -1509,15 +1531,16 @@ Return Value:
            ((Port->PendingCommands & (1 << Index)) == 0));
 
     Header = &(Port->Commands[Index]);
+    Header->Size = 0;
     Command = &(Port->Tables[Index]);
     RtlZeroMemory(&(Command->CommandFis), sizeof(Command->CommandFis));
     Fis = (PSATA_FIS_REGISTER_H2D)&(Command->CommandFis);
-    Fis->Type = SataFisRegisterH2d | SATA_FIS_REGISTER_H2D_FLAG_COMMAND;
+    Fis->Type = SataFisRegisterH2d;
+    Fis->Flags = SATA_FIS_REGISTER_H2D_FLAG_COMMAND;
     Fis->Command = AtaCommandCacheFlush28;
     Fis->Device = ATA_DRIVE_SELECT_LBA;
     Header->Control = AHCI_COMMAND_FIS_SIZE(sizeof(SATA_FIS_REGISTER_H2D));
     Header->PrdtLength = 0;
-    Header->Size = 0;
 
     //
     // Submit the command for execution.
@@ -1557,21 +1580,26 @@ Return Value:
     ULONG Bit;
     PAHCI_COMMAND_HEADER CommandHeader;
     ULONG Mask;
-    ULONG NewAllocatedMask;
-    ULONG OldAllocatedMask;
     PHYSICAL_ADDRESS PhysicalAddress;
 
-    Mask = Port->CommandMask;
+    //
+    // If there's only one command, then just allocate it. Or don't.
+    //
+
     if ((Port->Flags & AHCI_PORT_NATIVE_COMMAND_QUEUING) == 0) {
-        Mask = 0x1;
-    }
+        if (Port->AllocatedCommands != 0) {
+            return -1;
+        }
+
+        Port->AllocatedCommands = 1;
+        Bit = 0;
 
     //
-    // Loop trying to grab a free command.
-    // TODO: This doesn't have to be so fancy if the DPC lock is always held.
+    // Get the first free entry.
     //
 
-    while (TRUE) {
+    } else {
+        Mask = Port->CommandMask;
         AllocatedMask = Port->AllocatedCommands & Mask;
 
         //
@@ -1591,19 +1619,7 @@ Return Value:
 
         ASSERT((1 << Bit) <= Mask);
 
-        //
-        // Attempt to grab that one. If the mask changed, retry.
-        //
-
-        NewAllocatedMask = AllocatedMask | (1 << Bit);
-        OldAllocatedMask =
-            RtlAtomicCompareExchange32(&(Port->AllocatedCommands),
-                                       NewAllocatedMask,
-                                       AllocatedMask);
-
-        if (AllocatedMask == OldAllocatedMask) {
-            break;
-        }
+        Port->AllocatedCommands |= 1 << Bit;
     }
 
     PhysicalAddress = Port->TablesPhysical + (sizeof(AHCI_COMMAND_TABLE) * Bit);
@@ -1614,7 +1630,7 @@ Return Value:
     //
 
     ASSERT((IS_ALIGNED(PhysicalAddress, AHCI_COMMAND_TABLE_ALIGNMENT)) &&
-           (PhysicalAddress = Port->Controller->MaxPhysical));
+           (PhysicalAddress <= Port->Controller->MaxPhysical));
 
     CommandHeader = &(Port->Commands[Bit]);
     RtlZeroMemory(CommandHeader, sizeof(AHCI_COMMAND_HEADER));

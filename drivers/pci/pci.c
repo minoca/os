@@ -3742,13 +3742,9 @@ Return Value:
             return "IDE";
         }
 
-#if 0
-
         if (Subclass == PCI_CLASS_MASS_STORAGE_SATA) {
             return "AHCI";
         }
-
-#endif
 
         break;
 

@@ -157,6 +157,12 @@ DRIVER_FUNCTION_TABLE AhciDriverFunctionTable = {
 };
 
 //
+// Store how long it took to do the enumeration of all drives, in milliseconds.
+//
+
+ULONG AhciEnumerationMilliseconds;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -252,6 +258,7 @@ Return Value:
     Controller->InterruptVector = INVALID_INTERRUPT_VECTOR;
     Controller->InterruptLine = INVALID_INTERRUPT_LINE;
     for (Index = 0; Index < AHCI_PORT_COUNT; Index += 1) {
+        Controller->Ports[Index].Controller = Controller;
         KeInitializeSpinLock(&(Controller->Ports[Index].DpcLock));
         INITIALIZE_LIST_HEAD(&(Controller->Ports[Index].IrpQueue));
         Controller->Ports[Index].Type = AhciContextPort;
@@ -793,7 +800,7 @@ Return Value:
 
         ASSERT(Irp->MinorCode == IrpMinorSystemControlSynchronize);
 
-        PmDeviceReleaseReference(Irp->Device);
+        PmDeviceReleaseReference(Device->OsDevice);
         return;
     }
 
@@ -1043,10 +1050,12 @@ Return Value:
             Controller->InterruptVector = Allocation->Allocation;
 
         } else if (Allocation->Type == ResourceTypePhysicalAddressSpace) {
+            if (Allocation->Length != 0) {
 
-            ASSERT(ControllerBase == NULL);
+                ASSERT(ControllerBase == NULL);
 
-            ControllerBase = Allocation;
+                ControllerBase = Allocation;
+            }
         }
 
         //
@@ -1156,8 +1165,10 @@ Return Value:
 
     ULONG ChildCount;
     PDEVICE Children[AHCI_PORT_COUNT];
+    ULONGLONG Duration;
     PAHCI_PORT Port;
     ULONG PortIndex;
+    ULONGLONG Start;
     KSTATUS Status;
 
     Status = PmDeviceAddReference(Irp->Device);
@@ -1166,6 +1177,7 @@ Return Value:
         return;
     }
 
+    Start = HlQueryTimeCounter();
     ChildCount = 0;
     for (PortIndex = 0; PortIndex < AHCI_PORT_COUNT; PortIndex += 1) {
         Port = &(Controller->Ports[PortIndex]);
@@ -1216,6 +1228,10 @@ Return Value:
         Children[ChildCount] = Port->OsDevice;
         ChildCount += 1;
     }
+
+    Duration = HlQueryTimeCounter() - Start;
+    AhciEnumerationMilliseconds = (Duration * MILLISECONDS_PER_SECOND) /
+                                  HlQueryTimeCounterFrequency();
 
     Status = IoMergeChildArrays(Irp, Children, ChildCount, AHCI_ALLOCATION_TAG);
     if (!KSUCCESS(Status)) {

@@ -226,6 +226,9 @@ Return Value:
     KSTATUS Status;
 
     State = Device->Power;
+
+    ASSERT(State != NULL);
+
     PreviousCount = RtlAtomicAdd(&(State->ReferenceCount), 1);
 
     ASSERT(PreviousCount < 0x10000000);
@@ -271,6 +274,9 @@ Return Value:
     PDEVICE_POWER State;
 
     State = Device->Power;
+
+    ASSERT(State != NULL);
+
     PreviousCount = RtlAtomicAdd(&(State->ReferenceCount), -1);
 
     ASSERT((PreviousCount != 0) && (PreviousCount < 0x10000000));
@@ -895,6 +901,9 @@ Return Value:
 
     Status = STATUS_SUCCESS;
     State = Device->Power;
+
+    ASSERT(State != NULL);
+
     PreviousCount = RtlAtomicAdd(&(State->ReferenceCount), 1);
 
     ASSERT(PreviousCount < 0x10000000);

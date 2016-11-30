@@ -87,6 +87,12 @@ Author:
 #define AHCI_COMMAND_FIS_SIZE(_Size) ((_Size) / sizeof(ULONG))
 
 //
+// This macro gets the error register out of the task file register.
+//
+
+#define AHCI_PORT_TASK_GET_ERROR(_TaskFile) (((_TaskFile) >> 8) & 0xFF)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -110,7 +116,7 @@ Author:
 // milliseconds. The spec is 10 milliseconds.
 //
 
-#define AHCI_PHY_DETECT_TIMEOUT_MS 50
+#define AHCI_PHY_DETECT_TIMEOUT_MS 25
 
 #define AHCI_COMMAND_TABLE_ALIGNMENT 128
 #define AHCI_RECEIVE_FIS_MAX_SIZE 0x1000
@@ -226,6 +232,11 @@ Author:
 
 #define AHCI_INTERRUPT_DEFAULT_ENABLE \
     (AHCI_INTERRUPT_D2H_REGISTER_FIS | \
+     AHCI_INTERRUPT_PIO_SETUP_FIS | \
+     AHCI_INTERRUPT_DMA_SETUP_FIS | \
+     AHCI_INTERRUPT_SET_DEVICE_BITS | \
+     AHCI_INTERRUPT_UNKNOWN_FIS | \
+     AHCI_INTERRUPT_DESCRIPTOR_PROCESSED | \
      AHCI_INTERRUPT_PORT_CONNECT_CHANGE | \
      AHCI_INTERRUPT_MECHANICAL_PRESENCE_CHANGE | \
      AHCI_INTERRUPT_PHY_READY_CHANGE | \
