@@ -57,8 +57,44 @@ Environment:
     (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
 
 //
+// Define the maximum size of the stack-allocated print buffer.
+//
+
+#define STREAM_PRINT_BUFFER_SIZE 128
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
+
+/*++
+
+Structure Description:
+
+    This structure defines the print context used for streams. This allows
+    unbuffered streams to batch prints, rather than write them out character by
+    character.
+
+Members:
+
+    Stream - Store a pointer to the file stream to print to.
+
+    Buffer - Stores a pointer to the buffered print output for unbuffered
+        streams.
+
+    BufferNextIndex - Stores the index into the buffer to store the next
+        character.
+
+    CharactersWritten - Stores the number of characters actually written to the
+        stream.
+
+--*/
+
+typedef struct _STREAM_PRINT_CONTEXT {
+    FILE *Stream;
+    CHAR Buffer[STREAM_PRINT_BUFFER_SIZE];
+    ULONG BufferNextIndex;
+    ULONG CharactersWritten;
+} STREAM_PRINT_CONTEXT, *PSTREAM_PRINT_CONTEXT;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -3048,16 +3084,46 @@ Return Value:
 
 {
 
+    ULONG CharactersWritten;
     PRINT_FORMAT_CONTEXT PrintContext;
+    STREAM_PRINT_CONTEXT StreamContext;
 
+    StreamContext.Stream = File;
+    StreamContext.BufferNextIndex = 0;
+    StreamContext.CharactersWritten = 0;
     memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
-    PrintContext.Context = File;
+    PrintContext.Context = &StreamContext;
     PrintContext.U.WriteCharacter = ClpFileFormatWriteCharacter;
     RtlInitializeMultibyteState(&(PrintContext.State),
                                 CharacterEncodingDefault);
 
     RtlFormat(&PrintContext, (PSTR)Format, Arguments);
-    return PrintContext.CharactersWritten;
+
+    //
+    // Flush the remaining buffered bytes if necessary.
+    //
+
+    if (File->BufferMode == _IONBF) {
+        if (StreamContext.BufferNextIndex != 0) {
+            CharactersWritten = fwrite_unlocked(StreamContext.Buffer,
+                                                1,
+                                                StreamContext.BufferNextIndex,
+                                                File);
+
+            if (CharactersWritten > 0) {
+                StreamContext.CharactersWritten += CharactersWritten;
+            }
+        }
+
+        CharactersWritten = StreamContext.CharactersWritten;
+
+        assert(CharactersWritten <= PrintContext.CharactersWritten);
+
+    } else {
+        CharactersWritten = PrintContext.CharactersWritten;
+    }
+
+    return CharactersWritten;
 }
 
 LIBC_API
@@ -3165,10 +3231,10 @@ Return Value:
     stdout->Flags |= FILE_FLAG_STANDARD_IO;
 
     //
-    // Standard error is always line buffered or unbuffered.
+    // Standard error is never buffered. Default to unbuffered.
     //
 
-    stderr = ClpCreateFileStructure(STDERR_FILENO, O_WRONLY, _IOLBF);
+    stderr = ClpCreateFileStructure(STDERR_FILENO, O_WRONLY, _IONBF);
     if (stderr == NULL) {
         goto InitializeFileIoEnd;
     }
@@ -3532,8 +3598,52 @@ Return Value:
 
 {
 
-    if (fputc_unlocked(Character, Context->Context) == -1) {
-        return FALSE;
+    ULONG CharactersWritten;
+    PSTREAM_PRINT_CONTEXT StreamContext;
+
+    StreamContext = Context->Context;
+
+    //
+    // If the stream is buffered in any way, then pass the character on to the
+    // stream.
+    //
+
+    if (StreamContext->Stream->BufferMode != _IONBF) {
+        if (fputc_unlocked(Character, StreamContext->Stream) == -1) {
+            return FALSE;
+        }
+
+    //
+    // If the stream is unbuffered, then locally buffer some characters
+    // together before flushing. This reduces the number of system calls
+    // required for fprintf on unbuffered streams.
+    //
+
+    } else {
+        StreamContext->Buffer[StreamContext->BufferNextIndex] = Character;
+        StreamContext->BufferNextIndex += 1;
+
+        //
+        // If the local buffer is full, then write to the stream. This will
+        // flush the data immediately.
+        //
+
+        if (StreamContext->BufferNextIndex == STREAM_PRINT_BUFFER_SIZE) {
+            StreamContext->BufferNextIndex = 0;
+            CharactersWritten = fwrite_unlocked(StreamContext->Buffer,
+                                                1,
+                                                STREAM_PRINT_BUFFER_SIZE,
+                                                StreamContext->Stream);
+
+            if (CharactersWritten < 0) {
+                return FALSE;
+            }
+
+            StreamContext->CharactersWritten += CharactersWritten;
+            if (CharactersWritten != STREAM_PRINT_BUFFER_SIZE) {
+                return FALSE;
+            }
+        }
     }
 
     return TRUE;
