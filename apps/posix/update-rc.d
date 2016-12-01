@@ -209,7 +209,7 @@ while [ -n "$1" ] ; do
             fi
 
             for f in /etc/rc$level.d/*; do
-                if [ $f -fe $script ]; then
+                if [ $f -ef $script ]; then
                     $do_it rm $f
                 fi
             done
