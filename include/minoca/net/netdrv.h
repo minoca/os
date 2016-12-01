@@ -161,6 +161,13 @@ Author:
 #define EAPOL_PROTOCOL_NUMBER    0x888E
 
 //
+// Define an "invalid" protocol number for networks that don't actually expect
+// to receive packets from the physical layer (e.g. Netlink).
+//
+
+#define INVALID_PROTOCOL_NUMBER (ULONG)-1
+
+//
 // Define the network socket flags.
 //
 
