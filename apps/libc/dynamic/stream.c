@@ -2322,6 +2322,7 @@ Return Value:
 
 {
 
+    size_t Length;
     int Result;
 
     Result = 0;
@@ -2329,16 +2330,14 @@ Return Value:
         return Result;
     }
 
-    while (*String != '\0') {
-        Result = fputc_unlocked(*String, Stream);
-        if (Result < 0) {
-            break;
-        }
-
-        String += 1;
+    ORIENT_STREAM(Stream, FILE_FLAG_BYTE_ORIENTED);
+    Length = strlen(String);
+    Result = fwrite_unlocked(String, 1, Length, Stream);
+    if (Result == Length) {
+        return Result;
     }
 
-    return Result;
+    return EOF;
 }
 
 LIBC_API
