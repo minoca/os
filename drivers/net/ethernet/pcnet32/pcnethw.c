@@ -540,6 +540,7 @@ Return Value:
     Device->TransmitLastReaped = PCNET_TRANSMIT_RING_LENGTH - 1;
     Device->TransmitNextToUse = 0;
     NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
+    Device->LinkStatusMask = PCNET_BCR4_DEFAULT_MASK;
 
     //
     // Set up the initialization block.
@@ -693,28 +694,34 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
-    Device->WorkItem = KeCreateWorkItem(
+    //
+    // Don't create a timer if there is no way to check the link status.
+    //
+
+    if ((DeviceFlags & PCNET_DEVICE_FLAG_NO_LINK_STATUS) == 0) {
+        Device->WorkItem = KeCreateWorkItem(
                               NULL,
                               WorkPriorityNormal,
                               (PWORK_ITEM_ROUTINE)PcnetpInterruptServiceWorker,
                               Device,
                               PCNET_ALLOCATION_TAG);
 
-    if (Device->WorkItem == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
+        if (Device->WorkItem == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeDeviceStructuresEnd;
+        }
 
-    Device->LinkCheckTimer = KeCreateTimer(PCNET_ALLOCATION_TAG);
-    if (Device->LinkCheckTimer == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
+        Device->LinkCheckTimer = KeCreateTimer(PCNET_ALLOCATION_TAG);
+        if (Device->LinkCheckTimer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeDeviceStructuresEnd;
+        }
 
-    Device->LinkCheckDpc = KeCreateDpc(PcnetpLinkCheckDpc, Device);
-    if (Device->LinkCheckDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
+        Device->LinkCheckDpc = KeCreateDpc(PcnetpLinkCheckDpc, Device);
+        if (Device->LinkCheckDpc == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeDeviceStructuresEnd;
+        }
     }
 
     Status = STATUS_SUCCESS;
@@ -832,6 +839,34 @@ Return Value:
         }
 
         PcnetpWriteBcr(Device, PcnetBcr9FullDuplex, Value);
+
+        //
+        // Enable LED register programming. The LEDs need to be programmed to
+        // support full-duplex mode.
+        //
+
+        Value = PcnetpReadBcr(Device, PcnetBcr2Miscellaneous);
+        Value |= PCNET_BCR2_LED_PROGRAMMING_ENABLE;
+        PcnetpWriteBcr(Device, PcnetBcr2Miscellaneous, Value);
+
+        //
+        // Set the LED status register to enable full-duplex status. This is
+        // necessary for link change detection. OR the whole full-duplex
+        // default mask, which includes the regular link status enable bit.
+        // Even in full-duplex mode, VirtualBox keys off the regular link
+        // status bit and not the full-duplex status bit.
+        //
+
+        Value = PcnetpReadBcr(Device, PcnetBcr4LinkStatus);
+        Value |= PCNET_BCR4_FULL_DUPLEX_DEFAULT_MASK;
+        PcnetpWriteBcr(Device, PcnetBcr4LinkStatus, Value);
+
+        //
+        // Also update the mask against which the link status register is
+        // compared in order to determine whether the link is up or down.
+        //
+
+        Device->LinkStatusMask = PCNET_BCR4_FULL_DUPLEX_DEFAULT_MASK;
     }
 
     //
@@ -915,14 +950,16 @@ Return Value:
     // Fire up the link check timer.
     //
 
-    Frequency = HlQueryTimeCounterFrequency();
-    Interval = Frequency * PCNET_LINK_CHECK_INTERVAL;
-    KeQueueTimer(Device->LinkCheckTimer,
-                 TimerQueueSoft,
-                 0,
-                 Interval,
-                 0,
-                 Device->LinkCheckDpc);
+    if ((DeviceFlags & PCNET_DEVICE_FLAG_NO_LINK_STATUS) == 0) {
+        Frequency = HlQueryTimeCounterFrequency();
+        Interval = Frequency * PCNET_LINK_CHECK_INTERVAL;
+        KeQueueTimer(Device->LinkCheckTimer,
+                     TimerQueueSoft,
+                     0,
+                     Interval,
+                     0,
+                     Device->LinkCheckDpc);
+    }
 
     Status = STATUS_SUCCESS;
 
@@ -1202,7 +1239,7 @@ Return Value:
     USHORT Value;
 
     //
-    // If there is no PHY, then the link state needs to be taken from the BCRs.
+    // If there is no PHY, then the link state may be taken from the BCRs.
     //
 
     DeviceFlags = Device->DeviceInformation->Flags;
@@ -1213,10 +1250,19 @@ Return Value:
             FullDuplex = TRUE;
         }
 
-        LinkActive = FALSE;
-        Value = PcnetpReadBcr(Device, PcnetBcr4LinkStatus);
-        if ((Value & PCNET_BCR4_LINK_STATUS_ENABLE) != 0) {
+        //
+        // If there is no way to check the link status, just assume it's up.
+        //
+
+        if ((DeviceFlags & PCNET_DEVICE_FLAG_NO_LINK_STATUS) != 0) {
             LinkActive = TRUE;
+
+        } else {
+            LinkActive = FALSE;
+            Value = PcnetpReadBcr(Device, PcnetBcr4LinkStatus);
+            if ((Value & ~(Device->LinkStatusMask)) != 0) {
+                LinkActive = TRUE;
+            }
         }
 
     //

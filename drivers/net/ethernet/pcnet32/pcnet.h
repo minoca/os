@@ -193,6 +193,10 @@ Author:
 //
 
 #define PCNET_BCR2_TMAU_LOOP                 (1 << 14)
+#define PCNET_BCR2_DISABLE_SCRAMBLER         (1 << 14)
+#define PCNET_BCR2_PHY_SELECT_ENABLE         (1 << 13)
+#define PCNET_BCR2_LED_PROGRAMMING_ENABLE    (1 << 12)
+#define PCNET_BCR2_RESET_INTERNAL_PHY        (1 << 11)
 #define PCNET_BCR2_ADDRESS_PROM_WRITE_ENABLE (1 << 8)
 #define PCNET_BCR2_INTERRUPT_LEVEL           (1 << 7)
 #define PCNET_BCR2_DXCVR_CONTROL             (1 << 5)
@@ -206,17 +210,27 @@ Author:
 // Define the bits for the link status LED register - BCR4.
 //
 
-#define PCNET_BCR4_LED_OUT (1 << 15)
-#define PCNET_BCR4_LED_POLARITY (1 << 14)
-#define PCNET_BCR4_LED_DISABLE (1 << 13)
-#define PCNET_BCR4_PULSE_STRETCH_ENABLE (1 << 7)
-#define PCNET_BCR4_LINK_STATUS_ENABLE (1 << 6)
-#define PCNET_BCR4_RECEIVE_MATCH_ENABLE (1 << 5)
-#define PCNET_BCR4_TRANSMIT_ENABLE (1 << 4)
-#define PCNET_BCR4_RECEIVE_POLARITY_ENABLE (1 << 3)
-#define PCNET_BCR4_RECEIVE_ENABLE (1 << 2)
-#define PCNET_BCR4_JABBER_ENABLE (1 << 1)
-#define PCNET_BCR4_COLLISION_ENABLE (1 << 0)
+#define PCNET_BCR4_LED_OUT                        (1 << 15)
+#define PCNET_BCR4_LED_POLARITY                   (1 << 14)
+#define PCNET_BCR4_LED_DISABLE                    (1 << 13)
+#define PCNET_BCR4_MAGIC_PACKET_STATUS_ENABLE     (1 << 9)
+#define PCNET_BCR4_FULL_DUPLEX_LINK_STATUS_ENABLE (1 << 8)
+#define PCNET_BCR4_PULSE_STRETCH_ENABLE           (1 << 7)
+#define PCNET_BCR4_LINK_STATUS_ENABLE             (1 << 6)
+#define PCNET_BCR4_RECEIVE_MATCH_ENABLE           (1 << 5)
+#define PCNET_BCR4_TRANSMIT_ENABLE                (1 << 4)
+#define PCNET_BCR4_RECEIVE_POLARITY_ENABLE        (1 << 3)
+#define PCNET_BCR4_RECEIVE_ENABLE                 (1 << 2)
+#define PCNET_BCR4_JABBER_ENABLE                  (1 << 1)
+#define PCNET_BCR4_COLLISION_ENABLE               (1 << 0)
+
+#define PCNET_BCR4_DEFAULT_MASK \
+    (PCNET_BCR4_LINK_STATUS_ENABLE | PCNET_BCR4_PULSE_STRETCH_ENABLE)
+
+#define PCNET_BCR4_FULL_DUPLEX_DEFAULT_MASK      \
+    (PCNET_BCR4_LINK_STATUS_ENABLE |             \
+     PCNET_BCR4_FULL_DUPLEX_LINK_STATUS_ENABLE | \
+     PCNET_BCR4_PULSE_STRETCH_ENABLE)
 
 //
 // Define the bits for the full duplex control register - BCR9.
@@ -437,11 +451,12 @@ Author:
 // Define the PCnet device property flags.
 //
 
-#define PCNET_DEVICE_FLAG_AUTO_SELECT 0x00000001
-#define PCNET_DEVICE_FLAG_FULL_DUPLEX 0x00000002
-#define PCNET_DEVICE_FLAG_PHY         0x00000004
-#define PCNET_DEVICE_FLAG_100_MBPS    0x00000008
-#define PCNET_DEVICE_FLAG_AUI         0x00000010
+#define PCNET_DEVICE_FLAG_AUTO_SELECT    0x00000001
+#define PCNET_DEVICE_FLAG_FULL_DUPLEX    0x00000002
+#define PCNET_DEVICE_FLAG_PHY            0x00000004
+#define PCNET_DEVICE_FLAG_100_MBPS       0x00000008
+#define PCNET_DEVICE_FLAG_AUI            0x00000010
+#define PCNET_DEVICE_FLAG_NO_LINK_STATUS 0x00000020
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -750,6 +765,10 @@ Members:
     Software32 - Stores a boolean indicating whether or not this device is
         operating with 32-bit structures (TRUE) or 16-bit structures (FALSE).
 
+    LinkStatusMask - Stores the mask of the default value of the link status
+        register (BCR4). If a bit outside of the default mask is set, then the
+        link is considered up. Otherwise it is down.
+
     PhyId - Stores the ID of the active PHY for the PCnet device.
 
     DeviceInformation - Stores a pointer to the PCnet device information, which
@@ -792,6 +811,7 @@ typedef struct _PCNET_DEVICE {
     BYTE EepromMacAddress[ETHERNET_ADDRESS_SIZE];
     BOOL Registers32;
     BOOL Software32;
+    USHORT LinkStatusMask;
     USHORT PhyId;
     PPCNET_DEVICE_INFORMATION DeviceInformation;
     PKTIMER LinkCheckTimer;
