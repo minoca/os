@@ -59,6 +59,7 @@ Author:
 //
 
 #define TERMINAL_KEY_FLAG_ALT 0x00000001
+#define TERMINAL_KEY_FLAG_SHIFT 0x00000002
 
 //
 // Define known terminal mode values.
@@ -167,6 +168,18 @@ typedef enum _TERMINAL_KEY {
     TerminalKeyDown,
     TerminalKeyLeft,
     TerminalKeyRight,
+    TerminalKeyF1,
+    TerminalKeyF2,
+    TerminalKeyF3,
+    TerminalKeyF4,
+    TerminalKeyF5,
+    TerminalKeyF6,
+    TerminalKeyF7,
+    TerminalKeyF8,
+    TerminalKeyF9,
+    TerminalKeyF10,
+    TerminalKeyF11,
+    TerminalKeyF12,
 } TERMINAL_KEY, *PTERMINAL_KEY;
 
 /*++

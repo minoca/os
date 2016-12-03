@@ -299,7 +299,7 @@ UCHAR InShiftedKeyboardCharacters[KeyboardKeyMax] = {
     ')',
     '_',
     '+',
-    CHARACTER_CODE_RUBOUT,
+    '\b',
     '\t',
     'Q',  /* 10 */
     'W',

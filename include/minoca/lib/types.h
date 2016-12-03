@@ -138,6 +138,7 @@ typedef unsigned int DWORD, *PDWORD;
 typedef char CHAR, *PCHAR;
 typedef signed char SCHAR, *PSCHAR;
 typedef unsigned char UCHAR, *PUCHAR;
+typedef const unsigned char CUCHAR, *PCUCHAR;
 typedef __WCHAR_TYPE__ WCHAR, *PWCHAR;
 typedef short SHORT, *PSHORT;
 typedef unsigned short USHORT, *PUSHORT;
