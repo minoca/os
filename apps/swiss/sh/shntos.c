@@ -127,7 +127,8 @@ typedef struct _SHELL_NT_INPUT_PUSH_CONTEXT {
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-void
+__stdcall
+unsigned
 ShOutputCollectionThread (
     void *Context
     );
@@ -320,6 +321,7 @@ Return Value:
 
     PSHELL_NT_OUTPUT_COLLECTION Context;
     int Result;
+    unsigned ThreadId;
 
     //
     // Create an output collection context, initialize the file handle, and
@@ -334,8 +336,14 @@ Return Value:
 
     memset(Context, 0, sizeof(SHELL_NT_OUTPUT_COLLECTION));
     Context->Handle = FileDescriptorToRead;
-    Context->Thread = _beginthread(ShOutputCollectionThread, 0, Context);
-    if (Context->Thread == -1) {
+    Context->Thread = _beginthreadex(NULL,
+                                     0,
+                                     ShOutputCollectionThread,
+                                     Context,
+                                     0,
+                                     &ThreadId);
+
+    if (Context->Thread == 0) {
         goto PrepareForOutputCollectionEnd;
     }
 
@@ -394,6 +402,7 @@ Return Value:
     //
 
     WaitForSingleObject((HANDLE)(Context->Thread), INFINITE);
+    CloseHandle((HANDLE)(Context->Thread));
     if (Context->BufferSize == 0) {
         if (Context->Buffer != NULL) {
             free(Context->Buffer);
@@ -1075,7 +1084,8 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
-void
+__stdcall
+unsigned
 ShOutputCollectionThread (
     void *Context
     )
@@ -1093,9 +1103,9 @@ Arguments:
 
 Return Value:
 
-    1 on success.
+    0 on success.
 
-    0 on failure.
+    Non-zero on failure.
 
 --*/
 
@@ -1149,7 +1159,8 @@ Return Value:
         OutputContext->BufferSize += BytesRead;
     }
 
-    return;
+    _endthreadex(0);
+    return 0;
 }
 
 void
