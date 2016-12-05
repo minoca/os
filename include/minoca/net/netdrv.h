@@ -144,6 +144,7 @@ Author:
 #define NET_SPEED_10_MBPS 10000000ULL
 #define NET_SPEED_100_MBPS 100000000ULL
 #define NET_SPEED_1000_MBPS 1000000000ULL
+#define NET_SPEED_2500_MBPS 2500000000ULL
 
 //
 // Define the size of an ethernet address.

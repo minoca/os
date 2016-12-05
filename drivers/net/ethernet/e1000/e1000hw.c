@@ -56,6 +56,11 @@ E1000pSetupCopperLink (
     PE1000_DEVICE Device
     );
 
+KSTATUS
+E1000pSetupSerdesLink (
+    PE1000_DEVICE Device
+    );
+
 VOID
 E1000pCheckLink (
     PE1000_DEVICE Device
@@ -154,6 +159,11 @@ USHORT
 E1000pEepromShiftIn (
     PE1000_DEVICE Device,
     USHORT BitCount
+    );
+
+VOID
+E1000pDetermineMediaType (
+    PE1000_DEVICE Device
     );
 
 VOID
@@ -551,6 +561,7 @@ Return Value:
     ULONG Index;
     ULONG Management;
     UCHAR NullAddress[ETHERNET_ADDRESS_SIZE];
+    ULONG RxChecksumControl;
     ULONG RxControl;
     KSTATUS Status;
     ULONG TxControl;
@@ -572,6 +583,8 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto ResetDeviceEnd;
     }
+
+    E1000pDetermineMediaType(Device);
 
     //
     // Perform a complete device reset. Start by disabling interrupts.
@@ -598,6 +611,13 @@ Return Value:
         break;
     }
 
+    //
+    // Let the firmware know the driver is loaded.
+    //
+
+    ExtendedControl = E1000_READ(Device, E1000ExtendedDeviceControl);
+    ExtendedControl |= E1000_EXTENDED_CONTROL_DRIVER_LOADED;
+    E1000_WRITE(Device, E1000ExtendedDeviceControl, ExtendedControl);
     Management = E1000_READ(Device, E1000ManagementControl);
     Management &= ~E1000_MANAGEMENT_ARP_REQUEST_FILTERING;
     E1000_WRITE(Device, E1000ManagementControl, Management);
@@ -654,7 +674,13 @@ Return Value:
         E1000_WRITE_ARRAY(Device, E1000MulticastTable, Index, 0);
     }
 
-    Status = E1000pSetupCopperLink(Device);
+    if (Device->MediaType == E1000MediaCopper) {
+        Status = E1000pSetupCopperLink(Device);
+
+    } else {
+        Status = E1000pSetupSerdesLink(Device);
+    }
+
     if (!KSUCCESS(Status)) {
         goto ResetDeviceEnd;
     }
@@ -675,13 +701,6 @@ Return Value:
     //
     // The link is set up, finish up other initialization.
     //
-
-    if (Device->MacType != E1000Mac82543) {
-        Control = E1000_READ(Device, E1000TxDescriptorControl0);
-        Control &= ~E1000_TX_DESCRIPTOR_CONTROL_WRITEBACK_THRESHOLD_MASK;
-        Control |= E1000_TX_DESCRIPTOR_CONTROL_FULL_WRITEBACK;
-        E1000_WRITE(Device, E1000TxDescriptorControl0, Control);
-    }
 
     E1000_WRITE(Device, E1000VlanEthertype, E1000_VLAN_ETHERTYPE);
 
@@ -715,6 +734,16 @@ Return Value:
                  E1000_TX_CONTROL_RETRANSMIT_LATE_COLLISION;
 
     E1000_WRITE(Device, E1000TxControl, TxControl);
+    if (Device->MacType == E1000MacI354) {
+        E1000_WRITE(Device,
+                    E1000TxDescriptorControl0,
+                    E1000_TXD_CONTROL_DEFAULT_VALUE_I354);
+
+    } else {
+        E1000_WRITE(Device,
+                    E1000TxDescriptorControl0,
+                    E1000_TXD_CONTROL_DEFAULT_VALUE);
+    }
 
     //
     // Initialize receive.
@@ -750,13 +779,34 @@ Return Value:
 
     E1000_WRITE(Device, E1000RxDescriptorTail0, E1000_RX_RING_SIZE - 1);
     E1000_WRITE(Device, E1000RxDescriptorHead0, 0);
+    RxChecksumControl = E1000_RX_CHECKSUM_START | E1000_RX_CHECKSUM_IP_OFFLOAD |
+                        E1000_RX_CHECKSUM_TCP_UDP_OFFLOAD |
+                        E1000_RX_CHECKSUM_IPV6_OFFLOAD;
+
+    E1000_WRITE(Device, E1000RxChecksumControl, RxChecksumControl);
+    if (Device->MacType == E1000MacI354) {
+        E1000_WRITE(Device,
+                    E1000RxDescriptorControl0,
+                    E1000_RXD_CONTROL_DEFAULT_VALUE_I354);
+
+    } else {
+        E1000_WRITE(Device,
+                    E1000RxDescriptorControl0,
+                    E1000_RXD_CONTROL_DEFAULT_VALUE);
+    }
+
+    //
+    // Write the tail again after enabling the ring to kick it into gear.
+    //
+
+    E1000_WRITE(Device, E1000RxDescriptorTail0, E1000_RX_RING_SIZE - 1);
+
+    //
+    // Enable receive globally.
+    //
+
     RxControl |= E1000_RX_CONTROL_ENABLE;
     E1000_WRITE(Device, E1000RxControl, RxControl);
-    RxControl = E1000_RX_CHECKSUM_START | E1000_RX_CHECKSUM_IP_OFFLOAD |
-                E1000_RX_CHECKSUM_TCP_UDP_OFFLOAD |
-                E1000_RX_CHECKSUM_IPV6_OFFLOAD;
-
-    E1000_WRITE(Device, E1000RxChecksumControl, RxControl);
 
     //
     // Enable interrupts.
@@ -1029,6 +1079,111 @@ SetupCopperLinkEnd:
     return Status;
 }
 
+KSTATUS
+E1000pSetupSerdesLink (
+    PE1000_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets up a fiber serdes link.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    BOOL Autonegotiate;
+    ULONG Control;
+    ULONG ControlEx;
+    ULONG PcsControl;
+    ULONG TxConfiguration;
+    ULONG TxControl;
+    ULONG Value;
+
+    //
+    // Configure the collision distance.
+    //
+
+    TxControl = E1000_READ(Device, E1000TxControl);
+    TxControl &= ~E1000_TX_CONTROL_COLLISION_DISTANCE_MASK;
+    TxControl |= E1000_TX_CONTROL_DEFAULT_COLLISION_DISTANCE <<
+                 E1000_TX_CONTROL_COLLISION_DISTANCE_SHIFT;
+
+    E1000_WRITE(Device, E1000TxControl, TxControl);
+
+    //
+    // Set up flow control and enable autonegotiation.
+    //
+
+    Control = E1000_READ(Device, E1000DeviceControl);
+    Control &= ~E1000_DEVICE_CONTROL_LINK_RESET;
+    Control |= E1000_DEVICE_CONTROL_SET_LINK_UP |
+               E1000_DEVICE_CONTROL_SPEED_1000 |
+               E1000_DEVICE_CONTROL_FORCE_SPEED |
+               E1000_DEVICE_CONTROL_FORCE_DUPLEX |
+               E1000_DEVICE_CONTROL_DUPLEX;
+
+    PcsControl = E1000_READ(Device, E1000PcsControl);
+    PcsControl |= E1000_PCS_CONTROL_FORCED_SPEED_1000 |
+                  E1000_PCS_CONTROL_FORCED_DUPLEX_FULL;
+
+    PcsControl &= ~(E1000_PCS_CONTROL_FORCED_LINK_VALUE |
+                    E1000_PCS_CONTROL_AUTONEGOTIATE_ENABLE |
+                    E1000_PCS_CONTROL_FORCE_SPEED_DUPLEX |
+                    E1000_PCS_CONTROL_FORCE_LINK);
+
+    ControlEx = E1000_READ(Device, E1000ExtendedDeviceControl);
+    Autonegotiate = TRUE;
+    TxConfiguration = E1000_TX_CONFIGURATION_FULL_DUPLEX |
+                      E1000_TX_CONFIGURATION_PAUSE_MASK |
+                      E1000_TX_CONFIGURATION_AUTONEGOTIATE_ENABLE;
+
+    if ((ControlEx & E1000_EXTENDED_CONTROL_LINK_MASK) ==
+        E1000_EXTENDED_CONTROL_LINK_1000BASE_KX) {
+
+        Autonegotiate = FALSE;
+        TxConfiguration &= ~E1000_TX_CONFIGURATION_AUTONEGOTIATE_ENABLE;
+        PcsControl |= E1000_PCS_CONTROL_FORCE_FLOW_CONTROL;
+    }
+
+    E1000_WRITE(Device, E1000TxConfigurationWord, TxConfiguration);
+    if (Autonegotiate != FALSE) {
+        PcsControl |= E1000_PCS_CONTROL_AUTONEGOTIATE_ENABLE |
+                      E1000_PCS_CONTROL_AUTONEGOTIATE_RESTART;
+
+        PcsControl &= ~E1000_PCS_CONTROL_FORCE_FLOW_CONTROL;
+    }
+
+    //
+    // Configure PCS and power things up.
+    //
+
+    E1000_WRITE(Device, E1000PcsControl, PcsControl);
+    Value = E1000_READ(Device, E1000PcsConfiguration);
+    Value |= E1000_PCS_CONFIGURATION_PCS_ENABLE;
+    E1000_WRITE(Device, E1000PcsConfiguration, Value);
+    ControlEx = E1000_READ(Device, E1000ExtendedDeviceControl);
+    ControlEx &= ~E1000_EXTENDED_CONTROL_SDP7_DATA;
+    E1000_WRITE(Device, E1000ExtendedDeviceControl, ControlEx);
+
+    //
+    // Take the link out of reset.
+    //
+
+    E1000_WRITE(Device, E1000DeviceControl, Control);
+    return STATUS_SUCCESS;
+}
+
 VOID
 E1000pCheckLink (
     PE1000_DEVICE Device
@@ -1053,44 +1208,66 @@ Return Value:
 {
 
     ULONG LinkStatus;
+    BOOL LinkUp;
     USHORT PhyStatus;
     ULONGLONG Speed;
     KSTATUS Status;
 
-    Status = E1000pReadPhy(Device, E1000_PHY_STATUS, &PhyStatus);
-    if (!KSUCCESS(Status)) {
-        goto CheckLinkEnd;
-    }
+    LinkUp = FALSE;
+    Speed = 0;
 
-    Status = E1000pReadPhy(Device, E1000_PHY_STATUS, &PhyStatus);
-    if (!KSUCCESS(Status)) {
-        goto CheckLinkEnd;
-    }
+    //
+    // For copper links, ask the PHY.
+    //
 
-    LinkStatus = E1000_READ(Device, E1000DeviceStatus);
-    if ((PhyStatus & E1000_PHY_STATUS_LINK) != 0) {
-        Speed = 0;
-        switch (LinkStatus & E1000_DEVICE_STATUS_SPEED_MASK) {
-        case E1000_DEVICE_STATUS_SPEED_10:
-            Speed = NET_SPEED_10_MBPS;
-            break;
-
-        case E1000_DEVICE_STATUS_SPEED_100:
-            Speed = NET_SPEED_100_MBPS;
-            break;
-
-        case E1000_DEVICE_STATUS_SPEED_1000:
-            Speed = NET_SPEED_1000_MBPS;
-            break;
-
-        default:
-
-            ASSERT(FALSE);
-
-            break;
+    if (Device->MediaType == E1000MediaCopper) {
+        Status = E1000pReadPhy(Device, E1000_PHY_STATUS, &PhyStatus);
+        if (!KSUCCESS(Status)) {
+            goto CheckLinkEnd;
         }
 
-        if (Speed != Device->LinkSpeed) {
+        Status = E1000pReadPhy(Device, E1000_PHY_STATUS, &PhyStatus);
+        if (!KSUCCESS(Status)) {
+            goto CheckLinkEnd;
+        }
+
+        if ((PhyStatus & E1000_PHY_STATUS_LINK) != 0) {
+            LinkUp = TRUE;
+        }
+
+        LinkStatus = E1000_READ(Device, E1000DeviceStatus);
+
+    //
+    // Internal serdes link check.
+    //
+
+    } else {
+        LinkStatus = E1000_READ(Device, E1000DeviceStatus);
+        if ((LinkStatus & E1000_DEVICE_STATUS_LINK_UP) != 0) {
+            LinkUp = TRUE;
+        }
+    }
+
+    if (LinkUp != FALSE) {
+        if ((LinkStatus & E1000_DEVICE_STATUS_SPEED_1000) != 0) {
+            Speed = NET_SPEED_1000_MBPS;
+
+        } else if ((LinkStatus & E1000_DEVICE_STATUS_SPEED_100) != 0) {
+            Speed = NET_SPEED_100_MBPS;
+
+        } else {
+            Speed = NET_SPEED_10_MBPS;
+        }
+
+        if (Device->MacType == E1000MacI354) {
+            if (((LinkStatus & E1000_DEVICE_STATUS_2500_CAPABLE) != 0) &&
+                ((LinkStatus & E1000_DEVICE_STATUS_SPEED_2500))) {
+
+                Speed = NET_SPEED_2500_MBPS;
+            }
+        }
+
+        if (Device->LinkSpeed != Speed) {
             Device->LinkSpeed = Speed;
             NetSetLinkState(Device->NetworkLink, TRUE, Speed);
         }
@@ -2159,6 +2336,46 @@ Return Value:
     Control &= ~E1000_EEPROM_CONTROL_DATA_INPUT;
     E1000_WRITE(Device, E1000EepromControl, Control);
     return Data;
+}
+
+VOID
+E1000pDetermineMediaType (
+    PE1000_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines the type of media connected to this controller.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG ControlEx;
+
+    ControlEx = E1000_READ(Device, E1000ExtendedDeviceControl);
+    switch (ControlEx & E1000_EXTENDED_CONTROL_LINK_MASK) {
+    case E1000_EXTENDED_CONTROL_LINK_1000BASE_KX:
+    case E1000_EXTENDED_CONTROL_LINK_SERDES:
+        Device->MediaType = E1000MediaInternalSerdes;
+        break;
+
+    default:
+        Device->MediaType = E1000MediaCopper;
+        break;
+    }
+
+    return;
 }
 
 VOID
