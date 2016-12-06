@@ -101,12 +101,13 @@ mkdir -p -m777 "$WORLD/tmp"
 if ! test -x $WORLD/bin/chroot; then
 
     ##
-    ## If there is no swiss, link sh to swiss (hopefully that works). Pipes
-    ## don't really work at this point.
+    ## If there is no swiss, move sh to swiss, setuid on swiss, and then link
+    ## all the other binaries to swiss.
     ##
 
     if ! test -r $WORLD/bin/swiss ; then
-        ln -s sh $WORLD/bin/swiss
+        mv $WORLD/bin/sh $WORLD/bin/swiss
+        chmod u+s $WORLD/bin/swiss
     fi
 
     for app in `swiss --list`; do
@@ -114,6 +115,15 @@ if ! test -x $WORLD/bin/chroot; then
             ln -s swiss $WORLD/bin/$app
         fi
     done
+
+    ##
+    ## Also check on root's home and ssh directories, as having those set wrong
+    ## prevents logging in via SSH.
+    ##
+
+    chmod -f 700 $WORLD/root $WORLD/root/.ssh $WORLD/root/.ssh/authorized_keys \
+        $WORLD/root/.ssh/id_rsa
+
 fi
 
 ##
