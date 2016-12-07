@@ -121,7 +121,8 @@ if ! test -x $WORLD/bin/chroot; then
     ## prevents logging in via SSH.
     ##
 
-    chmod -f 700 $WORLD/root $WORLD/root/.ssh $WORLD/root/.ssh/authorized_keys \
+    chmod -f go-rwx $WORLD/root $WORLD/root/.ssh \
+        $WORLD/root/.ssh/authorized_keys \
         $WORLD/root/.ssh/id_rsa
 
 fi
