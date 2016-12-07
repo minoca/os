@@ -3487,7 +3487,7 @@ CreateCustomTimeZoneEnd:
 
     if (Status != 0) {
         if (Custom != NULL) {
-            free(Custom);
+            OsHeapFree(Custom);
             Custom = NULL;
             CustomSize = 0;
         }
