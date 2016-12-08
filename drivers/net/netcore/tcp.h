@@ -430,6 +430,9 @@ Members:
 
     State - Stores the connection state of the socket.
 
+    PreviousState - Stores the previous state of the socket, to debug where
+        transitions are coming from.
+
     Flags - Stores a bitmask of TCP flags. See TCP_SOCKET_FLAG_* for
         definitions.
 
@@ -601,6 +604,7 @@ typedef struct _TCP_SOCKET {
     NET_SOCKET NetSocket;
     LIST_ENTRY ListEntry;
     TCP_STATE State;
+    TCP_STATE PreviousState;
     ULONG Flags;
     LONG TimerReferenceCount;
     ULONG SendInitialSequence;

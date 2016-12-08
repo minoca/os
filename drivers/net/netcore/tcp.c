@@ -7949,6 +7949,7 @@ Return Value:
     TCP_STATE OldState;
 
     OldState = Socket->State;
+    Socket->PreviousState = OldState;
     Socket->State = NewState;
 
     //
@@ -7978,6 +7979,7 @@ Return Value:
             Socket->RetryWaitPeriod = TCP_INITIAL_RETRY_WAIT_PERIOD;
             Socket->SendNextBufferSequence = Socket->SendInitialSequence;
             Socket->SendNextNetworkSequence = Socket->SendInitialSequence;
+            NetpTcpTimerReleaseReference(Socket);
         }
 
         break;
