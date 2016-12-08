@@ -144,8 +144,7 @@ Author:
 //
 
 #define SHELL_INTERACTIVE_OPTIONS (SHELL_OPTION_INTERACTIVE |   \
-                                   SHELL_OPTION_PRINT_PROMPTS | \
-                                   SHELL_OPTION_RAW_INPUT)
+                                   SHELL_OPTION_PRINT_PROMPTS)
 
 //
 // This option is set to read commands from standard input.

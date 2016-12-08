@@ -392,6 +392,12 @@ Return Value:
         errno = 0;
         Shadow = getspnam(UserName);
         if ((Shadow == NULL) && (errno != ENOENT)) {
+            if ((errno == EPERM) || (errno == EACCES)) {
+                SwPrintError(errno, NULL, "Cannot access the password file");
+                TotalStatus = 1;
+                goto MainEnd;
+            }
+
             SwPrintError(0,
                          NULL,
                          "Shadow entry not found for user %s on line %I64d",

@@ -490,6 +490,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gettext-0.19.8.1"
         },
         {
+            "name": "Make glib",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/glib-2.49.6"
+        },
+        {
             "name": "Make gdbm",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gdbm-1.12"

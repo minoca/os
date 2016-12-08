@@ -66,7 +66,7 @@ Environment:
     "  -N, --no-user-group -- Do not create a group with the same name as \n"  \
     "      the user.\n"                                                        \
     "  -o, --non-unique -- Allow users with duplicate IDs.\n"                  \
-    "  -p, --password=pw -- Sets the user's password.\n"                       \
+    "  -p, --password=pw -- Sets the user's password hash value directly.\n"   \
     "  -R, --root=dir -- Chroot into the given directory before operating.\n"  \
     "  -r, --system -- Sets this as a system account.\n"                       \
     "  -s, --shell=shell -- Sets the user's shell.\n"                          \
@@ -81,7 +81,6 @@ Environment:
 #define USERADD_DEFAULT_SKELETON "/etc/skel"
 #define USERADD_DEFAULT_SHELL "/bin/sh"
 #define USERADD_DEFAULT_PASSWORD "x"
-#define USERADD_DEFAULT_SHADOW_PASSWORD "*"
 #define USERADD_DEFAULT_GROUP "nogroup"
 #define USERADD_DEFAULT_BASE_DIRECTORY "/home"
 #define USERADD_HOME_PERMISSIONS \
@@ -396,24 +395,8 @@ Return Value:
         goto MainEnd;
     }
 
-    //
-    // Hash up the password. This is done so that accesses to things like
-    // libcrypt and /dev/urandom can be done before chrooting.
-    //
-
     if (Password != NULL) {
-        Shadow.sp_pwdp = SwCreateHashedPassword(USERADD_PASSWORD_ALGORITHM,
-                                                -1,
-                                                0,
-                                                Password);
-
-        if (Shadow.sp_pwdp == NULL) {
-            SwPrintError(0,
-                         NULL,
-                         "Failed to create password, disabling account.");
-
-            Shadow.sp_pwdp = USERADD_DEFAULT_SHADOW_PASSWORD;
-        }
+        Shadow.sp_pwdp = Password;
     }
 
     //

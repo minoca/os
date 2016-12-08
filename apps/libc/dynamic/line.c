@@ -131,7 +131,7 @@ Return Value:
     }
 
     memcpy(&NewSettings, &OriginalSettings, sizeof(struct termios));
-    NewSettings.c_lflag &= ~ECHO;
+    NewSettings.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
     if (tcsetattr(FileIn, TCSAFLUSH, &NewSettings) != 0) {
         return NULL;
     }

@@ -156,7 +156,7 @@ PSTR SwDangerousEnvironmentVariables[] = {
 
 const struct spwd SwShadowTemplate = {
     NULL,
-    "*",
+    "!",
     0,
     0,
     99999,

@@ -175,12 +175,20 @@ Return Value:
     // Actually execute the change.
     //
 
+    Result = 0;
     if (Changed != FALSE) {
         if ((Context->Options & CHOWN_OPTION_AFFECT_SYMBOLIC_LINKS) != 0) {
             Result = lchown(Path, Stat.st_uid, Stat.st_gid);
 
         } else {
             Result = chown(Path, Stat.st_uid, Stat.st_gid);
+        }
+
+        if (Result != 0) {
+            Result = errno;
+            if ((Context->Options & CHOWN_OPTION_QUIET) == 0) {
+                SwPrintError(Result, Path, "Unable to change ownership");
+            }
         }
     }
 
@@ -189,7 +197,7 @@ Return Value:
     //
 
     if ((Context->Options & CHOWN_OPTION_RECURSIVE) == 0) {
-        return 0;
+        return Result;
     }
 
     //

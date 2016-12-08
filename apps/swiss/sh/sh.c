@@ -431,8 +431,8 @@ Return Value:
         InputDescriptor = fileno(Shell->Lexer.InputFile);
     }
 
-    if ((InputDescriptor != -1) && (isatty(InputDescriptor) != 0)) {
-        Shell->Options |= SHELL_INTERACTIVE_OPTIONS;
+    if ((InputDescriptor >= 0) && (isatty(InputDescriptor) != 0)) {
+        Shell->Options |= SHELL_INTERACTIVE_OPTIONS | SHELL_OPTION_RAW_INPUT;
     }
 
     InputDescriptor = -1;

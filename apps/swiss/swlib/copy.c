@@ -995,7 +995,6 @@ Return Value:
 
     Result = SwChangeFileOwner(Destination, FALSE, Stat->st_uid, Stat->st_gid);
     if (Result != 0) {
-        SwPrintError(Result, Destination, "Failed to change owner of");
 
         //
         // Change the permissions to clear the ISGID and ISUID bits.

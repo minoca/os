@@ -3213,11 +3213,33 @@ Return Value:
 
 {
 
+    PCSTR DurationUnit;
+    ULONG LeaseTime;
+    PCSTR Plural;
+
+    Plural = "s";
+    if (Context->LeaseTime >= SECONDS_PER_DAY) {
+        LeaseTime = Context->LeaseTime / SECONDS_PER_DAY;
+        DurationUnit = "day";
+
+    } else if (Context->LeaseTime >= SECONDS_PER_HOUR) {
+        LeaseTime = Context->LeaseTime / SECONDS_PER_HOUR;
+        DurationUnit = "hour";
+
+    } else {
+        LeaseTime = Context->LeaseTime / SECONDS_PER_MINUTE;
+        DurationUnit = "minute";
+    }
+
+    if (LeaseTime == 1) {
+        Plural = "";
+    }
+
     RtlDebugPrint("%20s: %d.%d.%d.%d\n"
                   "%20s: %d.%d.%d.%d\n"
                   "%20s: %d.%d.%d.%d\n"
                   "%20s: %d.%d.%d.%d\n"
-                  "%20s: %d hours.\n",
+                  "%20s: %d %s%s.\n",
                   "Server IP",
                   (UCHAR)Context->OfferServerAddress.Address[0],
                   (UCHAR)(Context->OfferServerAddress.Address[0] >> 8),
@@ -3239,7 +3261,9 @@ Return Value:
                   (UCHAR)(Context->OfferDnsAddress[0].Address[0] >> 16),
                   (UCHAR)(Context->OfferDnsAddress[0].Address[0] >> 24),
                   "Lease Time",
-                  Context->LeaseTime / 3600);
+                  LeaseTime,
+                  DurationUnit,
+                  Plural);
 
     return;
 }

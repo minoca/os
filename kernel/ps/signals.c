@@ -1234,7 +1234,8 @@ Return Value:
         if ((SignalQueueEntry != NULL) &&
             (SignalQueueEntry->CompletionRoutine != NULL)) {
 
-            SignalQueueEntry->ListEntry.Next = NULL;
+            ASSERT(SignalQueueEntry->ListEntry.Next == NULL);
+
             if (SignalNumber != SIGNAL_CHILD_PROCESS_ACTIVITY) {
                 SignalQueueEntry->CompletionRoutine(SignalQueueEntry);
 
