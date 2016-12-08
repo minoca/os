@@ -1241,7 +1241,20 @@ Return Value:
         Status = STATUS_PERMISSION_DENIED;
         if ((FieldsToSet & FILE_PROPERTY_FIELD_USER_ID) != 0) {
             if (HasChownPermission == FALSE) {
-                goto SetFileInformationEnd;
+
+                //
+                // Succeed a "non-change" for a file already owned by the user.
+                //
+
+                if ((FileOwner != FALSE) &&
+                    (FileObject->Properties.UserId ==
+                     FileProperties->UserId)) {
+
+                    FieldsToSet &= ~FILE_PROPERTY_FIELD_USER_ID;
+
+                } else {
+                    goto SetFileInformationEnd;
+                }
             }
         }
 
