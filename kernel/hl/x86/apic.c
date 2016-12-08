@@ -291,6 +291,17 @@ INTERRUPT_FUNCTION_TABLE HlApicInterruptFunctionTable = {
 };
 
 //
+// Define the local APIC interrupts to mask off initially.
+//
+
+const UCHAR HlApicLvts[] = {
+    ApicTimerVector,
+    ApicLInt0Vector,
+    ApicLInt1Vector,
+    0
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -1444,7 +1455,8 @@ Return Value:
 
 {
 
-    ULONG Mask;
+    ULONG Index;
+    ULONG Lvt;
     ULONG SpuriousRegister;
     KSTATUS Status;
     ULONG Version;
@@ -1471,13 +1483,18 @@ Return Value:
     WRITE_LOCAL_APIC(ApicSpuriousVector, SpuriousRegister);
 
     //
-    // Disable LVT entries such as the timer, LINT0, and LINT1.
+    // Disable LVT entries such as the timer, LINT0, and LINT1. Leave the
+    // delivery routing alone.
     //
 
-    Mask = APIC_LVT_DISABLED | 0x80;
-    WRITE_LOCAL_APIC(ApicTimerVector, Mask);
-    WRITE_LOCAL_APIC(ApicLInt0Vector, Mask);
-    WRITE_LOCAL_APIC(ApicLInt1Vector, Mask);
+    Index = 0;
+    while (HlApicLvts[Index] != 0) {
+        Lvt = READ_LOCAL_APIC(HlApicLvts[Index]) & APIC_DELIVERY_MASK;
+        Lvt |= APIC_LVT_DISABLED | (0x80 + Index);
+        WRITE_LOCAL_APIC(HlApicLvts[Index], Lvt);
+        Index += 1;
+    }
+
     WRITE_LOCAL_APIC(ApicTimerInitialCount, 0);
     Status = STATUS_SUCCESS;
 
