@@ -1555,7 +1555,6 @@ Return Value:
     ULONG CommandIndex;
     PNET_PACKET_BUFFER Packet;
     ULONG PreviousCommandIndex;
-    ULONG Status;
     BOOL WakeDevice;
 
     //
@@ -1670,16 +1669,15 @@ Return Value:
     }
 
     //
-    // If the device is suspended at this point (after adding all these great
-    // commands), wake it up.
+    // Rather than checking to see if the device is suspended, just force a
+    // resume. QEMU has a bug where it quits processing commands after
+    // encountering 16 in a row, but fails to put the transmit command unit
+    // into the suspended state. It is left active, despite being very much
+    // inactive. Forcing a resume works around the bug.
     //
 
     if (WakeDevice != FALSE) {
-        Status = E100_READ_STATUS_REGISTER(Device);
-        Status &= E100_STATUS_COMMAND_UNIT_STATUS_MASK;
-        if (Status == E100_STATUS_COMMAND_UNIT_SUSPENDED) {
-            E100_WRITE_COMMAND_REGISTER(Device, E100_COMMAND_UNIT_RESUME);
-        }
+        E100_WRITE_COMMAND_REGISTER(Device, E100_COMMAND_UNIT_RESUME);
     }
 
     return;
