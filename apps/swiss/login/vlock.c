@@ -207,7 +207,7 @@ Return Value:
     }
 
     memcpy(&NewSettings, &OriginalSettings, sizeof(struct termios));
-    NewSettings.c_iflag &= ~(BRKINT | ISIG | ECHO);
+    NewSettings.c_iflag &= ~(BRKINT | ISIG | ECHO | ECHOE | ECHOK | ECHONL);
     NewSettings.c_iflag |= IGNBRK;
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &NewSettings) != 0) {
         Status = 1;
