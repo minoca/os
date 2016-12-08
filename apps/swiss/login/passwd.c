@@ -385,9 +385,14 @@ Return Value:
     Shadow = getspnam(User->pw_name);
     if ((Shadow == NULL) && (errno != ENOENT)) {
         Status = errno;
+        if ((Status == EPERM) || (Status == EACCES)) {
+            SwPrintError(errno, NULL, "Cannot access the password file");
+            goto MainEnd;
+        }
+
         PasswdLogMessage(LOG_WARNING,
                          "passwd: warning: No shadow record of user %s, "
-                         "creating one",
+                         "creating one: %s",
                          User->pw_name,
                          strerror(Status));
 
