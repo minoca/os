@@ -110,8 +110,8 @@ Return Value:
 
 {
 
-    INT Option;
     uid_t EffectiveUserId;
+    INT Option;
     int Status;
 
     //
@@ -155,7 +155,6 @@ Return Value:
     Status = 0;
     EffectiveUserId = SwGetEffectiveUserId();
     WhoamiPrintUserName(EffectiveUserId);
-
     printf("\n");
 
 MainEnd:
@@ -192,12 +191,11 @@ Return Value:
 
         assert(UserName == NULL);
 
-        printf("%s", UserName);
+        printf("%u", (unsigned int)UserId);
         return;
     }
 
     printf("%s", UserName);
-
     if (UserName != NULL) {
         free(UserName);
     }
