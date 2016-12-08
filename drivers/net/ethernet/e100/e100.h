@@ -501,6 +501,9 @@ Members:
     CommandNextToUse - Stores the index where the next command should be placed.
         If this equals the next index to be reaped, then the list is full.
 
+    CommandFreeCount - Stores the number of command ring entries that are
+        currently free to use.
+
     CommandListLock - Stores the lock protecting simultaneous software access
         to the command list.
 
@@ -538,6 +541,7 @@ typedef struct _E100_DEVICE {
     PNET_PACKET_BUFFER *CommandPacket;
     ULONG CommandLastReaped;
     ULONG CommandNextToUse;
+    ULONG CommandFreeCount;
     PQUEUED_LOCK CommandListLock;
     NET_PACKET_LIST TransmitPacketList;
     BOOL LinkActive;

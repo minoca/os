@@ -346,6 +346,7 @@ Return Value:
     Device->Command = Device->CommandIoBuffer->Fragment[0].VirtualAddress;
     Device->CommandLastReaped = E100_COMMAND_RING_COUNT - 1;
     Device->CommandNextToUse = 1;
+    Device->CommandFreeCount = E100_COMMAND_RING_COUNT - 2;
     RtlZeroMemory(Device->Command, CommandSize);
     NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
 
@@ -563,6 +564,7 @@ Return Value:
                         E100_COMMAND_BLOCK_COMMAND_SHIFT);
 
     PreviousCommand->Command &= ~E100_COMMAND_SUSPEND;
+    Device->CommandFreeCount -= 1;
 
     //
     // Set the command unit base and start the command unit.
@@ -1237,6 +1239,7 @@ Return Value:
         //
 
         Device->CommandLastReaped = CommandIndex;
+        Device->CommandFreeCount += 1;
         CommandReaped = TRUE;
     }
 
@@ -1423,6 +1426,7 @@ Return Value:
 
         CommandIndex = Device->CommandNextToUse;
         Command = &(Device->Command[CommandIndex]);
+        Device->CommandFreeCount -= 1;
 
         //
         // The command better be reaped and not in use.
@@ -1440,6 +1444,16 @@ Return Value:
                             E100_COMMAND_BLOCK_COMMAND_SHIFT) |
                            E100_COMMAND_SUSPEND |
                            E100_COMMAND_TRANSMIT_FLEXIBLE_MODE;
+
+        //
+        // If half of the commands are free, then force an interrupt on this
+        // command. In cases where the entire ring fills up with commands, this
+        // allows more commands to be added to the ring before it empties.
+        //
+
+        if (Device->CommandFreeCount == (E100_COMMAND_RING_COUNT >> 1)) {
+            Command->Command |= E100_COMMAND_INTERRUPT;
+        }
 
         //
         // Calculate the physical address of the transmit buffer descriptor
