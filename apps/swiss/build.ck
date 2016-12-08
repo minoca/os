@@ -105,6 +105,7 @@ function build() {
         "uniq.c",
         "wc.c",
         "which.c",
+        "whoami.c",
         "xargs.c",
     ];
 
