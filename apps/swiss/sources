@@ -106,6 +106,7 @@ COMMON_OBJS = basename.o       \
               uniq.o           \
               wc.o             \
               which.o          \
+              whoami.o         \
               xargs.o          \
 
 ##
