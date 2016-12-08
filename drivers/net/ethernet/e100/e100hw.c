@@ -46,12 +46,29 @@ Environment:
 #define E100_MAX_TRANSMIT_PACKET_LIST_COUNT (E100_COMMAND_RING_COUNT * 2)
 
 //
+// Define a software only pending bit to indicate that the link status needs to
+// be checked.
+//
+
+#define E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS (1 << 31)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+E100pLinkCheckDpc (
+    PDPC Dpc
+    );
+
+KSTATUS
+E100pCheckLink (
+    PE100_DEVICE Device
+    );
 
 KSTATUS
 E100pReadDeviceMacAddress (
@@ -374,6 +391,24 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
+    Device->WorkItem = KeCreateWorkItem(
+                               NULL,
+                               WorkPriorityNormal,
+                               (PWORK_ITEM_ROUTINE)E100pInterruptServiceWorker,
+                               Device,
+                               E100_ALLOCATION_TAG);
+
+    if (Device->WorkItem == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->LinkCheckDpc = KeCreateDpc(E100pLinkCheckDpc, Device);
+    if (Device->LinkCheckDpc == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
     //
     // Initialize the receive frame list.
     //
@@ -474,6 +509,16 @@ InitializeDeviceStructuresEnd:
             KeDestroyTimer(Device->LinkCheckTimer);
             Device->LinkCheckTimer = NULL;
         }
+
+        if (Device->WorkItem != NULL) {
+            KeDestroyWorkItem(Device->WorkItem);
+            Device->WorkItem = NULL;
+        }
+
+        if (Device->LinkCheckDpc != NULL) {
+            KeDestroyDpc(Device->LinkCheckDpc);
+            Device->LinkCheckDpc = NULL;
+        }
     }
 
     return Status;
@@ -504,8 +549,8 @@ Return Value:
 
     PE100_COMMAND Command;
     ULONG CommandIndex;
-    UCHAR GeneralStatus;
-    ULONGLONG LinkSpeed;
+    ULONGLONG Frequency;
+    ULONGLONG Interval;
     PE100_COMMAND PreviousCommand;
     ULONG PreviousCommandIndex;
     KSTATUS Status;
@@ -646,25 +691,23 @@ Return Value:
     }
 
     //
-    // Figure out if the link is up, and report on it if so.
-    // TODO: The link state should be checked periodically, rather than just
-    // once at the beginning.
+    // Check to see if the link is up.
     //
 
-    GeneralStatus = E100_READ_REGISTER8(Device, E100RegisterGeneralStatus);
-    if ((GeneralStatus & E100_CONTROL_STATUS_LINK_UP) != 0) {
-        LinkSpeed = NET_SPEED_10_MBPS;
-        if ((GeneralStatus & E100_CONTROL_STATUS_100_MBPS) != 0) {
-            LinkSpeed = NET_SPEED_100_MBPS;
-        }
+    E100pCheckLink(Device);
 
-        Device->LinkActive = TRUE;
-        NetSetLinkState(Device->NetworkLink, TRUE, LinkSpeed);
+    //
+    // Fire up the link check timer.
+    //
 
-    } else {
-        Device->LinkActive = FALSE;
-        NetSetLinkState(Device->NetworkLink, FALSE, 0);
-    }
+    Frequency = HlQueryTimeCounterFrequency();
+    Interval = Frequency * E100_LINK_CHECK_INTERVAL;
+    KeQueueTimer(Device->LinkCheckTimer,
+                 TimerQueueSoft,
+                 0,
+                 Interval,
+                 0,
+                 Device->LinkCheckDpc);
 
     Status = STATUS_SUCCESS;
 
@@ -795,12 +838,120 @@ Return Value:
         E100pReapCompletedCommands(Device);
     }
 
+    //
+    // If the software-only link status bit is set, the link check timer went
+    // off.
+    //
+
+    if ((PendingBits & E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS) != 0) {
+        E100pCheckLink(Device);
+    }
+
     return InterruptStatusClaimed;
 }
 
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+E100pLinkCheckDpc (
+    PDPC Dpc
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the e100 DPC that is queued when a link check
+    timer expires.
+
+Arguments:
+
+    Dpc - Supplies a pointer to the DPC that is running.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PE100_DEVICE Device;
+    ULONG OldPendingBits;
+    KSTATUS Status;
+
+    Device = (PE100_DEVICE)(Dpc->UserData);
+    OldPendingBits = RtlAtomicOr32(&(Device->PendingStatusBits),
+                                   E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS);
+
+    if ((OldPendingBits & E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS) == 0) {
+        Status = KeQueueWorkItem(Device->WorkItem);
+        if (!KSUCCESS(Status)) {
+            RtlAtomicAnd32(&(Device->PendingStatusBits),
+                           ~E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS);
+        }
+    }
+
+    return;
+}
+
+KSTATUS
+E100pCheckLink (
+    PE100_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine checks whether or not an e100 device's media is still attached.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UCHAR GeneralStatus;
+    BOOL LinkActive;
+    ULONGLONG LinkSpeed;
+
+    GeneralStatus = E100_READ_REGISTER8(Device, E100RegisterGeneralStatus);
+    if ((GeneralStatus & E100_CONTROL_STATUS_LINK_UP) != 0) {
+        LinkSpeed = NET_SPEED_10_MBPS;
+        if ((GeneralStatus & E100_CONTROL_STATUS_100_MBPS) != 0) {
+            LinkSpeed = NET_SPEED_100_MBPS;
+        }
+
+        LinkActive = TRUE;
+
+    } else {
+        LinkSpeed = NET_SPEED_NONE;
+        LinkActive = FALSE;
+    }
+
+    //
+    // If the link state's do not match, make some changes.
+    //
+
+    if ((Device->LinkActive != LinkActive) ||
+        (Device->LinkSpeed != LinkSpeed)) {
+
+        Device->LinkActive = LinkActive;
+        Device->LinkSpeed = LinkSpeed;
+        NetSetLinkState(Device->NetworkLink, LinkActive, LinkSpeed);
+    }
+
+    return STATUS_SUCCESS;
+}
 
 KSTATUS
 E100pReadDeviceMacAddress (
