@@ -2860,6 +2860,8 @@ Return Value:
     if (Process->Environment != NULL) {
         PsDestroyEnvironment(Process->Environment);
         Process->Environment = NULL;
+        Process->BinaryName = NULL;
+        Process->BinaryNameSize = 0;
     }
 
     if (Process->HandleTable != NULL) {
