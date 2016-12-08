@@ -3055,7 +3055,9 @@ Return Value:
     // Send a signal to init.
     //
 
-    return kill(1, Signal);
+    errno = 0;
+    kill(1, Signal);
+    return errno;
 }
 
 int
@@ -3189,7 +3191,9 @@ Return Value:
     struct termios TerminalSettings;
 
     if (SwOriginalTerminalSettingsValid == 0) {
-        SwSaveTerminalMode();
+        if (!SwSaveTerminalMode()) {
+            return 0;
+        }
     }
 
     memcpy(&TerminalSettings,

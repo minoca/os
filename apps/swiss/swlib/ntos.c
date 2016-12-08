@@ -3711,7 +3711,9 @@ Return Value:
 
     Console = GetStdHandle(STD_INPUT_HANDLE);
     if (SwConsoleModeSaved == FALSE) {
-        SwSaveTerminalMode();
+        if (!SwSaveTerminalMode()) {
+            return 0;
+        }
     }
 
     OriginalMode = SwOriginalConsoleMode;
