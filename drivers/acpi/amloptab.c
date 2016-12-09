@@ -81,7 +81,7 @@ PAML_CREATE_NEXT_STATEMENT_ROUTINE AcpiCreateStatement[256] = {
     AcpipCreateDataStatement,
     AcpipCreateDataStatement,
     AcpipCreateDataStatement,
-    AcpipCreateInvalidOpcodeStatement,
+    AcpipCreateDataStatement,
     AcpipCreateInvalidOpcodeStatement,
     AcpipCreateScopeStatement,         // 0x10
     AcpipCreateBufferStatement,
