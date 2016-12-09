@@ -4742,7 +4742,6 @@ Return Value:
         goto TcpHandleUnconnectedPacketEnd;
     }
 
-    IoSocketAddReference(&(NewTcpSocket->NetSocket.KernelSocket));
     KeAcquireQueuedLock(NewTcpSocket->Lock);
     LockHeld = TRUE;
 
