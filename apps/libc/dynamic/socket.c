@@ -1383,7 +1383,13 @@ Return Value:
 
 {
 
+    UINTN CopySize;
+    KSTATUS ErrorStatus;
+    INT ErrorValue;
+    INT LeadingZeros;
+    INT Mask;
     socklen_t OriginalOptionLength;
+    INT Shift;
     KSTATUS Status;
 
     ASSERT_SOCKET_TYPES_EQUIVALENT();
@@ -1413,6 +1419,41 @@ Return Value:
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
         return -1;
+
+    //
+    // If this is the SO_ERROR option, then the status code must be converted
+    // from a KSTATUS to an errno value.
+    //
+
+    } else if ((Level == SOL_SOCKET) && (OptionName == SO_ERROR)) {
+        CopySize = *OptionLength;
+        if (CopySize > sizeof(KSTATUS)) {
+            CopySize = sizeof(KSTATUS);
+        }
+
+        ErrorStatus = 0;
+        RtlCopyMemory(&ErrorStatus, OptionValue, CopySize);
+
+        //
+        // If the error status is positive, then the option length is probably
+        // less than sizeof(KSTATUS). All of the KSTATUS values are negative,
+        // so the error status needs to be sign extended.
+        //
+
+        if (ErrorStatus > 0) {
+
+            assert(CopySize < sizeof(KSTATUS));
+
+            LeadingZeros = RtlCountLeadingZeros32(ErrorStatus);
+            Shift = (sizeof(KSTATUS) * BITS_PER_BYTE) - LeadingZeros;
+            Mask = ~((1 << Shift) - 1);
+            ErrorStatus |= Mask;
+
+            assert(ErrorStatus < 0);
+        }
+
+        ErrorValue = ClConvertKstatusToErrorNumber(ErrorStatus);
+        RtlCopyMemory(OptionValue, &ErrorValue, *OptionLength);
     }
 
     return 0;
