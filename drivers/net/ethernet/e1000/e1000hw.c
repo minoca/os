@@ -1842,6 +1842,7 @@ Return Value:
     case E1000Mac82540:
     case E1000Mac82545:
     case E1000Mac82574:
+    case E1000MacI350:
     case E1000MacI354:
         Eeprom->OpcodeBits = 3;
         Eeprom->Delay = 50;

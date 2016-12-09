@@ -126,6 +126,7 @@ E1000_DEVICE_ENTRY E1000Devices[] = {
     {0x100E, E1000Mac82540},
     {0x100F, E1000Mac82545},
     {0x10D3, E1000Mac82574},
+    {0x1521, E1000MacI350},
     {0x1F45, E1000MacI354},
     {0, E1000MacInvalid},
 };
@@ -857,6 +858,15 @@ Return Value:
     }
 
     //
+    // Start up the controller.
+    //
+
+    Status = E1000pResetDevice(Device);
+    if (!KSUCCESS(Status)) {
+        goto StartDeviceEnd;
+    }
+
+    //
     // Attempt to connect the interrupt.
     //
 
@@ -872,15 +882,6 @@ Return Value:
     Connect.Context = Device;
     Connect.Interrupt = &(Device->InterruptHandle);
     Status = IoConnectInterrupt(&Connect);
-    if (!KSUCCESS(Status)) {
-        goto StartDeviceEnd;
-    }
-
-    //
-    // Start up the controller.
-    //
-
-    Status = E1000pResetDevice(Device);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }
