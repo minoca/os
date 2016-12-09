@@ -994,6 +994,7 @@ Return Value:
     UINTN AlignmentOffset;
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    ULONG BarCount;
     IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION ControllerBase;
     PHYSICAL_ADDRESS EndAddress;
@@ -1021,6 +1022,7 @@ Return Value:
     // interrupt.
     //
 
+    BarCount = 0;
     AllocationList = Irp->U.StartDevice.ProcessorLocalResources;
     Allocation = IoGetNextResourceAllocation(AllocationList, NULL);
     while (Allocation != NULL) {
@@ -1049,8 +1051,13 @@ Return Value:
             Controller->InterruptLine = LineAllocation->Allocation;
             Controller->InterruptVector = Allocation->Allocation;
 
-        } else if (Allocation->Type == ResourceTypePhysicalAddressSpace) {
-            if (Allocation->Length != 0) {
+        } else if ((Allocation->Type == ResourceTypePhysicalAddressSpace) ||
+                   (Allocation->Type == ResourceTypeIoPort)) {
+
+            BarCount += 1;
+            if ((BarCount == 6) &&
+                (Allocation->Type == ResourceTypePhysicalAddressSpace) &&
+                (Allocation->Length != 0)) {
 
                 ASSERT(ControllerBase == NULL);
 
@@ -1072,6 +1079,7 @@ Return Value:
     if ((ControllerBase == NULL) ||
         (Controller->InterruptVector == INVALID_INTERRUPT_VECTOR)) {
 
+        RtlDebugPrint("AHCI: Missing resources.\n");
         Status = STATUS_INVALID_CONFIGURATION;
         goto StartControllerEnd;
     }
