@@ -1904,7 +1904,6 @@ Return Value:
         goto BindSocketEnd;
     }
 
-    SkipValidation = FALSE;
     KeAcquireSharedExclusiveLockExclusive(Protocol->SocketLock);
     LockHeld = TRUE;
 
@@ -1957,33 +1956,6 @@ Return Value:
 
         Status = STATUS_INVALID_PARAMETER;
         goto BindSocketEnd;
-    }
-
-    //
-    // If the socket is already in a tree, temporarily remove it. It will
-    // either get moved to the new tree or be restored, untouched, on error.
-    //
-
-    if (Socket->BindingType != SocketBindingInvalid) {
-        RtlRedBlackTreeRemove(&(Protocol->SocketTree[Socket->BindingType]),
-                              &(Socket->U.TreeEntry));
-
-        SkipValidation = TRUE;
-        Reinsert = TRUE;
-
-    //
-    // If the socket is the forked copy of some listening socket, skip
-    // validation. This socket is allowed to share the same local address and
-    // port.
-    //
-
-    } else if ((Socket->Flags & NET_SOCKET_FLAG_FORKED_LISTENER) != 0) {
-
-        ASSERT(LocalInformation != NULL);
-        ASSERT(BindingType == SocketLocallyBound);
-        ASSERT(LocalInformation->LocalAddress.Port != 0);
-
-        SkipValidation = TRUE;
     }
 
     //
@@ -2070,6 +2042,36 @@ Return Value:
         NetpDetachSocket(Socket);
         Status = STATUS_NO_NETWORK_CONNECTION;
         goto BindSocketEnd;
+    }
+
+    //
+    // If the socket is already in a tree, temporarily remove it. It will
+    // either get moved to the new tree or be restored, untouched, on error.
+    // Don't release the reference taken when the socket was first put on the
+    // tree. Pass it on to the new tree or keep it for the reinsert.
+    //
+
+    SkipValidation = FALSE;
+    if (Socket->BindingType != SocketBindingInvalid) {
+        RtlRedBlackTreeRemove(&(Protocol->SocketTree[Socket->BindingType]),
+                              &(Socket->U.TreeEntry));
+
+        SkipValidation = TRUE;
+        Reinsert = TRUE;
+
+    //
+    // If the socket is the forked copy of some listening socket, skip
+    // validation. This socket is allowed to share the same local address and
+    // port.
+    //
+
+    } else if ((Socket->Flags & NET_SOCKET_FLAG_FORKED_LISTENER) != 0) {
+
+        ASSERT(LocalInformation != NULL);
+        ASSERT(BindingType == SocketLocallyBound);
+        ASSERT(LocalInformation->LocalAddress.Port != 0);
+
+        SkipValidation = TRUE;
     }
 
     //
@@ -2247,6 +2249,15 @@ Return Value:
     }
 
     //
+    // If the socket wasn't already in a tree, increment the reference count on
+    // the socket so that it cannot disappear while being in the tree.
+    //
+
+    if (Socket->BindingType == SocketBindingInvalid) {
+        IoSocketAddReference(&(Socket->KernelSocket));
+    }
+
+    //
     // Welcome this new friend into the bound sockets tree.
     //
 
@@ -2254,13 +2265,6 @@ Return Value:
                           &(Socket->U.TreeEntry));
 
     Socket->BindingType = BindingType;
-
-    //
-    // Increment the reference count on the socket so that it cannot disappear
-    // while being on the tree.
-    //
-
-    IoSocketAddReference(&(Socket->KernelSocket));
     Status = STATUS_SUCCESS;
 
 BindSocketEnd:
@@ -4029,16 +4033,10 @@ Return Value:
 
     if (Socket->BindingType == SocketBindingInvalid) {
         INSERT_BEFORE(&(Socket->U.ListEntry), &NetRawSocketsList);
+        IoSocketAddReference(&(Socket->KernelSocket));
     }
 
     Socket->BindingType = BindingType;
-
-    //
-    // Increment the reference count on the socket so that it cannot disappear
-    // while being in the list.
-    //
-
-    IoSocketAddReference(&(Socket->KernelSocket));
     Status = STATUS_SUCCESS;
 
 BindRawSocketEnd:

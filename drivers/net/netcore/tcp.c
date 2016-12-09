@@ -4834,7 +4834,6 @@ TcpHandleUnconnectedPacketEnd:
         ASSERT(NewTcpSocket != NULL);
 
         KeReleaseQueuedLock(NewTcpSocket->Lock);
-        IoSocketReleaseReference(&(NewTcpSocket->NetSocket.KernelSocket));
     }
 
     if (NewIoHandle != INVALID_HANDLE) {
@@ -7816,7 +7815,6 @@ Return Value:
 
     NetSocketFlags |= NET_SOCKET_FLAG_FORKED_LISTENER;
     RtlAtomicOr32(&(NewTcpSocket->NetSocket.Flags), NetSocketFlags);
-    IoSocketAddReference(&(NewTcpSocket->NetSocket.KernelSocket));
     KeAcquireQueuedLock(NewTcpSocket->Lock);
     LockHeld = TRUE;
 
@@ -7932,7 +7930,6 @@ TcpHandleIncomingConnectionEnd:
         ASSERT(NewTcpSocket != NULL);
 
         KeReleaseQueuedLock(NewTcpSocket->Lock);
-        IoSocketReleaseReference(&(NewTcpSocket->NetSocket.KernelSocket));
     }
 
     //
