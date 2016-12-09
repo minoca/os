@@ -341,6 +341,7 @@ Author:
 #define TCP_SOCKET_FLAG_RECEIVE_MISSING_SEGMENTS     0x00000200
 #define TCP_SOCKET_FLAG_NO_DELAY                     0x00000400
 #define TCP_SOCKET_FLAG_WINDOW_SCALING               0x00000800
+#define TCP_SOCKET_FLAG_CONNECT_INTERRUPTED          0x00001000
 
 //
 // ------------------------------------------------------ Data Type Definitions

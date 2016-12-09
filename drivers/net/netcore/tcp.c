@@ -1280,34 +1280,59 @@ Return Value:
     KeAcquireQueuedLock(TcpSocket->Lock);
     LockHeld = TRUE;
     if (TcpSocket->State != TcpStateInitialized) {
-        if ((TcpSocket->State == TcpStateSynSent) ||
-            (TcpSocket->State == TcpStateSynReceived)) {
 
-            Status = STATUS_ALREADY_INITIALIZED;
+        //
+        // If a previous connect was not interrupted, then not being in the
+        // initialized state is fatal.
+        //
+
+        if ((TcpSocket->Flags & TCP_SOCKET_FLAG_CONNECT_INTERRUPTED) == 0) {
+            if ((TcpSocket->State == TcpStateSynSent) ||
+                (TcpSocket->State == TcpStateSynReceived)) {
+
+                Status = STATUS_ALREADY_INITIALIZED;
+
+            } else {
+                Status = STATUS_CONNECTION_EXISTS;
+            }
+
+            goto TcpConnectEnd;
+
+        //
+        // Otherwise note that the socket has already been connected to the
+        // network layer and move on.
+        //
 
         } else {
-            Status = STATUS_CONNECTION_EXISTS;
+            Connected = TRUE;
         }
-
-        goto TcpConnectEnd;
     }
+
+    //
+    // Unset the interrupted flag before giving the connect another shot.
+    //
+
+    TcpSocket->Flags &= ~TCP_SOCKET_FLAG_CONNECT_INTERRUPTED;
 
     //
     // Pass the request down to the network layer.
     //
 
-    Status = Socket->Network->Interface.Connect(Socket, Address);
-    if (!KSUCCESS(Status)) {
-        goto TcpConnectEnd;
+    if (Connected == FALSE) {
+        Status = Socket->Network->Interface.Connect(Socket, Address);
+        if (!KSUCCESS(Status)) {
+            goto TcpConnectEnd;
+        }
+
+        Connected = TRUE;
+
+        //
+        // Put the socket in the SYN sent state. This will fire off a SYN.
+        //
+
+        NetpTcpSetState(TcpSocket, TcpStateSynSent);
     }
 
-    Connected = TRUE;
-
-    //
-    // Put the socket in the SYN sent state. This will fire off a SYN.
-    //
-
-    NetpTcpSetState(TcpSocket, TcpStateSynSent);
     KeReleaseQueuedLock(TcpSocket->Lock);
     LockHeld = FALSE;
 
@@ -1360,18 +1385,25 @@ TcpConnectEnd:
     //
     // If the connect was attempted but failed for a reason other than a
     // timeout or that the wait was interrupted, stop the socket in its tracks.
-    // When interrupted, the connect is meant to continue in the background. On
+    // When interrupted, the connect is meant to continue in the background,
+    // but record the interruption in case the system call gets restarted. On
     // timeout, the mechanism that determined the timeout handled the
     // appropriate clean up of the socket (i.e. disconnect and reinitialize).
     //
 
-    if (!KSUCCESS(Status) && (Connected != FALSE)) {
-        if ((Status != STATUS_INTERRUPTED) && (Status != STATUS_TIMEOUT)) {
-            if (LockHeld == FALSE) {
-                KeAcquireQueuedLock(TcpSocket->Lock);
-                LockHeld = TRUE;
-            }
+    if (!KSUCCESS(Status) &&
+        (Connected != FALSE) &&
+        (Status != STATUS_TIMEOUT)) {
 
+        if (LockHeld == FALSE) {
+            KeAcquireQueuedLock(TcpSocket->Lock);
+            LockHeld = TRUE;
+        }
+
+        if (Status == STATUS_INTERRUPTED) {
+            TcpSocket->Flags |= TCP_SOCKET_FLAG_CONNECT_INTERRUPTED;
+
+        } else {
             NetpTcpCloseOutSocket(TcpSocket, FALSE);
         }
     }
@@ -7966,7 +7998,6 @@ Return Value:
         // When transitioning to the initialized state from the SYN-sent or
         // SYN-received state, disconnect the socket from its remote address
         // and reset the retry values and backtrack on the buffer sequences.
-        // Reset the error event as well, the socket could try to connect again.
         //
 
         if ((OldState == TcpStateSynReceived) ||
@@ -7998,6 +8029,7 @@ Return Value:
         // new chance to connect.
         //
 
+        NET_SOCKET_CLEAR_LAST_ERROR(&(Socket->NetSocket));
         IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
                            POLL_EVENT_ERROR,
                            FALSE);
@@ -8022,6 +8054,7 @@ Return Value:
             // a new chance to connect.
             //
 
+            NET_SOCKET_CLEAR_LAST_ERROR(&(Socket->NetSocket));
             IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
                                POLL_EVENT_ERROR,
                                FALSE);

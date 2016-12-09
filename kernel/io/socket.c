@@ -54,7 +54,7 @@ KSTATUS
 IopConvertInterruptedSocketStatus (
     PIO_HANDLE Handle,
     UINTN BytesComplete,
-    BOOL Send
+    BOOL Output
     );
 
 //
@@ -1554,6 +1554,15 @@ SysSocketConnectEnd:
     }
 
     //
+    // An interrupted socket connect cannot be restarted if a send timeout
+    // has been set.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        Status = IopConvertInterruptedSocketStatus(IoHandle, 0, TRUE);
+    }
+
+    //
     // Release the reference that was added when the handle was looked up.
     //
 
@@ -2411,7 +2420,7 @@ KSTATUS
 IopConvertInterruptedSocketStatus (
     PIO_HANDLE Handle,
     UINTN BytesComplete,
-    BOOL Send
+    BOOL OutputOperation
     )
 
 /*++
@@ -2429,8 +2438,9 @@ Arguments:
     BytesComplete - Supplies the number of I/O bytes completed during the
         system call.
 
-    Send - Supplies a boolean indicating if the system call was performing a
-        send (TRUE) or receive (FALSE).
+    OutputOperation - Supplies a boolean indicating if the system call was
+        performing a an output socket operation (send/connect) or an input
+        operation (receive/accept).
 
 Return Value:
 
@@ -2461,7 +2471,7 @@ Return Value:
     ASSERT(KSUCCESS(Status));
 
     Mask = SOCKET_FLAG_RECEIVE_TIMEOUT_SET;
-    if (Send != FALSE) {
+    if (OutputOperation != FALSE) {
         Mask = SOCKET_FLAG_SEND_TIMEOUT_SET;
     }
 

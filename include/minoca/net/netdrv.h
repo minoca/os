@@ -65,6 +65,13 @@ Author:
     RtlAtomicExchange32((volatile ULONG *)&((_Socket)->LastError), (_Error));
 
 //
+// This macro clears the network sockets last error state.
+//
+
+#define NET_SOCKET_CLEAR_LAST_ERROR(_Socket) \
+    NET_SOCKET_GET_AND_CLEAR_LAST_ERROR(_Socket)
+
+//
 // This macro initializes a network packet list.
 //
 
