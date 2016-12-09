@@ -200,6 +200,45 @@ typedef enum _AML_STATEMENT_TYPE {
     AmlStatementCount
 } AML_STATEMENT_TYPE, *PAML_STATEMENT_TYPE;
 
+typedef struct _AML_EXECUTION_CONTEXT
+    AML_EXECUTION_CONTEXT, *PAML_EXECUTION_CONTEXT;
+
+typedef struct _ACPI_OBJECT ACPI_OBJECT, *PACPI_OBJECT;
+
+typedef
+KSTATUS
+(*PACPI_C_METHOD) (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Method,
+    PACPI_OBJECT *Arguments,
+    ULONG ArgumentCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements an ACPI method in C.
+
+Arguments:
+
+    Context - Supplies a pointer to the execution context.
+
+    Method - Supplies a pointer to the method getting executed.
+
+    Arguments - Supplies a pointer to the function arguments.
+
+    ArgumentCount - Supplies the number of arguments provided.
+
+Return Value:
+
+    STATUS_SUCCESS if execution completed.
+
+    Returns a failing status code if a catastrophic error occurred that
+    prevented the proper execution of the method.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -394,6 +433,10 @@ Members:
         defining this method only supports 32 bit integers (a table revision of
         1).
 
+    Function - Stores a pointer to the C function to run when executing this
+        method. Most of the time this is NULL, as functions are implemented in
+        AML code. The _OSI function is a notable exception.
+
 --*/
 
 typedef struct _ACPI_METHOD_OBJECT {
@@ -404,6 +447,7 @@ typedef struct _ACPI_METHOD_OBJECT {
     PVOID AmlCode;
     ULONG AmlCodeSize;
     BOOL IntegerWidthIs32;
+    PACPI_C_METHOD Function;
 } ACPI_METHOD_OBJECT, *PACPI_METHOD_OBJECT;
 
 /*++
@@ -602,7 +646,6 @@ Members:
 
 --*/
 
-typedef struct _ACPI_OBJECT ACPI_OBJECT, *PACPI_OBJECT;
 struct _ACPI_OBJECT {
     ACPI_OBJECT_TYPE Type;
     ULONG Name;
@@ -802,7 +845,7 @@ Members:
 
 --*/
 
-typedef struct _AML_EXECUTION_CONTEXT {
+struct _AML_EXECUTION_CONTEXT {
     BOOL ExecuteStatements;
     BOOL PrintStatements;
     BOOL EscapingDynamicScope;
@@ -818,7 +861,7 @@ typedef struct _AML_EXECUTION_CONTEXT {
     PACPI_OBJECT ReturnValue;
     BOOL LastIfStatementResult;
     PLIST_ENTRY DestructorListHead;
-} AML_EXECUTION_CONTEXT, *PAML_EXECUTION_CONTEXT;
+};
 
 //
 // -------------------------------------------------------------------- Globals
@@ -1075,6 +1118,40 @@ Return Value:
 
     Status code. Failure means something serious went wrong, not just that some
     device returned a non-functioning status.
+
+--*/
+
+KSTATUS
+AcpipOsiMethod (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Method,
+    PACPI_OBJECT *Arguments,
+    ULONG ArgumentCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the _OSI method, which allows the AML code to
+    determine support for OS-specific features.
+
+Arguments:
+
+    Context - Supplies a pointer to the execution context.
+
+    Method - Supplies a pointer to the method getting executed.
+
+    Arguments - Supplies a pointer to the function arguments.
+
+    ArgumentCount - Supplies the number of arguments provided.
+
+Return Value:
+
+    STATUS_SUCCESS if execution completed.
+
+    Returns a failing status code if a catastrophic error occurred that
+    prevented the proper execution of the method.
 
 --*/
 

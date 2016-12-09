@@ -2845,6 +2845,25 @@ Return Value:
         return Status;
     }
 
+    //
+    // If this was a C method, complete it right away.
+    //
+
+    if (Method->U.Method.Function != NULL) {
+
+        ASSERT(Method->U.Method.AmlCodeSize == 0);
+
+        Statement->Reduction = Context->ReturnValue;
+        AcpipObjectAddReference(Statement->Reduction);
+        Context->IndentationLevel -= 1;
+        if (Context->PrintStatements != FALSE) {
+            AcpipPrintIndentedNewLine(Context);
+            RtlDebugPrint("}");
+        }
+
+        return STATUS_SUCCESS;
+    }
+
     return STATUS_MORE_PROCESSING_REQUIRED;
 }
 
@@ -7142,6 +7161,9 @@ Return Value:
             break;
 
         default:
+
+            ASSERT(FALSE);
+
             return STATUS_NOT_SUPPORTED;
         }
 

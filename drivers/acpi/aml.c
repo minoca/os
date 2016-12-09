@@ -57,6 +57,14 @@ Environment:
 #define AML_EXECUTION_OPTION_PRINT 0x00000002
 
 //
+// Define return values from _OSI indicating whether the given request is
+// supported or unsupported by the OS.
+//
+
+#define OSI_BEHAVIOR_SUPPORTED 0xFFFFFFFFFFFFFFFF
+#define OSI_BEHAVIOR_UNSUPPORTED 0
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -154,6 +162,12 @@ AcpipRunDeviceInitialization (
 ULONG AcpiDebugExecutionOptions = 0x0;
 
 //
+// Set this to TRUE and every _OSI request will get printed.
+//
+
+BOOL AcpiPrintOsiRequests = FALSE;
+
+//
 // Store the list of SSDT definition blocks.
 //
 
@@ -205,6 +219,28 @@ ACPI_OBJECT AcpiOnes64 = {
    {NULL, NULL},
    {NULL, NULL},
    {{0xFFFFFFFFFFFFFFFFULL}}
+};
+
+//
+// Store the OSI strings for which TRUE will be returned by default.
+//
+
+PCSTR AcpiDefaultOsiStrings[] = {
+    "Windows 2000",
+    "Windows 2001",
+    "Windows 2001 SP1",
+    "Windows 2001.1",
+    "Windows 2001 SP2",
+    "Windows 2001.1 SP1",
+    "Windows 2006",
+    "Windows 2006.1",
+    "Windows 2006 SP1",
+    "Windows 2006 SP2",
+    "Windows 2009",
+    "Windows 2012",
+    "Windows 2013",
+    "Windows 2015",
+    NULL
 };
 
 //
@@ -1005,6 +1041,24 @@ Return Value:
     KSTATUS Status;
 
     //
+    // If a method is being executed that is actually covered by a C function,
+    // then run the C function now and return. The C function is responsible
+    // for setting the return value.
+    //
+
+    if ((AmlCode == NULL) && (AmlCodeSize == 0) && (Scope != NULL) &&
+        (Scope->Type == AcpiObjectMethod) &&
+        (Scope->U.Method.Function != NULL)) {
+
+        Status = Scope->U.Method.Function(Context,
+                                          Scope,
+                                          Arguments,
+                                          ArgumentCount);
+
+        goto PushMethodOnExecutionContextEnd;
+    }
+
+    //
     // Allocate space for the new method.
     //
 
@@ -1319,6 +1373,127 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 RunInitializationMethodsEnd:
+    return Status;
+}
+
+KSTATUS
+AcpipOsiMethod (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Method,
+    PACPI_OBJECT *Arguments,
+    ULONG ArgumentCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the _OSI method, which allows the AML code to
+    determine support for OS-specific features.
+
+Arguments:
+
+    Context - Supplies a pointer to the execution context.
+
+    Method - Supplies a pointer to the method getting executed.
+
+    Arguments - Supplies a pointer to the function arguments.
+
+    ArgumentCount - Supplies the number of arguments provided.
+
+Return Value:
+
+    STATUS_SUCCESS if execution completed.
+
+    Returns a failing status code if a catastrophic error occurred that
+    prevented the proper execution of the method.
+
+--*/
+
+{
+
+    PACPI_OBJECT Argument;
+    PACPI_OBJECT ConvertedArgument;
+    PCSTR *Default;
+    ULONGLONG Result;
+    PCSTR ResultString;
+    KSTATUS Status;
+
+    ConvertedArgument = NULL;
+    Result = OSI_BEHAVIOR_UNSUPPORTED;
+    Status = STATUS_SUCCESS;
+    if (ArgumentCount != 1) {
+        RtlDebugPrint("ACPI: Warning: _OSI called with %u arguments.\n",
+                      ArgumentCount);
+
+        goto OsiMethodEnd;
+    }
+
+    Argument = Arguments[0];
+    if (Argument->Type != AcpiObjectString) {
+        ConvertedArgument = AcpipConvertObjectType(Context,
+                                                   Argument,
+                                                   AcpiObjectString);
+
+        if (ConvertedArgument == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto OsiMethodEnd;
+        }
+
+        Argument = ConvertedArgument;
+    }
+
+    ASSERT(Argument->Type == AcpiObjectString);
+
+    Default = AcpiDefaultOsiStrings;
+    while (*Default != NULL) {
+        if (RtlAreStringsEqual(*Default, Argument->U.String.String, -1) !=
+            FALSE) {
+
+            Result = OSI_BEHAVIOR_SUPPORTED;
+            break;
+        }
+
+        Default += 1;
+    }
+
+    if (Result == OSI_BEHAVIOR_UNSUPPORTED) {
+        if (AcpipCheckOsiSupport(Argument->U.String.String) != FALSE) {
+            Result = OSI_BEHAVIOR_SUPPORTED;
+        }
+    }
+
+    if (AcpiPrintOsiRequests != FALSE) {
+        ResultString = "Unsupported";
+        if (Result == OSI_BEHAVIOR_SUPPORTED) {
+            ResultString = "Supported";
+        }
+
+        RtlDebugPrint("_OSI Request \"%s\": %s\n",
+                      Argument->U.String.String,
+                      ResultString);
+    }
+
+OsiMethodEnd:
+
+    //
+    // Set the return value integer.
+    //
+
+    if (Context->ReturnValue != NULL) {
+        AcpipObjectReleaseReference(Context->ReturnValue);
+    }
+
+    Context->ReturnValue = AcpipCreateNamespaceObject(Context,
+                                                      AcpiObjectInteger,
+                                                      NULL,
+                                                      &Result,
+                                                      sizeof(Result));
+
+    if (Context->ReturnValue == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+    }
+
     return Status;
 }
 

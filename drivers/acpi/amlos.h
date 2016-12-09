@@ -77,6 +77,29 @@ Return Value:
 
 --*/
 
+BOOL
+AcpipCheckOsiSupport (
+    PCSTR String
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not a given _OSI request is supported.
+
+Arguments:
+
+    String - Supplies a pointer to the string to check.
+
+Return Value:
+
+    TRUE if the implementation supports this feature.
+
+    FALSE if the request is not supported.
+
+--*/
+
 PVOID
 AcpipAllocateMemory (
     ULONG Size
@@ -201,6 +224,7 @@ Return Value:
 
 ULONGLONG
 AcpipGetTimerValue (
+    VOID
     );
 
 /*++
@@ -325,6 +349,7 @@ Return Value:
 
 PVOID
 AcpipCreateEvent (
+    VOID
     );
 
 /*++
@@ -467,6 +492,7 @@ Return Value:
 
 VOID
 AcpipAcquirePciLock (
+    VOID
     );
 
 /*++
@@ -488,6 +514,7 @@ Return Value:
 
 VOID
 AcpipReleasePciLock (
+    VOID
     );
 
 /*++

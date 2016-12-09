@@ -80,6 +80,18 @@ Environment:
 #define ACPI_OPERATING_SYSTEM_NAME_OBJECT_NAME_STRING "_OS_"
 
 //
+// Define the name of the Operating System interface method object.
+//
+
+#define ACPI_OSI_METHOD_OBJECT_NAME_STRING "_OSI"
+
+//
+// Define the name of the supported revision integer.
+//
+
+#define ACPI_REV_INTEGER_NAME_STRING "_REV"
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -163,6 +175,9 @@ Return Value:
     PACPI_OBJECT GeneralEventObject;
     PACPI_OBJECT OperatingSystem;
     ULONG OperatingSystemStringLength;
+    PACPI_OBJECT OsInterface;
+    PACPI_OBJECT Revision;
+    ULONGLONG RevisionValue;
     KSTATUS Status;
 
     GeneralEventObject = NULL;
@@ -171,6 +186,7 @@ Return Value:
         return STATUS_SUCCESS;
     }
 
+    Status = STATUS_INSUFFICIENT_RESOURCES;
     AcpiNamespaceRoot = AcpipCreateNamespaceObject(NULL,
                                                    AcpiObjectUninitialized,
                                                    NULL,
@@ -178,11 +194,12 @@ Return Value:
                                                    0);
 
     if (AcpiNamespaceRoot == NULL) {
-        return STATUS_UNSUCCESSFUL;
+        goto InitializeNamespaceEnd;
     }
 
     //
-    // Create the objects defined by the ACPI specificiation to exist.
+    // Create the objects defined by the ACPI specificiation to exist. Start
+    // with \_SB.
     //
 
     AcpiSystemBusRoot = AcpipCreateNamespaceObject(
@@ -193,11 +210,15 @@ Return Value:
                                             0);
 
     if (AcpiSystemBusRoot == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
     AcpipObjectReleaseReference(AcpiSystemBusRoot);
+
+    //
+    // Create \_PR.
+    //
+
     AcpiProcessorRoot = AcpipCreateNamespaceObject(
                                              NULL,
                                              AcpiObjectUninitialized,
@@ -206,11 +227,15 @@ Return Value:
                                              0);
 
     if (AcpiProcessorRoot == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
     AcpipObjectReleaseReference(AcpiProcessorRoot);
+
+    //
+    // Create \_GPE.
+    //
+
     GeneralEventObject = AcpipCreateNamespaceObject(
                                  NULL,
                                  AcpiObjectUninitialized,
@@ -219,11 +244,15 @@ Return Value:
                                  0);
 
     if (GeneralEventObject == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
     AcpipObjectReleaseReference(GeneralEventObject);
+
+    //
+    // Create \_OS.
+    //
+
     OperatingSystemStringLength = RtlStringLength(ACPI_OPERATING_SYSTEM_NAME);
     OperatingSystem = AcpipCreateNamespaceObject(
                                  NULL,
@@ -233,11 +262,45 @@ Return Value:
                                  OperatingSystemStringLength + 1);
 
     if (OperatingSystem == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
     AcpipObjectReleaseReference(OperatingSystem);
+
+    //
+    // Create \_OSI.
+    //
+
+    OsInterface = AcpipCreateNamespaceObject(NULL,
+                                             AcpiObjectMethod,
+                                             ACPI_OSI_METHOD_OBJECT_NAME_STRING,
+                                             NULL,
+                                             0);
+
+    if (OsInterface == NULL) {
+        goto InitializeNamespaceEnd;
+    }
+
+    OsInterface->U.Method.Function = AcpipOsiMethod;
+    OsInterface->U.Method.ArgumentCount = 1;
+    AcpipObjectReleaseReference(OsInterface);
+
+    //
+    // Create \_REV.
+    //
+
+    RevisionValue = ACPI_IMPLEMENTED_REVISION;
+    Revision = AcpipCreateNamespaceObject(NULL,
+                                          AcpiObjectInteger,
+                                          ACPI_REV_INTEGER_NAME_STRING,
+                                          &RevisionValue,
+                                          sizeof(RevisionValue));
+
+    if (Revision == NULL) {
+        goto InitializeNamespaceEnd;
+    }
+
+    AcpipObjectReleaseReference(Revision);
     Status = STATUS_SUCCESS;
 
 InitializeNamespaceEnd:
@@ -708,6 +771,9 @@ Return Value:
                     goto CreateNamespaceObjectEnd;
                 }
             }
+
+        } else {
+            RtlZeroMemory(&(NewObject->U.Method), sizeof(ACPI_METHOD_OBJECT));
         }
 
         break;
@@ -1470,11 +1536,22 @@ Return Value:
 
         break;
 
+    case AcpiObjectPackage:
+        if (Source->Type != AcpiObjectPackage) {
+
+            ASSERT(FALSE);
+
+            Status = STATUS_NOT_SUPPORTED;
+            goto PerformStoreOperationEnd;
+        }
+
+        Status = AcpipReplaceObjectContents(Context, Destination, Source);
+        break;
+
     //
     // Some object cannot be "stored" into.
     //
 
-    case AcpiObjectPackage:
     case AcpiObjectDevice:
     case AcpiObjectEvent:
     case AcpiObjectMethod:
@@ -1483,6 +1560,9 @@ Return Value:
     case AcpiObjectPowerResource:
     case AcpiObjectProcessor:
     case AcpiObjectThermalZone:
+
+        ASSERT(FALSE);
+
         Status = STATUS_NOT_SUPPORTED;
         goto PerformStoreOperationEnd;
 

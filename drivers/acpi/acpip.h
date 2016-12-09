@@ -31,6 +31,8 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define ACPI_IMPLEMENTED_REVISION 5
+
 //
 // Define the names of the system bus and processor objects.
 //
