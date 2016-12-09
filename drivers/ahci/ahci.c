@@ -1233,9 +1233,15 @@ Return Value:
     AhciEnumerationMilliseconds = (Duration * MILLISECONDS_PER_SECOND) /
                                   HlQueryTimeCounterFrequency();
 
-    Status = IoMergeChildArrays(Irp, Children, ChildCount, AHCI_ALLOCATION_TAG);
-    if (!KSUCCESS(Status)) {
-        goto EnumeratePortsEnd;
+    if (ChildCount != 0) {
+        Status = IoMergeChildArrays(Irp,
+                                    Children,
+                                    ChildCount,
+                                    AHCI_ALLOCATION_TAG);
+
+        if (!KSUCCESS(Status)) {
+            goto EnumeratePortsEnd;
+        }
     }
 
 EnumeratePortsEnd:

@@ -927,6 +927,10 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
+    if (ChildCount == 0) {
+        return STATUS_SUCCESS;
+    }
+
     ASSERT(QueryChildrenIrp->MajorCode == IrpMajorStateChange);
     ASSERT(QueryChildrenIrp->MinorCode == IrpMinorQueryChildren);
 
@@ -2965,7 +2969,7 @@ Arguments:
 
 Return Value:
 
-    Returns a unique device ID string. If the result is different than 
+    Returns a unique device ID string. If the result is different than
     DeviceId, the caller is responsible for releasing the memory.
 
 --*/
@@ -3110,7 +3114,7 @@ GetUniqueDeviceIdEnd:
     if (FormatString != NULL) {
         MmFreePagedPool(FormatString);
     }
-    
+
     return NewDeviceId;
 }
 
