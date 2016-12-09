@@ -7978,6 +7978,7 @@ Return Value:
     ULONG Flags;
     PNET_SOCKET NetSocket;
     TCP_STATE OldState;
+    BOOL WithAcknowledge;
 
     OldState = Socket->State;
     Socket->PreviousState = OldState;
@@ -8025,22 +8026,8 @@ Return Value:
         ASSERT(OldState == TcpStateInitialized);
 
         //
-        // Make sure that the error event is not signalled. Give the socket a
-        // new chance to connect.
+        // Fall through to the SYN received state. They are almost identical.
         //
-
-        NET_SOCKET_CLEAR_LAST_ERROR(&(Socket->NetSocket));
-        IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_ERROR,
-                           FALSE);
-
-        Socket->SendNextBufferSequence += 1;
-        Socket->SendNextNetworkSequence += 1;
-        TCP_UPDATE_RETRY_TIME(Socket);
-        TCP_SET_DEFAULT_TIMEOUT(Socket);
-        NetpTcpTimerAddReference(Socket);
-        NetpTcpSendSyn(Socket, FALSE);
-        break;
 
     case TcpStateSynReceived:
 
@@ -8066,7 +8053,12 @@ Return Value:
             NetpTcpTimerAddReference(Socket);
         }
 
-        NetpTcpSendSyn(Socket, TRUE);
+        WithAcknowledge = FALSE;
+        if (NewState == TcpStateSynReceived) {
+            WithAcknowledge = TRUE;
+        }
+
+        NetpTcpSendSyn(Socket, WithAcknowledge);
         break;
 
     case TcpStateEstablished:
