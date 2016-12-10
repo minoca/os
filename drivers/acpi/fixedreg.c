@@ -839,9 +839,6 @@ Return Value:
     //
 
     if (AddressLength == 0) {
-
-        ASSERT(FALSE);
-
         return STATUS_NOT_SUPPORTED;
     }
 
@@ -1002,9 +999,6 @@ Return Value:
     //
 
     if (AddressLength == 0) {
-
-        ASSERT(FALSE);
-
         return STATUS_NOT_SUPPORTED;
     }
 
