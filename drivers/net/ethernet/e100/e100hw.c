@@ -1596,12 +1596,17 @@ Return Value:
                            E100_COMMAND_TRANSMIT_FLEXIBLE_MODE;
 
         //
-        // If half of the commands are free, then force an interrupt on this
-        // command. In cases where the entire ring fills up with commands, this
-        // allows more commands to be added to the ring before it empties.
+        // If one less than half (15) commands are now free, this command is
+        // the 16th command submitted to the hardware. Force an interrupt. This
+        // will give better throughput in cases where the ring fills up as more
+        // commands can be added after half of the ring is processed. It is
+        // also necessary on QEMU, because QEMU stops processing commands after
+        // completing 16 commands in a row (and it doesn't signal inactivity!).
+        // This command may become the 16th command in a row and would need an
+        // interrupt in order to be reaped.
         //
 
-        if (Device->CommandFreeCount == (E100_COMMAND_RING_COUNT >> 1)) {
+        if (Device->CommandFreeCount == ((E100_COMMAND_RING_COUNT >> 1) - 1)) {
             Command->Command |= E100_COMMAND_INTERRUPT;
         }
 
