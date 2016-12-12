@@ -154,6 +154,8 @@ typedef enum _TERMINAL_COMMAND {
     TerminalCommandDoubleLineHeightBottomHalf,
     TerminalCommandSingleWidthLine,
     TerminalCommandDoubleWidthLine,
+    TerminalCommandCursorForwardTabStops,
+    TerminalCommandCursorBackwardTabStops,
 } TERMINAL_COMMAND, *PTERMINAL_COMMAND;
 
 typedef enum _TERMINAL_KEY {

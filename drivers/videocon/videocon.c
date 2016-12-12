@@ -78,12 +78,39 @@ Environment:
       (_Console)->ScreenRows - 1 - (_Console)->BottomMargin))
 
 //
+// These macros determine the index and bit position of a tab stop bit.
+//
+
+#define TAB_STOP_INDEX(_Column) ((_Column) / (sizeof(ULONG) * BITS_PER_BYTE))
+#define TAB_STOP_MASK(_Column) \
+    (1 << ((_Column) % (sizeof(ULONG) * BITS_PER_BYTE)))
+
+//
+// These macros manipulate the tab stop bits given a column.
+//
+
+#define SET_TAB_STOP(_Console, _Column) \
+    (_Console)->TabStops[TAB_STOP_INDEX(_Column)] |= TAB_STOP_MASK(_Column)
+
+#define CLEAR_TAB_STOP(_Console, _Column) \
+    (_Console)->TabStops[TAB_STOP_INDEX(_Column)] &= ~TAB_STOP_MASK(_Column)
+
+#define IS_TAB_STOP(_Console, _Column) \
+    ((_Console)->TabStops[TAB_STOP_INDEX(_Column)] & TAB_STOP_MASK(_Column))
+
+#define TAB_STOPS_SIZE(_Column) \
+    (TAB_STOP_INDEX(_Column + (sizeof(ULONG) * BITS_PER_BYTE) - 1) * \
+     sizeof(ULONG))
+
+#define CLEAR_ALL_TAB_STOPS(_Console) \
+    RtlZeroMemory((_Console)->TabStops, TAB_STOPS_SIZE((_Console)->Columns))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
 #define VIDEO_CONSOLE_ALLOCATION_TAG 0x6E6F4356 // 'noCV'
 
-#define VIDEO_CONSOLE_DEFAULT_TAB_WIDTH 4
 #define VIDEO_CONSOLE_READ_BUFFER_SIZE 2048
 #define VIDEO_CONSOLE_MAX_LINES 10000
 
@@ -295,8 +322,6 @@ Members:
 
     TopLine - Stores the index of the line displaying at the top of the screen.
 
-    TabWidth - Stores the number of spaces that expand to a tab.
-
     Lock - Stores a pointer to a lock that serializes access to the console.
 
     NextColumn - Stores the zero-based column number where the next character
@@ -325,6 +350,9 @@ Members:
     SavedAttributes - Stores the next attributes when a save cursor command
         occurred.
 
+    TabStops - Stores a bitfield of the current tab stops. Each bit represents
+        a column, and that bit is set if the column is a tab stop.
+
 --*/
 
 typedef struct _VIDEO_CONSOLE_DEVICE {
@@ -343,7 +371,6 @@ typedef struct _VIDEO_CONSOLE_DEVICE {
     PVOID Lines;
     PVOID Screen;
     LONG TopLine;
-    ULONG TabWidth;
     PQUEUED_LOCK Lock;
     LONG NextColumn;
     LONG NextRow;
@@ -355,6 +382,7 @@ typedef struct _VIDEO_CONSOLE_DEVICE {
     LONG SavedColumn;
     LONG SavedRow;
     LONG SavedAttributes;
+    PULONG TabStops;
 } VIDEO_CONSOLE_DEVICE, *PVIDEO_CONSOLE_DEVICE;
 
 //
@@ -495,6 +523,12 @@ VcpInsertLines (
     LONG StartingRow
     );
 
+VOID
+VcpMoveCursorTabStops (
+    PVIDEO_CONSOLE_DEVICE Console,
+    LONG Advance
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -557,6 +591,8 @@ Return Value:
     LONG Rows;
     ULONG RowSize;
     KSTATUS Status;
+    LONG TabIndex;
+    ULONG TabStopSize;
     UINTN TopOffset;
     SYSTEM_RESOURCE_FRAME_BUFFER VideoResource;
     PVOID VirtualAddress;
@@ -688,6 +724,16 @@ Return Value:
         }
 
         RtlZeroMemory(ConsoleDevice->Screen, AllocationSize);
+        TabStopSize = TAB_STOPS_SIZE(Columns);
+        ConsoleDevice->TabStops = MmAllocatePagedPool(
+                                                 TabStopSize,
+                                                 VIDEO_CONSOLE_ALLOCATION_TAG);
+
+        if (ConsoleDevice->TabStops == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto DriverEntryEnd;
+        }
+
         ConsoleDevice->PhysicalAddress = PhysicalAddress;
         ConsoleDevice->FrameBuffer = VirtualAddress;
         ConsoleDevice->Width = Width;
@@ -698,8 +744,20 @@ Return Value:
         ConsoleDevice->BufferRows = Rows;
         ConsoleDevice->MaxRows = VIDEO_CONSOLE_MAX_LINES;
         ConsoleDevice->Mode = VIDEO_CONSOLE_MODE_DEFAULTS;
+
+        //
+        // Set up some default tab stops every 8 characters, since things seem
+        // to expect that.
+        //
+
+        CLEAR_ALL_TAB_STOPS(ConsoleDevice);
+        TabIndex = 8;
+        while (TabIndex < ConsoleDevice->Columns) {
+            SET_TAB_STOP(ConsoleDevice, TabIndex);
+            TabIndex += 8;
+        }
+
         ConsoleDevice->Lock = KeCreateQueuedLock();
-        ConsoleDevice->TabWidth = VIDEO_CONSOLE_DEFAULT_TAB_WIDTH;
         if (ConsoleDevice->Lock == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto DriverEntryEnd;
@@ -1377,20 +1435,7 @@ Return Value:
         case TerminalParseResultNormalCharacter:
             Console->PendingAction |= VIDEO_ACTION_RESET_SCROLL;
             if (Character == '\t') {
-                do {
-
-                    //
-                    // Tab never goes over a line, and leaves one character of
-                    // space as well at the end of the current line.
-                    //
-
-                    if (Console->NextColumn >= Console->Columns - 1) {
-                        break;
-                    }
-
-                    Console->NextColumn += 1;
-
-                } while ((Console->NextColumn % Console->TabWidth) != 0);
+                VcpMoveCursorTabStops(Console, 1);
 
             //
             // A newline, vertical time, or form feed moves to the next line,
@@ -1799,7 +1844,22 @@ Return Value:
         break;
 
     case TerminalCommandSetHorizontalTab:
+        if (Console->NextColumn < Console->Columns) {
+            SET_TAB_STOP(Console, Console->NextColumn);
+        }
+
+        break;
+
     case TerminalCommandClearHorizontalTab:
+        if (Command->Parameter[0] == 3) {
+            CLEAR_ALL_TAB_STOPS(Console);
+
+        } else {
+            if (Console->NextColumn < Console->Columns) {
+                CLEAR_TAB_STOP(Console, Console->NextColumn);
+            }
+        }
+
         break;
 
     case TerminalCommandSetTopAndBottomMargin:
@@ -2137,6 +2197,14 @@ Return Value:
         }
 
         Console->PendingAction |= VIDEO_ACTION_REDRAW_ENTIRE_SCREEN;
+        break;
+
+    case TerminalCommandCursorForwardTabStops:
+        VcpMoveCursorTabStops(Console, Command->Parameter[0]);
+        break;
+
+    case TerminalCommandCursorBackwardTabStops:
+        VcpMoveCursorTabStops(Console, -(Command->Parameter[0]));
         break;
 
     case TerminalCommandDoubleLineHeightTopHalf:
@@ -3235,6 +3303,79 @@ Return Value:
 
     Console->PendingAction |= VIDEO_ACTION_REDRAW_ENTIRE_SCREEN |
                               VIDEO_ACTION_RESET_SCROLL;
+
+    return;
+}
+
+VOID
+VcpMoveCursorTabStops (
+    PVIDEO_CONSOLE_DEVICE Console,
+    LONG Advance
+    )
+
+/*++
+
+Routine Description:
+
+    This routine advances the cursor forward or backwards by the given number
+    of tab stops.
+
+Arguments:
+
+    Console - Supplies a pointer to the video console.
+
+    Advance - Supplies the number of tab stops to advance. Negative values
+        move the cursor backwards to previous tab stops. A value of zero is a
+        no-op.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    LONG Increment;
+
+    if (Advance > 0) {
+        Increment = 1;
+
+    } else {
+        Increment = -1;
+    }
+
+    while (Advance != 0) {
+
+        //
+        // Perform at least one cursor movement to get off a current tab stop.
+        //
+
+        if ((Console->NextColumn + Increment >= 0) &&
+            (Console->NextColumn + Increment <= Console->Columns - 1)) {
+
+            Console->NextColumn += Increment;
+
+        } else {
+            break;
+        }
+
+        //
+        // Find the next tab stop or end.
+        //
+
+        while ((Console->NextColumn + Increment >= 0) &&
+               (Console->NextColumn + Increment <= Console->Columns - 1) &&
+               (!IS_TAB_STOP(Console, Console->NextColumn))) {
+
+            Console->NextColumn += Increment;
+        }
+
+        Advance -= Increment;
+    }
+
+    ASSERT((Console->NextColumn >= 0) &&
+           (Console->NextColumn <= Console->Columns));
 
     return;
 }

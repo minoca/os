@@ -120,9 +120,11 @@ TERMINAL_DECODE_ENTRY TermCommandTable[] = {
     {"[", "D", TerminalCommandCursorLeft},
     {"[", "f", TerminalCommandCursorMove},
     {"[", "H", TerminalCommandCursorMove},
+    {"[", "I", TerminalCommandCursorForwardTabStops},
     {"[", "d", TerminalCommandSetCursorRowAbsolute},
     {"[", "e", TerminalCommandCursorDown},
     {"[", "G", TerminalCommandSetCursorColumnAbsolute},
+    {"[", "Z", TerminalCommandCursorBackwardTabStops},
     {"", "c", TerminalCommandReset},
     {"", "D", TerminalCommandCursorDown},
     {"", "E", TerminalCommandNextLine},
@@ -452,6 +454,8 @@ Return Value:
     case TerminalCommandScrollDown:
     case TerminalCommandSetCursorRowAbsolute:
     case TerminalCommandSetCursorColumnAbsolute:
+    case TerminalCommandCursorForwardTabStops:
+    case TerminalCommandCursorBackwardTabStops:
         if (Command->ParameterCount == 0) {
             Command->Parameter[0] = 1;
         }
