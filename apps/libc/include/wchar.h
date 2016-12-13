@@ -2579,43 +2579,6 @@ LIBC_API
 wchar_t *
 wcstok (
     wchar_t *InputString,
-    const wchar_t *Separators
-    );
-
-/*++
-
-Routine Description:
-
-    This routine breaks a wide string into a series of tokens delimited by any
-    character from the given separator set. The first call passes an input
-    string in. This routine scans looking for a non-separator character, which
-    marks the first token. It then scans looking for a separator character, and
-    sets that character to the null terminator to delimit the first character.
-    Subsequent calls should pass NULL as the input string, and the context
-    pointer will be updated so that successive calls return the next tokens.
-    This routine is neither thread safe nor reentrant.
-
-Arguments:
-
-    InputString - Supplies a pointer to the wide input string to tokenize. If
-        supplied, this will reset the tokenizer function.
-
-    Separators - Supplies a pointer to a null terminated wide string containing
-        the set of characters that delimit tokens. This may vary from call to
-        call of this routine with the same context pointer.
-
-Return Value:
-
-    Returns a pointer to the next token on success.
-
-    NULL if there are no more tokens.
-
---*/
-
-LIBC_API
-wchar_t *
-wcstok_r (
-    wchar_t *InputString,
     const wchar_t *Separators,
     wchar_t **LastToken
     );
