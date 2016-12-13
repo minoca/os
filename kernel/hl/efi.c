@@ -210,7 +210,7 @@ Return Value:
 
     RuntimeServices = HlEfiRuntimeServices;
     if ((RuntimeServices == NULL) || (RuntimeServices->SetTime == NULL)) {
-        return STATUS_NOT_SUPPORTED;
+        return STATUS_NO_SUCH_DEVICE;
     }
 
     //
@@ -232,6 +232,10 @@ Return Value:
 
     if (!EFI_ERROR(EfiStatus)) {
         return STATUS_SUCCESS;
+    }
+
+    if (EfiStatus == EFI_UNSUPPORTED) {
+        return STATUS_NO_SUCH_DEVICE;
     }
 
     RtlDebugPrint("EFI SetTime Failed: 0x%x\n", EfiStatus);

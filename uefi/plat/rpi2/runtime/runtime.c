@@ -386,11 +386,13 @@ Return Value:
 
     EFI_DEVICE_ERROR if there was a hardware error accessing the device.
 
+    EFI_UNSUPPORTED if the wakeup timer is not supported on this platform.
+
 --*/
 
 {
 
-    return EFI_SUCCESS;
+    return EFI_UNSUPPORTED;
 }
 
 EFIAPI
@@ -417,11 +419,13 @@ Return Value:
 
     EFI_DEVICE_ERROR if there was a hardware error accessing the device.
 
+    EFI_UNSUPPORTED if the wakeup timer is not supported on this platform.
+
 --*/
 
 {
 
-    return EFI_SUCCESS;
+    return EFI_UNSUPPORTED;
 }
 
 EFIAPI
@@ -462,7 +466,7 @@ Return Value:
 
 {
 
-    return EFI_SUCCESS;
+    return EFI_UNSUPPORTED;
 }
 
 EFIAPI
@@ -499,6 +503,6 @@ Return Value:
 
 {
 
-    return EFI_SUCCESS;
+    return EFI_UNSUPPORTED;
 }
 
