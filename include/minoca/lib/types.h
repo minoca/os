@@ -37,8 +37,19 @@ Author:
 //
 
 #define BITS_PER_BYTE     (8)
-#define MAX_CHAR          (127)
-#define MIN_CHAR          (-128)
+
+#ifdef __CHAR_UNSIGNED__
+
+#define MIN_CHAR          0U
+#define MAX_CHAR          (__SCHAR_MAX__ * 2U + 1U)
+
+#else
+
+#define MIN_CHAR          (-__SCHAR_MAX__ - 1)
+#define MAX_CHAR          (__SCHAR_MAX__)
+
+#endif
+
 #define MAX_WCHAR         (__WCHAR_MAX__)
 #define MIN_WCHAR         (-MAX_WCHAR - 1)
 #define MAX_UCHAR         (0xFF)
