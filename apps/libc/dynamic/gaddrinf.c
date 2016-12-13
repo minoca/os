@@ -328,6 +328,12 @@ ClpIsLocalAddress (
     PBOOL UnspecifiedAddress
     );
 
+BOOL
+ClpIsNameSubdomain (
+    PCSTR Query,
+    PCSTR Domain
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1447,17 +1453,40 @@ Return Value:
             }
 
             NameServer = LIST_VALUE(NameServerList.Next, DNS_RESULT, ListEntry);
-            if (ClDebugDns != FALSE) {
-                fprintf(stderr,
-                        "Trying name server '%s'.\n",
-                        NameServer->Value);
-            }
 
-            Status = ClpGetNameServerAddress(NameServer,
-                                             RecordType,
-                                             &TranslationList,
-                                             &NameServerAddress,
-                                             RecursionDepth);
+            //
+            // If the name server returned is a subdomain of the name being
+            // translated, then skip it unless the answer's already there.
+            //
+
+            if (ClpIsNameSubdomain(NameServer->Value, Name) != FALSE) {
+                Status = ClpFindNameServerAddress(NameServer,
+                                                  RecordType,
+                                                  &TranslationList,
+                                                  &NameServerAddress);
+
+                if (Status != 0) {
+                    if (ClDebugDns != FALSE) {
+                        fprintf(stderr,
+                                "Skipping name server %s, subdomain of %s\n",
+                                NameServer->Value,
+                                Name);
+                    }
+                }
+
+            } else {
+                if (ClDebugDns != FALSE) {
+                    fprintf(stderr,
+                            "Trying name server '%s'.\n",
+                            NameServer->Value);
+                }
+
+                Status = ClpGetNameServerAddress(NameServer,
+                                                 RecordType,
+                                                 &TranslationList,
+                                                 &NameServerAddress,
+                                                 RecursionDepth);
+            }
 
             //
             // Remove this name server from the list of name servers to try.
@@ -4435,5 +4464,50 @@ Return Value:
 IsLocalAddressEnd:
     ClpDestroyDnsResultList(&ListHead);
     return Status;
+}
+
+BOOL
+ClpIsNameSubdomain (
+    PCSTR Query,
+    PCSTR Domain
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given name is a subdomain of the given
+    domain.
+
+Arguments:
+
+    Query - Supplies the name in question.
+
+    Domain - Supplies the domain to match against.
+
+Return Value:
+
+    TRUE if the query is a subdomain of the given domain.
+
+    FALSE if it is not.
+
+--*/
+
+{
+
+    size_t DomainLength;
+    size_t QueryLength;
+
+    QueryLength = strlen(Query);
+    DomainLength = strlen(Domain);
+    if (QueryLength < DomainLength) {
+        return FALSE;
+    }
+
+    if (strcmp(Query + QueryLength - DomainLength, Domain) == 0) {
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
