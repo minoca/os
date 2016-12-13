@@ -4087,7 +4087,23 @@ Return Value:
     IoState = Socket->NetSocket.KernelSocket.IoState;
     SynHandled = FALSE;
 
-    ASSERT(Socket->State > TcpStateInitialized);
+    //
+    // The socket might have been found during a connect operation that
+    // subsequently timed out and put the state back to reset. In this case
+    // the socket is now locally bound. Drop the packet since there's no
+    // remote address set up and the connect operation was given up on.
+    //
+
+    if (Socket->State == TcpStateInitialized) {
+        return;
+    }
+
+    //
+    // If the socket is not active, then things like the remote host will have
+    // been cleared and processing should not continue.
+    //
+
+    ASSERT((Socket->NetSocket.Flags & NET_SOCKET_FLAG_ACTIVE) != 0);
 
     RemoteSequence = NETWORK_TO_CPU32(Header->SequenceNumber);
     AcknowledgeNumber = NETWORK_TO_CPU32(Header->AcknowledgmentNumber);
