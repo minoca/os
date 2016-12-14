@@ -238,7 +238,9 @@ Return Value:
         }
 
         sleep(LOGIN_FAIL_DELAY);
-        printf("vlock: Incorrect password.\n");
+        if (Status == EPERM) {
+            printf("vlock: Incorrect password.\n");
+        }
     }
 
     //

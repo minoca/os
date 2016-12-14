@@ -32,6 +32,7 @@ Environment:
 #include "libcp.h"
 #include <assert.h>
 #include <errno.h>
+#include <paths.h>
 #include <stdio.h>
 #include <termios.h>
 #include <unistd.h>
@@ -99,13 +100,15 @@ Return Value:
 
     ssize_t BytesRead;
     char Character;
-    int FileIn;
+    int DescriptorIn;
+    FILE *FileIn;
     size_t LineSize;
     struct sigaction NewAction;
     void *NewBuffer;
     size_t NewBufferSize;
     struct termios NewSettings;
     struct termios OriginalSettings;
+    PSTR ResultBuffer;
     struct sigaction SaveAlarm;
     struct sigaction SaveHup;
     struct sigaction SaveInt;
@@ -118,22 +121,31 @@ Return Value:
     int Signal;
     int Signals[NSIG];
 
+    ResultBuffer = NULL;
     memset(Signals, 0, sizeof(Signals));
     ClGetpassSignals = Signals;
-    FileIn = STDIN_FILENO;
+    FileIn = fopen(_PATH_TTY, "w+");
+    if (FileIn == NULL) {
+        return NULL;
+    }
+
+    DescriptorIn = fileno(FileIn);
 
     //
     // Turn off echoing.
     //
 
-    if (tcgetattr(FileIn, &OriginalSettings) != 0) {
+    if ((DescriptorIn < 0) ||
+        (tcgetattr(DescriptorIn, &OriginalSettings) != 0)) {
+
+        fclose(FileIn);
         return NULL;
     }
 
     memcpy(&NewSettings, &OriginalSettings, sizeof(struct termios));
     NewSettings.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
-    if (tcsetattr(FileIn, TCSAFLUSH, &NewSettings) != 0) {
-        return NULL;
+    if (tcsetattr(DescriptorIn, TCSAFLUSH, &NewSettings) != 0) {
+        goto getpassEnd;
     }
 
     //
@@ -177,7 +189,7 @@ Return Value:
             break;
         }
 
-        BytesRead = read(FileIn, &Character, 1);
+        BytesRead = read(DescriptorIn, &Character, 1);
         if ((BytesRead < 0) && (errno == EINTR)) {
             continue;
         }
@@ -231,6 +243,14 @@ Return Value:
         }
 
         //
+        // Control-C cancels early.
+        //
+
+        if (Character == 3) {
+            goto getpassEnd;
+        }
+
+        //
         // Add the character to the buffer.
         //
 
@@ -253,11 +273,25 @@ Return Value:
         fputc('\n', stderr);
     }
 
+    ResultBuffer = ClGetpassBuffer;
+
+getpassEnd:
+
+    //
+    // If the result was not successful but there's a partial buffer, zero it
+    // out.
+    //
+
+    if ((ResultBuffer == NULL) && (ClGetpassBufferSize != 0)) {
+        SECURITY_ZERO(ClGetpassBuffer, ClGetpassBufferSize);
+    }
+
     //
     // Restore the original terminal settings.
     //
 
-    tcsetattr(FileIn, TCSAFLUSH, &OriginalSettings);
+    tcsetattr(DescriptorIn, TCSAFLUSH, &OriginalSettings);
+    fclose(FileIn);
 
     //
     // Restore the original signal handlers.
@@ -285,11 +319,7 @@ Return Value:
     }
 
     ClGetpassSignals = NULL;
-    if (BytesRead < 0) {
-        return NULL;
-    }
-
-    return ClGetpassBuffer;
+    return ResultBuffer;
 }
 
 LIBC_API

@@ -272,7 +272,14 @@ Return Value:
         goto MainEnd;
     }
 
-    if ((CurrentUserId == 0) || (SwGetAndCheckPassword(User, NULL) == 0)) {
+    if (CurrentUserId == 0) {
+        Status = 0;
+
+    } else {
+        Status = SwGetAndCheckPassword(User, NULL);
+    }
+
+    if (Status == 0) {
         syslog(LOG_NOTICE,
                "%c %s %s:%s",
                '+',
@@ -289,7 +296,10 @@ Return Value:
                User->pw_name);
 
         sleep(LOGIN_FAIL_DELAY);
-        SwPrintError(0, NULL, "Incorrect password");
+        if (Status == EPERM) {
+            SwPrintError(0, NULL, "Incorrect password");
+        }
+
         Status = 1;
         goto MainEnd;
     }
