@@ -132,6 +132,17 @@ PcnetpWriteMii (
     USHORT Value
     );
 
+RUNLEVEL
+PcnetpAcquireRegisterLock (
+    PPCNET_DEVICE Device
+    );
+
+VOID
+PcnetpReleaseRegisterLock (
+    PPCNET_DEVICE Device,
+    RUNLEVEL OldRunLevel
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -350,7 +361,9 @@ Return Value:
     PCNET_READ_REGISTER16(Device, PcnetWioReset);
 
     //
-    // Check to see if the chip is in 32-bit register access mode.
+    // Check to see if the chip is in 32-bit register access mode. The BCR/CSR
+    // register accesses in this routine do not need protection under the
+    // register lock as device access is serialized at this point.
     //
 
     Device->Registers32 = FALSE;
@@ -476,8 +489,12 @@ Return Value:
     USHORT Value;
     PVOID VirtualAddress;
 
+    KeInitializeSpinLock(&(Device->RegisterLock));
+
     //
-    // Read the software size bit to know which structures sizes to use.
+    // Read the software size bit to know which structures sizes to use. There
+    // is no need to acquire the register lock as this should still be
+    // serialized access.
     //
 
     Value = PcnetpReadBcr(Device, PcnetBcr20SoftwareStyle);
@@ -800,10 +817,18 @@ Return Value:
     ULONG DeviceFlags;
     ULONGLONG Frequency;
     ULONGLONG Interval;
+    RUNLEVEL OldRunLevel;
     PHYSICAL_ADDRESS PhysicalAddress;
     KSTATUS Status;
     ULONGLONG Timeout;
     USHORT Value;
+
+    //
+    // Acquire the register lock. Register access can no longer be assumed to
+    // be serialized by device initialization.
+    //
+
+    OldRunLevel = PcnetpAcquireRegisterLock(Device);
 
     //
     // Reset the device.
@@ -927,10 +952,13 @@ Return Value:
     //
 
     if (Device->NetworkLink == NULL) {
+        PcnetpReleaseRegisterLock(Device, OldRunLevel);
         Status = PcnetpAddNetworkDevice(Device);
         if (!KSUCCESS(Status)) {
             goto ResetDeviceEnd;
         }
+
+        OldRunLevel = PcnetpAcquireRegisterLock(Device);
     }
 
     //
@@ -939,6 +967,7 @@ Return Value:
 
     Value = PCNET_CSR0_START | PCNET_CSR0_INTERRUPT_ENABLED;
     PcnetpWriteCsr(Device, PcnetCsr0Status, Value);
+    PcnetpReleaseRegisterLock(Device, OldRunLevel);
 
     //
     // Check to see if the link is up.
@@ -1001,9 +1030,11 @@ Return Value:
 
     //
     // Read the status register, and if anything's set add it to the pending
-    // bits.
+    // bits. Acquire the register lock directly, as the helper routine is only
+    // there to adjust the run level to this interrupt's run level.
     //
 
+    KeAcquireSpinLock(&(Device->RegisterLock));
     PendingBits = PcnetpReadCsr(Device, PcnetCsr0Status) &
                   PCNET_CSR0_INTERRUPT_MASK;
 
@@ -1013,7 +1044,7 @@ Return Value:
 
         //
         // Write to clear the bits that got grabbed. Since the semantics of
-        // the eroro bits in this register are "write 1 to clear", any bits
+        // the error bits in this register are "write 1 to clear", any bits
         // that get set between the read and this write will just stick and
         // generate another level triggered interrupt. Unfortunately, the
         // interrupt enable register is "write 0 to clear", so it always needs
@@ -1024,6 +1055,7 @@ Return Value:
         PcnetpWriteCsr(Device, PcnetCsr0Status, PendingBits);
     }
 
+    KeReleaseSpinLock(&(Device->RegisterLock));
     return InterruptStatus;
 }
 
@@ -1234,6 +1266,7 @@ Return Value:
     ULONG DeviceFlags;
     BOOL FullDuplex;
     BOOL LinkActive;
+    RUNLEVEL OldRunLevel;
     ULONGLONG Speed;
     KSTATUS Status;
     USHORT Value;
@@ -1259,10 +1292,13 @@ Return Value:
 
         } else {
             LinkActive = FALSE;
+            OldRunLevel = PcnetpAcquireRegisterLock(Device);
             Value = PcnetpReadBcr(Device, PcnetBcr4LinkStatus);
             if ((Value & ~(Device->LinkStatusMask)) != 0) {
                 LinkActive = TRUE;
             }
+
+            PcnetpReleaseRegisterLock(Device, OldRunLevel);
         }
 
     //
@@ -1337,11 +1373,13 @@ Return Value:
     USHORT BasicStatus;
     USHORT BasicStatus2;
     USHORT CommonLink;
+    RUNLEVEL OldRunLevel;
     USHORT PartnerAbility;
 
     *LinkUp = FALSE;
     *Speed = NET_SPEED_NONE;
     *FullDuplex = FALSE;
+    OldRunLevel = PcnetpAcquireRegisterLock(Device);
     BasicStatus = PcnetpReadMii(Device, Device->PhyId, MiiRegisterBasicStatus);
     BasicStatus2 = PcnetpReadMii(Device, Device->PhyId, MiiRegisterBasicStatus);
     BasicStatus |= BasicStatus2;
@@ -1409,6 +1447,7 @@ Return Value:
     }
 
 DetermineLinkParametersEnd:
+    PcnetpReleaseRegisterLock(Device, OldRunLevel);
     return STATUS_SUCCESS;
 }
 
@@ -1631,6 +1670,14 @@ Return Value:
         ASSERT((*BufferFlags & PCNET_TRANSMIT_DESCRIPTOR_START) != 0);
         ASSERT((*BufferFlags & PCNET_TRANSMIT_DESCRIPTOR_END) != 0);
 
+        if (((*BufferFlags & PCNET_TRANSMIT_DESCRIPTOR_ERROR) != 0) ||
+            ((*ErrorFlags & PCNET_TRANSMIT_DESCRIPTOR_ERROR_FLAGS_MASK) != 0)) {
+
+            RtlDebugPrint("PCNET TX Error: 0x%08x, 0x%08x\n",
+                          *BufferFlags,
+                          *ErrorFlags);
+        }
+
         //
         // This descriptor is finished. Zero out the descriptor and free the
         // associated packet.
@@ -1693,6 +1740,7 @@ Return Value:
     PPCNET_TRANSMIT_DESCRIPTOR_16 Descriptor16;
     PPCNET_TRANSMIT_DESCRIPTOR_32 Descriptor32;
     ULONG Index;
+    RUNLEVEL OldRunLevel;
     PNET_PACKET_BUFFER Packet;
     ULONG PacketLength;
     BOOL WakeDevice;
@@ -1768,8 +1816,10 @@ Return Value:
     //
 
     if (WakeDevice != FALSE) {
+        OldRunLevel = PcnetpAcquireRegisterLock(Device);
         WakeFlags = PCNET_CSR0_TRANSMIT_DEMAND | PCNET_CSR0_INTERRUPT_ENABLED;
         PcnetpWriteCsr(Device, PcnetCsr0Status, WakeFlags);
+        PcnetpReleaseRegisterLock(Device, OldRunLevel);
     }
 
     return;
@@ -2020,6 +2070,80 @@ Return Value:
 
     PcnetpWriteBcr(Device, PcnetBcr33PhyAddress, Address);
     PcnetpWriteBcr(Device, PcnetBcr34PhyData, Value);
+    return;
+}
+
+RUNLEVEL
+PcnetpAcquireRegisterLock (
+    PPCNET_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine acquires the register lock. It must raise to the interrupt
+    handler's run level as the interrupt handler needs to read the interrupt
+    status register (CSR0).
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Returns the original run-level.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+
+    ASSERT(KeGetRunLevel() <= RunLevelDispatch);
+
+    if (Device->InterruptHandle != INVALID_HANDLE) {
+        OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
+
+    } else {
+        OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    }
+
+    KeAcquireSpinLock(&(Device->RegisterLock));
+    return OldRunLevel;
+}
+
+VOID
+PcnetpReleaseRegisterLock (
+    PPCNET_DEVICE Device,
+    RUNLEVEL OldRunLevel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine releases the register lock.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+    OldRunLevel - Supplies the original run-level returned by the acquire
+        function.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ASSERT(KeGetRunLevel() >= RunLevelDispatch);
+
+    KeReleaseSpinLock(&(Device->RegisterLock));
+    KeLowerRunLevel(OldRunLevel);
     return;
 }
 

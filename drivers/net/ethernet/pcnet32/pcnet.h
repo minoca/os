@@ -711,6 +711,9 @@ Members:
     InterruptHandle - Stores a pointer to the handle received when the
         interrupt was connected.
 
+    RegisterLock - Stores a pointer that protects access to the CSR and BCR
+        registers.
+
     IoPortAddress - Stores the I/O port address for the PCnet's registers.
 
     NetworkLink - Stores a pointer to the core networking link.
@@ -790,6 +793,7 @@ typedef struct _PCNET_DEVICE {
     ULONGLONG InterruptVector;
     BOOL InterruptResourcesFound;
     HANDLE InterruptHandle;
+    KSPIN_LOCK RegisterLock;
     USHORT IoPortAddress;
     PNET_LINK NetworkLink;
     PIO_BUFFER IoBuffer;
