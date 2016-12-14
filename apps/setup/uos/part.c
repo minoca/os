@@ -217,13 +217,20 @@ Return Value:
     // Skip the first line, which has the legend.
     //
 
-    fgets(Line, sizeof(Line), File);
+    if (fgets(Line, sizeof(Line), File) == NULL) {
+        Status = errno;
+        goto OsEnumerateDevicesEnd;
+    }
 
     //
     // Loop reading all the lines.
     //
 
     while (fgets(Line, sizeof(Line), File) != NULL) {
+        if (Line[0] == '\n') {
+            continue;
+        }
+
         Line[sizeof(Line) - 1] = '\0';
         Count = sscanf(Line, "%d %d %lld %s", &Major, &Minor, &Blocks, Device);
         if (Count != 4) {
@@ -250,6 +257,8 @@ Return Value:
                 Status = errno;
                 goto OsEnumerateDevicesEnd;
             }
+
+            Results = NewBuffer;
         }
 
         Description = &(Results[ResultCount]);
@@ -289,6 +298,7 @@ Return Value:
         Description->Partition.Version = PARTITION_DEVICE_INFORMATION_VERSION;
         Description->Partition.BlockSize = 512;
         Description->Partition.LastBlock = Blocks - 1;
+        Description->Partition.PartitionType = PartitionTypeUnknown;
         if (DestinationType == SetupDestinationDisk) {
             Description->Partition.Flags |= PARTITION_FLAG_RAW_DISK;
         }
@@ -323,7 +333,7 @@ OsEnumerateDevicesEnd:
         ResultCount = 0;
     }
 
-    *DeviceArray = NULL;
+    *DeviceArray = Results;
     *DeviceCount = ResultCount;
     return Status;
 }
