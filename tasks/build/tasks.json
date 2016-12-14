@@ -118,6 +118,11 @@
             "parameter": "Performance Test"
         },
         {
+            "name": "Run Minoca Pkg Test",
+            "type": "runtask",
+            "parameter": "Minoca Pkg Test"
+        },
+        {
             "name": "Run Native Compile (test)",
             "type": "runtask",
             "parameter": "Native Compile"
