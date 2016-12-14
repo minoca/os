@@ -88,11 +88,12 @@ export HOME="/root"
 export TERM=xterm
 
 ##
-## Clean out the tmp directory.
+## Clean out the tmp and dev directories.
 ##
 
-rm -rf "$WORLD/tmp"
-mkdir -p -m777 "$WORLD/tmp"
+rm -rf "$WORLD/tmp" "$WORLD/dev"
+mkdir -p "$WORLD/dev"
+mkdir -p -m1777 "$WORLD/tmp"
 
 ##
 ## Symlink swiss binaries.
