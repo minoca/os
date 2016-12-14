@@ -1,5 +1,7 @@
 #!/bin/sh
 ##
+## Copyright (c) 2016 Minoca Corp. All Rights Reserved.
+##
 ## Script Name:
 ##
 ##     install_sparrow.sh
@@ -8,16 +10,15 @@
 ##
 ##     This script installs Sparrow tool on running Minoca OS.
 ##     Installation script takes several steps:
-##     1) Installs sparrow system prerequisites (bash and curl), 
-##     some system prerequisites ( like make, gcc so on ) are to be installed _earlier_
-##     see os/tasks/build/add_files.sh file
+##     1) Installs sparrow system prerequisites (bash and curl).
+##     Some system prerequisites (like make, gcc so on) are to be installed
+##     _earlier_. See os/tasks/build/add_files.sh.
 ##     2) Installs cpanminus client to install CPAN modules
 ##     3) Install sparrow tool as CPAN module
 ##
 ## Author:
 ##
 ##     Alexey Melezhik 06-Dec-2016
-##
 ##
 
 set -e
