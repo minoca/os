@@ -2208,7 +2208,10 @@ CreateSocketEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        if ((Socket != NULL) && ((*FileObject)->SpecialIo != Socket)) {
+        if ((Socket != NULL) &&
+            (*FileObject != NULL) &&
+            ((*FileObject)->SpecialIo != Socket)) {
+
             IoSocketReleaseReference(Socket);
         }
 
