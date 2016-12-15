@@ -394,7 +394,7 @@ Return Value:
         if ((Shadow == NULL) && (errno != ENOENT)) {
             if ((errno == EPERM) || (errno == EACCES)) {
                 SwPrintError(errno, NULL, "Cannot access the password file");
-                TotalStatus = 1;
+                Status = 1;
                 goto MainEnd;
             }
 
