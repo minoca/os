@@ -278,9 +278,7 @@ Return Value:
                          &MountPointPath,
                          &MountPointPathSize,
                          OPEN_FLAG_NO_MOUNT_POINT,
-                         IoObjectInvalid,
                          NULL,
-                         FILE_PERMISSION_NONE,
                          &MountPathPoint);
 
     //
@@ -301,9 +299,7 @@ Return Value:
                          &TargetPath,
                          &TargetPathSize,
                          0,
-                         IoObjectInvalid,
                          NULL,
-                         FILE_PERMISSION_NONE,
                          &TargetPathPoint);
 
     if (!KSUCCESS(Status)) {
@@ -592,9 +588,7 @@ Return Value:
                          &MountPointPath,
                          &MountPointPathSize,
                          0,
-                         IoObjectInvalid,
                          NULL,
-                         FILE_PERMISSION_NONE,
                          &PathPoint);
 
     //

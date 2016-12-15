@@ -582,6 +582,7 @@ Return Value:
 
 {
 
+    CREATE_PARAMETERS Create;
     SOCKET_CREATION_PARAMETERS CreationParameters;
     PFILE_OBJECT FileObject;
     ULONG OpenFlags;
@@ -662,6 +663,10 @@ Return Value:
 
     RtlZeroMemory(&CreationParameters, sizeof(SOCKET_CREATION_PARAMETERS));
     CreationParameters.ExistingSocket = Socket;
+    Create.Type = IoObjectSocket;
+    Create.Context = &CreationParameters;
+    Create.Permissions = FileObject->Properties.Permissions;
+    Create.Created = FALSE;
     WalkedPath = PathCopy;
     WalkedPathSize = PathSize;
     OpenFlags = Handle->OpenFlags | OPEN_FLAG_CREATE | OPEN_FLAG_FAIL_IF_EXISTS;
@@ -670,9 +675,7 @@ Return Value:
                          &WalkedPath,
                          &WalkedPathSize,
                          OpenFlags,
-                         IoObjectSocket,
-                         &CreationParameters,
-                         FileObject->Properties.Permissions,
+                         &Create,
                          &PathPoint);
 
     if (!KSUCCESS(Status)) {
@@ -1090,9 +1093,7 @@ Return Value:
                          &WalkedPath,
                          &WalkedPathSize,
                          0,
-                         IoObjectInvalid,
                          NULL,
-                         FILE_PERMISSION_NONE,
                          &PathPoint);
 
     if (!KSUCCESS(Status)) {
@@ -1442,9 +1443,7 @@ Return Value:
                              &WalkedPath,
                              &WalkedPathSize,
                              0,
-                             IoObjectInvalid,
                              NULL,
-                             FILE_PERMISSION_NONE,
                              &PathPoint);
 
         if (!KSUCCESS(Status)) {

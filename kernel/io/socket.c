@@ -283,6 +283,7 @@ Return Value:
 
 {
 
+    CREATE_PARAMETERS Create;
     SOCKET_CREATION_PARAMETERS Parameters;
     PSOCKET Socket;
     KSTATUS Status;
@@ -291,15 +292,17 @@ Return Value:
     Parameters.Type = Type;
     Parameters.Protocol = Protocol;
     Parameters.ExistingSocket = NULL;
+    Create.Type = IoObjectSocket;
+    Create.Context = &Parameters;
+    Create.Permissions = FILE_PERMISSION_ALL;
+    Create.Created = FALSE;
     Status = IopOpen(FALSE,
                      NULL,
                      NULL,
                      0,
                      IO_ACCESS_READ | IO_ACCESS_WRITE,
                      OpenFlags | OPEN_FLAG_CREATE,
-                     IoObjectSocket,
-                     &Parameters,
-                     FILE_PERMISSION_ALL,
+                     &Create,
                      IoHandle);
 
     if (KSUCCESS(Status)) {
@@ -2012,8 +2015,7 @@ SysSocketShutdownEnd:
 
 KSTATUS
 IopCreateSocket (
-    PVOID Parameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     )
 
@@ -2025,9 +2027,7 @@ Routine Description:
 
 Arguments:
 
-    Parameter - Supplies the parameters the socket was created with.
-
-    CreatePermissions - Supplies the permissions to create the file with.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where the new file object representing the
         socket will be returned on success.
@@ -2040,7 +2040,6 @@ Return Value:
 
 {
 
-    BOOL Created;
     NETWORK_ADDRESS LocalAddress;
     PFILE_OBJECT NewFileObject;
     PSOCKET_CREATION_PARAMETERS Parameters;
@@ -2050,9 +2049,9 @@ Return Value:
     KSTATUS Status;
     PKTHREAD Thread;
 
-    Created = FALSE;
+    Create->Created = FALSE;
     NewFileObject = NULL;
-    Parameters = (PSOCKET_CREATION_PARAMETERS)Parameter;
+    Parameters = (PSOCKET_CREATION_PARAMETERS)(Create->Context);
 
     //
     // If there are no parameters, then this file object is being created from
@@ -2140,7 +2139,7 @@ Return Value:
         Properties.UserId = Thread->Identity.EffectiveUserId;
         Properties.GroupId = Thread->Identity.EffectiveGroupId;
         Properties.HardLinkCount = 1;
-        Properties.Permissions = CreatePermissions;
+        Properties.Permissions = Create->Permissions;
         KeGetSystemTime(&(Properties.StatusChangeTime));
         RtlCopyMemory(&(Properties.ModifiedTime),
                       &(Properties.StatusChangeTime),
@@ -2154,13 +2153,14 @@ Return Value:
                                              RootObject,
                                              FILE_OBJECT_FLAG_EXTERNAL_IO_STATE,
                                              &NewFileObject,
-                                             &Created);
+                                             &(Create->Created));
 
         if (!KSUCCESS(Status)) {
             goto CreateSocketEnd;
         }
 
-        ASSERT((Created != FALSE) || (Socket == Parameters->ExistingSocket));
+        ASSERT((Create->Created != FALSE) ||
+               (Socket == Parameters->ExistingSocket));
 
         *FileObject = NewFileObject;
     }

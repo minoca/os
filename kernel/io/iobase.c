@@ -69,9 +69,7 @@ IopCreateAnonymousObject (
     BOOL FromKernelMode,
     ULONG Access,
     ULONG Flags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PPATH_POINT PathPoint
     );
 
@@ -187,6 +185,7 @@ Return Value:
 
 {
 
+    CREATE_PARAMETERS Create;
     PSTR Separator;
     KSTATUS Status;
 
@@ -205,15 +204,20 @@ Return Value:
         }
     }
 
+    if ((Flags & OPEN_FLAG_CREATE) != 0) {
+        Create.Type = IoObjectInvalid;
+        Create.Context = NULL;
+        Create.Permissions = CreatePermissions;
+        Create.Created = FALSE;
+    }
+
     Status = IopOpen(FromKernelMode,
                      Directory,
                      Path,
                      PathLength,
                      Access,
                      Flags,
-                     IoObjectInvalid,
-                     NULL,
-                     CreatePermissions,
+                     &Create,
                      Handle);
 
 OpenEnd:
@@ -1581,9 +1585,7 @@ Return Value:
                          &Path,
                          &PathSize,
                          OpenFlags,
-                         IoObjectInvalid,
                          NULL,
-                         FILE_PERMISSION_NONE,
                          &PathPoint);
 
     if (!KSUCCESS(Status)) {
@@ -1757,9 +1759,7 @@ Return Value:
                              &LocalSourcePath,
                              &LocalSourcePathSize,
                              OPEN_FLAG_SYMBOLIC_LINK | OPEN_FLAG_NO_MOUNT_POINT,
-                             IoObjectInvalid,
                              NULL,
-                             FILE_PERMISSION_NONE,
                              &SourcePathPoint);
 
         if (!KSUCCESS(Status)) {
@@ -1836,9 +1836,7 @@ Return Value:
                              &LocalDestinationPath,
                              &LocalDestinationPathSize,
                              OPEN_FLAG_SYMBOLIC_LINK | OPEN_FLAG_NO_MOUNT_POINT,
-                             IoObjectInvalid,
                              NULL,
-                             FILE_PERMISSION_NONE,
                              &DestinationPathPoint);
 
         if (!KSUCCESS(Status)) {
@@ -1867,9 +1865,7 @@ Return Value:
                                  &LocalDestinationPath,
                                  &LocalDestinationPathSize,
                                  OPEN_FLAG_SYMBOLIC_LINK,
-                                 IoObjectInvalid,
                                  NULL,
-                                 FILE_PERMISSION_NONE,
                                  &DestinationDirectoryPathPoint);
 
             if (!KSUCCESS(Status)) {
@@ -2116,9 +2112,7 @@ Return Value:
                                DestinationFile,
                                DestinationFileSize,
                                OPEN_FLAG_NO_MOUNT_POINT,
-                               IoObjectInvalid,
                                NULL,
-                               0,
                                &FoundPathPoint);
 
         //
@@ -2443,6 +2437,7 @@ Return Value:
 {
 
     UINTN BytesCompleted;
+    CREATE_PARAMETERS Create;
     ULONG Flags;
     PIO_HANDLE Handle;
     IO_BUFFER IoBuffer;
@@ -2452,15 +2447,17 @@ Return Value:
     Flags = OPEN_FLAG_CREATE | OPEN_FLAG_FAIL_IF_EXISTS | OPEN_FLAG_TRUNCATE |
             OPEN_FLAG_SYMBOLIC_LINK;
 
+    Create.Type = IoObjectSymbolicLink;
+    Create.Context = NULL;
+    Create.Permissions = FILE_PERMISSION_ALL;
+    Create.Created = FALSE;
     Status = IopOpen(FromKernelMode,
                      Directory,
                      LinkName,
                      LinkNameSize,
                      IO_ACCESS_WRITE,
                      Flags,
-                     IoObjectSymbolicLink,
-                     NULL,
-                     FILE_PERMISSION_ALL,
+                     &Create,
                      &Handle);
 
     if (!KSUCCESS(Status)) {
@@ -2939,9 +2936,7 @@ Return Value:
                      PathSize,
                      Access,
                      Flags,
-                     IoObjectInvalid,
                      NULL,
-                     0,
                      &IoHandle);
 
     if (!KSUCCESS(Status)) {
@@ -3001,9 +2996,7 @@ IopOpen (
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PIO_HANDLE *Handle
     )
 
@@ -3033,14 +3026,8 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    TypeOverride - Supplies an object type that the regular file should be
-        converted to. Supply the invalid object type to specify no override.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to apply for created object
-        on create operations.
+    Create - Supplies an optional pointer to the creation information. If the
+        OPEN_FLAG_CREATE is supplied in the flags, then this field is required.
 
     Handle - Supplies a pointer where a pointer to the open I/O handle will be
         returned on success.
@@ -3096,8 +3083,13 @@ Return Value:
     //
 
     if ((Flags & OPEN_FLAG_CREATE) != 0) {
+        if (Create == NULL) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto OpenEnd;
+        }
+
         Process = PsGetCurrentProcess();
-        CreatePermissions &= ~(Process->Umask);
+        Create->Permissions &= ~(Process->Umask);
 
         //
         // Change the override if the create flag is on.
@@ -3105,19 +3097,22 @@ Return Value:
 
         if ((Flags & OPEN_FLAG_DIRECTORY) != 0) {
 
-            ASSERT(TypeOverride == IoObjectInvalid);
+            ASSERT(Create->Type == IoObjectInvalid);
 
-            TypeOverride = IoObjectRegularDirectory;
+            Create->Type = IoObjectRegularDirectory;
 
         } else if ((Flags & OPEN_FLAG_SHARED_MEMORY) != 0) {
 
-            ASSERT(TypeOverride == IoObjectInvalid);
+            ASSERT(Create->Type == IoObjectInvalid);
 
-            TypeOverride = IoObjectSharedMemoryObject;
+            Create->Type = IoObjectSharedMemoryObject;
 
-        } else if (TypeOverride == IoObjectInvalid) {
-            TypeOverride = IoObjectRegularFile;
+        } else if (Create->Type == IoObjectInvalid) {
+            Create->Type = IoObjectRegularFile;
         }
+
+    } else {
+        Create = NULL;
     }
 
     //
@@ -3131,9 +3126,7 @@ Return Value:
         Status = IopCreateAnonymousObject(FromKernelMode,
                                           Access,
                                           Flags,
-                                          TypeOverride,
-                                          OverrideParameter,
-                                          CreatePermissions,
+                                          Create,
                                           &PathPoint);
 
     //
@@ -3146,9 +3139,7 @@ Return Value:
                              &Path,
                              &PathLength,
                              Flags,
-                             TypeOverride,
-                             OverrideParameter,
-                             CreatePermissions,
+                             Create,
                              &PathPoint);
     }
 
@@ -3181,7 +3172,9 @@ Return Value:
     //
 
     } else if (FileObject->Properties.Type == IoObjectSocket) {
-        if ((TypeOverride != IoObjectSocket) && (Access != 0)) {
+        if (((Create == NULL) && (Access != 0)) ||
+            (Create->Created == FALSE)) {
+
             Status = STATUS_NO_SUCH_DEVICE_OR_ADDRESS;
             goto OpenEnd;
         }
@@ -3204,9 +3197,11 @@ Return Value:
             (FileObject->Properties.Type == IoObjectObjectDirectory)) {
 
             if (((Access & (IO_ACCESS_WRITE | IO_ACCESS_EXECUTE)) != 0) ||
-                (TypeOverride != IoObjectInvalid)) {
+                (Create != NULL)) {
 
-                if (TypeOverride == IoObjectSymbolicLink) {
+                if ((Create != NULL) &&
+                    (Create->Type == IoObjectSymbolicLink)) {
+
                     Status = STATUS_FILE_EXISTS;
 
                 } else {
@@ -3219,13 +3214,18 @@ Return Value:
     }
 
     //
-    // Check permissions on path entry.
+    // Check permissions on path entry. If this call successfully created the
+    // object, then open it no matter what. This supports calls like creating
+    // a file with read/write access on that file but fewer permissions in the
+    // create mask.
     //
 
     if (FromKernelMode == FALSE) {
-        Status = IopCheckPermissions(FromKernelMode, &PathPoint, Access);
-        if (!KSUCCESS(Status)) {
-            goto OpenEnd;
+        if ((Create == NULL) || (Create->Created == FALSE)) {
+            Status = IopCheckPermissions(FromKernelMode, &PathPoint, Access);
+            if (!KSUCCESS(Status)) {
+                goto OpenEnd;
+            }
         }
     }
 
@@ -3592,9 +3592,7 @@ Return Value:
                      RtlStringLength(ObjectPath) + 1,
                      Access,
                      Flags,
-                     IoObjectInvalid,
                      NULL,
-                     0,
                      &NewHandle);
 
     if (!KSUCCESS(Status)) {
@@ -3614,9 +3612,7 @@ KSTATUS
 IopCreateSpecialIoObject (
     BOOL FromKernelMode,
     ULONG Flags,
-    IO_OBJECT_TYPE Type,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     )
 
@@ -3634,12 +3630,7 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    Type - Supplies the type of special object to create.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to the new file.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to the new file object
         will be returned on success.
@@ -3654,25 +3645,20 @@ Return Value:
 
     KSTATUS Status;
 
-    switch (Type) {
+    ASSERT(Create != NULL);
+
+    switch (Create->Type) {
     case IoObjectPipe:
-        Status = IopCreatePipe(NULL, 0, CreatePermissions, FileObject);
+        Status = IopCreatePipe(NULL, 0, Create, FileObject);
         break;
 
     case IoObjectSocket:
-        Status = IopCreateSocket(OverrideParameter,
-                                 CreatePermissions,
-                                 FileObject);
-
+        Status = IopCreateSocket(Create, FileObject);
         break;
 
     case IoObjectTerminalMaster:
     case IoObjectTerminalSlave:
-        Status = IopCreateTerminal(Type,
-                                   OverrideParameter,
-                                   CreatePermissions,
-                                   FileObject);
-
+        Status = IopCreateTerminal(Create, FileObject);
         break;
 
     case IoObjectSharedMemoryObject:
@@ -3680,7 +3666,7 @@ Return Value:
                                              NULL,
                                              0,
                                              Flags,
-                                             CreatePermissions,
+                                             Create,
                                              FileObject);
 
         break;
@@ -5168,9 +5154,7 @@ IopCreateAnonymousObject (
     BOOL FromKernelMode,
     ULONG Access,
     ULONG Flags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PPATH_POINT PathPoint
     )
 
@@ -5192,14 +5176,7 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    TypeOverride - Supplies an object type that the regular file should be
-        converted to. Supply the invalid object type to specify no override.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the initial permissions to create the entry
-        with.
+    Create - Supplies a pointer to the creation parameters.
 
     PathPoint - Supplies a pointer that receives the path entry and mount point
         of the newly minted path point.
@@ -5220,9 +5197,7 @@ Return Value:
     PathEntry = NULL;
     Status = IopCreateSpecialIoObject(FromKernelMode,
                                       Flags,
-                                      TypeOverride,
-                                      OverrideParameter,
-                                      CreatePermissions,
+                                      Create,
                                       &FileObject);
 
     if (!KSUCCESS(Status)) {

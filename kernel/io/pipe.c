@@ -173,6 +173,7 @@ Return Value:
 
 {
 
+    CREATE_PARAMETERS Create;
     KSTATUS Status;
 
     *ReadHandle = NULL;
@@ -182,15 +183,17 @@ Return Value:
     // Create and open the read side.
     //
 
+    Create.Type = IoObjectPipe;
+    Create.Context = NULL;
+    Create.Permissions = CreatePermissions;
+    Create.Created = FALSE;
     Status = IopOpen(FromKernelMode,
                      Directory,
                      Path,
                      PathLength,
                      IO_ACCESS_READ,
                      OpenFlags | OPEN_FLAG_CREATE | OPEN_FLAG_FAIL_IF_EXISTS,
-                     IoObjectPipe,
-                     NULL,
-                     CreatePermissions,
+                     &Create,
                      ReadHandle);
 
     if (!KSUCCESS(Status)) {
@@ -257,7 +260,7 @@ KSTATUS
 IopCreatePipe (
     PCSTR Name,
     ULONG NameSize,
-    FILE_PERMISSIONS Permissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     )
 
@@ -275,7 +278,7 @@ Arguments:
     NameSize - Supplies the size of the name in bytes including the null
         terminator.
 
-    Permissions - Supplies the permissions to give to the file object.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to a newly created pipe
         file object will be returned on success.
@@ -348,7 +351,7 @@ Return Value:
     if (*FileObject == NULL) {
         Thread = KeGetCurrentThread();
         IopFillOutFilePropertiesForObject(&FileProperties, &(NewPipe->Header));
-        FileProperties.Permissions = Permissions;
+        FileProperties.Permissions = Create->Permissions;
         FileProperties.Type = IoObjectPipe;
         FileProperties.UserId = Thread->Identity.EffectiveUserId;
         FileProperties.GroupId = Thread->Identity.EffectiveGroupId;
@@ -403,6 +406,7 @@ Return Value:
 
     (*FileObject)->SpecialIo = NewPipe;
     NewPipe = NULL;
+    Create->Created = TRUE;
     Status = STATUS_SUCCESS;
 
 CreatePipeEnd:

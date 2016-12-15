@@ -265,7 +265,7 @@ IopCreateSharedMemoryObject (
     PCSTR Name,
     ULONG NameSize,
     ULONG Flags,
-    FILE_PERMISSIONS Permissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     )
 
@@ -290,7 +290,7 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    Permissions - Supplies the permissions to give to the file object.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to a newly created pipe
         file object will be returned on success.
@@ -397,7 +397,7 @@ Return Value:
             FileProperties.HardLinkCount = 0;
         }
 
-        FileProperties.Permissions = Permissions;
+        FileProperties.Permissions = Create->Permissions;
         FileProperties.BlockSize = IoGetCacheEntryDataSize();
         FileProperties.Type = IoObjectSharedMemoryObject;
         Status = IopCreateOrLookupFileObject(&FileProperties,
@@ -552,6 +552,7 @@ Return Value:
 
     ASSERT(Created != FALSE);
 
+    Create->Created = TRUE;
     Status = STATUS_SUCCESS;
 
 CreateSharedMemoryObjectEnd:

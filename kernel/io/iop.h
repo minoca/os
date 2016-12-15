@@ -1079,6 +1079,33 @@ Return Value:
 
 --*/
 
+/*++
+
+Structure Description:
+
+    This structure defines the parameters associated with a creation request.
+
+Members:
+
+    Type - Stores the type of object to create.
+
+    Context - Stores a pointer that contains additional context specific to a
+        given device type.
+
+    Permissions - Stores the creation permissions to assign.
+
+    Created - Stores a boolean that will get set to TRUE if the file was
+        created.
+
+--*/
+
+typedef struct _CREATE_PARAMETERS {
+    IO_OBJECT_TYPE Type;
+    PVOID Context;
+    FILE_PERMISSIONS Permissions;
+    BOOL Created;
+} CREATE_PARAMETERS, *PCREATE_PARAMETERS;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1805,9 +1832,7 @@ IopOpen (
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PIO_HANDLE *Handle
     );
 
@@ -1837,14 +1862,8 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    TypeOverride - Supplies an object type that the regular file should be
-        converted to. Supply the invalid object type to specify no override.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to apply for created object
-        on create operations.
+    Create - Supplies an optional pointer to the creation information. If the
+        OPEN_FLAG_CREATE is supplied in the flags, then this field is required.
 
     Handle - Supplies a pointer where a pointer to the open I/O handle will be
         returned on success.
@@ -1928,9 +1947,7 @@ KSTATUS
 IopCreateSpecialIoObject (
     BOOL FromKernelMode,
     ULONG Flags,
-    IO_OBJECT_TYPE Type,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -1945,15 +1962,10 @@ Arguments:
     FromKernelMode - Supplies a boolean indicating whether or not the request
         originated from kernel mode (TRUE) or user mode (FALSE).
 
-    Type - Supplies the type of special object to create.
-
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to the new file.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to the new file object
         will be returned on success.
@@ -3072,7 +3084,7 @@ KSTATUS
 IopCreatePipe (
     PCSTR Name,
     ULONG NameSize,
-    FILE_PERMISSIONS Permissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -3090,7 +3102,7 @@ Arguments:
     NameSize - Supplies the size of the name in bytes including the null
         terminator.
 
-    Permissions - Supplies the permissions to give to the file object.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to a newly created pipe
         file object will be returned on success.
@@ -3354,9 +3366,7 @@ Return Value:
 
 KSTATUS
 IopCreateTerminal (
-    IO_OBJECT_TYPE Type,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -3368,12 +3378,7 @@ Routine Description:
 
 Arguments:
 
-    Type - Supplies the type of special object to create.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to the new file.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to the new file object
         will be returned on success.
@@ -3473,8 +3478,7 @@ Return Value:
 
 KSTATUS
 IopCreateSocket (
-    PVOID Parameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -3486,9 +3490,7 @@ Routine Description:
 
 Arguments:
 
-    Parameter - Supplies the parameters the socket was created with.
-
-    CreatePermissions - Supplies the permissions to create the file with.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where the new file object representing the
         socket will be returned on success.
@@ -3619,7 +3621,7 @@ IopCreateSharedMemoryObject (
     PCSTR Name,
     ULONG NameSize,
     ULONG Flags,
-    FILE_PERMISSIONS Permissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -3644,7 +3646,7 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    Permissions - Supplies the permissions to give to the file object.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to a newly created pipe
         file object will be returned on success.
@@ -3764,9 +3766,7 @@ IopPathWalk (
     PCSTR *Path,
     PULONG PathSize,
     ULONG OpenFlags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PPATH_POINT Result
     );
 
@@ -3796,15 +3796,7 @@ Arguments:
     OpenFlags - Supplies a bitfield of flags governing the behavior of the
         handle. See OPEN_FLAG_* definitions.
 
-    TypeOverride - Supplies the type of object to create. If this is invalid,
-        then this routine will try to open an existing object. If this type is
-        valid, then this routine will attempt to create an object of the given
-        type.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to a created file.
+    Create - Supplies an optional pointer to the creation parameters.
 
     Result - Supplies a pointer to a path point that receives the resulting
         path entry and mount point on success. The path entry and mount point
@@ -4104,9 +4096,7 @@ IopPathLookup (
     PCSTR Name,
     ULONG NameSize,
     ULONG OpenFlags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PPATH_POINT Result
     );
 
@@ -4137,15 +4127,7 @@ Arguments:
     OpenFlags - Supplies a bitfield of flags governing the behavior of the
         handle. See OPEN_FLAG_* definitions.
 
-    TypeOverride - Supplies the type of object to create. If this is invalid,
-        then this routine will try to open an existing object. If this type is
-        valid, then this routine will attempt to create an object of the given
-        type.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to a created file.
+    Create - Supplies an optional pointer to the creation parameters.
 
     Result - Supplies a pointer to a path point that receives the resulting
         path entry and mount point on success. The path entry and mount point

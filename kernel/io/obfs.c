@@ -321,9 +321,7 @@ Return Value:
                                Child->Name,
                                Child->NameLength,
                                OPEN_FLAG_DIRECTORY,
-                               IoObjectInvalid,
                                NULL,
-                               0,
                                &ChildPathPoint);
 
         if (KSUCCESS(Status)) {
