@@ -176,6 +176,12 @@ Environment:
 #define USB_MASS_RETRY_COUNT 3
 
 //
+// Define the number of seconds to wait to get the capacities information.
+//
+
+#define USB_MASS_READ_CAPACITY_TIMEOUT 5
+
+//
 // Define the number of seconds to wait for the unit to become ready.
 //
 
@@ -2937,7 +2943,15 @@ Return Value:
         }
     }
 
-    for (Try = 0; Try < USB_MASS_RETRY_COUNT; Try += 1) {
+    //
+    // Ignore any errors from the read format capacities command and just try
+    // to read the capacity.
+    //
+
+    Timeout = KeGetRecentTimeCounter() +
+              (HlQueryTimeCounterFrequency() * USB_MASS_READ_CAPACITY_TIMEOUT);
+
+    do {
         Status = UsbMasspReadCapacity(Disk);
         if (KSUCCESS(Status)) {
             break;
@@ -2946,11 +2960,20 @@ Return Value:
         if (!KSUCCESS(UsbMasspRequestSense(Disk))) {
             goto StartDiskEnd;
         }
-    }
+
+        KeDelayExecution(FALSE, FALSE, 10 * MICROSECONDS_PER_MILLISECOND);
+        Status = STATUS_TIMEOUT;
+
+    } while (KeGetRecentTimeCounter() <= Timeout);
 
     if (!KSUCCESS(Status)) {
+        RtlDebugPrint("USB Mass: Failed to read capacity: %d\n", Status);
         goto StartDiskEnd;
     }
+
+    //
+    // Wait for the unit to become ready.
+    //
 
     Timeout = KeGetRecentTimeCounter() +
               (HlQueryTimeCounterFrequency() * USB_MASS_UNIT_READY_TIMEOUT);
