@@ -888,6 +888,8 @@ Return Value:
 
     ASSERT(Device->NetworkLink != NULL);
 
+    E1000pEnableInterrupts(Device);
+
 StartDeviceEnd:
     return Status;
 }

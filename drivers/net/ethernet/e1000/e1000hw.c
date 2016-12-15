@@ -807,6 +807,34 @@ Return Value:
 
     RxControl |= E1000_RX_CONTROL_ENABLE;
     E1000_WRITE(Device, E1000RxControl, RxControl);
+    Status = STATUS_SUCCESS;
+
+ResetDeviceEnd:
+    return Status;
+}
+
+VOID
+E1000pEnableInterrupts (
+    PE1000_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enables interrupts on the E1000 device.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
 
     //
     // Enable interrupts.
@@ -822,10 +850,7 @@ Return Value:
                 E1000InterruptCauseSet,
                 E1000_INTERRUPT_LINK_STATUS_CHANGE);
 
-    Status = STATUS_SUCCESS;
-
-ResetDeviceEnd:
-    return Status;
+    return;
 }
 
 INTERRUPT_STATUS

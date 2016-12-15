@@ -1184,6 +1184,27 @@ Return Value:
 
 --*/
 
+VOID
+E1000pEnableInterrupts (
+    PE1000_DEVICE Device
+    );
+
+/*++
+
+Routine Description:
+
+    This routine enables interrupts on the E1000 device.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
 INTERRUPT_STATUS
 E1000pInterruptService (
     PVOID Context
