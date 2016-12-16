@@ -2266,7 +2266,6 @@ Return Value:
     PPATH_POINT ShmDirectory;
     KSTATUS Status;
     PKTHREAD Thread;
-    BOOL Unlinked;
 
     Child = NULL;
     Created = FALSE;
@@ -2448,34 +2447,6 @@ Return Value:
                 ASSERT(Created != FALSE);
 
                 Create->Created = Created;
-
-                //
-                // If requested, unlink the file now that it has been created
-                // and the necessary data recorded. If the unlink fails, leave
-                // the file in the file system, but fail the create call.
-                //
-
-                if ((OpenFlags & OPEN_FLAG_UNLINK_ON_CREATE) != 0) {
-                    KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-                    Status = IopSendUnlinkRequest(PathRoot,
-                                                  FileObject,
-                                                  DirectoryFileObject,
-                                                  Name,
-                                                  NameSize,
-                                                  &Unlinked);
-
-                    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-                    if (Unlinked == FALSE) {
-
-                        ASSERT(FALSE);
-
-                        Status = STATUS_FILE_EXISTS;
-                    }
-
-                    if (!KSUCCESS(Status)) {
-                        goto PathLookupThroughFileSystemEnd;
-                    }
-                }
 
             //
             // The creation request didn't work. It can only turn into an open
@@ -2910,12 +2881,6 @@ Return Value:
 
         Result->PathEntry->FileObject = FileObject;
         IopFileObjectAddPathEntryReference(Result->PathEntry->FileObject);
-        if ((OpenFlags & OPEN_FLAG_UNLINK_ON_CREATE) != 0) {
-            if (Result->PathEntry->SiblingListEntry.Next != NULL) {
-                LIST_REMOVE(&(Result->PathEntry->SiblingListEntry));
-                Result->PathEntry->SiblingListEntry.Next = NULL;
-            }
-        }
 
     //
     // Create and insert a new path entry.
@@ -2939,19 +2904,15 @@ Return Value:
         PathEntry->DoNotCache = DoNotCache;
 
         //
-        // Unless this routine unlinked the file as soon as it was created,
-        // there should be at least one hard link count and it needs to get
+        // There should be at least one hard link count and it needs to get
         // inserted into the directory's list of children.
         //
 
-        if ((OpenFlags & OPEN_FLAG_UNLINK_ON_CREATE) == 0) {
+        ASSERT((FileObject == NULL) ||
+               (FileObject->Properties.HardLinkCount != 0));
 
-            ASSERT((FileObject == NULL) ||
-                   (FileObject->Properties.HardLinkCount != 0));
-
-            INSERT_BEFORE(&(PathEntry->SiblingListEntry),
-                          &(DirectoryEntry->ChildList));
-        }
+        INSERT_BEFORE(&(PathEntry->SiblingListEntry),
+                      &(DirectoryEntry->ChildList));
 
         Result->PathEntry = PathEntry;
         IoMountPointAddReference(Directory->MountPoint);

@@ -245,14 +245,6 @@ Author:
 #define OPEN_FLAG_ASYNCHRONOUS 0x00000800
 
 //
-// Set this flag if a file should be atomically unlinked after creation so that
-// it never appears in the namespace. The call will fail if the file already
-// exists or fails to be unlinked.
-//
-
-#define OPEN_FLAG_UNLINK_ON_CREATE 0x04000000
-
-//
 // Set this flag if mount points should not be followed on the final component.
 //
 

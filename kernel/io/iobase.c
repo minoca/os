@@ -3052,15 +3052,6 @@ Return Value:
     PathPoint.MountPoint = NULL;
 
     //
-    // If the request is meant to unlink on creation, make sure that the create
-    // flag is also set and prepare to fail if the file already exists.
-    //
-
-    ASSERT(((Flags & OPEN_FLAG_UNLINK_ON_CREATE) == 0) ||
-           ((Flags & (OPEN_FLAG_CREATE | OPEN_FLAG_FAIL_IF_EXISTS)) ==
-            (OPEN_FLAG_CREATE | OPEN_FLAG_FAIL_IF_EXISTS)));
-
-    //
     // If the caller specified a directory, validate that it is a directory,
     // and perform permission checking if search permissions were not granted
     // upon open.
