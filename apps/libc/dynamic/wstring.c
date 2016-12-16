@@ -493,7 +493,17 @@ Return Value:
 
 {
 
-    return wcsncpy(DestinationString, SourceString, MAX_ULONG);
+    wchar_t *OriginalDestination;
+
+    OriginalDestination = DestinationString;
+    while (*SourceString != L'\0') {
+        *DestinationString = *SourceString;
+        SourceString += 1;
+        DestinationString += 1;
+    }
+
+    *DestinationString = L'\0';
+    return OriginalDestination;
 }
 
 LIBC_API
