@@ -1660,7 +1660,14 @@ Return Value:
             IopFileObjectReleaseReference(CurrentObject);
             CurrentObject = NextObject;
         }
+
+        if (CurrentObject != NULL) {
+            IopFileObjectReleaseReference(CurrentObject);
+            CurrentObject = NULL;
+        }
     }
+
+    ASSERT(CurrentObject == NULL);
 
     return TotalStatus;
 }
