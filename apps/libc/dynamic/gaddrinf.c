@@ -1459,7 +1459,9 @@ Return Value:
             // translated, then skip it unless the answer's already there.
             //
 
-            if (ClpIsNameSubdomain(NameServer->Value, Name) != FALSE) {
+            if ((NameServer->Value != NULL) &&
+                (ClpIsNameSubdomain(NameServer->Value, Name) != FALSE)) {
+
                 Status = ClpFindNameServerAddress(NameServer,
                                                   RecordType,
                                                   &TranslationList,
