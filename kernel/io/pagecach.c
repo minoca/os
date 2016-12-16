@@ -2599,10 +2599,6 @@ Return Value:
         //
 
         if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING) == 0) {
-            if (Entry->ListEntry.Next != NULL) {
-                LIST_REMOVE(&(Entry->ListEntry));
-                Entry->ListEntry.Next = NULL;
-            }
 
             //
             // If requested, move the page cache entry to the back of the LRU
@@ -2612,6 +2608,11 @@ Return Value:
             //
 
             if (MoveToCleanList != FALSE) {
+                if (Entry->ListEntry.Next != NULL) {
+                    LIST_REMOVE(&(Entry->ListEntry));
+                    Entry->ListEntry.Next = NULL;
+                }
+
                 INSERT_BEFORE(&(Entry->ListEntry), &IoPageCacheCleanList);
             }
         }
