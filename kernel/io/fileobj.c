@@ -1562,7 +1562,8 @@ Return Value:
     for (FlushIndex = 0; FlushIndex < FlushCount; FlushIndex += 1) {
 
         //
-        // Get the first entry on the list, or the specific device in question.
+        // Get the first entry on the list, or the first file object for the
+        // specific device in question.
         //
 
         KeAcquireQueuedLock(IoFileObjectsDirtyListLock);
@@ -1592,8 +1593,14 @@ Return Value:
         }
 
         KeReleaseQueuedLock(IoFileObjectsDirtyListLock);
+
+        //
+        // If a device ID was supplied, but no file objects were found to
+        // belong to that device, then the flush was successful!
+        //
+
         if ((CurrentObject == NULL) && (DeviceId != 0)) {
-            TotalStatus = STATUS_NO_SUCH_DEVICE;
+            TotalStatus = STATUS_SUCCESS;
             break;
         }
 
@@ -1615,7 +1622,7 @@ Return Value:
                 }
             }
 
-            if ((DeviceId != 0) || ((PageCount != NULL) && (*PageCount == 0))) {
+            if ((PageCount != NULL) && (*PageCount == 0)) {
                 break;
             }
 
@@ -1623,20 +1630,37 @@ Return Value:
             // Re-lock the list, and get the next object.
             //
 
-            KeAcquireQueuedLock(IoFileObjectsDirtyListLock);
             NextObject = NULL;
+            KeAcquireQueuedLock(IoFileObjectsDirtyListLock);
+            if (CurrentObject->ListEntry.Next != NULL) {
+                CurrentEntry = CurrentObject->ListEntry.Next;
+
+            } else {
+                CurrentEntry = IoFileObjectsDirtyList.Next;
+            }
+
             if (DeviceId == 0) {
-                if (CurrentObject->ListEntry.Next != NULL) {
-                    CurrentEntry = CurrentObject->ListEntry.Next;
-
-                } else {
-                    CurrentEntry = IoFileObjectsDirtyList.Next;
-                }
-
                 if (CurrentEntry != &IoFileObjectsDirtyList) {
                     NextObject = LIST_VALUE(CurrentEntry,
                                             FILE_OBJECT,
                                             ListEntry);
+                }
+
+            } else {
+                while (CurrentEntry != &IoFileObjectsDirtyList) {
+                    NextObject = LIST_VALUE(CurrentEntry,
+                                            FILE_OBJECT,
+                                            ListEntry);
+
+                    if (NextObject->Properties.DeviceId == DeviceId) {
+                        break;
+                    }
+
+                    CurrentEntry = CurrentEntry->Next;
+                }
+
+                if (CurrentEntry == &IoFileObjectsDirtyList) {
+                    NextObject = NULL;
                 }
             }
 
