@@ -309,6 +309,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/Python-2.7.11"
         },
         {
+            "name": "Make Python3.5",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/Python-3.5.2"
+        },
+        {
             "name": "Make openssh",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/openssh-6.7p1"
