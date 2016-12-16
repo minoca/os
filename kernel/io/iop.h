@@ -214,6 +214,13 @@ Author:
 #define FILE_OBJECT_FLAG_DIRTY_DATA 0x00000040
 
 //
+// This flag indicates that a hard flush must be preformed before the file
+// object's contents are preserved on a backing store.
+//
+
+#define FILE_OBJECT_FLAG_HARD_FLUSH_REQUIRED 0x00000080
+
+//
 // The resource allocation work is currently assigned to the system work queue.
 //
 

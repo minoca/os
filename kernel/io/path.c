@@ -2263,6 +2263,7 @@ Return Value:
     PDEVICE PathRoot;
     FILE_PROPERTIES Properties;
     ULONG RootLookupFlags;
+    PPATH_POINT ShmDirectory;
     KSTATUS Status;
     PKTHREAD Thread;
     BOOL Unlinked;
@@ -2354,33 +2355,30 @@ Return Value:
             ASSERT(Create->Type != IoObjectInvalid);
 
             //
+            // It's not obvious what user/group ID to put as the owner
+            // if the creation comes from kernel mode. Assert that this create
+            // request is from user mode.
+            //
+
+            ASSERT(FromKernelMode == FALSE);
+
+            //
             // Check to make sure the caller has permission to create objects
             // in this directory.
             //
 
-            if (FromKernelMode == FALSE) {
-                Status = IopCheckPermissions(FromKernelMode,
-                                             Directory,
-                                             IO_ACCESS_WRITE);
+            Status = IopCheckPermissions(FromKernelMode,
+                                         Directory,
+                                         IO_ACCESS_WRITE);
 
-                if (!KSUCCESS(Status)) {
-                    goto PathLookupThroughFileSystemEnd;
-                }
+            if (!KSUCCESS(Status)) {
+                goto PathLookupThroughFileSystemEnd;
             }
 
             //
             // Send the create IRP. Set the file owner to the effective user ID
             // of the caller. If the sticky bit is set in the directory, set
             // the owning group to that of the directory.
-            //
-
-            //
-            // TODO: This should assert that FromKernelMode is FALSE,
-            // because it's not obvious what user/group ID to put as the owner
-            // if the creation comes from kernel mode. Current the assert
-            // cannot be put in because creation of shared memory objects
-            // happens from kernel mode. Fix shared memory objects to do
-            // "from user mode" path walks, and then re-add this assert.
             //
 
             Thread = KeGetCurrentThread();
@@ -2623,11 +2621,14 @@ Return Value:
 
                 break;
 
-            case IoObjectSharedMemoryObject:
-                Equal = IO_ARE_PATH_POINTS_EQUAL(
-                                  Directory,
-                                  IopGetSharedMemoryDirectory(FromKernelMode));
+            //
+            // Shared memory objects are allowed in the current process's
+            // shared memory object directory.
+            //
 
+            case IoObjectSharedMemoryObject:
+                ShmDirectory = IopGetSharedMemoryDirectory(FromKernelMode);
+                Equal = IO_ARE_PATH_POINTS_EQUAL(Directory, ShmDirectory);
                 if (Equal == FALSE) {
                     break;
                 }
