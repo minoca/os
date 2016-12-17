@@ -43,7 +43,7 @@ Environment:
 // sender is blocked.
 //
 
-#define UNIX_SOCKET_DEFAULT_SEND_MAX 131072
+#define UNIX_SOCKET_DEFAULT_SEND_MAX 0x20000
 
 //
 // Define the maximum number of file descriptors that can be passed in a
@@ -1556,7 +1556,6 @@ Return Value:
 
         Packet = NULL;
         if (PacketSize != 0) {
-            Packet = NULL;
             Status = IopUnixSocketCreatePacket(UnixSocket,
                                                IoBuffer,
                                                BytesCompleted,
@@ -1623,7 +1622,13 @@ Return Value:
 
         if (Packet == NULL) {
             if ((OpenFlags & OPEN_FLAG_NON_BLOCKING) != 0) {
-                Status = STATUS_OPERATION_WOULD_BLOCK;
+                if (BytesCompleted != 0) {
+                    Status = STATUS_SUCCESS;
+
+                } else {
+                    Status = STATUS_OPERATION_WOULD_BLOCK;
+                }
+
                 goto UnixSocketSendDataEnd;
             }
 
