@@ -3164,7 +3164,7 @@ Return Value:
 
     } else if (FileObject->Properties.Type == IoObjectSocket) {
         if (((Create == NULL) && (Access != 0)) ||
-            (Create->Created == FALSE)) {
+            ((Create != NULL) && (Create->Created == FALSE))) {
 
             Status = STATUS_NO_SUCH_DEVICE_OR_ADDRESS;
             goto OpenEnd;
