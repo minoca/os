@@ -323,7 +323,8 @@ ChownConvertUserGroupName (
 
 Routine Description:
 
-    This routine converts a user:group string into a user ID and group ID.
+    This routine converts a user:group or user.group string into a user ID and
+        group ID.
 
 Arguments:
 
@@ -348,6 +349,7 @@ Return Value:
     PSTR Colon;
     struct group *GroupInformation;
     PSTR GroupName;
+    PSTR Period;
     INT Status;
     struct passwd *UserInformation;
     PSTR UserName;
@@ -358,6 +360,11 @@ Return Value:
 
     GroupName = NULL;
     UserName = NULL;
+    Period = strchr(Argument, '.');
+    if (Period != NULL) {
+        *Period = ':';
+    }
+
     Colon = strchr(Argument, ':');
     if (Colon == NULL) {
         UserName = Argument;
