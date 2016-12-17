@@ -1458,10 +1458,11 @@ Return Value:
 
         if (Lexer->InputBuffer != NULL) {
             free(Lexer->InputBuffer);
-            Lexer->InputBuffer = NewInputBuffer;
-            Lexer->InputBufferCapacity = NewInputBufferSize;
         }
 
+        Lexer->InputBuffer = NewInputBuffer;
+        Lexer->InputBufferSize = NewInputBufferSize;
+        Lexer->InputBufferCapacity = Lexer->InputBufferSize;
         BytesRead = NewInputBufferSize;
 
     } else {

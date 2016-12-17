@@ -279,6 +279,7 @@ Return Value:
 
 {
 
+    PSTR NewInputBuffer;
     INT NonStandardErrorCopy;
     BOOL Result;
     PSHELL Subshell;
@@ -327,18 +328,22 @@ Return Value:
 
         assert(InputSize != 0);
 
-        Subshell->Lexer.InputBuffer = SwStringDuplicate(Input, InputSize);
-        if (Subshell->Lexer.InputBuffer == NULL) {
+        NewInputBuffer = SwStringDuplicate(Input, InputSize);
+        if (NewInputBuffer == NULL) {
             Result = FALSE;
             goto CreateSubshellEnd;
         }
 
-        Subshell->Lexer.InputBufferSize = InputSize;
-        if (DequoteForSubshell != FALSE) {
-            ShStringDequoteSubshellCommand(Subshell->Lexer.InputBuffer,
-                                           &(Subshell->Lexer.InputBufferSize));
+        if (Subshell->Lexer.InputBuffer != NULL) {
+            free(Subshell->Lexer.InputBuffer);
         }
 
+        if (DequoteForSubshell != FALSE) {
+            ShStringDequoteSubshellCommand(NewInputBuffer, &(InputSize));
+        }
+
+        Subshell->Lexer.InputBuffer = NewInputBuffer;
+        Subshell->Lexer.InputBufferSize = InputSize;
         Subshell->Lexer.InputBufferCapacity = Subshell->Lexer.InputBufferSize;
     }
 
