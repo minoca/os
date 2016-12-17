@@ -2140,6 +2140,41 @@ Return Value:
 
 LIBC_API
 int
+dup3 (
+    int FileDescriptor,
+    int CopyDescriptor,
+    int Flags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine duplicates the given file descriptor to the destination
+    descriptor, closing the original destination descriptor file along the way.
+
+Arguments:
+
+    FileDescriptor - Supplies the file descriptor to duplicate.
+
+    CopyDescriptor - Supplies the descriptor number of returned copy. If this
+        is equal to the original file descriptor, then the call fails with
+        EINVAL.
+
+    Flags - Supplies O_* open flags governing the new descriptor. Only
+        O_CLOEXEC is permitted.
+
+Return Value:
+
+    Returns the new file descriptor which represents a copy of the original,
+    which is also equal to the input copy descriptor parameter.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+LIBC_API
+int
 lockf (
     int FileDescriptor,
     int Function,
