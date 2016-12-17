@@ -441,9 +441,8 @@ Return Value:
 
         ShDup2(ParentShell, Pipe[1], STDOUT_FILENO);
         ShClose(ParentShell, Pipe[1]);
+        Pipe[1] = -1;
     }
-
-    Pipe[1] = -1;
 
     //
     // Get ready to read from the read end of the pipe.
@@ -505,6 +504,7 @@ Return Value:
     if (OriginalOutput >= 0) {
         ShDup2(ParentShell, OriginalOutput, STDOUT_FILENO);
         ShClose(ParentShell, OriginalOutput);
+        OriginalOutput = -1;
 
     } else {
 
@@ -513,10 +513,9 @@ Return Value:
         // pipe.
         //
 
-        ShClose(ParentShell, STDOUT_FILENO);
+        ShClose(ParentShell, Pipe[1]);
+        Pipe[1] = -1;
     }
-
-    OriginalOutput = -1;
 
     //
     // Collect the results.
@@ -575,6 +574,7 @@ ExecuteSubshellEnd:
 
     if (OriginalOutput != -1) {
         ShDup2(ParentShell, OriginalOutput, STDOUT_FILENO);
+        ShClose(ParentShell, OriginalOutput);
     }
 
     if (Pipe[0] != -1) {
