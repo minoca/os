@@ -2909,6 +2909,11 @@ Return Value:
     KSTATUS Status;
     ULONG TimeoutInMilliseconds;
 
+    if (DescriptorCount < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
     Result = ClpConvertSpecificTimeoutToSystemTimeout(Timeout,
                                                       &TimeoutInMilliseconds);
 
