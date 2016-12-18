@@ -1,0 +1,271 @@
+/*++
+
+Copyright (c) 2016 Minoca Corp.
+
+    This file is licensed under the terms of the GNU General Public License
+    version 3. Alternative licensing terms are available. Contact
+    info@minocacorp.com for details. See the LICENSE file at the root of this
+    project for complete licensing information.
+
+Module Name:
+
+    lzma.h
+
+Abstract:
+
+    This header contains definitions for the LZMA library, a port of Igor
+    Pavlov's 7zip compression system.
+
+Author:
+
+    Evan Green 27-Oct-2016
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+//
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+typedef enum _LZ_STATUS {
+    LzSuccess,
+    LzErrorMemory,
+    LzErrorCrc,
+    LzErrorUnsupported,
+    LzErrorInvalidParameter,
+    LzErrorInputEof,
+    LzErrorOutputEof,
+    LzErrorRead,
+    LzErrorWrite,
+    LzErrorProgress,
+    LzErrorFailure,
+    LzErrorThread,
+    LzErrorArchive,
+    LzErrorNoArchive
+} LZ_STATUS, *PLZ_STATUS;
+
+typedef struct _LZ_CONTEXT LZ_CONTEXT, *PLZ_CONTEXT;
+
+typedef
+PVOID
+(*PLZ_REALLOCATE) (
+    PVOID Allocation,
+    UINTN NewSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine represents the prototype of the function called when the LZMA
+    library needs to allocate, reallocate, or free memory.
+
+Arguments:
+
+    Allocation - Supplies an optional pointer to the allocation to resize or
+        free. If NULL, then this routine will allocate new memory.
+
+    NewSize - Supplies the size of the desired allocation. If this is 0 and the
+        allocation parameter is non-null, the given allocation will be freed.
+        Otherwise it will be resized to requested size.
+
+Return Value:
+
+    Returns a pointer to the allocation on success.
+
+    NULL on allocation failure, or in the case the memory is being freed.
+
+--*/
+
+typedef
+LZ_STATUS
+(*PLZ_REPORT_PROGRESS) (
+    PLZ_CONTEXT Context,
+    ULONGLONG InputSize,
+    ULONGLONG OutputSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine represents the prototype of the function called when the LZMA
+    library is reporting a progress update.
+
+Arguments:
+
+    Context - Supplies a pointer to the LZ context.
+
+    InputSize - Supplies the number of input bytes processed. Set to -1ULL if
+        unknown.
+
+    OutputSize - Supplies the number of output bytes processed. Set to -1ULL if
+        unknown.
+
+Return Value:
+
+    0 on success.
+
+    Returns a non-zero value to cancel the operation.
+
+--*/
+
+typedef
+INTN
+(*PLZ_PERFORM_IO) (
+    PLZ_CONTEXT Context,
+    PVOID Buffer,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine represents the prototype of the function called to read
+    or write data.
+
+Arguments:
+
+    Context - Supplies a pointer to the LZ context.
+
+    Buffer - Supplies a pointer where the read data should be returned for
+        read operations, or where the data to write exists for write oprations.
+
+    Size - Supplies the number of bytes to read or write.
+
+Return Value:
+
+    Returns the number of bytes read or written. For writes, anything other
+    than the full write size is considered failure. Reads however can return
+    less than asked for. If a read returns zero, that indicates end of file.
+
+    -1 on I/O failure.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure stores the general LZ library context.
+
+Members:
+
+    Context - Stores an unused context pointer that the environment integrating
+        the LZMA library can use for its own purposes.
+
+    Reallocate - Stores a pointer to a function used to allocate, reallocate,
+        and free memory.
+
+    ReportProgress - Stores an optional pointer to a function used to report
+        progress updates to the surrounding environment.
+
+    Read - Stores a pointer to a function used to read input data.
+
+    Write - Stores a pointer to a function used to write output data.
+
+    ReadContext - Stores an unused context pointer available for use by the
+        surrounding application. This often stores the input file information.
+
+    WriteContext - Stores an unused context pointer available for use by the
+        surrounding application. This often sotres the output file information.
+
+--*/
+
+struct _LZ_CONTEXT {
+    PVOID Context;
+    PLZ_REALLOCATE Reallocate;
+    PLZ_REPORT_PROGRESS ReportProgress;
+    PLZ_PERFORM_IO Read;
+    PLZ_PERFORM_IO Write;
+    PVOID ReadContext;
+    PVOID WriteContext;
+};
+
+/*++
+
+Structure Description:
+
+    This structure stores the LZMA encoder properties.
+
+Members:
+
+    Level - Stores the encoding level. Valid values are 0 through 9,
+        inclusive.
+
+    DictionarySize - Stores the dictionary size. Valid values are powers of
+        two between (1 << 12) and (1 << 27) inclusive for the 32-bit version,
+        or between (1 << 12) and (1 << 30) inclusive for the 64-bit version.
+        The default is (1 << 24).
+
+    ReduceSize - Stores the estimated size of the data that will be
+        compressed. The default is -1ULL. The encoder may use this value to
+        reduce the dictionary size.
+
+    Lc - Stores the lc parameter. Valid values are between 0 and 8, inclusive.
+        The default is 3.
+
+    Lp - Stores the lp parameter. Valid values are between 0 and 4, inclusive.
+        The default is 0.
+
+    Pb - Stores the pb parameter. Valid values are between 0 and 4, inclusive.
+        The default is 2.
+
+    Algorithm - Stores the algorithm speed. Set to 1 for normal, which is the
+        default. Set to zero for fast mode.
+
+    FastBytes - Stores the fast byte count parameter. Valid values are between
+        5 and 273, inclusive. The default is 32.
+
+    BinTreeMode - Stores a boolean indicating whether to run in bin tree mode
+        (TRUE, the default), or hash chain mode (FALSE).
+
+    HashByteCount - Stores the number of bytes in a hash. Valid values are 2
+        through 4, inclusive. The default is 4.
+
+    Mc - Stores the mc parameter. Valid values are between 1 and (1 << 30),
+        inclusive. The default is 32.
+
+    WriteEndMark - Stores a boolean indicating whether to write and end marker
+        or not. The default is FALSE.
+
+    ThreadCount - Stores the thread count to use while encoding. Valid values
+        are 1 and 2. The default is 2.
+
+--*/
+
+typedef struct _LZMA_ENCODER_PROPERTIES {
+    INT Level;
+    ULONG DictionarySize;
+    ULONGLONG ReduceSize;
+    INT Lc;
+    INT Lp;
+    INT Pb;
+    INT Algorithm;
+    INT FastBytes;
+    INT BinTreeMode;
+    INT HashByteCount;
+    ULONG Mc;
+    BOOL WriteEndMark;
+    INT ThreadCount;
+} LZMA_ENCODER_PROPERTIES, *PLZMA_ENCODER_PROPERTIES;
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// -------------------------------------------------------- Function Prototypes
+//
