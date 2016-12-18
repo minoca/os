@@ -360,16 +360,8 @@ Return Value:
 
     GroupName = NULL;
     UserName = NULL;
-    Period = strchr(Argument, '.');
-    if (Period != NULL) {
-        *Period = ':';
-    }
-
     Colon = strchr(Argument, ':');
-    if (Colon == NULL) {
-        UserName = Argument;
-
-    } else {
+    if (Colon != NULL) {
         if (Colon == Argument) {
             GroupName = Colon + 1;
 
@@ -385,6 +377,30 @@ Return Value:
             if (*GroupName == '\0') {
                 GroupName = NULL;
             }
+        }
+
+    } else {
+        Period = strrchr(Argument, '.');
+        if (Period != NULL) {
+            if (Period == Argument) {
+                GroupName = Period + 1;
+
+            } else {
+                UserName = strdup(Argument);
+                if (UserName == NULL) {
+                    return ENOMEM;
+                }
+
+                Period = strrchr(UserName, '.');
+                *Period = '\0';
+                GroupName = Period + 1;
+                if (*GroupName == '\0') {
+                    GroupName = NULL;
+                }
+            }
+
+        } else {
+            UserName = Argument;
         }
     }
 
