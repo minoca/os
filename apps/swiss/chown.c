@@ -323,7 +323,8 @@ ChownConvertUserGroupName (
 
 Routine Description:
 
-    This routine converts a user:group string into a user ID and group ID.
+    This routine converts a user:group or user.group string into a user ID and
+        group ID.
 
 Arguments:
 
@@ -348,6 +349,7 @@ Return Value:
     PSTR Colon;
     struct group *GroupInformation;
     PSTR GroupName;
+    PSTR Period;
     INT Status;
     struct passwd *UserInformation;
     PSTR UserName;
@@ -357,24 +359,43 @@ Return Value:
     }
 
     GroupName = NULL;
-    UserName = NULL;
-    Colon = strchr(Argument, ':');
-    if (Colon == NULL) {
-        UserName = Argument;
+    UserName = strdup(Argument);
+    Colon = strchr(UserName, ':');
+    Period = strrchr(UserName, '.');
 
-    } else {
-        if (Colon == Argument) {
-            GroupName = Colon + 1;
+    //
+    // Short-circuit evaluation of the presense of a colon to avoid calling
+    // SwGetUserIdFromName. A user name with a colon is definitely invalid.
+    //
+
+    if (Colon != NULL || ((SwGetUserIdFromName(UserName, UserId) != 0) &&
+       (Colon != NULL || Period != NULL))) {
+
+        if (Colon == UserName || Period == UserName) {
+            UserName = NULL;
+            if (Colon != NULL) {
+                GroupName = Colon + 1;
+            }
+
+            if (Period != NULL) {
+                GroupName = Period + 1;
+            }
 
         } else {
-            UserName = strdup(Argument);
             if (UserName == NULL) {
                 return ENOMEM;
             }
 
-            Colon = strchr(UserName, ':');
-            *Colon = '\0';
-            GroupName = Colon + 1;
+            if (Colon != NULL) {
+                *Colon = '\0';
+                GroupName = Colon + 1;
+            }
+
+            if (Period != NULL && Colon == NULL) {
+                *Period = '\0';
+                GroupName = Period + 1;
+            }
+
             if (*GroupName == '\0') {
                 GroupName = NULL;
             }
@@ -436,4 +457,3 @@ ConvertUserGroupNameEnd:
 
     return Status;
 }
-
