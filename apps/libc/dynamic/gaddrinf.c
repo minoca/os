@@ -3588,7 +3588,7 @@ Return Value:
     }
 
     if ((Hints != NULL) && ((Hints->ai_flags & AI_NUMERICSERV) != 0)) {
-        return EAI_SERVICE;
+        return EAI_NONAME;
     }
 
     ServiceEntry = getservbyname(ServiceName, NULL);
