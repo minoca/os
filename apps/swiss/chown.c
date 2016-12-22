@@ -346,10 +346,10 @@ Return Value:
 {
 
     PSTR AfterScan;
-    PSTR Colon;
+    PSTR Copy;
     struct group *GroupInformation;
     PSTR GroupName;
-    PSTR Period;
+    PSTR Separator;
     INT Status;
     struct passwd *UserInformation;
     PSTR UserName;
@@ -359,54 +359,40 @@ Return Value:
     }
 
     GroupName = NULL;
-    UserName = strdup(Argument);
-    Colon = strchr(UserName, ':');
-    Period = strrchr(UserName, '.');
 
     //
-    // Short-circuit evaluation of the presense of a colon to avoid calling
-    // SwGetUserIdFromName. A user name with a colon is definitely invalid.
+    // If the whole thing is a valid username, then that must be it. Check
+    // this first to avoid the string duplication if not needed, and to
+    // prioritize usernames with dots over the user.group separator.
     //
 
-    if (Colon != NULL || ((SwGetUserIdFromName(UserName, UserId) != 0) &&
-       (Colon != NULL || Period != NULL))) {
+    UserInformation = getpwnam(Argument);
+    if (UserInformation != NULL) {
+        *UserId = UserInformation->pw_uid;
+        return 0;
+    }
 
-        if (Colon == UserName || Period == UserName) {
-            UserName = NULL;
-            if (Colon != NULL) {
-                GroupName = Colon + 1;
-            }
+    Copy = strdup(Argument);
+    if (Copy == NULL) {
+        return ENOMEM;
+    }
 
-            if (Period != NULL) {
-                GroupName = Period + 1;
-            }
+    UserName = Copy;
+    Separator = strchr(UserName, ':');
+    if (Separator == NULL) {
+        Separator = strrchr(UserName, '.');
+    }
 
-        } else {
-            if (UserName == NULL) {
-                return ENOMEM;
-            }
-
-            if (Colon != NULL) {
-                *Colon = '\0';
-                GroupName = Colon + 1;
-            }
-
-            if (Period != NULL && Colon == NULL) {
-                *Period = '\0';
-                GroupName = Period + 1;
-            }
-
-            if (*GroupName == '\0') {
-                GroupName = NULL;
-            }
-        }
+    if (Separator != NULL) {
+        *Separator = '\0';
+        GroupName = Separator + 1;
     }
 
     //
     // Convert the user name.
     //
 
-    if (UserName != NULL) {
+    if ((UserName != NULL) && (*UserName != '\0')) {
         if (isdigit(*UserName) != 0) {
             *UserId = strtoul(UserName, &AfterScan, 10);
             if (AfterScan == UserName) {
@@ -427,7 +413,7 @@ Return Value:
         }
     }
 
-    if (GroupName != NULL) {
+    if ((GroupName != NULL) && (*GroupName != '\0')) {
         if (isdigit(*GroupName) != 0) {
             *GroupId = strtoul(GroupName, &AfterScan, 10);
             if (AfterScan == GroupName) {
@@ -451,9 +437,6 @@ Return Value:
     Status = 0;
 
 ConvertUserGroupNameEnd:
-    if ((UserName != NULL) && (UserName != Argument)) {
-        free(UserName);
-    }
-
+    free(Copy);
     return Status;
 }
