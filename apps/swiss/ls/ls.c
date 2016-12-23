@@ -779,7 +779,7 @@ Return Value:
 
     DIR *Directory;
     ULONG DirectoryPathLength;
-    struct dirent Entry;
+    struct dirent *Entry;
     ULONG EntryNameLength;
     PLS_FILE File;
     PLS_FILE *FileArray;
@@ -796,7 +796,6 @@ Return Value:
     PLS_FILE *NewFileArray;
     BOOL PrintTotal;
     INT Result;
-    struct dirent *ReturnedPointer;
     struct stat Stat;
     struct stat *StatPointer;
 
@@ -848,13 +847,15 @@ Return Value:
     //
 
     while (TRUE) {
-        Result = SwReadDirectory(Directory, &Entry, &ReturnedPointer);
-        if (Result != 0) {
-            SwPrintError(Result, DirectoryPath, "Unable to read directory");
-            goto ListDirectoryEnd;
-        }
+        errno = 0;
+        Entry = readdir(Directory);
+        if (Entry == NULL) {
+            Result = errno;
+            if (Result != 0) {
+                SwPrintError(Result, DirectoryPath, "Unable to read directory");
+                goto ListDirectoryEnd;
+            }
 
-        if (ReturnedPointer == NULL) {
             break;
         }
 
@@ -862,7 +863,7 @@ Return Value:
         // If the entry begins with a dot, skip it unless otherwise specified.
         //
 
-        if ((Entry.d_name[0] == '.') &&
+        if ((Entry->d_name[0] == '.') &&
             ((Context->Flags & LS_OPTION_LIST_ALL) == 0)) {
 
             continue;
@@ -872,10 +873,10 @@ Return Value:
         // Create the full path to the file so it can be statted.
         //
 
-        EntryNameLength = strlen(Entry.d_name);
+        EntryNameLength = strlen(Entry->d_name);
         Result = SwAppendPath(DirectoryPath,
                               DirectoryPathLength + 1,
-                              Entry.d_name,
+                              Entry->d_name,
                               EntryNameLength + 1,
                               &FullPath,
                               &FullPathSize);
@@ -890,7 +891,7 @@ Return Value:
         if (Result == 0) {
             StatPointer = &Stat;
 
-            assert((FollowLinks != FALSE) || (Stat.st_ino == Entry.d_ino));
+            assert((FollowLinks != FALSE) || (Stat.st_ino == Entry->d_ino));
 
             //
             // Follow the link for the stat information.
@@ -945,7 +946,7 @@ Return Value:
         //
 
         FileArray[FileArraySize] = LsCreateFileInformation(Context,
-                                                           Entry.d_name,
+                                                           Entry->d_name,
                                                            EntryNameLength + 1,
                                                            LinkDestination,
                                                            LinkDestinationSize,
@@ -2129,8 +2130,16 @@ Return Value:
         if (((Context->Flags & LS_OPTION_LONG_FORMAT) != 0) &&
             ((Context->Flags & LS_OPTION_PRINT_USER_GROUP_NUMBERS) == 0)) {
 
-            SwGetUserNameFromId(Stat->st_uid, &(NewFile->OwnerName));
-            SwGetGroupNameFromId(Stat->st_gid, &(NewFile->GroupName));
+            if (SwGetUserNameFromId(Stat->st_uid, &(NewFile->OwnerName)) != 0) {
+
+                assert(NewFile->OwnerName == NULL);
+            }
+
+            if (SwGetGroupNameFromId(Stat->st_gid, &(NewFile->GroupName)) !=
+                0) {
+
+                assert(NewFile->GroupName == NULL);
+            }
         }
 
     } else {

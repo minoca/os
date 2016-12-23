@@ -118,6 +118,11 @@
             "parameter": "Performance Test"
         },
         {
+            "name": "Run Minoca Pkg Test",
+            "type": "runtask",
+            "parameter": "Minoca Pkg Test"
+        },
+        {
             "name": "Run Native Compile (test)",
             "type": "runtask",
             "parameter": "Native Compile"
@@ -244,11 +249,6 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/acpica-unix-20140424"
         },
         {
-            "name": "Make SQLite",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/sqlite-autoconf-3080500"
-        },
-        {
             "name": "Make NCurses",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/ncurses-5.9"
@@ -257,6 +257,11 @@
             "name": "Make readline",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/readline-6.3"
+        },
+        {
+            "name": "Make SQLite",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/sqlite-autoconf-3080500"
         },
         {
             "name": "Make nano",
@@ -302,6 +307,11 @@
             "name": "Make Python",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/Python-2.7.11"
+        },
+        {
+            "name": "Make Python3.5",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/Python-3.5.2"
         },
         {
             "name": "Make openssh",
@@ -500,7 +510,7 @@
         },
         {
             "name": "Make mysql",
-            "type": "execute",
+            "type": "no-op",
             "parameter": "src/os/tasks/build/make.sh third-party/build/mysql-5.7.13"
         },
         {
@@ -642,6 +652,21 @@
             "name": "Make pth",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/pth-2.0.7"
+        },
+        {
+            "name": "Make irssi",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/irssi-0.8.20"
+        },
+        {
+            "name": "Make cpio",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/cpio-2.12"
+        },
+        {
+            "name": "Make mc",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mc-4.8.18"
         },
         {
             "name": "Setup Distribution",

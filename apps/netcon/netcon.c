@@ -532,6 +532,11 @@ Return Value:
         return;
     }
 
+    if (DeviceCount == 0) {
+        printf("No network devices detected.\n");
+        return;
+    }
+
     printf("Minoca Network Configuration:\n\n");
     for (Index = 0; Index < DeviceCount; Index += 1) {
         NetconPrintDeviceInformation(&(DeviceArray[Index]));

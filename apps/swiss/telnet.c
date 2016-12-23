@@ -715,7 +715,7 @@ Return Value:
         switch (Context->State) {
 
         //
-        // If the previous character was a carraige return and this one is
+        // If the previous character was a carriage return and this one is
         // null, ignore it.
         //
 

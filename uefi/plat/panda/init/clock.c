@@ -632,7 +632,13 @@ Return Value:
     UINT32 Mask;
     UINT32 Register;
 
-    Mask = 1 << BitCount;
+    if (BitCount == 32) {
+        Mask = 0;
+
+    } else {
+        Mask = 1 << BitCount;
+    }
+
     Mask -= 1;
     Register = OMAP4_READ32(Address) & ~(Mask << StartBit);
     Register |= Value << StartBit;

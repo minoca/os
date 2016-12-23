@@ -37,6 +37,21 @@ Environment:
 #include "namespce.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro determines whether or not an ACPI object is one of the interger
+// constants.
+//
+
+#define IS_ACPI_CONSTANT(_AcpiObject)  \
+    (((_AcpiObject) == &AcpiZero) ||   \
+     ((_AcpiObject) == &AcpiOne) ||    \
+     ((_AcpiObject) == &AcpiOnes32) || \
+     ((_AcpiObject) == &AcpiOnes64))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -63,6 +78,18 @@ Environment:
 //
 
 #define ACPI_OPERATING_SYSTEM_NAME_OBJECT_NAME_STRING "_OS_"
+
+//
+// Define the name of the Operating System interface method object.
+//
+
+#define ACPI_OSI_METHOD_OBJECT_NAME_STRING "_OSI"
+
+//
+// Define the name of the supported revision integer.
+//
+
+#define ACPI_REV_INTEGER_NAME_STRING "_REV"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -148,6 +175,9 @@ Return Value:
     PACPI_OBJECT GeneralEventObject;
     PACPI_OBJECT OperatingSystem;
     ULONG OperatingSystemStringLength;
+    PACPI_OBJECT OsInterface;
+    PACPI_OBJECT Revision;
+    ULONGLONG RevisionValue;
     KSTATUS Status;
 
     GeneralEventObject = NULL;
@@ -156,6 +186,7 @@ Return Value:
         return STATUS_SUCCESS;
     }
 
+    Status = STATUS_INSUFFICIENT_RESOURCES;
     AcpiNamespaceRoot = AcpipCreateNamespaceObject(NULL,
                                                    AcpiObjectUninitialized,
                                                    NULL,
@@ -163,11 +194,12 @@ Return Value:
                                                    0);
 
     if (AcpiNamespaceRoot == NULL) {
-        return STATUS_UNSUCCESSFUL;
+        goto InitializeNamespaceEnd;
     }
 
     //
-    // Create the objects defined by the ACPI specificiation to exist.
+    // Create the objects defined by the ACPI specificiation to exist. Start
+    // with \_SB.
     //
 
     AcpiSystemBusRoot = AcpipCreateNamespaceObject(
@@ -178,11 +210,15 @@ Return Value:
                                             0);
 
     if (AcpiSystemBusRoot == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
     AcpipObjectReleaseReference(AcpiSystemBusRoot);
+
+    //
+    // Create \_PR.
+    //
+
     AcpiProcessorRoot = AcpipCreateNamespaceObject(
                                              NULL,
                                              AcpiObjectUninitialized,
@@ -191,11 +227,15 @@ Return Value:
                                              0);
 
     if (AcpiProcessorRoot == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
     AcpipObjectReleaseReference(AcpiProcessorRoot);
+
+    //
+    // Create \_GPE.
+    //
+
     GeneralEventObject = AcpipCreateNamespaceObject(
                                  NULL,
                                  AcpiObjectUninitialized,
@@ -204,11 +244,15 @@ Return Value:
                                  0);
 
     if (GeneralEventObject == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
     AcpipObjectReleaseReference(GeneralEventObject);
+
+    //
+    // Create \_OS.
+    //
+
     OperatingSystemStringLength = RtlStringLength(ACPI_OPERATING_SYSTEM_NAME);
     OperatingSystem = AcpipCreateNamespaceObject(
                                  NULL,
@@ -218,11 +262,45 @@ Return Value:
                                  OperatingSystemStringLength + 1);
 
     if (OperatingSystem == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
     AcpipObjectReleaseReference(OperatingSystem);
+
+    //
+    // Create \_OSI.
+    //
+
+    OsInterface = AcpipCreateNamespaceObject(NULL,
+                                             AcpiObjectMethod,
+                                             ACPI_OSI_METHOD_OBJECT_NAME_STRING,
+                                             NULL,
+                                             0);
+
+    if (OsInterface == NULL) {
+        goto InitializeNamespaceEnd;
+    }
+
+    OsInterface->U.Method.Function = AcpipOsiMethod;
+    OsInterface->U.Method.ArgumentCount = 1;
+    AcpipObjectReleaseReference(OsInterface);
+
+    //
+    // Create \_REV.
+    //
+
+    RevisionValue = ACPI_IMPLEMENTED_REVISION;
+    Revision = AcpipCreateNamespaceObject(NULL,
+                                          AcpiObjectInteger,
+                                          ACPI_REV_INTEGER_NAME_STRING,
+                                          &RevisionValue,
+                                          sizeof(RevisionValue));
+
+    if (Revision == NULL) {
+        goto InitializeNamespaceEnd;
+    }
+
+    AcpipObjectReleaseReference(Revision);
     Status = STATUS_SUCCESS;
 
 InitializeNamespaceEnd:
@@ -693,6 +771,9 @@ Return Value:
                     goto CreateNamespaceObjectEnd;
                 }
             }
+
+        } else {
+            RtlZeroMemory(&(NewObject->U.Method), sizeof(ACPI_METHOD_OBJECT));
         }
 
         break;
@@ -1271,17 +1352,36 @@ Return Value:
 {
 
     BOOL NewObjectCreated;
+    PACPI_OBJECT ResolvedDestination;
     ULONG Size;
     KSTATUS Status;
 
     NewObjectCreated = FALSE;
 
     //
-    // Storing to an alias actually writes to its destination.
+    // Resolve to the correct destination.
     //
 
-    while (Destination->Type == AcpiObjectAlias) {
-        Destination = Destination->U.Alias.DestinationObject;
+    ResolvedDestination = NULL;
+    Status = AcpipResolveStoreDestination(Context,
+                                          Destination,
+                                          &ResolvedDestination);
+
+    if (!KSUCCESS(Status)) {
+        goto PerformStoreOperationEnd;
+    }
+
+    Destination = ResolvedDestination;
+
+    //
+    // The ACPI spec states that storing to constants is fatal, but also states
+    // that it is a no-op and not an error. Go with the more lenient option. A
+    // lot of operators use a store to Zero to indicate a no-op.
+    //
+
+    if (IS_ACPI_CONSTANT(Destination) != FALSE) {
+        Status = STATUS_SUCCESS;
+        goto PerformStoreOperationEnd;
     }
 
     //
@@ -1436,11 +1536,22 @@ Return Value:
 
         break;
 
+    case AcpiObjectPackage:
+        if (Source->Type != AcpiObjectPackage) {
+
+            ASSERT(FALSE);
+
+            Status = STATUS_NOT_SUPPORTED;
+            goto PerformStoreOperationEnd;
+        }
+
+        Status = AcpipReplaceObjectContents(Context, Destination, Source);
+        break;
+
     //
     // Some object cannot be "stored" into.
     //
 
-    case AcpiObjectPackage:
     case AcpiObjectDevice:
     case AcpiObjectEvent:
     case AcpiObjectMethod:
@@ -1449,6 +1560,9 @@ Return Value:
     case AcpiObjectPowerResource:
     case AcpiObjectProcessor:
     case AcpiObjectThermalZone:
+
+        ASSERT(FALSE);
+
         Status = STATUS_NOT_SUPPORTED;
         goto PerformStoreOperationEnd;
 
@@ -1473,6 +1587,10 @@ Return Value:
 PerformStoreOperationEnd:
     if (NewObjectCreated != FALSE) {
         AcpipObjectReleaseReference(Source);
+    }
+
+    if (ResolvedDestination != NULL) {
+        AcpipObjectReleaseReference(ResolvedDestination);
     }
 
     return Status;
@@ -1927,7 +2045,8 @@ Return Value:
 PACPI_OBJECT
 AcpipGetPackageObject (
     PACPI_OBJECT Package,
-    ULONG Index
+    ULONG Index,
+    BOOL ConvertConstants
     )
 
 /*++
@@ -1942,6 +2061,10 @@ Arguments:
 
     Index - Supplies the index of the element to get.
 
+    ConvertConstants - Supplies a boolean indicating whether or not constant
+        integers should be converted to non-constant integers before being
+        returned.
+
 Return Value:
 
     Returns a pointer to the element in the package at the given index.
@@ -1954,6 +2077,8 @@ Return Value:
 {
 
     PACPI_OBJECT *Array;
+    PVOID Buffer;
+    PACPI_OBJECT NewObject;
     PACPI_OBJECT ResolvedName;
 
     ASSERT(Package->Type == AcpiObjectPackage);
@@ -1996,6 +2121,30 @@ Return Value:
         }
 
         return ResolvedName;
+
+    //
+    // If constant conversion is requested, convert Zero, One, and Ones into
+    // private integers and set it in the package.
+    //
+
+    } else if ((ConvertConstants != FALSE) &&
+               (Array[Index]->Type == AcpiObjectInteger)) {
+
+        if (IS_ACPI_CONSTANT(Array[Index]) != FALSE) {
+            Buffer = &(Array[Index]->U.Integer.Value),
+            NewObject = AcpipCreateNamespaceObject(NULL,
+                                                   AcpiObjectInteger,
+                                                   NULL,
+                                                   Buffer,
+                                                   sizeof(ULONGLONG));
+
+            if (NewObject == NULL) {
+                return NULL;
+            }
+
+            AcpipSetPackageObject(Package, Index, NewObject);
+            AcpipObjectReleaseReference(NewObject);
+        }
     }
 
     return Array[Index];
@@ -2229,8 +2378,13 @@ Return Value:
 
             break;
 
-        case AcpiObjectUninitialized:
         case AcpiObjectInteger:
+
+            ASSERT(IS_ACPI_CONSTANT(Object) == FALSE);
+
+            break;
+
+        case AcpiObjectUninitialized:
         case AcpiObjectDevice:
         case AcpiObjectPowerResource:
         case AcpiObjectProcessor:

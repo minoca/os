@@ -1117,6 +1117,7 @@ Return Value:
 VOID
 ImpElf32RelocateSelf (
     PIMAGE_BUFFER Buffer,
+    PIM_RESOLVE_PLT_ENTRY PltResolver,
     PLOADED_IMAGE Image
     );
 
@@ -1129,6 +1130,9 @@ Routine Description:
 Arguments:
 
     Buffer - Supplies a pointer to the image buffer.
+
+    PltResolver - Supplies a pointer to the function used to resolve PLT
+        entries.
 
     Image - Supplies a pointer to the zeroed but otherwise uninitialized
         image buffer.
@@ -1506,6 +1510,7 @@ Return Value:
 VOID
 ImpElf64RelocateSelf (
     PIMAGE_BUFFER Buffer,
+    PIM_RESOLVE_PLT_ENTRY PltResolver,
     PLOADED_IMAGE Image
     );
 
@@ -1518,6 +1523,9 @@ Routine Description:
 Arguments:
 
     Buffer - Supplies a pointer to the image buffer.
+
+    PltResolver - Supplies a pointer to the function used to resolve PLT
+        entries.
 
     Image - Supplies a pointer to the zeroed but otherwise uninitialized
         image buffer.

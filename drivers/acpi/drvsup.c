@@ -1935,7 +1935,7 @@ Return Value:
     //
 
     for (EntryIndex = 0; EntryIndex < EntryCount; EntryIndex += 1) {
-        EntryPackage = AcpipGetPackageObject(PrtPackage, EntryIndex);
+        EntryPackage = AcpipGetPackageObject(PrtPackage, EntryIndex, FALSE);
         if ((EntryPackage == NULL) ||
             (EntryPackage->Type != AcpiObjectPackage) ||
             (EntryPackage->U.Package.ElementCount != 4)) {
@@ -1948,7 +1948,7 @@ Return Value:
         // Get the slot number.
         //
 
-        Slot = AcpipGetPackageObject(EntryPackage, 0);
+        Slot = AcpipGetPackageObject(EntryPackage, 0, FALSE);
         if ((Slot == NULL) || (Slot->Type != AcpiObjectInteger)) {
             Status = STATUS_INVALID_PARAMETER;
             goto CreatePciRoutingTableEnd;
@@ -1961,7 +1961,7 @@ Return Value:
         // Get the line number.
         //
 
-        Line = AcpipGetPackageObject(EntryPackage, 1);
+        Line = AcpipGetPackageObject(EntryPackage, 1, FALSE);
         if ((Line == NULL) ||
             (Line->Type != AcpiObjectInteger) ||
             (Line->U.Integer.Value > 4)) {
@@ -1978,7 +1978,7 @@ Return Value:
         // (which should be zero).
         //
 
-        Source = AcpipGetPackageObject(EntryPackage, 2);
+        Source = AcpipGetPackageObject(EntryPackage, 2, FALSE);
         if ((Source == NULL) ||
             ((Source->Type != AcpiObjectInteger) &&
              (Source->Type != AcpiObjectDevice))) {
@@ -1991,7 +1991,7 @@ Return Value:
         // Get the source index before storing the source value.
         //
 
-        SourceIndex = AcpipGetPackageObject(EntryPackage, 3);
+        SourceIndex = AcpipGetPackageObject(EntryPackage, 3, FALSE);
         if ((SourceIndex == NULL) || (SourceIndex->Type != AcpiObjectInteger)) {
             Status = STATUS_INVALID_PARAMETER;
             goto CreatePciRoutingTableEnd;
@@ -2583,7 +2583,7 @@ Return Value:
 
 {
 
-    PSTR ClassId;
+    PCSTR ClassId;
     BOOL Match;
 
     ClassId = IoGetDeviceClassId(Device);

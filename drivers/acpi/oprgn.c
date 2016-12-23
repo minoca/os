@@ -848,6 +848,9 @@ Return Value:
         SourceBufferSize = ValueToWrite->U.Buffer.Length;
 
     } else {
+
+        ASSERT(FALSE);
+
         Status = STATUS_NOT_SUPPORTED;
         goto WriteToFieldEnd;
     }

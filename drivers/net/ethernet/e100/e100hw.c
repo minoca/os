@@ -46,12 +46,29 @@ Environment:
 #define E100_MAX_TRANSMIT_PACKET_LIST_COUNT (E100_COMMAND_RING_COUNT * 2)
 
 //
+// Define a software only pending bit to indicate that the link status needs to
+// be checked.
+//
+
+#define E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS (1 << 31)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+E100pLinkCheckDpc (
+    PDPC Dpc
+    );
+
+KSTATUS
+E100pCheckLink (
+    PE100_DEVICE Device
+    );
 
 KSTATUS
 E100pReadDeviceMacAddress (
@@ -346,6 +363,7 @@ Return Value:
     Device->Command = Device->CommandIoBuffer->Fragment[0].VirtualAddress;
     Device->CommandLastReaped = E100_COMMAND_RING_COUNT - 1;
     Device->CommandNextToUse = 1;
+    Device->CommandFreeCount = E100_COMMAND_RING_COUNT - 2;
     RtlZeroMemory(Device->Command, CommandSize);
     NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
 
@@ -369,6 +387,24 @@ Return Value:
 
     Device->LinkCheckTimer = KeCreateTimer(E100_ALLOCATION_TAG);
     if (Device->LinkCheckTimer == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->WorkItem = KeCreateWorkItem(
+                               NULL,
+                               WorkPriorityNormal,
+                               (PWORK_ITEM_ROUTINE)E100pInterruptServiceWorker,
+                               Device,
+                               E100_ALLOCATION_TAG);
+
+    if (Device->WorkItem == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->LinkCheckDpc = KeCreateDpc(E100pLinkCheckDpc, Device);
+    if (Device->LinkCheckDpc == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
@@ -473,6 +509,16 @@ InitializeDeviceStructuresEnd:
             KeDestroyTimer(Device->LinkCheckTimer);
             Device->LinkCheckTimer = NULL;
         }
+
+        if (Device->WorkItem != NULL) {
+            KeDestroyWorkItem(Device->WorkItem);
+            Device->WorkItem = NULL;
+        }
+
+        if (Device->LinkCheckDpc != NULL) {
+            KeDestroyDpc(Device->LinkCheckDpc);
+            Device->LinkCheckDpc = NULL;
+        }
     }
 
     return Status;
@@ -503,8 +549,8 @@ Return Value:
 
     PE100_COMMAND Command;
     ULONG CommandIndex;
-    UCHAR GeneralStatus;
-    ULONGLONG LinkSpeed;
+    ULONGLONG Frequency;
+    ULONGLONG Interval;
     PE100_COMMAND PreviousCommand;
     ULONG PreviousCommandIndex;
     KSTATUS Status;
@@ -563,6 +609,7 @@ Return Value:
                         E100_COMMAND_BLOCK_COMMAND_SHIFT);
 
     PreviousCommand->Command &= ~E100_COMMAND_SUSPEND;
+    Device->CommandFreeCount -= 1;
 
     //
     // Set the command unit base and start the command unit.
@@ -644,25 +691,23 @@ Return Value:
     }
 
     //
-    // Figure out if the link is up, and report on it if so.
-    // TODO: The link state should be checked periodically, rather than just
-    // once at the beginning.
+    // Check to see if the link is up.
     //
 
-    GeneralStatus = E100_READ_REGISTER8(Device, E100RegisterGeneralStatus);
-    if ((GeneralStatus & E100_CONTROL_STATUS_LINK_UP) != 0) {
-        LinkSpeed = NET_SPEED_10_MBPS;
-        if ((GeneralStatus & E100_CONTROL_STATUS_100_MBPS) != 0) {
-            LinkSpeed = NET_SPEED_100_MBPS;
-        }
+    E100pCheckLink(Device);
 
-        Device->LinkActive = TRUE;
-        NetSetLinkState(Device->NetworkLink, TRUE, LinkSpeed);
+    //
+    // Fire up the link check timer.
+    //
 
-    } else {
-        Device->LinkActive = FALSE;
-        NetSetLinkState(Device->NetworkLink, FALSE, 0);
-    }
+    Frequency = HlQueryTimeCounterFrequency();
+    Interval = Frequency * E100_LINK_CHECK_INTERVAL;
+    KeQueueTimer(Device->LinkCheckTimer,
+                 TimerQueueSoft,
+                 0,
+                 Interval,
+                 0,
+                 Device->LinkCheckDpc);
 
     Status = STATUS_SUCCESS;
 
@@ -793,12 +838,120 @@ Return Value:
         E100pReapCompletedCommands(Device);
     }
 
+    //
+    // If the software-only link status bit is set, the link check timer went
+    // off.
+    //
+
+    if ((PendingBits & E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS) != 0) {
+        E100pCheckLink(Device);
+    }
+
     return InterruptStatusClaimed;
 }
 
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+E100pLinkCheckDpc (
+    PDPC Dpc
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the e100 DPC that is queued when a link check
+    timer expires.
+
+Arguments:
+
+    Dpc - Supplies a pointer to the DPC that is running.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PE100_DEVICE Device;
+    ULONG OldPendingBits;
+    KSTATUS Status;
+
+    Device = (PE100_DEVICE)(Dpc->UserData);
+    OldPendingBits = RtlAtomicOr32(&(Device->PendingStatusBits),
+                                   E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS);
+
+    if ((OldPendingBits & E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS) == 0) {
+        Status = KeQueueWorkItem(Device->WorkItem);
+        if (!KSUCCESS(Status)) {
+            RtlAtomicAnd32(&(Device->PendingStatusBits),
+                           ~E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS);
+        }
+    }
+
+    return;
+}
+
+KSTATUS
+E100pCheckLink (
+    PE100_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine checks whether or not an e100 device's media is still attached.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UCHAR GeneralStatus;
+    BOOL LinkActive;
+    ULONGLONG LinkSpeed;
+
+    GeneralStatus = E100_READ_REGISTER8(Device, E100RegisterGeneralStatus);
+    if ((GeneralStatus & E100_CONTROL_STATUS_LINK_UP) != 0) {
+        LinkSpeed = NET_SPEED_10_MBPS;
+        if ((GeneralStatus & E100_CONTROL_STATUS_100_MBPS) != 0) {
+            LinkSpeed = NET_SPEED_100_MBPS;
+        }
+
+        LinkActive = TRUE;
+
+    } else {
+        LinkSpeed = NET_SPEED_NONE;
+        LinkActive = FALSE;
+    }
+
+    //
+    // If the link state's do not match, make some changes.
+    //
+
+    if ((Device->LinkActive != LinkActive) ||
+        (Device->LinkSpeed != LinkSpeed)) {
+
+        Device->LinkActive = LinkActive;
+        Device->LinkSpeed = LinkSpeed;
+        NetSetLinkState(Device->NetworkLink, LinkActive, LinkSpeed);
+    }
+
+    return STATUS_SUCCESS;
+}
 
 KSTATUS
 E100pReadDeviceMacAddress (
@@ -1237,6 +1390,7 @@ Return Value:
         //
 
         Device->CommandLastReaped = CommandIndex;
+        Device->CommandFreeCount += 1;
         CommandReaped = TRUE;
     }
 
@@ -1401,7 +1555,6 @@ Return Value:
     ULONG CommandIndex;
     PNET_PACKET_BUFFER Packet;
     ULONG PreviousCommandIndex;
-    ULONG Status;
     BOOL WakeDevice;
 
     //
@@ -1423,6 +1576,7 @@ Return Value:
 
         CommandIndex = Device->CommandNextToUse;
         Command = &(Device->Command[CommandIndex]);
+        Device->CommandFreeCount -= 1;
 
         //
         // The command better be reaped and not in use.
@@ -1440,6 +1594,21 @@ Return Value:
                             E100_COMMAND_BLOCK_COMMAND_SHIFT) |
                            E100_COMMAND_SUSPEND |
                            E100_COMMAND_TRANSMIT_FLEXIBLE_MODE;
+
+        //
+        // If one less than half (15) commands are now free, this command is
+        // the 16th command submitted to the hardware. Force an interrupt. This
+        // will give better throughput in cases where the ring fills up as more
+        // commands can be added after half of the ring is processed. It is
+        // also necessary on QEMU, because QEMU stops processing commands after
+        // completing 16 commands in a row (and it doesn't signal inactivity!).
+        // This command may become the 16th command in a row and would need an
+        // interrupt in order to be reaped.
+        //
+
+        if (Device->CommandFreeCount == ((E100_COMMAND_RING_COUNT >> 1) - 1)) {
+            Command->Command |= E100_COMMAND_INTERRUPT;
+        }
 
         //
         // Calculate the physical address of the transmit buffer descriptor
@@ -1505,16 +1674,15 @@ Return Value:
     }
 
     //
-    // If the device is suspended at this point (after adding all these great
-    // commands), wake it up.
+    // Rather than checking to see if the device is suspended, just force a
+    // resume. QEMU has a bug where it quits processing commands after
+    // encountering 16 in a row, but fails to put the transmit command unit
+    // into the suspended state. It is left active, despite being very much
+    // inactive. Forcing a resume works around the bug.
     //
 
     if (WakeDevice != FALSE) {
-        Status = E100_READ_STATUS_REGISTER(Device);
-        Status &= E100_STATUS_COMMAND_UNIT_STATUS_MASK;
-        if (Status == E100_STATUS_COMMAND_UNIT_SUSPENDED) {
-            E100_WRITE_COMMAND_REGISTER(Device, E100_COMMAND_UNIT_RESUME);
-        }
+        E100_WRITE_COMMAND_REGISTER(Device, E100_COMMAND_UNIT_RESUME);
     }
 
     return;

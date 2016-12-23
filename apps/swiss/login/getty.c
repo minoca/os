@@ -90,7 +90,7 @@ Environment:
     "  -n, --skip-login -- Don't prompt for a login name.\n"                   \
     "  -t, --timeout=timeout -- Terminate if no user name could be read in \n" \
     "      the given number of seconds.\n"                                     \
-    "  -w, --wait-cr -- Wait for the terminal to send a carraige-return or \n" \
+    "  -w, --wait-cr -- Wait for the terminal to send a carriage-return or \n" \
     "      line feed character before sending the issue file and login \n"     \
     "      prompt.\n"                                                          \
     "  --noclear -- Don't clear the screen.\n"                                 \
@@ -138,7 +138,7 @@ Environment:
 #define GETTY_OPTION_NO_LOGIN_NAME 0x00000004
 
 //
-// Set this option to wait for a carraige return before spitting out the issue
+// Set this option to wait for a carriage return before spitting out the issue
 // file and prompt.
 //
 
@@ -768,7 +768,7 @@ Return Value:
     } else {
 
         //
-        // Guess that the terminal hands back carraige returns.
+        // Guess that the terminal hands back carriage returns.
         //
 
         TerminalSettings.c_iflag |= ICRNL;

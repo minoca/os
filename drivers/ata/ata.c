@@ -32,6 +32,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/intrface/disk.h>
 #include <minoca/intrface/pci.h>
+#include <minoca/storage/ata.h>
 #include "ata.h"
 
 //
@@ -2162,7 +2163,7 @@ Return Value:
     Device->DmaSupported = FALSE;
     Status = AtapPioCommand(Device,
                             AtaCommandIdentify,
-                            FALSE,
+                            TRUE,
                             FALSE,
                             0,
                             0,
@@ -2209,9 +2210,7 @@ Return Value:
     // Determine whether or not to do DMA to this device.
     //
 
-    if ((Device->Channel->BusMasterBase != (USHORT)-1) &&
-        (Identify.UltraDmaSettings != 0)) {
-
+    if (Device->Channel->BusMasterBase != (USHORT)-1) {
         Device->DmaSupported = TRUE;
     }
 
@@ -2934,6 +2933,7 @@ Return Value:
                                 CriticalMode);
 
         if (!KSUCCESS(Status)) {
+            RtlDebugPrint("ATA: Failed IO: %x\n", Status);
             goto ReadWriteSectorsPioEnd;
         }
 
@@ -2987,7 +2987,7 @@ Arguments:
         The IDENTIFY and PACKET IDENTIFY commands have a known sector count of
         one, zero should be passed in for those.
 
-    MultiCount - Supplies the value of the multicount register.
+    MultiCount - Supplies the actual number of sectors.
 
     CriticalMode - Supplies a boolean indicating if this I/O operation is in
         a critical code path (TRUE), such as a crash dump I/O request, or in
@@ -3320,6 +3320,12 @@ Return Value:
     if (Channel->SelectedDevice == Device->Slave) {
         return STATUS_SUCCESS;
     }
+
+    //
+    // Clear the selected device in case this selection fails.
+    //
+
+    Channel->SelectedDevice = 0xFF;
 
     //
     // Get the appropriate time counter routine. The recent time counter

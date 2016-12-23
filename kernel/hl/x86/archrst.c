@@ -112,9 +112,9 @@ Return Value:
 
             ResetRegisterSupported = TRUE;
 
-        } else if ((Fadt->Header.Revision == 1) &&
-                   (Fadt->Header.Length > FIELD_OFFSET(FADT, ResetValue)) &&
-                   (Fadt->ResetValue != 0)) {
+        } else if ((Fadt->Header.Length > FIELD_OFFSET(FADT, ResetValue)) &&
+                   (Fadt->ResetValue != 0) &&
+                   (Fadt->ResetRegister.Address != 0)) {
 
             ResetRegisterSupported = TRUE;
         }

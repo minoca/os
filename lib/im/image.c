@@ -125,6 +125,7 @@ ImpGetSymbolByAddress (
 VOID
 ImpRelocateSelf (
     PIMAGE_BUFFER Buffer,
+    PIM_RESOLVE_PLT_ENTRY PltResolver,
     PLOADED_IMAGE Image
     );
 
@@ -963,7 +964,8 @@ Return Value:
 
 VOID
 ImRelocateSelf (
-    PVOID Base
+    PVOID Base,
+    PIM_RESOLVE_PLT_ENTRY PltResolver
     )
 
 /*++
@@ -975,6 +977,9 @@ Routine Description:
 Arguments:
 
     Base - Supplies a pointer to the base of the loaded image.
+
+    PltResolver - Supplies a pointer to the function used to resolve PLT
+        entries.
 
 Return Value:
 
@@ -992,7 +997,7 @@ Return Value:
     Buffer.Size = -1;
     RtlZeroMemory(&FakeImage, sizeof(LOADED_IMAGE));
     FakeImage.Format = ImGetImageFormat(&Buffer);
-    ImpRelocateSelf(&Buffer, &FakeImage);
+    ImpRelocateSelf(&Buffer, PltResolver, &FakeImage);
     return;
 }
 
@@ -2061,6 +2066,7 @@ Return Value:
 VOID
 ImpRelocateSelf (
     PIMAGE_BUFFER Buffer,
+    PIM_RESOLVE_PLT_ENTRY PltResolver,
     PLOADED_IMAGE Image
     )
 
@@ -2075,6 +2081,9 @@ Arguments:
     Buffer - Supplies a pointer to an initialized buffer pointing at the base
         of the loaded image.
 
+    PltResolver - Supplies a pointer to the function used to resolve PLT
+        entries.
+
     Image - Supplies a pointer to a zeroed out image structure. The image
         format should be initialized. This can be stack allocated.
 
@@ -2088,7 +2097,7 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        ImpElf32RelocateSelf(Buffer, Image);
+        ImpElf32RelocateSelf(Buffer, PltResolver, Image);
         break;
 
     default:

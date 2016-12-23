@@ -765,10 +765,6 @@ Return Value:
                          &BytesCompleted);
 
     if (Status == STATUS_TIMEOUT) {
-        if (BytesCompleted != 0) {
-            return (ssize_t)BytesCompleted;
-        }
-
         errno = EAGAIN;
         return -1;
 
@@ -845,10 +841,6 @@ Return Value:
                          &BytesCompleted);
 
     if (Status == STATUS_TIMEOUT) {
-        if (BytesCompleted != 0) {
-            return (ssize_t)BytesCompleted;
-        }
-
         errno = EAGAIN;
         return -1;
 
@@ -1035,10 +1027,6 @@ Return Value:
                          &BytesCompleted);
 
     if (Status == STATUS_TIMEOUT) {
-        if (BytesCompleted != 0) {
-            return (ssize_t)BytesCompleted;
-        }
-
         errno = EAGAIN;
         return -1;
 
@@ -1113,10 +1101,6 @@ Return Value:
                          &BytesCompleted);
 
     if (Status == STATUS_TIMEOUT) {
-        if (BytesCompleted != 0) {
-            return (ssize_t)BytesCompleted;
-        }
-
         errno = EAGAIN;
         return -1;
 
@@ -2924,6 +2908,11 @@ Return Value:
     INT Result;
     KSTATUS Status;
     ULONG TimeoutInMilliseconds;
+
+    if (DescriptorCount < 0) {
+        errno = EINVAL;
+        return -1;
+    }
 
     Result = ClpConvertSpecificTimeoutToSystemTimeout(Timeout,
                                                       &TimeoutInMilliseconds);

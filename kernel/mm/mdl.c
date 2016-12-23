@@ -72,7 +72,7 @@ MmpMdAddFreeDescriptor (
     PMEMORY_DESCRIPTOR Descriptor
     );
 
-PSTR
+PCSTR
 MmpMdPrintMemoryType (
     MEMORY_TYPE MemoryType
     );
@@ -1667,7 +1667,7 @@ Return Value:
     return;
 }
 
-PSTR
+PCSTR
 MmpMdPrintMemoryType (
     MEMORY_TYPE MemoryType
     )

@@ -565,7 +565,8 @@ mbstowcs (
 Routine Description:
 
     This routine converts a null-terminated sequence of multi-byte characters
-    beginning in the inital shift state to a string of wide characters.
+    beginning in the inital shift state to a string of wide characters, up to
+    and including a null terminator.
 
 Arguments:
 
@@ -581,7 +582,7 @@ Arguments:
 Return Value:
 
     Returns the number of wide character array elements modified (or required
-    if the wide string is NULL).
+    if the wide string is NULL), not including the terminating NULL.
 
     -1 if an invalid character is encountered. The errno variable may be set
     to provide more information.
@@ -610,7 +611,8 @@ mbsrtowcs (
 Routine Description:
 
     This routine converts a null-terminated sequence of multi-byte characters
-    at the given shift state to a string of wide characters.
+    beginning in the inital shift state to a string of wide characters, up to
+    and including a null terminator.
 
 Arguments:
 
@@ -624,7 +626,7 @@ Arguments:
         conversion stopped because it would exceed the wide string size, then
         the value returned here will be a pointer to the character one after
         the last character successfully converted. If the wide string is NULL,
-        the pointer will remained unchanged on ouput.
+        the pointer will remained unchanged on output.
 
     DestinationSize - Supplies the maximum number of elements to place in the
         wide string.
@@ -637,7 +639,7 @@ Arguments:
 Return Value:
 
     Returns the number of wide character array elements modified (or required
-    if the wide string is NULL).
+    if the wide string is NULL), not including the terminating NULL.
 
     -1 if an invalid character is encountered. The errno variable may be set
     to provide more information.
@@ -659,14 +661,14 @@ Return Value:
             return -1;
         }
 
-        if (Result == 0) {
-            break;
-        }
-
         if (Destination != NULL) {
             *Destination = WideCharacter;
             Destination += 1;
             DestinationSize -= 1;
+        }
+
+        if (Result == 0) {
+            break;
         }
 
         if (WideCharacter == L'\0') {

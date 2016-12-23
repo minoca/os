@@ -214,6 +214,13 @@ Author:
 #define FILE_OBJECT_FLAG_DIRTY_DATA 0x00000040
 
 //
+// This flag indicates that a hard flush must be preformed before the file
+// object's contents are preserved on a backing store.
+//
+
+#define FILE_OBJECT_FLAG_HARD_FLUSH_REQUIRED 0x00000080
+
+//
 // The resource allocation work is currently assigned to the system work queue.
 //
 
@@ -872,7 +879,7 @@ typedef struct _DEVICE_PROBLEM_STATE {
     KSTATUS Status;
     ULONG DriverCode;
     ULONG Line;
-    PSTR File;
+    PCSTR File;
     PDRIVER Driver;
 } DEVICE_PROBLEM_STATE, *PDEVICE_PROBLEM_STATE;
 
@@ -1079,6 +1086,33 @@ Return Value:
 
 --*/
 
+/*++
+
+Structure Description:
+
+    This structure defines the parameters associated with a creation request.
+
+Members:
+
+    Type - Stores the type of object to create.
+
+    Context - Stores a pointer that contains additional context specific to a
+        given device type.
+
+    Permissions - Stores the creation permissions to assign.
+
+    Created - Stores a boolean that will get set to TRUE if the file was
+        created.
+
+--*/
+
+typedef struct _CREATE_PARAMETERS {
+    IO_OBJECT_TYPE Type;
+    PVOID Context;
+    FILE_PERMISSIONS Permissions;
+    BOOL Created;
+} CREATE_PARAMETERS, *PCREATE_PARAMETERS;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1226,9 +1260,9 @@ IopCreateDevice (
     PDRIVER BusDriver,
     PVOID BusDriverContext,
     PDEVICE ParentDevice,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     OBJECT_TYPE DeviceType,
     ULONG DeviceSize,
     PDEVICE *NewDevice
@@ -1372,7 +1406,7 @@ IopSetDeviceProblemEx (
     KSTATUS Status,
     PDRIVER Driver,
     ULONG DriverCode,
-    PSTR SourceFile,
+    PCSTR SourceFile,
     ULONG LineNumber
     );
 
@@ -1805,9 +1839,7 @@ IopOpen (
     ULONG PathLength,
     ULONG Access,
     ULONG Flags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PIO_HANDLE *Handle
     );
 
@@ -1837,14 +1869,8 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    TypeOverride - Supplies an object type that the regular file should be
-        converted to. Supply the invalid object type to specify no override.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to apply for created object
-        on create operations.
+    Create - Supplies an optional pointer to the creation information. If the
+        OPEN_FLAG_CREATE is supplied in the flags, then this field is required.
 
     Handle - Supplies a pointer where a pointer to the open I/O handle will be
         returned on success.
@@ -1928,9 +1954,7 @@ KSTATUS
 IopCreateSpecialIoObject (
     BOOL FromKernelMode,
     ULONG Flags,
-    IO_OBJECT_TYPE Type,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -1945,15 +1969,10 @@ Arguments:
     FromKernelMode - Supplies a boolean indicating whether or not the request
         originated from kernel mode (TRUE) or user mode (FALSE).
 
-    Type - Supplies the type of special object to create.
-
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to the new file.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to the new file object
         will be returned on success.
@@ -3072,7 +3091,7 @@ KSTATUS
 IopCreatePipe (
     PCSTR Name,
     ULONG NameSize,
-    FILE_PERMISSIONS Permissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -3090,7 +3109,7 @@ Arguments:
     NameSize - Supplies the size of the name in bytes including the null
         terminator.
 
-    Permissions - Supplies the permissions to give to the file object.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to a newly created pipe
         file object will be returned on success.
@@ -3354,9 +3373,7 @@ Return Value:
 
 KSTATUS
 IopCreateTerminal (
-    IO_OBJECT_TYPE Type,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -3368,12 +3385,7 @@ Routine Description:
 
 Arguments:
 
-    Type - Supplies the type of special object to create.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to the new file.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to the new file object
         will be returned on success.
@@ -3473,8 +3485,7 @@ Return Value:
 
 KSTATUS
 IopCreateSocket (
-    PVOID Parameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -3486,9 +3497,7 @@ Routine Description:
 
 Arguments:
 
-    Parameter - Supplies the parameters the socket was created with.
-
-    CreatePermissions - Supplies the permissions to create the file with.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where the new file object representing the
         socket will be returned on success.
@@ -3589,73 +3598,6 @@ Return Value:
 
 --*/
 
-KSTATUS
-IopOpenSharedMemoryObject (
-    PSTR Path,
-    ULONG PathLength,
-    ULONG Access,
-    ULONG Flags,
-    FILE_PERMISSIONS CreatePermissions,
-    PIO_HANDLE *Handle
-    );
-
-/*++
-
-Routine Description:
-
-    This routine opens a shared memory objeect.
-
-Arguments:
-
-    Path - Supplies a pointer to the path to open.
-
-    PathLength - Supplies the length of the path buffer in bytes, including the
-        null terminator.
-
-    Access - Supplies the desired access permissions to the object. See
-        IO_ACCESS_* definitions.
-
-    Flags - Supplies a bitfield of flags governing the behavior of the handle.
-        See OPEN_FLAG_* definitions.
-
-    CreatePermissions - Supplies the permissions to apply for a created file.
-
-    Handle - Supplies a pointer where a pointer to the open I/O handle will be
-        returned on success.
-
-Return Value:
-
-    Status code.
-
---*/
-
-KSTATUS
-IopDeleteSharedMemoryObject (
-    PSTR Path,
-    ULONG PathLength
-    );
-
-/*++
-
-Routine Description:
-
-    This routine deletes a shared memory object. It does not handle deletion of
-    unnamed anonymous shared memory objects.
-
-Arguments:
-
-    Path - Supplies a pointer to the path of the shared memory object within
-        the shared memory object namespace.
-
-    PathLength - Supplies the length of the path, in bytes, including the null
-        terminator.
-
-Return Value:
-
-    Status code.
-
---*/
-
 PPATH_POINT
 IopGetSharedMemoryDirectory (
     BOOL FromKernelMode
@@ -3686,7 +3628,7 @@ IopCreateSharedMemoryObject (
     PCSTR Name,
     ULONG NameSize,
     ULONG Flags,
-    FILE_PERMISSIONS Permissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     );
 
@@ -3711,7 +3653,7 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    Permissions - Supplies the permissions to give to the file object.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to a newly created pipe
         file object will be returned on success.
@@ -3831,9 +3773,7 @@ IopPathWalk (
     PCSTR *Path,
     PULONG PathSize,
     ULONG OpenFlags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PPATH_POINT Result
     );
 
@@ -3863,15 +3803,7 @@ Arguments:
     OpenFlags - Supplies a bitfield of flags governing the behavior of the
         handle. See OPEN_FLAG_* definitions.
 
-    TypeOverride - Supplies the type of object to create. If this is invalid,
-        then this routine will try to open an existing object. If this type is
-        valid, then this routine will attempt to create an object of the given
-        type.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to a created file.
+    Create - Supplies an optional pointer to the creation parameters.
 
     Result - Supplies a pointer to a path point that receives the resulting
         path entry and mount point on success. The path entry and mount point
@@ -4171,9 +4103,7 @@ IopPathLookup (
     PCSTR Name,
     ULONG NameSize,
     ULONG OpenFlags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PPATH_POINT Result
     );
 
@@ -4204,80 +4134,12 @@ Arguments:
     OpenFlags - Supplies a bitfield of flags governing the behavior of the
         handle. See OPEN_FLAG_* definitions.
 
-    TypeOverride - Supplies the type of object to create. If this is invalid,
-        then this routine will try to open an existing object. If this type is
-        valid, then this routine will attempt to create an object of the given
-        type.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to a created file.
+    Create - Supplies an optional pointer to the creation parameters.
 
     Result - Supplies a pointer to a path point that receives the resulting
         path entry and mount point on success. The path entry and mount point
         will come with an extra reference on them, so the caller must be sure
         to release the references when finished. This routine may return a
-        path entry even on failing status codes, such as a negative path entry.
-
-Return Value:
-
-    Status code.
-
---*/
-
-KSTATUS
-IopPathLookupUnlocked (
-    PPATH_POINT Root,
-    PPATH_POINT Directory,
-    BOOL DirectoryLockHeld,
-    PSTR Name,
-    ULONG NameSize,
-    ULONG OpenFlags,
-    IO_OBJECT_TYPE TypeOverride,
-    PVOID OverrideParameter,
-    FILE_PERMISSIONS CreatePermissions,
-    PPATH_POINT Result
-    );
-
-/*++
-
-Routine Description:
-
-    This routine attempts to look up a child with the given name in a directory
-    without acquiring the mount lock in shared mode.
-
-Arguments:
-
-    Root - Supplies a pointer to the caller's root path point.
-
-    Directory - Supplies a pointer to the path point to search.
-
-    DirectoryLockHeld - Supplies a boolean indicating whether or not the caller
-        had already acquired the directory's lock (exclusively).
-
-    Name - Supplies a pointer to the name string.
-
-    NameSize - Supplies a pointer to the size of the string in bytes
-        including an assumed null terminator.
-
-    OpenFlags - Supplies a bitfield of flags governing the behavior of the
-        handle. See OPEN_FLAG_* definitions.
-
-    TypeOverride - Supplies the type of object to create. If this is invalid,
-        then this routine will try to open an existing object. If this type is
-        valid, then this routine will attempt to create an object of the given
-        type.
-
-    OverrideParameter - Supplies an optional parameter to send along with the
-        override type.
-
-    CreatePermissions - Supplies the permissions to assign to a created file.
-
-    Result - Supplies a pointer to a path point that receives the resulting
-        path entry and mount point on success. The path entry and mount point
-        will come with an extra reference on them, so the caller must be sure
-        to release this references when finished. This routine may return a
         path entry even on failing status codes, such as a negative path entry.
 
 Return Value:

@@ -54,7 +54,7 @@ KSTATUS
 IopConvertInterruptedSocketStatus (
     PIO_HANDLE Handle,
     UINTN BytesComplete,
-    BOOL Send
+    BOOL Output
     );
 
 //
@@ -283,6 +283,7 @@ Return Value:
 
 {
 
+    CREATE_PARAMETERS Create;
     SOCKET_CREATION_PARAMETERS Parameters;
     PSOCKET Socket;
     KSTATUS Status;
@@ -291,15 +292,17 @@ Return Value:
     Parameters.Type = Type;
     Parameters.Protocol = Protocol;
     Parameters.ExistingSocket = NULL;
+    Create.Type = IoObjectSocket;
+    Create.Context = &Parameters;
+    Create.Permissions = FILE_PERMISSION_ALL;
+    Create.Created = FALSE;
     Status = IopOpen(FALSE,
                      NULL,
                      NULL,
                      0,
                      IO_ACCESS_READ | IO_ACCESS_WRITE,
                      OpenFlags | OPEN_FLAG_CREATE,
-                     IoObjectSocket,
-                     &Parameters,
-                     FILE_PERMISSION_ALL,
+                     &Create,
                      IoHandle);
 
     if (KSUCCESS(Status)) {
@@ -322,7 +325,7 @@ IoSocketBindToAddress (
     PIO_HANDLE Handle,
     PVOID Link,
     PNETWORK_ADDRESS Address,
-    PSTR Path,
+    PCSTR Path,
     UINTN PathSize
     )
 
@@ -455,7 +458,7 @@ IoSocketAccept (
     PIO_HANDLE Handle,
     PIO_HANDLE *NewConnectionSocket,
     PNETWORK_ADDRESS RemoteAddress,
-    PSTR *RemotePath,
+    PCSTR *RemotePath,
     PUINTN RemotePathSize
     )
 
@@ -531,7 +534,7 @@ IoSocketConnect (
     BOOL FromKernelMode,
     PIO_HANDLE Handle,
     PNETWORK_ADDRESS Address,
-    PSTR RemotePath,
+    PCSTR RemotePath,
     UINTN RemotePathSize
     )
 
@@ -664,6 +667,12 @@ Return Value:
         }
     }
 
+    if (((Parameters->SocketIoFlags & SOCKET_IO_NON_BLOCKING) != 0) &&
+        (Status == STATUS_TIMEOUT)) {
+
+        Status = STATUS_OPERATION_WOULD_BLOCK;
+    }
+
 SocketSendData:
     return Status;
 }
@@ -740,6 +749,12 @@ Return Value:
                                             Parameters,
                                             IoBuffer);
         }
+    }
+
+    if (((Parameters->SocketIoFlags & SOCKET_IO_NON_BLOCKING) != 0) &&
+        (Status == STATUS_TIMEOUT)) {
+
+        Status = STATUS_OPERATION_WOULD_BLOCK;
     }
 
 SocketReceiveDataEnd:
@@ -1370,7 +1385,7 @@ Return Value:
     PIO_HANDLE NewHandle;
     PSYSTEM_CALL_SOCKET_ACCEPT Parameters;
     PKPROCESS Process;
-    PSTR RemotePath;
+    PCSTR RemotePath;
     UINTN RemotePathSize;
     KSTATUS Status;
 
@@ -1539,6 +1554,15 @@ Return Value:
 SysSocketConnectEnd:
     if (PathCopy != NULL) {
         MmFreePagedPool(PathCopy);
+    }
+
+    //
+    // An interrupted socket connect cannot be restarted if a send timeout
+    // has been set.
+    //
+
+    if (Status == STATUS_INTERRUPTED) {
+        Status = IopConvertInterruptedSocketStatus(IoHandle, 0, TRUE);
     }
 
     //
@@ -1991,8 +2015,7 @@ SysSocketShutdownEnd:
 
 KSTATUS
 IopCreateSocket (
-    PVOID Parameter,
-    FILE_PERMISSIONS CreatePermissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     )
 
@@ -2004,9 +2027,7 @@ Routine Description:
 
 Arguments:
 
-    Parameter - Supplies the parameters the socket was created with.
-
-    CreatePermissions - Supplies the permissions to create the file with.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where the new file object representing the
         socket will be returned on success.
@@ -2019,7 +2040,6 @@ Return Value:
 
 {
 
-    BOOL Created;
     NETWORK_ADDRESS LocalAddress;
     PFILE_OBJECT NewFileObject;
     PSOCKET_CREATION_PARAMETERS Parameters;
@@ -2029,9 +2049,9 @@ Return Value:
     KSTATUS Status;
     PKTHREAD Thread;
 
-    Created = FALSE;
+    Create->Created = FALSE;
     NewFileObject = NULL;
-    Parameters = (PSOCKET_CREATION_PARAMETERS)Parameter;
+    Parameters = (PSOCKET_CREATION_PARAMETERS)(Create->Context);
 
     //
     // If there are no parameters, then this file object is being created from
@@ -2119,7 +2139,7 @@ Return Value:
         Properties.UserId = Thread->Identity.EffectiveUserId;
         Properties.GroupId = Thread->Identity.EffectiveGroupId;
         Properties.HardLinkCount = 1;
-        Properties.Permissions = CreatePermissions;
+        Properties.Permissions = Create->Permissions;
         KeGetSystemTime(&(Properties.StatusChangeTime));
         RtlCopyMemory(&(Properties.ModifiedTime),
                       &(Properties.StatusChangeTime),
@@ -2133,13 +2153,14 @@ Return Value:
                                              RootObject,
                                              FILE_OBJECT_FLAG_EXTERNAL_IO_STATE,
                                              &NewFileObject,
-                                             &Created);
+                                             &(Create->Created));
 
         if (!KSUCCESS(Status)) {
             goto CreateSocketEnd;
         }
 
-        ASSERT((Created != FALSE) || (Socket == Parameters->ExistingSocket));
+        ASSERT((Create->Created != FALSE) ||
+               (Socket == Parameters->ExistingSocket));
 
         *FileObject = NewFileObject;
     }
@@ -2187,7 +2208,10 @@ CreateSocketEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        if ((Socket != NULL) && ((*FileObject)->SpecialIo != Socket)) {
+        if ((Socket != NULL) &&
+            (*FileObject != NULL) &&
+            ((*FileObject)->SpecialIo != Socket)) {
+
             IoSocketReleaseReference(Socket);
         }
 
@@ -2399,7 +2423,7 @@ KSTATUS
 IopConvertInterruptedSocketStatus (
     PIO_HANDLE Handle,
     UINTN BytesComplete,
-    BOOL Send
+    BOOL OutputOperation
     )
 
 /*++
@@ -2417,8 +2441,9 @@ Arguments:
     BytesComplete - Supplies the number of I/O bytes completed during the
         system call.
 
-    Send - Supplies a boolean indicating if the system call was performing a
-        send (TRUE) or receive (FALSE).
+    OutputOperation - Supplies a boolean indicating if the system call was
+        performing a an output socket operation (send/connect) or an input
+        operation (receive/accept).
 
 Return Value:
 
@@ -2434,6 +2459,8 @@ Return Value:
 
     ASSERT(Handle != NULL);
 
+    Socket = NULL;
+
     //
     // If bytes were actually completed, return success.
     //
@@ -2447,7 +2474,7 @@ Return Value:
     ASSERT(KSUCCESS(Status));
 
     Mask = SOCKET_FLAG_RECEIVE_TIMEOUT_SET;
-    if (Send != FALSE) {
+    if (OutputOperation != FALSE) {
         Mask = SOCKET_FLAG_SEND_TIMEOUT_SET;
     }
 

@@ -123,7 +123,7 @@ Members:
 --*/
 
 typedef struct _PRINT_PARAMETERS {
-    PSTR FormatString;
+    PCSTR FormatString;
     va_list Arguments;
 } PRINT_PARAMETERS, *PPRINT_PARAMETERS;
 
@@ -306,12 +306,6 @@ KSTATUS
 KdpSendConnectionResponse (
     PCONNECTION_REQUEST ConnectionRequest,
     PBOOL BreakInRequested
-    );
-
-VOID
-KdpInternalPrint (
-    PSTR Format,
-    ...
     );
 
 VOID
@@ -509,7 +503,7 @@ Return Value:
 
 VOID
 KdPrint (
-    PSTR Format,
+    PCSTR Format,
     ...
     )
 
@@ -544,7 +538,7 @@ Return Value:
 
 VOID
 KdPrintWithArgumentList (
-    PSTR Format,
+    PCSTR Format,
     va_list ArgumentList
     )
 
@@ -3460,7 +3454,7 @@ SendConnectionResponseEnd:
 
 VOID
 KdpInternalPrint (
-    PSTR Format,
+    PCSTR Format,
     ...
     )
 

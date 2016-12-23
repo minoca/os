@@ -306,6 +306,11 @@ Return Value:
 
     } else {
         Shadow = getspnam(User->pw_name);
+        if ((Shadow == NULL) && ((errno == EACCES) || (errno == EPERM))) {
+            SwPrintError(errno, NULL, "Cannot access the password file");
+            Status = 1;
+            goto MainEnd;
+        }
     }
 
     HashedPassword = NULL;
@@ -418,6 +423,11 @@ Return Value:
     HashedPassword = User->pw_passwd;
     Shadow = getspnam(User->pw_name);
     if ((Shadow == NULL) && (errno != ENOENT)) {
+        if ((errno == EPERM) || (errno == EACCES)) {
+            SwPrintError(errno, NULL, "Cannot access the password file");
+            return errno;
+        }
+
         SwPrintError(errno,
                      User->pw_name,
                      "Error: Could not read password information for user");
@@ -540,7 +550,7 @@ Return Value:
     }
 
     memcpy(&NewSettings, &OriginalSettings, sizeof(struct termios));
-    NewSettings.c_lflag &= ~ECHO;
+    NewSettings.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
     if (tcsetattr(FileIn, TCSAFLUSH, &NewSettings) != 0) {
         return errno;
     }

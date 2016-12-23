@@ -409,8 +409,24 @@ Return Value:
         //
 
         sleep(LOGIN_FAIL_DELAY);
-        printf("Login incorrect\n");
-        Attempt += 1;
+        if (Status == EPERM) {
+            printf("Login incorrect\n");
+            Attempt += 1;
+
+        } else {
+            syslog(LOG_WARNING,
+                   "Authentication failure: uid=%ld, euid=%ld, tty=%s "
+                   "user=%s rhost=%s",
+                   (long int)UserId,
+                   (long int)EffectiveUserId,
+                   TtyName,
+                   UserName,
+                   Host);
+
+            Status = 1;
+            goto MainEnd;
+        }
+
         if (Attempt >= LOGIN_ATTEMPT_COUNT) {
             if (Host != NULL) {
                 syslog(LOG_WARNING,

@@ -101,10 +101,19 @@ Environment:
 #define DHCP_DISCOVER_RETRY_COUNT 5
 
 //
+// Define the number of times to retry binding, and how long to wait in
+// microseconds.
+//
+
+#define DHCP_BIND_RETRY_COUNT 20
+#define DHCP_BIND_DELAY (5 * MICROSECONDS_PER_SECOND)
+#define DHCP_BIND_VARIANCE (15 * MICROSECONDS_PER_SECOND)
+
+//
 // Define how long to wait for an offer and acknowledge, in milliseconds.
 //
 
-#define DHCP_OFFER_TIMEOUT                 8000
+#define DHCP_OFFER_TIMEOUT                 5000
 #define DHCP_ACKNOWLEDGE_TIMEOUT           DHCP_OFFER_TIMEOUT
 
 //
@@ -555,6 +564,12 @@ NetpDhcpCopyReplyToContext (
     PDHCP_REPLY Reply
     );
 
+KSTATUS
+NetpDhcpBind (
+    PDHCP_CONTEXT Context,
+    PNETWORK_ADDRESS Address
+    );
+
 VOID
 NetpDhcpPrintContext (
     PDHCP_CONTEXT Context
@@ -791,7 +806,7 @@ Return Value:
     PDHCP_LEASE Lease;
     BOOL LeaseAcquired;
     SYSTEM_TIME LeaseEndTime;
-    IP4_ADDRESS LocalAddress;
+    NETWORK_ADDRESS LocalAddress;
     ULONG RetryCount;
     KSTATUS Status;
     PSTR Step;
@@ -863,13 +878,7 @@ Return Value:
     RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
     LocalAddress.Domain = NetDomainIp4;
     LocalAddress.Port = DHCP_CLIENT_PORT;
-    Status = IoSocketBindToAddress(TRUE,
-                                   DhcpContext->Socket,
-                                   DhcpContext->Link,
-                                   (PNETWORK_ADDRESS)&LocalAddress,
-                                   NULL,
-                                   0);
-
+    Status = NetpDhcpBind(DhcpContext, &LocalAddress);
     if (!KSUCCESS(Status)) {
         goto DhcpAssignmentThreadEnd;
     }
@@ -1146,7 +1155,7 @@ Return Value:
     NETWORK_DEVICE_INFORMATION Information;
     PDHCP_LEASE Lease;
     SYSTEM_TIME LeaseEndTime;
-    IP4_ADDRESS LocalAddress;
+    NETWORK_ADDRESS LocalAddress;
     BOOL LockHeld;
     KSTATUS Status;
     PSTR Step;
@@ -1227,13 +1236,7 @@ Return Value:
     KeReleaseQueuedLock(DhcpContext->Link->QueuedLock);
     LockHeld = FALSE;
     LocalAddress.Port = DHCP_CLIENT_PORT;
-    Status = IoSocketBindToAddress(TRUE,
-                                   DhcpContext->Socket,
-                                   DhcpContext->Link,
-                                   (PNETWORK_ADDRESS)&LocalAddress,
-                                   NULL,
-                                   0);
-
+    Status = NetpDhcpBind(DhcpContext, &LocalAddress);
     if (!KSUCCESS(Status)) {
         goto DhcpLeaseExtensionThreadEnd;
     }
@@ -1442,7 +1445,7 @@ Return Value:
 {
 
     PDHCP_CONTEXT DhcpContext;
-    IP4_ADDRESS LocalAddress;
+    NETWORK_ADDRESS LocalAddress;
     BOOL LockHeld;
     KSTATUS Status;
     PSTR Step;
@@ -1504,13 +1507,7 @@ Return Value:
     KeReleaseQueuedLock(DhcpContext->Link->QueuedLock);
     LockHeld = FALSE;
     LocalAddress.Port = DHCP_CLIENT_PORT;
-    Status = IoSocketBindToAddress(TRUE,
-                                   DhcpContext->Socket,
-                                   DhcpContext->Link,
-                                   (PNETWORK_ADDRESS)&LocalAddress,
-                                   NULL,
-                                   0);
-
+    Status = NetpDhcpBind(DhcpContext, &LocalAddress);
     if (!KSUCCESS(Status)) {
         goto DhcpLeaseReleaseThreadEnd;
     }
@@ -3189,6 +3186,61 @@ DhcpCopyReplyToContextEnd:
     return Status;
 }
 
+KSTATUS
+NetpDhcpBind (
+    PDHCP_CONTEXT Context,
+    PNETWORK_ADDRESS Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to bind the given context to the any address on the
+    DHCP port. It is patient and will retry as multiple NICs may be coming up
+    at the same time.
+
+Arguments:
+
+    Context - Supplies a pointer to the DHCP context information.
+
+    Address - Supplies the address to bind to.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONGLONG Delay;
+    KSTATUS Status;
+    ULONG Try;
+
+    Status = STATUS_SUCCESS;
+    for (Try = 0; Try < DHCP_BIND_RETRY_COUNT; Try += 1) {
+        Status = IoSocketBindToAddress(TRUE,
+                                       Context->Socket,
+                                       Context->Link,
+                                       Address,
+                                       NULL,
+                                       0);
+
+        if ((KSUCCESS(Status)) || (Status != STATUS_ADDRESS_IN_USE)) {
+            break;
+        }
+
+        if (Try + 1 < DHCP_BIND_RETRY_COUNT) {
+            KeGetRandomBytes(&Delay, sizeof(Delay));
+            Delay = DHCP_BIND_DELAY + (Delay % DHCP_BIND_VARIANCE);
+            KeDelayExecution(FALSE, FALSE, Delay);
+        }
+    }
+
+    return Status;
+}
+
 VOID
 NetpDhcpPrintContext (
     PDHCP_CONTEXT Context
@@ -3213,11 +3265,33 @@ Return Value:
 
 {
 
+    PCSTR DurationUnit;
+    ULONG LeaseTime;
+    PCSTR Plural;
+
+    Plural = "s";
+    if (Context->LeaseTime >= SECONDS_PER_DAY) {
+        LeaseTime = Context->LeaseTime / SECONDS_PER_DAY;
+        DurationUnit = "day";
+
+    } else if (Context->LeaseTime >= SECONDS_PER_HOUR) {
+        LeaseTime = Context->LeaseTime / SECONDS_PER_HOUR;
+        DurationUnit = "hour";
+
+    } else {
+        LeaseTime = Context->LeaseTime / SECONDS_PER_MINUTE;
+        DurationUnit = "minute";
+    }
+
+    if (LeaseTime == 1) {
+        Plural = "";
+    }
+
     RtlDebugPrint("%20s: %d.%d.%d.%d\n"
                   "%20s: %d.%d.%d.%d\n"
                   "%20s: %d.%d.%d.%d\n"
                   "%20s: %d.%d.%d.%d\n"
-                  "%20s: %d hours.\n",
+                  "%20s: %d %s%s.\n",
                   "Server IP",
                   (UCHAR)Context->OfferServerAddress.Address[0],
                   (UCHAR)(Context->OfferServerAddress.Address[0] >> 8),
@@ -3239,7 +3313,9 @@ Return Value:
                   (UCHAR)(Context->OfferDnsAddress[0].Address[0] >> 16),
                   (UCHAR)(Context->OfferDnsAddress[0].Address[0] >> 24),
                   "Lease Time",
-                  Context->LeaseTime / 3600);
+                  LeaseTime,
+                  DurationUnit,
+                  Plural);
 
     return;
 }

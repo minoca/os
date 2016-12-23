@@ -119,13 +119,16 @@ var DriverFiles = [
 
 if (arch == "x86") {
     DriverFiles += [
+        "ahci.drv",
         "ata.drv",
         "atl1c.drv",
         "dwceth.drv",
         "e100.drv",
+        "e1000.drv",
         "i8042.drv",
         "rtl81xx.drv",
         "uhci.drv",
+        "pcnet32.drv",
     ];
 
 } else if ((arch == "armv7") || (arch == "armv6")) {
@@ -147,6 +150,7 @@ var BootDrivers = [
 
 if (arch == "x86") {
     BootDrivers += [
+        "ahci.drv",
         "ata.drv",
         "pci.drv",
         "ehci.drv",
@@ -447,6 +451,7 @@ if (plat == "install-armv6") {
 
     var Files = [
         "acpi.drv",
+        "ahci.drv",
         "am3eth.drv",
         "am3i2c.drv",
         "am3soc.drv",
@@ -566,6 +571,7 @@ if (plat == "install-armv7") {
 
     var Files = [
         "acpi.drv",
+        "ahci.drv",
         "am3eth.drv",
         "am3i2c.drv",
         "am3soc.drv",
@@ -693,6 +699,7 @@ if (plat == "install-x86") {
 
     var Files = [
         "acpi.drv",
+        "ahci.drv",
         "ata.drv",
         "atl1c.drv",
         "bootman.bin",
@@ -702,6 +709,7 @@ if (plat == "install-x86") {
         "devrem.drv",
         "dwceth.drv",
         "e100.drv",
+        "e1000.drv",
         "ehci.drv",
         "fat.drv",
         "fatboot.bin",
@@ -723,6 +731,7 @@ if (plat == "install-x86") {
         "onering.drv",
         "part.drv",
         "pci.drv",
+        "pcnet32.drv",
         "qrkhostb.drv",
         "rtl81xx.drv",
         "rtlw81xx.drv",
@@ -991,7 +1000,8 @@ if (plat == "pcefi") {
 if (plat == "pc-tiny") {
 
     //
-    // Completely clobber the drivers list with one that fits x86 Qemu perfectly.
+    // Completely clobber the drivers list with one that fits x86 Qemu
+    // perfectly.
     //
 
     DriversCopy["Files"] = [
@@ -1006,6 +1016,7 @@ if (plat == "pc-tiny") {
         "videocon.drv",
         "ata.drv",
         "e100.drv",
+        "e1000.drv",
         "i8042.drv",
     ];
 

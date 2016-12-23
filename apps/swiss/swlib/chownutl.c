@@ -103,8 +103,7 @@ Return Value:
     ULONG AppendedPathSize;
     BOOL Changed;
     DIR *Directory;
-    struct dirent Entry;
-    struct dirent *EntryPointer;
+    struct dirent *Entry;
     gid_t OriginalGroup;
     uid_t OriginalUser;
     int Result;
@@ -176,12 +175,20 @@ Return Value:
     // Actually execute the change.
     //
 
+    Result = 0;
     if (Changed != FALSE) {
         if ((Context->Options & CHOWN_OPTION_AFFECT_SYMBOLIC_LINKS) != 0) {
             Result = lchown(Path, Stat.st_uid, Stat.st_gid);
 
         } else {
             Result = chown(Path, Stat.st_uid, Stat.st_gid);
+        }
+
+        if (Result != 0) {
+            Result = errno;
+            if ((Context->Options & CHOWN_OPTION_QUIET) == 0) {
+                SwPrintError(Result, Path, "Unable to change ownership");
+            }
         }
     }
 
@@ -190,7 +197,7 @@ Return Value:
     //
 
     if ((Context->Options & CHOWN_OPTION_RECURSIVE) == 0) {
-        return 0;
+        return Result;
     }
 
     //
@@ -231,30 +238,31 @@ Return Value:
         return Result;
     }
 
+    Result = 0;
     while (TRUE) {
-        Result = SwReadDirectory(Directory, &Entry, &EntryPointer);
-        if (Result != 0) {
-            if ((Context->Options & CHOWN_OPTION_QUIET) == 0) {
-                SwPrintError(Result, Path, "Unable to read directory");
+        errno = 0;
+        Entry = readdir(Directory);
+        if (Entry == NULL) {
+            Result = errno;
+            if (Result != 0) {
+                if ((Context->Options & CHOWN_OPTION_QUIET) == 0) {
+                    SwPrintError(Result, Path, "Unable to read directory");
+                }
             }
 
             break;
         }
 
-        if (EntryPointer == NULL) {
-            break;
-        }
-
-        if ((strcmp(Entry.d_name, ".") == 0) ||
-            (strcmp(Entry.d_name, "..") == 0)) {
+        if ((strcmp(Entry->d_name, ".") == 0) ||
+            (strcmp(Entry->d_name, "..") == 0)) {
 
             continue;
         }
 
         Result = SwAppendPath(Path,
                               strlen(Path) + 1,
-                              Entry.d_name,
-                              strlen(Entry.d_name) + 1,
+                              Entry->d_name,
+                              strlen(Entry->d_name) + 1,
                               &AppendedPath,
                               &AppendedPathSize);
 

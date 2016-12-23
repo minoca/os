@@ -4351,6 +4351,70 @@ Return Value:
 
 --*/
 
+KSTATUS
+AcpipResolveStoreDestination (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Destination,
+    PACPI_OBJECT *ResolvedDestination
+    );
+
+/*++
+
+Routine Description:
+
+    This routine resolves a store destination to the proper ACPI object based
+    on its type and the statement type.
+
+Arguments:
+
+    Context - Supplies a pointer to the current AML execution context.
+
+    Destination - Supplies a pointer to the original store destination object.
+
+    ResolvedDestination - Supplies a pointer that receives a pointer to the
+        resolved destination object. This may return a pointer to the
+        original destination, but with an extra reference. The caller is always
+        responsible for releasing a reference on this object.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+AcpipConvertToDataReferenceObject (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Object,
+    PACPI_OBJECT *ResultObject
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a conversion of an object to a type in the set of
+    DataRefObject types.
+
+Arguments:
+
+    Context - Supplies a pointer to the current execution context.
+
+    Object - Supplies a pointer to the object to convert.
+
+    ResultObject - Supplies a pointer that receives a pointer to the result
+        object after the conversion. If no conversion is necessary, then this
+        may be a pointer to the original object. If a conversion is necessary,
+        then this will be a pointer to a new object. Either way the caller is
+        responsible for releasing one reference on the result object on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 PACPI_OBJECT
 AcpipParseNameString (
     PAML_EXECUTION_CONTEXT Context

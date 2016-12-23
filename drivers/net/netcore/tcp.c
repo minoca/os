@@ -57,6 +57,11 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef enum _TCP_TIMER_STATE {
+    TcpTimerNotQueued,
+    TcpTimerQueued,
+} TPC_TIMER_STATE, *PTCP_TIMER_STATE;
+
 /*++
 
 Structure Description:
@@ -407,6 +412,7 @@ NetpTcpFreeSegment (
 PKTIMER NetTcpTimer;
 ULONGLONG NetTcpTimerPeriod;
 volatile ULONG NetTcpTimerReferenceCount;
+volatile ULONG NetTcpTimerState = TcpTimerNotQueued;
 
 //
 // Store a pointer to the global TCP keep alive timer.
@@ -897,6 +903,7 @@ Return Value:
     ASSERT(TcpSocket->ListEntry.Next == NULL);
     ASSERT(LIST_EMPTY(&(TcpSocket->ReceivedSegmentList)) != FALSE);
     ASSERT(LIST_EMPTY(&(TcpSocket->OutgoingSegmentList)) != FALSE);
+    ASSERT(TcpSocket->TimerReferenceCount == 0);
 
     KeDestroyQueuedLock(TcpSocket->Lock);
     TcpSocket->Lock = NULL;
@@ -1273,34 +1280,59 @@ Return Value:
     KeAcquireQueuedLock(TcpSocket->Lock);
     LockHeld = TRUE;
     if (TcpSocket->State != TcpStateInitialized) {
-        if ((TcpSocket->State == TcpStateSynSent) ||
-            (TcpSocket->State == TcpStateSynReceived)) {
 
-            Status = STATUS_ALREADY_INITIALIZED;
+        //
+        // If a previous connect was not interrupted, then not being in the
+        // initialized state is fatal.
+        //
+
+        if ((TcpSocket->Flags & TCP_SOCKET_FLAG_CONNECT_INTERRUPTED) == 0) {
+            if ((TcpSocket->State == TcpStateSynSent) ||
+                (TcpSocket->State == TcpStateSynReceived)) {
+
+                Status = STATUS_ALREADY_INITIALIZED;
+
+            } else {
+                Status = STATUS_CONNECTION_EXISTS;
+            }
+
+            goto TcpConnectEnd;
+
+        //
+        // Otherwise note that the socket has already been connected to the
+        // network layer and move on.
+        //
 
         } else {
-            Status = STATUS_CONNECTION_EXISTS;
+            Connected = TRUE;
         }
-
-        goto TcpConnectEnd;
     }
+
+    //
+    // Unset the interrupted flag before giving the connect another shot.
+    //
+
+    TcpSocket->Flags &= ~TCP_SOCKET_FLAG_CONNECT_INTERRUPTED;
 
     //
     // Pass the request down to the network layer.
     //
 
-    Status = Socket->Network->Interface.Connect(Socket, Address);
-    if (!KSUCCESS(Status)) {
-        goto TcpConnectEnd;
+    if (Connected == FALSE) {
+        Status = Socket->Network->Interface.Connect(Socket, Address);
+        if (!KSUCCESS(Status)) {
+            goto TcpConnectEnd;
+        }
+
+        Connected = TRUE;
+
+        //
+        // Put the socket in the SYN sent state. This will fire off a SYN.
+        //
+
+        NetpTcpSetState(TcpSocket, TcpStateSynSent);
     }
 
-    Connected = TRUE;
-
-    //
-    // Put the socket in the SYN sent state. This will fire off a SYN.
-    //
-
-    NetpTcpSetState(TcpSocket, TcpStateSynSent);
     KeReleaseQueuedLock(TcpSocket->Lock);
     LockHeld = FALSE;
 
@@ -1353,18 +1385,25 @@ TcpConnectEnd:
     //
     // If the connect was attempted but failed for a reason other than a
     // timeout or that the wait was interrupted, stop the socket in its tracks.
-    // When interrupted, the connect is meant to continue in the background. On
+    // When interrupted, the connect is meant to continue in the background,
+    // but record the interruption in case the system call gets restarted. On
     // timeout, the mechanism that determined the timeout handled the
     // appropriate clean up of the socket (i.e. disconnect and reinitialize).
     //
 
-    if (!KSUCCESS(Status) && (Connected != FALSE)) {
-        if ((Status != STATUS_INTERRUPTED) && (Status != STATUS_TIMEOUT)) {
-            if (LockHeld == FALSE) {
-                KeAcquireQueuedLock(TcpSocket->Lock);
-                LockHeld = TRUE;
-            }
+    if (!KSUCCESS(Status) &&
+        (Connected != FALSE) &&
+        (Status != STATUS_TIMEOUT)) {
 
+        if (LockHeld == FALSE) {
+            KeAcquireQueuedLock(TcpSocket->Lock);
+            LockHeld = TRUE;
+        }
+
+        if (Status == STATUS_INTERRUPTED) {
+            TcpSocket->Flags |= TCP_SOCKET_FLAG_CONNECT_INTERRUPTED;
+
+        } else {
             NetpTcpCloseOutSocket(TcpSocket, FALSE);
         }
     }
@@ -1742,10 +1781,6 @@ Return Value:
                                         &ReturnedEvents);
 
         if (!KSUCCESS(Status)) {
-            if ((Status == STATUS_TIMEOUT) && (Timeout == 0)) {
-                Status = STATUS_OPERATION_WOULD_BLOCK;
-            }
-
             goto TcpSendEnd;
         }
 
@@ -1986,10 +2021,6 @@ Return Value:
                                             &ReturnedEvents);
 
             if (!KSUCCESS(Status)) {
-                if ((Status == STATUS_TIMEOUT) && (Timeout == 0)) {
-                    Status = STATUS_OPERATION_WOULD_BLOCK;
-                }
-
                 goto TcpSendEnd;
             }
 
@@ -3702,7 +3733,6 @@ Return Value:
     BOOL KeepAliveTimeout;
     PSOCKET KernelSocket;
     BOOL LinkUp;
-    ULONG OldReferenceCount;
     ULONGLONG RecentTime;
     PVOID SignalingObject;
     PVOID WaitObjectArray[2];
@@ -3737,12 +3767,25 @@ Return Value:
             KeSignalTimer(NetTcpKeepAliveTimer, SignalOptionUnsignal);
 
         //
-        // If the TCP time signaled, determine whether or not work needs to be
-        // done. Start by decrementing a reference for the now expired timer.
-        // If the old reference count is 1 then none of the sockets need
-        // processing. If there is still more than 1 reference, however, at
-        // least one socket is hanging around. Queue the timer and process the
-        // sockets.
+        // If the TCP timer signaled, determine whether or not work needs to be
+        // done. Start by setting the timer state to "not queued" as it just
+        // expired. Next, check the timer reference count. If there are no
+        // references, then no sockets need processing. If there are
+        // references, then at least one socket is hanging around. Attempt to
+        // queue the timer for the next round of work.
+        //
+        // Sockets may be racing to increment the timer reference count from 0
+        // to 1 and queue the timer. The timer state variable synchronizes
+        // this. If the increment comes before the setting of the state to
+        // "not queued", the socket will see that the timer is already queued
+        // and the worker will see the timer reference and requeue the timer.
+        // If the increment comes after the setting of the state to "not
+        // queued" but before the worker checks the reference count, then the
+        // worker and socket will race to requeue the timer by performing
+        // atomic compare-exchanges on the timer state. If the increment comes
+        // after the setting of the state to "not queued" and after the worker
+        // sees the reference as 0, then the socket is free and clear to win
+        // the compare-exchange and queue the timer.
         //
 
         } else {
@@ -3750,8 +3793,8 @@ Return Value:
             ASSERT(SignalingObject == NetTcpTimer);
 
             KeSignalTimer(NetTcpTimer, SignalOptionUnsignal);
-            OldReferenceCount = NetpTcpTimerReleaseReference(NULL);
-            if (OldReferenceCount == 1) {
+            RtlAtomicExchange32(&NetTcpTimerState, TcpTimerNotQueued);
+            if (NetTcpTimerReferenceCount == 0) {
                 continue;
             }
 
@@ -4044,7 +4087,23 @@ Return Value:
     IoState = Socket->NetSocket.KernelSocket.IoState;
     SynHandled = FALSE;
 
-    ASSERT(Socket->State > TcpStateInitialized);
+    //
+    // The socket might have been found during a connect operation that
+    // subsequently timed out and put the state back to reset. In this case
+    // the socket is now locally bound. Drop the packet since there's no
+    // remote address set up and the connect operation was given up on.
+    //
+
+    if (Socket->State == TcpStateInitialized) {
+        return;
+    }
+
+    //
+    // If the socket is not active, then things like the remote host will have
+    // been cleared and processing should not continue.
+    //
+
+    ASSERT((Socket->NetSocket.Flags & NET_SOCKET_FLAG_ACTIVE) != 0);
 
     RemoteSequence = NETWORK_TO_CPU32(Header->SequenceNumber);
     AcknowledgeNumber = NETWORK_TO_CPU32(Header->AcknowledgmentNumber);
@@ -4731,7 +4790,6 @@ Return Value:
         goto TcpHandleUnconnectedPacketEnd;
     }
 
-    IoSocketAddReference(&(NewTcpSocket->NetSocket.KernelSocket));
     KeAcquireQueuedLock(NewTcpSocket->Lock);
     LockHeld = TRUE;
 
@@ -4792,7 +4850,6 @@ TcpHandleUnconnectedPacketEnd:
         ASSERT(NewTcpSocket != NULL);
 
         KeReleaseQueuedLock(NewTcpSocket->Lock);
-        IoSocketReleaseReference(&(NewTcpSocket->NetSocket.KernelSocket));
     }
 
     if (NewIoHandle != INVALID_HANDLE) {
@@ -6612,6 +6669,7 @@ Return Value:
                    Socket->SendFinalSequence);
 
             Socket->SendNextNetworkSequence += 1;
+            NetpTcpTimerReleaseReference(Socket);
             NetpTcpSendControlPacket(Socket, TCP_HEADER_FLAG_FIN);
             if (Socket->State == TcpStateCloseWait) {
                 NetpTcpSetState(Socket, TcpStateLastAcknowledge);
@@ -7773,7 +7831,6 @@ Return Value:
 
     NetSocketFlags |= NET_SOCKET_FLAG_FORKED_LISTENER;
     RtlAtomicOr32(&(NewTcpSocket->NetSocket.Flags), NetSocketFlags);
-    IoSocketAddReference(&(NewTcpSocket->NetSocket.KernelSocket));
     KeAcquireQueuedLock(NewTcpSocket->Lock);
     LockHeld = TRUE;
 
@@ -7889,7 +7946,6 @@ TcpHandleIncomingConnectionEnd:
         ASSERT(NewTcpSocket != NULL);
 
         KeReleaseQueuedLock(NewTcpSocket->Lock);
-        IoSocketReleaseReference(&(NewTcpSocket->NetSocket.KernelSocket));
     }
 
     //
@@ -7932,10 +7988,13 @@ Return Value:
 
 {
 
+    ULONG Flags;
     PNET_SOCKET NetSocket;
     TCP_STATE OldState;
+    BOOL WithAcknowledge;
 
     OldState = Socket->State;
+    Socket->PreviousState = OldState;
     Socket->State = NewState;
 
     //
@@ -7953,7 +8012,6 @@ Return Value:
         // When transitioning to the initialized state from the SYN-sent or
         // SYN-received state, disconnect the socket from its remote address
         // and reset the retry values and backtrack on the buffer sequences.
-        // Reset the error event as well, the socket could try to connect again.
         //
 
         if ((OldState == TcpStateSynReceived) ||
@@ -7965,6 +8023,7 @@ Return Value:
             Socket->RetryWaitPeriod = TCP_INITIAL_RETRY_WAIT_PERIOD;
             Socket->SendNextBufferSequence = Socket->SendInitialSequence;
             Socket->SendNextNetworkSequence = Socket->SendInitialSequence;
+            NetpTcpTimerReleaseReference(Socket);
         }
 
         break;
@@ -7980,21 +8039,8 @@ Return Value:
         ASSERT(OldState == TcpStateInitialized);
 
         //
-        // Make sure that the error event is not signalled. Give the socket a
-        // new chance to connect.
+        // Fall through to the SYN received state. They are almost identical.
         //
-
-        IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_ERROR,
-                           FALSE);
-
-        Socket->SendNextBufferSequence += 1;
-        Socket->SendNextNetworkSequence += 1;
-        TCP_UPDATE_RETRY_TIME(Socket);
-        TCP_SET_DEFAULT_TIMEOUT(Socket);
-        NetpTcpTimerAddReference(Socket);
-        NetpTcpSendSyn(Socket, FALSE);
-        break;
 
     case TcpStateSynReceived:
 
@@ -8008,6 +8054,7 @@ Return Value:
             // a new chance to connect.
             //
 
+            NET_SOCKET_CLEAR_LAST_ERROR(&(Socket->NetSocket));
             IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
                                POLL_EVENT_ERROR,
                                FALSE);
@@ -8019,7 +8066,12 @@ Return Value:
             NetpTcpTimerAddReference(Socket);
         }
 
-        NetpTcpSendSyn(Socket, TRUE);
+        WithAcknowledge = FALSE;
+        if (NewState == TcpStateSynReceived) {
+            WithAcknowledge = TRUE;
+        }
+
+        NetpTcpSendSyn(Socket, WithAcknowledge);
         break;
 
     case TcpStateEstablished:
@@ -8147,14 +8199,32 @@ Return Value:
     //
 
     case TcpStateClosed:
+        if ((TCP_IS_SYN_RETRY_STATE(OldState) != FALSE) ||
+            ((TCP_IS_FIN_RETRY_STATE(OldState) != FALSE) &&
+             ((Socket->Flags & TCP_SOCKET_FLAG_SEND_FIN_WITH_DATA) == 0)) ||
+            (OldState == TcpStateTimeWait)) {
+
+            NetpTcpTimerReleaseReference(Socket);
+        }
 
         //
-        // Release all TCP timer references.
+        // If a more forceful close arrives after a transmit shutdown, the
+        // socket still have a reference on the timer in order to send a FIN
+        // once all the data has been sent. That's not going to happen now.
         //
 
-        Socket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
-        if (Socket->TimerReferenceCount >= 1) {
-            Socket->TimerReferenceCount = 1;
+        Flags = Socket->Flags;
+        if (((Flags & TCP_SOCKET_FLAG_SEND_FINAL_SEQUENCE_VALID) != 0) &&
+            ((Flags & TCP_SOCKET_FLAG_SEND_FIN_WITH_DATA) == 0) &&
+            ((OldState == TcpStateEstablished) ||
+             (OldState == TcpStateCloseWait) ||
+             (OldState == TcpStateSynReceived))) {
+
+            NetpTcpTimerReleaseReference(Socket);
+        }
+
+        if ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) != 0) {
+            Socket->Flags &= ~TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
             NetpTcpTimerReleaseReference(Socket);
         }
 
@@ -8209,6 +8279,8 @@ Return Value:
     PNET_PACKET_BUFFER Packet;
     PUCHAR PacketBuffer;
     NET_PACKET_LIST PacketList;
+    ULONG SavedWindowScale;
+    ULONG SavedWindowSize;
     KSTATUS Status;
 
     NetSocket = &(Socket->NetSocket);
@@ -8298,6 +8370,19 @@ Return Value:
     ASSERT(Packet->DataOffset >= sizeof(TCP_HEADER));
 
     Packet->DataOffset -= sizeof(TCP_HEADER);
+
+    //
+    // The SYN packet's window field should never be scaled. Temporarily
+    // disable the receive window scale and cap the size.
+    //
+
+    SavedWindowScale = Socket->ReceiveWindowScale;
+    Socket->ReceiveWindowScale = 0;
+    SavedWindowSize = Socket->ReceiveWindowFreeSize;
+    if (Socket->ReceiveWindowFreeSize > MAX_USHORT) {
+        Socket->ReceiveWindowFreeSize = MAX_USHORT;
+    }
+
     NetpTcpFillOutHeader(Socket,
                          Packet,
                          Socket->SendInitialSequence,
@@ -8306,6 +8391,8 @@ Return Value:
                          0,
                          0);
 
+    Socket->ReceiveWindowScale = SavedWindowScale;
+    Socket->ReceiveWindowFreeSize = SavedWindowSize;
     Status = NetSocket->Network->Interface.Send(NetSocket,
                                                 &(NetSocket->RemoteAddress),
                                                 NULL,
@@ -8455,26 +8542,33 @@ Return Value:
 {
 
     ULONGLONG DueTime;
+    ULONG OldState;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     //
-    // Add a reference for the TCP worker and queue the timer.
+    // Attempt to queue the timer. The TCP worker may race with sockets adding
+    // the first reference to the timer and then trying to queue it.
     //
 
-    RtlAtomicAdd32(&NetTcpTimerReferenceCount, 1);
-    DueTime = KeGetRecentTimeCounter();
-    DueTime += NetTcpTimerPeriod;
-    Status = KeQueueTimer(NetTcpTimer,
-                          TimerQueueSoftWake,
-                          DueTime,
-                          0,
-                          0,
-                          NULL);
+    OldState = RtlAtomicCompareExchange32(&NetTcpTimerState,
+                                          TcpTimerQueued,
+                                          TcpTimerNotQueued);
 
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Error: Failed to queue TCP timer: %d\n", Status);
+    if (OldState == TcpTimerNotQueued) {
+        DueTime = KeGetRecentTimeCounter();
+        DueTime += NetTcpTimerPeriod;
+        Status = KeQueueTimer(NetTcpTimer,
+                              TimerQueueSoftWake,
+                              DueTime,
+                              0,
+                              0,
+                              NULL);
+
+        if (!KSUCCESS(Status)) {
+            RtlDebugPrint("Error: Failed to queue TCP timer: %d\n", Status);
+        }
     }
 
     return;

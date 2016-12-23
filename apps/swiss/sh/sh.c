@@ -162,6 +162,8 @@ Return Value:
     UINTN ArgumentSize;
     INT InputDescriptor;
     INT InputDescriptorHigh;
+    PSTR NewInputBuffer;
+    UINTN NewInputBufferSize;
     BOOL Result;
     INT ReturnValue;
     BOOL Set;
@@ -292,15 +294,18 @@ Return Value:
         }
 
         Argument = Arguments[ArgumentIndex];
-        Shell->Lexer.InputBufferSize = strlen(Argument) + 1;
-        Shell->Lexer.InputBuffer = SwStringDuplicate(
-                                                 Argument,
-                                                 Shell->Lexer.InputBufferSize);
-
-        if (Shell->Lexer.InputBuffer == NULL) {
+        NewInputBufferSize = strlen(Argument) + 1;
+        NewInputBuffer = SwStringDuplicate(Argument, NewInputBufferSize);
+        if (NewInputBuffer == NULL) {
             goto MainEnd;
         }
 
+        if (Shell->Lexer.InputBuffer != NULL) {
+            free(Shell->Lexer.InputBuffer);
+        }
+
+        Shell->Lexer.InputBuffer = NewInputBuffer;
+        Shell->Lexer.InputBufferSize = NewInputBufferSize;
         Shell->Lexer.InputBufferCapacity = Shell->Lexer.InputBufferSize;
         ArgumentIndex += 1;
 
@@ -431,8 +436,8 @@ Return Value:
         InputDescriptor = fileno(Shell->Lexer.InputFile);
     }
 
-    if ((InputDescriptor != -1) && (isatty(InputDescriptor) != 0)) {
-        Shell->Options |= SHELL_INTERACTIVE_OPTIONS;
+    if ((InputDescriptor >= 0) && (isatty(InputDescriptor) != 0)) {
+        Shell->Options |= SHELL_INTERACTIVE_OPTIONS | SHELL_OPTION_RAW_INPUT;
     }
 
     InputDescriptor = -1;

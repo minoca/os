@@ -85,7 +85,7 @@ IopAddDrivers (
     PDEVICE Device
     );
 
-PSTR
+PCSTR
 IopFindDriverForDevice (
     PDEVICE Device
     );
@@ -104,7 +104,7 @@ IopProcessReportedChildren (
 PSTR
 IopGetUniqueDeviceId (
     PDEVICE ParentDevice,
-    PSTR DeviceId
+    PCSTR DeviceId
     );
 
 //
@@ -141,9 +141,9 @@ IoCreateDevice (
     PDRIVER BusDriver,
     PVOID BusDriverContext,
     PDEVICE ParentDevice,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PDEVICE *NewDevice
     )
 
@@ -604,7 +604,7 @@ Return Value:
 }
 
 KERNEL_API
-PSTR
+PCSTR
 IoGetCompatibleDeviceIds (
     PDEVICE Device
     )
@@ -635,7 +635,7 @@ Return Value:
 }
 
 KERNEL_API
-PSTR
+PCSTR
 IoGetDeviceClassId (
     PDEVICE Device
     )
@@ -666,7 +666,7 @@ Return Value:
 KERNEL_API
 BOOL
 IoIsDeviceIdInCompatibleIdList (
-    PSTR DeviceId,
+    PCSTR DeviceId,
     PDEVICE Device
     )
 
@@ -927,6 +927,10 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
+    if (ChildCount == 0) {
+        return STATUS_SUCCESS;
+    }
+
     ASSERT(QueryChildrenIrp->MajorCode == IrpMajorStateChange);
     ASSERT(QueryChildrenIrp->MinorCode == IrpMinorQueryChildren);
 
@@ -1134,7 +1138,7 @@ IoSetDeviceDriverErrorEx (
     KSTATUS Status,
     PDRIVER Driver,
     ULONG DriverError,
-    PSTR SourceFile,
+    PCSTR SourceFile,
     ULONG LineNumber
     )
 
@@ -1239,9 +1243,9 @@ IopCreateDevice (
     PDRIVER BusDriver,
     PVOID BusDriverContext,
     PDEVICE ParentDevice,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     OBJECT_TYPE DeviceType,
     ULONG DeviceSize,
     PDEVICE *NewDevice
@@ -1965,7 +1969,7 @@ IopSetDeviceProblemEx (
     KSTATUS Status,
     PDRIVER Driver,
     ULONG DriverCode,
-    PSTR SourceFile,
+    PCSTR SourceFile,
     ULONG LineNumber
     )
 
@@ -2571,7 +2575,7 @@ Return Value:
 
     PDRIVER_ADD_DEVICE AddDevice;
     PDRIVER FunctionDriver;
-    PSTR FunctionDriverName;
+    PCSTR FunctionDriverName;
     ULONG OriginalStackSize;
     KSTATUS Status;
 
@@ -2660,7 +2664,7 @@ AddDriversEnd:
     return Status;
 }
 
-PSTR
+PCSTR
 IopFindDriverForDevice (
     PDEVICE Device
     )
@@ -2686,7 +2690,7 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PDEVICE_DATABASE_ENTRY DatabaseEntry;
-    PSTR Driver;
+    PCSTR Driver;
     BOOL Match;
 
     Driver = NULL;
@@ -2946,7 +2950,7 @@ Return Value:
 PSTR
 IopGetUniqueDeviceId (
     PDEVICE ParentDevice,
-    PSTR DeviceId
+    PCSTR DeviceId
     )
 
 /*++
@@ -2965,7 +2969,8 @@ Arguments:
 
 Return Value:
 
-    Returns a unique device ID string.
+    Returns a unique device ID string. If the result is different than
+    DeviceId, the caller is responsible for releasing the memory.
 
 --*/
 
@@ -2988,7 +2993,7 @@ Return Value:
     if ((ParentDevice == NULL) ||
         (ParentDevice == (PDEVICE)IoVolumeDirectory)) {
 
-        return DeviceId;
+        return (PSTR)DeviceId;
     }
 
     //
@@ -3002,7 +3007,7 @@ Return Value:
                                   (POBJECT_HEADER)ParentDevice);
 
     if (ExistingDevice == NULL) {
-        return DeviceId;
+        return (PSTR)DeviceId;
     }
 
     ObReleaseReference(ExistingDevice);
@@ -3106,6 +3111,10 @@ Return Value:
     NewDeviceId = NULL;
 
 GetUniqueDeviceIdEnd:
+    if (FormatString != NULL) {
+        MmFreePagedPool(FormatString);
+    }
+
     return NewDeviceId;
 }
 

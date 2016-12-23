@@ -65,6 +65,13 @@ Author:
     RtlAtomicExchange32((volatile ULONG *)&((_Socket)->LastError), (_Error));
 
 //
+// This macro clears the network sockets last error state.
+//
+
+#define NET_SOCKET_CLEAR_LAST_ERROR(_Socket) \
+    NET_SOCKET_GET_AND_CLEAR_LAST_ERROR(_Socket)
+
+//
 // This macro initializes a network packet list.
 //
 
@@ -144,6 +151,7 @@ Author:
 #define NET_SPEED_10_MBPS 10000000ULL
 #define NET_SPEED_100_MBPS 100000000ULL
 #define NET_SPEED_1000_MBPS 1000000000ULL
+#define NET_SPEED_2500_MBPS 2500000000ULL
 
 //
 // Define the size of an ethernet address.
@@ -159,6 +167,13 @@ Author:
 #define IP6_PROTOCOL_NUMBER      0x86DD
 #define ARP_PROTOCOL_NUMBER      0x0806
 #define EAPOL_PROTOCOL_NUMBER    0x888E
+
+//
+// Define an "invalid" protocol number for networks that don't actually expect
+// to receive packets from the physical layer (e.g. Netlink).
+//
+
+#define INVALID_PROTOCOL_NUMBER (ULONG)-1
 
 //
 // Define the network socket flags.

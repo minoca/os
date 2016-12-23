@@ -577,7 +577,7 @@ Return Value:
                 ExpansionSize = 1;
 
             //
-            // \r is a carraige return.
+            // \r is a carriage return.
             //
 
             } else if (Specifier == 'r') {

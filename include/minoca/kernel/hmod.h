@@ -48,8 +48,8 @@ Author:
            (READ_UNALIGNED16((PUSHORT)(_Pointer) + 1) << 16))
 
 #define WRITE_UNALIGNED32(_Pointer, _Value)                     \
-    WRITE_UNALIGNED16(_Pointer, (_Value) & 0xFFFF),             \
-    WRITE_UNALIGNED16((PUSHORT)(_Pointer) + 1), (((_Value) >> 16) & 0xFFFF))
+    WRITE_UNALIGNED16((_Pointer), (_Value) & 0xFFFF),           \
+    WRITE_UNALIGNED16((PUSHORT)(_Pointer) + 1, (((_Value) >> 16) & 0xFFFF))
 
 #define READ_UNALIGNED64(_Pointer)              \
     (ULONGLONG)(READ_UNALIGNED32(_Pointer) |    \

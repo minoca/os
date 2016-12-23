@@ -486,7 +486,8 @@ Return Value:
 PACPI_OBJECT
 AcpipGetPackageObject (
     PACPI_OBJECT Package,
-    ULONG Index
+    ULONG Index,
+    BOOL ConvertConstants
     );
 
 /*++
@@ -500,6 +501,10 @@ Arguments:
     Package - Supplies a pointer to the package to read from.
 
     Index - Supplies the index of the element to get.
+
+    ConvertConstants - Supplies a boolean indicating whether or not constant
+        integers should be converted to non-constant integers before being
+        returned.
 
 Return Value:
 

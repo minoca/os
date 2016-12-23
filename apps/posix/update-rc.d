@@ -1,5 +1,10 @@
 #! /bin/sh
-## Copyright (c) 2015 Minoca Corp. All Rights Reserved.
+## Copyright (c) 2015 Minoca Corp.
+##
+##    This file is licensed under the terms of the GNU General Public License
+##    version 3. Alternative licensing terms are available. Contact
+##    info@minocacorp.com for details. See the LICENSE file at the root of this
+##    project for complete licensing information..
 ##
 ## Script Name:
 ##
@@ -61,8 +66,8 @@ validate_runlevels () {
 check_name () {
     local name
     name="$1"
-    if [ ! -f /etc/init.d/$name ]; then
-        echo "$me: Error: /etc/init.d/$name does not exist."
+    if [ ! -f $SYSROOT/etc/init.d/$name ]; then
+        echo "$me: Error: $SYSROOT/etc/init.d/$name does not exist."
         exit 1
     fi
 }
@@ -87,8 +92,8 @@ create_links () {
     ##
 
     for level in $levels; do
-        mkdir -p /etc/rc$level.d/
-        link_dest=/etc/rc$level.d/$action$sequence$name
+        mkdir -p $SYSROOT/etc/rc$level.d
+        link_dest=$SYSROOT/etc/rc$level.d/$action$sequence$name
 
         ##
         ## Only create the link if nothing already exists there.
@@ -98,13 +103,14 @@ create_links () {
             echo "$me: Skipping pre-existing $link_dest."
 
         else
+            $do_it cd $SYSROOT/etc/rc$level.d
             $do_it ln -s "../init.d/$name" "$link_dest"
         fi
     done
 }
 
 rename_links() {
-    local src_prefix dst_prefix name levels runlevels suffix link_dest seq
+    local src_prefix dst_prefix name levels runlevels suffix link_dest seq rcn
     src_prefix="$1"
     dst_prefix="$2"
     name="$3"
@@ -115,15 +121,16 @@ rename_links() {
 
     levels=`echo $runlevels | sed 's/\(.\)/\1 /g'`
     for level in $levels; do
-        if [ ! -d /etc/rc$level.d/ ]; then
+        if [ ! -d $SYSROOT/etc/rc$level.d/ ]; then
             continue
         fi
 
-        for f in /etc/rc$level.d/$src_prefix[0123456789][0123456789]$name; do
-            suffix=${f#/etc/rc$level.d/$src_prefix}
+        rcn=$SYSROOT/etc/rc$level.d
+        for f in $rcn/$src_prefix[0123456789][0123456789]$name; do
+            suffix=${f#$rcn/$src_prefix}
             seq=${suffix%$name}
             seq=$((100 - $seq))
-            link_dest=/etc/rc$level.d/$dst_prefix$seq$name
+            link_dest=$rcn/$dst_prefix$seq$name
 
             ##
             ## Only move the link if nothing already exists there.
@@ -184,7 +191,7 @@ while [ -n "$1" ] ; do
     ##
 
     remove)
-        script=/etc/init.d/$name
+        script=$SYSROOT/etc/init.d/$name
         if [ "$force" != "yes" ]; then
             if [ -f $script ]; then
                 echo "$me: Error: $script still exists!"
@@ -199,12 +206,12 @@ while [ -n "$1" ] ; do
 
         touch $script
         for level in 0 1 2 3 4 5 6 S; do
-            if [ ! -d /etc/rc$level.d/ ]; then
+            if [ ! -d $SYSROOT/etc/rc$level.d/ ]; then
                 continue
             fi
 
-            for f in /etc/rc$level.d/*; do
-                if [ $f -fe $script ]; then
+            for f in $SYSROOT/etc/rc$level.d/*; do
+                if [ $f -ef $script ]; then
                     $do_it rm $f
                 fi
             done
@@ -308,12 +315,12 @@ while [ -n "$1" ] ; do
             rename_links "S" "K" "$name" "$runlevels"
         fi
         ;;
-        
+
     *)
         echo "$me: Error: Unexpected argument $action."
         exit 1
         ;;
-        
+
     esac
 done
 

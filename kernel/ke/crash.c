@@ -58,7 +58,7 @@ KERNEL_API
 VOID
 KeCrashSystemEx (
     ULONG CrashCode,
-    PSTR CrashCodeString,
+    PCSTR CrashCodeString,
     ULONGLONG Parameter1,
     ULONGLONG Parameter2,
     ULONGLONG Parameter3,

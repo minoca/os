@@ -54,7 +54,7 @@ MmpMdGetFreeBinIndex (
     ULONGLONG Size
     );
 
-PSTR
+PCSTR
 PrintMemoryType (
     MEMORY_TYPE MemoryType
     );
@@ -684,7 +684,7 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
-PSTR
+PCSTR
 PrintMemoryType (
     MEMORY_TYPE MemoryType
     )

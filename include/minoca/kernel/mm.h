@@ -480,8 +480,7 @@ typedef struct _MEMORY_ACCOUNTING {
 
 Structure Description:
 
-    This structure stores memory page backing information for a section of
-    memory.
+    This structure stores image backing information for a section of memory.
 
 Members:
 
@@ -3224,7 +3223,7 @@ Return Value:
 
 VOID
 MmVolumeArrival (
-    PSTR VolumeName,
+    PCSTR VolumeName,
     ULONG VolumeNameLength,
     BOOL SystemVolume
     );
@@ -3379,6 +3378,53 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+KSTATUS
+MmPageFilePerformIo (
+    PIMAGE_BACKING ImageBacking,
+    PIO_BUFFER IoBuffer,
+    UINTN Offset,
+    UINTN SizeInBytes,
+    ULONG Flags,
+    ULONG TimeoutInMilliseconds,
+    BOOL Write,
+    PUINTN BytesCompleted
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs I/O on the page file region described by the given
+    image backing.
+
+Arguments:
+
+    ImageBacking - Supplies a pointer to the image backing that holds a device
+        handle and offset for the page file region.
+
+    IoBuffer - Supplies a pointer to an I/O buffer to use for the read or write.
+
+    Offset - Supplies the offset from the beginning of the file or device where
+        the I/O should be done.
+
+    SizeInBytes - Supplies the number of bytes to read or write.
+
+    Flags - Supplies flags regarding the I/O operation. See IO_FLAG_*
+        definitions.
+
+    TimeoutInMilliseconds - Supplies the number of milliseconds that the I/O
+        operation should be waited on before timing out. Use
+        WAIT_TIME_INDEFINITE to wait forever on the I/O.
+
+    BytesCompleted - Supplies the a pointer where the number of bytes actually
+        read or written will be returned.
+
+Return Value:
+
+    Status code.
 
 --*/
 

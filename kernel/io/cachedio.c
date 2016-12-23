@@ -225,12 +225,14 @@ Return Value:
     // trimming.
     //
 
-    TimidTrim = FALSE;
-    if ((IoContext->Flags & IO_FLAG_FS_DATA) != 0) {
-        TimidTrim = TRUE;
-    }
+    if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
+        TimidTrim = FALSE;
+        if ((IoContext->Flags & IO_FLAG_FS_DATA) != 0) {
+            TimidTrim = TRUE;
+        }
 
-    IopTrimPageCache(TimidTrim);
+        IopTrimPageCache(TimidTrim);
+    }
 
     //
     // If this is a write operation, then acquire the file object's lock
@@ -250,7 +252,9 @@ Return Value:
         // 3) Otherwise go clean some entries.
         //
 
-        if (IopIsPageCacheTooDirty() != FALSE) {
+        if ((IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) &&
+            (IopIsPageCacheTooDirty() != FALSE)) {
+
             if (FileObject->Properties.Type == IoObjectBlockDevice) {
                 IoContext->Flags |= IO_FLAG_DATA_SYNCHRONIZED;
 

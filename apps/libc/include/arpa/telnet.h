@@ -256,7 +256,7 @@ Author:
 #define TELOPT_NAOP 9
 
 //
-// Negotiate about carraige return disposition
+// Negotiate about carriage return disposition
 //
 
 #define TELOPT_NAOCRD 10

@@ -245,14 +245,6 @@ Author:
 #define OPEN_FLAG_ASYNCHRONOUS 0x00000800
 
 //
-// Set this flag if a file should be atomically unlinked after creation so that
-// it never appears in the namespace. The call will fail if the file already
-// exists or fails to be unlinked.
-//
-
-#define OPEN_FLAG_UNLINK_ON_CREATE 0x04000000
-
-//
 // Set this flag if mount points should not be followed on the final component.
 //
 
@@ -313,6 +305,25 @@ Author:
 //
 
 #define IO_FLAG_SERVICING_FAULT 0x40000000
+
+//
+// This flag is reserved for use by the page cache. It indicates that a write
+// I/O operation should preserve the data because the page cache is about to
+// release its copy of the data. The backing device may have previously been
+// acknowledging writes without actually writing to persistant storage.
+//
+
+#define IO_FLAG_HARD_FLUSH 0x20000000
+
+//
+// This flag is reserved for use by the page cache thread. It indicates that
+// hard flushes are allowed. Normal threads cannot perform hard flushes because
+// a hard flush may fail (e.g. there is no page file to back a shared memory
+// object). This failure should not be reported back to user mode, as it is
+// non-fatal.
+//
+
+#define IO_FLAG_HARD_FLUSH_ALLOWED 0x10000000
 
 //
 // This flag indicates that a write I/O operation should flush all the file
@@ -515,19 +526,19 @@ Author:
 #define TERMINAL_INPUT_STRIP 0x00000020
 
 //
-// Set this flag to map newlines (\n) to carraige returns (\r) on input.
+// Set this flag to map newlines (\n) to carriage returns (\r) on input.
 //
 
 #define TERMINAL_INPUT_NEWLINE_TO_CR 0x00000040
 
 //
-// Set this flag to ignore carraige returns.
+// Set this flag to ignore carriage returns.
 //
 
 #define TERMINAL_INPUT_IGNORE_CR 0x00000080
 
 //
-// Set this flag to map carraige return (\r) characters to newlines (\n) on
+// Set this flag to map carriage return (\r) characters to newlines (\n) on
 // input.
 //
 
@@ -577,19 +588,19 @@ Author:
 #define TERMINAL_OUTPUT_NEWLINE_TO_CRLF 0x00000002
 
 //
-// Set this flag to map carraige returns (\r) to newlines (\n) on output.
+// Set this flag to map carriage returns (\r) to newlines (\n) on output.
 //
 
 #define TERMINAL_OUTPUT_CR_TO_NEWLINE 0x00000004
 
 //
-// Set this flag to avoid carraige return output at column 0.
+// Set this flag to avoid carriage return output at column 0.
 //
 
 #define TERMINAL_OUTPUT_NO_CR_AT_COLUMN_ZERO 0x00000008
 
 //
-// Set this flag to have newline perform carraige return functionality.
+// Set this flag to have newline perform carriage return functionality.
 //
 
 #define TERMINAL_OUTPUT_NEWLINE_IS_CR 0x00000010
@@ -607,7 +618,7 @@ Author:
 #define TERMINAL_OUTPUT_NEWLINE_DELAY 0x00000040
 
 //
-// Set this flag to select carraige return delays, types 0 through 3.
+// Set this flag to select carriage return delays, types 0 through 3.
 // Type 1 delays for an amount dependent on column position. Type 2 is about
 // 0.1 seconds, and type 3 is about 0.15 seconds. If OFILL is set, type 1
 // transmits two fill characters and type 2 transmits four fill characters.
@@ -792,20 +803,17 @@ Author:
 
 #define TERMINAL_UNIMPLEMENTED_INPUT_FLAGS          \
     (TERMINAL_INPUT_ENABLE_PARITY_CHECK |           \
-     TERMINAL_INPUT_ANY_CHARACTER_RESTARTS_OUTPUT | \
      TERMINAL_INPUT_MARK_PARITY_ERRORS)
 
 #define TERMINAL_UNIMPLEMENTED_OUTPUT_FLAGS         \
     (TERMINAL_OUTPUT_NO_CR_AT_COLUMN_ZERO |         \
-     TERMINAL_OUTPUT_NEWLINE_IS_CR |                \
      TERMINAL_OUTPUT_USE_FILL_CHARACTERS |          \
      TERMINAL_OUTPUT_VERTICAL_TAB_DELAY |           \
      TERMINAL_OUTPUT_FORM_FEED_DELAY)
 
 #define TERMINAL_UNIMPLEMENTED_CONTROL_FLAGS        \
     (TERMINAL_CONTROL_2_STOP_BITS |                 \
-     TERMINAL_CONTROL_ENABLE_PARITY |               \
-     TERMINAL_CONTROL_ODD_PARITY)
+     TERMINAL_CONTROL_ENABLE_PARITY)
 
 //
 // Define the number of control characters in the old terminal settings
@@ -1100,7 +1108,7 @@ typedef struct _TERMINAL_SETTINGS_OLD {
     USHORT LocalFlags;
     UCHAR LineDiscipline;
     CHAR ControlCharacters[TERMINAL_SETTINGS_OLD_CONTROL_COUNT];
-} TERMINAL_SETTINGS_OLD, *pTERMINAL_SETTINGS_OLD;
+} TERMINAL_SETTINGS_OLD, *PTERMINAL_SETTINGS_OLD;
 
 /*++
 
@@ -1955,6 +1963,9 @@ Members:
     IoBuffer - Stores a pointer to the read or write buffer supplied by the
         caller.
 
+    IoBufferState - Stoers a pointer to the internal state used for bounce
+        buffering.
+
     IoFlags - Stores flags governing the behavior of the I/O. See
         IO_FLAG_* definitions.
 
@@ -2067,6 +2078,11 @@ Members:
         use to store context for the completion callback routine. It will be
         passed to the completion routine.
 
+    ListEntry - Stores a list entry that the current driver processing the IRP
+        can use to put the IRP on a list. Drivers that have just gained control
+        of the IRP in either direction should not make assumptions about its
+        state.
+
     QueryResources - Stores the results from a Query Resources IRP.
 
     StartDevice - Stores the parameters to a Start Device IRP.
@@ -2100,6 +2116,7 @@ struct _IRP {
     KSTATUS Status;
     PIRP_COMPLETION_ROUTINE CompletionRoutine;
     PVOID CompletionContext;
+    LIST_ENTRY ListEntry;
     union {
         IRP_QUERY_RESOURCES QueryResources;
         IRP_START_DEVICE StartDevice;
@@ -2723,9 +2740,9 @@ IoCreateDevice (
     PDRIVER BusDriver,
     PVOID BusDriverContext,
     PDEVICE ParentDevice,
-    PSTR DeviceId,
-    PSTR ClassId,
-    PSTR CompatibleIds,
+    PCSTR DeviceId,
+    PCSTR ClassId,
+    PCSTR CompatibleIds,
     PDEVICE *NewDevice
     );
 
@@ -2994,7 +3011,7 @@ Return Value:
 --*/
 
 KERNEL_API
-PSTR
+PCSTR
 IoGetCompatibleDeviceIds (
     PDEVICE Device
     );
@@ -3020,7 +3037,7 @@ Return Value:
 --*/
 
 KERNEL_API
-PSTR
+PCSTR
 IoGetDeviceClassId (
     PDEVICE Device
     );
@@ -3046,7 +3063,7 @@ Return Value:
 KERNEL_API
 BOOL
 IoIsDeviceIdInCompatibleIdList (
-    PSTR DeviceId,
+    PCSTR DeviceId,
     PDEVICE Device
     );
 
@@ -3218,7 +3235,7 @@ IoSetDeviceDriverErrorEx (
     KSTATUS Status,
     PDRIVER Driver,
     ULONG DriverCode,
-    PSTR SourceFile,
+    PCSTR SourceFile,
     ULONG LineNumber
     );
 
@@ -4503,7 +4520,7 @@ KSTATUS
 IoCreateSymbolicLink (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR LinkName,
+    PCSTR LinkName,
     ULONG LinkNameSize,
     PSTR LinkTarget,
     ULONG LinkTargetSize
@@ -4949,7 +4966,7 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoLoadFile (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     PLOAD_FILE_COMPLETION_ROUTINE CompletionRoutine,
     PVOID CompletionContext
@@ -5012,7 +5029,7 @@ KSTATUS
 IoCreatePipe (
     BOOL FromKernelMode,
     PIO_HANDLE Directory,
-    PSTR Path,
+    PCSTR Path,
     ULONG PathLength,
     ULONG OpenFlags,
     FILE_PERMISSIONS CreatePermissions,
@@ -5064,9 +5081,9 @@ IoCreateTerminal (
     BOOL FromKernelMode,
     PIO_HANDLE MasterDirectory,
     PIO_HANDLE SlaveDirectory,
-    PSTR MasterPath,
+    PCSTR MasterPath,
     UINTN MasterPathLength,
-    PSTR SlavePath,
+    PCSTR SlavePath,
     UINTN SlavePathLength,
     ULONG MasterAccess,
     ULONG MasterOpenFlags,
@@ -6516,7 +6533,7 @@ Return Value:
 
 KSTATUS
 IoOpenPageFile (
-    PSTR Path,
+    PCSTR Path,
     ULONG PathSize,
     ULONG Access,
     ULONG Flags,
@@ -6558,9 +6575,9 @@ Return Value:
 
 KSTATUS
 IoPathAppend (
-    PSTR Prefix,
+    PCSTR Prefix,
     ULONG PrefixSize,
-    PSTR Component,
+    PCSTR Component,
     ULONG ComponentSize,
     ULONG AllocationTag,
     PSTR *AppendedPath,
@@ -6588,7 +6605,7 @@ Arguments:
     AllocationTag - Supplies the tag to use for the combined allocation.
 
     AppendedPath - Supplies a pointer where the new path will be returned. The
-        caller is responsible for freeing this memory..
+        caller is responsible for freeing this memory.
 
     AppendedPathSize - Supplies a pointer where the size of the appended bath
         buffer in bytes including the null terminator will be returned.
@@ -6667,7 +6684,7 @@ Return Value:
 
 KSTATUS
 IoLoadDriver (
-    PSTR DriverName,
+    PCSTR DriverName,
     PDRIVER *DriverOut
     );
 
@@ -6693,8 +6710,8 @@ Return Value:
 
 KSTATUS
 IoAddDeviceDatabaseEntry (
-    PSTR DeviceId,
-    PSTR DriverName
+    PCSTR DeviceId,
+    PCSTR DriverName
     );
 
 /*++
@@ -6729,8 +6746,8 @@ Return Value:
 
 KSTATUS
 IoAddDeviceClassDatabaseEntry (
-    PSTR ClassId,
-    PSTR DriverName
+    PCSTR ClassId,
+    PCSTR DriverName
     );
 
 /*++

@@ -86,7 +86,7 @@ Environment:
 BOOL
 RtlpConvertFormatSpecifierWide (
     PPRINT_FORMAT_CONTEXT Context,
-    PWSTR Format,
+    PCWSTR Format,
     PULONG Index,
     va_list *Arguments
     );
@@ -140,7 +140,7 @@ RtlpFormatWriteCharacterWide (
 
 ULONGLONG
 RtlpGetPositionalArgumentWide (
-    PWSTR Format,
+    PCWSTR Format,
     ULONG ArgumentNumber,
     va_list *Arguments
     );
@@ -171,7 +171,7 @@ RtlPrintToStringWide (
     PWSTR Destination,
     ULONG DestinationSize,
     CHARACTER_ENCODING Encoding,
-    PWSTR Format,
+    PCWSTR Format,
     ...
     )
 
@@ -226,7 +226,7 @@ RtlFormatStringWide (
     PWSTR Destination,
     ULONG DestinationSize,
     CHARACTER_ENCODING Encoding,
-    PWSTR Format,
+    PCWSTR Format,
     va_list ArgumentList
     )
 
@@ -295,7 +295,7 @@ RTL_API
 BOOL
 RtlFormatWide (
     PPRINT_FORMAT_CONTEXT Context,
-    PWSTR Format,
+    PCWSTR Format,
     va_list ArgumentList
     )
 
@@ -377,7 +377,7 @@ FormatWideEnd:
 BOOL
 RtlpConvertFormatSpecifierWide (
     PPRINT_FORMAT_CONTEXT Context,
-    PWSTR Format,
+    PCWSTR Format,
     PULONG Index,
     va_list *Arguments
     )
@@ -998,6 +998,7 @@ Return Value:
             ASSERT(IntegerArgument != (UINTN)NULL);
 
             *((PINT)(UINTN)IntegerArgument) = Context->CharactersWritten;
+            Result = TRUE;
 
         } else {
             Result = RtlpPrintIntegerWide(Context,
@@ -2722,7 +2723,7 @@ Return Value:
 
 ULONGLONG
 RtlpGetPositionalArgumentWide (
-    PWSTR Format,
+    PCWSTR Format,
     ULONG ArgumentNumber,
     va_list *Arguments
     )

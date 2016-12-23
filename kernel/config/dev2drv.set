@@ -7,6 +7,7 @@
 # Driver = The driver that manages this device or device class.
 #
 
+CAHCI=ahci.drv
 CCharacter=null.drv
 CDisk=part.drv
 CEHCI=ehci.drv
@@ -78,11 +79,18 @@ DVEN_8086&DEV_27B8=null.drv
 DVEN_8086&DEV_7113=null.drv
 DVEN_8086&DEV_1209=e100.drv
 DVEN_8086&DEV_1229=e100.drv
+DVEN_8086&DEV_1004=e1000.drv
+DVEN_8086&DEV_100E=e1000.drv
+DVEN_8086&DEV_100F=e1000.drv
+DVEN_8086&DEV_10D3=e1000.drv
+DVEN_8086&DEV_1521=e1000.drv
+DVEN_8086&DEV_1F45=e1000.drv
 DVEN_8086&DEV_1237=null.drv
 DVEN_8086&DEV_27DC=e100.drv
 DVEN_10EC&DEV_8136=rtl81xx.drv
 DVEN_10EC&DEV_8139=rtl81xx.drv
 DVEN_10EC&DEV_8168=rtl81xx.drv
+DVEN_1022&DEV_2000=pcnet32.drv
 
 # USB device IDs
 DVID_0424&PID_EC00=smsc95xx.drv

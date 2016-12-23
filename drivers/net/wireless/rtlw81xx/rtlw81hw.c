@@ -1712,9 +1712,9 @@ Return Value:
         // Filter out traffic that is not coming from the BSSID.
         //
 
-        Value = *((PULONG)&(Bss->Bssid[0]));
+        Value = READ_UNALIGNED32(&(Bss->Bssid[0]));
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterBssid0, Value);
-        Value = *((PUSHORT)&(Bss->Bssid[4]));
+        Value = READ_UNALIGNED16(&(Bss->Bssid[4]));
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterBssid1, Value);
 
         //

@@ -295,6 +295,19 @@ BOOL HlNs16550ForceEnumeration = FALSE;
 
 BOOL HlNs16550ForceNoEnumeration = FALSE;
 
+NS16550 HlNs16550Default = {
+    NULL,
+    NS16550_DEFAULT_IO_PORT_BASE,
+    0,
+    0,
+    NS16550_DEFAULT_BASE_BAUD,
+    0,
+    0,
+    0,
+    HlpNs16550ReadIo8,
+    HlpNs16550WriteIo8
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -421,8 +434,7 @@ Return Value:
     // Enumerate a forced serial device.
     //
 
-    IoPortBase = NS16550_DEFAULT_IO_PORT_BASE;
-    Status = HlpNs16550RegisterDevice(IoPortBase, 0, 0, NULL);
+    Status = HlpNs16550RegisterDevice(0, 0, 0, NULL);
     if (!KSUCCESS(Status)) {
         goto Ns16550ModuleEntryEnd;
     }
@@ -477,33 +489,40 @@ Return Value:
     // Allocate the context and fill it in.
     //
 
-    DeviceContext = HlAllocateMemory(sizeof(NS16550),
-                                     NS16550_ALLOCATION_TAG,
-                                     FALSE,
-                                     NULL);
+    if ((IoPortBase == 0) && (PhysicalBase == 0) && (Size == 0) &&
+        (OemData == NULL)) {
 
-    if (DeviceContext == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Ns16550RegisterDeviceEnd;
-    }
+        DeviceContext = &HlNs16550Default;
 
-    RtlZeroMemory(DeviceContext, sizeof(NS16550));
-    DeviceContext->PhysicalMemoryBase = PhysicalBase;
-    DeviceContext->IoBase = IoPortBase;
-    DeviceContext->BaseBaud = NS16550_DEFAULT_BASE_BAUD;
-    DeviceContext->RegionSize = Size;
+    } else {
+        DeviceContext = HlAllocateMemory(sizeof(NS16550),
+                                         NS16550_ALLOCATION_TAG,
+                                         FALSE,
+                                         NULL);
 
-    //
-    // Use the OEM data if it's valid.
-    //
+        if (DeviceContext == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto Ns16550RegisterDeviceEnd;
+        }
 
-    if ((OemData != NULL) &&
-        (OemData->Signature == DEBUG_PORT_16550_OEM_DATA_SIGNATURE)) {
+        RtlZeroMemory(DeviceContext, sizeof(NS16550));
+        DeviceContext->PhysicalMemoryBase = PhysicalBase;
+        DeviceContext->IoBase = IoPortBase;
+        DeviceContext->BaseBaud = NS16550_DEFAULT_BASE_BAUD;
+        DeviceContext->RegionSize = Size;
 
-        DeviceContext->RegisterOffset = OemData->RegisterOffset;
-        DeviceContext->RegisterShift = OemData->RegisterShift;
-        DeviceContext->BaseBaud = OemData->BaseBaud;
-        DeviceContext->Flags = OemData->Flags;
+        //
+        // Use the OEM data if it's valid.
+        //
+
+        if ((OemData != NULL) &&
+            (OemData->Signature == DEBUG_PORT_16550_OEM_DATA_SIGNATURE)) {
+
+            DeviceContext->RegisterOffset = OemData->RegisterOffset;
+            DeviceContext->RegisterShift = OemData->RegisterShift;
+            DeviceContext->BaseBaud = OemData->BaseBaud;
+            DeviceContext->Flags = OemData->Flags;
+        }
     }
 
     //
@@ -573,6 +592,9 @@ Return Value:
     UCHAR Value;
 
     Device = Context;
+    if (Device == NULL) {
+        Device = &HlNs16550Default;
+    }
 
     //
     // Compute the baud rate divisor.
@@ -727,6 +749,10 @@ Return Value:
     UCHAR StatusRegister;
 
     Device = Context;
+    if (Device == NULL) {
+        Device = &HlNs16550Default;
+    }
+
     Bytes = Data;
     for (ByteIndex = 0; ByteIndex < Size; ByteIndex += 1) {
 
@@ -800,6 +826,10 @@ Return Value:
     UCHAR StatusRegister;
 
     Device = Context;
+    if (Device == NULL) {
+        Device = &HlNs16550Default;
+    }
+
     ByteCount = *Size;
     Bytes = Data;
     Status = STATUS_NO_DATA_AVAILABLE;
@@ -854,6 +884,10 @@ Return Value:
     BYTE StatusRegister;
 
     Device = Context;
+    if (Device == NULL) {
+        Device = &HlNs16550Default;
+    }
+
     *ReceiveDataAvailable = FALSE;
     StatusRegister = NS16550_READ8(Device, Ns16550LineStatus);
     if ((StatusRegister & NS16550_LINE_STATUS_DATA_READY) != 0) {

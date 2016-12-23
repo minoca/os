@@ -105,6 +105,26 @@ Environment:
 #define PAGE_CACHE_ENTRY_FLAG_MAPPED 0x00000008
 
 //
+// Set this flag if the page cache entry was ever marked dirty.
+//
+
+#define PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY 0x00000010
+
+//
+// Set this flag if the page cache entry belongs to a file object that does not
+// preserve the data to a backing image unless a hard flush is performed.
+//
+
+#define PAGE_CACHE_ENTRY_FLAG_HARD_FLUSH_REQUIRED 0x00000020
+
+//
+// Set this flag to indicate that a hard flush is requested on the next attempt
+// to flush the page cache entry.
+//
+
+#define PAGE_CACHE_ENTRY_FLAG_HARD_FLUSH_REQUESTED 0x00000040
+
+//
 // If any of the dirty mask bits are set, then the page cache entry needs to
 // be cleaned and flushed.
 //
@@ -176,11 +196,35 @@ Environment:
 // --------------------------------------------------------------------- Macros
 //
 
+//
+// This macro determines whether or not a page cache entry belogning to a file
+// object of the given type can be linked to another page cache entry.
+//
+
 #define IS_IO_OBJECT_TYPE_LINKABLE(_IoObjectType)     \
     ((_IoObjectType == IoObjectRegularFile) ||        \
      (_IoObjectType == IoObjectSymbolicLink) ||       \
      (_IoObjectType == IoObjectSharedMemoryObject) || \
      (_IoObjectType == IoObjectBlockDevice))
+
+//
+// This macro determines whether or not a hard flush is required based on the
+// given page cache entry flags.
+//
+
+#define IS_HARD_FLUSH_REQUIRED(_CacheFlags)                                \
+    ((((_CacheFlags) & PAGE_CACHE_ENTRY_FLAG_HARD_FLUSH_REQUIRED) != 0) && \
+     (((_CacheFlags) & PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY) != 0))
+
+//
+// This macro determines whether or not a hard flush is requested in the given
+// set of page cache entry flags.
+//
+
+#define IS_HARD_FLUSH_REQUESTED(_CacheFlags)                                \
+    ((((_CacheFlags) & PAGE_CACHE_ENTRY_FLAG_HARD_FLUSH_REQUIRED) != 0) &&  \
+     (((_CacheFlags) & PAGE_CACHE_ENTRY_FLAG_HARD_FLUSH_REQUESTED) != 0) && \
+     (((_CacheFlags) & PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY) != 0))
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -901,6 +945,7 @@ Return Value:
     PPAGE_CACHE_ENTRY DirtyEntry;
     BOOL MarkDirty;
     ULONG OldFlags;
+    ULONG SetFlags;
 
     //
     // Try to get the backing entry if possible.
@@ -927,9 +972,10 @@ Return Value:
     // is held.
     //
 
-    OldFlags = RtlAtomicOr32(&(DirtyEntry->Flags),
-                             PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING);
+    SetFlags = PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING |
+               PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY;
 
+    OldFlags = RtlAtomicOr32(&(DirtyEntry->Flags), SetFlags);
     if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
         RtlAtomicAdd(&IoPageCacheDirtyPendingPageCount, 1);
 
@@ -2335,6 +2381,8 @@ Return Value:
 
         if (Destroyed != FALSE) {
             IopMarkPageCacheEntryClean(CacheEntry, FALSE);
+            RtlAtomicAnd32(&(CacheEntry->Flags),
+                           ~PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY);
         }
     }
 
@@ -2599,10 +2647,6 @@ Return Value:
         //
 
         if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_PENDING) == 0) {
-            if (Entry->ListEntry.Next != NULL) {
-                LIST_REMOVE(&(Entry->ListEntry));
-                Entry->ListEntry.Next = NULL;
-            }
 
             //
             // If requested, move the page cache entry to the back of the LRU
@@ -2612,6 +2656,11 @@ Return Value:
             //
 
             if (MoveToCleanList != FALSE) {
+                if (Entry->ListEntry.Next != NULL) {
+                    LIST_REMOVE(&(Entry->ListEntry));
+                    Entry->ListEntry.Next = NULL;
+                }
+
                 INSERT_BEFORE(&(Entry->ListEntry), &IoPageCacheCleanList);
             }
         }
@@ -2655,6 +2704,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     BOOL MarkedDirty;
     ULONG OldFlags;
+    ULONG SetFlags;
 
     FileObject = Entry->FileObject;
 
@@ -2697,7 +2747,8 @@ Return Value:
         KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
     }
 
-    OldFlags = RtlAtomicOr32(&(DirtyEntry->Flags), PAGE_CACHE_ENTRY_FLAG_DIRTY);
+    SetFlags = PAGE_CACHE_ENTRY_FLAG_DIRTY | PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY;
+    OldFlags = RtlAtomicOr32(&(DirtyEntry->Flags), SetFlags);
 
     ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_OWNER) != 0);
 
@@ -3405,6 +3456,9 @@ Return Value:
     }
 
     NewEntry->ReferenceCount = 1;
+    if ((FileObject->Flags & FILE_OBJECT_FLAG_HARD_FLUSH_REQUIRED) != 0) {
+        NewEntry->Flags |= PAGE_CACHE_ENTRY_FLAG_HARD_FLUSH_REQUIRED;
+    }
 
 CreatePageCacheEntryEnd:
     return NewEntry;
@@ -3515,6 +3569,7 @@ Return Value:
     FileObject = Entry->FileObject;
 
     ASSERT((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0);
+    ASSERT((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY) == 0);
     ASSERT(Entry->ListEntry.Next == NULL);
     ASSERT(Entry->ReferenceCount == 0);
     ASSERT(Entry->Node.Parent == NULL);
@@ -3612,7 +3667,6 @@ Return Value:
     PVOID VirtualAddress;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(NewEntry->FileObject->Lock));
-    ASSERT(NewEntry->Flags == 0);
 
     //
     // Insert the new entry into its file object's tree.
@@ -3663,7 +3717,7 @@ Return Value:
 
             IoPageCacheEntryAddReference(NewEntry);
             LinkEntry->BackingEntry = NewEntry;
-            NewEntry->Flags = PAGE_CACHE_ENTRY_FLAG_OWNER;
+            NewEntry->Flags |= PAGE_CACHE_ENTRY_FLAG_OWNER;
             ClearFlags = PAGE_CACHE_ENTRY_FLAG_OWNER |
                          PAGE_CACHE_ENTRY_FLAG_MAPPED;
 
@@ -3869,7 +3923,7 @@ Return Value:
             // Flush some dirty file objects.
             //
 
-            Status = IopFlushFileObjects(0, 0, NULL);
+            Status = IopFlushFileObjects(0, IO_FLAG_HARD_FLUSH_ALLOWED, NULL);
             if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_DIRTY_LISTS) != 0) {
                 IopCheckDirtyFileObjectsList();
             }
@@ -3937,11 +3991,13 @@ Return Value:
     UINTN BytesToWrite;
     PPAGE_CACHE_ENTRY CacheEntry;
     BOOL Clean;
+    ULONG ClearFlags;
     PFILE_OBJECT FileObject;
     IO_OFFSET FileOffset;
     ULONGLONG FileSize;
     IO_CONTEXT IoContext;
     BOOL MarkedClean;
+    ULONG OldFlags;
     ULONG PageSize;
     KSTATUS Status;
 
@@ -3981,6 +4037,24 @@ Return Value:
 
         MarkedClean = IopMarkPageCacheEntryClean(CacheEntry, TRUE);
         if (MarkedClean != FALSE) {
+
+            //
+            // If hard flushes are allowed and one is requested, then update
+            // the flags.
+            //
+
+            if (((Flags & IO_FLAG_HARD_FLUSH_ALLOWED) != 0) &&
+                (IS_HARD_FLUSH_REQUESTED(CacheEntry->Flags) != FALSE)) {
+
+                ClearFlags = PAGE_CACHE_ENTRY_FLAG_HARD_FLUSH_REQUESTED |
+                             PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY;
+
+                OldFlags = RtlAtomicAnd32(&(CacheEntry->Flags), ~ClearFlags);
+                if (IS_HARD_FLUSH_REQUESTED(OldFlags) != FALSE) {
+                    Flags |= IO_FLAG_HARD_FLUSH;
+                }
+            }
+
             Clean = FALSE;
         }
 
@@ -4214,6 +4288,7 @@ Return Value:
     LIST_ENTRY LocalList;
     PSHARED_EXCLUSIVE_LOCK Lock;
     PLIST_ENTRY MoveList;
+    ULONG OrFlags;
     BOOL PageTakenDown;
     KSTATUS Status;
 
@@ -4333,6 +4408,9 @@ Return Value:
 
             if (CacheEntry->Node.Parent == NULL) {
                 IopMarkPageCacheEntryClean(CacheEntry, FALSE);
+                RtlAtomicAnd32(&(CacheEntry->Flags),
+                               ~PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY);
+
                 PageTakenDown = TRUE;
 
             //
@@ -4346,10 +4424,28 @@ Return Value:
             } else {
                 Status = IopUnmapPageCacheEntrySections(CacheEntry);
                 if (KSUCCESS(Status)) {
-                    if ((CacheEntry->Flags &
-                         PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
+
+                    //
+                    // If a hard flush is required for this cache entry and it
+                    // was dirty at some point, request a hard flush and mark
+                    // the page cache entry dirty again.
+                    //
+
+                    if (IS_HARD_FLUSH_REQUIRED(CacheEntry->Flags) != FALSE) {
+
+                        ASSERT(CacheEntry->BackingEntry == NULL);
+
+                        OrFlags = PAGE_CACHE_ENTRY_FLAG_HARD_FLUSH_REQUESTED;
+                        RtlAtomicOr32(&(CacheEntry->Flags), OrFlags);
+                        IopMarkPageCacheEntryDirty(CacheEntry);
+
+                    } else if ((CacheEntry->Flags &
+                                PAGE_CACHE_ENTRY_FLAG_DIRTY_MASK) == 0) {
 
                         IopRemovePageCacheEntryFromTree(CacheEntry);
+                        RtlAtomicAnd32(&(CacheEntry->Flags),
+                                       ~PAGE_CACHE_ENTRY_FLAG_WAS_DIRTY);
+
                         PageTakenDown = TRUE;
                     }
                 }

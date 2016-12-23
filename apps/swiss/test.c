@@ -69,7 +69,7 @@ Environment:
     "  -u file -- The file exists and has its set-user-ID flag set.\n"         \
     "  -w file -- The file exists and is writable.\n"                          \
     "  -x file -- The file exists and is executable.\n"                        \
-    "  file1 -fe file2 -- True if file1 and file2 have the same device and \n" \
+    "  file1 -ef file2 -- True if file1 and file2 have the same device and \n" \
     "      file serial numbers.\n"                                             \
     "  file1 -nt file2 -- True if file1 has a later modification date than \n" \
     "      file2.\n"                                                           \

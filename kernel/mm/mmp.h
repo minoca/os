@@ -2170,7 +2170,7 @@ KSTATUS
 MmpPageOut (
     PPAGING_ENTRY PagingEntry,
     PIMAGE_SECTION Section,
-    UINTN SectionOffset,
+    UINTN PageOffset,
     PHYSICAL_ADDRESS PhysicalAddress,
     PIO_BUFFER IoBuffer,
     PMEMORY_RESERVATION SwapRegion,
@@ -2192,9 +2192,9 @@ Arguments:
     Section - Supplies a pointer to the image section, snapped from the paging
         entry while the physical page lock was still held.
 
-    SectionOffset - Supplies the offset into the section in pages where this
-        page resides, snapped form the paging entry while the physical page
-        lock was still held.
+    PageOffset - Supplies the offset into the section in pages where this page
+        resides, snapped form the paging entry while the physical page lock was
+        still held.
 
     PhysicalAddress - Supplies the address of the physical page to swap out.
 

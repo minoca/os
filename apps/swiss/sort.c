@@ -1339,7 +1339,7 @@ Return Value:
         } else if (Character == '\n') {
 
             //
-            // Peel off a carraige return too if it's there.
+            // Peel off a carriage return too if it's there.
             //
 
             if ((Holding->Size != 0) &&

@@ -128,6 +128,7 @@ Return Value:
     }
 
     ExceptionStacks = ArP0ExceptionStacks;
+    InterruptTable = ArP0InterruptTable;
     if (PhysicalMode == FALSE) {
 
         //
@@ -135,7 +136,6 @@ Return Value:
         // subsystem is not yet online.
         //
 
-        InterruptTable = ArP0InterruptTable;
         if (ProcessorStructures == NULL) {
             ProcessorBlock = &ArP0ProcessorBlock;
 

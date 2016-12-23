@@ -79,7 +79,7 @@ PspLoaderThread (
 
 KSTATUS
 PspLoadExecutable (
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File,
     PIMAGE_BUFFER Buffer,
     PPROCESS_START_DATA StartData
@@ -1189,7 +1189,7 @@ Return Value:
 
 PKPROCESS
 PsCreateProcess (
-    PSTR CommandLine,
+    PCSTR CommandLine,
     ULONG CommandLineSize,
     PVOID RootDirectoryPathPoint,
     PVOID WorkingDirectoryPathPoint,
@@ -1880,7 +1880,7 @@ CopyProcessEnd:
 
 PKPROCESS
 PspCreateProcess (
-    PSTR CommandLine,
+    PCSTR CommandLine,
     ULONG CommandLineSize,
     PPROCESS_ENVIRONMENT SourceEnvironment,
     PPROCESS_IDENTIFIERS Identifiers,
@@ -1936,7 +1936,7 @@ Return Value:
 
 {
 
-    PSTR BinaryName;
+    PCSTR BinaryName;
     ULONG BinaryNameSize;
     PPROCESS_ENVIRONMENT Environment;
     PSTR FoundName;
@@ -2860,6 +2860,8 @@ Return Value:
     if (Process->Environment != NULL) {
         PsDestroyEnvironment(Process->Environment);
         Process->Environment = NULL;
+        Process->BinaryName = NULL;
+        Process->BinaryNameSize = 0;
     }
 
     if (Process->HandleTable != NULL) {
@@ -3420,7 +3422,7 @@ LoaderThreadEnd:
 
 KSTATUS
 PspLoadExecutable (
-    PSTR BinaryName,
+    PCSTR BinaryName,
     PIMAGE_FILE_INFORMATION File,
     PIMAGE_BUFFER Buffer,
     PPROCESS_START_DATA StartData

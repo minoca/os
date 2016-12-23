@@ -341,6 +341,7 @@ Author:
 #define TCP_SOCKET_FLAG_RECEIVE_MISSING_SEGMENTS     0x00000200
 #define TCP_SOCKET_FLAG_NO_DELAY                     0x00000400
 #define TCP_SOCKET_FLAG_WINDOW_SCALING               0x00000800
+#define TCP_SOCKET_FLAG_CONNECT_INTERRUPTED          0x00001000
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -429,6 +430,9 @@ Members:
         list.
 
     State - Stores the connection state of the socket.
+
+    PreviousState - Stores the previous state of the socket, to debug where
+        transitions are coming from.
 
     Flags - Stores a bitmask of TCP flags. See TCP_SOCKET_FLAG_* for
         definitions.
@@ -601,6 +605,7 @@ typedef struct _TCP_SOCKET {
     NET_SOCKET NetSocket;
     LIST_ENTRY ListEntry;
     TCP_STATE State;
+    TCP_STATE PreviousState;
     ULONG Flags;
     LONG TimerReferenceCount;
     ULONG SendInitialSequence;

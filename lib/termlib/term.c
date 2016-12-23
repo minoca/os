@@ -79,19 +79,19 @@ Structure Description:
 
 Members:
 
-    Sequence - Supplies a pointer to a string containing the escape sequence
+    Sequence - Stores a pointer to a string containing the escape sequence
         (after the escape) corresponding to this key.
 
-    ApplicationMode - Supplies a boolean indicating if this key represents
-        application mode keys or normal mode keys.
+    Control - Stores the control bits for this entry. See TERMINAL_KEY_FLAG_*
+        definitions.
 
-    Key - Supplies the corresponding key code for this sequence.
+    Key - Stores the corresponding key code for this sequence.
 
 --*/
 
 typedef struct _TERMINAL_KEY_ENTRY {
     PSTR Sequence;
-    BOOL ApplicationMode;
+    UCHAR Control;
     TERMINAL_KEY Key;
 } TERMINAL_KEY_ENTRY, *PTERMINAL_KEY_ENTRY;
 
@@ -120,9 +120,11 @@ TERMINAL_DECODE_ENTRY TermCommandTable[] = {
     {"[", "D", TerminalCommandCursorLeft},
     {"[", "f", TerminalCommandCursorMove},
     {"[", "H", TerminalCommandCursorMove},
+    {"[", "I", TerminalCommandCursorForwardTabStops},
     {"[", "d", TerminalCommandSetCursorRowAbsolute},
     {"[", "e", TerminalCommandCursorDown},
     {"[", "G", TerminalCommandSetCursorColumnAbsolute},
+    {"[", "Z", TerminalCommandCursorBackwardTabStops},
     {"", "c", TerminalCommandReset},
     {"", "D", TerminalCommandCursorDown},
     {"", "E", TerminalCommandNextLine},
@@ -165,16 +167,44 @@ TERMINAL_DECODE_ENTRY TermCommandTable[] = {
 };
 
 TERMINAL_KEY_ENTRY TermKeyTable[] = {
-    {"[A", FALSE, TerminalKeyUp},
-    {"[B", FALSE, TerminalKeyDown},
-    {"[C", FALSE, TerminalKeyRight},
-    {"[D", FALSE, TerminalKeyLeft},
-    {"[2~", FALSE, TerminalKeyInsert},
-    {"[3~", FALSE, TerminalKeyDelete},
-    {"[1~", FALSE, TerminalKeyHome},
-    {"[4~", FALSE, TerminalKeyEnd},
-    {"[5~", FALSE, TerminalKeyPageUp},
-    {"[6~", FALSE, TerminalKeyPageDown},
+    {"[A", 0, TerminalKeyUp},
+    {"[B", 0, TerminalKeyDown},
+    {"[C", 0, TerminalKeyRight},
+    {"[D", 0, TerminalKeyLeft},
+    {"[A", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyUp},
+    {"[B", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyDown},
+    {"[C", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyRight},
+    {"[D", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyLeft},
+    {"[2~", 0, TerminalKeyInsert},
+    {"[3~", 0, TerminalKeyDelete},
+    {"[1~", 0, TerminalKeyHome},
+    {"[4~", 0, TerminalKeyEnd},
+    {"[5~", 0, TerminalKeyPageUp},
+    {"[6~", 0, TerminalKeyPageDown},
+    {"[11~", 0, TerminalKeyF1},
+    {"[12~", 0, TerminalKeyF2},
+    {"[13~", 0, TerminalKeyF3},
+    {"[14~", 0, TerminalKeyF4},
+    {"[15~", 0, TerminalKeyF5},
+    {"[17~", 0, TerminalKeyF6},
+    {"[18~", 0, TerminalKeyF7},
+    {"[19~", 0, TerminalKeyF8},
+    {"[20~", 0, TerminalKeyF9},
+    {"[21~", 0, TerminalKeyF10},
+    {"[23~", 0, TerminalKeyF11},
+    {"[24~", 0, TerminalKeyF12},
+    {"[23~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF1},
+    {"[24~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF2},
+    {"[25~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF3},
+    {"[26~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF4},
+    {"[28~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF5},
+    {"[29~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF6},
+    {"[31~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF7},
+    {"[32~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF8},
+    {"[33~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF9},
+    {"[34~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF10},
+    {"[11~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF11},
+    {"[12~", TERMINAL_KEY_FLAG_SHIFT, TerminalKeyF12},
 };
 
 //
@@ -424,6 +454,8 @@ Return Value:
     case TerminalCommandScrollDown:
     case TerminalCommandSetCursorRowAbsolute:
     case TerminalCommandSetCursorColumnAbsolute:
+    case TerminalCommandCursorForwardTabStops:
+    case TerminalCommandCursorBackwardTabStops:
         if (Command->ParameterCount == 0) {
             Command->Parameter[0] = 1;
         }
@@ -793,14 +825,18 @@ Return Value:
 
 {
 
+    UCHAR Control;
     UINTN DecodeCount;
     PTERMINAL_KEY_ENTRY DecodeEntry;
     UINTN DecodeIndex;
 
+    Control = KeyData->Flags & ~TERMINAL_KEY_FLAG_ALT;
     DecodeCount = sizeof(TermKeyTable) / sizeof(TermKeyTable[0]);
     for (DecodeIndex = 0; DecodeIndex < DecodeCount; DecodeIndex += 1) {
         DecodeEntry = &(TermKeyTable[DecodeIndex]);
-        if (DecodeEntry->Key == KeyData->Key) {
+        if ((DecodeEntry->Key == KeyData->Key) &&
+            (DecodeEntry->Control == Control)) {
+
             break;
         }
     }

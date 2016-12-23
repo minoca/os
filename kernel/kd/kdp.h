@@ -288,7 +288,7 @@ Return Value:
 
 VOID
 KdpInternalPrint (
-    PSTR Format,
+    PCSTR Format,
     ...
     );
 

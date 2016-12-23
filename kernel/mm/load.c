@@ -607,8 +607,7 @@ Return Value:
 
             OpenFlags = OPEN_FLAG_CREATE |
                         OPEN_FLAG_FAIL_IF_EXISTS |
-                        OPEN_FLAG_SHARED_MEMORY |
-                        OPEN_FLAG_UNLINK_ON_CREATE;
+                        OPEN_FLAG_SHARED_MEMORY;
 
             Status = IoOpen(FALSE,
                             NULL,

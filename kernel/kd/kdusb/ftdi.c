@@ -364,13 +364,6 @@ Return Value:
     Device->TransferIn.Direction = DebugUsbTransferDirectionIn;
     Device->TransferIn.Length = 0;
 
-    //
-    // Reset the endpoints.
-    //
-
-    Device->BulkInEndpoint.DataToggle = FALSE;
-    Device->BulkOutEndpoint.DataToggle = FALSE;
-
 FtdiResetEnd:
     return Status;
 }

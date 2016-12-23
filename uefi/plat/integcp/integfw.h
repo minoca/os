@@ -254,6 +254,8 @@ Return Value:
 
     EFI_DEVICE_ERROR if there was a hardware error accessing the device.
 
+    EFI_UNSUPPORTED if the wakeup timer is not supported on this platform.
+
 --*/
 
 EFIAPI
@@ -279,6 +281,8 @@ Return Value:
     EFI_INVALID_PARAMETER if a time field is out of range.
 
     EFI_DEVICE_ERROR if there was a hardware error accessing the device.
+
+    EFI_UNSUPPORTED if the wakeup timer is not supported on this platform.
 
 --*/
 

@@ -3742,6 +3742,10 @@ Return Value:
             return "IDE";
         }
 
+        if (Subclass == PCI_CLASS_MASS_STORAGE_SATA) {
+            return "AHCI";
+        }
+
         break;
 
     case PCI_CLASS_BRIDGE:

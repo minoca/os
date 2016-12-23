@@ -909,7 +909,7 @@ Return Value:
     CHAR Characters[TERMINAL_MAX_KEY_CHARACTERS + 1];
     ULONG ControlMask;
     PIO_BUFFER IoBuffer;
-    CHAR RegularCharacter;
+    INT RegularCharacter;
     BOOL Result;
     KSTATUS Status;
     TERMINAL_KEY_DATA TerminalKey;
@@ -917,7 +917,7 @@ Return Value:
 
     ControlMask = 0;
     CharacterCount = 0;
-    RegularCharacter = 0;
+    RegularCharacter = -1;
     if (Event->DeviceType != UserInputDeviceKeyboard) {
         return STATUS_SUCCESS;
     }
@@ -1042,6 +1042,21 @@ Return Value:
         TerminalKey.Key = TerminalKeyDelete;
         break;
 
+    case KeyboardKeyF1:
+    case KeyboardKeyF2:
+    case KeyboardKeyF3:
+    case KeyboardKeyF4:
+    case KeyboardKeyF5:
+    case KeyboardKeyF6:
+    case KeyboardKeyF7:
+    case KeyboardKeyF8:
+    case KeyboardKeyF9:
+    case KeyboardKeyF10:
+    case KeyboardKeyF11:
+    case KeyboardKeyF12:
+        TerminalKey.Key = TerminalKeyF1 + (Event->U.Key - KeyboardKeyF1);
+        break;
+
     case KeyboardKeyKeypad0:
     case KeyboardKeyKeypad1:
     case KeyboardKeyKeypad2:
@@ -1120,6 +1135,8 @@ Return Value:
 
         } else {
             RegularCharacter = InKeyboardCharacters[Event->U.Key];
+
+            ASSERT(RegularCharacter != '\0');
         }
 
         break;
@@ -1140,19 +1157,39 @@ Return Value:
             }
         }
 
+        if (RegularCharacter == '\0') {
+            RegularCharacter = -1;
+
         //
         // Do it differently if a control key is down.
         //
 
-        if ((InTerminalKeyboardMask & TERMINAL_KEYBOARD_CONTROL) != 0) {
+        } else if ((InTerminalKeyboardMask & TERMINAL_KEYBOARD_CONTROL) != 0) {
             RegularCharacter =
                           RtlConvertCharacterToUpperCase(RegularCharacter);
+
+            //
+            // A couple of character alias when control is down.
+            //
+
+            if (RegularCharacter == '-') {
+                RegularCharacter = '_';
+
+            } else if (RegularCharacter == ' ') {
+                RegularCharacter = '@';
+            }
 
             if ((RegularCharacter >= '@') && (RegularCharacter <= '_')) {
                 RegularCharacter -= '@';
 
-            } else {
-                RegularCharacter = 0;
+            //
+            // A couple of keys come through even if control is held down.
+            //
+
+            } else if ((RegularCharacter != '\r') &&
+                       (RegularCharacter != TERMINAL_RUBOUT)) {
+
+                RegularCharacter = -1;
             }
         }
 
@@ -1180,6 +1217,10 @@ Return Value:
             TerminalKey.Flags |= TERMINAL_KEY_FLAG_ALT;
         }
 
+        if ((InTerminalKeyboardMask & TERMINAL_KEYBOARD_SHIFT) != 0) {
+            TerminalKey.Flags |= TERMINAL_KEY_FLAG_SHIFT;
+        }
+
         Result = TermCreateInputSequence(&TerminalKey,
                                          Characters,
                                          sizeof(Characters));
@@ -1192,9 +1233,14 @@ Return Value:
             CharacterCount = 0;
         }
 
-    } else if (RegularCharacter != 0) {
-        Characters[0] = RegularCharacter;
-        CharacterCount = 1;
+    } else if (RegularCharacter != -1) {
+        if ((InTerminalKeyboardMask & TERMINAL_KEYBOARD_ALT) != 0) {
+            Characters[CharacterCount] = ANSI_ESCAPE_CODE;
+            CharacterCount += 1;
+        }
+
+        Characters[CharacterCount] = RegularCharacter;
+        CharacterCount += 1;
     }
 
     ASSERT(Event->EventType == UserInputEventKeyDown);

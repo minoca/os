@@ -290,8 +290,7 @@ Return Value:
     PSTR AppendedPath;
     ULONG AppendedPathSize;
     DIR *Directory;
-    struct dirent Entry;
-    struct dirent *EntryPointer;
+    struct dirent *Entry;
     BOOL IsDirectory;
     mode_t NewMode;
     mode_t OriginalMode;
@@ -477,30 +476,32 @@ Return Value:
     // Loop through all entries in the directory.
     //
 
+    Result = 0;
     while (TRUE) {
-        Result = SwReadDirectory(Directory, &Entry, &EntryPointer);
-        if (Result != 0) {
-            if ((Options & CHMOD_OPTION_QUIET) == 0) {
-                SwPrintError(Result, Argument, "Unable to read directory");
+        errno = 0;
+        Entry = readdir(Directory);
+        if (Entry == NULL) {
+            Result = errno;
+            if (Result != 0) {
+                if ((Options & CHMOD_OPTION_QUIET) == 0) {
+                    SwPrintError(Result, Argument, "Unable to read directory");
+                    goto ChangePermissionsEnd;
+                }
             }
 
-            goto ChangePermissionsEnd;
-        }
-
-        if (EntryPointer == NULL) {
             break;
         }
 
-        if ((strcmp(Entry.d_name, ".") == 0) ||
-            (strcmp(Entry.d_name, "..") == 0)) {
+        if ((strcmp(Entry->d_name, ".") == 0) ||
+            (strcmp(Entry->d_name, "..") == 0)) {
 
             continue;
         }
 
         Result = SwAppendPath(Argument,
                               strlen(Argument) + 1,
-                              Entry.d_name,
-                              strlen(Entry.d_name) + 1,
+                              Entry->d_name,
+                              strlen(Entry->d_name) + 1,
                               &AppendedPath,
                               &AppendedPathSize);
 

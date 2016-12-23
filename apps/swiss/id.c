@@ -490,7 +490,13 @@ Return Value:
     if (((Options & ID_OPTION_EXCLUSIVE_MASK) == 0) ||
         ((Options & ID_OPTION_PRINT_NAMES) != 0)) {
 
-        SwGetUserNameFromId(UserId, &UserName);
+        if (SwGetUserNameFromId(UserId, &UserName) != 0) {
+
+            assert(UserName == NULL);
+
+            printf("%u", (unsigned int)UserId);
+            return;
+        }
     }
 
     //
@@ -558,7 +564,13 @@ Return Value:
     if (((Options & ID_OPTION_EXCLUSIVE_MASK) == 0) ||
         ((Options & ID_OPTION_PRINT_NAMES) != 0)) {
 
-        SwGetGroupNameFromId(GroupId, &GroupName);
+        if (SwGetGroupNameFromId(GroupId, &GroupName) != 0) {
+
+            assert(GroupName == NULL);
+
+            printf("%u", (unsigned int)GroupId);
+            return;
+        }
     }
 
     //

@@ -3179,11 +3179,11 @@ Return Value:
 
 {
 
-    PSTR DaylightName;
+    PCSTR DaylightName;
     LONG DaylightOffset;
     PVOID OldData;
     ULONG OldDataSize;
-    PSTR StandardName;
+    PCSTR StandardName;
     LONG StandardOffset;
     KSTATUS Status;
     PSTR Variable;
@@ -3246,8 +3246,8 @@ Return Value:
                         &StandardOffset,
                         &DaylightOffset);
 
-    tzname[0] = StandardName;
-    tzname[1] = DaylightName;
+    tzname[0] = (PSTR)StandardName;
+    tzname[1] = (PSTR)DaylightName;
     timezone = -StandardOffset;
     if (StandardOffset != DaylightOffset) {
         daylight = 1;
@@ -3487,7 +3487,7 @@ CreateCustomTimeZoneEnd:
 
     if (Status != 0) {
         if (Custom != NULL) {
-            free(Custom);
+            OsHeapFree(Custom);
             Custom = NULL;
             CustomSize = 0;
         }

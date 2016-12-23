@@ -1008,7 +1008,7 @@ Return Value:
             Offset = rand() % FileSize;
             DEBUG_PRINT("Reading file %s, Offset %x\n", FileName, Offset);
             OpenFlags = O_RDWR | O_CREAT;
-            File = open(FileName, OpenFlags);
+            File = open(FileName, OpenFlags, FILE_TEST_CREATE_PERMISSIONS);
             if (File < 0) {
                 PRINT_ERROR("Failed to open file %s (flags %x): %s.\n",
                             FileName,

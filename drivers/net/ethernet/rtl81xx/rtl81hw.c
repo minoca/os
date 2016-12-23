@@ -1108,6 +1108,12 @@ Return Value:
                                Rtl81RegisterBasicModeControl,
                                RTL81_BASIC_MODE_CONTROL_INITIAL_VALUE);
 
+        //
+        // According the the RealTek RTL8139C+ datasheet, the reset bit is
+        // supposed to be self-clearing. QEMU, however, does not clear the bit.
+        // Ignore timeout failures.
+        //
+
         CurrentTime = KeGetRecentTimeCounter();
         Timeout = CurrentTime + TimeoutTicks;
         do {
@@ -1121,11 +1127,6 @@ Return Value:
             CurrentTime = KeGetRecentTimeCounter();
 
         } while (CurrentTime <= Timeout);
-
-        if (CurrentTime > Timeout) {
-            Status = STATUS_TIMEOUT;
-            goto InitializePhyEnd;
-        }
 
     //
     // RTL8168 and above access the PHY through the MII registers. Reset the

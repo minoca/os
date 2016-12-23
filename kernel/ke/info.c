@@ -186,8 +186,8 @@ KERNEL_API
 PKERNEL_ARGUMENT
 KeGetKernelArgument (
     PKERNEL_ARGUMENT Start,
-    PSTR Component,
-    PSTR Name
+    PCSTR Component,
+    PCSTR Name
     )
 
 /*++

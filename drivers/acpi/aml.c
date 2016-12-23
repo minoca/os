@@ -34,6 +34,7 @@ Environment:
 #include "amlos.h"
 #include "amlops.h"
 #include "namespce.h"
+#include "oprgn.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -54,6 +55,14 @@ Environment:
 //
 
 #define AML_EXECUTION_OPTION_PRINT 0x00000002
+
+//
+// Define return values from _OSI indicating whether the given request is
+// supported or unsupported by the OS.
+//
+
+#define OSI_BEHAVIOR_SUPPORTED 0xFFFFFFFFFFFFFFFF
+#define OSI_BEHAVIOR_UNSUPPORTED 0
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -135,11 +144,6 @@ AcpipCreateExecutingMethodStatement (
     );
 
 KSTATUS
-AcpipRunInitializationMethods (
-    PACPI_OBJECT RootObject
-    );
-
-KSTATUS
 AcpipRunDeviceInitialization (
     PACPI_OBJECT Device,
     PBOOL TraverseDown
@@ -158,10 +162,86 @@ AcpipRunDeviceInitialization (
 ULONG AcpiDebugExecutionOptions = 0x0;
 
 //
+// Set this to TRUE and every _OSI request will get printed.
+//
+
+BOOL AcpiPrintOsiRequests = FALSE;
+
+//
 // Store the list of SSDT definition blocks.
 //
 
 LIST_ENTRY AcpiLoadedDefinitionBlockList;
+
+//
+// Store globals for the read-only ACPI objects Zero, One and Ones.
+//
+
+ACPI_OBJECT AcpiZero = {
+   AcpiObjectInteger,
+   0,
+   1,
+   NULL,
+   {NULL, NULL},
+   {NULL, NULL},
+   {NULL, NULL},
+   {{0ULL}}
+};
+
+ACPI_OBJECT AcpiOne = {
+   AcpiObjectInteger,
+   0,
+   1,
+   NULL,
+   {NULL, NULL},
+   {NULL, NULL},
+   {NULL, NULL},
+   {{1ULL}}
+};
+
+ACPI_OBJECT AcpiOnes32 = {
+   AcpiObjectInteger,
+   0,
+   1,
+   NULL,
+   {NULL, NULL},
+   {NULL, NULL},
+   {NULL, NULL},
+   {{0xFFFFFFFFULL}}
+};
+
+ACPI_OBJECT AcpiOnes64 = {
+   AcpiObjectInteger,
+   0,
+   1,
+   NULL,
+   {NULL, NULL},
+   {NULL, NULL},
+   {NULL, NULL},
+   {{0xFFFFFFFFFFFFFFFFULL}}
+};
+
+//
+// Store the OSI strings for which TRUE will be returned by default.
+//
+
+PCSTR AcpiDefaultOsiStrings[] = {
+    "Windows 2000",
+    "Windows 2001",
+    "Windows 2001 SP1",
+    "Windows 2001.1",
+    "Windows 2001 SP2",
+    "Windows 2001.1 SP1",
+    "Windows 2006",
+    "Windows 2006.1",
+    "Windows 2006 SP1",
+    "Windows 2006 SP2",
+    "Windows 2009",
+    "Windows 2012",
+    "Windows 2013",
+    "Windows 2015",
+    NULL
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -290,15 +370,6 @@ Return Value:
     }
 
     Status = AcpipExecuteAml(ExecutionContext);
-    if (!KSUCCESS(Status)) {
-        goto LoadDefinitionBlockEnd;
-    }
-
-    //
-    // Run any _INI methods.
-    //
-
-    Status = AcpipRunInitializationMethods(NULL);
     if (!KSUCCESS(Status)) {
         goto LoadDefinitionBlockEnd;
     }
@@ -528,7 +599,28 @@ Return Value:
                 ReturnObject = ConvertedReturnObject;
 
             } else {
-                AcpipObjectAddReference(ReturnObject);
+
+                //
+                // Dereference field units, since no one ever wants to get one
+                // of those back.
+                //
+
+                if (ReturnObject->Type == AcpiObjectFieldUnit) {
+                    Status = AcpipReadFromField(ExecutionContext,
+                                                ReturnObject,
+                                                &ReturnObject);
+
+                    if (!KSUCCESS(Status)) {
+                        RtlDebugPrint("ACPI: Failed to read from field for "
+                                      "return value conversion: %x.\n",
+                                      Status);
+
+                        goto ExecuteMethodEnd;
+                    }
+
+                } else {
+                    AcpipObjectAddReference(ReturnObject);
+                }
             }
         }
     }
@@ -624,6 +716,16 @@ Return Value:
         if (!KSUCCESS(Status)) {
             goto InitializeAmlInterpreterEnd;
         }
+    }
+
+    //
+    // Run any _INI methods. The DSDT may depend on the SSDT, so the _INI
+    // methods cannot be run until after all tables have loaded.
+    //
+
+    Status = AcpipRunInitializationMethods(NULL);
+    if (!KSUCCESS(Status)) {
+        goto InitializeAmlInterpreterEnd;
     }
 
     //
@@ -939,6 +1041,24 @@ Return Value:
     KSTATUS Status;
 
     //
+    // If a method is being executed that is actually covered by a C function,
+    // then run the C function now and return. The C function is responsible
+    // for setting the return value.
+    //
+
+    if ((AmlCode == NULL) && (AmlCodeSize == 0) && (Scope != NULL) &&
+        (Scope->Type == AcpiObjectMethod) &&
+        (Scope->U.Method.Function != NULL)) {
+
+        Status = Scope->U.Method.Function(Context,
+                                          Scope,
+                                          Arguments,
+                                          ArgumentCount);
+
+        goto PushMethodOnExecutionContextEnd;
+    }
+
+    //
     // Allocate space for the new method.
     //
 
@@ -963,6 +1083,7 @@ Return Value:
     NewMethod->SavedCurrentOffset = Context->CurrentOffset;
     NewMethod->SavedIndentationLevel = Context->IndentationLevel;
     NewMethod->SavedCurrentScope = Context->CurrentScope;
+    NewMethod->LastLocalIndex = AML_INVALID_LOCAL_INDEX;
     if (ArgumentCount != 0) {
         for (ArgumentIndex = 0;
              ArgumentIndex < ArgumentCount;
@@ -1117,6 +1238,263 @@ Return Value:
 
     AcpipFreeMemory(Method);
     return;
+}
+
+KSTATUS
+AcpipRunInitializationMethods (
+    PACPI_OBJECT RootObject
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs immediately after a definition block has been loaded. As
+    defined by the ACPI spec, it runs all applicable _INI methods on devices.
+
+Arguments:
+
+    RootObject - Supplies a pointer to the object to start from. If NULL is
+        supplied, the root system bus object \_SB will be used.
+
+Return Value:
+
+    Status code. Failure means something serious went wrong, not just that some
+    device returned a non-functioning status.
+
+--*/
+
+{
+
+    PACPI_OBJECT CurrentObject;
+    PACPI_OBJECT PreviousObject;
+    PACPI_OBJECT PreviousSibling;
+    KSTATUS Status;
+    BOOL TraverseDown;
+
+    if (RootObject == NULL) {
+        RootObject = AcpipGetSystemBusRoot();
+    }
+
+    CurrentObject = RootObject;
+    PreviousObject = CurrentObject->Parent;
+    while (CurrentObject != NULL) {
+
+        //
+        // If this is the first time the node is being visited (via parent or
+        // sibling, but not child), then process it.
+        //
+
+        PreviousSibling = LIST_VALUE(CurrentObject->SiblingListEntry.Previous,
+                                     ACPI_OBJECT,
+                                     SiblingListEntry);
+
+        if ((PreviousObject == CurrentObject->Parent) ||
+            ((CurrentObject->SiblingListEntry.Previous != NULL) &&
+             (PreviousObject == PreviousSibling))) {
+
+            TraverseDown = TRUE;
+            if (CurrentObject->Type == AcpiObjectDevice) {
+                Status = AcpipRunDeviceInitialization(CurrentObject,
+                                                      &TraverseDown);
+
+                if (!KSUCCESS(Status)) {
+                    goto RunInitializationMethodsEnd;
+                }
+            }
+
+            //
+            // Move to the first child if eligible.
+            //
+
+            PreviousObject = CurrentObject;
+            if ((TraverseDown != FALSE) &&
+                (LIST_EMPTY(&(CurrentObject->ChildListHead)) == FALSE)) {
+
+                CurrentObject = LIST_VALUE(CurrentObject->ChildListHead.Next,
+                                           ACPI_OBJECT,
+                                           SiblingListEntry);
+
+            //
+            // Move to the next sibling if possible.
+            //
+
+            } else if ((CurrentObject != RootObject) &&
+                       (CurrentObject->SiblingListEntry.Next !=
+                        &(CurrentObject->Parent->ChildListHead))) {
+
+                CurrentObject = LIST_VALUE(CurrentObject->SiblingListEntry.Next,
+                                           ACPI_OBJECT,
+                                           SiblingListEntry);
+
+            //
+            // There are no children and this is the last sibling, move up to
+            // the parent.
+            //
+
+            } else {
+
+                //
+                // This case only gets hit if the root is the only node in the
+                // tree.
+                //
+
+                if (CurrentObject == RootObject) {
+                    CurrentObject = NULL;
+
+                } else {
+                    CurrentObject = CurrentObject->Parent;
+                }
+            }
+
+        //
+        // If the node is popping up from the previous, attempt to move to
+        // the next sibling, or up the tree.
+        //
+
+        } else {
+            PreviousObject = CurrentObject;
+            if (CurrentObject == RootObject) {
+                CurrentObject = NULL;
+
+            } else if (CurrentObject->SiblingListEntry.Next !=
+                       &(CurrentObject->Parent->ChildListHead)) {
+
+                CurrentObject = LIST_VALUE(CurrentObject->SiblingListEntry.Next,
+                                           ACPI_OBJECT,
+                                           SiblingListEntry);
+
+            } else {
+                CurrentObject = CurrentObject->Parent;
+            }
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+RunInitializationMethodsEnd:
+    return Status;
+}
+
+KSTATUS
+AcpipOsiMethod (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Method,
+    PACPI_OBJECT *Arguments,
+    ULONG ArgumentCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the _OSI method, which allows the AML code to
+    determine support for OS-specific features.
+
+Arguments:
+
+    Context - Supplies a pointer to the execution context.
+
+    Method - Supplies a pointer to the method getting executed.
+
+    Arguments - Supplies a pointer to the function arguments.
+
+    ArgumentCount - Supplies the number of arguments provided.
+
+Return Value:
+
+    STATUS_SUCCESS if execution completed.
+
+    Returns a failing status code if a catastrophic error occurred that
+    prevented the proper execution of the method.
+
+--*/
+
+{
+
+    PACPI_OBJECT Argument;
+    PACPI_OBJECT ConvertedArgument;
+    PCSTR *Default;
+    ULONGLONG Result;
+    PCSTR ResultString;
+    KSTATUS Status;
+
+    ConvertedArgument = NULL;
+    Result = OSI_BEHAVIOR_UNSUPPORTED;
+    Status = STATUS_SUCCESS;
+    if (ArgumentCount != 1) {
+        RtlDebugPrint("ACPI: Warning: _OSI called with %u arguments.\n",
+                      ArgumentCount);
+
+        goto OsiMethodEnd;
+    }
+
+    Argument = Arguments[0];
+    if (Argument->Type != AcpiObjectString) {
+        ConvertedArgument = AcpipConvertObjectType(Context,
+                                                   Argument,
+                                                   AcpiObjectString);
+
+        if (ConvertedArgument == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto OsiMethodEnd;
+        }
+
+        Argument = ConvertedArgument;
+    }
+
+    ASSERT(Argument->Type == AcpiObjectString);
+
+    Default = AcpiDefaultOsiStrings;
+    while (*Default != NULL) {
+        if (RtlAreStringsEqual(*Default, Argument->U.String.String, -1) !=
+            FALSE) {
+
+            Result = OSI_BEHAVIOR_SUPPORTED;
+            break;
+        }
+
+        Default += 1;
+    }
+
+    if (Result == OSI_BEHAVIOR_UNSUPPORTED) {
+        if (AcpipCheckOsiSupport(Argument->U.String.String) != FALSE) {
+            Result = OSI_BEHAVIOR_SUPPORTED;
+        }
+    }
+
+    if (AcpiPrintOsiRequests != FALSE) {
+        ResultString = "Unsupported";
+        if (Result == OSI_BEHAVIOR_SUPPORTED) {
+            ResultString = "Supported";
+        }
+
+        RtlDebugPrint("_OSI Request \"%s\": %s\n",
+                      Argument->U.String.String,
+                      ResultString);
+    }
+
+OsiMethodEnd:
+
+    //
+    // Set the return value integer.
+    //
+
+    if (Context->ReturnValue != NULL) {
+        AcpipObjectReleaseReference(Context->ReturnValue);
+    }
+
+    Context->ReturnValue = AcpipCreateNamespaceObject(Context,
+                                                      AcpiObjectInteger,
+                                                      NULL,
+                                                      &Result,
+                                                      sizeof(Result));
+
+    if (Context->ReturnValue == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    return Status;
 }
 
 //
@@ -1562,6 +1940,17 @@ Return Value:
         goto EvaluateStatementEnd;
     }
 
+    //
+    // If the statement is not a local type, then the local index needs to be
+    // cleared. It should not persist to the next statement.
+    //
+
+    if ((Statement->Type != AmlStatementLocal) &&
+        (Context->CurrentMethod != NULL)) {
+
+        Context->CurrentMethod->LastLocalIndex = AML_INVALID_LOCAL_INDEX;
+    }
+
 EvaluateStatementEnd:
     return Status;
 }
@@ -1669,142 +2058,6 @@ Return Value:
 
 CreateExecutingMethodStatementEnd:
     *NextStatement = Statement;
-    return Status;
-}
-
-KSTATUS
-AcpipRunInitializationMethods (
-    PACPI_OBJECT RootObject
-    )
-
-/*++
-
-Routine Description:
-
-    This routine runs immediately after a definition block has been loaded. As
-    defined by the ACPI spec, it runs all applicable _INI methods on devices.
-
-Arguments:
-
-    RootObject - Supplies a pointer to the object to start from. If NULL is
-        supplied, the root system bus object \_SB will be used.
-
-Return Value:
-
-    Status code. Failure means something serious went wrong, not just that some
-    device returned a non-functioning status.
-
---*/
-
-{
-
-    PACPI_OBJECT CurrentObject;
-    PACPI_OBJECT PreviousObject;
-    PACPI_OBJECT PreviousSibling;
-    KSTATUS Status;
-    BOOL TraverseDown;
-
-    if (RootObject == NULL) {
-        RootObject = AcpipGetSystemBusRoot();
-    }
-
-    CurrentObject = RootObject;
-    PreviousObject = CurrentObject->Parent;
-    while (CurrentObject != NULL) {
-
-        //
-        // If this is the first time the node is being visited (via parent or
-        // sibling, but not child), then process it.
-        //
-
-        PreviousSibling = LIST_VALUE(CurrentObject->SiblingListEntry.Previous,
-                                     ACPI_OBJECT,
-                                     SiblingListEntry);
-
-        if ((PreviousObject == CurrentObject->Parent) ||
-            ((CurrentObject->SiblingListEntry.Previous != NULL) &&
-             (PreviousObject == PreviousSibling))) {
-
-            TraverseDown = TRUE;
-            if (CurrentObject->Type == AcpiObjectDevice) {
-                Status = AcpipRunDeviceInitialization(CurrentObject,
-                                                      &TraverseDown);
-
-                if (!KSUCCESS(Status)) {
-                    goto RunInitializationMethodsEnd;
-                }
-            }
-
-            //
-            // Move to the first child if eligible.
-            //
-
-            PreviousObject = CurrentObject;
-            if ((TraverseDown != FALSE) &&
-                (LIST_EMPTY(&(CurrentObject->ChildListHead)) == FALSE)) {
-
-                CurrentObject = LIST_VALUE(CurrentObject->ChildListHead.Next,
-                                           ACPI_OBJECT,
-                                           SiblingListEntry);
-
-            //
-            // Move to the next sibling if possible.
-            //
-
-            } else if ((CurrentObject != RootObject) &&
-                       (CurrentObject->SiblingListEntry.Next !=
-                        &(CurrentObject->Parent->ChildListHead))) {
-
-                CurrentObject = LIST_VALUE(CurrentObject->SiblingListEntry.Next,
-                                           ACPI_OBJECT,
-                                           SiblingListEntry);
-
-            //
-            // There are no children and this is the last sibling, move up to
-            // the parent.
-            //
-
-            } else {
-
-                //
-                // This case only gets hit if the root is the only node in the
-                // tree.
-                //
-
-                if (CurrentObject == RootObject) {
-                    CurrentObject = NULL;
-
-                } else {
-                    CurrentObject = CurrentObject->Parent;
-                }
-            }
-
-        //
-        // If the node is popping up from the previous, attempt to move to
-        // the next sibling, or up the tree.
-        //
-
-        } else {
-            PreviousObject = CurrentObject;
-            if (CurrentObject == RootObject) {
-                CurrentObject = NULL;
-
-            } else if (CurrentObject->SiblingListEntry.Next !=
-                       &(CurrentObject->Parent->ChildListHead)) {
-
-                CurrentObject = LIST_VALUE(CurrentObject->SiblingListEntry.Next,
-                                           ACPI_OBJECT,
-                                           SiblingListEntry);
-
-            } else {
-                CurrentObject = CurrentObject->Parent;
-            }
-        }
-    }
-
-    Status = STATUS_SUCCESS;
-
-RunInitializationMethodsEnd:
     return Status;
 }
 

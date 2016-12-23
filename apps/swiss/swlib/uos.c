@@ -37,7 +37,6 @@ Environment:
 
 #include <assert.h>
 #include <errno.h>
-#include <dirent.h>
 #include <grp.h>
 #include <pwd.h>
 #include <signal.h>
@@ -903,44 +902,6 @@ Return Value:
 {
 
     return Stat->st_blksize;
-}
-
-int
-SwReadDirectory (
-    DIR *Directory,
-    struct dirent *Buffer,
-    struct dirent **Result
-    )
-
-/*++
-
-Routine Description:
-
-    This routine reads from a directly, ideally in a reentrant manner.
-
-Arguments:
-
-    Directory - Supplies a pointer to the structure returned by the open
-        directory function.
-
-    Buffer - Supplies the buffer where the next directory entry will be
-        returned.
-
-    Result - Supplies a pointer that will either be set to the Buffer pointer
-        if there are more entries, or NULL if there are no more entries in the
-        directory.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    return readdir_r(Directory, Buffer, Result);
 }
 
 int
@@ -3094,7 +3055,9 @@ Return Value:
     // Send a signal to init.
     //
 
-    return kill(1, Signal);
+    errno = 0;
+    kill(1, Signal);
+    return errno;
 }
 
 int
@@ -3228,7 +3191,9 @@ Return Value:
     struct termios TerminalSettings;
 
     if (SwOriginalTerminalSettingsValid == 0) {
-        SwSaveTerminalMode();
+        if (!SwSaveTerminalMode()) {
+            return 0;
+        }
     }
 
     memcpy(&TerminalSettings,

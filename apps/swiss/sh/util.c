@@ -279,6 +279,7 @@ Return Value:
 
 {
 
+    PSTR NewInputBuffer;
     INT NonStandardErrorCopy;
     BOOL Result;
     PSHELL Subshell;
@@ -327,18 +328,22 @@ Return Value:
 
         assert(InputSize != 0);
 
-        Subshell->Lexer.InputBuffer = SwStringDuplicate(Input, InputSize);
-        if (Subshell->Lexer.InputBuffer == NULL) {
+        NewInputBuffer = SwStringDuplicate(Input, InputSize);
+        if (NewInputBuffer == NULL) {
             Result = FALSE;
             goto CreateSubshellEnd;
         }
 
-        Subshell->Lexer.InputBufferSize = InputSize;
-        if (DequoteForSubshell != FALSE) {
-            ShStringDequoteSubshellCommand(Subshell->Lexer.InputBuffer,
-                                           &(Subshell->Lexer.InputBufferSize));
+        if (Subshell->Lexer.InputBuffer != NULL) {
+            free(Subshell->Lexer.InputBuffer);
         }
 
+        if (DequoteForSubshell != FALSE) {
+            ShStringDequoteSubshellCommand(NewInputBuffer, &(InputSize));
+        }
+
+        Subshell->Lexer.InputBuffer = NewInputBuffer;
+        Subshell->Lexer.InputBufferSize = InputSize;
         Subshell->Lexer.InputBufferCapacity = Subshell->Lexer.InputBufferSize;
     }
 
@@ -441,9 +446,8 @@ Return Value:
 
         ShDup2(ParentShell, Pipe[1], STDOUT_FILENO);
         ShClose(ParentShell, Pipe[1]);
+        Pipe[1] = -1;
     }
-
-    Pipe[1] = -1;
 
     //
     // Get ready to read from the read end of the pipe.
@@ -505,6 +509,7 @@ Return Value:
     if (OriginalOutput >= 0) {
         ShDup2(ParentShell, OriginalOutput, STDOUT_FILENO);
         ShClose(ParentShell, OriginalOutput);
+        OriginalOutput = -1;
 
     } else {
 
@@ -513,10 +518,9 @@ Return Value:
         // pipe.
         //
 
-        ShClose(ParentShell, STDOUT_FILENO);
+        ShClose(ParentShell, Pipe[1]);
+        Pipe[1] = -1;
     }
-
-    OriginalOutput = -1;
 
     //
     // Collect the results.
@@ -575,6 +579,7 @@ ExecuteSubshellEnd:
 
     if (OriginalOutput != -1) {
         ShDup2(ParentShell, OriginalOutput, STDOUT_FILENO);
+        ShClose(ParentShell, OriginalOutput);
     }
 
     if (Pipe[0] != -1) {
@@ -1295,7 +1300,7 @@ Return Value:
                      SeparatorIndex += 1) {
 
                     //
-                    // Treat carraige returns as equal to newlines. This is
+                    // Treat carriage returns as equal to newlines. This is
                     // cheating a bit, but the hope is it fixes up CRLFs
                     // seamlessly without causing much other damage.
                     //

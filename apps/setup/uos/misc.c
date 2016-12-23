@@ -138,7 +138,30 @@ Return Value:
 
 {
 
-    return ENOSYS;
+    //
+    // TODO: Consider common-izing the Minoca code that looks through the
+    // SMBIOS tables, which can be accessed at on Linux with root access at
+    // /sys/firmware/dmi/tables/DMI.
+    //
+
+    if (access("/sys/firmware/efi", F_OK) != F_OK) {
+        *Name = strdup("x86 PC");
+        if (Fallback != NULL) {
+            *Fallback = SetupRecipePc;
+        }
+
+    } else {
+        *Name = strdup("x86 UEFI-based PC");
+        if (Fallback != NULL) {
+            *Fallback = SetupRecipePcEfi;
+        }
+    }
+
+    if (*Name == NULL) {
+        return ENOMEM;
+    }
+
+    return 0;
 }
 
 INT

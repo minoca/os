@@ -37,22 +37,52 @@ Environment:
 //
 
 //
-// TODO: This doesn't work, as Volume0 is usually a small 10MB boot partition.
-// Make shared memory objects work in this case and when the file system is
-// all read-only.
+// Define a maximum region size for shared memory objects. This prevents a
+// large shared memory object from requiring a massive contiguous chunk of the
+// backing image (page file) just to page out a few pages. 128KB is also the
+// systems default I/O size, so hopefully this helps to generate contiguous I/O.
+// Do not increase this beyon 128KB so that the backing region's dirty bitmap
+// can remain one ULONG.
 //
 
-#define SHARED_MEMORY_OBJECT_DIRECTORY "/Volume/Volume0/temp"
-#define SHARED_MEMORY_OBJECT_DIRECTORY_LENGTH \
-    (RtlStringLength(SHARED_MEMORY_OBJECT_DIRECTORY) + 1)
-
-#define SHARED_MEMORY_OBJECT_FORMAT_STRING "#ShmObject#%x#%d"
-
-#define MAX_SHARED_MEMORY_OBJECT_CREATE_RETRIES 10
+#define MAX_SHARED_MEMORY_BACKING_REGION_SIZE _128KB
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
+
+/*++
+
+Structure Description:
+
+    This structure defines a shared memory object backing region.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous shared memory object
+        backing regions.
+
+    ImageBacking - Stores the image backing handle for this region of the
+        shared memory object.
+
+    Offset - Stores the shared memory object file offset where this backing
+        region starts.
+
+    Size - Stores the size of the region, in bytes.
+
+    DirtyBitmap - Stores a bitmap of which pages in the region have actually
+        been written to the backing image. Clean pages cannot be read from, as
+        they would hand back uninitialized data from the disk.
+
+--*/
+
+typedef struct _SHARED_MEMORY_BACKING_REGION {
+    LIST_ENTRY ListEntry;
+    IMAGE_BACKING ImageBacking;
+    IO_OFFSET Offset;
+    ULONG Size;
+    ULONG DirtyBitmap;
+} SHARED_MEMORY_BACKING_REGION, *PSHARED_MEMORY_BACKING_REGION;
 
 /*++
 
@@ -67,15 +97,19 @@ Members:
     FileObject - Stores a pointer to the file object associated with the shared
         memory object.
 
-    BackingImage - Stores a handle to the file that backs the shared memory
-        object.
+    Lock - Stores a pointer to a shared exclusive lock that protects access to
+        the shared memory object, including the backing region list.
+
+    BackingRegionList - Stores the list of backing regions for this shared
+        memory object.
 
 --*/
 
 typedef struct _SHARED_MEMORY_OBJECT {
     OBJECT_HEADER Header;
     PFILE_OBJECT FileObject;
-    PIO_HANDLE BackingImage;
+    PSHARED_EXCLUSIVE_LOCK Lock;
+    LIST_ENTRY BackingRegionList;
 } SHARED_MEMORY_OBJECT, *PSHARED_MEMORY_OBJECT;
 
 //
@@ -87,12 +121,16 @@ IopDestroySharedMemoryObject (
     PVOID SharedMemoryObject
     );
 
-KSTATUS
-IopAddSharedMemoryObjectPathPrefix (
-    PSTR Path,
-    ULONG PathLength,
-    PSTR *NewPath,
-    PULONG NewPathLength
+PSHARED_MEMORY_BACKING_REGION
+IopCreateSharedMemoryBackingRegion (
+    PFILE_OBJECT FileObject,
+    IO_OFFSET Offset,
+    PSHARED_MEMORY_BACKING_REGION NextRegion
+    );
+
+VOID
+IopDestroySharedMemoryBackingRegion (
+    PSHARED_MEMORY_BACKING_REGION Region
     );
 
 //
@@ -148,8 +186,8 @@ Return Value:
 
     Object = ObCreateObject(ObjectDirectory,
                             NULL,
-                            "SharedMemoryObjects",
-                            sizeof("SharedMemoryObjects"),
+                            "SharedMemoryObject",
+                            sizeof("SharedMemoryObject"),
                             sizeof(OBJECT_HEADER),
                             NULL,
                             OBJECT_FLAG_USE_NAME_DIRECTLY,
@@ -192,18 +230,20 @@ Return Value:
 
 InitializeSharedMemoryObjectSupportEnd:
     if (!KSUCCESS(Status)) {
-
-        //
-        // Release once for the file properties and once for the create.
-        //
-
         if (Object != NULL) {
-            ObReleaseReference(Object);
             ObReleaseReference(Object);
         }
 
+        //
+        // If the file object was not created, an additional reference needs to
+        // be release on the shared memory object (taken for the properties).
+        //
+
         if (FileObject != NULL) {
             IopFileObjectReleaseReference(FileObject);
+
+        } else {
+            ObReleaseReference(Object);
         }
     }
 
@@ -265,7 +305,7 @@ IopCreateSharedMemoryObject (
     PCSTR Name,
     ULONG NameSize,
     ULONG Flags,
-    FILE_PERMISSIONS Permissions,
+    PCREATE_PARAMETERS Create,
     PFILE_OBJECT *FileObject
     )
 
@@ -290,7 +330,7 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the handle.
         See OPEN_FLAG_* definitions.
 
-    Permissions - Supplies the permissions to give to the file object.
+    Create - Supplies a pointer to the creation parameters.
 
     FileObject - Supplies a pointer where a pointer to a newly created pipe
         file object will be returned on success.
@@ -304,54 +344,31 @@ Return Value:
 {
 
     BOOL Created;
-    ULONG DirectoryAccess;
-    PIO_HANDLE DirectoryHandle;
-    ULONG DirectoryOpenFlags;
+    PFILE_OBJECT DirectoryFileObject;
+    POBJECT_HEADER DirectoryObject;
+    PPATH_POINT DirectoryPathPoint;
     PSHARED_MEMORY_OBJECT ExistingObject;
-    ULONG FileAccess;
     FILE_ID FileId;
-    PSTR FileName;
-    ULONG FileNameLength;
-    ULONG FileOpenFlags;
+    ULONG FileObjectFlags;
     FILE_PROPERTIES FileProperties;
-    PIO_HANDLE Handle;
-    ULONG MaxFileNameLength;
     PFILE_OBJECT NewFileObject;
-    PSHARED_MEMORY_OBJECT NewSharedMemoryObject;
-    POBJECT_HEADER ObjectDirectory;
-    PSTR Path;
-    ULONG PathLength;
-    ULONG RetryCount;
-    PPATH_POINT SharedMemoryDirectory;
+    PSHARED_MEMORY_OBJECT SharedMemoryObject;
     KSTATUS Status;
 
-    DirectoryHandle = INVALID_HANDLE;
-    FileName = NULL;
     NewFileObject = NULL;
-    NewSharedMemoryObject = NULL;
-    Path = NULL;
-
-    //
-    // Create an object manager object. If it is to be immediately unlinked, do
-    // not give it a name.
-    //
-
-    if ((Flags & OPEN_FLAG_UNLINK_ON_CREATE) != 0) {
-        Name = NULL;
-        NameSize = 0;
-    }
+    SharedMemoryObject = NULL;
 
     //
     // Get the shared memory object directory for the process.
     //
 
-    SharedMemoryDirectory = IopGetSharedMemoryDirectory(FromKernelMode);
+    DirectoryPathPoint = IopGetSharedMemoryDirectory(FromKernelMode);
+    DirectoryFileObject = DirectoryPathPoint->PathEntry->FileObject;
 
-    ASSERT(SharedMemoryDirectory->PathEntry->FileObject->Properties.Type ==
-           IoObjectObjectDirectory);
+    ASSERT(DirectoryFileObject->Properties.Type == IoObjectObjectDirectory);
 
-    FileId = SharedMemoryDirectory->PathEntry->FileObject->Properties.FileId;
-    ObjectDirectory = (POBJECT_HEADER)(UINTN)FileId;
+    FileId = DirectoryFileObject->Properties.FileId;
+    DirectoryObject = (POBJECT_HEADER)(UINTN)FileId;
 
     //
     // Make sure there is not already an existing shared memory object by the
@@ -360,7 +377,7 @@ Return Value:
     //
 
     if (Name != NULL) {
-        ExistingObject = ObFindObject(Name, NameSize, ObjectDirectory);
+        ExistingObject = ObFindObject(Name, NameSize, DirectoryObject);
         if (ExistingObject != NULL) {
             ObReleaseReference(ExistingObject);
             Status = STATUS_FILE_EXISTS;
@@ -368,41 +385,45 @@ Return Value:
         }
     }
 
-    NewSharedMemoryObject = ObCreateObject(ObjectSharedMemoryObject,
-                                           ObjectDirectory,
-                                           Name,
-                                           NameSize,
-                                           sizeof(SHARED_MEMORY_OBJECT),
-                                           IopDestroySharedMemoryObject,
-                                           0,
-                                           IO_ALLOCATION_TAG);
+    SharedMemoryObject = ObCreateObject(ObjectSharedMemoryObject,
+                                        DirectoryObject,
+                                        Name,
+                                        NameSize,
+                                        sizeof(SHARED_MEMORY_OBJECT),
+                                        IopDestroySharedMemoryObject,
+                                        0,
+                                        IO_ALLOCATION_TAG);
 
-    if (NewSharedMemoryObject == NULL) {
+    if (SharedMemoryObject == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateSharedMemoryObjectEnd;
     }
 
-    NewSharedMemoryObject->BackingImage = INVALID_HANDLE;
+    INITIALIZE_LIST_HEAD(&(SharedMemoryObject->BackingRegionList));
+    SharedMemoryObject->Lock = KeCreateSharedExclusiveLock();
+    if (SharedMemoryObject->Lock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateSharedMemoryObjectEnd;
+    }
 
     //
-    // Create a file object, if needed.
+    // If necessary, create a file object that points to the memory object.
     //
 
     if (*FileObject == NULL) {
         RtlZeroMemory(&FileProperties, sizeof(FILE_PROPERTIES));
         IopFillOutFilePropertiesForObject(&FileProperties,
-                                          &(NewSharedMemoryObject->Header));
+                                          &(SharedMemoryObject->Header));
 
-        if ((Flags & OPEN_FLAG_UNLINK_ON_CREATE) != 0) {
-            FileProperties.HardLinkCount = 0;
-        }
-
-        FileProperties.Permissions = Permissions;
+        FileProperties.Permissions = Create->Permissions;
         FileProperties.BlockSize = IoGetCacheEntryDataSize();
         FileProperties.Type = IoObjectSharedMemoryObject;
+        FileObjectFlags = FILE_OBJECT_FLAG_EXTERNAL_IO_STATE |
+                          FILE_OBJECT_FLAG_HARD_FLUSH_REQUIRED;
+
         Status = IopCreateOrLookupFileObject(&FileProperties,
                                              ObGetRootObject(),
-                                             FILE_OBJECT_FLAG_EXTERNAL_IO_STATE,
+                                             FileObjectFlags,
                                              &NewFileObject,
                                              &Created);
 
@@ -412,8 +433,7 @@ Return Value:
             // Release reference taken when filling out the file properties.
             //
 
-            ObReleaseReference(NewSharedMemoryObject);
-            NewSharedMemoryObject = NULL;
+            ObReleaseReference(SharedMemoryObject);
             goto CreateSharedMemoryObjectEnd;
         }
 
@@ -423,121 +443,6 @@ Return Value:
     }
 
     //
-    // Allocate a buffer that will be used to create the shared memory object's
-    // backing image's file name.
-    //
-
-    MaxFileNameLength = RtlPrintToString(
-                                      NULL,
-                                      0,
-                                      CharacterEncodingDefault,
-                                      SHARED_MEMORY_OBJECT_FORMAT_STRING,
-                                      NewSharedMemoryObject,
-                                      MAX_SHARED_MEMORY_OBJECT_CREATE_RETRIES);
-
-    FileName = MmAllocatePagedPool(MaxFileNameLength, IO_ALLOCATION_TAG);
-    if (FileName == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateSharedMemoryObjectEnd;
-    }
-
-    //
-    // Loop trying to create the backing image.
-    //
-
-    DirectoryOpenFlags = OPEN_FLAG_CREATE | OPEN_FLAG_DIRECTORY;
-    DirectoryAccess = IO_ACCESS_READ | IO_ACCESS_WRITE;
-    FileOpenFlags = OPEN_FLAG_NON_CACHED |
-                    OPEN_FLAG_CREATE |
-                    OPEN_FLAG_FAIL_IF_EXISTS |
-                    OPEN_FLAG_UNLINK_ON_CREATE;
-
-    FileAccess = IO_ACCESS_READ | IO_ACCESS_WRITE;
-    RetryCount = 0;
-    while (RetryCount < MAX_SHARED_MEMORY_OBJECT_CREATE_RETRIES) {
-
-        //
-        // Make sure that the shared memory object directory exists.
-        //
-
-        Status = IoOpen(TRUE,
-                        NULL,
-                        SHARED_MEMORY_OBJECT_DIRECTORY,
-                        SHARED_MEMORY_OBJECT_DIRECTORY_LENGTH,
-                        DirectoryAccess,
-                        DirectoryOpenFlags,
-                        FILE_PERMISSION_NONE,
-                        &DirectoryHandle);
-
-        if (!KSUCCESS(Status) && (Status != STATUS_FILE_EXISTS)) {
-            goto CreateSharedMemoryObjectEnd;
-        }
-
-        if (DirectoryHandle != INVALID_HANDLE) {
-            IoClose(DirectoryHandle);
-        }
-
-        //
-        // Create the path to the shared memory object's backing image.
-        //
-
-        FileNameLength = RtlPrintToString(FileName,
-                                          MaxFileNameLength,
-                                          CharacterEncodingDefault,
-                                          SHARED_MEMORY_OBJECT_FORMAT_STRING,
-                                          NewSharedMemoryObject,
-                                          RetryCount);
-
-        if (Path != NULL) {
-            MmFreePagedPool(Path);
-            Path = NULL;
-        }
-
-        Status = IoPathAppend(SHARED_MEMORY_OBJECT_DIRECTORY,
-                              SHARED_MEMORY_OBJECT_DIRECTORY_LENGTH,
-                              FileName,
-                              FileNameLength,
-                              IO_ALLOCATION_TAG,
-                              &Path,
-                              &PathLength);
-
-        if (!KSUCCESS(Status)) {
-            goto CreateSharedMemoryObjectEnd;
-        }
-
-        Status = IoOpen(TRUE,
-                        NULL,
-                        Path,
-                        PathLength,
-                        FileAccess,
-                        FileOpenFlags,
-                        FILE_PERMISSION_NONE,
-                        &Handle);
-
-        //
-        // If the file already exists or the directroy got removed since it
-        // was created above, try again.
-        //
-
-        if ((Status == STATUS_FILE_EXISTS) ||
-            (Status == STATUS_PATH_NOT_FOUND)) {
-
-            RetryCount += 1;
-            continue;
-        }
-
-        if (!KSUCCESS(Status)) {
-            goto CreateSharedMemoryObjectEnd;
-        }
-
-        break;
-    }
-
-    ASSERT(Handle != INVALID_HANDLE);
-
-    NewSharedMemoryObject->BackingImage = Handle;
-
-    //
     // If the shared memory object is named, then it is valid until it is
     // unlinked. So, add a reference to the file object to make sure the create
     // premissions stick around.
@@ -545,13 +450,11 @@ Return Value:
 
     if (Name != NULL) {
         IopFileObjectAddReference(*FileObject);
-        NewSharedMemoryObject->FileObject = *FileObject;
+        SharedMemoryObject->FileObject = *FileObject;
     }
 
-    (*FileObject)->SpecialIo = NewSharedMemoryObject;
-
-    ASSERT(Created != FALSE);
-
+    (*FileObject)->SpecialIo = SharedMemoryObject;
+    Create->Created = TRUE;
     Status = STATUS_SUCCESS;
 
 CreateSharedMemoryObjectEnd:
@@ -562,29 +465,24 @@ CreateSharedMemoryObjectEnd:
     //
 
     if (*FileObject != NULL) {
-        KeSignalEvent((*FileObject)->ReadyEvent, SignalOptionSignalAll);
+        KeSignalEvent(NewFileObject->ReadyEvent, SignalOptionSignalAll);
     }
 
     if (!KSUCCESS(Status)) {
+        if ((SharedMemoryObject != NULL) &&
+            (*FileObject != NULL) &&
+            ((*FileObject)->SpecialIo != SharedMemoryObject)) {
+
+            ObReleaseReference(SharedMemoryObject);
+        }
+
         if (NewFileObject != NULL) {
             IopFileObjectReleaseReference(NewFileObject);
             NewFileObject = NULL;
-            *FileObject = NULL;
-        }
-
-        if (NewSharedMemoryObject != NULL) {
-            ObReleaseReference(NewSharedMemoryObject);
         }
     }
 
-    if (Path != NULL) {
-        MmFreePagedPool(Path);
-    }
-
-    if (FileName != NULL) {
-        MmFreePagedPool(FileName);
-    }
-
+    *FileObject = NewFileObject;
     return Status;
 }
 
@@ -616,38 +514,67 @@ Return Value:
 
 {
 
-    PIO_HANDLE BackingImage;
-    PFILE_OBJECT BackingImageObject;
+    PLIST_ENTRY CurrentEntry;
+    ULONGLONG FileSize;
+    ULONG PageCount;
+    ULONG PageShift;
+    ULONG PageSize;
+    PSHARED_MEMORY_BACKING_REGION Region;
+    ULONG RegionSize;
     PSHARED_MEMORY_OBJECT SharedMemoryObject;
-    KSTATUS Status;
 
     ASSERT(FileObject->Properties.Type == IoObjectSharedMemoryObject);
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
 
     SharedMemoryObject = FileObject->SpecialIo;
+    PageShift = MmPageShift();
+    PageSize = MmPageSize();
 
     //
-    // There must be a backing image as long as the shared object is alive.
+    // If the file is decreasing in size, then free page file regions beyond
+    // the end of the file size.
     //
 
-    ASSERT(SharedMemoryObject->BackingImage != INVALID_HANDLE);
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    if (FileSize > NewSize) {
+        KeAcquireSharedExclusiveLockExclusive(SharedMemoryObject->Lock);
+        CurrentEntry = SharedMemoryObject->BackingRegionList.Next;
+        while (CurrentEntry != &(SharedMemoryObject->BackingRegionList)) {
+            Region = LIST_VALUE(CurrentEntry,
+                                SHARED_MEMORY_BACKING_REGION,
+                                ListEntry);
 
-    //
-    // Otherwise modify the backing image's file size to be the same as the
-    // shared memory object's file size.
-    //
+            CurrentEntry = CurrentEntry->Next;
 
-    BackingImage = SharedMemoryObject->BackingImage;
-    BackingImageObject = BackingImage->FileObject;
-    Status = IopModifyFileObjectSize(BackingImageObject,
-                                     BackingImage->DeviceContext,
-                                     NewSize);
+            //
+            // If the region is beyond the end of the new file size, then the
+            // whole region should be released from the page file.
+            //
 
-    if (KSUCCESS(Status)) {
-        WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
+            if (Region->Offset >= NewSize) {
+                LIST_REMOVE(&(Region->ListEntry));
+                Region->ListEntry.Next = NULL;
+                IopDestroySharedMemoryBackingRegion(Region);
+
+            //
+            // If only the end is beyond the new size, don't bother with a
+            // partial page file free in case the file grows again. Just clear
+            // the dirty bitmap for pages beyond the end of the file.
+            //
+
+            } else if ((Region->Offset + Region->Size) > NewSize) {
+                RegionSize = (ULONG)(NewSize - Region->Offset);
+                RegionSize = ALIGN_RANGE_UP(RegionSize, PageSize);
+                PageCount = RegionSize >> PageShift;
+                Region->DirtyBitmap &= (1 << PageCount) - 1;
+            }
+        }
+
+        KeReleaseSharedExclusiveLockExclusive(SharedMemoryObject->Lock);
     }
 
-    return Status;
+    WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
+    return STATUS_SUCCESS;
 }
 
 KSTATUS
@@ -689,10 +616,22 @@ Return Value:
     Status = ObUnlinkObject(SharedMemoryObject);
     if (KSUCCESS(Status)) {
 
-        ASSERT(SharedMemoryObject->FileObject == FileObject);
+        //
+        // Named shared memory objects hold on to the file object, so they
+        // cannot disappear until they are unlinked. Unnamed shared memory
+        // objects do not have a file object pointer, as those can go away as
+        // soon as the last close happens. That said, don't fall over if an
+        // unlink gets sent to an unnamed object.
+        //
 
-        IopFileObjectReleaseReference(SharedMemoryObject->FileObject);
-        SharedMemoryObject->FileObject = NULL;
+        if (SharedMemoryObject->FileObject != NULL) {
+
+            ASSERT(SharedMemoryObject->FileObject == FileObject);
+
+            IopFileObjectReleaseReference(SharedMemoryObject->FileObject);
+            SharedMemoryObject->FileObject = NULL;
+        }
+
         *Unlinked = TRUE;
     }
 
@@ -728,72 +667,277 @@ Return Value:
 
 {
 
+    UINTN AlignedSize;
+    UINTN BytesCompleted;
+    UINTN BytesCompletedThisRound;
+    UINTN BytesRemaining;
+    UINTN BytesThisRound;
+    PLIST_ENTRY CurrentEntry;
+    IO_OFFSET CurrentOffset;
     ULONGLONG FileSize;
-    PSHARED_MEMORY_OBJECT SharedMemoryObject;
+    IO_OFFSET IoEnd;
+    BOOL LockHeld;
+    PSHARED_MEMORY_OBJECT MemoryObject;
+    UINTN OriginalIoBufferOffset;
+    ULONG PageCount;
+    ULONG PageIndex;
+    ULONG PageMask;
+    ULONG PageShift;
+    ULONG PageSize;
+    PSHARED_MEMORY_BACKING_REGION Region;
+    IO_OFFSET RegionEnd;
+    ULONG RegionOffset;
     KSTATUS Status;
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
+    ASSERT(IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE);
 
-    SharedMemoryObject = FileObject->SpecialIo;
+    MemoryObject = FileObject->SpecialIo;
+    Status = STATUS_SUCCESS;
+    PageShift = MmPageShift();
+    PageSize = MmPageSize();
+    BytesCompleted = 0;
+    LockHeld = FALSE;
+    OriginalIoBufferOffset = MmGetIoBufferCurrentOffset(IoContext->IoBuffer);
+    AlignedSize = ALIGN_RANGE_UP(IoContext->SizeInBytes, PageSize);
 
     //
-    // There must be a backing image as long as the shared memory object is
-    // alive.
+    // If this is a write operation but not a hard flush request, just act like
+    // the write succeeded. Don't actually preserve the data to disk.
     //
 
-    ASSERT(SharedMemoryObject->BackingImage != INVALID_HANDLE);
-
-    //
-    // If this is a read operation then read from the backing image.
-    //
-
-    if (IoContext->Write == FALSE) {
-        Status = IoReadAtOffset(SharedMemoryObject->BackingImage,
-                                IoContext->IoBuffer,
-                                IoContext->Offset,
-                                IoContext->SizeInBytes,
-                                IoContext->Flags,
-                                IoContext->TimeoutInMilliseconds,
-                                &(IoContext->BytesCompleted),
-                                NULL);
-
-        if (!KSUCCESS(Status)) {
+    LockHeld = TRUE;
+    if (IoContext->Write != FALSE) {
+        if ((IoContext->Flags & IO_FLAG_HARD_FLUSH) == 0) {
+            BytesCompleted = IoContext->SizeInBytes;
+            KeAcquireSharedExclusiveLockExclusive(MemoryObject->Lock);
             goto PerformSharedMemoryIoOperationEnd;
         }
 
-    //
-    // Write operations get passed onto the file that backs the shared memory
-    // object. If there is no such file, then create one, save the handle, and
-    // then unlink it.
-    //
+        //
+        // The backing file write is a no-allocate IRP path. Make sure the I/O
+        // buffer is mapped before the write happens.
+        //
+
+        MmMapIoBuffer(IoContext->IoBuffer, FALSE, FALSE, FALSE);
+        KeAcquireSharedExclusiveLockExclusive(MemoryObject->Lock);
 
     } else {
-        Status = IoWriteAtOffset(SharedMemoryObject->BackingImage,
-                                 IoContext->IoBuffer,
-                                 IoContext->Offset,
-                                 IoContext->SizeInBytes,
-                                 IoContext->Flags,
-                                 IoContext->TimeoutInMilliseconds,
-                                 &(IoContext->BytesCompleted),
-                                 NULL);
+
+        //
+        // The backing file read is a no-allocate IRP path. It is not allowed
+        // to extend the I/O buffers. Zero the buffer.
+        //
+
+        MmZeroIoBuffer(IoContext->IoBuffer, 0, AlignedSize);
+        KeAcquireSharedExclusiveLockShared(MemoryObject->Lock);
+    }
+
+    //
+    // All I/O should be page aligned and less than the block-aligned file
+    // size.
+    //
+
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+
+    ASSERT(IS_ALIGNED(IoContext->Offset, PageSize) != FALSE);
+    ASSERT((IoContext->Offset + IoContext->SizeInBytes) <=
+           ALIGN_RANGE_UP(FileSize, FileObject->Properties.BlockSize));
+
+    BytesRemaining = AlignedSize;
+
+    //
+    // Look through the backing regions for the right areas of the backing
+    // image (page file) to read from and write to.
+    //
+
+    CurrentOffset = IoContext->Offset;
+    CurrentEntry = MemoryObject->BackingRegionList.Next;
+    IoEnd = CurrentOffset + BytesRemaining;
+    while (BytesRemaining != 0) {
+
+        //
+        // If the current entry is the head of the list, there are no more
+        // backing regions. One will have to be allocated below.
+        //
+
+        if (CurrentEntry == &(MemoryObject->BackingRegionList)) {
+            Region = NULL;
+            BytesThisRound = BytesRemaining;
+
+        //
+        // Get the next region and determine if any of it overlaps with the
+        // I/O offset and size.
+        //
+
+        } else {
+            Region = LIST_VALUE(CurrentEntry,
+                                SHARED_MEMORY_BACKING_REGION,
+                                ListEntry);
+
+            RegionEnd = Region->Offset + Region->Size;
+            if (CurrentOffset >= RegionEnd) {
+                CurrentEntry = CurrentEntry->Next;
+                continue;
+            }
+
+            if (RegionEnd < IoEnd) {
+                BytesThisRound = RegionEnd - CurrentOffset;
+
+            } else {
+                BytesThisRound = IoEnd - CurrentOffset;
+            }
+        }
+
+        ASSERT(IS_ALIGNED(BytesThisRound, PageSize) != FALSE);
+
+        //
+        // If there is no region or the region starts beyond the current
+        // offset, then there is a gap in the backing regions. If this is only
+        // a read, the I/O buffer was zeroed above and the gap can be skipped.
+        // If this is a write, then allocate a new region to fill the gap.
+        //
+
+        if ((Region == NULL) || (CurrentOffset < Region->Offset)) {
+            if (IoContext->Write == FALSE) {
+                MmIoBufferIncrementOffset(IoContext->IoBuffer, BytesThisRound);
+                BytesRemaining -= BytesThisRound;
+                BytesCompleted += BytesThisRound;
+                CurrentOffset += BytesThisRound;
+
+                ASSERT((Region != NULL) || (BytesRemaining == 0));
+
+                if (Region != NULL) {
+                    CurrentEntry = CurrentEntry->Next;
+                }
+
+            } else {
+                Region = IopCreateSharedMemoryBackingRegion(FileObject,
+                                                            CurrentOffset,
+                                                            Region);
+
+                if (Region == NULL) {
+                    Status = STATUS_INSUFFICIENT_RESOURCES;
+                    goto PerformSharedMemoryIoOperationEnd;
+                }
+
+                CurrentEntry = &(Region->ListEntry);
+            }
+
+            continue;
+        }
+
+        RegionOffset = (ULONG)(CurrentOffset - Region->Offset);
+
+        //
+        // On read, the backing entry may contain some invalid data. Only read
+        // from the pages that were previously marked dirty by a write.
+        //
+
+        if (IoContext->Write == FALSE) {
+
+            //
+            // Skip clean pages, they were already zeroed above.
+            //
+
+            PageIndex = RegionOffset >> PageShift;
+            PageCount = BytesThisRound >> PageShift;
+            PageMask = (1 << PageCount) - 1;
+            PageMask &= (Region->DirtyBitmap >> PageIndex);
+            if (PageMask != 0) {
+                PageCount = RtlCountTrailingZeros32(PageMask);
+            }
+
+            BytesThisRound = PageCount << PageShift;
+            MmIoBufferIncrementOffset(IoContext->IoBuffer, BytesThisRound);
+            BytesRemaining -= BytesThisRound;
+            BytesCompleted += BytesThisRound;
+            CurrentOffset += BytesThisRound;
+            RegionOffset += BytesThisRound;
+
+            //
+            // Count the number of dirty pages that actually need to be read.
+            // If they are all clean, skip ahead to the next entry if necessary.
+            //
+
+            BytesThisRound = 0;
+            if (PageMask != 0) {
+                PageCount = RtlCountSetBits32(PageMask);
+                BytesThisRound = PageCount << PageShift;
+            }
+
+            if (BytesThisRound == 0) {
+
+                ASSERT((CurrentOffset == RegionEnd) || (BytesRemaining == 0));
+
+                CurrentEntry = CurrentEntry->Next;
+                continue;
+            }
+        }
+
+        Status = MmPageFilePerformIo(&(Region->ImageBacking),
+                                     IoContext->IoBuffer,
+                                     RegionOffset,
+                                     BytesThisRound,
+                                     IoContext->Flags,
+                                     IoContext->TimeoutInMilliseconds,
+                                     IoContext->Write,
+                                     &BytesCompletedThisRound);
 
         if (!KSUCCESS(Status)) {
             goto PerformSharedMemoryIoOperationEnd;
         }
 
+        ASSERT(BytesThisRound == BytesCompletedThisRound);
+
         //
-        // If bytes were written, then update the file size of the shared
-        // memory object.
+        // Update the dirty bitmap on write, so that the next read will go get
+        // the saved page(s).
         //
 
-        if (IoContext->BytesCompleted != 0) {
-            FileSize = IoContext->Offset + IoContext->BytesCompleted;
-            IopUpdateFileObjectFileSize(FileObject, FileSize);
+        if (IoContext->Write != FALSE) {
+            PageIndex = RegionOffset >> PageShift;
+            PageMask = (1 << (BytesCompletedThisRound >> PageShift)) - 1;
+            Region->DirtyBitmap |= (PageMask << PageIndex);
+        }
+
+        MmIoBufferIncrementOffset(IoContext->IoBuffer, BytesCompletedThisRound);
+        BytesRemaining -= BytesCompletedThisRound;
+        BytesCompleted += BytesCompletedThisRound;
+        CurrentOffset += BytesCompletedThisRound;
+        if (CurrentOffset >= RegionEnd) {
+            CurrentEntry = CurrentEntry->Next;
         }
     }
 
 PerformSharedMemoryIoOperationEnd:
+
+    //
+    // The I/O size may have been aligned up to a page. Make sure the bytes
+    // completed is not larger than the request.
+    //
+
+    if (BytesCompleted > IoContext->SizeInBytes) {
+        BytesCompleted = IoContext->SizeInBytes;
+    }
+
+    if ((IoContext->Write != FALSE) && (BytesCompleted != 0)) {
+        FileSize = IoContext->Offset + BytesCompleted;
+        IopUpdateFileObjectFileSize(FileObject, FileSize);
+    }
+
+    if (LockHeld != FALSE) {
+        if (IoContext->Write != FALSE) {
+            KeReleaseSharedExclusiveLockExclusive(MemoryObject->Lock);
+
+        } else {
+            KeReleaseSharedExclusiveLockShared(MemoryObject->Lock);
+        }
+    }
+
+    MmSetIoBufferCurrentOffset(IoContext->IoBuffer, OriginalIoBufferOffset);
+    IoContext->BytesCompleted = BytesCompleted;
     return Status;
 }
 
@@ -823,16 +967,231 @@ Return Value:
 
 {
 
+    PLIST_ENTRY CurrentEntry;
+    PSHARED_MEMORY_BACKING_REGION Region;
     PSHARED_MEMORY_OBJECT SharedMemoryObject;
 
     SharedMemoryObject = (PSHARED_MEMORY_OBJECT)Object;
-    if (SharedMemoryObject->BackingImage != INVALID_HANDLE) {
-        IoIoHandleReleaseReference(SharedMemoryObject->BackingImage);
-        SharedMemoryObject->BackingImage = INVALID_HANDLE;
+
+    //
+    // Release backing region resources.
+    //
+
+    CurrentEntry = SharedMemoryObject->BackingRegionList.Next;
+    while (CurrentEntry != &(SharedMemoryObject->BackingRegionList)) {
+        Region = LIST_VALUE(CurrentEntry,
+                            SHARED_MEMORY_BACKING_REGION,
+                            ListEntry);
+
+        CurrentEntry = CurrentEntry->Next;
+        Region->ListEntry.Next = NULL;
+        IopDestroySharedMemoryBackingRegion(Region);
     }
 
-    ASSERT(SharedMemoryObject->FileObject == NULL);
+    if (SharedMemoryObject->Lock != NULL) {
+        KeDestroySharedExclusiveLock(SharedMemoryObject->Lock);
+    }
 
+    return;
+}
+
+PSHARED_MEMORY_BACKING_REGION
+IopCreateSharedMemoryBackingRegion (
+    PFILE_OBJECT FileObject,
+    IO_OFFSET Offset,
+    PSHARED_MEMORY_BACKING_REGION NextRegion
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new shared memory object backing region for the
+    given file object and allocates the associated page file space. It inserts
+    the new backing region on the end of the backing region list and assumes
+    the file object's lock is held exclusively.
+
+Arguments:
+
+    FileObject - Supplies a pointer to the file object for the shared memory
+        object.
+
+    Offset - Supplies the desired file offset of the backing region.
+
+    NextRegion - Supplies a pointer to the backing region before which the new
+        region should be placed. This parameter should be NULL if the region is
+        to be placed at the end of the list.
+
+Return Value:
+
+    Returns a pointer to the newly allocated shared memory object region on
+    success. NULL on failure.
+
+--*/
+
+{
+
+    PSHARED_MEMORY_BACKING_REGION NewRegion;
+    ULONG PageSize;
+    IO_OFFSET PreviousEnd;
+    PSHARED_MEMORY_BACKING_REGION PreviousRegion;
+    IO_OFFSET RegionEnd;
+    PLIST_ENTRY RegionList;
+    IO_OFFSET RegionOffset;
+    UINTN RegionSize;
+    ULONG RetryCount;
+    PSHARED_MEMORY_OBJECT SharedMemoryObject;
+    KSTATUS Status;
+
+    SharedMemoryObject = FileObject->SpecialIo;
+
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(SharedMemoryObject->Lock));
+
+    NewRegion = MmAllocatePagedPool(sizeof(SHARED_MEMORY_BACKING_REGION),
+                                   IO_ALLOCATION_TAG);
+
+    if (NewRegion == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateSharedMemoryObjectBackingRegionEnd;
+    }
+
+    RtlZeroMemory(NewRegion, sizeof(SHARED_MEMORY_BACKING_REGION));
+    NewRegion->ImageBacking.DeviceHandle = INVALID_HANDLE;
+
+    //
+    // The next region was supplied. Find the previous region.
+    //
+
+    RegionList = &(SharedMemoryObject->BackingRegionList);
+    PreviousRegion = NULL;
+    if (NextRegion == NULL) {
+        if (LIST_EMPTY(RegionList) == FALSE) {
+            PreviousRegion = LIST_VALUE(RegionList->Previous,
+                                        SHARED_MEMORY_BACKING_REGION,
+                                        ListEntry);
+        }
+
+    } else {
+        if (NextRegion->ListEntry.Previous != RegionList) {
+            PreviousRegion = LIST_VALUE(NextRegion->ListEntry.Previous,
+                                        SHARED_MEMORY_BACKING_REGION,
+                                        ListEntry);
+        }
+    }
+
+    //
+    // Try to allocate backing regions of the maximum size, aligning the region
+    // off down. Fail gracefully if page file space appears to be tight. This
+    // might extend beyond the end of the file, but that's OK. It will only get
+    // touched if the file grows.
+    //
+
+    RetryCount = 0;
+    RegionSize = MAX_SHARED_MEMORY_BACKING_REGION_SIZE;
+    PageSize = MmPageSize();
+    Status = STATUS_INSUFFICIENT_RESOURCES;
+    while (RegionSize >= PageSize) {
+        RegionOffset = ALIGN_RANGE_DOWN(Offset, RegionSize);
+
+        //
+        // Adjust the offset and size based on the previous and next regions.
+        //
+
+        if (PreviousRegion != NULL) {
+            PreviousEnd = PreviousRegion->Offset + PreviousRegion->Size;
+            if (PreviousEnd > RegionOffset) {
+                RegionSize -= (PreviousEnd - RegionOffset);
+                RegionOffset = PreviousEnd;
+            }
+        }
+
+        if (NextRegion != NULL) {
+            RegionEnd = RegionOffset + RegionSize;
+            if (NextRegion->Offset < RegionEnd) {
+                RegionSize -= (RegionEnd - NextRegion->Offset);
+            }
+        }
+
+        ASSERT(RegionSize >= PageSize);
+
+        Status = MmAllocatePageFileSpace(&(NewRegion->ImageBacking),
+                                         RegionSize);
+
+        if (KSUCCESS(Status)) {
+            break;
+        }
+
+        //
+        // Attempts to allocate a smaller portion of page file space are only
+        // allowed if insufficient resources were reported.
+        //
+
+        if (Status != STATUS_INSUFFICIENT_RESOURCES) {
+            goto CreateSharedMemoryObjectBackingRegionEnd;
+        }
+
+        ASSERT(IS_ALIGNED(RegionSize, PageSize) != FALSE);
+
+        RetryCount += 1;
+        RegionSize = MAX_SHARED_MEMORY_BACKING_REGION_SIZE >> RetryCount;
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto CreateSharedMemoryObjectBackingRegionEnd;
+    }
+
+    NewRegion->Offset = RegionOffset;
+    NewRegion->Size = RegionSize;
+    if (NextRegion != NULL) {
+        INSERT_BEFORE(&(NewRegion->ListEntry), &(NextRegion->ListEntry));
+
+    } else {
+        INSERT_BEFORE(&(NewRegion->ListEntry),
+                      &(SharedMemoryObject->BackingRegionList));
+    }
+
+    Status = STATUS_SUCCESS;
+
+CreateSharedMemoryObjectBackingRegionEnd:
+    if (!KSUCCESS(Status)) {
+        if (NewRegion != NULL) {
+            MmFreePagedPool(NewRegion);
+            NewRegion = NULL;
+        }
+    }
+
+    return NewRegion;
+}
+
+VOID
+IopDestroySharedMemoryBackingRegion (
+    PSHARED_MEMORY_BACKING_REGION Region
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a shared memory object backing region and its
+    associated page file space.
+
+Arguments:
+
+    Region - Supplies a pointer to the shared memory object backing region to
+        destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ASSERT(Region->ListEntry.Next == NULL);
+
+    MmFreePageFileSpace(&(Region->ImageBacking), Region->Size);
+    MmFreePagedPool(Region);
     return;
 }
 

@@ -1315,6 +1315,7 @@ Return Value:
     PACPI_OBJECT Destination;
     PACPI_OBJECT NewArgument;
     PACPI_OBJECT Source;
+    KSTATUS Status;
 
     //
     // If not all arguments are acquired, evaluate the previous statement to get
@@ -1379,7 +1380,19 @@ Return Value:
     Statement->Reduction = NULL;
     if (Context->ExecuteStatements != FALSE) {
         Source = Statement->Argument[0];
+
+        //
+        // This needs to perform an implicit source converstion into a
+        // DataRefObject (i.e. a DataObject or Reference Object).
+        //
+
+        Status = AcpipConvertToDataReferenceObject(Context, Source, &Source);
+        if (!KSUCCESS(Status)) {
+            goto EvaluateCopyObjectStatementEnd;
+        }
+
         Statement->Reduction = AcpipCopyObject(Source);
+        AcpipObjectReleaseReference(Source);
 
         //
         // If the target is supplied, replace it with the copy.
@@ -1387,11 +1400,29 @@ Return Value:
 
         Destination = Statement->Argument[1];
         if (Destination != NULL) {
-            return AcpipReplaceObjectContents(Context, Source, Destination);
+            Status = AcpipResolveStoreDestination(Context,
+                                                  Destination,
+                                                  &Destination);
+
+            if (!KSUCCESS(Status)) {
+                goto EvaluateCopyObjectStatementEnd;
+            }
+
+            Status = AcpipReplaceObjectContents(Context,
+                                                Destination,
+                                                Statement->Reduction);
+
+            AcpipObjectReleaseReference(Destination);
+            if (!KSUCCESS(Status)) {
+                goto EvaluateCopyObjectStatementEnd;
+            }
         }
     }
 
-    return STATUS_SUCCESS;
+    Status = STATUS_SUCCESS;
+
+EvaluateCopyObjectStatementEnd:
+    return Status;
 }
 
 KSTATUS
@@ -2400,7 +2431,7 @@ Return Value:
 
             Statement->Argument[Statement->ArgumentsAcquired] = NewArgument;
             Statement->ArgumentsAcquired += 1;
-            if (Statement->ArgumentsNeeded != Statement->ArgumentsAcquired) {
+            if (Statement->ArgumentsAcquired < 3) {
                 return STATUS_MORE_PROCESSING_REQUIRED;
             }
         }
@@ -2410,80 +2441,100 @@ Return Value:
     // Evaluate the result.
     //
 
-    ASSERT(Statement->ArgumentsNeeded == Statement->ArgumentsAcquired);
-
     if (Context->ExecuteStatements == FALSE) {
+
+        ASSERT(Statement->ArgumentsNeeded == Statement->ArgumentsAcquired);
+
         return STATUS_SUCCESS;
     }
 
-    ASSERT(Statement->Argument[0]->Type == AcpiObjectInteger);
-    ASSERT(Statement->Argument[1]->Type == AcpiObjectInteger);
-
-    Dividend = Statement->Argument[0]->U.Integer.Value;
-    Divisor = Statement->Argument[1]->U.Integer.Value;
-    if (Context->CurrentMethod->IntegerWidthIs32 != FALSE) {
-        Dividend &= 0xFFFFFFFF;
-        Dividend &= 0xFFFFFFFF;
-    }
-
     //
-    // Fail to divide by 0, otherwise do the divide.
+    // The first time around, perform the divide and try to store the remainder.
     //
 
-    if (Divisor == 0) {
-        return STATUS_DIVIDE_BY_ZERO;
-    }
+    if (Statement->ArgumentsAcquired == 3) {
 
-    Quotient = Dividend / Divisor;
-    Remainder = Dividend % Divisor;
-    if (Context->CurrentMethod->IntegerWidthIs32 != FALSE) {
-        Quotient &= 0xFFFFFFFF;
-        Remainder &= 0xFFFFFFFF;
-    }
+        ASSERT(Statement->Argument[0]->Type == AcpiObjectInteger);
+        ASSERT(Statement->Argument[1]->Type == AcpiObjectInteger);
 
-    Statement->Reduction = AcpipCreateNamespaceObject(Context,
-                                                      AcpiObjectInteger,
-                                                      NULL,
-                                                      &Quotient,
-                                                      sizeof(ULONGLONG));
+        Dividend = Statement->Argument[0]->U.Integer.Value;
+        Divisor = Statement->Argument[1]->U.Integer.Value;
+        if (Context->CurrentMethod->IntegerWidthIs32 != FALSE) {
+            Dividend &= 0xFFFFFFFF;
+            Dividend &= 0xFFFFFFFF;
+        }
 
-    if (Statement->Reduction == NULL) {
-        return STATUS_UNSUCCESSFUL;
-    }
+        //
+        // Fail to divide by 0, otherwise do the divide.
+        //
 
-    //
-    // Store the remainder if supplied.
-    //
+        if (Divisor == 0) {
+            return STATUS_DIVIDE_BY_ZERO;
+        }
 
-    if (Statement->Argument[2] != NULL) {
-        RemainderObject = AcpipCreateNamespaceObject(Context,
-                                                     AcpiObjectInteger,
-                                                     NULL,
-                                                     &Remainder,
-                                                     sizeof(ULONGLONG));
+        Quotient = Dividend / Divisor;
+        Remainder = Dividend % Divisor;
+        if (Context->CurrentMethod->IntegerWidthIs32 != FALSE) {
+            Quotient &= 0xFFFFFFFF;
+            Remainder &= 0xFFFFFFFF;
+        }
 
-        if (RemainderObject == NULL) {
+        Statement->Reduction = AcpipCreateNamespaceObject(Context,
+                                                          AcpiObjectInteger,
+                                                          NULL,
+                                                          &Quotient,
+                                                          sizeof(ULONGLONG));
+
+        if (Statement->Reduction == NULL) {
             return STATUS_UNSUCCESSFUL;
         }
 
-        Status = AcpipPerformStoreOperation(Context,
-                                            RemainderObject,
-                                            Statement->Argument[2]);
+        //
+        // Store the remainder if supplied.
+        //
 
-        AcpipObjectReleaseReference(RemainderObject);
-        if (!KSUCCESS(Status)) {
-            return Status;
+        if (Statement->Argument[2] != NULL) {
+            RemainderObject = AcpipCreateNamespaceObject(Context,
+                                                         AcpiObjectInteger,
+                                                         NULL,
+                                                         &Remainder,
+                                                         sizeof(ULONGLONG));
+
+            if (RemainderObject == NULL) {
+                return STATUS_UNSUCCESSFUL;
+            }
+
+            Status = AcpipPerformStoreOperation(Context,
+                                                RemainderObject,
+                                                Statement->Argument[2]);
+
+            AcpipObjectReleaseReference(RemainderObject);
+            if (!KSUCCESS(Status)) {
+                return Status;
+            }
         }
-    }
+
+        ASSERT(Statement->ArgumentsAcquired < Statement->ArgumentsNeeded);
+
+        Status = STATUS_MORE_PROCESSING_REQUIRED;
 
     //
-    // Store the quotient in the target if supplied.
+    // The second time around store the quotient.
     //
 
-    if (Statement->Argument[3] != NULL) {
-        return AcpipPerformStoreOperation(Context,
-                                          Statement->Reduction,
-                                          Statement->Argument[3]);
+    } else {
+
+        ASSERT(Statement->ArgumentsAcquired == 4);
+
+        //
+        // Store the quotient in the target if supplied.
+        //
+
+        if (Statement->Argument[3] != NULL) {
+            return AcpipPerformStoreOperation(Context,
+                                              Statement->Reduction,
+                                              Statement->Argument[3]);
+        }
     }
 
     return STATUS_SUCCESS;
@@ -2792,6 +2843,25 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         return Status;
+    }
+
+    //
+    // If this was a C method, complete it right away.
+    //
+
+    if (Method->U.Method.Function != NULL) {
+
+        ASSERT(Method->U.Method.AmlCodeSize == 0);
+
+        Statement->Reduction = Context->ReturnValue;
+        AcpipObjectAddReference(Statement->Reduction);
+        Context->IndentationLevel -= 1;
+        if (Context->PrintStatements != FALSE) {
+            AcpipPrintIndentedNewLine(Context);
+            RtlDebugPrint("}");
+        }
+
+        return STATUS_SUCCESS;
     }
 
     return STATUS_MORE_PROCESSING_REQUIRED;
@@ -3754,7 +3824,8 @@ Return Value:
         RtlZeroMemory(&Alias, sizeof(ACPI_ALIAS_OBJECT));
         PackageIndex = (ULONG)Statement->Argument[1]->U.Integer.Value;
         Alias.DestinationObject = AcpipGetPackageObject(Statement->Argument[0],
-                                                        PackageIndex);
+                                                        PackageIndex,
+                                                        TRUE);
 
         if (Alias.DestinationObject == NULL) {
             return STATUS_NOT_FOUND;
@@ -4100,24 +4171,30 @@ Return Value:
 {
 
     BOOL PrintParentheses;
+    PACPI_OBJECT Reduction;
     ULONGLONG Value;
 
+    Reduction = NULL;
     PrintParentheses = FALSE;
     switch (Statement->Type) {
     case AmlStatementZero:
         Value = 0;
+        Reduction = &AcpiZero;
         break;
 
     case AmlStatementOne:
         Value = 1;
+        Reduction = &AcpiOne;
         break;
 
     case AmlStatementOnes:
         if (Context->CurrentMethod->IntegerWidthIs32 != FALSE) {
             Value = 0xFFFFFFFF;
+            Reduction = &AcpiOnes32;
 
         } else {
             Value = 0xFFFFFFFFFFFFFFFFULL;
+            Reduction = &AcpiOnes64;
         }
 
         break;
@@ -4155,15 +4232,22 @@ Return Value:
     }
 
     if (Context->ExecuteStatements != FALSE) {
-        Statement->Reduction = AcpipCreateNamespaceObject(Context,
-                                                          AcpiObjectInteger,
-                                                          NULL,
-                                                          &Value,
-                                                          sizeof(ULONGLONG));
+        if (Reduction != NULL) {
+            AcpipObjectAddReference(Reduction);
 
-        if (Statement->Reduction == NULL) {
-            return STATUS_UNSUCCESSFUL;
+        } else {
+            Reduction = AcpipCreateNamespaceObject(Context,
+                                                   AcpiObjectInteger,
+                                                   NULL,
+                                                   &Value,
+                                                   sizeof(ULONGLONG));
+
+            if (Reduction == NULL) {
+                return STATUS_UNSUCCESSFUL;
+            }
         }
+
+        Statement->Reduction = Reduction;
     }
 
     return STATUS_SUCCESS;
@@ -4369,6 +4453,15 @@ Return Value:
     }
 
     //
+    // Run any _INI methods.
+    //
+
+    Status = AcpipRunInitializationMethods(NULL);
+    if (!KSUCCESS(Status)) {
+        goto EvaluateLoadStatementEnd;
+    }
+
+    //
     // The definition block owns the buffer now.
     //
 
@@ -4447,6 +4540,7 @@ Return Value:
 
         Statement->Reduction = LocalObject;
         AcpipObjectAddReference(LocalObject);
+        Context->CurrentMethod->LastLocalIndex = LocalNumber;
     }
 
     return STATUS_SUCCESS;
@@ -4999,7 +5093,7 @@ Return Value:
     ItemIndex = StartIndex->U.Integer.Value;
     ItemCount = Package->U.Package.ElementCount;
     while (ItemIndex < ItemCount) {
-        PackageElement = AcpipGetPackageObject(Package, ItemIndex);
+        PackageElement = AcpipGetPackageObject(Package, ItemIndex, FALSE);
         Match = AcpipEvaluateMatchComparison(Context,
                                              PackageElement,
                                              Operand1,
@@ -5020,24 +5114,27 @@ Return Value:
     //
 
     if (ItemIndex == ItemCount) {
-        ItemIndex = (ULONGLONG)-1;
-        if (Context->CurrentMethod->IntegerWidthIs32) {
-            ItemIndex = (ULONG)-1;
+        Statement->Reduction = &AcpiOnes64;
+        if (Context->CurrentMethod->IntegerWidthIs32 != FALSE) {
+            Statement->Reduction = &AcpiOnes32;
         }
-    }
+
+        AcpipObjectAddReference(Statement->Reduction);
 
     //
-    // Return the result value.
+    // Otherwise, return the result value.
     //
 
-    Statement->Reduction = AcpipCreateNamespaceObject(Context,
-                                                      AcpiObjectInteger,
-                                                      NULL,
-                                                      &ItemIndex,
-                                                      sizeof(ULONGLONG));
+    } else {
+        Statement->Reduction = AcpipCreateNamespaceObject(Context,
+                                                          AcpiObjectInteger,
+                                                          NULL,
+                                                          &ItemIndex,
+                                                          sizeof(ULONGLONG));
 
-    if (Statement->Reduction == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        if (Statement->Reduction == NULL) {
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
     }
 
     return STATUS_SUCCESS;
@@ -7064,6 +7161,9 @@ Return Value:
             break;
 
         default:
+
+            ASSERT(FALSE);
+
             return STATUS_NOT_SUPPORTED;
         }
 
@@ -8496,6 +8596,207 @@ Return Value:
     }
 
     return NewObject;
+}
+
+KSTATUS
+AcpipResolveStoreDestination (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Destination,
+    PACPI_OBJECT *ResolvedDestination
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resolves a store destination to the proper ACPI object based
+    on its type and the statement type.
+
+Arguments:
+
+    Context - Supplies a pointer to the current AML execution context.
+
+    Destination - Supplies a pointer to the original store destination object.
+
+    ResolvedDestination - Supplies a pointer that receives a pointer to the
+        resolved destination object. This may return a pointer to the
+        original destination, but with an extra reference. The caller is always
+        responsible for releasing a reference on this object.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG LastLocalIndex;
+    PACPI_OBJECT *LocalVariable;
+    PACPI_OBJECT ResolvedObject;
+
+    //
+    // Follow all aliases.
+    //
+
+    while (Destination->Type == AcpiObjectAlias) {
+        Destination = Destination->U.Alias.DestinationObject;
+    }
+
+    //
+    // If it is a local, then store is meant to release the reference on the
+    // existing local variable and set the local to a new copy of the source.
+    //
+
+    ResolvedObject = Destination;
+    LastLocalIndex = Context->CurrentMethod->LastLocalIndex;
+    LocalVariable = Context->CurrentMethod->LocalVariable;
+    if ((LastLocalIndex != AML_INVALID_LOCAL_INDEX) &&
+        (LocalVariable[LastLocalIndex] == Destination)) {
+
+        AcpipObjectReleaseReference(Destination);
+        LocalVariable[LastLocalIndex] = NULL;
+        ResolvedObject = AcpipCreateNamespaceObject(Context,
+                                                    AcpiObjectUninitialized,
+                                                    NULL,
+                                                    NULL,
+                                                    0);
+
+        if (ResolvedObject == NULL) {
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
+
+        LocalVariable[LastLocalIndex] = ResolvedObject;
+    }
+
+    AcpipObjectAddReference(ResolvedObject);
+    *ResolvedDestination = ResolvedObject;
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+AcpipConvertToDataReferenceObject (
+    PAML_EXECUTION_CONTEXT Context,
+    PACPI_OBJECT Object,
+    PACPI_OBJECT *ResultObject
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a conversion of an object to a type in the set of
+    DataRefObject types.
+
+Arguments:
+
+    Context - Supplies a pointer to the current execution context.
+
+    Object - Supplies a pointer to the object to convert.
+
+    ResultObject - Supplies a pointer that receives a pointer to the result
+        object after the conversion. If no conversion is necessary, then this
+        may be a pointer to the original object. If a conversion is necessary,
+        then this will be a pointer to a new object. Either way the caller is
+        responsible for releasing one reference on the result object on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PACPI_OBJECT DataReferenceObject;
+    KSTATUS Status;
+
+    //
+    // Get the real object being pointed to here.
+    //
+
+    while (Object->Type == AcpiObjectAlias) {
+        Object = Object->U.Alias.DestinationObject;
+    }
+
+    DataReferenceObject = NULL;
+    Status = STATUS_SUCCESS;
+    switch (Object->Type) {
+
+    //
+    // Convert a field unit to an integer or buffer.
+    //
+
+    case AcpiObjectFieldUnit:
+        Status = AcpipReadFromField(Context, Object, &DataReferenceObject);
+        if (!KSUCCESS(Status)) {
+            goto ConvertToDataReferenceObjectEnd;
+        }
+
+        ASSERT((DataReferenceObject->Type == AcpiObjectInteger) ||
+               (DataReferenceObject->Type == AcpiObjectBuffer));
+
+        break;
+
+    //
+    // Convert a buffer field into an integer or buffer.
+    //
+
+    case AcpiObjectBufferField:
+        Status = AcpipReadFromBufferField(Context,
+                                          Object,
+                                          &DataReferenceObject);
+
+        if (!KSUCCESS(Status)) {
+            goto ConvertToDataReferenceObjectEnd;
+        }
+
+        ASSERT((DataReferenceObject->Type == AcpiObjectInteger) ||
+               (DataReferenceObject->Type == AcpiObjectBuffer));
+
+        break;
+
+    //
+    // Just add a new reference if it is already a DataReferenceObject type.
+    //
+
+    case AcpiObjectInteger:
+    case AcpiObjectString:
+    case AcpiObjectBuffer:
+    case AcpiObjectPackage:
+    case AcpiObjectDdbHandle:
+        DataReferenceObject = Object;
+        AcpipObjectAddReference(DataReferenceObject);
+        break;
+
+    //
+    // Anything else cannot be converted and results in failure.
+    //
+
+    default:
+        RtlDebugPrint("\nACPI: Unable to convert object of type %d to a "
+                      "DataRefObject. Context: 0x%08x, Object 0x%08x.\n",
+                      Object->Type,
+                      Context,
+                      Object);
+
+        ASSERT(FALSE);
+
+        Status = STATUS_NOT_SUPPORTED;
+        break;
+    }
+
+ConvertToDataReferenceObjectEnd:
+    if (!KSUCCESS(Status)) {
+        if (DataReferenceObject != NULL) {
+            AcpipObjectReleaseReference(DataReferenceObject);
+            DataReferenceObject = NULL;
+        }
+    }
+
+    *ResultObject = DataReferenceObject;
+    return Status;
 }
 
 //

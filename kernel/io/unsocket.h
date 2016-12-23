@@ -162,7 +162,7 @@ IopUnixSocketBindToAddress (
     BOOL FromKernelMode,
     PIO_HANDLE Handle,
     PNETWORK_ADDRESS Address,
-    PSTR Path,
+    PCSTR Path,
     UINTN PathSize
     );
 
@@ -226,7 +226,7 @@ IopUnixSocketAccept (
     PSOCKET Socket,
     PIO_HANDLE *NewConnectionSocket,
     PNETWORK_ADDRESS RemoteAddress,
-    PSTR *RemotePath,
+    PCSTR *RemotePath,
     PUINTN RemotePathSize
     );
 
@@ -266,7 +266,7 @@ IopUnixSocketConnect (
     BOOL FromKernelMode,
     PSOCKET Socket,
     PNETWORK_ADDRESS Address,
-    PSTR RemotePath,
+    PCSTR RemotePath,
     UINTN RemotePathSize
     );
 

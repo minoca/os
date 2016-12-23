@@ -233,7 +233,7 @@ Return Value:
     //
 
     NetworkEntry.Domain = NetDomainNetlink;
-    NetworkEntry.ParentProtocolNumber = 0;
+    NetworkEntry.ParentProtocolNumber = INVALID_PROTOCOL_NUMBER;
     NetworkEntry.Interface.InitializeLink = NetlinkpInitializeLink;
     NetworkEntry.Interface.DestroyLink = NetlinkpDestroyLink;
     NetworkEntry.Interface.InitializeSocket = NetlinkpInitializeSocket;

@@ -330,7 +330,8 @@ mbstowcs (
 Routine Description:
 
     This routine converts a null-terminated sequence of multi-byte characters
-    beginning in the inital shift state to a string of wide characters.
+    beginning in the inital shift state to a string of wide characters, up to
+    and including a null terminator.
 
 Arguments:
 
@@ -346,7 +347,7 @@ Arguments:
 Return Value:
 
     Returns the number of wide character array elements modified (or required
-    if the wide string is NULL).
+    if the wide string is NULL), not including the terminating NULL.
 
     -1 if an invalid character is encountered. The errno variable may be set
     to provide more information.
@@ -367,7 +368,8 @@ mbsrtowcs (
 Routine Description:
 
     This routine converts a null-terminated sequence of multi-byte characters
-    at the given shift state to a string of wide characters.
+    beginning in the inital shift state to a string of wide characters, up to
+    and including a null terminator.
 
 Arguments:
 
@@ -381,7 +383,7 @@ Arguments:
         conversion stopped because it would exceed the wide string size, then
         the value returned here will be a pointer to the character one after
         the last character successfully converted. If the wide string is NULL,
-        the pointer will remained unchanged on ouput.
+        the pointer will remained unchanged on output.
 
     DestinationSize - Supplies the maximum number of elements to place in the
         wide string.
@@ -394,7 +396,7 @@ Arguments:
 Return Value:
 
     Returns the number of wide character array elements modified (or required
-    if the wide string is NULL).
+    if the wide string is NULL), not including the terminating NULL.
 
     -1 if an invalid character is encountered. The errno variable may be set
     to provide more information.
@@ -1789,7 +1791,7 @@ LIBC_API
 wchar_t *
 wmemchr (
     const wchar_t *Buffer,
-    int Character,
+    wchar_t Character,
     size_t Size
     );
 
@@ -2578,43 +2580,6 @@ Return Value:
 LIBC_API
 wchar_t *
 wcstok (
-    wchar_t *InputString,
-    const wchar_t *Separators
-    );
-
-/*++
-
-Routine Description:
-
-    This routine breaks a wide string into a series of tokens delimited by any
-    character from the given separator set. The first call passes an input
-    string in. This routine scans looking for a non-separator character, which
-    marks the first token. It then scans looking for a separator character, and
-    sets that character to the null terminator to delimit the first character.
-    Subsequent calls should pass NULL as the input string, and the context
-    pointer will be updated so that successive calls return the next tokens.
-    This routine is neither thread safe nor reentrant.
-
-Arguments:
-
-    InputString - Supplies a pointer to the wide input string to tokenize. If
-        supplied, this will reset the tokenizer function.
-
-    Separators - Supplies a pointer to a null terminated wide string containing
-        the set of characters that delimit tokens. This may vary from call to
-        call of this routine with the same context pointer.
-
-Return Value:
-
-    Returns a pointer to the next token on success.
-
-    NULL if there are no more tokens.
-
---*/
-
-LIBC_API
-wchar_t *
-wcstok_r (
     wchar_t *InputString,
     const wchar_t *Separators,
     wchar_t **LastToken

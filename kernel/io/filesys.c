@@ -1259,9 +1259,7 @@ Return Value:
                          &Path,
                          &PathSize,
                          OPEN_FLAG_DIRECTORY,
-                         IoObjectInvalid,
                          NULL,
-                         FILE_PERMISSION_NONE,
                          &RootPathPoint);
 
     if (!KSUCCESS(Status)) {

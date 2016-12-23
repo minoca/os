@@ -1,6 +1,11 @@
 ################################################################################
 #
-#   Copyright (c) 2013 Minoca Corp. All Rights Reserved
+#   Copyright (c) 2013 Minoca Corp.
+#
+#    This file is licensed under the terms of the GNU General Public License
+#    version 3. Alternative licensing terms are available. Contact
+#    info@minocacorp.com for details. See the LICENSE file at the root of this
+#    project for complete licensing information.
 #
 #   Binary Name:
 #
@@ -63,9 +68,7 @@ include $(SRCROOT)/os/minoca.mk
 
 postbuild:
 	@mkdir -p $(BINROOT)/skel/bin
-	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/sh; then \
-	    $(STRIP) -o $(BINROOT)/skel/bin/sh $(BINROOT)/$(BINARY); \
-	fi
+	@$(STRIP) -p -o $(BINROOT)/skel/bin/sh $(BINROOT)/$(BINARY)
 
 ##
 ## Generate the version header for the commit information.

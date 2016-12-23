@@ -1524,7 +1524,8 @@ Return Value:
 
 VOID
 ImRelocateSelf (
-    PVOID Base
+    PVOID Base,
+    PIM_RESOLVE_PLT_ENTRY PltResolver
     );
 
 /*++
@@ -1536,6 +1537,9 @@ Routine Description:
 Arguments:
 
     Base - Supplies a pointer to the base of the loaded image.
+
+    PltResolver - Supplies a pointer to the function used to resolve PLT
+        entries.
 
 Return Value:
 

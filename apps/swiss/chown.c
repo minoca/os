@@ -323,7 +323,8 @@ ChownConvertUserGroupName (
 
 Routine Description:
 
-    This routine converts a user:group string into a user ID and group ID.
+    This routine converts a user:group or user.group string into a user ID and
+        group ID.
 
 Arguments:
 
@@ -345,9 +346,10 @@ Return Value:
 {
 
     PSTR AfterScan;
-    PSTR Colon;
+    PSTR Copy;
     struct group *GroupInformation;
     PSTR GroupName;
+    PSTR Separator;
     INT Status;
     struct passwd *UserInformation;
     PSTR UserName;
@@ -357,35 +359,40 @@ Return Value:
     }
 
     GroupName = NULL;
-    UserName = NULL;
-    Colon = strchr(Argument, ':');
-    if (Colon == NULL) {
-        UserName = Argument;
 
-    } else {
-        if (Colon == Argument) {
-            GroupName = Colon + 1;
+    //
+    // If the whole thing is a valid username, then that must be it. Check
+    // this first to avoid the string duplication if not needed, and to
+    // prioritize usernames with dots over the user.group separator.
+    //
 
-        } else {
-            UserName = strdup(Argument);
-            if (UserName == NULL) {
-                return ENOMEM;
-            }
+    UserInformation = getpwnam(Argument);
+    if (UserInformation != NULL) {
+        *UserId = UserInformation->pw_uid;
+        return 0;
+    }
 
-            Colon = strchr(UserName, ':');
-            *Colon = '\0';
-            GroupName = Colon + 1;
-            if (*GroupName == '\0') {
-                GroupName = NULL;
-            }
-        }
+    Copy = strdup(Argument);
+    if (Copy == NULL) {
+        return ENOMEM;
+    }
+
+    UserName = Copy;
+    Separator = strchr(UserName, ':');
+    if (Separator == NULL) {
+        Separator = strrchr(UserName, '.');
+    }
+
+    if (Separator != NULL) {
+        *Separator = '\0';
+        GroupName = Separator + 1;
     }
 
     //
     // Convert the user name.
     //
 
-    if (UserName != NULL) {
+    if ((UserName != NULL) && (*UserName != '\0')) {
         if (isdigit(*UserName) != 0) {
             *UserId = strtoul(UserName, &AfterScan, 10);
             if (AfterScan == UserName) {
@@ -406,7 +413,7 @@ Return Value:
         }
     }
 
-    if (GroupName != NULL) {
+    if ((GroupName != NULL) && (*GroupName != '\0')) {
         if (isdigit(*GroupName) != 0) {
             *GroupId = strtoul(GroupName, &AfterScan, 10);
             if (AfterScan == GroupName) {
@@ -430,10 +437,6 @@ Return Value:
     Status = 0;
 
 ConvertUserGroupNameEnd:
-    if ((UserName != NULL) && (UserName != Argument)) {
-        free(UserName);
-    }
-
+    free(Copy);
     return Status;
 }
-

@@ -51,6 +51,8 @@ Questions or patches can be submitted to minoca-dev@googlegroups.com. Good luck!
  - Network/ramdisk boot
  - Add driver for NIC used by VMWare.
  - Add SD driver for PL081 used by Qemu (ARM).
+ - NAND flash file system
+ - IPv6 kernel support
 
 ### Hard
  - Implement better scheduling
@@ -65,3 +67,14 @@ Questions or patches can be submitted to minoca-dev@googlegroups.com. Good luck!
  - x86-64 architecture port
  - AARCH64 architecture port
  - CD boot
+ - Accelerated graphics
+
+Below is a list of platforms that might be interesting to port to.
+### Interesting Platform Ports
+ - chipPC
+ - Odroid C1/C2/XU4
+
+### Community feature requests
+ - PowerPC architecture port
+ - MIPS architecture port
+ - Asynchronous I/O mechanism

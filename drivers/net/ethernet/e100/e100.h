@@ -89,6 +89,12 @@ Author:
 #define E100_ALLOCATION_TAG 0x30303145 // '001E'
 
 //
+// Define how often to check the link for connect/disconnect, in seconds.
+//
+
+#define E100_LINK_CHECK_INTERVAL 5
+
+//
 // Define the size of receive frame data.
 //
 
@@ -501,6 +507,9 @@ Members:
     CommandNextToUse - Stores the index where the next command should be placed.
         If this equals the next index to be reaped, then the list is full.
 
+    CommandFreeCount - Stores the number of command ring entries that are
+        currently free to use.
+
     CommandListLock - Stores the lock protecting simultaneous software access
         to the command list.
 
@@ -508,8 +517,15 @@ Members:
 
     LinkActive - Stores a boolean indicating if there is an active network link.
 
+    LinkSpeed - Stores a the current link speed of the device.
+
     LinkCheckTimer - Stores a pointer to the timer that fires periodically to
         see if the link is active.
+
+    LinkCheckDpc - Stores a pointer to the DPC associated with the link check
+        timer.
+
+    WorkItem - Stores a pointer to the work item queued from the DPC.
 
     PendingStatusBits - Stores the bitfield of status bits that have yet to be
         dealt with by software.
@@ -538,10 +554,14 @@ typedef struct _E100_DEVICE {
     PNET_PACKET_BUFFER *CommandPacket;
     ULONG CommandLastReaped;
     ULONG CommandNextToUse;
+    ULONG CommandFreeCount;
     PQUEUED_LOCK CommandListLock;
     NET_PACKET_LIST TransmitPacketList;
     BOOL LinkActive;
+    ULONGLONG LinkSpeed;
     PKTIMER LinkCheckTimer;
+    PDPC LinkCheckDpc;
+    PWORK_ITEM WorkItem;
     ULONG PendingStatusBits;
     ULONG EepromAddressBits;
     BYTE EepromMacAddress[ETHERNET_ADDRESS_SIZE];

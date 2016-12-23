@@ -1032,8 +1032,7 @@ Return Value:
     //
 
     if (Device->PhyId == (ULONG)-1) {
-        Status = STATUS_NO_SUCH_DEVICE;
-        return Status;
+        return STATUS_NO_SUCH_DEVICE;
     }
 
     //

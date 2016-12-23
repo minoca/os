@@ -42,6 +42,7 @@ Environment:
 #include <minoca/debug/dbgext.h>
 #include "dbgrprof.h"
 #include "console.h"
+#include "sock.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -68,7 +69,9 @@ Environment:
 typedef enum _CHANNEL_TYPE {
     CommChannelInvalid,
     CommChannelPipe,
-    CommChannelSerial
+    CommChannelSerial,
+    CommChannelTcp,
+    CommChannelExec
 } CHANNEL_TYPE, *PCHANNEL_TYPE;
 
 typedef struct _NT_THREAD_CREATION_CONTEXT {
@@ -81,16 +84,27 @@ typedef struct _NT_THREAD_CREATION_CONTEXT {
 //
 
 HANDLE CommChannel = INVALID_HANDLE_VALUE;
+HANDLE CommChannelOut = INVALID_HANDLE_VALUE;
 CHANNEL_TYPE CommChannelType = CommChannelInvalid;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+BOOL
+DbgrpCreateExecPipe (
+    PSTR Command
+    );
+
 DWORD
 WINAPI
 DbgrpOsThreadStart (
     LPVOID Parameter
+    );
+
+VOID
+DbgrpPrintLastError (
+    VOID
     );
 
 //
@@ -274,13 +288,77 @@ Return Value:
 
 {
 
+    PSTR AfterScan;
+    PSTR Colon;
     UCHAR EmptyBuffer[8];
+    PSTR HostCopy;
+    unsigned long Port;
     BOOL Result;
     DCB SerialParameters;
+    int Socket;
     ULONG Timeout;
     COMMTIMEOUTS Timeouts;
 
+    HostCopy = NULL;
     Result = FALSE;
+    Socket = -1;
+
+    //
+    // Connect via TCP.
+    //
+
+    if (strncasecmp(Channel, "tcp:", 4) == 0) {
+        if (DbgrSocketInitializeLibrary() != 0) {
+            DbgOut("Failed to initialize socket library.\n");
+            return FALSE;
+        }
+
+        HostCopy = strdup(Channel + 4);
+        if (HostCopy == NULL) {
+            goto InitializeCommunicationsEnd;
+        }
+
+        Colon = strrchr(HostCopy, ':');
+        if (Colon == NULL) {
+            DbgOut("Error: Port number expected in the form host:port.\n");
+            goto InitializeCommunicationsEnd;
+        }
+
+        *Colon = '\0';
+        Port = strtoul(Colon + 1, &AfterScan, 10);
+        if ((*AfterScan != '\0') || (AfterScan == Colon + 1)) {
+            DbgOut("Error: Invalid port '%s'.\n", Colon + 1);
+        }
+
+        Socket = DbgrSocketCreateStreamSocket();
+        if (Socket < 0) {
+            DbgOut("Failed to create socket.\n");
+            goto InitializeCommunicationsEnd;
+        }
+
+        DbgOut("Connecting via TCP to %s on port %u...", HostCopy, Port);
+        if (DbgrSocketConnect(Socket, HostCopy, Port) != 0) {
+            DbgOut("Failed to connect: ");
+            DbgrpPrintLastError();
+            goto InitializeCommunicationsEnd;
+        }
+
+        DbgOut("Connected.\n");
+        CommChannel = (HANDLE)Socket;
+        CommChannelType = CommChannelTcp;
+        Socket = -1;
+        Result = TRUE;
+        goto InitializeCommunicationsEnd;
+
+    //
+    // Execute another process and use its stdin/stdout as the kernel debug
+    // channel.
+    //
+
+    } else if (strncasecmp(Channel, "exec:", 5) == 0) {
+        Result = DbgrpCreateExecPipe(Channel + 5);
+        goto InitializeCommunicationsEnd;
+    }
 
     //
     // CreateFile can open both named pipes and COM ports. Named pipes usually
@@ -368,6 +446,15 @@ Return Value:
     Result = TRUE;
 
 InitializeCommunicationsEnd:
+    if (HostCopy != NULL) {
+        free(HostCopy);
+    }
+
+    if (Socket >= 0) {
+        DbgrSocketClose(Socket);
+        Socket = -1;
+    }
+
     if (Result == FALSE) {
         if (CommChannel != INVALID_HANDLE_VALUE) {
             CloseHandle(CommChannel);
@@ -402,9 +489,17 @@ Return Value:
 
 {
 
-    if (CommChannel != INVALID_HANDLE_VALUE) {
+    if (CommChannelType == CommChannelTcp) {
+        DbgrSocketClose((int)CommChannel);
+
+    } else if (CommChannel != INVALID_HANDLE_VALUE) {
         CloseHandle(CommChannel);
         CommChannel = INVALID_HANDLE_VALUE;
+        if (CommChannelOut != INVALID_HANDLE_VALUE) {
+            CloseHandle(CommChannelOut);
+            CommChannelOut = INVALID_HANDLE_VALUE;
+        }
+
         CommChannelType = CommChannelInvalid;
     }
 
@@ -440,6 +535,7 @@ Return Value:
 {
 
     ULONG BytesRead;
+    int BytesReceived;
     PVOID CurrentPosition;
     ULONG Result;
     ULONG TotalBytesReceived;
@@ -447,14 +543,32 @@ Return Value:
     CurrentPosition = Buffer;
     TotalBytesReceived = 0;
     while (TotalBytesReceived < BytesToRead) {
-        Result = ReadFile(CommChannel,
-                          CurrentPosition,
-                          BytesToRead - TotalBytesReceived,
-                          &BytesRead,
-                          NULL);
+        if (CommChannelType == CommChannelTcp) {
+            BytesReceived = DbgrSocketReceive((int)CommChannel,
+                                              CurrentPosition,
+                                              BytesToRead - TotalBytesReceived);
 
-        if (Result == FALSE) {
-            return FALSE;
+            if (BytesReceived == 0) {
+                DbgOut("Socket closed\n");
+                return FALSE;
+
+            } else if (BytesReceived < 0) {
+                DbgOut("Receive failure.\n");
+                return FALSE;
+            }
+
+            BytesRead = BytesReceived;
+
+        } else {
+            Result = ReadFile(CommChannel,
+                              CurrentPosition,
+                              BytesToRead - TotalBytesReceived,
+                              &BytesRead,
+                              NULL);
+
+            if (Result == FALSE) {
+                return FALSE;
+            }
         }
 
         TotalBytesReceived += BytesRead;
@@ -491,26 +605,45 @@ Return Value:
 
 {
 
-    ULONG BytesSent;
+    int BytesSent;
+    ULONG BytesWritten;
     PVOID CurrentPosition;
+    HANDLE Handle;
     ULONG Result;
-    ULONG TotalBytesSent;
+    ULONG TotalBytesWritten;
 
     CurrentPosition = Buffer;
-    TotalBytesSent = 0;
-    while (TotalBytesSent < BytesToSend) {
-        Result = WriteFile(CommChannel,
-                           CurrentPosition,
-                           BytesToSend - TotalBytesSent,
-                           &BytesSent,
-                           NULL);
+    TotalBytesWritten = 0;
+    while (TotalBytesWritten < BytesToSend) {
+        if (CommChannelType == CommChannelTcp) {
+            BytesSent = DbgrSocketSend((int)CommChannel,
+                                       CurrentPosition,
+                                       BytesToSend - TotalBytesWritten);
 
-        if (Result == FALSE) {
-            return FALSE;
+            if (BytesSent <= 0) {
+                DbgOut("Send failure.\n");
+                return FALSE;
+            }
+
+        } else {
+            Handle = CommChannel;
+            if (CommChannelType == CommChannelExec) {
+                Handle = CommChannelOut;
+            }
+
+            Result = WriteFile(Handle,
+                               CurrentPosition,
+                               BytesToSend - TotalBytesWritten,
+                               &BytesWritten,
+                               NULL);
+
+            if (Result == FALSE) {
+                return FALSE;
+            }
         }
 
-        TotalBytesSent += BytesSent;
-        CurrentPosition += BytesSent;
+        TotalBytesWritten += BytesWritten;
+        CurrentPosition += BytesWritten;
     }
 
     return TRUE;
@@ -541,6 +674,8 @@ Return Value:
 {
 
     DWORD BytesAvailable;
+    char Peek[1024];
+    int PeekSize;
     BOOL Result;
     COMSTAT SerialStatus;
 
@@ -551,6 +686,7 @@ Return Value:
 
     switch (CommChannelType) {
     case CommChannelPipe:
+    case CommChannelExec:
         Result = PeekNamedPipe(CommChannel,
                                NULL,
                                0,
@@ -571,6 +707,17 @@ Return Value:
 
         } else {
             BytesAvailable = SerialStatus.cbInQue;
+        }
+
+        break;
+
+    case CommChannelTcp:
+        PeekSize = DbgrSocketPeek((int)CommChannel, Peek, sizeof(Peek));
+        if (PeekSize < 0) {
+            BytesAvailable = 0;
+
+        } else {
+            BytesAvailable = PeekSize;
         }
 
         break;
@@ -738,6 +885,108 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
+BOOL
+DbgrpCreateExecPipe (
+    PSTR Command
+    )
+
+/*++
+
+Routine Description:
+
+    This routine execs the given command and uses its stdin and stdout as the
+    kernel debug channel.
+
+Arguments:
+
+    Command - Supplies a pointer to a string of the command line.
+
+Return Value:
+
+    Returns TRUE on success, FALSE on failure.
+
+--*/
+
+{
+
+    DWORD Inherit;
+    PROCESS_INFORMATION ProcessInformation;
+    BOOL Result;
+    HANDLE StandardIn[2];
+    HANDLE StandardOut[2];
+    STARTUPINFO StartupInfo;
+
+    memset(&StartupInfo, 0, sizeof(STARTUPINFO));
+    StartupInfo.cb = sizeof(STARTUPINFO);
+    StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    StandardIn[0] = INVALID_HANDLE_VALUE;
+    StandardIn[1] = INVALID_HANDLE_VALUE;
+    StandardOut[0] = INVALID_HANDLE_VALUE;
+    StandardOut[1] = INVALID_HANDLE_VALUE;
+    Result = FALSE;
+    if ((!CreatePipe(&(StandardIn[0]), &(StandardIn[1]), NULL, 0)) ||
+        (!CreatePipe(&(StandardOut[0]), &(StandardOut[1]), NULL, 0))) {
+
+        goto CreateExecPipeEnd;
+    }
+
+    Inherit = HANDLE_FLAG_INHERIT;
+    if ((!SetHandleInformation(StandardIn[0], Inherit, Inherit)) ||
+        (!SetHandleInformation(StandardOut[1], Inherit, Inherit))) {
+
+        goto CreateExecPipeEnd;
+    }
+
+    StartupInfo.hStdInput = StandardIn[0];
+    StartupInfo.hStdOutput = StandardOut[1];
+    StartupInfo.hStdError = StandardOut[1]; //GetStdHandle(STD_ERROR_HANDLE);
+    DbgOut("Spawning '%s'\n", Command);
+    Result = CreateProcess(NULL,
+                           Command,
+                           NULL,
+                           NULL,
+                           TRUE,
+                           CREATE_NEW_CONSOLE,
+                           NULL,
+                           NULL,
+                           &StartupInfo,
+                           &ProcessInformation);
+
+    if (Result == FALSE) {
+        DbgOut("Failed to exec process: %s: ", Command);
+        DbgrpPrintLastError();
+        goto CreateExecPipeEnd;
+    }
+
+    DbgOut("Created process %x.\n", ProcessInformation.dwProcessId);
+    CloseHandle(ProcessInformation.hProcess);
+    CloseHandle(ProcessInformation.hThread);
+    CommChannel = StandardOut[0];
+    StandardOut[0] = INVALID_HANDLE_VALUE;
+    CommChannelOut = StandardIn[1];
+    StandardIn[1] = INVALID_HANDLE_VALUE;
+    CommChannelType = CommChannelExec;
+
+CreateExecPipeEnd:
+    if (StandardIn[0] != INVALID_HANDLE_VALUE) {
+        CloseHandle(StandardIn[0]);
+    }
+
+    if (StandardIn[1] != INVALID_HANDLE_VALUE) {
+        CloseHandle(StandardIn[1]);
+    }
+
+    if (StandardOut[0] != INVALID_HANDLE_VALUE) {
+        CloseHandle(StandardOut[0]);
+    }
+
+    if (StandardOut[1] != INVALID_HANDLE_VALUE) {
+        CloseHandle(StandardOut[1]);
+    }
+
+    return Result;
+}
+
 DWORD
 WINAPI
 DbgrpOsThreadStart (
@@ -773,5 +1022,44 @@ Return Value:
     free(Context);
     Routine(RoutineParameter);
     return 0;
+}
+
+VOID
+DbgrpPrintLastError (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a description of GetLastError to standard error and
+    also prints a newline.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    char *Message;
+
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
+                   NULL,
+                   GetLastError(),
+                   0,
+                   (LPSTR)&Message,
+                   0,
+                   NULL);
+
+    DbgOut("%s", Message);
+    LocalFree(Message);
+    return;
 }
 

@@ -66,10 +66,11 @@ extern "C" {
 //
 // This macro evaluates to nonzero if the status indicates that the child has
 // exited due to an uncaught signal. This constant matches up to flags in
-// ksignals.h
+// ksignals.h. The macro is looking to make sure that the lower 7 bits are not
+// all 0 (exited) and are not all 1 (continued or stopped).
 //
 
-#define WIFSIGNALED(_Status) ((!WIFEXITED(_Status)) && (!WIFSTOPPED(_Status)))
+#define WIFSIGNALED(_Status) (((((_Status) + 1) >> 1) & 0x7F) != 0)
 
 //
 // This macro evaluates to nonzero if the status indicates that the child has

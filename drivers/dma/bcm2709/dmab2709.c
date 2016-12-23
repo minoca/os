@@ -1376,7 +1376,6 @@ Return Value:
     PHYSICAL_ADDRESS PreviousAddress;
     PDMA_BCM2709_CONTROL_BLOCK PreviousControlBlock;
     UINTN Remaining;
-    UINTN Size;
     KSTATUS Status;
     UINTN TransferSize;
 
@@ -1508,7 +1507,6 @@ Return Value:
             FragmentOffset = 0;
         }
 
-        Size += BytesThisRound;
         TransferSize += BytesThisRound;
         Remaining -= BytesThisRound;
         PreviousAddress += BytesThisRound;

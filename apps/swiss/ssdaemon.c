@@ -932,9 +932,11 @@ Return Value:
     }
 
     if (fscanf(File, "%u", &ScannedPid) != 1) {
+        fclose(File);
         return EINVAL;
     }
 
+    fclose(File);
     SsDaemonMatchPid(Context, ScannedPid);
     return 0;
 }

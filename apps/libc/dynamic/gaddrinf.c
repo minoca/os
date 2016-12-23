@@ -49,6 +49,7 @@ Environment:
 #define DNS_RECORD_TYPE_A 1
 #define DNS_RECORD_TYPE_NS 2
 #define DNS_RECORD_TYPE_CNAME 5
+#define DNS_RECORD_TYPE_SOA 6
 #define DNS_RECORD_TYPE_PTR 12
 #define DNS_RECORD_TYPE_MX 15
 #define DNS_RECORD_TYPE_TXT 16
@@ -154,7 +155,8 @@ ClpPerformDnsTranslation (
     PSTR Name,
     UCHAR RecordType,
     NET_DOMAIN_TYPE Domain,
-    PLIST_ENTRY ListHead
+    PLIST_ENTRY ListHead,
+    ULONG RecursionDepth
     );
 
 INT
@@ -239,6 +241,23 @@ ClpDebugPrintDnsResult (
     );
 
 INT
+ClpGetNameServerAddress (
+    PDNS_RESULT NameServer,
+    UCHAR RecordType,
+    PLIST_ENTRY TranslationList,
+    struct sockaddr *NameServerAddress,
+    ULONG RecursionDepth
+    );
+
+INT
+ClpFindNameServerAddress (
+    PDNS_RESULT NameServer,
+    UCHAR RecordType,
+    PLIST_ENTRY TranslationList,
+    struct sockaddr *NameServerAddress
+    );
+
+INT
 ClpSearchDnsResultList (
     PSTR Name,
     UCHAR RecordType,
@@ -307,6 +326,12 @@ ClpIsLocalAddress (
     socklen_t SocketAddressLength,
     PBOOL LocalAddress,
     PBOOL UnspecifiedAddress
+    );
+
+BOOL
+ClpIsNameSubdomain (
+    PCSTR Query,
+    PCSTR Domain
     );
 
 //
@@ -745,7 +770,8 @@ Return Value:
             Status = ClpPerformDnsTranslation((char *)NodeName,
                                               DNS_RECORD_TYPE_AAAA,
                                               NetDomainIp6,
-                                              &ResultList);
+                                              &ResultList,
+                                              0);
 
             if (Status != 0) {
                 goto getaddrinfoEnd;
@@ -772,7 +798,8 @@ Return Value:
             Status = ClpPerformDnsTranslation((char *)NodeName,
                                               DNS_RECORD_TYPE_A,
                                               NetDomainIp4,
-                                              &ResultList);
+                                              &ResultList,
+                                              0);
 
             if (Status != 0) {
                 goto getaddrinfoEnd;
@@ -1161,7 +1188,8 @@ ClpPerformDnsTranslation (
     PSTR Name,
     UCHAR RecordType,
     NET_DOMAIN_TYPE Domain,
-    PLIST_ENTRY ListHead
+    PLIST_ENTRY ListHead,
+    ULONG RecursionDepth
     )
 
 /*++
@@ -1182,6 +1210,10 @@ Arguments:
     ListHead - Supplies a pointer to the initialized list head where the
         desired DNS results will be returned.
 
+    RecursionDepth - Supplies the recursion depth of this function, used to
+        avoid getting in a loop of calling nameservers to translate nameservers.
+        Supply 0 initially.
+
 Return Value:
 
     0 on success.
@@ -1197,11 +1229,7 @@ Return Value:
     INT MatchCount;
     PDNS_RESULT NameServer;
     struct sockaddr NameServerAddress;
-    struct sockaddr_in *NameServerAddressIp4;
-    struct sockaddr_in6 *NameServerAddressIp6;
     LIST_ENTRY NameServerList;
-    PDNS_RESULT NameServerTranslation;
-    LIST_ENTRY NameServerTranslationList;
     INT QueryCount;
     LIST_ENTRY ResultList;
     time_t StartTime;
@@ -1223,10 +1251,13 @@ Return Value:
 
     QueryCount = 0;
     INITIALIZE_LIST_HEAD(&NameServerList);
-    INITIALIZE_LIST_HEAD(&NameServerTranslationList);
     INITIALIZE_LIST_HEAD(&ResultList);
     INITIALIZE_LIST_HEAD(&TranslationList);
     StartTime = time(NULL);
+    if (RecursionDepth > 10) {
+        fprintf(stderr, "Error: DNS recursion loop.\n");
+        return EAI_AGAIN;
+    }
 
     //
     // Attempt to get the DNS servers. If the default does not exist, then try
@@ -1393,6 +1424,12 @@ Return Value:
                                &ResultList,
                                &NameServerList);
 
+        ClpSearchDnsResultList(NULL,
+                               DNS_RECORD_TYPE_SOA,
+                               StartTime,
+                               &ResultList,
+                               &NameServerList);
+
         ClpDestroyDnsResultList(&ResultList);
 
         //
@@ -1416,92 +1453,41 @@ Return Value:
             }
 
             NameServer = LIST_VALUE(NameServerList.Next, DNS_RESULT, ListEntry);
-            if (ClDebugDns != FALSE) {
-                fprintf(stderr,
-                        "Trying name server '%s'.\n",
-                        NameServer->Value);
-            }
-
-            MatchCount = 0;
 
             //
-            // If the record type is not nameserver, then assume the address
-            // is there directly. It's probably an original name server address
-            // from the top of the function.
+            // If the name server returned is a subdomain of the name being
+            // translated, then skip it unless the answer's already there.
             //
 
-            if (NameServer->Type != DNS_RECORD_TYPE_NS) {
-                memcpy(&NameServerAddress,
-                       &(NameServer->Address),
-                       sizeof(struct sockaddr));
+            if ((NameServer->Value != NULL) &&
+                (ClpIsNameSubdomain(NameServer->Value, Name) != FALSE)) {
 
-                MatchCount = 1;
-            }
+                Status = ClpFindNameServerAddress(NameServer,
+                                                  RecordType,
+                                                  &TranslationList,
+                                                  &NameServerAddress);
 
-            //
-            // Look for IPv6 translations if the caller wants IPv6 translations.
-            //
-
-            if ((MatchCount == 0) && (RecordType == DNS_RECORD_TYPE_AAAA)) {
-                MatchCount = ClpSearchDnsResultList(NameServer->Value,
-                                                    DNS_RECORD_TYPE_AAAA,
-                                                    StartTime,
-                                                    &TranslationList,
-                                                    &NameServerTranslationList);
-
-                if (MatchCount != 0) {
-                    NameServerTranslation = LIST_VALUE(
-                                            NameServerTranslationList.Previous,
-                                            DNS_RESULT,
-                                            ListEntry);
-
-                    memcpy(&NameServerAddress,
-                           &(NameServerTranslation->Address),
-                           sizeof(struct sockaddr));
-
-                    NameServerAddressIp6 =
-                                     (struct sockaddr_in6 *)&NameServerAddress;
-
-                    NameServerAddressIp6->sin6_port = htons(DNS_PORT_NUMBER);
+                if (Status != 0) {
+                    if (ClDebugDns != FALSE) {
+                        fprintf(stderr,
+                                "Skipping name server %s, subdomain of %s\n",
+                                NameServer->Value,
+                                Name);
+                    }
                 }
-            }
 
-            //
-            // If no matches were found or weren't tried, try for IPv4
-            // translations.
-            //
-
-            if (MatchCount == 0) {
-                MatchCount = ClpSearchDnsResultList(NameServer->Value,
-                                                    DNS_RECORD_TYPE_A,
-                                                    StartTime,
-                                                    &TranslationList,
-                                                    &NameServerTranslationList);
-
-                if (MatchCount != 0) {
-                    NameServerTranslation = LIST_VALUE(
-                                            NameServerTranslationList.Previous,
-                                            DNS_RESULT,
-                                            ListEntry);
-
-                    memcpy(&NameServerAddress,
-                           &(NameServerTranslation->Address),
-                           sizeof(struct sockaddr));
-
-                    NameServerAddressIp4 =
-                                      (struct sockaddr_in *)&NameServerAddress;
-
-                    NameServerAddressIp4->sin_port = htons(DNS_PORT_NUMBER);
+            } else {
+                if (ClDebugDns != FALSE) {
+                    fprintf(stderr,
+                            "Trying name server '%s'.\n",
+                            NameServer->Value);
                 }
-            }
 
-            if (MatchCount == 0) {
-                fprintf(stderr,
-                        "TODO: Name server %s didn't return its translation.\n",
-                        NameServer->Name);
-
-                Status = EAI_FAIL;
-                goto PerformDnsTranslationEnd;
+                Status = ClpGetNameServerAddress(NameServer,
+                                                 RecordType,
+                                                 &TranslationList,
+                                                 &NameServerAddress,
+                                                 RecursionDepth);
             }
 
             //
@@ -1510,7 +1496,7 @@ Return Value:
 
             LIST_REMOVE(&(NameServer->ListEntry));
             ClpDestroyDnsResult(NameServer);
-            if (MatchCount != 0) {
+            if (Status == 0) {
                 break;
             }
         }
@@ -1520,7 +1506,6 @@ PerformDnsTranslationEnd:
     ClpDestroyDnsResultList(&ResultList);
     ClpDestroyDnsResultList(&TranslationList);
     ClpDestroyDnsResultList(&NameServerList);
-    ClpDestroyDnsResultList(&NameServerTranslationList);
     return Status;
 }
 
@@ -1617,7 +1602,8 @@ Return Value:
     Status = ClpPerformDnsTranslation(Name,
                                       DNS_RECORD_TYPE_PTR,
                                       Domain,
-                                      ListHead);
+                                      ListHead,
+                                      0);
 
     if (Status != 0) {
         goto PerformDnsReverseTranslationEnd;
@@ -2387,6 +2373,7 @@ Return Value:
 
     case DNS_RECORD_TYPE_NS:
     case DNS_RECORD_TYPE_CNAME:
+    case DNS_RECORD_TYPE_SOA:
     case DNS_RECORD_TYPE_PTR:
         Status = ClpDecompressDnsName(Response,
                                       ResponseSize,
@@ -2863,6 +2850,10 @@ Return Value:
         TypeString = "CNAME";
         break;
 
+    case DNS_RECORD_TYPE_SOA:
+        TypeString = "SOA";
+        break;
+
     case DNS_RECORD_TYPE_MX:
         TypeString = "MX";
         break;
@@ -2872,11 +2863,17 @@ Return Value:
         break;
 
     default:
-        TypeString = "Unknown";
+        TypeString = NULL;
         break;
     }
 
-    fprintf(stderr, "%s %s ", TypeString, Result->Name);
+    if (TypeString != NULL) {
+        fprintf(stderr, "%s %s ", TypeString, Result->Name);
+
+    } else {
+        fprintf(stderr, "Unknown (%u) %s ", Result->Type, Result->Name);
+    }
+
     switch (Result->Type) {
     case DNS_RECORD_TYPE_A:
         Ip4Address = (struct sockaddr_in *)&(Result->Address);
@@ -2904,13 +2901,13 @@ Return Value:
         fprintf(stderr, "%s", PrintBuffer);
         break;
 
-    case DNS_RECORD_TYPE_CNAME:
     case DNS_RECORD_TYPE_NS:
+    case DNS_RECORD_TYPE_CNAME:
+    case DNS_RECORD_TYPE_SOA:
         fprintf(stderr, "%s", Result->Value);
         break;
 
     default:
-        fprintf(stderr, "...");
         break;
     }
 
@@ -2918,6 +2915,234 @@ Return Value:
     asctime_r(&TimeStructure, PrintBuffer);
     fprintf(stderr, " Expires %s", PrintBuffer);
     return;
+}
+
+INT
+ClpGetNameServerAddress (
+    PDNS_RESULT NameServer,
+    UCHAR RecordType,
+    PLIST_ENTRY TranslationList,
+    struct sockaddr *NameServerAddress,
+    ULONG RecursionDepth
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the address of a name server.
+
+Arguments:
+
+    NameServer - Supplies the DNS name server or start of authority result.
+
+    RecordType - Supplies the type of record to search for.
+
+    TranslationList - Supplies the list of possible translations to the name
+        server address. More results may be added to this list.
+
+    NameServerAddress - Supplies a pointer where the address of the name server
+        will be returned, including having its port set to the DNS port number.
+
+    RecursionDepth - Supplies the current recursion depth.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error code on failure.
+
+--*/
+
+{
+
+    NET_DOMAIN_TYPE Domain;
+    INT Status;
+
+    //
+    // If the record type is not nameserver, then assume the address
+    // is there directly. It's probably an original name server address
+    // from the top of the function.
+    //
+
+    if ((NameServer->Type != DNS_RECORD_TYPE_NS) &&
+        (NameServer->Type != DNS_RECORD_TYPE_SOA)) {
+
+        assert((NameServer->Type == DNS_RECORD_TYPE_A) ||
+               (NameServer->Type == DNS_RECORD_TYPE_AAAA));
+
+        memcpy(&NameServerAddress,
+               &(NameServer->Address),
+               sizeof(struct sockaddr));
+
+        return 0;
+    }
+
+    //
+    // Maybe the name server address was already returned in the list of
+    // translations.
+    //
+
+    Status = ClpFindNameServerAddress(NameServer,
+                                      RecordType,
+                                      TranslationList,
+                                      NameServerAddress);
+
+    if (Status == 0) {
+        return Status;
+    }
+
+    if (RecordType == DNS_RECORD_TYPE_AAAA) {
+        Domain = NetDomainIp6;
+
+    } else {
+        Domain = NetDomainIp4;
+    }
+
+    //
+    // Go start a whole new query to figure out the name server address.
+    //
+
+    Status = ClpPerformDnsTranslation(NameServer->Value,
+                                      RecordType,
+                                      Domain,
+                                      TranslationList,
+                                      RecursionDepth + 1);
+
+    if (Status != 0) {
+        if (ClDebugDns != FALSE) {
+            fprintf(stderr,
+                    "Error: Failed to get address of DNS server %s\n",
+                    NameServer->Value);
+        }
+
+        return Status;
+    }
+
+    Status = ClpFindNameServerAddress(NameServer,
+                                      RecordType,
+                                      TranslationList,
+                                      NameServerAddress);
+
+    if (Status == 0) {
+        return Status;
+    }
+
+    if (ClDebugDns != FALSE) {
+        fprintf(stderr,
+                "Error: Failed to get address of DNS server %s\n",
+                NameServer->Value);
+    }
+
+    return Status;
+}
+
+INT
+ClpFindNameServerAddress (
+    PDNS_RESULT NameServer,
+    UCHAR RecordType,
+    PLIST_ENTRY TranslationList,
+    struct sockaddr *NameServerAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the address of a name server in the list of
+    translations.
+
+Arguments:
+
+    NameServer - Supplies the DNS name server or start of authority result.
+
+    RecordType - Supplies the type of record to search for.
+
+    TranslationList - Supplies the list of possible translations to the name
+        server address. More results may be added to this list.
+
+    NameServerAddress - Supplies a pointer where the address of the name server
+        will be returned, including having its port set to the DNS port number.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error code on failure.
+
+--*/
+
+{
+
+    ULONG MatchCount;
+    struct sockaddr_in *NameServerAddressIp4;
+    struct sockaddr_in6 *NameServerAddressIp6;
+    LIST_ENTRY NameServerAddressList;
+    INT Status;
+    time_t Time;
+    PDNS_RESULT Translation;
+
+    MatchCount = 0;
+    INITIALIZE_LIST_HEAD(&NameServerAddressList);
+    Status = 0;
+    Time = time(NULL);
+
+    //
+    // Look for IPv6 translations if the caller wants IPv6 translations.
+    //
+
+    if (RecordType == DNS_RECORD_TYPE_AAAA) {
+        MatchCount = ClpSearchDnsResultList(NameServer->Value,
+                                            DNS_RECORD_TYPE_AAAA,
+                                            Time,
+                                            TranslationList,
+                                            &NameServerAddressList);
+
+        if (MatchCount != 0) {
+            Translation = LIST_VALUE(NameServerAddressList.Previous,
+                                     DNS_RESULT,
+                                     ListEntry);
+
+            memcpy(NameServerAddress,
+                   &(Translation->Address),
+                   sizeof(struct sockaddr));
+
+            NameServerAddressIp6 = (struct sockaddr_in6 *)NameServerAddress;
+            NameServerAddressIp6->sin6_port = htons(DNS_PORT_NUMBER);
+            goto FindNameServerAddressEnd;
+        }
+    }
+
+    //
+    // If no matches were found or weren't tried, try for IPv4
+    // translations.
+    //
+
+    MatchCount = ClpSearchDnsResultList(NameServer->Value,
+                                        DNS_RECORD_TYPE_A,
+                                        Time,
+                                        TranslationList,
+                                        &NameServerAddressList);
+
+    if (MatchCount != 0) {
+        Translation = LIST_VALUE(NameServerAddressList.Previous,
+                                 DNS_RESULT,
+                                 ListEntry);
+
+        memcpy(NameServerAddress,
+               &(Translation->Address),
+               sizeof(struct sockaddr));
+
+        NameServerAddressIp4 = (struct sockaddr_in *)NameServerAddress;
+        NameServerAddressIp4->sin_port = htons(DNS_PORT_NUMBER);
+        goto FindNameServerAddressEnd;
+    }
+
+    Status = EAI_AGAIN;
+
+FindNameServerAddressEnd:
+    ClpDestroyDnsResultList(&NameServerAddressList);
+    return Status;
 }
 
 INT
@@ -2994,7 +3219,9 @@ Return Value:
             // Name servers go at the front of the list.
             //
 
-            if (Result->Type == DNS_RECORD_TYPE_NS) {
+            if ((Result->Type == DNS_RECORD_TYPE_NS) ||
+                (Result->Type == DNS_RECORD_TYPE_SOA)) {
+
                 INSERT_AFTER(&(Result->ListEntry), DestinationListHead);
 
             } else {
@@ -3361,7 +3588,7 @@ Return Value:
     }
 
     if ((Hints != NULL) && ((Hints->ai_flags & AI_NUMERICSERV) != 0)) {
-        return EAI_SERVICE;
+        return EAI_NONAME;
     }
 
     ServiceEntry = getservbyname(ServiceName, NULL);
@@ -4239,5 +4466,50 @@ Return Value:
 IsLocalAddressEnd:
     ClpDestroyDnsResultList(&ListHead);
     return Status;
+}
+
+BOOL
+ClpIsNameSubdomain (
+    PCSTR Query,
+    PCSTR Domain
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given name is a subdomain of the given
+    domain.
+
+Arguments:
+
+    Query - Supplies the name in question.
+
+    Domain - Supplies the domain to match against.
+
+Return Value:
+
+    TRUE if the query is a subdomain of the given domain.
+
+    FALSE if it is not.
+
+--*/
+
+{
+
+    size_t DomainLength;
+    size_t QueryLength;
+
+    QueryLength = strlen(Query);
+    DomainLength = strlen(Domain);
+    if (QueryLength < DomainLength) {
+        return FALSE;
+    }
+
+    if (strcmp(Query + QueryLength - DomainLength, Domain) == 0) {
+        return TRUE;
+    }
+
+    return FALSE;
 }
 

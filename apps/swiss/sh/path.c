@@ -195,6 +195,10 @@ Return Value:
             Capacity *= 2;
             NewBuffer = realloc(Buffer, Capacity);
             if (NewBuffer == NULL) {
+
+                assert(Capacity != 0);
+
+                free(Buffer);
                 return FALSE;
             }
 

@@ -1042,6 +1042,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PNET_NETWORK_ENTRY NetworkEntry;
     BOOL NetworkFound;
+    ULONG NetworkProtocolNumber;
 
     //
     // Try the common ones first before going heavy by acquiring the lock and
@@ -1072,7 +1073,10 @@ Return Value:
                                       NET_NETWORK_ENTRY,
                                       ListEntry);
 
-            if (NetworkEntry->ParentProtocolNumber == ParentProtocolNumber) {
+            NetworkProtocolNumber = NetworkEntry->ParentProtocolNumber;
+            if ((NetworkProtocolNumber != INVALID_PROTOCOL_NUMBER) &&
+                (NetworkProtocolNumber == ParentProtocolNumber)) {
+
                 NetworkFound = TRUE;
                 break;
             }

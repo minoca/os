@@ -131,8 +131,9 @@ Return Value:
 {
 
     Socket->SlowStartThreshold = Socket->SendWindowSize;
-
-    ASSERT(Socket->SendMaxSegmentSize != 0);
+    if (Socket->SendMaxSegmentSize == 0) {
+        Socket->SendMaxSegmentSize = TCP_DEFAULT_MAX_SEGMENT_SIZE;
+    }
 
     Socket->CongestionWindowSize = 2 * Socket->SendMaxSegmentSize;
     if (NetTcpDebugPrintCongestionControl != FALSE) {

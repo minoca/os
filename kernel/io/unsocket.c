@@ -43,7 +43,7 @@ Environment:
 // sender is blocked.
 //
 
-#define UNIX_SOCKET_DEFAULT_SEND_MAX 131072
+#define UNIX_SOCKET_DEFAULT_SEND_MAX 0x20000
 
 //
 // Define the maximum number of file descriptors that can be passed in a
@@ -547,7 +547,7 @@ IopUnixSocketBindToAddress (
     BOOL FromKernelMode,
     PIO_HANDLE Handle,
     PNETWORK_ADDRESS Address,
-    PSTR Path,
+    PCSTR Path,
     UINTN PathSize
     )
 
@@ -582,6 +582,7 @@ Return Value:
 
 {
 
+    CREATE_PARAMETERS Create;
     SOCKET_CREATION_PARAMETERS CreationParameters;
     PFILE_OBJECT FileObject;
     ULONG OpenFlags;
@@ -662,6 +663,10 @@ Return Value:
 
     RtlZeroMemory(&CreationParameters, sizeof(SOCKET_CREATION_PARAMETERS));
     CreationParameters.ExistingSocket = Socket;
+    Create.Type = IoObjectSocket;
+    Create.Context = &CreationParameters;
+    Create.Permissions = FileObject->Properties.Permissions;
+    Create.Created = FALSE;
     WalkedPath = PathCopy;
     WalkedPathSize = PathSize;
     OpenFlags = Handle->OpenFlags | OPEN_FLAG_CREATE | OPEN_FLAG_FAIL_IF_EXISTS;
@@ -670,9 +675,7 @@ Return Value:
                          &WalkedPath,
                          &WalkedPathSize,
                          OpenFlags,
-                         IoObjectSocket,
-                         &CreationParameters,
-                         FileObject->Properties.Permissions,
+                         &Create,
                          &PathPoint);
 
     if (!KSUCCESS(Status)) {
@@ -803,7 +806,7 @@ IopUnixSocketAccept (
     PSOCKET Socket,
     PIO_HANDLE *NewConnectionSocket,
     PNETWORK_ADDRESS RemoteAddress,
-    PSTR *RemotePath,
+    PCSTR *RemotePath,
     PUINTN RemotePathSize
     )
 
@@ -993,7 +996,7 @@ IopUnixSocketConnect (
     BOOL FromKernelMode,
     PSOCKET Socket,
     PNETWORK_ADDRESS Address,
-    PSTR RemotePath,
+    PCSTR RemotePath,
     UINTN RemotePathSize
     )
 
@@ -1090,9 +1093,7 @@ Return Value:
                          &WalkedPath,
                          &WalkedPathSize,
                          0,
-                         IoObjectInvalid,
                          NULL,
-                         FILE_PERMISSION_NONE,
                          &PathPoint);
 
     if (!KSUCCESS(Status)) {
@@ -1442,9 +1443,7 @@ Return Value:
                              &WalkedPath,
                              &WalkedPathSize,
                              0,
-                             IoObjectInvalid,
                              NULL,
-                             FILE_PERMISSION_NONE,
                              &PathPoint);
 
         if (!KSUCCESS(Status)) {
@@ -1557,7 +1556,6 @@ Return Value:
 
         Packet = NULL;
         if (PacketSize != 0) {
-            Packet = NULL;
             Status = IopUnixSocketCreatePacket(UnixSocket,
                                                IoBuffer,
                                                BytesCompleted,
@@ -1624,7 +1622,13 @@ Return Value:
 
         if (Packet == NULL) {
             if ((OpenFlags & OPEN_FLAG_NON_BLOCKING) != 0) {
-                Status = STATUS_OPERATION_WOULD_BLOCK;
+                if (BytesCompleted != 0) {
+                    Status = STATUS_SUCCESS;
+
+                } else {
+                    Status = STATUS_OPERATION_WOULD_BLOCK;
+                }
+
                 goto UnixSocketSendDataEnd;
             }
 
