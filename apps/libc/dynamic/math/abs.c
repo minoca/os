@@ -176,6 +176,37 @@ Return Value:
     return ValueParts.Double;
 }
 
+LIBC_API
+float
+fabsf (
+    float Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the absolute value of the given value.
+
+Arguments:
+
+    Value - Supplies the value to get the absolute value of.
+
+Return Value:
+
+    Returns the absolute value.
+
+--*/
+
+{
+
+    FLOAT_PARTS ValueParts;
+
+    ValueParts.Float = Value;
+    ValueParts.Ulong &= ~FLOAT_SIGN_BIT;
+    return ValueParts.Float;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

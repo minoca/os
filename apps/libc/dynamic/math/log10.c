@@ -15,16 +15,16 @@ Abstract:
 
     This module implements support for the base 10 logarithm function.
 
-Author:
-
-    Evan Green 13-Aug-2013
-
     Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 
     Developed at SunPro, a Sun Microsystems, Inc. business.
     Permission to use, copy, modify, and distribute this
     software is freely granted, provided that this notice
     is preserved.
+
+Author:
+
+    Evan Green 13-Aug-2013
 
 Environment:
 
@@ -139,7 +139,7 @@ Return Value:
         if (((HighWord & (~DOUBLE_SIGN_BIT >> DOUBLE_HIGH_WORD_SHIFT)) |
              LowWord) == 0) {
 
-            return ClTwo54 / ClDoubleZero;
+            return -ClTwo54 / ClDoubleZero;
         }
 
         //

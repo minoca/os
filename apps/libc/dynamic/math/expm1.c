@@ -226,7 +226,7 @@ Return Value:
                 // Overflow.
                 //
 
-                return ClHugeValue * ClHugeValue;
+                return ClDoubleHugeValue * ClDoubleHugeValue;
             }
         }
 
@@ -235,8 +235,8 @@ Return Value:
         //
 
         if (SignBit != 0) {
-            if (Value + ClTinyValue < 0.0) {
-                return ClTinyValue - ClDoubleOne;
+            if (Value + ClDoubleTinyValue < 0.0) {
+                return ClDoubleTinyValue - ClDoubleOne;
             }
         }
     }
@@ -253,13 +253,13 @@ Return Value:
 
         if (HighWord < EXPM1_3LN2_OVER_2_HIGH_WORD) {
             if (SignBit == 0) {
-                High = Value - ClLn2High[0];
-                Low = ClLn2Low[0];
+                High = Value - ClDoubleLn2High[0];
+                Low = ClDoubleLn2Low[0];
                 Exponent = 1;
 
             } else {
-                High = Value + ClLn2High[0];
-                Low = ClLn2Low[1];
+                High = Value + ClDoubleLn2High[0];
+                Low = ClDoubleLn2Low[1];
                 Exponent = -1;
             }
 
@@ -272,8 +272,8 @@ Return Value:
             }
 
             Working = Exponent;
-            High = Value - Working * ClLn2High[0];
-            Low = Working * ClLn2Low[0];
+            High = Value - Working * ClDoubleLn2High[0];
+            Low = Working * ClDoubleLn2Low[0];
         }
 
         VolatileValue = High - Low;
@@ -286,8 +286,8 @@ Return Value:
     //
 
     } else if (HighWord < EXPM1_2_TO_NEGATIVE_54_HIGH_WORD) {
-        Working = ClHugeValue + Value;
-        return Value - (Working - (ClHugeValue + Value));
+        Working = ClDoubleHugeValue + Value;
+        return Value - (Working - (ClDoubleHugeValue + Value));
 
     } else {
         Exponent = 0;

@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -9,7 +9,7 @@ Copyright (c) 2013 Minoca Corp.
 
 Module Name:
 
-    ceil.c
+    ceilf.c
 
 Abstract:
 
@@ -24,7 +24,7 @@ Abstract:
 
 Author:
 
-    Evan Green 29-Aug-2013
+    Chris Stevens 4-Jan-2017
 
 Environment:
 
@@ -60,9 +60,9 @@ Environment:
 //
 
 LIBC_API
-double
-ceil (
-    double Value
+float
+ceilf (
+    float Value
     )
 
 /*++
@@ -89,23 +89,16 @@ Return Value:
 {
 
     LONG Exponent;
-    ULONG ExponentMask;
-    ULONG ExponentShift;
-    LONG HighWord;
-    LONG LowWord;
-    ULONG NewLowWord;
     ULONG NonExponent;
-    DOUBLE_PARTS Parts;
+    FLOAT_PARTS Parts;
+    LONG Word;
 
-    Parts.Double = Value;
-    HighWord = Parts.Ulong.High;
-    LowWord = Parts.Ulong.Low;
-    ExponentMask = DOUBLE_EXPONENT_MASK >> DOUBLE_HIGH_WORD_SHIFT;
-    ExponentShift = DOUBLE_EXPONENT_SHIFT - DOUBLE_HIGH_WORD_SHIFT;
-    Exponent = ((HighWord & ExponentMask) >> ExponentShift) -
-               DOUBLE_EXPONENT_BIAS;
+    Parts.Float= Value;
+    Word = Parts.Ulong;
+    Exponent = ((Word & FLOAT_EXPONENT_MASK) >> FLOAT_EXPONENT_SHIFT) -
+               FLOAT_EXPONENT_BIAS;
 
-    if (Exponent < 20) {
+    if (Exponent < 23) {
 
         //
         // Raise an inexact if the value isn't zero.
@@ -117,25 +110,23 @@ Return Value:
             // Return 0 * sign(Value) if |Value| < 1.
             //
 
-            if (ClDoubleHugeValue + Value > 0.0) {
-                if (HighWord < 0) {
-                    HighWord = DOUBLE_SIGN_BIT >> DOUBLE_HIGH_WORD_SHIFT;
-                    LowWord = 0;
+            if (ClFloatHugeValue + Value > (float)0.0) {
+                if (Word < 0) {
+                    Word = FLOAT_SIGN_BIT;
 
-                } else if ((HighWord | LowWord) != 0) {
-                    HighWord = DOUBLE_ONE_HIGH_WORD;
-                    LowWord = 0;
+                } else if (Word != 0) {
+                    Word = FLOAT_ONE_WORD;
                 }
             }
 
         } else {
-            NonExponent = DOUBLE_HIGH_VALUE_MASK >> Exponent;
+            NonExponent = FLOAT_VALUE_MASK >> Exponent;
 
             //
             // Return the value itself if it's integral.
             //
 
-            if (((HighWord & NonExponent) | LowWord) == 0) {
+            if ((Word & NonExponent) == 0) {
                 return Value;
             }
 
@@ -143,23 +134,22 @@ Return Value:
             // Raise the inexact flag.
             //
 
-            if (ClDoubleHugeValue + Value > 0.0) {
-                if (HighWord > 0) {
-                    HighWord += (1 << ExponentShift) >> Exponent;
+            if (ClFloatHugeValue + Value > (float)0.0) {
+                if (Word > 0) {
+                    Word += (1 << FLOAT_EXPONENT_SHIFT) >> Exponent;
                 }
 
-                HighWord &= (~NonExponent);
-                LowWord = 0;
+                Word &= ~NonExponent;
             }
         }
 
-    } else if (Exponent > 51) {
+    } else {
 
         //
         // Handle infinity or NaN.
         //
 
-        if (Exponent == (DOUBLE_NAN_EXPONENT - DOUBLE_EXPONENT_BIAS)) {
+        if (Exponent == (FLOAT_NAN_EXPONENT - FLOAT_EXPONENT_BIAS)) {
             return Value + Value;
 
         //
@@ -169,49 +159,10 @@ Return Value:
         } else {
             return Value;
         }
-
-    } else {
-        NonExponent = ((ULONG)(MAX_ULONG)) >> (Exponent - ExponentShift);
-
-        //
-        // Check to see if the value is integral.
-        //
-
-        if ((LowWord & NonExponent) == 0) {
-            return Value;
-        }
-
-        //
-        // Raise the inexact flag.
-        //
-
-        if (ClDoubleHugeValue + Value > 0.0) {
-            if (HighWord > 0) {
-                if (Exponent == 20) {
-                    HighWord += 1;
-
-                } else {
-                    NewLowWord = LowWord + (1 << (52 - Exponent));
-                    if (NewLowWord < LowWord) {
-
-                        //
-                        // Perform the carry.
-                        //
-
-                        HighWord += 1;
-                    }
-
-                    LowWord = NewLowWord;
-                }
-            }
-
-            LowWord &= (~NonExponent);
-        }
     }
 
-    Parts.Ulong.High = HighWord;
-    Parts.Ulong.Low = LowWord;
-    return Parts.Double;
+    Parts.Ulong = Word;
+    return Parts.Float;
 }
 
 //

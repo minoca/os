@@ -227,9 +227,53 @@ Return Value:
 --*/
 
 LIBC_API
+float
+sinf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the sine of the given value.
+
+Arguments:
+
+    Value - Supplies the value to compute the sine of, in radians.
+
+Return Value:
+
+    Returns the sine of the value.
+
+--*/
+
+LIBC_API
 double
 cos (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the cosine of the given value.
+
+Arguments:
+
+    Value - Supplies the value to compute the cosine of, in radians.
+
+Return Value:
+
+    Returns the cosine of the value.
+
+--*/
+
+LIBC_API
+float
+cosf (
+    float Value
     );
 
 /*++
@@ -271,9 +315,53 @@ Return Value:
 --*/
 
 LIBC_API
+float
+tanf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the tangent of the given value.
+
+Arguments:
+
+    Value - Supplies the value to compute the tangent of, in radians.
+
+Return Value:
+
+    Returns the cosine of the value.
+
+--*/
+
+LIBC_API
 double
 asin (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the arc sine of the given value.
+
+Arguments:
+
+    Value - Supplies the sine value to convert back to an angle.
+
+Return Value:
+
+    Returns the arc sine of the value, in radians.
+
+--*/
+
+LIBC_API
+float
+asinf (
+    float Value
     );
 
 /*++
@@ -315,9 +403,53 @@ Return Value:
 --*/
 
 LIBC_API
+float
+acosf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the arc cosine of the given value.
+
+Arguments:
+
+    Value - Supplies the cosine value to convert back to an angle.
+
+Return Value:
+
+    Returns the arc cosine of the value, in radians.
+
+--*/
+
+LIBC_API
 double
 atan (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the arc tangent of the given value.
+
+Arguments:
+
+    Value - Supplies the tangent value to convert back to an angle.
+
+Return Value:
+
+    Returns the arc tangent of the value, in radians.
+
+--*/
+
+LIBC_API
+float
+atanf (
+    float Value
     );
 
 /*++
@@ -341,6 +473,63 @@ double
 atan2 (
     double Numerator,
     double Denominator
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the arc tangent of the given values, using the signs
+    of both the numerator and the denominator to determine the correct
+    quadrant for the output angle.
+
+Arguments:
+
+    Numerator - Supplies the numerator to the tangent value.
+
+    Denominator - Supplies the denominator to the tangent value.
+
+Return Value:
+
+    Returns the arc tangent of the value, in radians.
+
+    Pi if the numerator is +/- 0 and the denominator is negative.
+
+    +/- 0 if the numerator is +/- 0 and the denominator is positive.
+
+    Negative pi over 2 if the numerator is negative and the denominator is
+    +/- 0.
+
+    Pi over 2 if the numerator is positive and the denominator is +/- 0.
+
+    NaN if either input is NaN.
+
+    Returns the numerator over the denominator if the result underflows.
+
+    +/- Pi if the numerator is +/- 0 and the denominator is -0.
+
+    +/- 0 if the numerator is +/- 0 and the denominator is +0.
+
+    +/- Pi for positive finite values of the numerator and -Infinity in the
+    denominator.
+
+    +/- 0 for positive finite values of the numerator and +Infinity in the
+    denominator.
+
+    +/- Pi/2 for finite values of the denominator if the numerator is
+    +/- Infinity.
+
+    +/- 3Pi/4 if the numerator is +/- Infinity and the denominator is -Infinity.
+
+    +/- Pi/4 if the numerator is +/- Infinity and the denominator is +Infinity.
+
+--*/
+
+LIBC_API
+float
+atan2f (
+    float Numerator,
+    float Denominator
     );
 
 /*++
@@ -423,9 +612,69 @@ Return Value:
 --*/
 
 LIBC_API
+float
+sinhf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the hyperbolic sine of the given value.
+
+Arguments:
+
+    Value - Supplies the value to take the hyperbolic sine of.
+
+Return Value:
+
+    Returns the hyperbolic sine on success.
+
+    +/- HUGE_VAL (with the same sign as the value) if the result cannot be
+    represented.
+
+    NaN if the input is NaN.
+
+    Returns the value itself if the given value is +/- 0 or +/- Infinity.
+
+--*/
+
+LIBC_API
 double
 cosh (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the hyperbolic cosine of the given value.
+
+Arguments:
+
+    Value - Supplies the value to take the hyperbolic cosine of.
+
+Return Value:
+
+    Returns the hyperbolic cosine on success.
+
+    +/- HUGE_VAL (with the same sign as the value) if the result cannot be
+    represented.
+
+    NaN if the input is NaN.
+
+    1.0 if the value is +/- 0.
+
+    +Infinity if the value is +/- Infinity.
+
+--*/
+
+LIBC_API
+float
+coshf (
+    float Value
     );
 
 /*++
@@ -482,9 +731,64 @@ Return Value:
 --*/
 
 LIBC_API
+float
+tanhf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the hyperbolic tangent of the given value.
+
+Arguments:
+
+    Value - Supplies the value to take the hyperbolic tangent of.
+
+Return Value:
+
+    Returns the hyperbolic tangent on success.
+
+    Returns the value itself if the value is +/- 0.
+
+    Returns +/- 1 if the value is +/- Infinity.
+
+    Returns the value itself with a range error if the value is subnormal.
+
+--*/
+
+LIBC_API
 double
 ldexp (
     double Value,
+    int Exponent
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the given value times two raised to the given
+    exponent efficiently. That is, Value * (2 ^ Exponent). On systems where
+    FLT_RADIX is 2, this is equivalent to the scalbn function.
+
+Arguments:
+
+    Value - Supplies the value to multiply.
+
+    Exponent - Supplies the exponent to raise two to.
+
+Return Value:
+
+    Returns the scaled value.
+
+--*/
+
+LIBC_API
+float
+ldexpf (
+    float Value,
     int Exponent
     );
 
@@ -535,9 +839,62 @@ Return Value:
 --*/
 
 LIBC_API
+float
+scalbnf (
+    float Value,
+    int Exponent
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the given value times FLT_RADIX raised to the given
+    exponent efficiently. That is, Value * 2 ^ Exponent.
+
+Arguments:
+
+    Value - Supplies the value to multiply.
+
+    Exponent - Supplies the exponent to raise the radix to.
+
+Return Value:
+
+    Returns the scaled value.
+
+--*/
+
+LIBC_API
 double
 ceil (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the smallest integral value not less then the given
+    value.
+
+Arguments:
+
+    Value - Supplies the value to compute the ceiling of.
+
+Return Value:
+
+    Returns the ceiling on success.
+
+    NaN if the given value is NaN.
+
+    Returns the value itself for +/- 0 and +/- Infinity.
+
+--*/
+
+LIBC_API
+float
+ceilf (
+    float Value
     );
 
 /*++
@@ -585,9 +942,54 @@ Return Value:
 --*/
 
 LIBC_API
+float
+floorf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the largest integral value not greater than the
+    given value.
+
+Arguments:
+
+    Value - Supplies the value to use.
+
+Return Value:
+
+    Returns the largest integral value not greater than the input value.
+
+--*/
+
+LIBC_API
 double
 fabs (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the absolute value of the given value.
+
+Arguments:
+
+    Value - Supplies the value to get the absolute value of.
+
+Return Value:
+
+    Returns the absolute value.
+
+--*/
+
+LIBC_API
+float
+fabsf (
+    float Value
     );
 
 /*++
@@ -637,6 +1039,36 @@ Return Value:
 --*/
 
 LIBC_API
+float
+fmodf (
+    float Dividend,
+    float Divisor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the remainder of dividing the given two values.
+
+Arguments:
+
+    Dividend - Supplies the numerator of the division.
+
+    Divisor - Supplies the denominator of the division.
+
+Return Value:
+
+    Returns the remainder of the division on success.
+
+    NaN if the divisor is zero, either value is NaN, or the dividend is
+    infinite.
+
+    Returns the dividend if the dividend is not infinite and the denominator is.
+
+--*/
+
+LIBC_API
 double
 round (
     double Value
@@ -660,9 +1092,57 @@ Return Value:
 --*/
 
 LIBC_API
+float
+roundf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine rounds the given value to the nearest integer. Rounding
+    halfway leans away from zero regardless of the current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round.
+
+Return Value:
+
+    Returns the rounded value.
+
+--*/
+
+LIBC_API
 long
 lround (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine rounds the given value to the nearest integer value, rounding
+    halfway cases away from zero, regardless of the current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round.
+
+Return Value:
+
+    Returns the rounded integer on success.
+
+    Returns an unspecified value if the given value is out of range, or NaN.
+
+--*/
+
+LIBC_API
+long
+lroundf (
+    float Value
     );
 
 /*++
@@ -710,6 +1190,31 @@ Return Value:
 --*/
 
 LIBC_API
+long long
+llroundf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine rounds the given value to the nearest integer value, rounding
+    halfway cases away from zero, regardless of the current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round.
+
+Return Value:
+
+    Returns the rounded integer on success.
+
+    Returns an unspecified value if the given value is out of range, or NaN.
+
+--*/
+
+LIBC_API
 long
 lrint (
     double Value
@@ -735,9 +1240,59 @@ Return Value:
 --*/
 
 LIBC_API
+long
+lrintf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integer value.
+
+    Returns an undefined value if the integer is NaN or out of range.
+
+--*/
+
+LIBC_API
 long long
 llrint (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integer value.
+
+    Returns an undefined value if the integer is NaN or out of range.
+
+--*/
+
+LIBC_API
+long long
+llrintf (
+    float Value
     );
 
 /*++
@@ -789,6 +1344,35 @@ Return Value:
 --*/
 
 LIBC_API
+float
+nearbyintf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine round the given value to the nearest integer, using the
+    current rounding direction. This routine does not raise an inexact
+    exception.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integral value in the direction of the current rounding
+    mode.
+
+    NaN if the given value is NaN.
+
+    Returns the value itself for +/- 0 and +/- Infinity.
+
+--*/
+
+LIBC_API
 double
 rint (
     double Value
@@ -809,6 +1393,34 @@ Return Value:
 
     Returns the nearest integral value in the direction of the current rounding
     mode.
+
+--*/
+
+LIBC_API
+float
+rintf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given value into the nearest integral in the
+    direction of the current rounding mode.
+
+Arguments:
+
+    Value - Supplies the value to round into an integral.
+
+Return Value:
+
+    Returns the nearest integral value in the direction of the current rounding
+    mode.
+
+    NaN if the given value is NaN.
+
+    Returns the value itself for +/- 0 and +/- Infinity.
 
 --*/
 
@@ -839,9 +1451,63 @@ Return Value:
 --*/
 
 LIBC_API
+float
+hypotf (
+    float Length,
+    float Width
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the square root of a2 + b2 without undue overflow
+    or underflow.
+
+Arguments:
+
+    Length - Supplies the length of the triangle.
+
+    Width - Supplies the width of the triangle.
+
+Return Value:
+
+    Returns the hypotenuse of the triangle.
+
+--*/
+
+LIBC_API
 double
 sqrt (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the square root function.
+
+Arguments:
+
+    Value - Supplies the value to get the square root of.
+
+Return Value:
+
+    Returns the square root of the value.
+
+    +-0 for inputs of +-0.
+
+    Infinity for inputs of infinity.
+
+    NaN for inputs of NaN or negative values.
+
+--*/
+
+LIBC_API
+float
+sqrtf (
+    float Value
     );
 
 /*++
@@ -893,6 +1559,32 @@ Return Value:
 --*/
 
 LIBC_API
+float
+frexpf (
+    float Value,
+    int *Exponent
+    );
+
+/*++
+
+Routine Description:
+
+    This routine breaks a floating point number down into a normalized fraction
+    and an integer power of 2.
+
+Arguments:
+
+    Value - Supplies the value to normalize.
+
+    Exponent - Supplies a pointer where the exponent will be returned.
+
+Return Value:
+
+    Returns the normalized fraction (the significand).
+
+--*/
+
+LIBC_API
 double
 exp (
     double Value
@@ -915,9 +1607,53 @@ Return Value:
 --*/
 
 LIBC_API
+float
+expf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the base e exponential of the given value.
+
+Arguments:
+
+    Value - Supplies the value to raise e to.
+
+Return Value:
+
+    Returns e to the given value.
+
+--*/
+
+LIBC_API
 double
 expm1 (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the base e exponential of the given value, minus one.
+
+Arguments:
+
+    Value - Supplies the value to raise e to.
+
+Return Value:
+
+    Returns e to the given value, minus one.
+
+--*/
+
+LIBC_API
+float
+expm1f (
+    float Value
     );
 
 /*++
@@ -962,9 +1698,56 @@ Return Value:
 --*/
 
 LIBC_API
+float
+powf (
+    float Value,
+    float Power
+    );
+
+/*++
+
+Routine Description:
+
+    This routine raises the given value to the given power.
+
+Arguments:
+
+    Value - Supplies the value to raise.
+
+    Power - Supplies the power to raise the value to.
+
+Return Value:
+
+    Returns the given value raised to the given power.
+
+--*/
+
+LIBC_API
 double
 log (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the natural logarithm (base e) of the given value.
+
+Arguments:
+
+    Value - Supplies the value to get the logarithm of.
+
+Return Value:
+
+    Returns the logarithm of the given value.
+
+--*/
+
+LIBC_API
+float
+logf (
+    float Value
     );
 
 /*++
@@ -1006,9 +1789,53 @@ Return Value:
 --*/
 
 LIBC_API
+float
+log2f (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the base two logarithm function.
+
+Arguments:
+
+    Value - Supplies the value to take the base 2 logarithm of.
+
+Return Value:
+
+    Returns the base 2 logarithm of the given value.
+
+--*/
+
+LIBC_API
 double
 log10 (
     double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the base 10 logarithm of the given value.
+
+Arguments:
+
+    Value - Supplies the value to get the logarithm of.
+
+Return Value:
+
+    Returns the logarithm of the given value.
+
+--*/
+
+LIBC_API
+float
+log10f (
+    float Value
     );
 
 /*++
@@ -1061,6 +1888,39 @@ Return Value:
 --*/
 
 LIBC_API
+float
+modff (
+    float Value,
+    float *IntegerPortion
+    );
+
+/*++
+
+Routine Description:
+
+    This routine breaks the given value up into integral and fractional parts,
+    each of which has the same sign as the argument. It stores the integral
+    part as a floating point value.
+
+Arguments:
+
+    Value - Supplies the value to decompose into an integer and a fraction.
+
+    IntegerPortion - Supplies a pointer where the integer portion of the
+        value will be returned. If the given value is NaN or +/- Infinity, then
+        NaN or +/- Infinity will be returned.
+
+Return Value:
+
+    Returns the fractional portion of the given value on success.
+
+    NaN if the input is NaN.
+
+    0 if +/- Infinity is given.
+
+--*/
+
+LIBC_API
 double
 copysign (
     double Value,
@@ -1079,6 +1939,32 @@ Arguments:
     Value - Supplies the value to modify.
 
     Sign - Supplies the double with the desired sign bit.
+
+Return Value:
+
+    Returns the value with the modified sign bit.
+
+--*/
+
+LIBC_API
+float
+copysignf (
+    float Value,
+    float Sign
+    );
+
+/*++
+
+Routine Description:
+
+    This routine replaces the sign bit on the given value with the sign bit
+    from the other given value.
+
+Arguments:
+
+    Value - Supplies the value to modify.
+
+    Sign - Supplies the float with the desired sign bit.
 
 Return Value:
 

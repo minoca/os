@@ -377,10 +377,11 @@ Author:
 #define FLOAT_SIGN_BIT_SHIFT 31
 #define FLOAT_NAN 0x7F800000
 #define FLOAT_NAN_EXPONENT 0xFF
-#define FLOAT_EXPONENT_SHIFT 23
 #define FLOAT_VALUE_MASK 0x007FFFFFUL
 #define FLOAT_EXPONENT_MASK 0x7F800000UL
 #define FLOAT_EXPONENT_SHIFT 23
+#define FLOAT_EXPONENT_BIAS 0x7F
+#define FLOAT_ONE_WORD 0x3F800000
 
 //
 // Define some constants used for manipulating double floating point types.

@@ -411,7 +411,7 @@ Return Value:
 
                     Result = (Result - Result) / (Result - Result);
 
-                } else if (PowerIntegerStatus==1) {
+                } else if (PowerIntegerStatus == 1) {
 
                     //
                     // (Value < 0)^Odd = -(|Value|^odd).
@@ -455,19 +455,19 @@ Return Value:
         if (AbsolutePowerHigh > DOUBLE_2_TO_64_HIGH_WORD) {
             if (AbsoluteValueHigh < DOUBLE_ONE_HIGH_WORD) {
                 if (PowerHighWord < 0) {
-                    return ClHugeValue * ClHugeValue;
+                    return ClDoubleHugeValue * ClDoubleHugeValue;
 
                 } else {
-                    return ClTinyValue * ClTinyValue;
+                    return ClDoubleTinyValue * ClDoubleTinyValue;
                 }
             }
 
             if (AbsoluteValueHigh >= DOUBLE_ONE_HIGH_WORD) {
                 if (PowerHighWord > 0) {
-                    return ClHugeValue * ClHugeValue;
+                    return ClDoubleHugeValue * ClDoubleHugeValue;
 
                 } else {
-                    return ClTinyValue * ClTinyValue;
+                    return ClDoubleTinyValue * ClDoubleTinyValue;
                 }
             }
         }
@@ -478,19 +478,19 @@ Return Value:
 
         if (AbsoluteValueHigh < DOUBLE_ONE_HIGH_WORD - 1) {
             if (PowerHighWord < 0) {
-                return Sign * ClHugeValue * ClHugeValue;
+                return Sign * ClDoubleHugeValue * ClDoubleHugeValue;
 
             } else {
-                return Sign * ClTinyValue * ClTinyValue;
+                return Sign * ClDoubleTinyValue * ClDoubleTinyValue;
             }
         }
 
         if (AbsoluteValueHigh > DOUBLE_ONE_HIGH_WORD) {
             if (PowerHighWord > 0) {
-                return Sign * ClHugeValue * ClHugeValue;
+                return Sign * ClDoubleHugeValue * ClDoubleHugeValue;
 
             } else {
-                return Sign * ClTinyValue * ClTinyValue;
+                return Sign * ClDoubleTinyValue * ClDoubleTinyValue;
             }
         }
 
@@ -692,11 +692,11 @@ Return Value:
 
     if (ResultHigh >= DOUBLE_1024_HIGH_WORD) {
         if (((ResultHigh - DOUBLE_1024_HIGH_WORD) | ResultLow) != 0) {
-            return Sign * ClHugeValue * ClHugeValue;
+            return Sign * ClDoubleHugeValue * ClDoubleHugeValue;
 
         } else {
             if (PowerLogTail + ClPowerOverflow > Result - PowerLog) {
-                return Sign * ClHugeValue * ClHugeValue;
+                return Sign * ClDoubleHugeValue * ClDoubleHugeValue;
             }
         }
 
@@ -706,11 +706,11 @@ Return Value:
 
     } else if ((ResultHigh & SignHighMask) >= DOUBLE_1075_HIGH_WORD ) {
         if (((ResultHigh - DOUBLE_NEGATIVE_1075_HIGH_WORD) | ResultLow) != 0) {
-            return Sign * ClTinyValue * ClTinyValue;
+            return Sign * ClDoubleTinyValue * ClDoubleTinyValue;
 
         } else {
             if (PowerLogTail <= Result - PowerLog) {
-                return Sign * ClTinyValue * ClTinyValue;
+                return Sign * ClDoubleTinyValue * ClDoubleTinyValue;
             }
         }
     }

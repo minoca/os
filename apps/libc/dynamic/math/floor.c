@@ -15,6 +15,13 @@ Abstract:
 
     This module implements the floor functions for the math library.
 
+    Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+
+    Developed at SunPro, a Sun Microsystems, Inc. business.
+    Permission to use, copy, modify, and distribute this
+    software is freely granted, provided that this notice
+    is preserved.
+
 Author:
 
     Evan Green 23-Jul-2013
@@ -116,7 +123,7 @@ Return Value:
             // than 1.
             //
 
-            if (ClHugeValue + Value > 0.0) {
+            if (ClDoubleHugeValue + Value > 0.0) {
                 if (HighWord >= 0) {
                     HighWord = 0;
                     LowWord = 0;
@@ -142,7 +149,7 @@ Return Value:
             // Raise the inexact flag.
             //
 
-            if (ClHugeValue + Value > 0.0) {
+            if (ClDoubleHugeValue + Value > 0.0) {
                 if (HighWord < 0) {
                     HighWord += (1 << ExponentHighWordShift) >> Exponent;
                 }
@@ -158,7 +165,9 @@ Return Value:
         // Watch out for infinity or NaN.
         //
 
-        if (Exponent == NAN_HIGH_WORD - DOUBLE_EXPONENT_BIAS) {
+        if (Exponent ==
+            (NAN_HIGH_WORD >> ExponentHighWordShift) - DOUBLE_EXPONENT_BIAS) {
+
             return Value + Value;
         }
 
@@ -183,7 +192,7 @@ Return Value:
         // Raise the inexact flag.
         //
 
-        if (ClHugeValue + Value > 0.0) {
+        if (ClDoubleHugeValue + Value > 0.0) {
             if (HighWord < 0) {
                 if (Exponent == 20) {
                     HighWord+=1;

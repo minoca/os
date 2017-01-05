@@ -307,9 +307,9 @@ Return Value:
         // Trigger the inexact flag.
         //
 
-        RoundingValue = ClDoubleOne - ClTinyValue;
+        RoundingValue = ClDoubleOne - ClDoubleTinyValue;
         if (RoundingValue >= ClDoubleOne) {
-            RoundingValue = ClDoubleOne + ClTinyValue;
+            RoundingValue = ClDoubleOne + ClDoubleTinyValue;
             if (CoveredBits == MAX_ULONG) {
                 CoveredBits = 0;
                 RootBit += 1;

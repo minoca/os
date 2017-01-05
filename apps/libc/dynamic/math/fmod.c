@@ -120,7 +120,7 @@ Return Value:
     // Get the absolute value of the dividend.
     //
 
-    DividendHigh ^=DividendSign;
+    DividendHigh ^= DividendSign;
 
     //
     // Get the absolute value of the divisor.
@@ -351,7 +351,7 @@ Return Value:
         DividendHigh = ((DividendHigh - OneExponent) |
                        ((DivisorExponent + 1023) << ExponentShift));
 
-        Parts.Ulong.High = DividendHigh|DividendSign;
+        Parts.Ulong.High = DividendHigh | DividendSign;
         Parts.Ulong.Low = DividendLow;
         Dividend = Parts.Double;
 
@@ -378,7 +378,7 @@ Return Value:
             DividendHigh = DividendSign;
         }
 
-        Parts.Ulong.High = DividendHigh|DividendSign;
+        Parts.Ulong.High = DividendHigh | DividendSign;
         Parts.Ulong.Low = DividendLow;
         Dividend = Parts.Double;
 

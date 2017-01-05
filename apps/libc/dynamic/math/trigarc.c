@@ -216,7 +216,7 @@ Return Value:
 
     } else if (AbsoluteHighWord < DOUBLE_ONE_HALF_HIGH_WORD) {
         if (AbsoluteHighWord < ARC_SINE_LOW_THRESHOLD_HIGH_WORD) {
-            if (ClHugeValue + Value > ClDoubleOne) {
+            if (ClDoubleHugeValue + Value > ClDoubleOne) {
 
                 //
                 // Return the value with inexact if the value is not zero.
@@ -226,7 +226,7 @@ Return Value:
             }
         }
 
-        Value2 = Value*Value;
+        Value2 = Value * Value;
         Numerator = Value2 *
                     (ClArcSineNumerator0 + Value2 *
                      (ClArcSineNumerator1 + Value2 *
@@ -481,7 +481,7 @@ Return Value:
                     (ClArcSineDenominator3 + Input * ClArcSineDenominator4)));
 
     Quotient = Numerator / Denominator;
-    Approximation = Quotient *Root + Correction;
+    Approximation = Quotient * Root + Correction;
     return 2.0 * (RootHigh + Approximation);
 }
 
@@ -553,10 +553,13 @@ Return Value:
         }
 
         if (HighWord > 0) {
-            return ClArcTangentHigh[3]+*(volatile double *)&ClArcTangentLow[3];
+            ArcTangent = ClArcTangentHigh[3] +
+                         *(volatile double *)&ClArcTangentLow[3];
+
+            return ArcTangent;
         }
 
-        return -ClArcTangentHigh[3]-*(volatile double *)&ClArcTangentLow[3];
+        return -ClArcTangentHigh[3] - *(volatile double *)&ClArcTangentLow[3];
     }
 
     //
@@ -570,7 +573,7 @@ Return Value:
         //
 
         if (AbsoluteHighWord < ARC_TANGENT_ZERO_THRESHOLD_HIGH_WORD) {
-            if (ClHugeValue + Value > ClDoubleOne) {
+            if (ClDoubleHugeValue + Value > ClDoubleOne) {
 
                 //
                 // Raise an inexact condition.
@@ -608,8 +611,8 @@ Return Value:
         }
     }
 
-    Value2 = Value*Value;
-    Value4 = Value2*Value2;
+    Value2 = Value * Value;
+    Value4 = Value2 * Value2;
 
     //
     // Calculate the big polynomial in two chunks, the even coefficients and
@@ -777,14 +780,14 @@ Return Value:
         //
 
         case 2:
-            return ClPi + ClTinyValue;
+            return ClPi + ClDoubleTinyValue;
 
         //
         // The arc tangent of -0 / -anything is -pi.
         //
 
         case 3:
-            return -ClPi - ClTinyValue;
+            return -ClPi - ClDoubleTinyValue;
         }
     }
 
@@ -794,10 +797,10 @@ Return Value:
 
     if ((AbsoluteDenominatorHigh | DenominatorLow) == 0) {
         if (NumeratorHigh < 0) {
-            return -ClPiOver2High - ClTinyValue;
+            return -ClPiOver2High - ClDoubleTinyValue;
 
         } else {
-            return ClPiOver2High + ClTinyValue;
+            return ClPiOver2High + ClDoubleTinyValue;
         }
     }
 
@@ -814,28 +817,28 @@ Return Value:
             //
 
             case 0:
-                return ClPiOver4High + ClTinyValue;
+                return ClPiOver4High + ClDoubleTinyValue;
 
             //
             // The arc tangent of -Infinity / +Infinity is -pi/4.
             //
 
             case 1:
-                return -ClPiOver4High - ClTinyValue;
+                return -ClPiOver4High - ClDoubleTinyValue;
 
             //
             // The arc tangent of +Infinity / -Infinity is 3pi/4.
             //
 
             case 2:
-                return 3.0 * ClPiOver4High + ClTinyValue;
+                return 3.0 * ClPiOver4High + ClDoubleTinyValue;
 
             //
             // The arc tangent of -Infinity / -Infinity is -3pi/4.
             //
 
             case 3:
-                return -3.0 * ClPiOver4High - ClTinyValue;
+                return -3.0 * ClPiOver4High - ClDoubleTinyValue;
             }
 
         } else {
@@ -860,14 +863,14 @@ Return Value:
             //
 
             case 2:
-                return ClPi + ClTinyValue;
+                return ClPi + ClDoubleTinyValue;
 
             //
             // The arc tangent of -anything / -Infinity is -pi.
             //
 
             case 3:
-                return -ClPi - ClTinyValue;
+                return -ClPi - ClDoubleTinyValue;
             }
         }
     }
@@ -878,10 +881,10 @@ Return Value:
 
     if (AbsoluteNumeratorHigh == NAN_HIGH_WORD) {
         if (NumeratorHigh < 0) {
-            return -ClPiOver2High - ClTinyValue;
+            return -ClPiOver2High - ClDoubleTinyValue;
 
         } else {
-            return ClPiOver2High + ClTinyValue;
+            return ClPiOver2High + ClDoubleTinyValue;
         }
     }
 

@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -9,7 +9,7 @@ Copyright (c) 2013 Minoca Corp.
 
 Module Name:
 
-    scalbn.c
+    scalbnf.c
 
 Abstract:
 
@@ -25,7 +25,7 @@ Abstract:
 
 Author:
 
-    Evan Green 23-Jul-2013
+    Chris Stevens 4-Jan-2017
 
 Environment:
 
@@ -44,7 +44,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define DOUBLE_HUGE_VALUE_EXPONENT 0x7FE
+#define FLOAT_HUGE_VALUE_EXPONENT 0xFE
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -58,16 +58,16 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-const double ClTwoNegative54 = 5.55111512312578270212e-17;
+const float ClTwoNegative25 = 2.9802322388e-08;
 
 //
 // ------------------------------------------------------------------ Functions
 //
 
 LIBC_API
-double
-ldexp (
-    double Value,
+float
+ldexpf (
+    float Value,
     int Exponent
     )
 
@@ -93,13 +93,13 @@ Return Value:
 
 {
 
-    return scalbn(Value, Exponent);
+    return scalbnf(Value, Exponent);
 }
 
 LIBC_API
-double
-scalbn (
-    double Value,
+float
+scalbnf (
+    float Value,
     int Exponent
     )
 
@@ -124,24 +124,18 @@ Return Value:
 
 {
 
-    ULONG ExponentHighWordMask;
-    ULONG ExponentHighWordShift;
-    LONG HighWord;
-    LONG LowWord;
     LONG ValueExponent;
-    DOUBLE_PARTS ValueParts;
+    FLOAT_PARTS ValueParts;
+    LONG Word;
 
-    ExponentHighWordMask = DOUBLE_EXPONENT_MASK >> DOUBLE_HIGH_WORD_SHIFT;
-    ExponentHighWordShift = DOUBLE_EXPONENT_SHIFT - DOUBLE_HIGH_WORD_SHIFT;
-    ValueParts.Double = Value;
-    HighWord = ValueParts.Ulong.High;
-    LowWord = ValueParts.Ulong.Low;
+    ValueParts.Float = Value;
+    Word = ValueParts.Ulong;
 
     //
     // Get the exponent of the value.
     //
 
-    ValueExponent = (HighWord & ExponentHighWordMask) >> ExponentHighWordShift;
+    ValueExponent = (Word & FLOAT_EXPONENT_MASK) >> FLOAT_EXPONENT_SHIFT;
 
     //
     // Watch out for zero or a subnormal value.
@@ -153,24 +147,22 @@ Return Value:
         // Handle +0 and -0.
         //
 
-        if ((LowWord |
-            (HighWord & (~DOUBLE_SIGN_BIT >> DOUBLE_HIGH_WORD_SHIFT))) == 0) {
-
+        if ((Word & ~FLOAT_SIGN_BIT) == 0) {
             return Value;
         }
 
-        Value *= ClTwo54;
-        ValueParts.Double = Value;
-        HighWord = ValueParts.Ulong.High;
-        ValueExponent = ((HighWord & ExponentHighWordMask) >>
-                         ExponentHighWordShift) - 54;
+        Value *= ClFloatTwo25;
+        ValueParts.Float = Value;
+        Word = ValueParts.Ulong;
+        ValueExponent = ((Word & ~FLOAT_EXPONENT_MASK) >>
+                         FLOAT_EXPONENT_SHIFT) - 25;
 
         //
         // Handle underflow.
         //
 
         if (Exponent < -50000) {
-            return ClDoubleTinyValue * Value;
+            return ClFloatTinyValue * Value;
         }
     }
 
@@ -178,13 +170,13 @@ Return Value:
     // Handle NaN or infinity.
     //
 
-    if (ValueExponent == NAN_HIGH_WORD >> ExponentHighWordShift) {
+    if (ValueExponent == (FLOAT_NAN >> FLOAT_EXPONENT_SHIFT)) {
         return Value + Value;
     }
 
     ValueExponent = ValueExponent + Exponent;
-    if (ValueExponent > DOUBLE_HUGE_VALUE_EXPONENT) {
-        return ClDoubleHugeValue * copysign(ClDoubleHugeValue, Value);
+    if (ValueExponent > FLOAT_HUGE_VALUE_EXPONENT) {
+        return ClFloatHugeValue * copysignf(ClFloatHugeValue, Value);
     }
 
     //
@@ -192,13 +184,13 @@ Return Value:
     //
 
     if (ValueExponent > 0) {
-        ValueParts.Ulong.High = (HighWord & (~ExponentHighWordMask)) |
-                                (ValueExponent << ExponentHighWordShift);
+        ValueParts.Ulong = (Word & ~FLOAT_EXPONENT_MASK) |
+                           (ValueExponent << FLOAT_EXPONENT_SHIFT);
 
-        return ValueParts.Double;
+        return ValueParts.Float;
     }
 
-    if (ValueExponent <= -54) {
+    if (ValueExponent <= -25) {
 
             //
             // Watch out for integer overflow in the exponent plus the value
@@ -206,10 +198,10 @@ Return Value:
             //
 
             if (Exponent > 50000) {
-                return ClDoubleHugeValue * copysign(ClDoubleHugeValue, Value);
+                return ClFloatHugeValue * copysignf(ClFloatHugeValue, Value);
 
             } else {
-                return ClDoubleTinyValue * copysign(ClDoubleTinyValue, Value);
+                return ClFloatTinyValue * copysignf(ClFloatTinyValue, Value);
             }
     }
 
@@ -217,11 +209,11 @@ Return Value:
     // This is a subnormal result.
     //
 
-    ValueExponent += 54;
-    ValueParts.Ulong.High = (HighWord & (~ExponentHighWordMask)) |
-                            (ValueExponent << ExponentHighWordShift);
+    ValueExponent += 25;
+    ValueParts.Ulong = (Word & ~FLOAT_EXPONENT_MASK) |
+                       (ValueExponent << FLOAT_EXPONENT_SHIFT);
 
-    return Value * ClTwoNegative54;
+    return Value * ClTwoNegative25;
 }
 
 //

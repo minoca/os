@@ -81,24 +81,42 @@ OBJS = assert.o             \
        locale.o             \
        math/abs.o           \
        math/ceil.o          \
+       math/ceilf.o         \
        math/div.o           \
        math/exp.o           \
+       math/expf.o          \
        math/expm1.o         \
+       math/expm1f.o        \
        math/floor.o         \
+       math/floorf.o        \
        math/fmod.o          \
+       math/fmodf.o         \
        math/hypot.o         \
+       math/hypotf.o        \
        math/log.o           \
+       math/logf.o          \
        math/log2.o          \
+       math/log2f.o         \
        math/log10.o         \
+       math/log10f.o        \
        math/lround.o        \
+       math/lroundf.o       \
        math/modf.o          \
+       math/modff.o         \
        math/pow.o           \
+       math/powf.o          \
        math/rint.o          \
+       math/rintf.o         \
        math/scalbn.o        \
+       math/scalbnf.o       \
        math/sqrt.o          \
+       math/sqrtf.o         \
        math/trig.o          \
+       math/trigf.o         \
        math/trigarc.o       \
+       math/trigarcf.o      \
        math/trighyp.o       \
+       math/trighypf.o      \
        math/util.o          \
        memory.o             \
        netaddr.o            \

@@ -297,7 +297,7 @@ Return Value:
         //
 
         if (Value > ClExpOverflowThreshold) {
-            return ClHugeValue * ClHugeValue;
+            return ClDoubleHugeValue * ClDoubleHugeValue;
         }
 
         if (Value < ClExpUnderflowThreshold) {
@@ -311,8 +311,8 @@ Return Value:
 
     if (HighWord > EXP_HALF_LN_2_HIGH_WORD) {
         if (HighWord < EXP_3_HALVES_LN_2_HIGH_WORD) {
-            High = Value - ClLn2High[SignBit];
-            Low = ClLn2Low[SignBit];
+            High = Value - ClDoubleLn2High[SignBit];
+            Low = ClDoubleLn2Low[SignBit];
             Ln2Multiple = 1 - SignBit - SignBit;
 
         } else {
@@ -329,8 +329,8 @@ Return Value:
             // Input * Ln2High is exact here.
             //
 
-            High = Value - Input * ClLn2High[0];
-            Low = Input * ClLn2Low[0];
+            High = Value - Input * ClDoubleLn2High[0];
+            Low = Input * ClDoubleLn2Low[0];
         }
 
         VolatileValue = High - Low;
@@ -341,7 +341,7 @@ Return Value:
     //
 
     } else if (HighWord < EXP_LOWER_THRESHOLD_HIGH_WORD)  {
-        if (ClHugeValue + Value > ClDoubleOne) {
+        if (ClDoubleHugeValue + Value > ClDoubleOne) {
 
             //
             // Trigger an inexact condition.

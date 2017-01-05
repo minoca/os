@@ -49,16 +49,12 @@ Environment:
 #define SINH_MID_RANGE_HIGH_WORD 0x40862E42
 #define SINH_OVERFLOW_HIGH_WORD 0x408633CE
 
+#define COSH_HALF_LN2_HIGH_WORD 0x3FD62E42
 #define COSH_TINY_HIGH_WORD 0x3C800000
+#define COSH_HUGE_HIGH_WORD 0x40862E42
 #define COSH_HUGE_THRESHOLD_HIGH_WORD 0x408633CE
 
 #define TANH_TINY_HIGH_WORD 0x3E300000
-
-#define EXP_MINUS_ONE_BIG_HIGH_WORD 0x4043687A
-#define EXP_MINUS_ONE_HUGE_HIGH_WORD 0x40862E42
-#define EXP_MINUS_ONE_HALF_LN_2_HIGH_WORD 0x3FD62E42
-#define EXP_MINUS_ONE_THREE_HALVES_LN_2_HIGH_WORD 0x3FF0A2B2
-#define EXP_MINUS_ONE_TINY_HIGH_WORD 0x3c900000
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -67,11 +63,6 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-double
-ClpExpMinusOne (
-    double Value
-    );
 
 double
 ClpLoadExponentExpBig (
@@ -90,14 +81,6 @@ ClpExpBig (
 //
 
 const double ClSinhHuge = 1.0E307;
-
-const double ClExpMinusOneOverflowThreshold = 7.09782712893383973096e+02;
-
-const double ClExpMinusOne1 = -3.33333333333331316428e-02;
-const double ClExpMinusOne2 = 1.58730158725481460165e-03;
-const double ClExpMinusOne3 = -7.93650757867487942473e-05;
-const double ClExpMinusOne4 = 4.00821782732936239552e-06;
-const double ClExpMinusOne5 = -2.01099218183624371326e-07;
 
 const ULONG ClExpReductionConstant = 1799;
 const double ClExpReductionConstantTimesLn2 = 1246.97177782734161156;
@@ -193,7 +176,7 @@ Return Value:
             }
         }
 
-        ExpMinusOne = ClpExpMinusOne(fabs(Value));
+        ExpMinusOne = expm1(fabs(Value));
         if (AbsoluteHighWord < DOUBLE_ONE_HIGH_WORD) {
             return Half * (2.0 * ExpMinusOne - ExpMinusOne * ExpMinusOne /
                            (ExpMinusOne + ClDoubleOne));
@@ -300,11 +283,11 @@ Return Value:
 
     //
     // If |Value| is in [0, 0.5 * ln2], return
-    // 1 * ExpMinusOne(|Value|)^2 / (2 * exp(|Value|))
+    // 1 * expm1(|Value|)^2 / (2 * exp(|Value|))
     //
 
-    if (AbsoluteHighWord <= EXP_MINUS_ONE_HALF_LN_2_HIGH_WORD) {
-        Exponential = ClpExpMinusOne(fabs(Value));
+    if (AbsoluteHighWord <= COSH_HALF_LN2_HIGH_WORD) {
+        Exponential = expm1(fabs(Value));
         ExponentialPlusOne = ClDoubleOne + Exponential;
 
         //
@@ -312,7 +295,7 @@ Return Value:
         //
 
         if (AbsoluteHighWord < COSH_TINY_HIGH_WORD) {
-            return ExponentialPlusOne;
+            return ClDoubleOne;
         }
 
         return ClDoubleOne + (Exponential * Exponential) /
@@ -333,7 +316,7 @@ Return Value:
     // If |Value| is in [22, log(maxdouble)] return 0.5 * exp(|Value|).
     //
 
-    if (AbsoluteHighWord < EXP_MINUS_ONE_HUGE_HIGH_WORD)  {
+    if (AbsoluteHighWord < COSH_HUGE_HIGH_WORD)  {
         return ClDoubleOneHalf * exp(fabs(Value));
     }
 
@@ -349,7 +332,7 @@ Return Value:
     // The value is really big, return an overflow.
     //
 
-    return ClHugeValue * ClHugeValue;
+    return ClDoubleHugeValue * ClDoubleHugeValue;
 }
 
 LIBC_API
@@ -449,17 +432,17 @@ Return Value:
             // Tanh of a tiny value is a tiny value with inexact.
             //
 
-            if (ClHugeValue + Value > ClDoubleOne) {
+            if (ClDoubleHugeValue + Value > ClDoubleOne) {
                 return Value;
             }
         }
 
         if (AbsoluteHighWord >= DOUBLE_ONE_HIGH_WORD) {
-            ExpMinusOne = ClpExpMinusOne(2.0 * fabs(Value));
+            ExpMinusOne = expm1(2.0 * fabs(Value));
             Result = ClDoubleOne - 2.0 / (ExpMinusOne + 2.0);
 
         } else {
-            ExpMinusOne = ClpExpMinusOne(-2.0 * fabs(Value));
+            ExpMinusOne = expm1(-2.0 * fabs(Value));
             Result= -ExpMinusOne / (ExpMinusOne + 2.0);
         }
 
@@ -473,7 +456,7 @@ Return Value:
         // Raise the inexact flag.
         //
 
-        Result = ClDoubleOne - ClTinyValue;
+        Result = ClDoubleOne - ClDoubleTinyValue;
     }
 
     if (HighWord >= 0) {
@@ -486,350 +469,6 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
-double
-ClpExpMinusOne (
-    double Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine computes the exponential of a given number, minus one:
-    exp(Value) - 1.
-
-Arguments:
-
-    Value - Supplies the input value of the computation.
-
-Return Value:
-
-    Returns one less than the exponential.
-
---*/
-
-{
-
-    double Approximation;
-    double Correction;
-    double Denominator;
-    LONG Exponent;
-    ULONG ExponentShift;
-    double FinalResult;
-    double HalfSquared;
-    double HalfValue;
-    double High;
-    ULONG HighWord;
-    double Low;
-    DOUBLE_PARTS Parts;
-    double Polynomial;
-    LONG SignBit;
-    double TwoRaisedToExponent;
-    volatile double VolatileValue;
-
-    //
-    // Method
-    //  1. Argument reduction:
-    //     Given x, find r and integer k such that
-    //
-    //               x = k*ln2 + r,  |r| <= 0.5*ln2 ~ 0.34658
-    //
-    //     Here a correction term c will be computed to compensate
-    //     the error in r when rounded to a floating-point number.
-    //
-    //  2. Approximating expm1(r) by a special rational function on
-    //     the interval [0,0.34658]:
-    //     Since
-    //        r *(exp(r) + 1) / (exp(r) - 1) = 2 + r^2 / 6 - r^4 / 360 + ...
-    //     we define R1(r*r) by
-    //        r * (exp(r) + 1) / (exp(r) - 1) = 2 + r^2 / 6 * R1(r * r)
-    //     That is,
-    //        R1(r^2) = 6 / r *((exp(r) + 1) / (exp(r) - 1) - 2 / r)
-    //                = 6 / r * (1 + 2.0 * (1 / (exp(r) - 1) - 1 / r))
-    //                = 1 - r^2 / 60 + r^4 / 2520 - r^6 / 100800 + ...
-    //     Use a special Reme algorithm on [0,0.347] to generate
-    //     a polynomial of degree 5 in r*r to approximate R1. The
-    //     maximum error of this polynomial approximation is bounded
-    //     by 2^-61. In other words,
-    //        R1(z) ~ 1.0 + Q1*z + Q2*z^2 + Q3*z^3 + Q4*z^4 + Q5*z^5
-    //     where z = r * r,
-    //     with error bounded by
-    //        |                        5           |     -61
-    //        | 1.0 + Q1*z + ... + Q5*z   -  R1(z) | <= 2
-    //        |                                    |
-    //
-    //     expm1(r) = exp(r) - 1 is then computed by the following
-    //     specific way which minimizes the accumulation rounding error:
-    //                          2     3
-    //                         r     r    [ 3 - (R1 + R1 * r/2)  ]
-    //         expm1(r) = r + --- + --- * ----------------------
-    //                         2     2    [ 6 - r * (3 - R1 * r/2) ]
-    //
-    //     To compensate the error in the argument reduction, use
-    //     expm1(r + c) = expm1(r) + c + expm1(r) * c
-    //                  ~ expm1(r) + c + r*c
-    //     Thus c + r * c will be added in as the correction terms for
-    //     expm1(r + c). Now rearrange the term to avoid optimization
-    //     screw up:
-    //     expm1(r + c) ~
-    //             (        2                                             2 )
-    //             ({    ( r    [ R1 -  (3 - R1 * r / 2)  ]    )    }    r  )
-    //         r - ({r * (--- * --------------------------- - c) - c} - --- )
-    //             ({    ( 2    [ 6 - r * (3 - R1 * r / 2)]    )    }    2  )
-    //
-    //         = r - E
-    //  3. Scale back to obtain expm1(x):
-    //     From step 1:
-    //        expm1(x) = either 2^k * [expm1(r)+1] - 1
-    //                 = or     2^k * [expm1(r) + (1 - 2^-k)]
-    //
-    //  4. Implementation notes:
-    //       (A). To save one multiplication, scale the coefficient Qi
-    //            to Qi * 2^i, and replace z by (x^2) / 2.
-    //       (B). To achieve maximum accuracy, compute expm1(x) by
-    //            (i)   if x < -56*ln2, return -1.0, (raise inexact if x != inf)
-    //            (ii)  if k = 0, return r - E
-    //            (iii) if k = -1, return 0.5 * (r - E) - 0.5
-    //            (iv)  if k = 1 if r < -0.25, return 2 * ((r + 0.5) - E)
-    //                  else      return  1.0 + 2.0 * (r - E);
-    //            (v)   if (k < -2 || k > 56) return 2^k(1 - (E - r)) - 1
-    //                  (or exp(x) - 1)
-    //            (vi)  if k <= 20, return 2^k((1 - 2^-k) - (E - r)), else
-    //            (vii) return 2^k(1 - ((E + 2^-k) - r))
-    //
-    //    Special cases:
-    //       expm1(INF) is INF, expm1(NaN) is NaN;
-    //       expm1(-INF) is -1, and
-    //       for finite argument, only expm1(0) = 0 is exact.
-    //
-    //  Accuracy:
-    //    according to an error analysis, the error is always less than
-    //    1 ulp (unit in the last place).
-    //
-    //  Misc. info.
-    //   For IEEE double
-    //       if x >  7.09782712893383973096e+02 then expm1(x) overflow
-    //
-
-    Correction = 0;
-    ExponentShift = DOUBLE_EXPONENT_SHIFT - DOUBLE_HIGH_WORD_SHIFT;
-    Parts.Double = Value;
-    HighWord = Parts.Ulong.High;
-    SignBit = HighWord & (DOUBLE_SIGN_BIT >> DOUBLE_HIGH_WORD_SHIFT);
-
-    //
-    // Get the absolute value by taking out the sign.
-    //
-
-    HighWord &= (~DOUBLE_SIGN_BIT >> DOUBLE_HIGH_WORD_SHIFT);
-
-    //
-    // Filter out huge and non-finite arguments.
-    //
-
-    if (HighWord >= EXP_MINUS_ONE_BIG_HIGH_WORD) {
-
-        //
-        // The value is greater than 56 * ln2.
-        //
-
-        if (HighWord >= EXP_MINUS_ONE_HUGE_HIGH_WORD) {
-
-            //
-            // The value is greater than 709.78.
-            //
-
-            if (HighWord >= NAN_HIGH_WORD) {
-                if (((HighWord & DOUBLE_HIGH_VALUE_MASK) |
-                      Parts.Ulong.Low) != 0) {
-
-                    //
-                    // Return NaN.
-                    //
-
-                    return Value + Value;
-
-                } else {
-
-                    //
-                    // Exp(+-Infinity) = {Infinity, -1}.
-                    //
-
-                    if (SignBit == 0) {
-                        return Value;
-                    }
-
-                    return -1.0;
-                }
-            }
-
-            if (Value > ClExpMinusOneOverflowThreshold) {
-
-                //
-                // Return an overflow.
-                //
-
-                return ClHugeValue * ClHugeValue;
-            }
-        }
-
-        //
-        // If the value is < -56*ln2, return -1.0 with inexact.
-        //
-
-        if (SignBit != 0) {
-            if (Value + ClTinyValue < 0.0) {
-                return ClTinyValue - ClDoubleOne;
-            }
-        }
-    }
-
-    //
-    // Perform argument reduction.
-    //
-
-    if (HighWord > EXP_MINUS_ONE_HALF_LN_2_HIGH_WORD) {
-        if (HighWord < EXP_MINUS_ONE_THREE_HALVES_LN_2_HIGH_WORD) {
-            if (SignBit == 0) {
-                High = Value - ClLn2High[0];
-                Low = ClLn2Low[0];
-                Exponent = 1;
-
-            } else {
-                High = Value + ClLn2High[0];
-                Low = -ClLn2Low[0];
-                Exponent = -1;
-            }
-
-        } else {
-            if (SignBit == 0) {
-                Exponent  = ClInverseLn2 * Value + 0.5;
-
-            } else {
-                Exponent  = ClInverseLn2 * Value - 0.5;
-            }
-
-            Approximation = Exponent;
-
-            //
-            // Approximation * ln2High is exact here.
-            //
-
-            High = Value - Approximation * ClLn2High[0];
-            Low = Approximation * ClLn2Low[0];
-        }
-
-        VolatileValue = High - Low;
-        Value = VolatileValue;
-        Correction = (High - Value) - Low;
-
-    //
-    // Return the value itself when |Value| < 2^-54.
-    //
-
-    } else if (HighWord < EXP_MINUS_ONE_TINY_HIGH_WORD) {
-
-        //
-        // Return the value with inexact flags when the value is non-zero.
-        //
-
-        Approximation = ClHugeValue + Value;
-        return Value - (Approximation - (ClHugeValue + Value));
-
-    } else {
-        Exponent = 0;
-    }
-
-    //
-    // The value is now in the primary range.
-    //
-
-    HalfValue = 0.5 * Value;
-    HalfSquared = Value * HalfValue;
-    Polynomial = ClDoubleOne + HalfSquared *
-                 (ClExpMinusOne1 + HalfSquared *
-                  (ClExpMinusOne2 + HalfSquared *
-                   (ClExpMinusOne3 + HalfSquared *
-                    (ClExpMinusOne4 + HalfSquared * ClExpMinusOne5))));
-
-    Approximation = 3.0 - Polynomial * HalfValue;
-    Denominator = HalfSquared *
-                  ((Polynomial - Approximation) /
-                   (6.0 - Value * Approximation));
-
-    if (Exponent == 0) {
-
-        //
-        // Correction is zero in this case.
-        //
-
-        return Value - (Value * Denominator - HalfSquared);
-
-    } else {
-        Parts.Ulong.High = DOUBLE_ONE_HIGH_WORD + (Exponent << ExponentShift);
-        Parts.Ulong.Low = 0;
-        TwoRaisedToExponent = Parts.Double;
-        Denominator = (Value * (Denominator - Correction) - Correction);
-        Denominator -= HalfSquared;
-        if (Exponent == -1) {
-            return 0.5 * (Value - Denominator) - 0.5;
-        }
-
-        if (Exponent == 1) {
-            if (Value < -0.25) {
-                return -2.0 * (Denominator - (Value + 0.5));
-
-            } else {
-                return ClDoubleOne + 2.0 * (Value - Denominator);
-            }
-        }
-
-        if ((Exponent <= -2) || (Exponent > 56)) {
-            FinalResult = ClDoubleOne - (Denominator - Value);
-            if (Exponent == 1024) {
-                FinalResult = FinalResult * 2.0 * 0x1p1023;
-
-            } else {
-                FinalResult = FinalResult * TwoRaisedToExponent;
-            }
-
-            return FinalResult - ClDoubleOne;
-        }
-
-        Approximation = ClDoubleOne;
-        Parts.Double = Approximation;
-        if (Exponent < 20) {
-
-            //
-            // Set the approximation to 1 - 2^-Exponent.
-            //
-
-            Parts.Ulong.High = DOUBLE_ONE_HIGH_WORD -
-                               ((2 << ExponentShift) >> Exponent);
-
-            Approximation = Parts.Double;
-            FinalResult = Approximation - (Denominator - Value);
-            FinalResult = FinalResult * TwoRaisedToExponent;
-
-        } else {
-
-            //
-            // Set the approximation to 2^-Exponent.
-            //
-
-            Parts.Ulong.High = (DOUBLE_EXPONENT_BIAS - Exponent) <<
-                               ExponentShift;
-
-            Approximation = Parts.Double;
-            FinalResult = Value - (Denominator + Approximation);
-            FinalResult += ClDoubleOne;
-            FinalResult = FinalResult * TwoRaisedToExponent;
-        }
-    }
-
-    return FinalResult;
-}
 
 double
 ClpLoadExponentExpBig (

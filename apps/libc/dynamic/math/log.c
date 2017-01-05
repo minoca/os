@@ -225,8 +225,8 @@ Return Value:
 
             } else {
                 ExponentDouble = (double)Exponent;
-                Logarithm = ExponentDouble * ClLn2High[0] +
-                            ExponentDouble * ClLn2Low[0];
+                Logarithm = ExponentDouble * ClDoubleLn2High[0] +
+                            ExponentDouble * ClDoubleLn2Low[0];
 
                 return Logarithm;
             }
@@ -240,8 +240,8 @@ Return Value:
 
         } else {
             ExponentDouble = (double)Exponent;
-            Logarithm = ExponentDouble * ClLn2High[0] -
-                        ((Approximation - ExponentDouble * ClLn2Low[0]) -
+            Logarithm = ExponentDouble * ClDoubleLn2High[0] -
+                        ((Approximation - ExponentDouble * ClDoubleLn2Low[0]) -
                          ValueMinusOne);
 
             return Logarithm;
@@ -269,9 +269,9 @@ Return Value:
             return Logarithm;
         }
 
-        Logarithm = ExponentDouble * ClLn2High[0] -
+        Logarithm = ExponentDouble * ClDoubleLn2High[0] -
                     ((HalfSquare - (Input * (HalfSquare + Approximation) +
-                      ExponentDouble * ClLn2Low[0])) - ValueMinusOne);
+                      ExponentDouble * ClDoubleLn2Low[0])) - ValueMinusOne);
 
         return Logarithm;
     }
@@ -280,9 +280,9 @@ Return Value:
         return ValueMinusOne - Input * (ValueMinusOne - Approximation);
     }
 
-    Logarithm = ExponentDouble * ClLn2High[0] -
+    Logarithm = ExponentDouble * ClDoubleLn2High[0] -
                 ((Input * (ValueMinusOne - Approximation) -
-                  ExponentDouble * ClLn2Low[0]) - ValueMinusOne);
+                  ExponentDouble * ClDoubleLn2Low[0]) - ValueMinusOne);
 
     return Logarithm;
 }

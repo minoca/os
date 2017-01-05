@@ -62,14 +62,6 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _FLOATING_PRECISION {
-    FloatingPrecisionSingle,
-    FloatingPrecisionDouble,
-    FloatingPrecisionExtended,
-    FloatingPrecisionQuad,
-    FloatingPrecisionCount
-} FLOATING_PRECISION, *PFLOATING_PRECISION;
-
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -92,16 +84,6 @@ ClpTangentDouble (
     double Value,
     double Tail,
     INT TailAndSign
-    );
-
-float
-ClpSineFloat (
-    double Value
-    );
-
-float
-ClpCosineFloat (
-    double Value
     );
 
 INT
@@ -229,7 +211,7 @@ INT ClPiOverTwoInitialTermCount[FloatingPrecisionCount] = {3, 4, 4, 6};
 // terms.
 //
 
-const ULONG ClPiOverTwoIntegers[] = {
+const ULONG ClTwoOverPiIntegers[] = {
     0xA2F983, 0x6E4E44, 0x1529FC, 0x2757D1, 0xF534DD, 0xC0DB62,
     0x95993C, 0x439041, 0xFE5163, 0xABDEBB, 0xC561B7, 0x246E3A,
     0x424DD2, 0xE00649, 0x2EEA09, 0xD1921C, 0xFE1DEB, 0x1CB129,
@@ -246,7 +228,7 @@ const ULONG ClPiOverTwoIntegers[] = {
 
 #if LDBL_MAX_EXP > 16384
 
-#error "Pi/2 integer table needs to be expanded"
+#error "2/Pi integer table needs to be expanded"
 
 #endif
 
@@ -878,137 +860,6 @@ Return Value:
     return Tangent;
 }
 
-float
-ClpSineFloat (
-    double Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the sine function along the range of
-    [-pi/4 to pi/4].
-
-Arguments:
-
-    Value - Supplies the value between -pi/4 and pi/4.
-
-Return Value:
-
-    Returns the sine of the given value.
-
---*/
-
-{
-
-    double HighestDegrees;
-    double HighestTimesValue;
-    float Sine;
-    double Value2;
-    double Value4;
-
-    Value2 = Value * Value;
-    Value4 = Value2 * Value2;
-    HighestDegrees = ClSine3 + (Value2 * ClSine4);
-    HighestTimesValue = HighestDegrees * Value;
-    Sine = (Value + HighestTimesValue * (ClSine1 + (Value2 * ClSine2))) +
-           (HighestTimesValue * Value4 * Value2);
-
-    return Sine;
-}
-
-float
-ClpCosineFloat (
-    double Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the cosine function along the range of
-    [-pi/4 to pi/4].
-
-Arguments:
-
-    Value - Supplies the value between -pi/4 and pi/4.
-
-Return Value:
-
-    Returns the cosine of the given value.
-
---*/
-
-{
-
-    double HighestDegrees;
-    double Result;
-    double Value2;
-    double Value4;
-
-    Value2 = Value * Value;
-    Value4 = Value2 * Value2;
-    HighestDegrees = ClCosine2 + (Value2 * ClCosine3);
-    Result = ((ClDoubleOne + (Value2 * ClCosine0)) + (Value4 * ClCosine1)) +
-             ((Value4 * Value2) * HighestDegrees);
-
-    return Result;
-}
-
-float
-ClpTangentFloat (
-    double Value,
-    INT Sign
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the tangent function along the range of
-    [-pi/4 to pi/4].
-
-Arguments:
-
-    Value - Supplies the value between -pi/4 and pi/4.
-
-    Sign - Supplies 1 if the positive tangent is to be computed, and -1 if
-        -1/tangent is to be computed.
-
-Return Value:
-
-    Returns the tangent of the given value.
-
---*/
-
-{
-
-    double HighestDegrees;
-    double LowDegrees;
-    double MiddleDegrees;
-    double Tangent;
-    double Value2;
-    double Value3;
-    double Value4;
-
-    Value2 = Value * Value;
-    HighestDegrees = ClTangentFloat[4] + Value2 * ClTangentFloat[5];
-    MiddleDegrees = ClTangentFloat[2] + Value2 * ClTangentFloat[3];
-    Value4 = Value2 * Value2;
-    Value3 = Value2 * Value;
-    LowDegrees = ClTangentFloat[0] + Value2 * ClTangentFloat[1];
-    Tangent = (Value + Value3 * LowDegrees) +
-                     (Value3 * Value4) *
-                     (MiddleDegrees + Value4 * HighestDegrees);
-
-    if (Sign == 1) {
-        return Tangent;
-    }
-
-    return -1.0 / Tangent;
-}
-
 INT
 ClpRemovePiOver2 (
     double Value,
@@ -1285,9 +1136,9 @@ Return Value:
 
     if (Positive != FALSE) {
         Subtraction = Value - Multiplier * ClPiOverTwo1;
-        Remainder[0] = Subtraction - Multiplier* ClPiOverTwo1Tail;
+        Remainder[0] = Subtraction - Multiplier * ClPiOverTwo1Tail;
         Remainder[1] = (Subtraction - Remainder[0]) -
-                       Multiplier* ClPiOverTwo1Tail;
+                       Multiplier * ClPiOverTwo1Tail;
 
         return Multiplier;
     }
@@ -1383,7 +1234,7 @@ Return Value:
             PiOver2[Index] = 0.0;
 
         } else {
-            PiOver2[Index] = ClPiOverTwoIntegers[Index2];
+            PiOver2[Index] = ClTwoOverPiIntegers[Index2];
         }
 
         Index2 += 1;
@@ -1529,7 +1380,7 @@ Return Value:
                      Index += 1) {
 
                     PiOver2[LastInput + Index] =
-                               (double)ClPiOverTwoIntegers[TableIndex + Index];
+                               (double)ClTwoOverPiIntegers[TableIndex + Index];
 
                     Final = 0.0;
                     for (Index2 = 0; Index2 <= LastInput; Index2 += 1) {
