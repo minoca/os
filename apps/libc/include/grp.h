@@ -518,37 +518,6 @@ Return Value:
 
 --*/
 
-LIBC_API
-int
-nice (
-    int Increment
-    );
-
-/*++
-
-Routine Description:
-
-    This routine adds the given value to the current process' nice value. A
-    process' nice value is a non-negative number for which a more positive
-    value results in less favorable scheduling. Valid nice values are between
-    0 and 2 * NZERO - 1.
-
-Arguments:
-
-    Increment - Supplies the increment to add to the current nice value.
-
-Return Value:
-
-    Returns the new nice value minus NZERO. Note that this can result in a
-    successful return value of -1. Callers checking for errors should set
-    errno to 0 before calling this function, then check errno after.
-
-    -1 on failure, and errno will be set to indicate more information. This may
-    fail with EPERM if the increment is negative and the caller does not have
-    appropriate privileges.
-
---*/
-
 #ifdef __cplusplus
 
 }
