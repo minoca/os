@@ -87,7 +87,7 @@ const float ClFloatPi = 3.1415925026e+00;
 const float ClFloatPiOver4 = 7.8539812565e-01;;
 const float ClFloatPiOver4Tail = 3.7748947079e-08;
 const float ClFloatInverseLn2 = 1.4426950216e+00;
-const float ClTwo25 = 3.355443200e+07;
+const float ClFloatTwo25 = 3.355443200e+07;
 
 const float ClFloatLn2High[2] = {
     6.9314575195e-01,
