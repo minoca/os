@@ -141,6 +141,7 @@ PSTR CkNodeNames[] = {
     "TryStatement",
     "IdentifierList",
     "FunctionDefinition",
+    "FunctionDeclaration",
     "ClassMember",
     "ClassMemberList",
     "ClassBody",

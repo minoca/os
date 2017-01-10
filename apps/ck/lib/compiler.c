@@ -122,6 +122,12 @@ CkpVisitFunctionDefinition (
     );
 
 VOID
+CkpVisitFunctionDeclaration (
+    PCK_COMPILER Compiler,
+    PCK_AST_NODE Node
+    );
+
+VOID
 CkpVisitExceptStatement (
     PCK_COMPILER Compiler,
     PCK_AST_NODE Node
@@ -260,6 +266,7 @@ PCK_COMPILER_NODE_VISITOR CkCompilerNodeFunctions[] = {
     CkpVisitTryStatement, // CkNodeTryStatement,
     NULL, // CkNodeIdentifierList,
     CkpVisitFunctionDefinition, // CkNodeFunctionDefinition,
+    CkpVisitFunctionDeclaration, // CkNodeFunctionDeclaration,
     CkpVisitChildren, // CkNodeClassMember,
     CkpVisitLeftRecursiveList, // CkNodeClassMemberList,
     CkpVisitChildren, // CkNodeClassBody,
@@ -694,6 +701,12 @@ FinalizeCompilerEnd:
         Compiler->LocalCapacity = 0;
     }
 
+    if (Compiler->Declarations != NULL) {
+        CkFree(Compiler->Parser->Vm, Compiler->Declarations);
+        Compiler->Declarations = NULL;
+        Compiler->DeclarationCapacity = 0;
+    }
+
     if (Compiler->Upvalues != NULL) {
         CkFree(Compiler->Parser->Vm, Compiler->Upvalues);
         Compiler->Upvalues = NULL;
@@ -746,6 +759,7 @@ Return Value:
     PCK_AST_NODE ModuleNameNode;
     PLEXER_TOKEN ModuleNameToken;
     CK_VARIABLE ModuleVariable;
+    BOOL NamedModule;
     CK_VALUE NameString;
     CK_SYMBOL_INDEX NameVariable;
     PLEXER_TOKEN Token;
@@ -756,16 +770,17 @@ Return Value:
     //     var mymodule = Core.importModule("mydir.mymodule");
     //     mymodule.run();
     // from mydir.mymodule import thing1, thing2 compiles to:
-    //     var mymodule = Core.importModule("mydir.mymodule");
-    //     mymodule.run();
-    //     thing1 = mymodule.__get("thing1");
-    //     thing2 = mymodule.__get("thing2");
+    //     var _mod = Core.importModule("mydir.mymodule");
+    //     _mod.run();
+    //     var thing1 = _mod.__get("thing1");
+    //     var thing2 = _mod.__get("thing2");
     // from mydir.mymodule import * compiles to:
-    //     var mymodule = Core.importModule("mydir.mymodule");
-    //     mymodule.run();
-    //     Core.importAllSymbols(mymodule);
+    //     var _mod = Core.importModule("mydir.mymodule");
+    //     _mod.run();
+    //     Core.importAllSymbols(_tmp);
     //
-    // Start by loading the Core module and pushing it onto the stack.
+    // Start by loading the Core module and pushing it onto the stack. _mod
+    // represents an invisible local.
     //
 
     CkpLoadCoreVariable(Compiler, "Core");
@@ -802,18 +817,36 @@ Return Value:
     CkpEmitMethodCall(Compiler, 1, "importModule@1", 14);
 
     //
-    // Create a variable to store the resulting module.
+    // Create a variable to store the resulting module. For an import statement,
+    // this is a visible variable. For a from statement, this is an invisible
+    // local.
     //
 
-    if (Compiler->ScopeDepth == -1) {
-        ModuleVariable.Scope = CkScopeModule;
+    Token = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex);
+    if (Token->Value == CkTokenImport) {
+        NamedModule = TRUE;
+        if (Compiler->ScopeDepth == -1) {
+            ModuleVariable.Scope = CkScopeModule;
+
+        } else {
+            ModuleVariable.Scope = CkScopeLocal;
+        }
+
+        ModuleVariable.Index = CkpDeclareVariable(Compiler, ModuleNameToken);
+        CkpDefineVariable(Compiler, ModuleVariable.Index);
+
+    //
+    // Create an invisible local (made invisible by the space). In non-global
+    // scopes this continues to take up a stack slot since there's no way to
+    // keep that around and also create new locals for each of the specific
+    // imports.
+    //
 
     } else {
+        NamedModule = FALSE;
         ModuleVariable.Scope = CkScopeLocal;
+        ModuleVariable.Index = CkpAddLocal(Compiler, "_mod ", 5);
     }
-
-    ModuleVariable.Index = CkpDeclareVariable(Compiler, ModuleNameToken);
-    CkpDefineVariable(Compiler, ModuleVariable.Index);
 
     //
     // Run the module contents to get everything actually loaded.
@@ -828,7 +861,7 @@ Return Value:
     //
 
     if (Node->Children == 3) {
-        return;
+        goto VisitImportStatementEnd;
     }
 
     CK_ASSERT(Node->Children >= 5);
@@ -845,7 +878,7 @@ Return Value:
         CkpLoadVariable(Compiler, ModuleVariable);
         CkpEmitMethodCall(Compiler, 1, "importAllSymbols@1", 18);
         CkpEmitOp(Compiler, CkOpPop);
-        return;
+        goto VisitImportStatementEnd;
     }
 
     //
@@ -878,6 +911,22 @@ Return Value:
         } else {
             break;
         }
+    }
+
+VisitImportStatementEnd:
+
+    //
+    // If this is in global scope, the invisible local can be popped because
+    // all the named elements were added to the global scope (rather than on
+    // top of the local scope).
+    //
+
+    if ((NamedModule == FALSE) && (Compiler->ScopeDepth == -1)) {
+
+        CK_ASSERT(Compiler->LocalCount == 1);
+
+        Compiler->LocalCount -= 1;
+        CkpEmitOp(Compiler, CkOpPop);
     }
 
     return;
@@ -1129,7 +1178,7 @@ CkpVisitFunctionDefinition (
 
 Routine Description:
 
-    This routine compiles an function definition.
+    This routine compiles a function definition.
 
 Arguments:
 
@@ -1287,6 +1336,109 @@ Return Value:
     CkpEmitOp(&MethodCompiler, CkOpReturn);
     CkpFinalizeCompiler(&MethodCompiler, Signature.Name, Signature.Length);
     CkpDefineMethod(Compiler, IsStatic, MethodSymbol);
+    return;
+}
+
+VOID
+CkpVisitFunctionDeclaration (
+    PCK_COMPILER Compiler,
+    PCK_AST_NODE Node
+    )
+
+/*++
+
+Routine Description:
+
+    This routine compiles a function declaration.
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Node - Supplies a pointer to the node to visit.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_AST_NODE Argument;
+    PCK_AST_NODE ArgumentsNode;
+    BOOL IsFunction;
+    BOOL IsStatic;
+    UINTN Length;
+    PLEXER_TOKEN NameToken;
+    CK_FUNCTION_SIGNATURE Signature;
+    CHAR SignatureString[CK_MAX_METHOD_SIGNATURE];
+
+    //
+    // The grammar is [static] function myname ( identifier_list ) body.
+    //
+
+    if (Node->Children == 7) {
+        IsStatic = TRUE;
+        NameToken = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 2);
+        ArgumentsNode = CK_GET_AST_NODE(Compiler, Node->ChildIndex + 4);
+
+    } else {
+
+        CK_ASSERT(Node->Children == 6);
+
+        IsStatic = FALSE;
+        NameToken = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex + 1);
+        ArgumentsNode = CK_GET_AST_NODE(Compiler, Node->ChildIndex + 3);
+    }
+
+    CK_ASSERT((NameToken->Value == CkTokenIdentifier) &&
+              (ArgumentsNode->Symbol == CkNodeIdentifierList));
+
+    Signature.Name = Compiler->Parser->Source + NameToken->Position;
+    Signature.Length = NameToken->Size;
+    Signature.Arity = 0;
+    if (Signature.Length > CK_MAX_NAME) {
+        CkpCompileError(Compiler, NameToken, "Name too long");
+        return;
+    }
+
+    IsFunction = TRUE;
+    if (Compiler->EnclosingClass != FALSE) {
+        IsFunction = FALSE;
+        Compiler->EnclosingClass->InStatic = IsStatic;
+    }
+
+    if ((IsStatic != FALSE) && (IsFunction != FALSE)) {
+        CkpCompileError(Compiler,
+                        NameToken,
+                        "Only class methods can be static");
+
+        return;
+    }
+
+    //
+    // Validate the argument count.
+    //
+
+    Argument = ArgumentsNode;
+    while (Argument->Children > 1) {
+        Signature.Arity += 1;
+        Argument = CK_GET_AST_NODE(Compiler, Argument->ChildIndex);
+    }
+
+    if (Argument->Children > 0) {
+        Signature.Arity += 1;
+    }
+
+    if (Signature.Arity >= CK_MAX_ARGUMENTS) {
+        CkpCompileError(Compiler, NameToken, "Too many arguments");
+        return;
+    }
+
+    Length = sizeof(SignatureString);
+    CkpPrintSignature(&Signature, SignatureString, &Length);
+    CkpAddFunctionDeclaration(Compiler, &Signature, NameToken);
     return;
 }
 
@@ -2446,7 +2598,14 @@ Return Value:
     PCSTR Name;
 
     Parser->Errors += 1;
-    if (Parser->PrintErrors == FALSE) {
+
+    //
+    // If not reporting errors, or an error has already been raised, forget it.
+    // Multiple exceptions cannot be raised because they would peel back
+    // exception handlers before they got a chance to run.
+    //
+
+    if ((Parser->PrintErrors == FALSE) || (Parser->Errors != 1)) {
         return;
     }
 

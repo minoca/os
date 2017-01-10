@@ -188,7 +188,7 @@ Return Value:
         return NULL;
     }
 
-    StackCapacity = CK_INITIAL_CALL_FRAMES;
+    StackCapacity = CK_INITIAL_STACK;
     if (Closure != NULL) {
         if (Closure->Type == CkClosureBlock) {
             while (StackCapacity < Closure->U.Block.Function->MaxStack + 1) {
@@ -477,6 +477,15 @@ Return Value:
         for (Index = 0; Index < Fiber->FrameCount; Index += 1) {
             Fiber->Frames[Index].StackStart =
                        CK_POINTER_ADD(Fiber->Frames[Index].StackStart, Offset);
+        }
+
+        //
+        // Adjust the try blocks.
+        //
+
+        for (Index = 0; Index < Fiber->TryCount; Index += 1) {
+            Fiber->TryStack[Index].Stack =
+                          CK_POINTER_ADD(Fiber->TryStack[Index].Stack, Offset);
         }
 
         //

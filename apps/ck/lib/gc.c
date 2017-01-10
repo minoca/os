@@ -670,6 +670,7 @@ Return Value:
 
         CK_ASSERT(((*Object)->Class != NULL) ||
                   ((*Object)->Type == CkObjectFunction) ||
+                  ((*Object)->Type == CkObjectUpvalue) ||
                   (Vm->Class.Class == NULL) ||
                   (Vm->Class.Class->Flags == 0));
 

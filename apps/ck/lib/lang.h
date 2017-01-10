@@ -148,6 +148,7 @@ typedef enum _CK_SYMBOL {
     CkNodeTryStatement,
     CkNodeIdentifierList,
     CkNodeFunctionDefinition,
+    CkNodeFunctionDeclaration,
     CkNodeClassMember,
     CkNodeClassMemberList,
     CkNodeClassBody,

@@ -771,7 +771,28 @@ Return Value:
     //
 
     if (Compiler->EnclosingClass == NULL) {
-        CkpDefineVariable(Compiler, Symbol);
+
+        //
+        // If this is the definition for a previous declaration, then put it
+        // in the right place further down the stack.
+        //
+
+        if ((Compiler->ScopeDepth >= 0) &&
+            (Symbol != Compiler->LocalCount - 1)) {
+
+            CK_ASSERT(Symbol < CK_MAX_LOCALS);
+
+            CkpEmitByteOp(Compiler, CkOpStoreLocal, Symbol);
+            CkpEmitOp(Compiler, CkOpPop);
+
+        //
+        // This is a definition with no previous declaration.
+        //
+
+        } else {
+            CkpDefineVariable(Compiler, Symbol);
+        }
+
         return;
     }
 

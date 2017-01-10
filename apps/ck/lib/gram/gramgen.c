@@ -275,6 +275,7 @@ YY_VALUE CkgVariableDefinition[] = {
 
 YY_VALUE CkgStatement[] = {
     CkNodeFunctionDefinition, -1,
+    CkNodeFunctionDeclaration, -1,
     CkNodeVariableDefinition, -1,
     CkNodeExpressionStatement, -1,
     CkNodeSelectionStatement, -1,
@@ -398,8 +399,21 @@ YY_VALUE CkgFunctionDefinition[] = {
     0
 };
 
+YY_VALUE CkgFunctionDeclaration[] = {
+    CkTokenFunction, CkTokenIdentifier, CkTokenOpenParentheses,
+        CkNodeIdentifierList, CkTokenCloseParentheses,
+        CkTokenSemicolon, -1,
+
+    CkTokenStatic, CkTokenFunction, CkTokenIdentifier, CkTokenOpenParentheses,
+        CkNodeIdentifierList, CkTokenCloseParentheses,
+        CkTokenSemicolon, -1,
+
+    0
+};
+
 YY_VALUE CkgClassMember[] = {
     CkNodeFunctionDefinition, -1,
+    CkNodeFunctionDeclaration, -1,
     CkNodeVariableDeclaration, -1,
     0
 };
@@ -569,6 +583,7 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"TryStatement", 0, 0, CkgTryStatement},
     {"IdentifierList", 0, 0, CkgIdentifierList},
     {"FunctionDefinition", 0, 0, CkgFunctionDefinition},
+    {"FunctionDeclaration", 0, 0, CkgFunctionDeclaration},
     {"ClassMember", 0, 0, CkgClassMember},
     {"ClassMemberList", 0, 0, CkgClassMemberList},
     {"ClassBody", 0, 0, CkgClassBody},

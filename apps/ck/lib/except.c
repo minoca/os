@@ -251,6 +251,7 @@ Return Value:
         if (Fiber->TryCount == 0) {
             Fiber->Error = Exception;
             Fiber->FrameCount = 0;
+            Fiber->StackTop = Fiber->Stack;
             Fiber = Fiber->Caller;
             if (Fiber == NULL) {
                 break;

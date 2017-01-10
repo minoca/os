@@ -150,6 +150,12 @@ Author:
 #define CK_INITIAL_CALL_FRAMES 8
 
 //
+// Define the initial size of the stack, in elements.
+//
+
+#define CK_INITIAL_STACK 8
+
+//
 // Define the minimum number of try frames to allocate. These are allocated
 // upon executing the first try block.
 //

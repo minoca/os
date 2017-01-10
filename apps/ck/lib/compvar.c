@@ -72,6 +72,13 @@ CkpResolveLocal (
     UINTN Length
     );
 
+CK_SYMBOL_INDEX
+CkpFindFunctionDeclaration (
+    PCK_COMPILER Compiler,
+    PCK_FUNCTION_SIGNATURE Signature,
+    BOOL Remove
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -115,8 +122,7 @@ Arguments:
 
 Return Value:
 
-    Returns the index into the giant table of methods for this function's
-    signature.
+    Returns the index into the table of methods for this function's signature.
 
 --*/
 
@@ -137,6 +143,15 @@ Return Value:
     if (EnclosingClass == NULL) {
 
         CK_ASSERT(IsStatic == FALSE);
+
+        //
+        // First try to find an existing declaration.
+        //
+
+        Symbol = CkpFindFunctionDeclaration(Compiler, Signature, TRUE);
+        if (Symbol != -1) {
+            return Symbol;
+        }
 
         return CkpDeclareVariable(Compiler, NameToken);
     }
@@ -194,8 +209,7 @@ Arguments:
 
 Return Value:
 
-    Returns the index into the giant table of methods for this function's
-    signature.
+    Returns the index into the table of methods for this function's signature.
 
 --*/
 
@@ -234,7 +248,7 @@ Arguments:
 
 Return Value:
 
-    Returns the index in the giant symbol table of method names.
+    Returns the index in the symbol table of method names.
 
 --*/
 
@@ -646,7 +660,19 @@ Return Value:
 
 {
 
+    CK_SYMBOL_INDEX Index;
     CK_SYMBOL_INDEX Popped;
+
+    //
+    // Discard declarations.
+    //
+
+    Index = Compiler->DeclarationCount - 1;
+    while ((Index >= 0) &&
+           (Compiler->Declarations[Index].Scope >= Compiler->ScopeDepth)) {
+
+        Index -= 1;
+    }
 
     Popped = CkpDiscardLocals(Compiler, Compiler->ScopeDepth);
     Compiler->LocalCount -= Popped;
@@ -955,6 +981,109 @@ Return Value:
     return;
 }
 
+VOID
+CkpAddFunctionDeclaration (
+    PCK_COMPILER Compiler,
+    PCK_FUNCTION_SIGNATURE Signature,
+    PLEXER_TOKEN NameToken
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds a function declaration.
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Signature - Supplies the function signature.
+
+    NameToken - Supplies the name token of the variable.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    LONG Index;
+    PVOID NewBuffer;
+    ULONG NewCapacity;
+    CK_SYMBOL_INDEX SignatureSymbol;
+    CK_SYMBOL_INDEX Symbol;
+
+    SignatureSymbol = CkpGetSignatureSymbol(Compiler, Signature);
+    if (SignatureSymbol == -1) {
+        return;
+    }
+
+    //
+    // Make sure there's room for one more, even if it's not needed.
+    //
+
+    if (Compiler->DeclarationCount >= Compiler->DeclarationCapacity) {
+        if (Compiler->DeclarationCount == 0) {
+            NewCapacity = 8;
+
+        } else {
+            NewCapacity = Compiler->DeclarationCapacity * 2;
+        }
+
+        NewBuffer = CkpReallocate(
+               Compiler->Parser->Vm,
+               Compiler->Declarations,
+               Compiler->DeclarationCapacity * sizeof(CK_FUNCTION_DECLARATION),
+               NewCapacity * sizeof(CK_FUNCTION_DECLARATION));
+
+        if (NewBuffer == NULL) {
+            return;
+        }
+
+        Compiler->Declarations = NewBuffer;
+        Compiler->DeclarationCapacity = NewCapacity;
+    }
+
+    for (Index = Compiler->DeclarationCount - 1; Index >= 0; Index -= 1) {
+
+        //
+        // If there's already a declaration, return it.
+        //
+
+        if ((Compiler->Declarations[Index].Signature == SignatureSymbol) &&
+            (Compiler->Declarations[Index].Scope == Compiler->ScopeDepth)) {
+
+            return;
+        }
+
+        //
+        // Stop looking if a lower scope is hit.
+        //
+
+        if (Compiler->Declarations[Index].Scope < Compiler->ScopeDepth) {
+            break;
+        }
+    }
+
+    Index = Compiler->DeclarationCount;
+
+    //
+    // Add the new declaration. Push a null to instantiate the variable.
+    //
+
+    CkpEmitOp(Compiler, CkOpNull);
+    Symbol = CkpDeclareVariable(Compiler, NameToken);
+    CkpDefineVariable(Compiler, Symbol);
+    Compiler->Declarations[Index].Signature = SignatureSymbol;
+    Compiler->Declarations[Index].Scope = Compiler->ScopeDepth;
+    Compiler->Declarations[Index].Symbol = Symbol;
+    Compiler->DeclarationCount += 1;
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1160,3 +1289,65 @@ Return Value:
 
     return -1;
 }
+
+CK_SYMBOL_INDEX
+CkpFindFunctionDeclaration (
+    PCK_COMPILER Compiler,
+    PCK_FUNCTION_SIGNATURE Signature,
+    BOOL Remove
+    )
+
+/*++
+
+Routine Description:
+
+    This routine finds a function declaration.
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Signature - Supplies the function signature.
+
+    Remove - Supplies a boolean indicating whether to remove the declaration
+        or not. TRUE is supplied when the function is being defined.
+
+Return Value:
+
+    Returns the variable index for the function in the current scope.
+
+--*/
+
+{
+
+    ULONG Index;
+    CK_SYMBOL_INDEX SignatureSymbol;
+
+    SignatureSymbol = CkpGetSignatureSymbol(Compiler, Signature);
+    if (SignatureSymbol == -1) {
+        return -1;
+    }
+
+    for (Index = 0; Index < Compiler->DeclarationCount; Index += 1) {
+        if ((Compiler->Declarations[Index].Signature == SignatureSymbol) &&
+            (Compiler->Declarations[Index].Scope == Compiler->ScopeDepth)) {
+
+            if (Remove != FALSE) {
+                Compiler->Declarations[Index].Signature = -1;
+            }
+
+            return Compiler->Declarations[Index].Symbol;
+        }
+
+        //
+        // Stop looking if a lower scope is hit.
+        //
+
+        if (Compiler->Declarations[Index].Scope < Compiler->ScopeDepth) {
+            break;
+        }
+    }
+
+    return -1;
+}
+
