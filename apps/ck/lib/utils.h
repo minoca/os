@@ -372,16 +372,14 @@ UINTN
 CkpGetRange (
     PCK_VM Vm,
     PCK_RANGE Range,
-    PUINTN Count,
-    PLONG Step
+    PUINTN Count
     );
 
 /*++
 
 Routine Description:
 
-    This routine computes the starting index, length, and direction from a
-    given range.
+    This routine computes the starting index and length from a given range.
 
 Arguments:
 
@@ -392,9 +390,6 @@ Arguments:
     Count - Supplies a pointer that on input contains the number of elements
         possible to iterate over. On output, returns the number of elements to
         iterate over will be returned.
-
-    Step - Supplies a pointer where +1 or -1 will be returned to indicate the
-        direction.
 
 Return Value:
 

@@ -1704,8 +1704,7 @@ CkpStringCreateFromRange (
     PCK_VM Vm,
     PCK_STRING Source,
     UINTN Start,
-    UINTN Count,
-    LONG Step
+    UINTN Count
     );
 
 /*++
@@ -1724,8 +1723,6 @@ Arguments:
     Start - Supplies the starting index to slice from.
 
     Count - Supplies the number of characters to slice.
-
-    Step - Supplies the whether to increment (1) or decrement (-1).
 
 Return Value:
 

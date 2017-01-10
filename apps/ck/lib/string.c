@@ -237,8 +237,7 @@ CkpStringCreateFromRange (
     PCK_VM Vm,
     PCK_STRING Source,
     UINTN Start,
-    UINTN Count,
-    LONG Step
+    UINTN Count
     )
 
 /*++
@@ -257,8 +256,6 @@ Arguments:
     Start - Supplies the starting index to slice from.
 
     Count - Supplies the number of characters to slice.
-
-    Step - Supplies the whether to increment (1) or decrement (-1).
 
 Return Value:
 
@@ -286,7 +283,7 @@ Return Value:
     SourceLength = Source->Length;
     Length = 0;
     for (Index = 0; Index < Count; Index += 1) {
-        CurrentIndex = Start + (Index * Step);
+        CurrentIndex = Start + Index;
 
         CK_ASSERT(CurrentIndex < SourceLength);
 
@@ -300,7 +297,7 @@ Return Value:
 
     To = (PUCHAR)(NewString->Value);
     for (Index = 0; Index < Count; Index += 1) {
-        CurrentIndex = Start + (Index * Step);
+        CurrentIndex = Start + Index;
         Character = CkpUtf8Decode(From + CurrentIndex,
                                   SourceLength - CurrentIndex);
 
@@ -1261,8 +1258,8 @@ Return Value:
         return FALSE;
     }
 
-    Needle = CK_AS_STRING(Arguments[0]);
-    Haystack = CK_AS_STRING(Arguments[1]);
+    Haystack = CK_AS_STRING(Arguments[0]);
+    Needle = CK_AS_STRING(Arguments[1]);
     if ((Needle->Length > Haystack->Length) ||
         (CkCompareMemory(Needle->Value, Haystack->Value, Needle->Length) !=
          0)) {
@@ -1314,8 +1311,8 @@ Return Value:
         return FALSE;
     }
 
-    Needle = CK_AS_STRING(Arguments[0]);
-    Haystack = CK_AS_STRING(Arguments[1]);
+    Haystack = CK_AS_STRING(Arguments[0]);
+    Needle = CK_AS_STRING(Arguments[1]);
     if (Needle->Length > Haystack->Length) {
         Arguments[0] = CkZeroValue;
 
@@ -1762,7 +1759,6 @@ Return Value:
 
     UINTN Count;
     INTN Start;
-    LONG Step;
     PCK_STRING String;
 
     String = CK_AS_STRING(Arguments[0]);
@@ -1778,7 +1774,6 @@ Return Value:
         }
 
         Count = 1;
-        Step = 1;
 
     } else {
         if (!CK_IS_RANGE(Arguments[1])) {
@@ -1787,13 +1782,13 @@ Return Value:
         }
 
         Count = String->Length;
-        Start = CkpGetRange(Vm, CK_AS_RANGE(Arguments[1]), &Count, &Step);
+        Start = CkpGetRange(Vm, CK_AS_RANGE(Arguments[1]), &Count);
         if (Start == MAX_UINTN) {
             return FALSE;
         }
     }
 
-    Arguments[0] = CkpStringCreateFromRange(Vm, String, Start, Count, Step);
+    Arguments[0] = CkpStringCreateFromRange(Vm, String, Start, Count);
     return TRUE;
 }
 

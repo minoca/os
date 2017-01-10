@@ -470,16 +470,14 @@ UINTN
 CkpGetRange (
     PCK_VM Vm,
     PCK_RANGE Range,
-    PUINTN Count,
-    PLONG Step
+    PUINTN Count
     )
 
 /*++
 
 Routine Description:
 
-    This routine computes the starting index, length, and direction from a
-    given range.
+    This routine computes the starting index and length from a given range.
 
 Arguments:
 
@@ -490,9 +488,6 @@ Arguments:
     Count - Supplies a pointer that on input contains the number of elements
         possible to iterate over. On output, returns the number of elements to
         iterate over will be returned.
-
-    Step - Supplies a pointer where +1 or -1 will be returned to indicate the
-        direction.
 
 Return Value:
 
@@ -515,20 +510,9 @@ Return Value:
         return 0;
     }
 
-    //
-    // Create a left side. If it's out of range, make it in range.
-    //
-
     From = Range->From;
     if (From < 0) {
         From += *Count;
-    }
-
-    if (From < 0) {
-        From = 0;
-
-    } else if (From >= *Count) {
-        From = *Count - 1;
     }
 
     To = Range->To;
@@ -536,49 +520,29 @@ Return Value:
         To += *Count;
     }
 
-    //
-    // Convert an exclusive range into an inclusive one.
-    //
-
-    if (Range->Inclusive == FALSE) {
-
-        //
-        // If the start and end are equal, it's empty.
-        //
-
-        if (From == To) {
-            *Count = 0;
-            return From;
-        }
-
-        if (To >= From) {
-            To -= 1;
-
-        } else {
-            To += 1;
-        }
+    if (Range->Inclusive != FALSE) {
+        To += 1;
     }
 
-    //
-    // Clip the range to be in bounds.
-    //
-
-    if (To < 0) {
-        To = 0;
-
-    } else if (To >= *Count) {
-        To = *Count - 1;
+    if (From >= To) {
+        *Count = 0;
+        return 0;
     }
 
-    if (To >= From) {
-        *Count = To - From + 1;
-        *Step = 1;
-
-    } else {
-        *Count = From - To + 1;
-        *Step = -1;
+    if ((To < 0) || (From >= *Count)) {
+        *Count = 0;
+        return 0;
     }
 
+    if (To > *Count) {
+        To = *Count;
+    }
+
+    if (From < 0) {
+        From = 0;
+    }
+
+    *Count = To - From;
     return From;
 }
 

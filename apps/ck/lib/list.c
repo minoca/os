@@ -92,6 +92,12 @@ CkpListRemoveIndexPrimitive (
     );
 
 BOOL
+CkpListContains (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpListIterate (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -126,6 +132,7 @@ CK_PRIMITIVE_DESCRIPTION CkListPrimitives[] = {
     {"length@0", 0, CkpListLength},
     {"insert@2", 2, CkpListInsertPrimitive},
     {"removeAt@1", 1, CkpListRemoveIndexPrimitive},
+    {"contains@1", 1, CkpListContains},
     {"iterate@1", 1, CkpListIterate},
     {"iteratorValue@1", 1, CkpListIteratorValue},
     {"__slice@1", 1, CkpListSlice},
@@ -702,6 +709,51 @@ Return Value:
 }
 
 BOOL
+CkpListContains (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given list contains the given value.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    UINTN Index;
+    PCK_LIST List;
+
+    List = CK_AS_LIST(Arguments[0]);
+    for (Index = 0; Index < List->Elements.Count; Index += 1) {
+        if (CkpAreValuesEqual(List->Elements.Data[Index], Arguments[1]) !=
+            FALSE) {
+
+            Arguments[0] = CkOneValue;
+            return TRUE;
+        }
+    }
+
+    Arguments[0] = CkZeroValue;
+    return TRUE;
+}
+
+BOOL
 CkpListIterate (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -839,7 +891,6 @@ Return Value:
     PCK_RANGE Range;
     PCK_LIST Result;
     UINTN Start;
-    LONG Step;
 
     List = CK_AS_LIST(Arguments[0]);
 
@@ -868,7 +919,7 @@ Return Value:
 
     Range = CK_AS_RANGE(Arguments[1]);
     Count = List->Elements.Count;
-    Start = CkpGetRange(Vm, Range, &Count, &Step);
+    Start = CkpGetRange(Vm, Range, &Count);
     if (Start == MAX_UINTN) {
         return FALSE;
     }
@@ -885,7 +936,7 @@ Return Value:
 
     for (CopyIndex = 0; CopyIndex < Count; CopyIndex += 1) {
         Result->Elements.Data[CopyIndex] =
-                               List->Elements.Data[Start + (CopyIndex * Step)];
+                                        List->Elements.Data[Start + CopyIndex];
     }
 
     CK_OBJECT_VALUE(Arguments[0], Result);
