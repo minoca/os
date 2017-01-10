@@ -53,12 +53,13 @@ Environment:
     "usage: chalk [options] [file] [arguments...]\n"                           \
     "Chalk is a nifty scripting language. It's designed to be intuitive, \n"   \
     "small, and easily embeddable. Options are:\n"                             \
+    "  -c \"expr\" -- Execute the given expression and exit.\n"                \
     "  --debug-gc -- Stress the garbage collector.\n"                          \
     "  --debug-compiler -- Print the compiled bytecode.\n"                     \
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n"
 
-#define CHALK_OPTIONS_STRING "hV"
+#define CHALK_OPTIONS_STRING "c:chV"
 
 #define CHALK_LINE_MAX 2048
 
@@ -176,12 +177,14 @@ Return Value:
     ULONG ArgumentIndex;
     PSTR BaseName;
     CK_APP_CONTEXT Context;
+    PCSTR Expression;
     PSTR FileBuffer;
     UINTN FileSize;
     INT Option;
     PSTR ScriptPath;
     int Status;
 
+    Expression = NULL;
     FileBuffer = NULL;
     Status = ChalkInitializeContext(&Context);
     if (Status != 0) {
@@ -195,6 +198,7 @@ Return Value:
     //
 
     while (TRUE) {
+        optarg = NULL;
         Option = getopt_long(ArgumentCount,
                              Arguments,
                              CHALK_OPTIONS_STRING,
@@ -211,6 +215,10 @@ Return Value:
         }
 
         switch (Option) {
+        case 'c':
+            Expression = optarg;
+            break;
+
         case CHALK_OPTION_DEBUG_GC:
             Context.Configuration.Flags |= CK_CONFIGURATION_GC_STRESS;
             break;
@@ -295,10 +303,22 @@ Return Value:
     }
 
     //
+    // Run the expression if there was one.
+    //
+
+    if (Expression != NULL) {
+        Status = 0;
+        if (CkInterpret(Context.Vm, NULL, Expression, strlen(Expression), 1) !=
+            CkSuccess) {
+
+            Status = 1;
+        }
+
+    //
     // Run the script if there was one.
     //
 
-    if (ScriptPath != NULL) {
+    } else if (ScriptPath != NULL) {
         FileBuffer = ChalkLoadFile(ScriptPath, &FileSize);
         if (FileBuffer == NULL) {
             fprintf(stderr,
@@ -606,6 +626,7 @@ Return Value:
     while (TRUE) {
         Line = Context->LineNumber;
         printf("%d> ", Line);
+        fflush(NULL);
         Status = ChalkReadLine(Context);
         if (Status == EOF) {
             Status = 0;
