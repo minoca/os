@@ -244,10 +244,17 @@ class String {
     }
 
     function __mod(arguments) {
-        var argumentCount = arguments.length();
+        var argumentCount = 1;
         var argumentIndex = 0;
         var format = this;
         var result = "";
+
+        if (arguments is List) {
+            argumentCount = arguments.length();
+
+        } else {
+            arguments = [arguments];
+        }
 
         while (1) {
             var index = format.indexOf("%");
