@@ -31,3 +31,26 @@ DIRS = app       \
 
 include $(SRCROOT)/os/minoca.mk
 
+CK_MODULES := getopt.ck
+
+CK_LIB_PATH := $(BINROOT)/chalk1
+CK_BUILD_LIB_PATH := $(OUTROOT)/tools/lib/chalk1
+
+CK_MODULE_TARGETS := $(CK_MODULES:%=$(CK_LIB_PATH)/%)
+CK_MODULE_BUILD_TARGETS := $(CK_MODULES:%=$(CK_BUILD_LIB_PATH)/%)
+
+all: $(CK_MODULE_TARGETS) $(CK_MODULE_BUILD_TARGETS)
+
+##
+## These static pattern rules in the form <1>: <2>: <3> say "for each target
+## in <1>, apply pattern <2> to get prerequisites list <3> for that target."
+##
+
+$(CK_MODULE_TARGETS): $(CK_LIB_PATH)/%: %
+	@mkdir -p $(CK_LIB_PATH)
+	@cp -v $^ $@
+
+$(CK_MODULE_BUILD_TARGETS): $(CK_BUILD_LIB_PATH)/%: %
+	@mkdir -p $(CK_BUILD_LIB_PATH)
+	@cp -v $^ $@
+
