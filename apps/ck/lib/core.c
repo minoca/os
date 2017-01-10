@@ -1653,16 +1653,26 @@ Return Value:
 
 {
 
+    CK_VALUE Result;
+    UINTN StackIndex;
+
+    StackIndex = Arguments - Vm->Fiber->Stack;
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
-    Arguments[0] = CkpModuleLoad(Vm, Arguments[1], NULL);
-    if (CK_IS_NULL(Arguments[0])) {
+    //
+    // Don't save the return value directly on the stack yet, as the stack
+    // might get reallocated during the module load.
+    //
+
+    Result = CkpModuleLoad(Vm, Arguments[1], NULL);
+    if (CK_IS_NULL(Result)) {
         return FALSE;
     }
 
+    Vm->Fiber->Stack[StackIndex] = Result;
     return TRUE;
 }
 
