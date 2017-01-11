@@ -154,7 +154,7 @@ Return Value:
         Value *= ClFloatTwo25;
         ValueParts.Float = Value;
         Word = ValueParts.Ulong;
-        ValueExponent = ((Word & ~FLOAT_EXPONENT_MASK) >>
+        ValueExponent = ((Word & FLOAT_EXPONENT_MASK) >>
                          FLOAT_EXPONENT_SHIFT) - 25;
 
         //
@@ -213,6 +213,7 @@ Return Value:
     ValueParts.Ulong = (Word & ~FLOAT_EXPONENT_MASK) |
                        (ValueExponent << FLOAT_EXPONENT_SHIFT);
 
+    Value = ValueParts.Float;
     return Value * ClTwoNegative25;
 }
 

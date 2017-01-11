@@ -201,7 +201,7 @@ Return Value:
     //
 
     if ((AbsoluteValueWord > FLOAT_NAN) || (AbsolutePowerWord > FLOAT_NAN)) {
-        return (Value + 0.0F) + (Power + 0.0F);
+        return (Value + (float)0.0) + (Power + (float)0.0F);
     }
 
     //
@@ -384,10 +384,10 @@ Return Value:
         // Input still has 20 trailing zeros.
         //
 
-        Input = AbsoluteValue - ClFloatOne;
+        Input = AbsoluteValue - 1;
         Log = (Input * Input) *
               ((float)0.5 - Input *
-               ((float)0.3333333333333333333333 - Input * (float)0.25));
+               ((float)0.333333333333 - Input * (float)0.25));
 
         Component1 = ClFloatInverseLn2High * Input;
         Component2 = Input * ClFloatInverseLn2Low - Log * ClFloatInverseLn2;
@@ -436,7 +436,7 @@ Return Value:
         } else {
             Interval = 0;
             ResultExponent += 1;
-            AbsoluteValueWord -= 1 << FLOAT_EXPONENT_SHIFT;
+            AbsoluteValueWord -= (1 << FLOAT_EXPONENT_SHIFT);
         }
 
         //
@@ -453,12 +453,12 @@ Return Value:
         //
 
         if (Interval == 0) {
-            Component1 = AbsoluteValue - 1.0;
-            Component2 = ClFloatOne / (AbsoluteValue + 1.0);
+            Component1 = AbsoluteValue - (float)1.0;
+            Component2 = ClFloatOne / (AbsoluteValue + (float)1.0);
 
         } else {
-            Component1 = AbsoluteValue - 1.5;
-            Component2 = ClFloatOne / (AbsoluteValue + 1.5);
+            Component1 = AbsoluteValue - (float)1.5;
+            Component2 = ClFloatOne / (AbsoluteValue + (float)1.5);
         }
 
         ValueQuotient = Component1 * Component2;
@@ -481,10 +481,10 @@ Return Value:
 
         Sum = Parts.Float;
         if (Interval == 0) {
-            SumTail = AbsoluteValue - (Sum - 1.0);
+            SumTail = AbsoluteValue - (Sum - (float)1.0);
 
         } else {
-            SumTail = AbsoluteValue - (Sum - 1.5);
+            SumTail = AbsoluteValue - (Sum - (float)1.5);
         }
 
         ValueQuotientLow = Component2 *
@@ -610,7 +610,7 @@ Return Value:
     // If |Result| > 0.5, set ResultExponent = [Result + 0.5].
     //
 
-    if (AbsoluteResultWord > FLOAT_ONE_WORD) {
+    if (AbsoluteResultWord > FLOAT_ONE_HALF_WORD) {
         ResultExponent = ResultWord +
                          ((1 << FLOAT_EXPONENT_SHIFT) >> (Exponent + 1));
 

@@ -90,8 +90,8 @@ const float ClFloatInverseLn2 = 1.4426950216e+00;
 const float ClFloatTwo25 = 3.355443200e+07;
 
 const float ClFloatLn2High[2] = {
-    6.9314575195e-01,
-    -6.9314575195e-01
+    6.9313812256e-01,
+    -6.9313812256e-01
 };
 
 const float ClFloatLn2Low[2] = {

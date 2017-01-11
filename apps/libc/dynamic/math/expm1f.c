@@ -248,7 +248,7 @@ Return Value:
 
         if (Exponent == 1) {
             if (Value < (float)-0.25) {
-                return (float)-2.0 * (Error - (Value + (float)0.5));
+                return -(float)2.0 * (Error - (Value + (float)0.5));
 
             } else {
                 return ClFloatOne + (float)2.0 * (Value - Error);
@@ -271,7 +271,7 @@ Return Value:
             return Result - ClFloatOne;
         }
 
-        if (Exponent < 20) {
+        if (Exponent < 23) {
 
             //
             // Create 1 - 2^Exponent.

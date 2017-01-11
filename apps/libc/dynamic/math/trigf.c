@@ -500,8 +500,8 @@ Return Value:
 {
 
     LONG AbsoluteWord;
-    float Sine;
     FLOAT_PARTS Parts;
+    float Sine;
     float UpperDegrees;
     float Value2;
     float Value3;
@@ -582,7 +582,7 @@ Return Value:
     AbsoluteWord = Parts.Ulong & ~FLOAT_SIGN_BIT;
     if (AbsoluteWord < FLOAT_COSINE_SMALL_VALUE_WORD) {
         if ((INT)Value == 0) {
-            return Value;
+            return ClFloatOne;
         }
     }
 
@@ -940,7 +940,7 @@ Return Value:
     // value being infinity or NaN real quick.
     //
 
-    if(AbsoluteWord >= FLOAT_NAN) {
+    if (AbsoluteWord >= FLOAT_NAN) {
         Remainder[0] = Value - Value;
         Remainder[1] = Value - Value;
         return 0;
@@ -971,7 +971,7 @@ Return Value:
     //
 
     InputCount = 3;
-    while((InputCount >= 1) && (Input[InputCount - 1] == ClFloatZero)) {
+    while ((InputCount >= 1) && (Input[InputCount - 1] == ClFloatZero)) {
         InputCount -= 1;
     }
 
@@ -983,7 +983,7 @@ Return Value:
 
     Remainder[0] = Output[0];
     Remainder[1] = Output[1];
-    if(Word < 0) {
+    if (Word < 0) {
         Remainder[0] = -Remainder[0];
         Remainder[1] = -Remainder[1];
         return -PiOver2Count;
@@ -1063,7 +1063,6 @@ Return Value:
 
     Remainder[0] = Subtraction + Multiplier * PiOverTwoTail;
     Remainder[1] = (Subtraction - Remainder[0]) + Multiplier * PiOverTwoTail;
-
     return -Multiplier;
 }
 
