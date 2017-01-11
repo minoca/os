@@ -30,6 +30,7 @@ function build() {
         "bsrchtst.c",
         "getoptst.c",
         "mathtst.c",
+        "mathftst.c",
         "qsorttst.c",
         "regextst.c",
         "testc.c"

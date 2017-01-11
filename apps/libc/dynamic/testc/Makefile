@@ -78,6 +78,7 @@ OBJS = bsearch.o           \
        trighypf.o          \
        util.o              \
        mathtst.o           \
+       mathftst.o          \
        qsort.o             \
        qsorttst.o          \
        regexcmp.o          \

@@ -112,6 +112,12 @@ Return Value:
         TotalFailures += Failures;
     }
 
+    Failures = TestMathFloat();
+    if (Failures != 0) {
+        printf("%d math float failures.\n", Failures);
+        TotalFailures += Failures;
+    }
+
     Failures = TestGetopt();
     if (Failures != 0) {
         printf("%d getopt failures.\n", Failures);

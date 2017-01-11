@@ -128,6 +128,28 @@ Return Value:
 --*/
 
 ULONG
+TestMathFloat (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the entry point for the C library single-precision
+    floating point math test.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the count of test failures.
+
+--*/
+
+ULONG
 TestGetopt (
     VOID
     );

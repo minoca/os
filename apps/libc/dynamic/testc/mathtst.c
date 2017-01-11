@@ -66,10 +66,10 @@ typedef struct _MATH_TRIG_DOUBLE_VALUE {
     double HyperbolicTangent;
 } MATH_TRIG_DOUBLE_VALUE, *PMATH_TRIG_DOUBLE_VALUE;
 
-typedef struct _MATH_TEST_SQUARE_ROOT_VALUE {
+typedef struct _MATH_TEST_SQUARE_ROOT_DOUBLE_VALUE {
     double Argument;
     double SquareRoot;
-} MATH_TEST_SQUARE_ROOT_VALUE, *PMATH_TEST_SQUARE_ROOT_VALUE;
+} MATH_TEST_SQUARE_ROOT_DOUBLE_VALUE, *PMATH_TEST_SQUARE_ROOT_DOUBLE_VALUE;
 
 typedef struct _MATH_ARC_DOUBLE_VALUE {
     double Argument;
@@ -111,17 +111,17 @@ typedef struct _MATH_DECOMPOSITION_DOUBLE {
     double FractionalPart;
 } MATH_DECOMPOSITION_DOUBLE, *PMATH_DECOMPOSITION_DOUBLE;
 
-typedef struct _MATH_CEILING_FLOOR_VALUE {
+typedef struct _MATH_CEILING_FLOOR_DOUBLE_VALUE {
     double Argument;
     double Ceiling;
     double Floor;
-} MATH_CEILING_FLOOR_VALUE, *PMATH_CEILING_FLOOR_VALUE;
+} MATH_CEILING_FLOOR_DOUBLE_VALUE, *PMATH_CEILING_FLOOR_DOUBLE_VALUE;
 
-typedef struct _MATH_MODULO_VALUE {
+typedef struct _MATH_MODULO_DOUBLE_VALUE {
     double Numerator;
     double Denominator;
     double Remainder;
-} MATH_MODULO_VALUE, *PMATH_MODULO_VALUE;
+} MATH_MODULO_DOUBLE_VALUE, *PMATH_MODULO_DOUBLE_VALUE;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -536,7 +536,7 @@ MATH_TRIG_DOUBLE_VALUE TestBasicTrigonometryDoubles[] = {
      NAN},
 };
 
-MATH_TEST_SQUARE_ROOT_VALUE TestSquareRootDoubles[] = {
+MATH_TEST_SQUARE_ROOT_DOUBLE_VALUE TestSquareRootDoubles[] = {
     {0x1.921fb54442d18p-1, 0x1.c5bf891b4ef6ap-1},
     {0x1.921fb54442d18p+1, 0x1.c5bf891b4ef6ap+0},
     {0x1.f6a7a2955385ep+1, 0x1.fb4e4f1347eb9p+0},
@@ -1696,7 +1696,7 @@ MATH_DECOMPOSITION_DOUBLE TestDecompositionDoubles[] = {
     {NAN, NAN, NAN},
 };
 
-MATH_CEILING_FLOOR_VALUE TestCeilingFloorDoubles[] = {
+MATH_CEILING_FLOOR_DOUBLE_VALUE TestCeilingFloorDoubles[] = {
     {-0x1.1000000000000p+5,
      -0x1.1000000000000p+5,
      -0x1.1000000000000p+5},
@@ -1910,7 +1910,7 @@ MATH_CEILING_FLOOR_VALUE TestCeilingFloorDoubles[] = {
      0x1.0800000000000p+5},
 };
 
-MATH_MODULO_VALUE TestModuloDoubles[] = {
+MATH_MODULO_DOUBLE_VALUE TestModuloDoubles[] = {
     {0x0.0000000000000p+0,
      -0x0.0000000000000p+0,
      -INFINITY},
@@ -2159,7 +2159,7 @@ Return Value:
 
     ULONG Failures;
     volatile double SquareRoot;
-    PMATH_TEST_SQUARE_ROOT_VALUE Test;
+    PMATH_TEST_SQUARE_ROOT_DOUBLE_VALUE Test;
     ULONG TestIndex;
     ULONG ValueCount;
 
@@ -2483,7 +2483,7 @@ Return Value:
             printf("log10(%.13a) was %.13a, should have been %.13a.\n",
                    Test->Argument,
                    Logarithm,
-                   Test->Log2);
+                   Test->Log10);
 
             Failures += 1;
         }
@@ -2574,7 +2574,7 @@ Return Value:
     volatile double Ceiling;
     ULONG Failures;
     volatile double Floor;
-    PMATH_CEILING_FLOOR_VALUE Test;
+    PMATH_CEILING_FLOOR_DOUBLE_VALUE Test;
     ULONG TestIndex;
     ULONG ValueCount;
 
@@ -2633,7 +2633,7 @@ Return Value:
 
     ULONG Failures;
     volatile double Remainder;
-    PMATH_MODULO_VALUE Test;
+    PMATH_MODULO_DOUBLE_VALUE Test;
     ULONG TestIndex;
     ULONG ValueCount;
 
