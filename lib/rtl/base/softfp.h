@@ -37,7 +37,7 @@ Author:
 
 #define FLOAT_PACK(_Sign, _Exponent, _Significand)                  \
     (((ULONG)(_Sign)) << FLOAT_SIGN_BIT_SHIFT) +                    \
-    (((ULONG)(_Exponent)) << FLOAT_EXPONENT_SHIFT) + (_Significand)
+    (((ULONG)(_Exponent)) << FLOAT_EXPONENT_SHIFT) + (ULONG)(_Significand)
 
 //
 // This macro gets the sign out of a float parts structure.
@@ -57,6 +57,12 @@ Author:
 //
 
 #define FLOAT_GET_SIGNIFICAND(_Parts) ((_Parts).Ulong & FLOAT_VALUE_MASK)
+
+//
+// This macro returns non-zero if the given value (in float parts) is NaN.
+//
+
+#define FLOAT_IS_NAN(_Parts) ((ULONG)((_Parts).Ulong << 1) > 0xFF000000UL)
 
 //
 // This macro returns non-zero if the given value (in float parts) is a
@@ -206,6 +212,76 @@ Return Value:
 
 --*/
 
+float
+RtlpRoundAndPackFloat (
+    CHAR SignBit,
+    SHORT Exponent,
+    ULONG Significand
+    );
+
+/*++
+
+Routine Description:
+
+    This routine takes a sign, exponent, and significand and creates the
+    proper rounded floating point value from that input. Overflow and
+    underflow can be raised here.
+
+Arguments:
+
+    SignBit - Supplies a non-zero value if the value should be negated before
+        being converted.
+
+    Exponent - Supplies the exponent for the value.
+
+    Significand - Supplies the significand with its binary point between bits
+        30 and 29, which is 7 bits to the left of its usual location. The
+        shifted exponent must be normalized or smaller. If the significand is
+        not normalized, the exponent must be 0. In that case, the result
+        returned is a subnormal number, and it must not require rounding. In
+        the normal case wehre the significand is normalized, the exponent must
+        be one less than the true floating point exponent.
+
+Return Value:
+
+    Returns the float representation of the given components.
+
+--*/
+
+float
+RtlpNormalizeRoundAndPackFloat (
+    CHAR SignBit,
+    SHORT Exponent,
+    ULONG Significand
+    );
+
+/*++
+
+Routine Description:
+
+    This routine takes a sign, exponent, and significand and creates the
+    proper rounded single floating point value from that input. Overflow and
+    underflow can be raised here. This routine is very similar to the "round
+    and pack float" routine except that the significand does not have to be
+    normalized. Bit 31 of the significand must be zero, and the exponent must
+    be one less than the true floating point exponent.
+
+Arguments:
+
+    SignBit - Supplies a non-zero value if the value should be negated before
+        being converted.
+
+    Exponent - Supplies the exponent for the value.
+
+    Significand - Supplies the significand with its binary point between bits
+        30 and 29, which is 7 bits to the left of its usual location.
+
+Return Value:
+
+    Returns the float representation of the given components.
+
+--*/
+
 double
 RtlpRoundAndPackDouble (
     CHAR SignBit,
@@ -273,6 +349,36 @@ Arguments:
 Return Value:
 
     Returns the double representation of the given components.
+
+--*/
+
+VOID
+RtlpShift32RightJamming (
+    ULONG Value,
+    SHORT Count,
+    PULONG Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine shifts the given value right by the requested number of bits.
+    If any bits are shifted off the right, the least significant bit is set.
+    The imagery is that the bits get "jammed" on the end as they try to fall
+    off.
+
+Arguments:
+
+    Value - Supplies the value to shift.
+
+    Count - Supplies the number of bits to shift by.
+
+    Result - Supplies a pointer where the result will be stored.
+
+Return Value:
+
+    None.
 
 --*/
 

@@ -51,7 +51,6 @@ Author:
 #define FLOAT_ONE_HALF_WORD 0x3F000000
 #define FLOAT_ONE_WORD 0x3F800000
 #define FLOAT_TWO_WORD 0x40000000
-#define FLOAT_TRUNCATE_VALUE_MASK 0xFFFFF000
 
 //
 // ------------------------------------------------------ Data Type Definitions

@@ -99,6 +99,463 @@ SOFT_FLOAT_DETECT_TININESS RtlTininessDetection =
 //
 
 RTL_API
+float
+RtlFloatConvertFromInteger32 (
+    LONG Integer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given signed 32-bit integer into a float.
+
+Arguments:
+
+    Integer - Supplies the integer to convert to a float.
+
+Return Value:
+
+    Returns the float equivalent to the given integer.
+
+--*/
+
+{
+
+    ULONG AbsoluteInteger;
+    FLOAT_PARTS Parts;
+    CHAR Sign;
+
+    if (Integer == 0) {
+        Parts.Ulong = 0;
+        return Parts.Float;
+    }
+
+    if (Integer == MIN_LONG) {
+        Parts.Ulong = FLOAT_PACK(1, 0x9E, 0);
+        return Parts.Float;
+    }
+
+    AbsoluteInteger = Integer;
+    Sign = 0;
+    if (Integer < 0) {
+        AbsoluteInteger = -Integer;
+        Sign = 1;
+    }
+
+    return RtlpNormalizeRoundAndPackFloat(Sign, 0x9C, AbsoluteInteger);
+}
+
+RTL_API
+float
+RtlFloatConvertFromUnsignedInteger32 (
+    ULONG Integer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given unsigned 32-bit integer into a float.
+
+Arguments:
+
+    Integer - Supplies the integer to convert to a float.
+
+Return Value:
+
+    Returns the float equivalent to the given integer.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts;
+
+    if (Integer == 0) {
+        Parts.Ulong = 0;
+        return Parts.Float;
+    }
+
+    if ((Integer & FLOAT_SIGN_BIT) != 0) {
+        return RtlpRoundAndPackFloat(0, 0x9D, Integer >> 1);
+    }
+
+    return RtlpNormalizeRoundAndPackFloat(0, 0x9C, Integer);
+}
+
+RTL_API
+float
+RtlFloatConvertFromInteger64 (
+    LONGLONG Integer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given signed 64-bit integer into a float.
+
+Arguments:
+
+    Integer - Supplies the integer to convert to a float.
+
+Return Value:
+
+    Returns the float equivalent to the given integer.
+
+--*/
+
+{
+
+    ULONGLONG AbsoluteInteger;
+    FLOAT_PARTS Parts;
+    CHAR ShiftCount;
+    CHAR Sign;
+
+    if (Integer == 0) {
+        Parts.Ulong = 0;
+        return Parts.Float;
+    }
+
+    AbsoluteInteger = Integer;
+    Sign = 0;
+    if (Integer < 0) {
+        Sign = 1;
+        AbsoluteInteger = -Integer;
+    }
+
+    ShiftCount = RtlCountLeadingZeros64(AbsoluteInteger) - 40;
+    if (ShiftCount >= 0) {
+        Parts.Ulong = FLOAT_PACK(Sign,
+                                 0x95 - ShiftCount,
+                                 AbsoluteInteger << ShiftCount);
+
+        return Parts.Float;
+    }
+
+    ShiftCount += 7;
+    if (ShiftCount < 0) {
+        RtlpShift64RightJamming(AbsoluteInteger, -ShiftCount, &AbsoluteInteger);
+
+    } else {
+        AbsoluteInteger <<= ShiftCount;
+    }
+
+    return RtlpRoundAndPackFloat(Sign, 0x9C - ShiftCount, AbsoluteInteger);
+}
+
+RTL_API
+float
+RtlFloatConvertFromUnsignedInteger64 (
+    ULONGLONG Integer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given unsigned 64-bit integer into a float.
+
+Arguments:
+
+    Integer - Supplies the unsigned integer to convert to a float.
+
+Return Value:
+
+    Returns the float equivalent to the given integer.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts;
+    CHAR ShiftCount;
+
+    if (Integer == 0) {
+        Parts.Ulong = 0;
+        return Parts.Float;
+    }
+
+    ShiftCount = RtlCountLeadingZeros64(Integer) - 40;
+    if (ShiftCount >= 0) {
+        Parts.Ulong = FLOAT_PACK(0, 0x95 - ShiftCount, Integer << ShiftCount);
+        return Parts.Float;
+    }
+
+    ShiftCount += 7;
+    if (ShiftCount < 0) {
+        RtlpShift64RightJamming(Integer, -ShiftCount, &Integer);
+
+    } else {
+        Integer <<= ShiftCount;
+    }
+
+    return RtlpRoundAndPackFloat(0, 0x9C - ShiftCount, Integer);
+}
+
+RTL_API
+LONG
+RtlFloatConvertToInteger32 (
+    float Float
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a signed 32 bit integer.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the integer, rounded according to the current rounding mode.
+
+--*/
+
+{
+
+    SHORT Exponent;
+    FLOAT_PARTS Parts;
+    SHORT ShiftCount;
+    CHAR Sign;
+    ULONG Significand;
+    ULONGLONG Significand64;
+
+    Parts.Float = Float;
+    Significand = FLOAT_GET_SIGNIFICAND(Parts);
+    Exponent = FLOAT_GET_EXPONENT(Parts);
+    Sign = FLOAT_GET_SIGN(Parts);
+    if ((Exponent == FLOAT_NAN_EXPONENT) && (Significand != 0)) {
+        Sign = 0;
+    }
+
+    if (Exponent != 0) {
+        Significand |= 1ULL << FLOAT_EXPONENT_SHIFT;;
+    }
+
+    ShiftCount = 0xAF - Exponent;
+    Significand64 = Significand;
+    Significand64 <<= 32;
+    if (ShiftCount > 0) {
+        RtlpShift64RightJamming(Significand64, ShiftCount, &Significand64);
+    }
+
+    return RtlpRoundAndPack32(Sign, Significand64);
+}
+
+RTL_API
+LONG
+RtlFloatConvertToInteger32RoundToZero (
+    float Float
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a signed 32 bit integer. It
+    always rounds towards zero.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the integer, rounded towards zero.
+
+--*/
+
+{
+
+    SHORT Exponent;
+    FLOAT_PARTS Parts;
+    LONG Result;
+    SHORT ShiftCount;
+    CHAR Sign;
+    ULONG Significand;
+
+    Parts.Float = Float;
+    Significand = FLOAT_GET_SIGNIFICAND(Parts);
+    Exponent = FLOAT_GET_EXPONENT(Parts);
+    Sign = FLOAT_GET_SIGN(Parts);
+    ShiftCount = Exponent - 0x9E;
+    if (ShiftCount >= 0) {
+        if (Parts.Ulong != 0xCF000000) {
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+            if ((Sign == 0) ||
+                ((Exponent == FLOAT_NAN_EXPONENT) && (Significand != 0))) {
+
+                return MAX_LONG;
+            }
+        }
+
+        return MIN_LONG;
+
+    } else if (Exponent < FLOAT_EXPONENT_BIAS) {
+        if ((Exponent != 0) || (Significand != 0)) {
+            RtlSoftFloatExceptionFlags |= SOFT_FLOAT_INEXACT;
+        }
+
+        return 0;
+    }
+
+    Significand = (Significand | (1UL << FLOAT_EXPONENT_SHIFT)) << 8;
+    Result = Significand >> -ShiftCount;
+    if (((ULONG)(Significand << (ShiftCount & 31))) != 0) {
+        RtlSoftFloatExceptionFlags |= SOFT_FLOAT_INEXACT;
+    }
+
+    if (Sign != 0) {
+        Result = -Result;
+    }
+
+    return Result;
+}
+
+RTL_API
+LONGLONG
+RtlFloatConvertToInteger64 (
+    float Float
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a signed 64 bit integer. If the
+    value is NaN, then the largest positive integer is returned.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the integer, rounded according to the current rounding mode.
+
+--*/
+
+{
+
+    SHORT Exponent;
+    FLOAT_PARTS Parts;
+    SHORT ShiftCount;
+    CHAR Sign;
+    ULONG Significand;
+    ULONGLONG Significand64;
+    ULONGLONG Significand64Extra;
+
+    Parts.Float = Float;
+    Significand = FLOAT_GET_SIGNIFICAND(Parts);
+    Exponent = FLOAT_GET_EXPONENT(Parts);
+    Sign = FLOAT_GET_SIGN(Parts);
+    ShiftCount = 0xBE - Exponent;
+    if (ShiftCount < 0) {
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        if ((Sign == 0) ||
+            ((Exponent == FLOAT_NAN_EXPONENT) && (Significand != 0))) {
+
+            return MAX_LONGLONG;
+        }
+
+        return MIN_LONGLONG;
+    }
+
+    if (Exponent != 0) {
+        Significand |= 1UL << FLOAT_EXPONENT_SHIFT;
+    }
+
+    Significand64 = Significand;
+    Significand64 <<= 40;
+    RtlpShift64ExtraRightJamming(Significand64,
+                                 0,
+                                 ShiftCount,
+                                 &Significand64,
+                                 &Significand64Extra);
+
+    return RtlpRoundAndPack64(Sign, Significand64, Significand64Extra);
+}
+
+RTL_API
+LONGLONG
+RtlFloatConvertToInteger64RoundToZero (
+    float Float
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a signed 64 bit integer. If the
+    value is NaN, then the largest positive integer is returned. This routine
+    always rounds towards zero.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the integer, rounded towards zero.
+
+--*/
+
+{
+
+    SHORT Exponent;
+    FLOAT_PARTS Parts;
+    LONGLONG Result;
+    SHORT ShiftCount;
+    CHAR Sign;
+    ULONG Significand;
+    ULONGLONG Significand64;
+
+    Parts.Float = Float;
+    Significand = FLOAT_GET_SIGNIFICAND(Parts);
+    Exponent = FLOAT_GET_EXPONENT(Parts);
+    Sign = FLOAT_GET_SIGN(Parts);
+    ShiftCount = Exponent - 0xBE;
+    if (ShiftCount >= 0) {
+        if (Parts.Ulong != 0xDF000000) {
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+            if ((Sign == 0) ||
+                ((Exponent == FLOAT_NAN_EXPONENT) && (Significand != 0))) {
+
+                return MAX_LONGLONG;
+            }
+        }
+
+        return MIN_LONGLONG;
+    }
+
+    if (Exponent < FLOAT_EXPONENT_BIAS) {
+        if ((Exponent != 0) || (Significand != 0)) {
+            RtlSoftFloatExceptionFlags |= SOFT_FLOAT_INEXACT;
+        }
+
+        return 0;
+    }
+
+    Significand64 = Significand | (1UL << FLOAT_EXPONENT_SHIFT);
+    Significand64 <<= 40;
+    Result = Significand64 >> -ShiftCount;
+    if (((ULONGLONG)(Significand64 << (ShiftCount & 63))) != 0) {
+        RtlSoftFloatExceptionFlags |= SOFT_FLOAT_INEXACT;
+    }
+
+    if (Sign != 0) {
+        Result = -Result;
+    }
+
+    return Result;
+}
+
+RTL_API
 double
 RtlDoubleConvertFromInteger32 (
     LONG Integer
@@ -525,7 +982,7 @@ Return Value:
     Exponent = DOUBLE_GET_EXPONENT(Parts);
     Sign = DOUBLE_GET_SIGN(Parts);
     if (Exponent != 0) {
-        Significand |= 1ULL << DOUBLE_EXPONENT_SHIFT;;
+        Significand |= 1ULL << DOUBLE_EXPONENT_SHIFT;
     }
 
     ShiftCount = Exponent - 0x433;
@@ -593,6 +1050,171 @@ Return Value:
 
     RtlSoftFloatExceptionFlags |= Flags;
     return;
+}
+
+float
+RtlpRoundAndPackFloat (
+    CHAR SignBit,
+    SHORT Exponent,
+    ULONG Significand
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes a sign, exponent, and significand and creates the
+    proper rounded floating point value from that input. Overflow and
+    underflow can be raised here.
+
+Arguments:
+
+    SignBit - Supplies a non-zero value if the value should be negated before
+        being converted.
+
+    Exponent - Supplies the exponent for the value.
+
+    Significand - Supplies the significand with its binary point between bits
+        30 and 29, which is 7 bits to the left of its usual location. The
+        shifted exponent must be normalized or smaller. If the significand is
+        not normalized, the exponent must be 0. In that case, the result
+        returned is a subnormal number, and it must not require rounding. In
+        the normal case wehre the significand is normalized, the exponent must
+        be one less than the true floating point exponent.
+
+Return Value:
+
+    Returns the float representation of the given components.
+
+--*/
+
+{
+
+    BOOL IsTiny;
+    FLOAT_PARTS Result;
+    CHAR RoundBits;
+    CHAR RoundIncrement;
+    SOFT_FLOAT_ROUNDING_MODE RoundingMode;
+    BOOL RoundNearestEven;
+
+    RoundingMode = RtlRoundingMode;
+    RoundNearestEven = FALSE;
+    if (RoundingMode == SoftFloatRoundNearestEven) {
+        RoundNearestEven = TRUE;
+    }
+
+    RoundIncrement = 0x40;
+    if (RoundNearestEven == FALSE) {
+        if (RoundingMode == SoftFloatRoundToZero) {
+            RoundIncrement = 0;
+
+        } else {
+            RoundIncrement = 0x7F;
+            if (SignBit != 0) {
+                if (RoundingMode == SoftFloatRoundUp) {
+                    RoundIncrement = 0;
+                }
+
+            } else {
+                if (RoundingMode == SoftFloatRoundDown) {
+                    RoundIncrement = 0;
+                }
+            }
+        }
+    }
+
+    RoundBits = Significand & 0x7F;
+    if ((USHORT)Exponent >= 0xFD) {
+        if ((Exponent > 0xFD) ||
+            ((Exponent == 0xFD) &&
+             ((LONG)(Significand + RoundIncrement) < 0))) {
+
+            RtlpSoftFloatRaise(SOFT_FLOAT_OVERFLOW | SOFT_FLOAT_INEXACT);
+            Result.Ulong = FLOAT_PACK(SignBit, 0xFF, 0);
+            if (RoundIncrement == 0) {
+                Result.Ulong -= 1;
+            }
+
+            return Result.Float;
+        }
+
+        if (Exponent < 0) {
+            IsTiny = (RtlTininessDetection ==
+                      SoftFloatTininessBeforeRounding) ||
+                     (Exponent < -1) ||
+                     (Significand + RoundIncrement < 0x80000000);
+
+            RtlpShift32RightJamming(Significand, -Exponent, &Significand);
+            Exponent = 0;
+            RoundBits = Significand & 0x7F;
+            if ((IsTiny != FALSE) && (RoundBits != 0)) {
+                RtlpSoftFloatRaise(SOFT_FLOAT_UNDERFLOW);
+            }
+        }
+    }
+
+    if (RoundBits != 0) {
+        RtlSoftFloatExceptionFlags |= SOFT_FLOAT_INEXACT;
+    }
+
+    Significand = (Significand + RoundIncrement ) >> 7;
+    if (((RoundBits ^ 0x40) == 0) && (RoundNearestEven != FALSE)) {
+        Significand &= ~0x1;
+    }
+
+    if (Significand == 0) {
+        Exponent = 0;
+    }
+
+    Result.Ulong = FLOAT_PACK(SignBit, Exponent, Significand);
+    return Result.Float;
+}
+
+float
+RtlpNormalizeRoundAndPackFloat (
+    CHAR SignBit,
+    SHORT Exponent,
+    ULONG Significand
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes a sign, exponent, and significand and creates the
+    proper rounded single floating point value from that input. Overflow and
+    underflow can be raised here. This routine is very similar to the "round
+    and pack float" routine except that the significand does not have to be
+    normalized. Bit 31 of the significand must be zero, and the exponent must
+    be one less than the true floating point exponent.
+
+Arguments:
+
+    SignBit - Supplies a non-zero value if the value should be negated before
+        being converted.
+
+    Exponent - Supplies the exponent for the value.
+
+    Significand - Supplies the significand with its binary point between bits
+        30 and 29, which is 7 bits to the left of its usual location.
+
+Return Value:
+
+    Returns the float representation of the given components.
+
+--*/
+
+{
+
+    double Result;
+    INT ShiftCount;
+
+    ShiftCount = RtlCountLeadingZeros32(Significand) - 1;
+    Result = RtlpRoundAndPackFloat(SignBit,
+                                   Exponent - ShiftCount,
+                                   Significand << ShiftCount);
+
+    return Result;
 }
 
 double
@@ -755,6 +1377,57 @@ Return Value:
                                     Significand << ShiftCount);
 
     return Result;
+}
+
+VOID
+RtlpShift32RightJamming (
+    ULONG Value,
+    SHORT Count,
+    PULONG Result
+    )
+
+/*++
+
+Routine Description:
+
+    This routine shifts the given value right by the requested number of bits.
+    If any bits are shifted off the right, the least significant bit is set.
+    The imagery is that the bits get "jammed" on the end as they try to fall
+    off.
+
+Arguments:
+
+    Value - Supplies the value to shift.
+
+    Count - Supplies the number of bits to shift by.
+
+    Result - Supplies a pointer where the result will be stored.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG ShiftedValue;
+
+    if (Count == 0) {
+        ShiftedValue = Value;
+
+    } else if (Count < 32) {
+        ShiftedValue = (Value >> Count) | ((Value << ((-Count) & 31)) != 0);
+
+    } else {
+        ShiftedValue = 0;
+        if (Value != 0) {
+            ShiftedValue = 1;
+        }
+    }
+
+    *Result = ShiftedValue;
+    return;
 }
 
 VOID
@@ -1097,4 +1770,3 @@ Return Value:
     *ResultHigh = ShiftedValueHigh;
     return;
 }
-

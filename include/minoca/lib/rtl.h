@@ -382,6 +382,7 @@ Author:
 #define FLOAT_EXPONENT_SHIFT 23
 #define FLOAT_EXPONENT_BIAS 0x7F
 #define FLOAT_ONE_WORD 0x3F800000
+#define FLOAT_TRUNCATE_VALUE_MASK 0xFFFFF000
 
 //
 // Define some constants used for manipulating double floating point types.
@@ -3653,6 +3654,557 @@ Return Value:
 
 RTL_API
 BOOL
+RtlFloatIsNan (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is Not a Number.
+
+Arguments:
+
+    Value - Supplies the floating point value to query.
+
+Return Value:
+
+    TRUE if the given value is Not a Number.
+
+    FALSE otherwise.
+
+--*/
+
+RTL_API
+double
+RtlFloatConvertToDouble (
+    float Float
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a double.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the double equivalent.
+
+--*/
+
+RTL_API
+float
+RtlFloatAdd (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds two floats together.
+
+Arguments:
+
+    Value1 - Supplies the first value.
+
+    Value2 - Supplies the second value.
+
+Return Value:
+
+    Returns the sum of the two values.
+
+--*/
+
+RTL_API
+float
+RtlFloatSubtract (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine subtracts two floats from each other.
+
+Arguments:
+
+    Value1 - Supplies the first value.
+
+    Value2 - Supplies the second value, the value to subtract.
+
+Return Value:
+
+    Returns the difference of the two values.
+
+--*/
+
+RTL_API
+float
+RtlFloatMultiply (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine multiplies two floats together.
+
+Arguments:
+
+    Value1 - Supplies the first value.
+
+    Value2 - Supplies the second value.
+
+Return Value:
+
+    Returns the product of the two values.
+
+--*/
+
+RTL_API
+float
+RtlFloatDivide (
+    float Dividend,
+    float Divisor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine divides one float into another.
+
+Arguments:
+
+    Dividend - Supplies the numerator.
+
+    Divisor - Supplies the denominator.
+
+Return Value:
+
+    Returns the quotient of the two values.
+
+--*/
+
+RTL_API
+float
+RtlFloatModulo (
+    float Dividend,
+    float Divisor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine divides one float into another, and returns the remainder.
+
+Arguments:
+
+    Dividend - Supplies the numerator.
+
+    Divisor - Supplies the denominator.
+
+Return Value:
+
+    Returns the modulo of the two values.
+
+--*/
+
+RTL_API
+float
+RtlFloatSquareRoot (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the square root of the given float.
+
+Arguments:
+
+    Value - Supplies the value to take the square root of.
+
+Return Value:
+
+    Returns the square root of the given value.
+
+--*/
+
+RTL_API
+BOOL
+RtlFloatIsEqual (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given floats are equal.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare.
+
+    Value2 - Supplies the second value to compare.
+
+Return Value:
+
+    TRUE if the values are equal.
+
+    FALSE if the values are not equal. Note that NaN is not equal to anything,
+    including itself.
+
+--*/
+
+RTL_API
+BOOL
+RtlFloatIsLessThanOrEqual (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is less than or equal to the
+    second value.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is less than or equal to the first.
+
+    FALSE if the first value is greater than the second.
+
+--*/
+
+RTL_API
+BOOL
+RtlFloatIsLessThan (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is strictly less than the
+    second value.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is strictly less than to the first.
+
+    FALSE if the first value is greater than or equal to the second.
+
+--*/
+
+RTL_API
+BOOL
+RtlFloatSignalingIsEqual (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given values are equal, generating an
+    invalid floating point exception if either is NaN.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is strictly less than to the first.
+
+    FALSE if the first value is greater than or equal to the second.
+
+--*/
+
+RTL_API
+BOOL
+RtlFloatIsLessThanOrEqualQuiet (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is less than or equal to the
+    second value. Quiet NaNs do not generate floating point exceptions.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is less than or equal to the first.
+
+    FALSE if the first value is greater than the second.
+
+--*/
+
+RTL_API
+BOOL
+RtlFloatIsLessThanQuiet (
+    float Value1,
+    float Value2
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is strictly less than the
+    second value. Quiet NaNs do not cause float point exceptions to be raised.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is strictly less than to the first.
+
+    FALSE if the first value is greater than or equal to the second.
+
+--*/
+
+RTL_API
+float
+RtlFloatConvertFromInteger32 (
+    LONG Integer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given signed 32-bit integer into a float.
+
+Arguments:
+
+    Integer - Supplies the integer to convert to a float.
+
+Return Value:
+
+    Returns the float equivalent to the given integer.
+
+--*/
+
+RTL_API
+float
+RtlFloatConvertFromUnsignedInteger32 (
+    ULONG Integer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given unsigned 32-bit integer into a float.
+
+Arguments:
+
+    Integer - Supplies the integer to convert to a float.
+
+Return Value:
+
+    Returns the float equivalent to the given integer.
+
+--*/
+
+RTL_API
+float
+RtlFloatConvertFromInteger64 (
+    LONGLONG Integer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given signed 64-bit integer into a float.
+
+Arguments:
+
+    Integer - Supplies the integer to convert to a float.
+
+Return Value:
+
+    Returns the float equivalent to the given integer.
+
+--*/
+
+RTL_API
+float
+RtlFloatConvertFromUnsignedInteger64 (
+    ULONGLONG Integer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given unsigned 64-bit integer into a float.
+
+Arguments:
+
+    Integer - Supplies the unsigned integer to convert to a float.
+
+Return Value:
+
+    Returns the float equivalent to the given integer.
+
+--*/
+
+RTL_API
+LONG
+RtlFloatConvertToInteger32 (
+    float Float
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a signed 32 bit integer.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the integer, rounded according to the current rounding mode.
+
+--*/
+
+RTL_API
+LONG
+RtlFloatConvertToInteger32RoundToZero (
+    float Float
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a signed 32 bit integer. It
+    always rounds towards zero.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the integer, rounded towards zero.
+
+--*/
+
+RTL_API
+LONGLONG
+RtlFloatConvertToInteger64 (
+    float Float
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a signed 64 bit integer. If the
+    value is NaN, then the largest positive integer is returned.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the integer, rounded according to the current rounding mode.
+
+--*/
+
+RTL_API
+LONGLONG
+RtlFloatConvertToInteger64RoundToZero (
+    float Float
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a signed 64 bit integer. If the
+    value is NaN, then the largest positive integer is returned. This routine
+    always rounds towards zero.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the integer, rounded towards zero.
+
+--*/
+
+RTL_API
+BOOL
 RtlDoubleIsNan (
     double Value
     );
@@ -4200,28 +4752,6 @@ Return Value:
     TRUE if the first value is strictly less than to the first.
 
     FALSE if the first value is greater than or equal to the second.
-
---*/
-
-RTL_API
-double
-RtlFloatConvertToDouble (
-    float Float
-    );
-
-/*++
-
-Routine Description:
-
-    This routine converts the given float into a double.
-
-Arguments:
-
-    Float - Supplies the float to convert.
-
-Return Value:
-
-    Returns the double equivalent.
 
 --*/
 

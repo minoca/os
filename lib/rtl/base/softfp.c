@@ -51,6 +51,20 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+float
+RtlpFloatAdd (
+    FLOAT_PARTS Value1,
+    FLOAT_PARTS Value2,
+    CHAR Sign
+    );
+
+float
+RtlpFloatSubtract (
+    FLOAT_PARTS Value1,
+    FLOAT_PARTS Value2,
+    CHAR Sign
+    );
+
 double
 RtlpDoubleAdd (
     DOUBLE_PARTS Value1,
@@ -106,17 +120,16 @@ RtlpSubtract128 (
     PULONGLONG ResultLow
     );
 
+float
+RtlpFloatPropagateNan (
+    FLOAT_PARTS Value1,
+    FLOAT_PARTS Value2
+    );
+
 double
 RtlpDoublePropagateNan (
     DOUBLE_PARTS Value1,
     DOUBLE_PARTS Value2
-    );
-
-float
-RtlpRoundAndPackFloat (
-    CHAR SignBit,
-    SHORT Exponent,
-    ULONG Significand
     );
 
 VOID
@@ -130,13 +143,6 @@ VOID
 RtlpNormalizeFloatSubnormal (
     ULONG Significand,
     PSHORT Exponent,
-    PULONG Result
-    );
-
-VOID
-RtlpShift32RightJamming (
-    ULONG Value,
-    SHORT Count,
     PULONG Result
     );
 
@@ -181,6 +187,1152 @@ const USHORT RtlSquareRootEvenAdjustments[] = {
 //
 // ------------------------------------------------------------------ Functions
 //
+
+RTL_API
+BOOL
+RtlFloatIsNan (
+    float Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is Not a Number.
+
+Arguments:
+
+    Value - Supplies the floating point value to query.
+
+Return Value:
+
+    TRUE if the given value is Not a Number.
+
+    FALSE otherwise.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts;
+
+    Parts.Float = Value;
+    if (FLOAT_GET_EXPONENT(Parts) == FLOAT_NAN_EXPONENT) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+RTL_API
+double
+RtlFloatConvertToDouble (
+    float Float
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given float into a double.
+
+Arguments:
+
+    Float - Supplies the float to convert.
+
+Return Value:
+
+    Returns the double equivalent.
+
+--*/
+
+{
+
+    DOUBLE_PARTS DoubleParts;
+    SHORT Exponent;
+    FLOAT_PARTS FloatParts;
+    CHAR Sign;
+    ULONG Significand;
+
+    FloatParts.Float = Float;
+    Significand = FLOAT_GET_SIGNIFICAND(FloatParts);
+    Exponent = FLOAT_GET_EXPONENT(FloatParts);
+    Sign = FLOAT_GET_SIGN(FloatParts);
+    if (Exponent == FLOAT_NAN_EXPONENT) {
+        if (Significand != 0) {
+            return RtlpCommonNanToDouble(RtlpFloatToCommonNan(FloatParts));
+        }
+
+        DoubleParts.Ulonglong = DOUBLE_PACK(Sign, DOUBLE_NAN_EXPONENT, 0);
+        return DoubleParts.Double;
+    }
+
+    if (Exponent == 0) {
+        if (Significand == 0) {
+            DoubleParts.Ulonglong = DOUBLE_PACK(Sign, 0, 0);
+            return DoubleParts.Double;
+        }
+
+        RtlpNormalizeFloatSubnormal(Significand,
+                                    &Exponent,
+                                    &Significand);
+
+        Exponent -= 1;
+    }
+
+    DoubleParts.Ulonglong = DOUBLE_PACK(Sign,
+                                        Exponent + 0x380,
+                                        (ULONGLONG)Significand << 29);
+
+    return DoubleParts.Double;
+}
+
+RTL_API
+float
+RtlFloatAdd (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds two floats together.
+
+Arguments:
+
+    Value1 - Supplies the first value.
+
+    Value2 - Supplies the second value.
+
+Return Value:
+
+    Returns the sum of the two values.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+    CHAR Sign1;
+    CHAR Sign2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    Sign1 = FLOAT_GET_SIGN(Parts1);
+    Sign2 = FLOAT_GET_SIGN(Parts2);
+    if (Sign1 == Sign2) {
+        return RtlpFloatAdd(Parts1, Parts2, Sign1);
+    }
+
+    return RtlpFloatSubtract(Parts1, Parts2, Sign1);
+}
+
+RTL_API
+float
+RtlFloatSubtract (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine subtracts two floats from each other.
+
+Arguments:
+
+    Value1 - Supplies the first value.
+
+    Value2 - Supplies the second value, the value to subtract.
+
+Return Value:
+
+    Returns the difference of the two values.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+    CHAR Sign1;
+    CHAR Sign2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    Sign1 = FLOAT_GET_SIGN(Parts1);
+    Sign2 = FLOAT_GET_SIGN(Parts2);
+    if (Sign1 == Sign2) {
+        return RtlpFloatSubtract(Parts1, Parts2, Sign1);
+    }
+
+    return RtlpFloatAdd(Parts1, Parts2, Sign1);
+}
+
+RTL_API
+float
+RtlFloatMultiply (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine multiplies two floats together.
+
+Arguments:
+
+    Value1 - Supplies the first value.
+
+    Value2 - Supplies the second value.
+
+Return Value:
+
+    Returns the product of the two values.
+
+--*/
+
+{
+
+    SHORT Exponent1;
+    SHORT Exponent2;
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+    FLOAT_PARTS Result;
+    SHORT ResultExponent;
+    BOOL ResultSign;
+    ULONG ResultSignificand;
+    ULONGLONG ResultSignificand64;
+    BOOL Sign1;
+    BOOL Sign2;
+    ULONG Significand1;
+    ULONG Significand2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    Significand1 = FLOAT_GET_SIGNIFICAND(Parts1);
+    Exponent1 = FLOAT_GET_EXPONENT(Parts1);
+    Sign1 = FLOAT_GET_SIGN(Parts1);
+    Significand2 = FLOAT_GET_SIGNIFICAND(Parts2);
+    Exponent2 = FLOAT_GET_EXPONENT(Parts2);
+    Sign2 = FLOAT_GET_SIGN(Parts2);
+    ResultSign = Sign1 ^ Sign2;
+    if (Exponent1 == FLOAT_NAN_EXPONENT) {
+        if ((Significand1 != 0) ||
+            ((Exponent2 == FLOAT_NAN_EXPONENT) && (Significand2 != 0))) {
+
+            return RtlpFloatPropagateNan(Parts1, Parts2);
+        }
+
+        if ((Exponent2 | Significand2) == 0) {
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+            Result.Ulong = FLOAT_DEFAULT_NAN;
+            return Result.Float;
+        }
+
+        Result.Ulong = FLOAT_PACK(ResultSign, FLOAT_NAN_EXPONENT, 0);
+        return Result.Float;
+    }
+
+    if (Exponent2 == FLOAT_NAN_EXPONENT) {
+        if (Significand2 != 0) {
+            return RtlpFloatPropagateNan(Parts1, Parts2);
+        }
+
+        if ((Exponent1 | Significand1) == 0) {
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+            Result.Ulong = FLOAT_DEFAULT_NAN;
+            return Result.Float;
+        }
+
+        Result.Ulong = FLOAT_PACK(ResultSign, FLOAT_NAN_EXPONENT, 0);
+        return Result.Float;
+    }
+
+    if (Exponent1 == 0) {
+        if (Significand1 == 0) {
+            Result.Ulong = FLOAT_PACK(ResultSign, 0, 0);
+            return Result.Float;
+        }
+
+        RtlpNormalizeFloatSubnormal(Significand1, &Exponent1, &Significand1);
+    }
+
+    if (Exponent2 == 0) {
+        if (Significand2 == 0) {
+            Result.Ulong = FLOAT_PACK(ResultSign, 0, 0);
+            return Result.Float;
+        }
+
+        RtlpNormalizeFloatSubnormal(Significand2, &Exponent2, &Significand2);
+    }
+
+    ResultExponent = Exponent1 + Exponent2 - FLOAT_EXPONENT_BIAS;
+    Significand1 = (Significand1 | 0x00800000UL) << 7;
+    Significand2 = (Significand2 | 0x00800000UL) << 8;
+    RtlpShift64RightJamming((ULONGLONG)Significand1 * Significand2,
+                            32,
+                            &ResultSignificand64);
+
+    ResultSignificand = (ULONG)ResultSignificand64;
+    if ((LONG)(ResultSignificand << 1) >= 0) {
+        ResultSignificand <<= 1;
+        ResultExponent -= 1;
+    }
+
+    Result.Float = RtlpRoundAndPackFloat(ResultSign,
+                                         ResultExponent,
+                                         ResultSignificand);
+
+    return Result.Float;
+}
+
+RTL_API
+float
+RtlFloatDivide (
+    float Dividend,
+    float Divisor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine divides one float into another.
+
+Arguments:
+
+    Dividend - Supplies the numerator.
+
+    Divisor - Supplies the denominator.
+
+Return Value:
+
+    Returns the quotient of the two values.
+
+--*/
+
+{
+
+    SHORT DividendExponent;
+    FLOAT_PARTS DividendParts;
+    BOOL DividendSign;
+    ULONG DividendSignificand;
+    SHORT DivisorExponent;
+    FLOAT_PARTS DivisorParts;
+    BOOL DivisorSign;
+    ULONG DivisorSignificand;
+    FLOAT_PARTS Result;
+    SHORT ResultExponent;
+    BOOL ResultSign;
+    ULONG ResultSignificand;
+
+    DividendParts.Float = Dividend;
+    DivisorParts.Float = Divisor;
+    DividendSignificand = FLOAT_GET_SIGNIFICAND(DividendParts);
+    DividendExponent = FLOAT_GET_EXPONENT(DividendParts);
+    DividendSign = FLOAT_GET_SIGN(DividendParts);
+    DivisorSignificand = FLOAT_GET_SIGNIFICAND(DivisorParts);
+    DivisorExponent = FLOAT_GET_EXPONENT(DivisorParts);
+    DivisorSign = FLOAT_GET_SIGN(DivisorParts);
+    ResultSign = DividendSign ^ DivisorSign;
+    if (DividendExponent == FLOAT_NAN_EXPONENT) {
+        if (DividendSignificand != 0) {
+            return RtlpFloatPropagateNan(DividendParts, DivisorParts);
+        }
+
+        if (DivisorExponent == FLOAT_NAN_EXPONENT) {
+            if (DivisorSignificand != 0) {
+                return RtlpFloatPropagateNan(DividendParts, DivisorParts);
+            }
+
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+            Result.Ulong = FLOAT_DEFAULT_NAN;
+            return Result.Float;
+        }
+
+        Result.Ulong = FLOAT_PACK(ResultSign, FLOAT_NAN_EXPONENT, 0);
+        return Result.Float;
+    }
+
+    if (DivisorExponent == FLOAT_NAN_EXPONENT) {
+        if (DivisorSignificand != 0) {
+            return RtlpFloatPropagateNan(DividendParts, DivisorParts);
+        }
+
+        Result.Ulong = FLOAT_PACK(ResultSign, 0, 0);
+        return Result.Float;
+    }
+
+    if (DivisorExponent == 0) {
+        if (DivisorSignificand == 0) {
+            if ((DividendExponent | DividendSignificand) == 0) {
+                RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+                Result.Ulong = FLOAT_DEFAULT_NAN;
+                return Result.Float;
+            }
+
+            RtlpSoftFloatRaise(SOFT_FLOAT_DIVIDE_BY_ZERO);
+            Result.Ulong = FLOAT_PACK(ResultSign, FLOAT_NAN_EXPONENT, 0);
+            return Result.Float;
+        }
+
+        RtlpNormalizeFloatSubnormal(DivisorSignificand,
+                                    &DivisorExponent,
+                                    &DivisorSignificand);
+    }
+
+    if (DividendExponent == 0) {
+        if (DividendSignificand == 0) {
+            Result.Ulong = FLOAT_PACK(ResultSign, 0, 0);
+            return Result.Float;
+        }
+
+        RtlpNormalizeFloatSubnormal(DividendSignificand,
+                                    &DividendExponent,
+                                    &DividendSignificand);
+    }
+
+    ResultExponent = DividendExponent - DivisorExponent + 0x7D;
+    DividendSignificand = (DividendSignificand | 0x00800000UL) << 7;
+    DivisorSignificand = (DivisorSignificand | 0x00800000UL) << 8;
+    if (DivisorSignificand <= (DividendSignificand + DividendSignificand)) {
+        DividendSignificand >>= 1;
+        ResultExponent += 1;
+    }
+
+    ResultSignificand = (((ULONGLONG)DividendSignificand) << 32) /
+                        DivisorSignificand;
+
+    if ((ResultSignificand & 0x3F) == 2) {
+        if (((ULONGLONG)DivisorSignificand * ResultSignificand) !=
+            (((ULONGLONG)DividendSignificand) << 32)) {
+
+            ResultSignificand |= 0x1;
+        }
+    }
+
+    Result.Float = RtlpRoundAndPackFloat(ResultSign,
+                                         ResultExponent,
+                                         ResultSignificand);
+
+    return Result.Float;
+}
+
+RTL_API
+float
+RtlFloatModulo (
+    float Dividend,
+    float Divisor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine divides one float into another, and returns the remainder.
+
+Arguments:
+
+    Dividend - Supplies the numerator.
+
+    Divisor - Supplies the denominator.
+
+Return Value:
+
+    Returns the modulo of the two values.
+
+--*/
+
+{
+
+    ULONG AlternateDividendSignificand;
+    SHORT DividendExponent;
+    FLOAT_PARTS DividendParts;
+    CHAR DividendSign;
+    ULONG DividendSignificand;
+    ULONGLONG DividendSignificand64;
+    SHORT DivisorExponent;
+    FLOAT_PARTS DivisorParts;
+    ULONG DivisorSignificand;
+    ULONGLONG DivisorSignificand64;
+    SHORT ExponentDifference;
+    ULONG Quotient;
+    ULONGLONG Quotient64;
+    FLOAT_PARTS Result;
+    CHAR ResultSign;
+    LONG SignificandMean;
+
+    DividendParts.Float = Dividend;
+    DivisorParts.Float = Divisor;
+    DividendSignificand = FLOAT_GET_SIGNIFICAND(DividendParts);
+    DividendExponent = FLOAT_GET_EXPONENT(DividendParts);
+    DividendSign = FLOAT_GET_SIGN(DividendParts);
+    DivisorSignificand = FLOAT_GET_SIGNIFICAND(DivisorParts);
+    DivisorExponent = FLOAT_GET_EXPONENT(DivisorParts);
+    if (DividendExponent == FLOAT_NAN_EXPONENT) {
+        if ((DividendSignificand != 0) ||
+            ((DivisorExponent == FLOAT_NAN_EXPONENT) &&
+             (DivisorSignificand != 0))) {
+
+            return RtlpFloatPropagateNan(DividendParts, DivisorParts);
+        }
+
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        Result.Ulong = FLOAT_DEFAULT_NAN;
+        return Result.Float;
+    }
+
+    if (DivisorExponent == FLOAT_NAN_EXPONENT) {
+        if (DivisorSignificand != 0) {
+            return RtlpFloatPropagateNan(DividendParts, DivisorParts);
+        }
+
+        return DividendParts.Float;
+    }
+
+    if (DivisorExponent == 0) {
+        if (DivisorSignificand == 0) {
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+            Result.Ulong = FLOAT_DEFAULT_NAN;
+            return Result.Float;
+        }
+
+        RtlpNormalizeFloatSubnormal(DivisorSignificand,
+                                    &DivisorExponent,
+                                    &DivisorSignificand);
+    }
+
+    if (DividendExponent == 0) {
+        if (DividendSignificand == 0) {
+            return DividendParts.Float;
+        }
+
+        RtlpNormalizeFloatSubnormal(DividendSignificand,
+                                    &DividendExponent,
+                                    &DividendSignificand);
+    }
+
+    ExponentDifference = DividendExponent - DivisorExponent;
+    DividendSignificand |= 1UL << FLOAT_EXPONENT_SHIFT;
+    DivisorSignificand |= 1UL << FLOAT_EXPONENT_SHIFT;
+    if (ExponentDifference < 32) {
+        DividendSignificand <<= 8;
+        DivisorSignificand <<= 8;
+        if (ExponentDifference < 0) {
+            if (ExponentDifference < -1) {
+                return DividendParts.Float;
+            }
+
+            DividendSignificand >>= 1;
+        }
+
+        Quotient = 0;
+        if (DivisorSignificand <= DividendSignificand) {
+            Quotient = 1;
+        }
+
+        if (Quotient != 0) {
+            DividendSignificand -= DivisorSignificand;
+        }
+
+        if (ExponentDifference > 0) {
+            Quotient = (((ULONGLONG)DividendSignificand) << 32) /
+                       DivisorSignificand;
+
+            Quotient >>= 32 - ExponentDifference;
+            DivisorSignificand >>= 2;
+            DividendSignificand = ((DividendSignificand >> 1) <<
+                                   (ExponentDifference - 1)) -
+                                  DivisorSignificand * Quotient;
+
+        } else {
+            DividendSignificand >>= 2;
+            DivisorSignificand >>= 2;
+        }
+
+    } else {
+        if (DivisorSignificand <= DividendSignificand) {
+            DividendSignificand -= DivisorSignificand;
+        }
+
+        DividendSignificand64 = ((ULONGLONG)DividendSignificand) << 40;
+        DivisorSignificand64 = ((ULONGLONG)DivisorSignificand) << 40;
+        ExponentDifference -= 64;
+        while (ExponentDifference > 0) {
+            Quotient64 = RtlpEstimateDivide128To64(DividendSignificand64,
+                                                   0,
+                                                   DivisorSignificand64);
+
+            if (Quotient64 > 2) {
+                Quotient64 -= 2;
+
+            } else {
+                Quotient64 = 0;
+            }
+
+            DividendSignificand64 = -((DivisorSignificand & Quotient64) << 38);
+            ExponentDifference -= 62;
+        }
+
+        ExponentDifference += 64;
+        Quotient64 = RtlpEstimateDivide128To64(DividendSignificand64,
+                                               0,
+                                               DivisorSignificand64);
+
+        if (Quotient64 > 2) {
+            Quotient64 -= 2;
+
+        } else {
+            Quotient64 = 0;
+        }
+
+        Quotient = Quotient64 >> (64 - ExponentDifference);
+        DivisorSignificand <<= 6;
+        DividendSignificand = ((DividendSignificand64 >> 33) <<
+                               (ExponentDifference - 1)) -
+                              DivisorSignificand * Quotient;
+    }
+
+    do {
+        AlternateDividendSignificand = DividendSignificand;
+        Quotient += 1;
+        DividendSignificand -= DivisorSignificand;
+
+    } while ((LONG)DividendSignificand >= 0);
+
+    SignificandMean = DividendSignificand + AlternateDividendSignificand;
+    if ((SignificandMean < 0 ) ||
+        ((SignificandMean == 0) && ((Quotient & 0x1) != 0))) {
+
+        DividendSignificand = AlternateDividendSignificand;
+    }
+
+    ResultSign = 0;
+    if ((LONG)DividendSignificand < 0) {
+        ResultSign = 1;
+    }
+
+    if (ResultSign != 0) {
+        DividendSignificand = -DividendSignificand;
+    }
+
+    Result.Float = RtlpNormalizeRoundAndPackFloat(DividendSign ^ ResultSign,
+                                                  DivisorExponent,
+                                                  DividendSignificand);
+
+    return Result.Float;
+}
+
+RTL_API
+float
+RtlFloatSquareRoot (
+    float Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the square root of the given float.
+
+Arguments:
+
+    Value - Supplies the value to take the square root of.
+
+Return Value:
+
+    Returns the square root of the given value.
+
+--*/
+
+{
+
+    ULONGLONG Remainder;
+    FLOAT_PARTS Result;
+    SHORT ResultExponent;
+    ULONG ResultSignificand;
+    ULONGLONG Term;
+    SHORT ValueExponent;
+    FLOAT_PARTS ValueParts;
+    BOOL ValueSign;
+    ULONG ValueSignificand;
+
+    ValueParts.Float = Value;
+    ValueSignificand = FLOAT_GET_SIGNIFICAND(ValueParts);
+    ValueExponent = FLOAT_GET_EXPONENT(ValueParts);
+    ValueSign = FLOAT_GET_SIGN(ValueParts);
+    if (ValueExponent == FLOAT_NAN_EXPONENT) {
+        if (ValueSignificand != 0) {
+            return RtlpFloatPropagateNan(ValueParts, ValueParts);
+        }
+
+        if (ValueSign == 0) {
+            return ValueParts.Float;
+        }
+
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        Result.Ulong = FLOAT_DEFAULT_NAN;
+        return Result.Float;
+    }
+
+    if (ValueSign != 0) {
+        if ((ValueExponent | ValueSignificand) == 0) {
+            return ValueParts.Float;
+        }
+
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        Result.Ulong = FLOAT_DEFAULT_NAN;
+        return Result.Float;
+    }
+
+    if (ValueExponent == 0) {
+        if (ValueSignificand == 0) {
+            return 0;
+        }
+
+        RtlpNormalizeFloatSubnormal(ValueSignificand,
+                                    &ValueExponent,
+                                    &ValueSignificand);
+    }
+
+    ResultExponent = ((ValueExponent - FLOAT_EXPONENT_BIAS) >> 1) +
+                     (FLOAT_EXPONENT_BIAS - 1);
+
+    ValueSignificand = (ValueSignificand | (1UL << FLOAT_EXPONENT_SHIFT)) << 8;
+    ResultSignificand = RtlpEstimateSquareRoot32(ValueExponent,
+                                                 ValueSignificand);
+
+    ResultSignificand += 2;
+    if ((ResultSignificand & 0x7F) <= 5) {
+        if (ResultSignificand < 2) {
+            ResultSignificand = (FLOAT_EXPONENT_MASK | FLOAT_VALUE_MASK);
+            goto FloatSquareRootEnd;
+        }
+
+        ValueSignificand >>= ValueExponent & 0x1;
+        Term = ((ULONGLONG)ResultSignificand) * ResultSignificand;
+        Remainder = ((ULONGLONG)ValueSignificand << 32) - Term;
+        while ((LONGLONG)Remainder < 0) {
+            ResultSignificand -= 1;
+            Remainder += (((ULONGLONG)ResultSignificand) << 1) | 0x1;
+        }
+
+        if (Remainder != 0) {
+            ResultSignificand |= 0x1;
+        }
+    }
+
+    RtlpShift32RightJamming(ResultSignificand, 1, &ResultSignificand);
+
+FloatSquareRootEnd:
+    return RtlpRoundAndPackFloat(0, ResultExponent, ResultSignificand);
+}
+
+RTL_API
+BOOL
+RtlFloatIsEqual (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given floats are equal.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare.
+
+    Value2 - Supplies the second value to compare.
+
+Return Value:
+
+    TRUE if the values are equal.
+
+    FALSE if the values are not equal. Note that NaN is not equal to anything,
+    including itself.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    if (((FLOAT_GET_EXPONENT(Parts1) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts1) != 0)) ||
+        ((FLOAT_GET_EXPONENT(Parts2) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts2) != 0))) {
+
+        if (FLOAT_IS_SIGNALING_NAN(Parts1) ||
+            FLOAT_IS_SIGNALING_NAN(Parts2)) {
+
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        }
+
+        return FALSE;
+    }
+
+    if ((Parts1.Ulong == Parts2.Ulong) ||
+        ((ULONG)((Parts1.Ulong | Parts2.Ulong) << 1) == 0)) {
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+RTL_API
+BOOL
+RtlFloatIsLessThanOrEqual (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is less than or equal to the
+    second value.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is less than or equal to the first.
+
+    FALSE if the first value is greater than the second.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+    CHAR Sign1;
+    CHAR Sign2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    if (((FLOAT_GET_EXPONENT(Parts1) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts1) != 0)) ||
+        ((FLOAT_GET_EXPONENT(Parts2) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts2) != 0))) {
+
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        return FALSE;
+    }
+
+    Sign1 = FLOAT_GET_SIGN(Parts1);
+    Sign2 = FLOAT_GET_SIGN(Parts2);
+    if (Sign1 != Sign2) {
+        if ((Sign1 != 0) ||
+            ((ULONG)((Parts1.Ulong | Parts2.Ulong) << 1) == 0)) {
+
+            return TRUE;
+        }
+
+        return FALSE;
+    }
+
+    if ((Parts1.Ulong == Parts2.Ulong) ||
+        (Sign1 ^ (Parts1.Ulong < Parts2.Ulong))) {
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+RTL_API
+BOOL
+RtlFloatIsLessThan (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is strictly less than the
+    second value.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is strictly less than to the first.
+
+    FALSE if the first value is greater than or equal to the second.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+    CHAR Sign1;
+    CHAR Sign2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    if (((FLOAT_GET_EXPONENT(Parts1) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts1) != 0)) ||
+        ((FLOAT_GET_EXPONENT(Parts2) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts2) != 0))) {
+
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        return FALSE;
+    }
+
+    Sign1 = FLOAT_GET_SIGN(Parts1);
+    Sign2 = FLOAT_GET_SIGN(Parts2);
+    if (Sign1 != Sign2) {
+        if ((Sign1 != 0) &&
+            ((ULONG)((Parts1.Ulong | Parts2.Ulong) << 1) != 0)) {
+
+            return TRUE;
+        }
+
+        return FALSE;
+    }
+
+    if ((Parts1.Ulong != Parts2.Ulong) &&
+        (Sign1 ^ (Parts1.Ulong < Parts2.Ulong))) {
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+RTL_API
+BOOL
+RtlFloatSignalingIsEqual (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given values are equal, generating an
+    invalid floating point exception if either is NaN.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is strictly less than to the first.
+
+    FALSE if the first value is greater than or equal to the second.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    if (((FLOAT_GET_EXPONENT(Parts1) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts1) != 0)) ||
+        ((FLOAT_GET_EXPONENT(Parts2) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts2) != 0))) {
+
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        return FALSE;
+    }
+
+    if ((Parts1.Ulong == Parts2.Ulong) ||
+        ((ULONG)((Parts1.Ulong | Parts2.Ulong) << 1) == 0)) {
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+RTL_API
+BOOL
+RtlFloatIsLessThanOrEqualQuiet (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is less than or equal to the
+    second value. Quiet NaNs do not generate floating point exceptions.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is less than or equal to the first.
+
+    FALSE if the first value is greater than the second.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+    CHAR Sign1;
+    CHAR Sign2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    if (((FLOAT_GET_EXPONENT(Parts1) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts1) != 0)) ||
+        ((FLOAT_GET_EXPONENT(Parts2) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts2) != 0))) {
+
+        if ((FLOAT_IS_SIGNALING_NAN(Parts1)) ||
+            (FLOAT_IS_SIGNALING_NAN(Parts2))) {
+
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        }
+
+        return FALSE;
+    }
+
+    Sign1 = FLOAT_GET_SIGN(Parts1);
+    Sign2 = FLOAT_GET_SIGN(Parts2);
+    if (Sign1 != Sign2) {
+        if ((Sign1 != 0) ||
+            ((ULONG)((Parts1.Ulong | Parts2.Ulong) << 1) == 0)) {
+
+            return TRUE;
+        }
+
+        return FALSE;
+    }
+
+    if ((Parts1.Ulong == Parts2.Ulong) ||
+        (Sign1 ^ (Parts1.Ulong < Parts2.Ulong))) {
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+RTL_API
+BOOL
+RtlFloatIsLessThanQuiet (
+    float Value1,
+    float Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given value is strictly less than the
+    second value. Quiet NaNs do not cause float point exceptions to be raised.
+
+Arguments:
+
+    Value1 - Supplies the first value to compare, the left hand side of the
+        comparison.
+
+    Value2 - Supplies the second value to compare, the right hand side of the
+        comparison.
+
+Return Value:
+
+    TRUE if the first value is strictly less than to the first.
+
+    FALSE if the first value is greater than or equal to the second.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts1;
+    FLOAT_PARTS Parts2;
+    CHAR Sign1;
+    CHAR Sign2;
+
+    Parts1.Float = Value1;
+    Parts2.Float = Value2;
+    if (((FLOAT_GET_EXPONENT(Parts1) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts1) != 0)) ||
+        ((FLOAT_GET_EXPONENT(Parts2) == FLOAT_NAN_EXPONENT) &&
+         (FLOAT_GET_SIGNIFICAND(Parts2) != 0))) {
+
+        if ((FLOAT_IS_SIGNALING_NAN(Parts1)) ||
+            (FLOAT_IS_SIGNALING_NAN(Parts2))) {
+
+            RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        }
+
+        return FALSE;
+    }
+
+    Sign1 = FLOAT_GET_SIGN(Parts1);
+    Sign2 = FLOAT_GET_SIGN(Parts2);
+    if (Sign1 != Sign2) {
+        if ((Sign1 != 0) &&
+            ((ULONG)((Parts1.Ulong | Parts2.Ulong) << 1) != 0)) {
+
+            return TRUE;
+        }
+
+        return FALSE;
+    }
+
+    if ((Parts1.Ulong != Parts2.Ulong) &&
+        (Sign1 ^ (Parts1.Ulong < Parts2.Ulong))) {
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
 
 RTL_API
 BOOL
@@ -1342,72 +2494,286 @@ Return Value:
     return FALSE;
 }
 
-RTL_API
-double
-RtlFloatConvertToDouble (
-    float Float
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+float
+RtlpFloatAdd (
+    FLOAT_PARTS Value1,
+    FLOAT_PARTS Value2,
+    CHAR Sign
     )
 
 /*++
 
 Routine Description:
 
-    This routine converts the given float into a double.
+    This routine adds the absolute values of two float together.
 
 Arguments:
 
-    Float - Supplies the float to convert.
+    Value1 - Supplies the first value.
+
+    Value2 - Supplies the second value to add.
+
+    Sign - Supplies 1 if the sum should be negated before being returned, or
+        0 if it should be left alone.
 
 Return Value:
 
-    Returns the double equivalent.
+    Returns the sum of the two absolute values.
 
 --*/
 
 {
 
-    DOUBLE_PARTS DoubleParts;
-    SHORT Exponent;
-    FLOAT_PARTS FloatParts;
-    CHAR Sign;
-    ULONG Significand;
+    SHORT Exponent1;
+    SHORT Exponent2;
+    SHORT ExponentDifference;
+    FLOAT_PARTS Result;
+    SHORT ResultExponent;
+    ULONG ResultSignificand;
+    ULONG Significand1;
+    ULONG Significand2;
 
-    FloatParts.Float = Float;
-    Significand = FLOAT_GET_SIGNIFICAND(FloatParts);
-    Exponent = FLOAT_GET_EXPONENT(FloatParts);
-    Sign = FLOAT_GET_SIGN(FloatParts);
-    if (Exponent == FLOAT_NAN_EXPONENT) {
-        if (Significand != 0) {
-            return RtlpCommonNanToDouble(RtlpFloatToCommonNan(FloatParts));
+    Significand1 = FLOAT_GET_SIGNIFICAND(Value1);
+    Exponent1 = FLOAT_GET_EXPONENT(Value1);
+    Significand2 = FLOAT_GET_SIGNIFICAND(Value2);
+    Exponent2 = FLOAT_GET_EXPONENT(Value2);
+    ExponentDifference = Exponent1 - Exponent2;
+    Significand1 <<= 6;
+    Significand2 <<= 6;
+    if (ExponentDifference > 0) {
+        if (Exponent1 == FLOAT_NAN_EXPONENT) {
+            if (Significand1 != 0) {
+                return RtlpFloatPropagateNan(Value1, Value2);
+            }
+
+            return Value1.Float;
         }
 
-        DoubleParts.Ulonglong = DOUBLE_PACK(Sign, DOUBLE_NAN_EXPONENT, 0);
-        return DoubleParts.Double;
-    }
+        if (Exponent2 == 0) {
+            ExponentDifference -= 1;
 
-    if (Exponent == 0) {
-        if (Significand == 0) {
-            DoubleParts.Ulonglong = DOUBLE_PACK(Sign, 0, 0);
-            return DoubleParts.Double;
+        } else {
+            Significand2 |= 0x20000000UL;
         }
 
-        RtlpNormalizeFloatSubnormal(Significand,
-                                    &Exponent,
-                                    &Significand);
+        RtlpShift32RightJamming(Significand2,
+                                ExponentDifference,
+                                &Significand2);
 
-        Exponent -= 1;
+        ResultExponent = Exponent1;
+
+    } else if (ExponentDifference < 0) {
+        if (Exponent2 == FLOAT_NAN_EXPONENT) {
+            if (Significand2 != 0) {
+                return RtlpFloatPropagateNan(Value1, Value2);
+            }
+
+            Result.Ulong = FLOAT_PACK(Sign, FLOAT_NAN_EXPONENT, 0);
+            return Result.Float;
+        }
+
+        if (Exponent1 == 0) {
+            ExponentDifference += 1;
+
+        } else {
+            Significand1 |= 0x20000000UL;
+        }
+
+        RtlpShift32RightJamming(Significand1,
+                                -ExponentDifference,
+                                &Significand1);
+
+        ResultExponent = Exponent2;
+
+    } else {
+        if (Exponent1 == FLOAT_NAN_EXPONENT) {
+            if ((Significand1 | Significand2) != 0) {
+                return RtlpFloatPropagateNan( Value1, Value2 );
+            }
+
+            return Value1.Float;
+        }
+
+        if (Exponent1 == 0) {
+            Result.Ulong = FLOAT_PACK(Sign,
+                                      0,
+                                      (Significand1 + Significand2) >> 6);
+
+            return Result.Float;
+        }
+
+        ResultSignificand = 0x40000000UL + Significand1 + Significand2;
+        ResultExponent = Exponent1;
+        goto FloatAddEnd;
     }
 
-    DoubleParts.Ulonglong = DOUBLE_PACK(Sign,
-                                        Exponent + 0x380,
-                                        (ULONGLONG)Significand << 29);
+    Significand1 |= 0x20000000UL;
+    ResultSignificand = (Significand1 + Significand2) << 1;
+    ResultExponent -= 1;
+    if ((LONG)ResultSignificand < 0 ) {
+        ResultSignificand = Significand1 + Significand2;
+        ResultExponent += 1;
+    }
 
-    return DoubleParts.Double;
+FloatAddEnd:
+    return RtlpRoundAndPackFloat(Sign, ResultExponent, ResultSignificand);
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
+float
+RtlpFloatSubtract (
+    FLOAT_PARTS Value1,
+    FLOAT_PARTS Value2,
+    CHAR Sign
+    )
+
+/*++
+
+Routine Description:
+
+    This routine subtracts the absolute values of two floats from each other.
+
+Arguments:
+
+    Value1 - Supplies the first value.
+
+    Value2 - Supplies the value to subtract.
+
+    Sign - Supplies 1 if the difference should be negated before being
+        returned, or 0 if it should be left alone.
+
+Return Value:
+
+    Returns the difference of the two absolute values.
+
+--*/
+
+{
+
+    SHORT Exponent1;
+    SHORT Exponent2;
+    SHORT ExponentDifference;
+    FLOAT_PARTS Result;
+    SHORT ResultExponent;
+    ULONG ResultSignificand;
+    ULONG Significand1;
+    ULONG Significand2;
+
+    Significand1 = FLOAT_GET_SIGNIFICAND(Value1);
+    Exponent1 = FLOAT_GET_EXPONENT(Value1);
+    Significand2 = FLOAT_GET_SIGNIFICAND(Value2);
+    Exponent2 = FLOAT_GET_EXPONENT(Value2);
+    ExponentDifference = Exponent1 - Exponent2;
+    Significand1 <<= 7;
+    Significand2 <<= 7;
+    if (ExponentDifference > 0) {
+        if (Exponent1 == FLOAT_NAN_EXPONENT) {
+            if (Significand1 != 0) {
+                return RtlpFloatPropagateNan(Value1, Value2);
+            }
+
+            return Value1.Float;
+        }
+
+        if (Exponent2 == 0) {
+            ExponentDifference -= 1;
+
+        } else {
+            Significand2 |= 0x40000000UL;
+        }
+
+        RtlpShift32RightJamming(Significand2,
+                                ExponentDifference,
+                                &Significand2);
+
+        Significand1 |= 0x40000000UL;
+        ResultSignificand = Significand1 - Significand2;
+        ResultExponent = Exponent1;
+        goto FloatSubtractEnd;
+    }
+
+    if (ExponentDifference < 0) {
+        if (Exponent2 == FLOAT_NAN_EXPONENT) {
+            if (Significand2 != 0) {
+                return RtlpFloatPropagateNan(Value1, Value2);
+            }
+
+            if (Sign != 0) {
+                Result.Ulong = FLOAT_PACK(0, FLOAT_NAN_EXPONENT, 0);
+
+            } else {
+                Result.Ulong = FLOAT_PACK(1, FLOAT_NAN_EXPONENT, 0);
+            }
+
+            return Result.Float;
+        }
+
+        if (Exponent1 == 0) {
+            ExponentDifference += 1;
+
+        } else {
+            Significand1 |= 0x40000000UL;
+        }
+
+        RtlpShift32RightJamming(Significand1,
+                                -ExponentDifference,
+                                &Significand1);
+
+        Significand2 |= 0x40000000UL;
+        ResultSignificand = Significand2 - Significand1;
+        ResultExponent = Exponent2;
+        Sign ^= 1;
+        goto FloatSubtractEnd;
+    }
+
+    if (Exponent1 == FLOAT_NAN_EXPONENT) {
+        if ((Significand1 | Significand2) != 0) {
+            return RtlpFloatPropagateNan(Value1, Value2);
+        }
+
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+        Result.Ulong = FLOAT_DEFAULT_NAN;
+        return Result.Float;
+    }
+
+    if (Exponent1 == 0) {
+        Exponent1 = 1;
+        Exponent2 = 1;
+    }
+
+    if (Significand2 < Significand1) {
+        ResultSignificand = Significand1 - Significand2;
+        ResultExponent = Exponent1;
+        goto FloatSubtractEnd;
+    }
+
+    if (Significand1 < Significand2) {
+        ResultSignificand = Significand2 - Significand1;
+        ResultExponent = Exponent2;
+        Sign ^= 1;
+        goto FloatSubtractEnd;
+    }
+
+    if (RtlRoundingMode == SoftFloatRoundDown) {
+        Result.Ulong = FLOAT_PACK(1, 0, 0);
+
+    } else {
+        Result.Ulong = FLOAT_PACK(0, 0, 0);
+    }
+
+    return Result.Float;
+
+FloatSubtractEnd:
+    ResultExponent -= 1;
+    Result.Float = RtlpNormalizeRoundAndPackFloat(Sign,
+                                                  ResultExponent,
+                                                  ResultSignificand);
+
+    return Result.Float;
+}
 
 double
 RtlpDoubleAdd (
@@ -2000,6 +3366,82 @@ Return Value:
     return;
 }
 
+float
+RtlpFloatPropagateNan (
+    FLOAT_PARTS Value1,
+    FLOAT_PARTS Value2
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes two float values, one of which is NaN, and returns the
+    appropriate NaN result. If with one is a signaling NaN, then the invalid
+    exception is raised.
+
+Arguments:
+
+    Value1 - Supplies the first possibly NaN value.
+
+    Value2 - Supplies the second possibly NaN value.
+
+Return Value:
+
+    Returns the appropriate NaN value.
+
+--*/
+
+{
+
+    BOOL Value1IsNan;
+    BOOL Value1IsSignalingNan;
+    BOOL Value2IsNan;
+    BOOL Value2IsSignalingNan;
+
+    Value1IsNan = FLOAT_IS_NAN(Value1);
+    Value1IsSignalingNan = FLOAT_IS_SIGNALING_NAN(Value1);
+    Value2IsNan = FLOAT_IS_NAN(Value2);
+    Value2IsSignalingNan = FLOAT_IS_SIGNALING_NAN(Value2);
+    Value1.Ulong |= 1ULL << (FLOAT_EXPONENT_SHIFT - 1);
+    Value2.Ulong |= 1ULL << (FLOAT_EXPONENT_SHIFT - 1);
+    if ((Value1IsSignalingNan != FALSE) || (Value2IsSignalingNan != FALSE)) {
+        RtlpSoftFloatRaise(SOFT_FLOAT_INVALID);
+    }
+
+    if (Value1IsSignalingNan != FALSE) {
+        if (Value2IsSignalingNan == FALSE) {
+            if (Value2IsNan != FALSE) {
+                return Value2.Float;
+            }
+
+            return Value1.Float;
+        }
+
+    } else if (Value1IsNan != FALSE) {
+        if ((Value2IsSignalingNan != FALSE) || (Value2IsNan == FALSE)) {
+            return Value1.Float;
+        }
+
+    } else {
+        return Value2.Float;
+    }
+
+    if ((ULONG)(Value1.Ulong << 1) < (ULONG)(Value2.Ulong << 1)) {
+        return Value2.Float;
+    }
+
+    if ((ULONG)(Value2.Ulong << 1) < (ULONG)(Value1.Ulong << 1)) {
+        return Value1.Float;
+    }
+
+    if (Value1.Ulong < Value2.Ulong) {
+        return Value1.Float;
+    }
+
+    return Value2.Float;
+}
+
 double
 RtlpDoublePropagateNan (
     DOUBLE_PARTS Value1,
@@ -2078,124 +3520,6 @@ Return Value:
     }
 
     return Value2.Double;
-}
-
-float
-RtlpRoundAndPackFloat (
-    CHAR SignBit,
-    SHORT Exponent,
-    ULONG Significand
-    )
-
-/*++
-
-Routine Description:
-
-    This routine takes a sign, exponent, and significand and creates the
-    proper rounded floating point value from that input. Overflow and
-    underflow can be raised here.
-
-Arguments:
-
-    SignBit - Supplies a non-zero value if the value should be negated before
-        being converted.
-
-    Exponent - Supplies the exponent for the value.
-
-    Significand - Supplies the significand with its binary point between bits
-        30 and 29, which is 7 bits to the left of its usual location. The
-        shifted exponent must be normalized or smaller. If the significand is
-        not normalized, the exponent must be 0. In that case, the result
-        returned is a subnormal number, and it must not require rounding. In
-        the normal case wehre the significand is normalized, the exponent must
-        be one less than the true floating point exponent.
-
-Return Value:
-
-    Returns the float representation of the given components.
-
---*/
-
-{
-
-    BOOL IsTiny;
-    FLOAT_PARTS Result;
-    CHAR RoundBits;
-    CHAR RoundIncrement;
-    SOFT_FLOAT_ROUNDING_MODE RoundingMode;
-    BOOL RoundNearestEven;
-
-    RoundingMode = RtlRoundingMode;
-    RoundNearestEven = FALSE;
-    if (RoundingMode == SoftFloatRoundNearestEven) {
-        RoundNearestEven = TRUE;
-    }
-
-    RoundIncrement = 0x40;
-    if (RoundNearestEven == FALSE) {
-        if (RoundingMode == SoftFloatRoundToZero) {
-            RoundIncrement = 0;
-
-        } else {
-            RoundIncrement = 0x7F;
-            if (SignBit != 0) {
-                if (RoundingMode == SoftFloatRoundUp) {
-                    RoundIncrement = 0;
-                }
-
-            } else {
-                if (RoundingMode == SoftFloatRoundDown) {
-                    RoundIncrement = 0;
-                }
-            }
-        }
-    }
-
-    RoundBits = Significand & 0x7F;
-    if ((USHORT)Exponent >= 0xFD) {
-        if ((Exponent > 0xFD) ||
-            ((Exponent == 0xFD) &&
-             ((LONG)(Significand + RoundIncrement) < 0))) {
-
-            RtlpSoftFloatRaise(SOFT_FLOAT_OVERFLOW | SOFT_FLOAT_INEXACT);
-            Result.Ulong = FLOAT_PACK(SignBit, 0xFF, 0);
-            if (RoundIncrement == 0) {
-                Result.Ulong -= 1;
-            }
-
-            return Result.Float;
-        }
-
-        if (Exponent < 0) {
-            IsTiny = (RtlTininessDetection ==
-                      SoftFloatTininessBeforeRounding) ||
-                     (Exponent < -1) ||
-                     (Significand + RoundIncrement < 0x80000000);
-
-            RtlpShift32RightJamming(Significand, -Exponent, &Significand);
-            Exponent = 0;
-            RoundBits = Significand & 0x7F;
-            if ((IsTiny != FALSE) && (RoundBits != 0)) {
-                RtlpSoftFloatRaise(SOFT_FLOAT_UNDERFLOW);
-            }
-        }
-    }
-
-    if (RoundBits != 0) {
-        RtlSoftFloatExceptionFlags |= SOFT_FLOAT_INEXACT;
-    }
-
-    Significand = (Significand + RoundIncrement ) >> 7;
-    if (((RoundBits ^ 0x40) == 0) && (RoundNearestEven != FALSE)) {
-        Significand &= ~0x1;
-    }
-
-    if (Significand == 0) {
-        Exponent = 0;
-    }
-
-    Result.Ulong = FLOAT_PACK(SignBit, Exponent, Significand);
-    return Result.Float;
 }
 
 VOID
@@ -2277,57 +3601,6 @@ Return Value:
     ShiftCount = RtlCountLeadingZeros32(Significand) - 8;
     *Result = Significand << ShiftCount;
     *Exponent = 1 - ShiftCount;
-    return;
-}
-
-VOID
-RtlpShift32RightJamming (
-    ULONG Value,
-    SHORT Count,
-    PULONG Result
-    )
-
-/*++
-
-Routine Description:
-
-    This routine shifts the given value right by the requested number of bits.
-    If any bits are shifted off the right, the least significant bit is set.
-    The imagery is that the bits get "jammed" on the end as they try to fall
-    off.
-
-Arguments:
-
-    Value - Supplies the value to shift.
-
-    Count - Supplies the number of bits to shift by.
-
-    Result - Supplies a pointer where the result will be stored.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG ShiftedValue;
-
-    if (Count == 0) {
-        ShiftedValue = Value;
-
-    } else if (Count < 32) {
-        ShiftedValue = (Value >> Count) | ((Value << ((-Count) & 31)) != 0);
-
-    } else {
-        ShiftedValue = 0;
-        if (Value != 0) {
-            ShiftedValue = 1;
-        }
-    }
-
-    *Result = ShiftedValue;
     return;
 }
 
@@ -2471,4 +3744,3 @@ Return Value:
 
     return Parts.Double;
 }
-

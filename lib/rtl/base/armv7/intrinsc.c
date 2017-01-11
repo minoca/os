@@ -445,3 +445,255 @@ Return Value:
     return RtlDoubleConvertToInteger64RoundToZero(Parts.Double);
 }
 
+RTL_API
+unsigned long
+__aeabi_i2f (
+    int Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a signed 32 bit integer into a 32 bit floating point
+    value (float).
+
+Arguments:
+
+    Value - Supplies the integer to convert.
+
+Return Value:
+
+    Returns the float equivalent of the given integer, in the integer
+    registers.
+
+--*/
+
+{
+
+    FLOAT_PARTS Result;
+
+    Result.Float = RtlFloatConvertFromInteger32(Value);
+    return Result.Ulong;
+}
+
+RTL_API
+unsigned long
+__aeabi_ui2f (
+    unsigned int Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts an unsigned 32 bit integer into a 32 bit floating
+    point value (float).
+
+Arguments:
+
+    Value - Supplies the integer to convert.
+
+Return Value:
+
+    Returns the float equivalent of the given integer, in the integer
+    registers.
+
+--*/
+
+{
+
+    FLOAT_PARTS Result;
+
+    Result.Float = RtlFloatConvertFromUnsignedInteger32(Value);
+    return Result.Ulong;
+}
+
+RTL_API
+unsigned long
+__aeabi_l2f (
+    long long Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a signed 64 bit integer into a 32 bit floating point
+    value (float).
+
+Arguments:
+
+    Value - Supplies the integer to convert.
+
+Return Value:
+
+    Returns the float equivalent of the given integer, in the integer
+    registers.
+
+--*/
+
+{
+
+    FLOAT_PARTS Result;
+
+    Result.Float = RtlFloatConvertFromInteger64(Value);
+    return Result.Ulong;
+}
+
+RTL_API
+unsigned long
+__aeabi_ul2f (
+    unsigned long long Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts an unsigned 64 bit integer into a 32 bit floating
+    point value (float).
+
+Arguments:
+
+    Value - Supplies the integer to convert.
+
+Return Value:
+
+    Returns the float equivalent of the given integer, in the integer
+    registers.
+
+--*/
+
+{
+
+    FLOAT_PARTS Result;
+
+    Result.Float = RtlFloatConvertFromUnsignedInteger64(Value);
+    return Result.Ulong;
+}
+
+RTL_API
+int
+__aeabi_f2iz (
+    unsigned long Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a float to a signed 32 bit integer.
+
+Arguments:
+
+    Value - Supplies the float value to convert, passed via integer registers
+        always.
+
+Return Value:
+
+    Returns the integer equivalent of the given float.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts;
+
+    Parts.Ulong = Value;
+    return RtlFloatConvertToInteger32RoundToZero(Parts.Float);
+}
+
+RTL_API
+long long
+__aeabi_f2lz (
+    unsigned long Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a float to a signed 64 bit integer.
+
+Arguments:
+
+    Value - Supplies the float value to convert, passed via integer registers
+        always.
+
+Return Value:
+
+    Returns the integer equivalent of the given float.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts;
+
+    Parts.Ulong = Value;
+    return RtlFloatConvertToInteger64RoundToZero(Parts.Float);
+}
+
+RTL_API
+unsigned int
+__aeabi_f2uiz (
+    unsigned long Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a float to an unsigned 32 bit integer.
+
+Arguments:
+
+    Value - Supplies the float value to convert, passed via integer registers
+        always.
+
+Return Value:
+
+    Returns the integer equivalent of the given float.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts;
+
+    Parts.Ulong = Value;
+    return RtlFloatConvertToInteger32RoundToZero(Parts.Float);
+}
+
+RTL_API
+unsigned long long
+__aeabi_f2ulz (
+    unsigned long Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a float to an unsigned 64 bit integer.
+
+Arguments:
+
+    Value - Supplies the float value to convert, passed via integer registers
+        always.
+
+Return Value:
+
+    Returns the integer equivalent of the given float.
+
+--*/
+
+{
+
+    FLOAT_PARTS Parts;
+
+    Parts.Ulong = Value;
+    return RtlFloatConvertToInteger64RoundToZero(Parts.Float);
+}
+
