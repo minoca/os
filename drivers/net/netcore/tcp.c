@@ -2709,6 +2709,16 @@ Return Value:
 
             if (BytesThisRound == SegmentSize) {
                 SegmentOffset = 0;
+
+                //
+                // The next thing to read better be just after this
+                // segment. A failure here indicates bad receive buffering
+                // (e.g. saving duplicate packets into the buffer).
+                //
+
+                ASSERT(ExpectedSequence == Segment->SequenceNumber);
+
+                ExpectedSequence = Segment->NextSequence;
                 if ((Flags & SOCKET_IO_PEEK) == 0) {
                     LIST_REMOVE(&(Segment->Header.ListEntry));
 
@@ -2725,15 +2735,6 @@ Return Value:
                                              TcpSocket->ReceiveWindowTotalSize;
                     }
 
-                    //
-                    // The next thing to read better be just after this
-                    // segment. A failure here indicates bad receive buffering
-                    // (e.g. saving duplicate packets into the buffer).
-                    //
-
-                    ASSERT(ExpectedSequence == Segment->SequenceNumber);
-
-                    ExpectedSequence = Segment->NextSequence;
                     NetpTcpFreeSegment(TcpSocket, &(Segment->Header));
                 }
 
