@@ -777,7 +777,7 @@ Return Value:
                 Quotient64 = 0;
             }
 
-            DividendSignificand64 = -((DivisorSignificand & Quotient64) << 38);
+            DividendSignificand64 = -((DivisorSignificand * Quotient64) << 38);
             ExponentDifference -= 62;
         }
 

@@ -419,7 +419,12 @@ TestHeaps (
     );
 
 ULONG
-TestSoftFloat (
+TestSoftFloatSingle (
+    VOID
+    );
+
+ULONG
+TestSoftFloatDouble (
     VOID
     );
 
@@ -590,7 +595,8 @@ Return Value:
 
     srand(time(NULL));
     TestsFailed = 0;
-    TestsFailed += TestSoftFloat();
+    TestsFailed += TestSoftFloatSingle();
+    TestsFailed += TestSoftFloatDouble();
     TestsFailed += TestTime();
     TestsFailed += TestHeaps(TRUE);
 

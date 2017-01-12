@@ -13,8 +13,8 @@ Module Name:
 
 Abstract:
 
-    This module tests the soft floating point support baked into the Rtl
-    Library.
+    This module tests the double-precision soft floating point support baked
+    into the Rtl Library.
 
 Author:
 
@@ -49,7 +49,7 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef struct _SOFT_FLOAT_MATH_CASE {
+typedef struct _SOFT_FLOAT_DOUBLE_MATH_CASE {
     double Value1;
     double Value2;
     double Sum;
@@ -64,13 +64,13 @@ typedef struct _SOFT_FLOAT_MATH_CASE {
     LONG Int32;
     LONGLONG Int64;
     ULONG Float;
-} SOFT_FLOAT_MATH_CASE, *PSOFT_FLOAT_MATH_CASE;
+} SOFT_FLOAT_DOUBLE_MATH_CASE, *PSOFT_FLOAT_DOUBLE_MATH_CASE;
 
-typedef struct _SOFT_FLOAT_CONVERT_CASE {
+typedef struct _SOFT_FLOAT_DOUBLE_CONVERT_CASE {
     ULONGLONG Integer;
     double FromInt32;
     double FromInt64;
-} SOFT_FLOAT_CONVERT_CASE, *PSOFT_FLOAT_CONVERT_CASE;
+} SOFT_FLOAT_DOUBLE_CONVERT_CASE, *PSOFT_FLOAT_DOUBLE_CONVERT_CASE;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -80,7 +80,7 @@ typedef struct _SOFT_FLOAT_CONVERT_CASE {
 // -------------------------------------------------------------------- Globals
 //
 
-SOFT_FLOAT_MATH_CASE TestSoftFloatMathCases[] = {
+SOFT_FLOAT_DOUBLE_MATH_CASE TestSoftFloatDoubleMathCases[] = {
     {0x0.0000000000000P+0,
      0x0.0000000000000P+0,
      0x0.0000000000000P+0,
@@ -922,7 +922,7 @@ SOFT_FLOAT_MATH_CASE TestSoftFloatMathCases[] = {
      0xD1BA43B7},
 };
 
-SOFT_FLOAT_CONVERT_CASE TestSoftFloatFromIntegers[] = {
+SOFT_FLOAT_DOUBLE_CONVERT_CASE TestSoftFloatDoubleFromIntegers[] = {
     {0x0ULL, 0x0.0000000000000P+0, 0x0.0000000000000P+0},
     {0x1ULL, 0x1.0000000000000P+0, 0x1.0000000000000P+0},
     {0xFFFFFFFFFFFFFFFFULL, -0x1.0000000000000P+0, -0x1.0000000000000P+0},
@@ -954,7 +954,7 @@ SOFT_FLOAT_CONVERT_CASE TestSoftFloatFromIntegers[] = {
 //
 
 ULONG
-TestSoftFloat (
+TestSoftFloatDouble (
     VOID
     )
 
@@ -977,20 +977,20 @@ Return Value:
 {
 
     DOUBLE_PARTS Answer;
-    PSOFT_FLOAT_CONVERT_CASE ConvertTest;
+    PSOFT_FLOAT_DOUBLE_CONVERT_CASE ConvertTest;
     ULONG Failures;
     FLOAT_PARTS Float;
-    PSOFT_FLOAT_MATH_CASE MathTest;
+    PSOFT_FLOAT_DOUBLE_MATH_CASE MathTest;
     DOUBLE_PARTS Result;
     ULONG TestCount;
     ULONG TestIndex;
 
     Failures = 0;
-    TestCount = sizeof(TestSoftFloatMathCases) /
-                sizeof(TestSoftFloatMathCases[0]);
+    TestCount = sizeof(TestSoftFloatDoubleMathCases) /
+                sizeof(TestSoftFloatDoubleMathCases[0]);
 
     for (TestIndex = 0; TestIndex < TestCount; TestIndex += 1) {
-        MathTest = &(TestSoftFloatMathCases[TestIndex]);
+        MathTest = &(TestSoftFloatDoubleMathCases[TestIndex]);
 
         //
         // Test the math: add, subtract, multiply, divide, modulo, and
@@ -1214,11 +1214,11 @@ Return Value:
     // Also test the conversion of integers to doubles.
     //
 
-    TestCount = sizeof(TestSoftFloatFromIntegers) /
-                sizeof(TestSoftFloatFromIntegers[0]);
+    TestCount = sizeof(TestSoftFloatDoubleFromIntegers) /
+                sizeof(TestSoftFloatDoubleFromIntegers[0]);
 
     for (TestIndex = 0; TestIndex < TestCount; TestIndex += 1) {
-        ConvertTest = &(TestSoftFloatFromIntegers[TestIndex]);
+        ConvertTest = &(TestSoftFloatDoubleFromIntegers[TestIndex]);
         Answer.Double = ConvertTest->FromInt32;
         Result.Double =
                      RtlDoubleConvertFromInteger32((LONG)ConvertTest->Integer);
@@ -1247,7 +1247,8 @@ Return Value:
     }
 
     if (Failures != 0) {
-        printf("\n\n%d Soft Float test failures.\n\n", Failures);
+        printf("\n\n%d Soft Float double-precision test failures.\n\n",
+               Failures);
     }
 
     return Failures;

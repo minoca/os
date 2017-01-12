@@ -27,6 +27,7 @@ Environment:
 
 function build() {
     sources = [
+        "fpstest.c",
         "fptest.c",
         "heaptest.c",
         "testrtl.c",
