@@ -30,10 +30,11 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "osp.h"
 #include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "osp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -48,22 +49,7 @@ Environment:
 //
 
 VOID
-CkpOsOpen (
-    PCK_VM Vm
-    );
-
-VOID
-CkpOsClose (
-    PCK_VM Vm
-    );
-
-VOID
-CkpOsRead (
-    PCK_VM Vm
-    );
-
-VOID
-CkpOsWrite (
+CkpOsExit (
     PCK_VM Vm
     );
 
@@ -72,10 +58,7 @@ CkpOsWrite (
 //
 
 CK_VARIABLE_DESCRIPTION CkOsModuleValues[] = {
-    {CkTypeFunction, "open", CkpOsOpen, 3},
-    {CkTypeFunction, "close", CkpOsClose, 1},
-    {CkTypeFunction, "read", CkpOsRead, 2},
-    {CkTypeFunction, "write", CkpOsWrite, 2},
+    {CkTypeFunction, "exit", CkpOsExit, 1},
     {CkTypeInvalid, NULL, NULL, 0}
 };
 
@@ -135,12 +118,27 @@ Return Value:
 
 {
 
+    //
+    // Define the OsError exception.
+    //
+
+    CkPushString(Vm, "OsError", 7);
+    CkGetVariable(Vm, 0, "Exception");
+    CkPushClass(Vm, 0, 0);
+    CkSetVariable(Vm, 0, "OsError");
+
+    //
+    // Register the functions and definitions.
+    //
+
+    CkDeclareVariables(Vm, 0, CkOsErrnoValues);
+    CkDeclareVariables(Vm, 0, CkOsIoModuleValues);
     CkDeclareVariables(Vm, 0, CkOsModuleValues);
     return;
 }
 
 VOID
-CkpOsOpen (
+CkpOsExit (
     PCK_VM Vm
     )
 
@@ -148,9 +146,8 @@ CkpOsOpen (
 
 Routine Description:
 
-    This routine implements the open call. It takes in a path string, flags
-    integer, and creation mode integer. It returns a file descriptor integer
-    on success, or -1 on failure.
+    This routine implements the exit call. It takes in an exit code, and does
+    not return because the current process exits.
 
 Arguments:
 
@@ -158,70 +155,23 @@ Arguments:
 
 Return Value:
 
-    None.
+    This routine does not return. The process exits.
 
 --*/
 
 {
-
-    INT Descriptor;
-    ULONG Flags;
-    ULONG Mode;
-    PCSTR Path;
-
-    //
-    // The function is open(path, flags, mode).
-    //
-
-    if (!CkCheckArguments(Vm, 3, CkTypeString, CkTypeInteger, CkTypeInteger)) {
-        return;
-    }
-
-    Path = CkGetString(Vm, 1, NULL);
-    Flags = CkGetInteger(Vm, 2);
-    Mode = CkGetInteger(Vm, 3);
-    Descriptor = open(Path, Flags, Mode);
-    CkReturnInteger(Vm, Descriptor);
-    return;
-}
-
-VOID
-CkpOsClose (
-    PCK_VM Vm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the close call. It takes in a file descriptor
-    integer, and returns the integer returned by the close call.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    INT Result;
 
     if (!CkCheckArguments(Vm, 1, CkTypeInteger)) {
         return;
     }
 
-    Result = close(CkGetInteger(Vm, 1));
-    CkReturnInteger(Vm, Result);
+    exit(CkGetInteger(Vm, 1));
+    CkReturnInteger(Vm, -1LL);
     return;
 }
 
 VOID
-CkpOsRead (
+CkpOsRaiseError (
     PCK_VM Vm
     )
 
@@ -229,10 +179,7 @@ CkpOsRead (
 
 Routine Description:
 
-    This routine implements the read call. It takes in a file descriptor
-    integer and a size, and reads at most that size byte from the descriptor.
-    It returns a string containing the bytes read on success, an empty string
-    if no bytes were read, or null on failure.
+    This routine raises an error associated with the current errno value.
 
 Arguments:
 
@@ -240,91 +187,42 @@ Arguments:
 
 Return Value:
 
-    None.
+    This routine does not return. The process exits.
 
 --*/
 
 {
 
-    PSTR Buffer;
-    ssize_t BytesRead;
-    INT Descriptor;
-    INT Size;
+    INT Error;
+    PCSTR ErrorString;
 
-    if (!CkCheckArguments(Vm, 2, CkTypeInteger, CkTypeInteger)) {
-        return;
-    }
+    Error = errno;
+    ErrorString = strerror(Error);
 
-    Descriptor = CkGetInteger(Vm, 1);
-    Size = CkGetInteger(Vm, 2);
-    if (Size < 0) {
-        Size = 0;
-    }
+    //
+    // Create an OsError exception.
+    //
 
-    Buffer = CkPushStringBuffer(Vm, Size);
-    if (Buffer == NULL) {
-        return;
-    }
+    CkPushModule(Vm, "os");
+    CkGetVariable(Vm, -1, "OsError");
+    CkPushString(Vm, ErrorString, strlen(ErrorString));
+    CkCall(Vm, 1);
 
-    do {
-        BytesRead = read(Descriptor, Buffer, Size);
+    //
+    // Execute instance.errno = Error.
+    //
 
-    } while ((BytesRead < 0) && (errno == EINTR));
+    CkPushValue(Vm, -1);
+    CkPushString(Vm, "errno", 5);
+    CkPushInteger(Vm, Error);
+    CkCallMethod(Vm, "__set", 2);
+    CkStackPop(Vm);
 
-    if (BytesRead < 0) {
-        CkReturnNull(Vm);
+    //
+    // Raise the exception.
+    //
 
-    } else {
-        CkFinalizeString(Vm, -1, BytesRead);
-        CkStackReplace(Vm, 0);
-    }
-
-    return;
-}
-
-VOID
-CkpOsWrite (
-    PCK_VM Vm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the write call. It takes in a file descriptor
-    integer and a string, and attempts to write that string to the descriptor.
-    It returns the number of bytes actually written, which may be less than the
-    desired size, or -1 on failure.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PCSTR Buffer;
-    ssize_t BytesWritten;
-    INT Descriptor;
-    UINTN Size;
-
-    if (!CkCheckArguments(Vm, 2, CkTypeInteger, CkTypeString)) {
-        return;
-    }
-
-    Descriptor = CkGetInteger(Vm, 1);
-    Buffer = CkGetString(Vm, 2, &Size);
-    do {
-        BytesWritten = write(Descriptor, Buffer, Size);
-
-    } while ((BytesWritten < 0) && (errno == EINTR));
-
-    CkReturnInteger(Vm, BytesWritten);
+    CkRaiseException(Vm, -1);
     return;
 }
 

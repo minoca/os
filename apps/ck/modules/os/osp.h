@@ -33,12 +33,87 @@ Author:
 //
 
 //
+// Define any O_* open flags that might not exist on all systems.
+//
+
+#ifndef O_APPEND
+#define O_APPEND 0x0
+#endif
+
+#ifndef O_EXEC
+#define O_EXEC 0x0
+#endif
+
+#ifndef O_SEARCH
+#define O_SEARCH 0x0
+#endif
+
+#ifndef O_DIRECTORY
+#define O_DIRECTORY 0x0
+#endif
+
+#ifndef O_NOFOLLOW
+#define O_NOFOLLOW 0x0
+#endif
+
+#ifndef O_SYNC
+#define O_SYNC 0x0
+#endif
+
+#ifndef O_DSYNC
+#define O_DSYNC 0x0
+#endif
+
+#ifndef O_RSYNC
+#define O_RSYNC 0x0
+#endif
+
+#ifndef O_NOCTTY
+#define O_NOCTTY 0x0
+#endif
+
+#ifndef O_NONBLOCK
+#define O_NONBLOCK 0x0
+#endif
+
+#ifndef O_ASYNC
+#define O_ASYNC 0x0
+#endif
+
+#ifndef O_LARGEFILE
+#define O_LARGEFILE 0x0
+#endif
+
+#ifndef O_NOATIME
+#define O_NOATIME 0x0
+#endif
+
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0x0
+#endif
+
+#ifndef O_PATH
+#define O_PATH 0x0
+#endif
+
+#ifndef O_TEXT
+#define O_TEXT 0x0
+#endif
+
+#ifndef O_BINARY
+#define O_BINARY 0x0
+#endif
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
 //
 // -------------------------------------------------------------------- Globals
 //
+
+extern CK_VARIABLE_DESCRIPTION CkOsErrnoValues[];
+extern CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[];
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -62,6 +137,27 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+VOID
+CkpOsRaiseError (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine raises an error associated with the current errno value.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    This routine does not return. The process exits.
 
 --*/
 
