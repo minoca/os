@@ -118,6 +118,12 @@ CkpStringLength (
     );
 
 BOOL
+CkpStringJoinList (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpStringAdd (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -163,6 +169,7 @@ CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[] = {
     {"lower@0", 0, CkpStringLower},
     {"upper@0", 0, CkpStringUpper},
     {"length@0", 0, CkpStringLength},
+    {"joinList@1", 1, CkpStringJoinList},
     {"__add@1", 1, CkpStringAdd},
     {"__mul@1", 1, CkpStringMultiply},
     {"__slice@1", 1, CkpStringSlice},
@@ -1423,6 +1430,9 @@ Return Value:
             Arguments[0] = CkNullValue;
             return TRUE;
         }
+
+        CK_INT_VALUE(Arguments[0], 0);
+        return TRUE;
     }
 
     //
@@ -1616,6 +1626,110 @@ Return Value:
 
     String = CK_AS_STRING(Arguments[0]);
     CK_INT_VALUE(Arguments[0], String->Length);
+    return TRUE;
+}
+
+BOOL
+CkpStringJoinList (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a new string containing all the strings in the given
+    list, separated by this string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PSTR Buffer;
+    PCK_STRING Element;
+    UINTN Index;
+    PCK_LIST List;
+    PCK_STRING Result;
+    UINTN Size;
+    PCK_STRING String;
+
+    String = CK_AS_STRING(Arguments[0]);
+    if (!CK_IS_LIST(Arguments[1])) {
+        CkpRuntimeError(Vm, "TypeError", "Expected a list");
+        return FALSE;
+    }
+
+    List = CK_AS_LIST(Arguments[1]);
+
+    //
+    // Figure out how big the final string will be.
+    //
+
+    Size = 0;
+    for (Index = 0; Index < List->Elements.Count; Index += 1) {
+        if (!CK_IS_STRING(List->Elements.Data[Index])) {
+            CkpRuntimeError(Vm,
+                            "TypeError",
+                            "Element %u is not a string",
+                            Index);
+
+            return FALSE;
+        }
+
+        Element = CK_AS_STRING(List->Elements.Data[Index]);
+        Size += Element->Length;
+        if (Index < List->Elements.Count - 1) {
+            Size += String->Length;
+        }
+    }
+
+    //
+    // Optimization: if there's only one element in the list, just return that
+    // element. This has to happen after the check to make sure it's a string.
+    //
+
+    if (List->Elements.Count == 1) {
+        Arguments[0] = List->Elements.Data[0];
+        return TRUE;
+    }
+
+    //
+    // Allocate the string, then copy the members over.
+    //
+
+    Result = CkpStringAllocate(Vm, Size);
+    if (Result == NULL) {
+        return FALSE;
+    }
+
+    Buffer = (PSTR)(Result->Value);
+    for (Index = 0; Index < List->Elements.Count; Index += 1) {
+        Element = CK_AS_STRING(List->Elements.Data[Index]);
+        CkCopy(Buffer, Element->Value, Element->Length);
+        Buffer += Element->Length;
+        if (Index < List->Elements.Count - 1) {
+            CkCopy(Buffer, String->Value, String->Length);
+            Buffer += String->Length;
+        }
+    }
+
+    CK_ASSERT(Buffer == Result->Value + Result->Length);
+
+    CkpStringHash(Result);
+    CK_OBJECT_VALUE(Arguments[0], Result);
     return TRUE;
 }
 
