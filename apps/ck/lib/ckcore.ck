@@ -75,8 +75,15 @@ class List {
 }
 
 class Exception {
+    function __init() {
+        this.args = null;
+        this.stackTrace = null;
+        return this;
+    }
+
     function __init(args) {
         this.args = args;
+        this.stackTrace = null;
         return this;
     }
 
@@ -363,6 +370,19 @@ class String {
         }
 
         return result;
+    }
+
+    function join(iterable) {
+        if (iterable is List) {
+            return this.joinList(iterable);
+        }
+
+        var realList = [];
+        for (item in iterable) {
+            realList.append(item);
+        }
+
+        return this.joinList(realList);
     }
 }
 

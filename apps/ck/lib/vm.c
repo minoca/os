@@ -1516,14 +1516,14 @@ Return Value:
     PCK_VALUE Arguments;
     CK_STRING FakeString;
     PCK_FIBER Fiber;
-    UINTN FrameCount;
     UINTN Length;
     CHAR Name[CK_MAX_METHOD_SIGNATURE];
     CK_VALUE NameValue;
     CK_FUNCTION_SIGNATURE Signature;
+    UINTN TryCount;
 
     Fiber = Vm->Fiber;
-    FrameCount = Fiber->FrameCount;
+    TryCount = Fiber->TryCount;
     Arguments = Fiber->StackTop - Arity;
 
     //
@@ -1531,7 +1531,7 @@ Return Value:
     //
 
     Arguments[0] = CkpCreateInstance(Vm, Class);
-    if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
         return FALSE;
     }
 
@@ -1649,12 +1649,13 @@ Return Value:
 
     PCK_VALUE Arguments;
     PCK_FIBER Fiber;
-    UINTN FrameCount;
     BOOL FramePushed;
     CK_ARITY FunctionArity;
     PCK_STRING Name;
     UINTN RequiredStackSize;
+    UINTN ReturnStackIndex;
     UINTN StackSize;
+    UINTN TryCount;
 
     Fiber = Vm->Fiber;
     FramePushed = FALSE;
@@ -1699,20 +1700,27 @@ Return Value:
         FramePushed = TRUE;
 
     } else if (Closure->Type == CkClosureForeign) {
-        FrameCount = Fiber->FrameCount;
+        TryCount = Fiber->TryCount;
         CkpAppendCallFrame(Vm, Fiber, Closure, Fiber->StackTop - Arity);
         CkpEnsureStack(Vm,
                        Fiber,
                        (Fiber->StackTop - Fiber->Stack) + CK_MIN_FOREIGN_STACK);
 
-        if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
+        if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
             return FALSE;
         }
 
         //
+        // Get the stack index to return to. Add one to account for the return
+        // value. The stack get reallocated during the foreign function, which
+        // is why this must be in the form of an index.
+        //
+
+        ReturnStackIndex = (Fiber->StackTop - Arity) + 1 - Fiber->Stack;
+
+        //
         // Increment the foreign call count to prevent fiber switches from
-        // happening while the VM call stack is somewhat linked with the C
-        // stack.
+        // happening while the VM call stack is linked with the C stack.
         //
 
         Fiber->ForeignCalls += 1;
@@ -1724,12 +1732,12 @@ Return Value:
         // the frame count or mess with the stack.
         //
 
-        if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
+        if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
             return FALSE;
         }
 
-        Fiber->FrameCount = FrameCount;
-        Fiber->StackTop -= Arity - 1;
+        Fiber->FrameCount -= 1;
+        Fiber->StackTop = Fiber->Stack + ReturnStackIndex;
 
     } else {
 

@@ -145,7 +145,6 @@ Return Value:
 {
 
     PCK_FIBER Fiber;
-    UINTN FrameCount;
     PCK_STRING Frozen;
     CK_LOAD_MODULE_RESULT LoadStatus;
     PCK_MODULE Module;
@@ -154,6 +153,7 @@ Return Value:
     PCK_STRING NameString;
     CK_VALUE PathValue;
     INT SaveError;
+    UINTN TryCount;
     CK_VALUE Value;
     BOOL WasPrecompiled;
 
@@ -162,7 +162,7 @@ Return Value:
     NameString = CK_AS_STRING(ModuleName);
     PathValue = CkNullValue;
     Fiber = Vm->Fiber;
-    FrameCount = Fiber->FrameCount;
+    TryCount = Fiber->TryCount;
 
     //
     // If the module already exists, just return it.
@@ -299,7 +299,7 @@ Return Value:
         return CkNullValue;
 
     case CkLoadModuleNoMemory:
-        if (!CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
+        if (!CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
             CkpRuntimeError(Vm, "MemoryError", "Allocation failure");
         }
 
@@ -375,11 +375,13 @@ Return Value:
 {
 
     PCK_CLOSURE Closure;
+    BOOL Created;
     PCK_FUNCTION Function;
     PCK_MODULE Module;
     PCK_STRING PathString;
     BOOL Result;
 
+    Created = FALSE;
     PathString = NULL;
     if (CK_IS_STRING(Path)) {
         PathString = CK_AS_STRING(Path);
@@ -395,6 +397,8 @@ Return Value:
         if (Module == NULL) {
             return NULL;
         }
+
+        Created = TRUE;
     }
 
     Result = FALSE;
@@ -436,7 +440,10 @@ Return Value:
 
 ModuleLoadSourceEnd:
     if (Result == FALSE) {
-        CkpDictRemove(Vm, Vm->Modules, ModuleName);
+        if (Created != FALSE) {
+            CkpDictRemove(Vm, Vm->Modules, ModuleName);
+        }
+
         Module = NULL;
     }
 
@@ -798,8 +805,7 @@ Return Value:
 
     EntryFunction = Module->Closure;
     if (EntryFunction->Type == CkClosureForeign) {
-        CkpCallFunction(Vm, EntryFunction, 1);
-        return TRUE;
+        return CkpCallFunction(Vm, EntryFunction, 1);
     }
 
     Fiber = CkpFiberCreate(Vm, Module->Closure);
@@ -928,14 +934,14 @@ Return Value:
 {
 
     PCK_FIBER Fiber;
-    UINTN FrameCount;
     PCK_MODULE Module;
+    UINTN TryCount;
 
     Fiber = Vm->Fiber;
-    FrameCount = Fiber->FrameCount;
+    TryCount = Fiber->TryCount;
     Module = CK_AS_MODULE(Arguments[0]);
     Arguments[0] = CkpModuleFreeze(Vm, Module);
-    if (CK_EXCEPTION_RAISED(Vm, Fiber, FrameCount)) {
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
         return FALSE;
     }
 
