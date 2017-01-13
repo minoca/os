@@ -213,6 +213,12 @@ CkpCoreRaise (
     PCK_VALUE Arguments
     );
 
+BOOL
+CkpCoreImportAllSymbols (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -268,6 +274,7 @@ CK_PRIMITIVE_DESCRIPTION CkCorePrimitives[] = {
     {"modulePath@0", 0, CkpCoreGetModulePath},
     {"setModulePath@1", 1, CkpCoreSetModulePath},
     {"raise@1", 1, CkpCoreRaise},
+    {"importAllSymbols@1", 1, CkpCoreImportAllSymbols},
     {NULL, 0, NULL}
 };
 
@@ -1833,5 +1840,69 @@ Return Value:
     }
 
     return FALSE;
+}
+
+BOOL
+CkpCoreImportAllSymbols (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine imports all module level symbols from the given module.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_CLOSURE Closure;
+    PCK_MODULE CurrentModule;
+    PCK_FIBER Fiber;
+    PCK_CALL_FRAME Frame;
+    CK_SYMBOL_INDEX Index;
+    PCK_MODULE Module;
+    PCK_STRING String;
+
+    if (!CK_IS_MODULE(Arguments[1])) {
+        CkpRuntimeError(Vm, "TypeError", "Expected a module");
+        return FALSE;
+    }
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(Fiber->FrameCount != 0);
+
+    Frame = &(Fiber->Frames[Fiber->FrameCount - 1]);
+    Closure = Frame->Closure;
+
+    CK_ASSERT(Closure->Type == CkClosureBlock);
+
+    CurrentModule = Closure->U.Block.Function->Module;
+    Module = CK_AS_MODULE(Arguments[1]);
+    for (Index = 0; Index < Module->Variables.Count; Index += 1) {
+        String = CK_AS_STRING(Module->VariableNames.List.Data[Index]);
+        CkpDefineModuleVariable(Vm,
+                                CurrentModule,
+                                String->Value,
+                                String->Length,
+                                Module->Variables.Data[Index]);
+    }
+
+    return TRUE;
 }
 
