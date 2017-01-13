@@ -115,6 +115,7 @@ PSTR CkNodeNames[] = {
     "DictElement",
     "DictElementList",
     "Dict",
+    "StringLiteralList",
     "PrimaryExpression",
     "PostfixExpression",
     "ArgumentExpressionList",

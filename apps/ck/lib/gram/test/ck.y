@@ -61,12 +61,17 @@ dictionary
     | '{' dictionary_element_list ',' '}'
     ;
 
+string_literal_list
+    : STRING_LITERAL
+    | string_literal_list STRING_LITERAL
+    ;
+
 primary_expression
     : IDENTIFIER
     | CONSTANT
     | HEX_CONSTANT
     | BINARY_CONSTANT
-    | STRING_LITERAL
+    | string_literal_list
     | NULL_TOKEN
     | THIS
     | SUPER

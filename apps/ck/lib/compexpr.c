@@ -61,6 +61,12 @@ CkpCompilePrimaryIdentifier (
     BOOL Store
     );
 
+VOID
+CkpReadStringLiteralList (
+    PCK_COMPILER Compiler,
+    PCK_AST_NODE Node
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -705,8 +711,6 @@ Return Value:
     PLEXER_TOKEN Token;
     CK_VALUE Value;
 
-    Token = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex);
-
     //
     // If it's a ( expression ), go visit the inner expression.
     //
@@ -716,6 +720,7 @@ Return Value:
         return;
     }
 
+    Token = CK_GET_AST_TOKEN(Compiler, Node->ChildIndex);
     if ((Compiler->Assign != FALSE) && (Token->Value != CkTokenIdentifier)) {
         CkpCompileError(Compiler, Token, "Cannot assign to a constant");
         return;
@@ -747,10 +752,6 @@ Return Value:
         CkpEmitNumericConstant(Compiler, Value);
         break;
 
-    case CkTokenString:
-        CkpEmitConstant(Compiler, CkpReadSourceString(Compiler, Token));
-        break;
-
     case CkTokenNull:
         CkpEmitOp(Compiler, CkOpNull);
         break;
@@ -774,6 +775,9 @@ Return Value:
             (Constant->Symbol == CkNodeList)) {
 
             CkpVisitNode(Compiler, Constant);
+
+        } else if (Constant->Symbol == CkNodeStringLiteralList) {
+            CkpReadStringLiteralList(Compiler, Constant);
 
         } else {
 
@@ -1201,6 +1205,90 @@ Return Value:
     }
 
     CkpCompileError(Compiler, Token, "Undefined variable");
+    return;
+}
+
+VOID
+CkpReadStringLiteralList (
+    PCK_COMPILER Compiler,
+    PCK_AST_NODE Node
+    )
+
+/*++
+
+Routine Description:
+
+    This routine emits a string literal.
+
+Arguments:
+
+    Compiler - Supplies a pointer to the compiler.
+
+    Node - Supplies a pointer to the string literal list to visit.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_AST_NODE LiteralNode;
+    CK_VALUE String;
+    CK_VALUE String2;
+    PCK_STRING StringObject;
+    PCK_STRING StringObject2;
+    PLEXER_TOKEN Token;
+    PCK_VM Vm;
+
+    Vm = Compiler->Parser->Vm;
+
+    //
+    // Get to the leftmost node.
+    //
+
+    LiteralNode = Node;
+    while (LiteralNode->Children > 1) {
+        LiteralNode = CK_GET_AST_NODE(Compiler, LiteralNode->ChildIndex);
+    }
+
+    //
+    // Go backwards reading source strings.
+    //
+
+    Token = CK_GET_AST_TOKEN(Compiler, LiteralNode->ChildIndex);
+    String = CkpReadSourceString(Compiler, Token);
+    while (LiteralNode != Node) {
+        LiteralNode = CK_GET_AST_NODE(Compiler, LiteralNode->Parent);
+
+        CK_ASSERT(LiteralNode->Children == 2);
+
+        Token = CK_GET_AST_TOKEN(Compiler, LiteralNode->ChildIndex + 1);
+        if (!CK_IS_STRING(String)) {
+            return;
+        }
+
+        //
+        // Read the next string, and combine it with the first.
+        //
+
+        StringObject = CK_AS_STRING(String);
+        CkpPushRoot(Vm, &(StringObject->Header));
+        String2 = CkpReadSourceString(Compiler, Token);
+        if (!CK_IS_STRING(String2)) {
+            CkpPopRoot(Vm);
+            return;
+        }
+
+        StringObject2 = CK_AS_STRING(String2);
+        CkpPushRoot(Vm, &(StringObject2->Header));
+        String = CkpStringFormat(Vm, "@@", String, String2);
+        CkpPopRoot(Vm);
+        CkpPopRoot(Vm);
+    }
+
+    CkpEmitConstant(Compiler, String);
     return;
 }
 

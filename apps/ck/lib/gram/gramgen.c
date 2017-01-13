@@ -131,12 +131,18 @@ YY_VALUE CkgDict[] = {
     0
 };
 
+YY_VALUE CkgStringLiteralList[] = {
+    CkTokenString, -1,
+    CkNodeStringLiteralList, CkTokenString, -1,
+    0
+};
+
 YY_VALUE CkgPrimaryExpression[] = {
     CkTokenIdentifier, -1,
     CkTokenConstant, -1,
     CkTokenHexConstant, -1,
     CkTokenBinaryConstant, -1,
-    CkTokenString, -1,
+    CkNodeStringLiteralList, -1,
     CkTokenNull, -1,
     CkTokenThis, -1,
     CkTokenSuper, -1,
@@ -557,6 +563,7 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"DictElement", 0, 0, CkgDictElement},
     {"DictElementList", 0, 0, CkgDictElementList},
     {"Dict", 0, 0, CkgDict},
+    {"StringLiteralList", 0, 0, CkgStringLiteralList},
     {"PrimaryExpression", 0, 0, CkgPrimaryExpression},
     {"PostfixExpression", 0, 0, CkgPostfixExpression},
     {"ArgumentExpressionList", 0, 0, CkgArgumentExpressionList},

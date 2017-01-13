@@ -240,6 +240,7 @@ PCK_COMPILER_NODE_VISITOR CkCompilerNodeFunctions[] = {
     CkpVisitChildren, // CkNodeDictElement,
     CkpVisitDictElementList, // CkNodeDictElementList,
     CkpVisitDict, // CkNodeDict,
+    NULL, // CkNodeStringLiteralList,
     CkpVisitPrimaryExpression, // CkNodePrimaryExpression,
     CkpVisitPostfixExpression, // CkNodePostfixExpression,
     CkpVisitLeftRecursiveList, // CkNodeArgumentExpressionList,

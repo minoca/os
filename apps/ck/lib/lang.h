@@ -122,6 +122,7 @@ typedef enum _CK_SYMBOL {
     CkNodeDictElement,
     CkNodeDictElementList,
     CkNodeDict,
+    CkNodeStringLiteralList,
     CkNodePrimaryExpression,
     CkNodePostfixExpression,
     CkNodeArgumentExpressionList,
