@@ -1321,11 +1321,12 @@ Return Value:
     AfterScan = NULL;
     *Integer = strtoll(*Contents + 1, &AfterScan, 10);
     if ((AfterScan == NULL) || (AfterScan == *Contents) ||
-        (AfterScan >= *Contents + *Size)) {
+        (AfterScan >= *Contents + *Size) || (*AfterScan != ' ')) {
 
         return FALSE;
     }
 
+    AfterScan += 1;
     *Size = (*Contents + *Size) - AfterScan;
     *Contents = AfterScan;
     return TRUE;
