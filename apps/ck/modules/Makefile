@@ -31,7 +31,11 @@ DIRS = app       \
 
 include $(SRCROOT)/os/minoca.mk
 
-CK_MODULES := getopt.ck
+CK_MODULES := bufferedio.ck \
+              fileio.ck     \
+              getopt.ck     \
+              io.ck         \
+              iobase.ck     \
 
 CK_LIB_PATH := $(BINROOT)/chalk1
 CK_BUILD_LIB_PATH := $(OUTROOT)/tools/lib/chalk1
