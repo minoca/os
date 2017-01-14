@@ -27,9 +27,12 @@ BINARYTYPE = library
 
 BINPLACE = bin
 
-OBJS = encopt.o   \
-       lzfind.o   \
-       lzmaenc.o  \
+include $(SRCDIR)/sources
+
+DIRS = build \
+       util  \
 
 include $(SRCROOT)/os/minoca.mk
+
+util: $(BINARY)
 

@@ -235,8 +235,8 @@ Members:
     HashByteCount - Stores the number of bytes in a hash. Valid values are 2
         through 4, inclusive. The default is 4.
 
-    Mc - Stores the mc parameter. Valid values are between 1 and (1 << 30),
-        inclusive. The default is 32.
+    MatchCount - Stores the number of match finder cycles. Valid values are
+        between 1 and (1 << 30), inclusive. The default is 32.
 
     WriteEndMark - Stores a boolean indicating whether to write and end marker
         or not. The default is FALSE.
@@ -257,7 +257,7 @@ typedef struct _LZMA_ENCODER_PROPERTIES {
     INT FastBytes;
     INT BinTreeMode;
     INT HashByteCount;
-    ULONG Mc;
+    ULONG MatchCount;
     BOOL WriteEndMark;
     INT ThreadCount;
 } LZMA_ENCODER_PROPERTIES, *PLZMA_ENCODER_PROPERTIES;
@@ -269,3 +269,101 @@ typedef struct _LZMA_ENCODER_PROPERTIES {
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+VOID
+LzLzmaEncoderInitializeProperties (
+    PLZMA_ENCODER_PROPERTIES Properties
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes LZMA encoder properties to their defaults.
+
+Arguments:
+
+    Properties - Supplies a pointer to the properties to initialize.
+
+Return Value:
+
+    None.
+
+--*/
+
+LZ_STATUS
+LzLzmaEncode (
+    PUCHAR Destination,
+    PUINTN DestinationSize,
+    PCUCHAR Source,
+    UINTN SourceSize,
+    PLZMA_ENCODER_PROPERTIES Properties,
+    PUCHAR EncodedProperties,
+    PUINTN EncodedPropertiesSize,
+    BOOL WriteEndMark,
+    PLZ_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine LZMA encodes the given data block.
+
+Arguments:
+
+    Destination - Supplies a pointer to buffer where the compressed data will
+        be returned.
+
+    DestinationSize - Supplies a pointer that on input contains the size of the
+        destination buffer. On output, will contain the size of the encoded
+        data.
+
+    Source - Supplies a pointer to the data to compress.
+
+    SourceSize - Supplies the number of bytes in the source buffer.
+
+    Properties - Supplies a pointer to the encoding properties.
+
+    EncodedProperties - Supplies a pointer where the encoded properties will be
+        returned on success.
+
+    EncodedPropertiesSize - Supplies a pointer that on input contains the size
+        of the encoded properties buffer. On output, contains the size of the
+        encoded properties.
+
+    WriteEndMark - Supplies a boolean indicating whether or not to write an
+        end marker.
+
+    Context - Supplies a pointer to the general LZ context.
+
+Return Value:
+
+    LZ status.
+
+--*/
+
+LZ_STATUS
+LzLzmaEncodeStream (
+    PLZMA_ENCODER_PROPERTIES Properties,
+    PLZ_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine LZMA encodes the given stream.
+
+Arguments:
+
+    Properties - Supplies the encoder properties to set.
+
+    Context - Supplies a pointer to the general LZ context.
+
+Return Value:
+
+    LZ status.
+
+--*/
+

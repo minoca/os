@@ -88,6 +88,12 @@ LzpLzmaDestroyLiterals (
     );
 
 LZ_STATUS
+LzpLzmaEncoderSetProperties (
+    PLZMA_ENCODER Encoder,
+    PLZMA_ENCODER_PROPERTIES Properties
+    );
+
+LZ_STATUS
 LzpLzmaWriteProperties (
     PLZMA_ENCODER Encoder,
     PUCHAR Properties,
@@ -386,7 +392,7 @@ Return Value:
 
     Properties->Level = 5;
     Properties->DictionarySize = 0;
-    Properties->Mc = 0;
+    Properties->MatchCount = 0;
     Properties->ReduceSize = -1ULL;
     Properties->Lc = -1;
     Properties->Lp = -1;
@@ -398,89 +404,6 @@ Return Value:
     Properties->ThreadCount = -1;
     Properties->WriteEndMark = FALSE;
     return;
-}
-
-LZ_STATUS
-LzLzmaEncoderSetProperties (
-    PLZMA_ENCODER Encoder,
-    PLZMA_ENCODER_PROPERTIES Properties
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the properties of the given LZMA encoder.
-
-Arguments:
-
-    Encoder - Supplies a pointer to the encoder whose properties should be set.
-
-    Properties - Supplies a pointer to the properties to set. A copy of this
-        memory will be made.
-
-Return Value:
-
-    LZ Status.
-
---*/
-
-{
-
-    ULONG FastBytes;
-    ULONG HashBytes;
-    LZMA_ENCODER_PROPERTIES NewProperties;
-
-    memcpy(&NewProperties, Properties, sizeof(LZMA_ENCODER_PROPERTIES));
-    LzpLzmaNormalizeProperties(&NewProperties);
-    if ((NewProperties.Lc > LZMA_LC_MAX) ||
-        (NewProperties.Lp > LZMA_LP_MAX) ||
-        (NewProperties.Pb > LZMA_PB_MAX) ||
-        (NewProperties.DictionarySize > (1ULL << LZMA_DICT_LOG_MAX_COMPRESS)) ||
-        (NewProperties.DictionarySize > LZMA_MAX_HISTORY_SIZE)) {
-
-        return LzErrorInvalidParameter;
-    }
-
-    Encoder->DictSize = NewProperties.DictionarySize;
-    FastBytes = NewProperties.FastBytes;
-    if (FastBytes < 5) {
-        FastBytes = 5;
-
-    } else if (FastBytes > LZMA_MAX_MATCH_LENGTH) {
-        FastBytes = LZMA_MAX_MATCH_LENGTH;
-    }
-
-    Encoder->FastByteCount = FastBytes;
-    Encoder->Lc = NewProperties.Lc;
-    Encoder->Lp = NewProperties.Lp;
-    Encoder->Pb = NewProperties.Pb;
-    Encoder->FastMode = FALSE;
-    if (NewProperties.Algorithm == 0) {
-        Encoder->FastMode = TRUE;
-    }
-
-    HashBytes = 4;
-    Encoder->MatchFinderData.BinTreeMode = FALSE;
-    if (NewProperties.BinTreeMode != FALSE) {
-        Encoder->MatchFinderData.BinTreeMode = TRUE;
-        if (NewProperties.HashByteCount < 2) {
-            HashBytes = 2;
-
-        } else if (NewProperties.HashByteCount < 4) {
-            HashBytes = NewProperties.HashByteCount;
-        }
-    }
-
-    Encoder->MatchFinderData.HashByteCount = HashBytes;
-    Encoder->MatchFinderData.CutValue = NewProperties.Mc;
-    Encoder->WriteEndMark = NewProperties.WriteEndMark;
-    Encoder->Multithread = FALSE;
-    if (NewProperties.ThreadCount > 1) {
-        Encoder->Multithread = TRUE;
-    }
-
-    return LzSuccess;
 }
 
 LZ_STATUS
@@ -545,7 +468,7 @@ Return Value:
         return LzErrorMemory;
     }
 
-    Result = LzLzmaEncoderSetProperties(Encoder, Properties);
+    Result = LzpLzmaEncoderSetProperties(Encoder, Properties);
     if (Result != LzSuccess) {
         goto LzmaEncodeEnd;
     }
@@ -567,6 +490,68 @@ Return Value:
                                  Context);
 
 LzmaEncodeEnd:
+    LzpLzmaDestroyEncoder(Encoder, Context);
+    return Result;
+}
+
+LZ_STATUS
+LzLzmaEncodeStream (
+    PLZMA_ENCODER_PROPERTIES Properties,
+    PLZ_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine LZMA encodes the given stream.
+
+Arguments:
+
+    Properties - Supplies the encoder properties to set.
+
+    Context - Supplies a pointer to the general LZ context.
+
+Return Value:
+
+    LZ status.
+
+--*/
+
+{
+
+    PLZMA_ENCODER Encoder;
+    LZ_STATUS Result;
+
+    Encoder = LzpLzmaCreateEncoder(Context);
+    if (Encoder == NULL) {
+        return LzErrorMemory;
+    }
+
+    Result = LzpLzmaEncoderSetProperties(Encoder, Properties);
+    if (Result != LzSuccess) {
+        goto LzmaEncodeStreamEnd;
+    }
+
+    //
+    // Prepare the encoder.
+    //
+
+    Encoder->MatchFinderData.System = Context;
+    Encoder->NeedInitialization = TRUE;
+    Encoder->RangeEncoder.System = Context;
+    Result = LzpLzmaAllocateBuffers(Encoder, 0, Context);
+    if (Result != LzSuccess) {
+        goto LzmaEncodeStreamEnd;
+    }
+
+    //
+    // Run the encoder.
+    //
+
+    Result = LzpLzmaEncode(Encoder);
+
+LzmaEncodeStreamEnd:
     LzpLzmaDestroyEncoder(Encoder, Context);
     return Result;
 }
@@ -733,7 +718,7 @@ Return Value:
 
     LzpInitializeMatchFinder(&(Encoder->MatchFinderData));
     LzLzmaEncoderInitializeProperties(&Properties);
-    LzLzmaEncoderSetProperties(Encoder, &Properties);
+    LzpLzmaEncoderSetProperties(Encoder, &Properties);
     LzpLzmaInitializeFastPosition(Encoder->FastPosition);
     LzpLzmaInitializePriceTables(Encoder->ProbabilityPrices);
     Encoder->LiteralProbabilities = NULL;
@@ -812,6 +797,89 @@ Return Value:
     Context->Reallocate(Encoder->SaveState.LiteralProbabilities, 0);
     Encoder->SaveState.LiteralProbabilities = NULL;
     return;
+}
+
+LZ_STATUS
+LzpLzmaEncoderSetProperties (
+    PLZMA_ENCODER Encoder,
+    PLZMA_ENCODER_PROPERTIES Properties
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the properties of the given LZMA encoder.
+
+Arguments:
+
+    Encoder - Supplies a pointer to the encoder whose properties should be set.
+
+    Properties - Supplies a pointer to the properties to set. A copy of this
+        memory will be made.
+
+Return Value:
+
+    LZ Status.
+
+--*/
+
+{
+
+    ULONG FastBytes;
+    ULONG HashBytes;
+    LZMA_ENCODER_PROPERTIES NewProperties;
+
+    memcpy(&NewProperties, Properties, sizeof(LZMA_ENCODER_PROPERTIES));
+    LzpLzmaNormalizeProperties(&NewProperties);
+    if ((NewProperties.Lc > LZMA_LC_MAX) ||
+        (NewProperties.Lp > LZMA_LP_MAX) ||
+        (NewProperties.Pb > LZMA_PB_MAX) ||
+        (NewProperties.DictionarySize > (1ULL << LZMA_DICT_LOG_MAX_COMPRESS)) ||
+        (NewProperties.DictionarySize > LZMA_MAX_HISTORY_SIZE)) {
+
+        return LzErrorInvalidParameter;
+    }
+
+    Encoder->DictSize = NewProperties.DictionarySize;
+    FastBytes = NewProperties.FastBytes;
+    if (FastBytes < 5) {
+        FastBytes = 5;
+
+    } else if (FastBytes > LZMA_MAX_MATCH_LENGTH) {
+        FastBytes = LZMA_MAX_MATCH_LENGTH;
+    }
+
+    Encoder->FastByteCount = FastBytes;
+    Encoder->Lc = NewProperties.Lc;
+    Encoder->Lp = NewProperties.Lp;
+    Encoder->Pb = NewProperties.Pb;
+    Encoder->FastMode = FALSE;
+    if (NewProperties.Algorithm == 0) {
+        Encoder->FastMode = TRUE;
+    }
+
+    HashBytes = 4;
+    Encoder->MatchFinderData.BinTreeMode = FALSE;
+    if (NewProperties.BinTreeMode != FALSE) {
+        Encoder->MatchFinderData.BinTreeMode = TRUE;
+        if (NewProperties.HashByteCount < 2) {
+            HashBytes = 2;
+
+        } else if (NewProperties.HashByteCount < 4) {
+            HashBytes = NewProperties.HashByteCount;
+        }
+    }
+
+    Encoder->MatchFinderData.HashByteCount = HashBytes;
+    Encoder->MatchFinderData.CutValue = NewProperties.MatchCount;
+    Encoder->WriteEndMark = NewProperties.WriteEndMark;
+    Encoder->Multithread = FALSE;
+    if (NewProperties.ThreadCount > 1) {
+        Encoder->Multithread = TRUE;
+    }
+
+    return LzSuccess;
 }
 
 LZ_STATUS
@@ -983,10 +1051,10 @@ Return Value:
         Properties->HashByteCount = 4;
     }
 
-    if (Properties->Mc == 0) {
-        Properties->Mc = (16 + (Properties->FastBytes >> 1));
+    if (Properties->MatchCount == 0) {
+        Properties->MatchCount = (16 + (Properties->FastBytes >> 1));
         if (Properties->BinTreeMode == FALSE) {
-            Properties->Mc >>= 1;
+            Properties->MatchCount >>= 1;
         }
     }
 
@@ -1076,7 +1144,7 @@ Return Value:
         for (Bit = 0; Bit < LZMA_BIT_PRICE_SHIFT_BITS; Bit += 1) {
             Weight = Weight * Weight;
             BitCount <<= 1;
-            while (Weight >= (1 >> 16)) {
+            while (Weight >= (ULONG)(1 << 16)) {
                 Weight >>= 1;
                 BitCount += 1;
             }
@@ -2543,6 +2611,8 @@ Return Value:
                      LZMA_LENGTH_HIGH_BITS,
                      Index - LZMA_LENGTH_LOW_SYMBOLS - LZMA_LENGTH_MID_SYMBOLS,
                      ProbabilityPrices);
+
+        Index += 1;
     }
 
     return;

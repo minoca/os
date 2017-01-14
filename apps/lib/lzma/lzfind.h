@@ -84,7 +84,8 @@ Members:
 
     HashMask - Stores the bitmask to use based on the hash table size.
 
-    CutValue - Stores the cut value, also known as Mc.
+    CutValue - Stores the cut value, also known as the match count. It is the
+        number of match finder cycles to perform on each iteration.
 
     BufferBase - Stores the original buffer address.
 
@@ -113,12 +114,13 @@ Members:
 
     Crc - Stores a CRC table.
 
-    ReferenceCount - Stores the number of references taken on the match finder.
+    ReferenceCount - Stores the total number of elements in the giant flat
+        array of hash tables and the son array.
 
 --*/
 
 typedef struct _LZ_MATCH_FINDER {
-    PVOID Buffer;
+    PUCHAR Buffer;
     ULONG Position;
     ULONG PositionLimit;
     ULONG StreamPosition;
@@ -238,7 +240,7 @@ Arguments:
 
 Return Value:
 
-    Returns the number of matches.
+    Returns the number of matches times two (since they come in pairs).
 
 --*/
 
