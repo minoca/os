@@ -279,6 +279,9 @@ Author:
 
 #define SHELL_IFS_DEFAULT " \t\n"
 
+#define SHELL_GLOBAL_PROFILE_PATH "/etc/profile"
+#define SHELL_USER_PROFILE_PATH ".profile"
+
 //
 // Define shell control characters.
 //
@@ -890,35 +893,6 @@ Return Value:
     TRUE on success.
 
     FALSE on failure.
-
---*/
-
-INT
-ShBuiltinEval (
-    PSHELL Shell,
-    INT ArgumentCount,
-    PSTR *Arguments
-    );
-
-/*++
-
-Routine Description:
-
-    This routine implements the eval command, which collects all the parameters
-    together separated by spaces and reexecutes them in the shell.
-
-Arguments:
-
-    Shell - Supplies a pointer to the shell.
-
-    ArgumentCount - Supplies the number of arguments on the command line.
-
-    Arguments - Supplies the array of pointers to strings representing each
-        argument.
-
-Return Value:
-
-    Returns the return value of the command it executes.
 
 --*/
 
@@ -2892,6 +2866,34 @@ Arguments:
 Return Value:
 
     Returns the return value of the command it executes.
+
+--*/
+
+INT
+ShRunScriptInContext (
+    PSHELL Shell,
+    PSTR FilePath,
+    ULONG FilePathSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine executes the given script in the current context.
+
+Arguments:
+
+    Shell - Supplies a pointer to the shell being run in.
+
+    FilePath - Supplies a pointer to the path of the script to run.
+
+    FilePathSize - Supplies the size of the file path script in bytes,
+        including the null terminator.
+
+Return Value:
+
+    Returns the return value from running (or failing to load) the script.
 
 --*/
 

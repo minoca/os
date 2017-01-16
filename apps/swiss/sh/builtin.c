@@ -645,6 +645,138 @@ BuiltinEvalEnd:
     return ReturnValue;
 }
 
+INT
+ShRunScriptInContext (
+    PSHELL Shell,
+    PSTR FilePath,
+    ULONG FilePathSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine executes the given script in the current context.
+
+Arguments:
+
+    Shell - Supplies a pointer to the shell being run in.
+
+    FilePath - Supplies a pointer to the path of the script to run.
+
+    FilePathSize - Supplies the size of the file path script in bytes,
+        including the null terminator.
+
+Return Value:
+
+    Returns the return value from running (or failing to load) the script.
+
+--*/
+
+{
+
+    FILE *NewFile;
+    INT NewFileDescriptor;
+    INT NewFileDescriptorHigh;
+    SHELL_LEXER_STATE OriginalLexer;
+    ULONG OriginalOptions;
+    BOOL Result;
+    INT ReturnValue;
+
+    NewFile = NULL;
+    NewFileDescriptor = -1;
+    NewFileDescriptorHigh = -1;
+    ReturnValue = 0;
+
+    //
+    // Open up the new file to be read for commands. Make sure it's out of the
+    // user file descriptor range.
+    //
+
+    NewFileDescriptor = open(FilePath, O_RDONLY | O_BINARY);
+    if (NewFileDescriptor < 0) {
+        SwPrintError(errno, FilePath, "Unable to open");
+        ReturnValue = SHELL_ERROR_OPEN;
+        goto RunScriptInContextEnd;
+    }
+
+    if (NewFileDescriptor >= SHELL_MINIMUM_FILE_DESCRIPTOR) {
+        NewFileDescriptorHigh = NewFileDescriptor;
+        NewFileDescriptor = -1;
+
+    } else {
+        NewFileDescriptorHigh = ShDup(Shell, NewFileDescriptor, FALSE);
+        if (NewFileDescriptorHigh < 0) {
+            SwPrintError(errno, FilePath, "Unable to dup");
+            ReturnValue = SHELL_ERROR_OPEN;
+            goto RunScriptInContextEnd;
+        }
+
+        assert(NewFileDescriptorHigh >= SHELL_MINIMUM_FILE_DESCRIPTOR);
+
+        close(NewFileDescriptor);
+        NewFileDescriptor = -1;
+    }
+
+    NewFile = fdopen(NewFileDescriptorHigh, "rb");
+    if (NewFile == NULL) {
+        SwPrintError(errno, FilePath, "Unable to Open");
+        ReturnValue = SHELL_ERROR_OPEN;
+        goto RunScriptInContextEnd;
+    }
+
+    NewFileDescriptorHigh = -1;
+
+    //
+    // Save the original lexer and re-initialize the lexer for this new file.
+    //
+
+    memcpy(&OriginalLexer, &(Shell->Lexer), sizeof(SHELL_LEXER_STATE));
+    Result = ShInitializeLexer(&(Shell->Lexer), NewFile, NULL, 0);
+    if (Result == FALSE) {
+        memcpy(&(Shell->Lexer), &OriginalLexer, sizeof(SHELL_LEXER_STATE));
+        goto RunScriptInContextEnd;
+    }
+
+    NewFile = NULL;
+    OriginalOptions = Shell->Options &
+                      (SHELL_OPTION_PRINT_PROMPTS |
+                       SHELL_OPTION_INTERACTIVE |
+                       SHELL_OPTION_RAW_INPUT |
+                       SHELL_OPTION_INPUT_BUFFER_ONLY);
+
+    Shell->Options &= ~OriginalOptions;
+    Shell->LastReturnValue = 0;
+
+    //
+    // Run the commands.
+    //
+
+    Result = ShExecute(Shell, &ReturnValue);
+    Shell->Options |= OriginalOptions;
+
+    //
+    // Restore the original lexer.
+    //
+
+    ShDestroyLexer(&(Shell->Lexer));
+    memcpy(&(Shell->Lexer), &OriginalLexer, sizeof(SHELL_LEXER_STATE));
+    if ((Result == FALSE) && (ReturnValue == 0)) {
+        ReturnValue = 1;
+    }
+
+RunScriptInContextEnd:
+    if (NewFileDescriptor >= 0) {
+        close(NewFileDescriptor);
+    }
+
+    if (NewFileDescriptorHigh >= 0) {
+        close(NewFileDescriptorHigh);
+    }
+
+    return ReturnValue;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1119,17 +1251,9 @@ Return Value:
 
     PSTR FullCommandPath;
     ULONG FullCommandPathSize;
-    FILE *NewFile;
-    INT NewFileDescriptor;
-    INT NewFileDescriptorHigh;
-    SHELL_LEXER_STATE OriginalLexer;
-    ULONG OriginalOptions;
     BOOL Result;
     INT ReturnValue;
 
-    NewFile = NULL;
-    NewFileDescriptor = -1;
-    NewFileDescriptorHigh = -1;
     if (ArgumentCount < 2) {
         return 0;
     }
@@ -1162,78 +1286,10 @@ Return Value:
         goto BuiltinDotEnd;
     }
 
-    //
-    // Open up the new file to be read for commands. Make sure it's out of the
-    // user file descriptor range.
-    //
+    ReturnValue = ShRunScriptInContext(Shell,
+                                       FullCommandPath,
+                                       FullCommandPathSize);
 
-    NewFileDescriptor = open(FullCommandPath, O_RDONLY | O_BINARY);
-    if (NewFileDescriptor < 0) {
-        SwPrintError(errno, FullCommandPath, "Unable to open");
-        ReturnValue = SHELL_ERROR_OPEN;
-        goto BuiltinDotEnd;
-    }
-
-    if (NewFileDescriptor >= SHELL_MINIMUM_FILE_DESCRIPTOR) {
-        NewFileDescriptorHigh = NewFileDescriptor;
-        NewFileDescriptor = -1;
-
-    } else {
-        NewFileDescriptorHigh = ShDup(Shell, NewFileDescriptor, FALSE);
-        if (NewFileDescriptorHigh < 0) {
-            SwPrintError(errno, FullCommandPath, "Unable to dup");
-            ReturnValue = SHELL_ERROR_OPEN;
-            goto BuiltinDotEnd;
-        }
-
-        assert(NewFileDescriptorHigh >= SHELL_MINIMUM_FILE_DESCRIPTOR);
-
-        close(NewFileDescriptor);
-        NewFileDescriptor = -1;
-    }
-
-    NewFile = fdopen(NewFileDescriptorHigh, "rb");
-    if (NewFile == NULL) {
-        SwPrintError(errno, FullCommandPath, "Unable to Open");
-        ReturnValue = SHELL_ERROR_OPEN;
-        goto BuiltinDotEnd;
-    }
-
-    NewFileDescriptorHigh = -1;
-
-    //
-    // Save the original lexer and re-initialize the lexer for this new file.
-    //
-
-    memcpy(&OriginalLexer, &(Shell->Lexer), sizeof(SHELL_LEXER_STATE));
-    Result = ShInitializeLexer(&(Shell->Lexer), NewFile, NULL, 0);
-    if (Result == FALSE) {
-        memcpy(&(Shell->Lexer), &OriginalLexer, sizeof(SHELL_LEXER_STATE));
-        goto BuiltinDotEnd;
-    }
-
-    OriginalOptions = Shell->Options &
-                      (SHELL_OPTION_PRINT_PROMPTS |
-                       SHELL_OPTION_INTERACTIVE |
-                       SHELL_OPTION_RAW_INPUT |
-                       SHELL_OPTION_INPUT_BUFFER_ONLY);
-
-    Shell->Options &= ~OriginalOptions;
-    Shell->LastReturnValue = 0;
-
-    //
-    // Run the commands.
-    //
-
-    Result = ShExecute(Shell, &ReturnValue);
-    Shell->Options |= OriginalOptions;
-
-    //
-    // Restore the original lexer.
-    //
-
-    ShDestroyLexer(&(Shell->Lexer));
-    memcpy(&(Shell->Lexer), &OriginalLexer, sizeof(SHELL_LEXER_STATE));
     if ((Result == FALSE) && (ReturnValue == 0)) {
         ReturnValue = 1;
     }
@@ -1241,14 +1297,6 @@ Return Value:
 BuiltinDotEnd:
     if ((FullCommandPath != NULL) && (FullCommandPath != Arguments[1])) {
         free(FullCommandPath);
-    }
-
-    if (NewFileDescriptor >= 0) {
-        close(NewFileDescriptor);
-    }
-
-    if (NewFileDescriptorHigh >= 0) {
-        close(NewFileDescriptorHigh);
     }
 
     return ReturnValue;
