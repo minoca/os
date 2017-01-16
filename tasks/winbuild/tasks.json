@@ -587,7 +587,7 @@
         {
             "name": "Make irssi",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/irssi-0.8.20"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/irssi-1.0.0"
         },
         {
             "name": "Make cpio",

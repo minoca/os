@@ -656,7 +656,7 @@
         {
             "name": "Make irssi",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/irssi-0.8.20"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/irssi-1.0.0"
         },
         {
             "name": "Make cpio",
