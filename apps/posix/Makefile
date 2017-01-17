@@ -35,6 +35,7 @@ BINFILES=$(BINROOT)/skel/usr/sbin/update-rc.d       \
          $(BINROOT)/skel/etc/issue                  \
          $(BINROOT)/skel/etc/init.d/rc              \
          $(BINROOT)/skel/etc/init.d/init-functions  \
+         $(BINROOT)/skel/etc/init.d/hostname.sh     \
 
 BINDIRS=$(BINROOT)/skel/etc/init.d      \
         $(BINROOT)/skel/var/run         \
@@ -82,4 +83,9 @@ $(BINROOT)/skel/etc/init.d/rc: init.d/rc
 $(BINROOT)/skel/etc/init.d/init-functions: init.d/init-functions
 	cp $^ $@
 	chmod 0755 $@
+
+$(BINROOT)/skel/etc/init.d/hostname.sh: init.d/hostname.sh $(BINROOT)/skel/usr/sbin/update-rc.d
+	cp $< $@
+	chmod 0755 $@
+	SYSROOT=$(BINROOT)/skel sh $(BINROOT)/skel/usr/sbin/update-rc.d -f hostname.sh defaults 10
 

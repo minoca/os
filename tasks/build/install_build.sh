@@ -102,6 +102,20 @@ _EOS
 
 fi
 
+if [ -r /etc/hostname ]; then
+    cat > ./keep_hostname <<_EOS
+var HostnameCopy = {
+    "Destination": "/etc/hostname",
+    "Source": "/etc/hostname",
+    "SourceVolume": -1,
+};
+
+SystemPartition["Files"] += [HostnameCopy];
+_EOS
+
+AUTO_ROOT_ARGS="$AUTO_ROOT_ARGS --script=./keep_hostname"
+fi
+
 echo "Running msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy"
 msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy
 echo "Done running setup."
