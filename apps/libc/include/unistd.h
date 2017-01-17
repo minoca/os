@@ -3786,6 +3786,60 @@ Return Value:
 --*/
 
 LIBC_API
+int
+sethostname (
+    const char *Name,
+    size_t Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the network host name for the current machine.
+
+Arguments:
+
+    Name - Supplies a pointer to the new name to set.
+
+    Size - Supplies the size of the name, not including a null terminator.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to indicate the error.
+
+--*/
+
+LIBC_API
+int
+setdomainname (
+    const char *Name,
+    size_t Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the network domain name for the current machine.
+
+Arguments:
+
+    Name - Supplies a pointer to the new name to set.
+
+    Size - Supplies the size of the name, not including a null terminator.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to indicate the error.
+
+--*/
+
+LIBC_API
 void
 swab (
     const void *Source,
