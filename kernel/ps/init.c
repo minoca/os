@@ -229,6 +229,11 @@ Return Value:
                 goto InitializeEnd;
             }
 
+            Status = PspInitializeUtsRealm(KernelProcess);
+            if (!KSUCCESS(Status)) {
+                goto InitializeEnd;
+            }
+
             PsKernelProcess = KernelProcess;
 
             //

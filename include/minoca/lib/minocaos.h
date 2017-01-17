@@ -667,6 +667,7 @@ Return Value:
 OS_API
 KSTATUS
 OsForkProcess (
+    ULONG Flags,
     PPROCESS_ID NewProcessId
     );
 
@@ -678,6 +679,9 @@ Routine Description:
     child process begins executing in the middle of this function.
 
 Arguments:
+
+    Flags - Supplies a bitfield of flags governing the behavior of the newly
+        forked process. See FORK_FLAG_* definitions.
 
     NewProcessId - Supplies a pointer that on success contains the process ID
         of the child process in the parent, and 0 in the child. This value

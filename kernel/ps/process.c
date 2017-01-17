@@ -396,13 +396,16 @@ Return Value:
     PKTHREAD CurrentThread;
     PKPROCESS NewProcess;
     INTN NewProcessId;
+    PSYSTEM_CALL_FORK Parameters;
     KSTATUS Status;
 
     CurrentThread = KeGetCurrentThread();
     NewProcess = NULL;
+    Parameters = (PSYSTEM_CALL_FORK)SystemCallParameter;
     Status = PspCopyProcess(CurrentThread->OwningProcess,
                             CurrentThread,
                             CurrentThread->TrapFrame,
+                            Parameters->Flags,
                             &NewProcess);
 
     if (!KSUCCESS(Status)) {
@@ -1234,6 +1237,7 @@ Return Value:
     PSTR *EnvironmentArray;
     UINTN EnvironmentCount;
     PKERNEL_ARGUMENT KernelArgument;
+    PKPROCESS KernelProcess;
     PKPROCESS NewProcess;
     KSTATUS Status;
     THREAD_CREATION_PARAMETERS ThreadParameters;
@@ -1329,6 +1333,9 @@ Return Value:
     }
 
     NewProcess->Umask = PS_DEFAULT_UMASK;
+    KernelProcess = PsGetKernelProcess();
+    NewProcess->Realm.Uts = KernelProcess->Realm.Uts;
+    PspUtsRealmAddReference(NewProcess->Realm.Uts);
 
     //
     // Give this process it's own new session.
@@ -1671,6 +1678,7 @@ PspCopyProcess (
     PKPROCESS Process,
     PKTHREAD MainThread,
     PTRAP_FRAME TrapFrame,
+    ULONG Flags,
     PKPROCESS *CreatedProcess
     )
 
@@ -1691,6 +1699,9 @@ Arguments:
 
     TrapFrame - Supplies a pointer to the trap frame of the interrupted main
         thread.
+
+    Flags - Supplies a bitfield of flags governing the creation of the new
+        process. See FORK_FLAG_* definitions.
 
     CreatedProcess - Supplies an optional pointer that will receive a pointer to
         the created process on success.
@@ -1805,6 +1816,22 @@ Return Value:
     }
 
     //
+    // Copy the realms or create new ones if specified.
+    //
+
+    if ((Flags & FORK_FLAG_REALM_UTS) != 0) {
+        NewProcess->Realm.Uts = PspCreateUtsRealm(Process->Realm.Uts);
+        if (NewProcess->Realm.Uts == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CopyProcessEnd;
+        }
+
+    } else {
+        NewProcess->Realm.Uts = Process->Realm.Uts;
+        PspUtsRealmAddReference(NewProcess->Realm.Uts);
+    }
+
+    //
     // Add the tracing process if needed.
     //
 
@@ -1865,6 +1892,7 @@ CopyProcessEnd:
             // nothing will clean up the new process. "Terminate" it now.
             //
 
+            PspRemoveProcessFromLists(NewProcess);
             PspProcessTermination(NewProcess);
             ObReleaseReference(NewProcess);
             NewProcess = NULL;
@@ -2869,12 +2897,17 @@ Return Value:
         Process->HandleTable = NULL;
     }
 
+    if (Process->Realm.Uts != NULL) {
+        PspUtsRealmReleaseReference(Process->Realm.Uts);
+        Process->Realm.Uts = NULL;
+    }
+
     //
     // There should only be one remaining page mapped: the shared user data
     // page.
     //
 
-    ASSERT(Process->AddressSpace->ResidentSet == 1);
+    ASSERT(Process->AddressSpace->ResidentSet <= 1);
 
     return;
 }

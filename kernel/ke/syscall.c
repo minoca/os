@@ -98,7 +98,7 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
     {PsSysCreateThread,
         sizeof(SYSTEM_CALL_CREATE_THREAD),
         sizeof(SYSTEM_CALL_CREATE_THREAD)},
-    {PsSysForkProcess, 0, 0},
+    {PsSysForkProcess, sizeof(SYSTEM_CALL_FORK), 0},
     {PsSysExecuteImage, sizeof(SYSTEM_CALL_EXECUTE_IMAGE), 0},
     {IoSysChangeDirectory, sizeof(SYSTEM_CALL_CHANGE_DIRECTORY), 0},
     {PsSysSetSignalHandler,

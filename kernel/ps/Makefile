@@ -42,6 +42,7 @@ OBJS = env.o      \
        thread.o   \
        usrlock.o  \
        utimer.o   \
+       uts.o      \
 
 ARMV7_OBJS = armv7/psarch.o   \
 

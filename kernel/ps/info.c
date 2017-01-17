@@ -118,6 +118,16 @@ Return Value:
         Status = PspGetProcessIdListInformation(Data, DataSize, Set);
         break;
 
+    case PsInformationHostName:
+    case PsInformationDomainName:
+        Status = PspGetSetUtsInformation(FromKernelMode,
+                                         InformationType,
+                                         Data,
+                                         DataSize,
+                                         Set);
+
+        break;
+
     default:
         Status = STATUS_INVALID_PARAMETER;
         *DataSize = 0;

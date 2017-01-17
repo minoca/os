@@ -668,6 +668,22 @@ typedef struct _SYSTEM_CALL_CREATE_THREAD {
 
 Structure Description:
 
+    This structure defines the system call parameters for the fork call.
+
+Members:
+
+    Flags - Supplies a bitfield of flags governing the behavior of the child.
+
+--*/
+
+typedef struct _SYSTEM_CALL_FORK {
+    ULONG Flags;
+} SYSCALL_STRUCT SYSTEM_CALL_FORK, *PSYSTEM_CALL_FORK;
+
+/*++
+
+Structure Description:
+
     This structure defines the system call parameters for the execute image
     system call.
 
@@ -2550,6 +2566,7 @@ typedef union _SYSTEM_CALL_PARAMETER_UNION {
     SYSTEM_CALL_PERFORM_VECTORED_IO PerformVectoredIo;
     SYSTEM_CALL_CREATE_PIPE CreatePipe;
     SYSTEM_CALL_CREATE_THREAD CreateThread;
+    SYSTEM_CALL_FORK Fork;
     SYSTEM_CALL_EXECUTE_IMAGE ExecuteImage;
     SYSTEM_CALL_CHANGE_DIRECTORY ChangeDirectory;
     SYSTEM_CALL_SET_SIGNAL_HANDLER SetSignalHandler;

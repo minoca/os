@@ -455,6 +455,7 @@ Author:
 #define PS_FPU_CONTEXT_ALLOCATION_TAG 0x46637250 // 'FcrP'
 #define PS_IMAGE_ALLOCATION_TAG 0x6D497350 // 'mIsP'
 #define PS_GROUP_ALLOCATION_TAG 0x70477350 // 'pGsP'
+#define PS_UTS_ALLOCATION_TAG 0x74557350 // 'tUsP'
 
 #define PROCESS_INFORMATION_VERSION 1
 
@@ -506,6 +507,23 @@ Author:
 //
 
 #define MAX_USER_ADDRESS ((PVOID)0x7FFFFFFF)
+
+//
+// Define the maximum length of a UTS name.
+//
+
+#define UTS_NAME_MAX 80
+
+//
+// Define flags to the fork call.
+//
+
+//
+// Set this flag to have the child process fork into an independent UTS
+// realm (which stores the host and domain name).
+//
+
+#define FORK_FLAG_REALM_UTS 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -564,6 +582,8 @@ typedef enum _PS_INFORMATION_TYPE {
     PsInformationInvalid,
     PsInformationProcess,
     PsInformationProcessIdList,
+    PsInformationHostName,
+    PsInformationDomainName,
 } PS_INFORMATION_TYPE, *PPS_INFORMATION_TYPE;
 
 typedef enum _PROCESS_ID_TYPE {
@@ -624,6 +644,8 @@ typedef struct _KPROCESS KPROCESS, *PKPROCESS;
 typedef struct _KTHREAD KTHREAD, *PKTHREAD;
 typedef struct _SUPPLEMENTARY_GROUPS
     SUPPLEMENTARY_GROUPS, *PSUPPLEMENTARY_GROUPS;
+
+typedef struct _UTS_REALM UTS_REALM, *PUTS_REALM;
 
 //
 // Define the user and group ID types.
@@ -1243,6 +1265,22 @@ typedef struct _PROCESS_IDENTIFIERS {
 
 Structure Description:
 
+    This structure defines the set of realms a process can belong to.
+
+Members:
+
+    Uts - Stores a pointer to the UTS realm.
+
+--*/
+
+typedef struct _PROCESS_REALMS {
+    PUTS_REALM Uts;
+} PROCESS_REALMS, *PPROCESS_REALMS;
+
+/*++
+
+Structure Description:
+
     This structure defines system or user process.
 
 Members:
@@ -1379,6 +1417,8 @@ Members:
         process doesn't necessarily have a reference to. This pointer should
         not be touched without the terminal list lock held.
 
+    Realm - Stores the set of realms the process belongs to.
+
 --*/
 
 struct _KPROCESS {
@@ -1424,6 +1464,7 @@ struct _KPROCESS {
     RESOURCE_USAGE ChildResourceUsage;
     ULONG Umask;
     PVOID ControllingTerminal;
+    PROCESS_REALMS Realm;
 };
 
 /*++

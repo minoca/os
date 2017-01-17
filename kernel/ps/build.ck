@@ -39,7 +39,8 @@ function build() {
         "signals.c",
         "thread.c",
         "usrlock.c",
-        "utimer.c"
+        "utimer.c",
+        "uts.c"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {

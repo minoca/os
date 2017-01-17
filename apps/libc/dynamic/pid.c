@@ -396,7 +396,7 @@ Return Value:
 
     ClpRunAtforkPrepareRoutines();
     fflush(NULL);
-    Status = OsForkProcess(&NewProcess);
+    Status = OsForkProcess(0, &NewProcess);
     if (NewProcess == 0) {
         ClpRunAtforkChildRoutines();
 
