@@ -114,6 +114,7 @@ COMMON_OBJS = basename.o       \
 ##
 
 UOS_OBJS = chown.o          \
+           hostname.o       \
            mkfifo.o         \
            readlink.o       \
            sh/shuos.o       \

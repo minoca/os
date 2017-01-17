@@ -230,6 +230,14 @@ Author:
 #define WHOAMI_COMMAND_DESCRIPTION \
     "Print the user name associated with the current effective user ID"
 
+#define HOSTNAME_COMMAND_NAME "hostname"
+#define HOSTNAME_COMMAND_DESCRIPTION \
+    "Print or set the machine's network host name"
+
+#define DNSDOMAINNAME_COMMAND_NAME "dnsdomainname"
+#define DNSDOMAINNAME_COMMAND_DESCRIPTION \
+    "Print the DNS domain name of the machine"
+
 //
 // Command entry point prototypes.
 //
@@ -2257,6 +2265,31 @@ WhoamiMain (
 Routine Description:
 
     This routine is the main entry point for the whoami utility.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of command line arguments the program
+        was invoked with.
+
+    Arguments - Supplies a tokenized array of command line arguments.
+
+Return Value:
+
+    Returns an integer exit code. 0 for success, nonzero otherwise.
+
+--*/
+
+INT
+HostnameMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the main entry point for the hostname utility.
 
 Arguments:
 

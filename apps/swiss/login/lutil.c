@@ -1452,7 +1452,13 @@ Return Value:
 
     memset(&SystemInformation, 0, sizeof(SystemInformation));
     uname(&SystemInformation);
-    printf("%s login: ", SystemInformation.nodename);
+    if (SystemInformation.nodename[0] == '\0') {
+        printf("login: ");
+
+    } else {
+        printf("%s login: ", SystemInformation.nodename);
+    }
+
     fflush(NULL);
     return;
 }

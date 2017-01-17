@@ -143,6 +143,7 @@ function build() {
 
     uos_sources = [
         "dw.c",
+        "hostname.c",
         "swlib/linux.c",
         "uos/uoscmds.c",
     ];
