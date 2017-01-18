@@ -532,7 +532,7 @@ Return Value:
     } else {
         File = SetupFileOpen(Handle,
                              Path,
-                             O_WRONLY | O_CREAT | O_EXCL,
+                             O_WRONLY | O_CREAT | O_TRUNC,
                              FILE_PERMISSION_ALL);
 
         if (File == NULL) {

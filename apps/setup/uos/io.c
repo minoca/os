@@ -149,7 +149,21 @@ Return Value:
 
 {
 
-    return symlink(LinkTarget, Path);
+    INT Result;
+
+    //
+    // Create the symlink. If it already exists, attempt to unlink that file
+    // and create a new one.
+    //
+
+    Result = symlink(LinkTarget, Path);
+    if ((Result < 0) && (errno == EEXIST)) {
+        if (unlink(LinkTarget) == 0) {
+            Result = symlink(LinkTarget, Path);
+        }
+    }
+
+    return Result;
 }
 
 PVOID
