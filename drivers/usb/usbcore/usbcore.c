@@ -2908,6 +2908,7 @@ Return Value:
 
     if (CurrentConfiguration == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto GetConfigurationEnd;
     }
 
     RtlZeroMemory(CurrentConfiguration, AllocationSize);
