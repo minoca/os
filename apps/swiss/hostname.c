@@ -33,6 +33,7 @@ Environment:
 
 #include <arpa/inet.h>
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <limits.h>
