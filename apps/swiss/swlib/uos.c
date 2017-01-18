@@ -52,6 +52,7 @@ Environment:
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include "../swlib.h"
 
 //
@@ -3315,6 +3316,44 @@ Return Value:
     }
 
     return Result;
+}
+
+int
+SwOpen (
+    const char *Path,
+    int OpenFlags,
+    mode_t Mode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine opens a file and connects it to a file descriptor.
+
+Arguments:
+
+    Shell - Supplies a pointer to the shell.
+
+    Path - Supplies a pointer to a null terminated string containing the path
+        of the file to open.
+
+    OpenFlags - Supplies a set of flags ORed together. See O_* definitions.
+
+    Mode - Supplies an optional integer representing the permission mask to set
+        if the file is to be created by this open call.
+
+Return Value:
+
+    Returns a file descriptor on success.
+
+    -1 on failure. The errno variable will be set to indicate the error.
+
+--*/
+
+{
+
+    return open(Path, OpenFlags, Mode);
 }
 
 //

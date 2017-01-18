@@ -2361,9 +2361,9 @@ Return Value:
             // Open up the file.
             //
 
-            NewDescriptorAnywhere = open(ExpandedFileName,
-                                         OpenFlags,
-                                         SHELL_FILE_CREATION_MASK);
+            NewDescriptorAnywhere = SwOpen(ExpandedFileName,
+                                           OpenFlags,
+                                           SHELL_FILE_CREATION_MASK);
 
             if (NewDescriptorAnywhere < 0) {
                 PRINT_ERROR("sh: Unable to open redirection file %s: %s.\n",

@@ -34,7 +34,6 @@ Environment:
 
 #include <windows.h>
 #include <psapi.h>
-
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -121,6 +120,11 @@ SwpReadSheBang (
     char *Command,
     char **NewCommand,
     char **NewArgument
+    );
+
+void
+SwpPrintLastError (
+    void
     );
 
 //
@@ -3846,6 +3850,119 @@ Return Value:
     return 0;
 }
 
+int
+SwOpen (
+    const char *Path,
+    int OpenFlags,
+    mode_t Mode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine opens a file and connects it to a file descriptor.
+
+Arguments:
+
+    Shell - Supplies a pointer to the shell.
+
+    Path - Supplies a pointer to a null terminated string containing the path
+        of the file to open.
+
+    OpenFlags - Supplies a set of flags ORed together. See O_* definitions.
+
+    Mode - Supplies an optional integer representing the permission mask to set
+        if the file is to be created by this open call.
+
+Return Value:
+
+    Returns a file descriptor on success.
+
+    -1 on failure. The errno variable will be set to indicate the error.
+
+--*/
+
+{
+
+    DWORD CreationDisposition;
+    DWORD DesiredAccess;
+    HANDLE FileHandle;
+    DWORD FlagsAndAttributes;
+    DWORD ShareMode;
+
+    //
+    // Translate the access flags to the Win32 bits.
+    //
+
+    DesiredAccess = 0;
+    if ((OpenFlags & (O_WRONLY & O_RDONLY)) == (O_WRONLY | O_RDONLY)) {
+        DesiredAccess |= GENERIC_WRITE | GENERIC_READ;
+
+    } else if ((OpenFlags & (O_WRONLY & O_RDONLY)) == O_RDONLY) {
+        DesiredAccess |= GENERIC_READ;
+
+    } else if ((OpenFlags & (O_WRONLY & O_RDONLY)) == O_WRONLY) {
+        DesiredAccess |= GENERIC_WRITE;
+    }
+
+    if ((OpenFlags & O_APPEND) != 0) {
+        DesiredAccess |= FILE_APPEND_DATA;
+    }
+
+    //
+    // Convert the create flags to the Win32 version bits.
+    //
+
+    CreationDisposition = OPEN_EXISTING;
+    if ((OpenFlags & O_CREAT) != 0) {
+        if ((OpenFlags & O_EXCL) != 0) {
+            CreationDisposition = CREATE_NEW;
+
+        } else if ((OpenFlags & O_TRUNC) != 0) {
+            CreationDisposition = CREATE_ALWAYS;
+
+        } else {
+            CreationDisposition = OPEN_ALWAYS;
+        }
+
+    } else if ((OpenFlags & O_TRUNC) != 0) {
+        CreationDisposition = TRUNCATE_EXISTING;
+    }
+
+    //
+    // Default to normal file attributes. If this is a create and write
+    // permissions are not specified, set the attributes to read-only.
+    //
+
+    FlagsAndAttributes = FILE_ATTRIBUTE_NORMAL;
+    if ((OpenFlags & O_CREAT) != 0) {
+        if ((Mode & S_IWUSR) == 0) {
+            FlagsAndAttributes = FILE_ATTRIBUTE_READONLY;
+        }
+    }
+
+    //
+    // Always open the file in read/write share mode for now.
+    //
+
+    ShareMode = FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE;
+    FileHandle = CreateFile(Path,
+                            DesiredAccess,
+                            ShareMode,
+                            NULL,
+                            CreationDisposition,
+                            FlagsAndAttributes,
+                            NULL);
+
+    if (FileHandle == INVALID_HANDLE_VALUE) {
+        SwpPrintLastError();
+        return -1;
+    }
+
+    return _open_osfhandle((intptr_t)FileHandle, 0);
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -4335,5 +4452,48 @@ ReadSheBangEnd:
     }
 
     return Status;
+}
+
+void
+SwpPrintLastError (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the result of GetLastError.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    DWORD Flags;
+    PCHAR MessageBuffer;
+
+    Flags = FORMAT_MESSAGE_ALLOCATE_BUFFER |
+            FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS;
+
+    FormatMessage(Flags,
+                  NULL,
+                  GetLastError(),
+                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                  (LPTSTR)&MessageBuffer,
+                  0,
+                  NULL);
+
+    fprintf(stderr, "Last Error: %s\n", MessageBuffer);
+    LocalFree(MessageBuffer);
+    return;
 }
 
