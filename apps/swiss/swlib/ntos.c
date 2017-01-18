@@ -3887,27 +3887,25 @@ Return Value:
 
     DWORD CreationDisposition;
     DWORD DesiredAccess;
+    INT FileDescriptor;
     HANDLE FileHandle;
     DWORD FlagsAndAttributes;
     DWORD ShareMode;
 
     //
-    // Translate the access flags to the Win32 bits.
+    // Translate the access flags to the Win32 bits. If the file is to be
+    // opened in append mode, do not set the write flags. For whatever reason,
+    // the write flags take precedence over the append flag.
     //
 
-    DesiredAccess = 0;
-    if ((OpenFlags & (O_WRONLY | O_RDONLY)) == (O_WRONLY | O_RDONLY)) {
-        DesiredAccess |= GENERIC_WRITE | GENERIC_READ;
-
-    } else if ((OpenFlags & (O_WRONLY | O_RDONLY)) == O_RDONLY) {
-        DesiredAccess |= GENERIC_READ;
-
-    } else if ((OpenFlags & (O_WRONLY | O_RDONLY)) == O_WRONLY) {
-        DesiredAccess |= GENERIC_WRITE;
-    }
-
     if ((OpenFlags & O_APPEND) != 0) {
-        DesiredAccess |= FILE_APPEND_DATA;
+        DesiredAccess = FILE_APPEND_DATA;
+
+    } else {
+        DesiredAccess = GENERIC_READ;
+        if (((OpenFlags & O_WRONLY) != 0) || ((OpenFlags & O_RDWR) != 0)) {
+            DesiredAccess |= GENERIC_WRITE;
+        }
     }
 
     //
@@ -3960,7 +3958,23 @@ Return Value:
         return -1;
     }
 
-    return _open_osfhandle((intptr_t)FileHandle, 0);
+    //
+    // Swiss assumes that the default translation mode is text mode, but
+    // CreateFile defaults to binary mode. If binary mode is not explicitly
+    // specified, OR in the text mode bit.
+    //
+
+    if ((OpenFlags & O_BINARY) == 0) {
+        OpenFlags |= O_TEXT;
+    }
+
+    FileDescriptor = _open_osfhandle((intptr_t)FileHandle, OpenFlags);
+    if (FileDescriptor == -1) {
+        CloseHandle(FileHandle);
+        return -1;
+    }
+
+    return FileDescriptor;
 }
 
 //
