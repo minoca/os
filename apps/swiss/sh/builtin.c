@@ -693,7 +693,7 @@ Return Value:
     // user file descriptor range.
     //
 
-    NewFileDescriptor = open(FilePath, O_RDONLY | O_BINARY);
+    NewFileDescriptor = SwOpen(FilePath, O_RDONLY | O_BINARY, 0);
     if (NewFileDescriptor < 0) {
         SwPrintError(errno, FilePath, "Unable to open");
         ReturnValue = SHELL_ERROR_OPEN;

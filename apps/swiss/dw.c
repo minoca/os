@@ -1072,9 +1072,9 @@ Return Value:
     // Seed the bad randomizer, and try to open a decent random source.
     //
 
-    DwRandomSource = open("/dev/urandom", O_RDONLY | O_NONBLOCK);
+    DwRandomSource = SwOpen("/dev/urandom", O_RDONLY | O_NONBLOCK, 0);
     if (DwRandomSource < 0) {
-        DwRandomSource = open("/dev/random", O_RDONLY | O_NONBLOCK);
+        DwRandomSource = SwOpen("/dev/random", O_RDONLY | O_NONBLOCK, 0);
     }
 
     srand(time(NULL));

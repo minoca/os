@@ -822,7 +822,7 @@ Return Value:
         goto ReadFileInEnd;
     }
 
-    File = open(Path, O_RDONLY | O_BINARY);
+    File = SwOpen(Path, O_RDONLY | O_BINARY, 0);
     if (File < 0) {
         if ((Context->Options & GREP_OPTION_SUPPRESS_BLAND_ERRORS) != 0) {
             Status = 0;

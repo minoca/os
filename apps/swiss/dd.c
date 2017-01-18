@@ -578,7 +578,7 @@ Return Value:
     //
 
     if (InPath != NULL) {
-        Input = open(InPath, Context.InOpenFlags);
+        Input = SwOpen(InPath, Context.InOpenFlags, 0);
         if (Input < 0) {
             Status = errno;
             SwPrintError(Status, InPath, "Cannot open");
@@ -591,7 +591,10 @@ Return Value:
     }
 
     if (OutPath != NULL) {
-        Output = open(OutPath, Context.OutOpenFlags, DD_DEFAULT_CREATION_MASK);
+        Output = SwOpen(OutPath,
+                        Context.OutOpenFlags,
+                        DD_DEFAULT_CREATION_MASK);
+
         if (Output < 0) {
             Status = errno;
             SwPrintError(Status, OutPath, "Cannot open");

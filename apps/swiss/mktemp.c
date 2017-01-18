@@ -473,9 +473,9 @@ Return Value:
             }
 
         } else {
-            Descriptor = open(AppendedPath,
-                              O_RDWR | O_CREAT | O_EXCL,
-                              TEMPORARY_FILE_PERMISSIONS);
+            Descriptor = SwOpen(AppendedPath,
+                                O_RDWR | O_CREAT | O_EXCL,
+                                TEMPORARY_FILE_PERMISSIONS);
 
             if (Descriptor >= 0) {
                 close(Descriptor);

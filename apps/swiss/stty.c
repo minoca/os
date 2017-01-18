@@ -524,7 +524,7 @@ Return Value:
             break;
 
         case 'F':
-            Terminal = open(optarg, O_RDONLY | O_NONBLOCK);
+            Terminal = SwOpen(optarg, O_RDONLY | O_NONBLOCK, 0);
             if (Terminal < 0) {
                 Status = 1;
                 SwPrintError(errno, optarg, "Unable to open");
@@ -576,7 +576,7 @@ Return Value:
     //
 
     if (Terminal < 0) {
-        Terminal = open("/dev/tty", O_RDWR);
+        Terminal = SwOpen("/dev/tty", O_RDWR, 0);
         if (Terminal < 0) {
             Terminal = STDIN_FILENO;
         }

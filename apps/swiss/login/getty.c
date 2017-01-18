@@ -567,7 +567,7 @@ Return Value:
 
         TtyName = ttyname(STDIN_FILENO);
         if (TtyName != NULL) {
-            FileDescriptor = open(TtyName, O_RDWR | O_NONBLOCK);
+            FileDescriptor = SwOpen(TtyName, O_RDWR | O_NONBLOCK, 0);
             if (FileDescriptor >= 0) {
                 OriginalHandler = signal(SIGHUP, SIG_IGN);
                 ioctl(FileDescriptor, TIOCNOTTY);
@@ -585,7 +585,7 @@ Return Value:
 
     SwCloseFrom(STDERR_FILENO + 1);
     openlog("getty", LOG_PID, LOG_AUTH);
-    Null = open("/dev/null", O_RDWR);
+    Null = SwOpen("/dev/null", O_RDWR, 0);
     if (Null < 0) {
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
@@ -986,7 +986,7 @@ Return Value:
         }
 
         close(STDIN_FILENO);
-        Descriptor = open(FinalName, O_RDWR | O_NONBLOCK);
+        Descriptor = SwOpen(FinalName, O_RDWR | O_NONBLOCK, 0);
         if (Descriptor < 0) {
             SwPrintError(errno, FinalName, "Failed to open");
             free(FinalName);

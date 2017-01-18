@@ -571,7 +571,7 @@ Return Value:
         // Point standard in, out, and error at /dev/null.
         //
 
-        DevNull = open("/dev/null", O_RDWR);
+        DevNull = SwOpen("/dev/null", O_RDWR, 0);
         if (DevNull >= 0) {
             dup2(DevNull, STDIN_FILENO);
             dup2(DevNull, STDOUT_FILENO);

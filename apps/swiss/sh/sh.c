@@ -350,7 +350,7 @@ Return Value:
 
         } else {
             Argument = Arguments[ArgumentIndex];
-            InputDescriptor = open(Argument, O_RDONLY | O_BINARY);
+            InputDescriptor = SwOpen(Argument, O_RDONLY | O_BINARY, 0);
             if (InputDescriptor < 0) {
                 SwPrintError(errno, Argument, "Unable to open script");
                 ReturnValue = SHELL_ERROR_OPEN;

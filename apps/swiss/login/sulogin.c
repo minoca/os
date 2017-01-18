@@ -266,7 +266,7 @@ Return Value:
     if (Terminal != NULL) {
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
-        File = open(Terminal, O_RDWR);
+        File = SwOpen(Terminal, O_RDWR, 0);
         if (File >= 0) {
             dup2(File, STDOUT_FILENO);
             close(STDERR_FILENO);

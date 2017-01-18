@@ -752,7 +752,7 @@ Return Value:
     }
 
     if (Console != NULL) {
-        Descriptor = open(Console, O_RDWR | O_NONBLOCK | O_NOCTTY);
+        Descriptor = SwOpen(Console, O_RDWR | O_NONBLOCK | O_NOCTTY, 0);
         if (Descriptor >= 0) {
             dup2(Descriptor, STDIN_FILENO);
             dup2(Descriptor, STDOUT_FILENO);

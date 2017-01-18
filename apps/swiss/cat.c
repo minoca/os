@@ -385,7 +385,7 @@ Return Value:
                 }
 
             } else {
-                FileDescriptor = open(Argument, OpenFlags);
+                FileDescriptor = SwOpen(Argument, OpenFlags, 0);
                 if (FileDescriptor < 0) {
                     SwPrintError(errno, Argument, "Failed to open file");
                     Failed = TRUE;

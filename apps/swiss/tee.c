@@ -223,7 +223,7 @@ Return Value:
          DescriptorIndex += 1) {
 
         Path = Arguments[ArgumentIndex + DescriptorIndex - 1];
-        Descriptors[DescriptorIndex] = open(Path, OpenFlags, 0777);
+        Descriptors[DescriptorIndex] = SwOpen(Path, OpenFlags, 0777);
         if (Descriptors[DescriptorIndex] < 0) {
             SwPrintError(errno, Path, "Cannot open");
             TotalStatus = 1;

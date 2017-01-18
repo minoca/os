@@ -479,9 +479,9 @@ Return Value:
 
     NewFileDescriptor = -1;
     for (Stall = 0; Stall < UPDATE_PASSWORD_WAIT; Stall += 1) {
-        NewFileDescriptor = open(AppendedPath,
-                                 O_WRONLY | O_CREAT | O_EXCL,
-                                 S_IRUSR | S_IWUSR);
+        NewFileDescriptor = SwOpen(AppendedPath,
+                                   O_WRONLY | O_CREAT | O_EXCL,
+                                   S_IRUSR | S_IWUSR);
 
         if (NewFileDescriptor >= 0) {
             break;
@@ -753,7 +753,7 @@ Return Value:
         URandom = RandomSource;
 
     } else {
-        URandom = open(URANDOM_PATH, O_RDONLY);
+        URandom = SwOpen(URANDOM_PATH, O_RDONLY, 0);
         if (URandom < 0) {
             SwPrintError(errno, URANDOM_PATH, "Failed to open random source");
             return NULL;
@@ -1508,9 +1508,9 @@ Return Value:
     //
 
     if (access(_PATH_UTMPX, R_OK | W_OK) < 0) {
-        Descriptor = open(_PATH_UTMPX,
-                          O_WRONLY | O_CREAT,
-                          S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        Descriptor = SwOpen(_PATH_UTMPX,
+                            O_WRONLY | O_CREAT,
+                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
         if (Descriptor >= 0) {
             close(Descriptor);

@@ -265,7 +265,7 @@ Return Value:
         File = STDIN_FILENO;
 
     } else {
-        File = open(FileName, O_RDONLY | O_BINARY | O_NOCTTY);
+        File = SwOpen(FileName, O_RDONLY | O_BINARY | O_NOCTTY, 0);
         if (File < 0) {
             Status = errno;
             SwPrintError(Status, FileName, "Cannot open");

@@ -291,7 +291,7 @@ Return Value:
     // it. Don't freak out if this fails, as maybe the root does have it.
     //
 
-    RandomSource = open(URANDOM_PATH, O_RDONLY);
+    RandomSource = SwOpen(URANDOM_PATH, O_RDONLY, 0);
 
     //
     // Chroot if requested. Warm up crypt first in case libcrypt isn't in the

@@ -784,7 +784,7 @@ Return Value:
         //
 
         if ((Options & SS_DAEMON_OPTION_NO_CLOSE) == 0) {
-            DevNull = open("/dev/null", O_RDWR);
+            DevNull = SwOpen("/dev/null", O_RDWR, 0);
             if (DevNull >= 0) {
                 dup2(DevNull, STDIN_FILENO);
                 dup2(DevNull, STDOUT_FILENO);
@@ -970,7 +970,7 @@ Return Value:
     int Size;
     size_t TotalBytesWritten;
 
-    File = open(Context->PidFilePath, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+    File = SwOpen(Context->PidFilePath, O_WRONLY | O_TRUNC | O_CREAT, 0644);
     if (File >= 0) {
         Size = snprintf(Buffer,
                         sizeof(Buffer),

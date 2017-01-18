@@ -1248,7 +1248,7 @@ Return Value:
         return 1;
     }
 
-    Terminal = open(TerminalName, O_RDONLY);
+    Terminal = SwOpen(TerminalName, O_RDONLY, 0);
     if (Terminal < 0) {
         return 1;
     }

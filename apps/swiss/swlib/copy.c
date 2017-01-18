@@ -658,7 +658,7 @@ Return Value:
         // Attempt to open and truncate the file.
         //
 
-        DestinationFile = open(Destination, O_WRONLY | O_TRUNC | O_BINARY);
+        DestinationFile = SwOpen(Destination, O_WRONLY | O_TRUNC | O_BINARY, 0);
         if (DestinationFile < 0) {
             if ((Options & COPY_OPTION_UNLINK) != 0) {
                 Result = SwUnlink(Destination);
@@ -689,9 +689,9 @@ Return Value:
             CreatePermissions |= S_IRWXU;
         }
 
-        DestinationFile = open(Destination,
-                               O_WRONLY | O_CREAT | O_BINARY,
-                               CreatePermissions);
+        DestinationFile = SwOpen(Destination,
+                                 O_WRONLY | O_CREAT | O_BINARY,
+                                 CreatePermissions);
 
         if (DestinationFile < 0) {
             Result = errno;
@@ -704,7 +704,7 @@ Return Value:
     // Open up the source as well.
     //
 
-    SourceFile = open(Source, O_RDONLY | O_BINARY);
+    SourceFile = SwOpen(Source, O_RDONLY | O_BINARY, 0);
     if (SourceFile < 0) {
         Result = errno;
         SwPrintError(Result, Destination, "Cannot open");
