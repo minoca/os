@@ -3896,13 +3896,13 @@ Return Value:
     //
 
     DesiredAccess = 0;
-    if ((OpenFlags & (O_WRONLY & O_RDONLY)) == (O_WRONLY | O_RDONLY)) {
+    if ((OpenFlags & (O_WRONLY | O_RDONLY)) == (O_WRONLY | O_RDONLY)) {
         DesiredAccess |= GENERIC_WRITE | GENERIC_READ;
 
-    } else if ((OpenFlags & (O_WRONLY & O_RDONLY)) == O_RDONLY) {
+    } else if ((OpenFlags & (O_WRONLY | O_RDONLY)) == O_RDONLY) {
         DesiredAccess |= GENERIC_READ;
 
-    } else if ((OpenFlags & (O_WRONLY & O_RDONLY)) == O_WRONLY) {
+    } else if ((OpenFlags & (O_WRONLY | O_RDONLY)) == O_WRONLY) {
         DesiredAccess |= GENERIC_WRITE;
     }
 
