@@ -2067,7 +2067,7 @@ Return Value:
 
     //
     // Execute all the children on the subshell (either if this is the child
-    // process or fork never happened.
+    // process or fork never happened).
     //
 
     if (ChildProcess <= 0) {
@@ -2077,7 +2077,7 @@ Return Value:
             CurrentEntry = CurrentEntry->Next;
             Result = ShExecuteNode(Subshell, Child);
             if (Result == FALSE) {
-                goto ExecuteSubshellGroupEnd;
+                break;
             }
 
             if (Shell->Exited != FALSE) {

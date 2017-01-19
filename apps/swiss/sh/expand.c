@@ -1724,7 +1724,15 @@ Return Value:
                 VariableNameCopy = SwStringDuplicate(VariableName,
                                                      VariableNameSize);
 
-                printf("%s: %s\n", VariableNameCopy, ModifierWord);
+                if (ModifierWord != NULL) {
+                    fprintf(stderr, "%s: %s\n", VariableNameCopy, ModifierWord);
+
+                } else {
+                    fprintf(stderr,
+                            "%s: parameter null or not set\n",
+                            VariableNameCopy);
+                }
+
                 if (VariableNameCopy != NULL) {
                     free(VariableNameCopy);
                 }
@@ -1733,10 +1741,25 @@ Return Value:
 
                 assert(ParameterNumber >= 0);
 
-                printf("%d: %s\n", ParameterNumber, ModifierWord);
+                if (ModifierWord != NULL) {
+                    fprintf(stderr, "%d: %s\n", ParameterNumber, ModifierWord);
+
+                } else {
+                    fprintf(stderr,
+                            "%d: parameter null or not set\n",
+                            ParameterNumber);
+                }
             }
 
             Result = FALSE;
+
+            //
+            // If ":?" or "?" expansion fails, a non-interactive shell is
+            // supposed to exit. Set a non-zero return value. The
+            // non-interactive check happens further up the stack.
+            //
+
+            Shell->ReturnValue = 1;
             goto ExpandNormalParameterEnd;
         }
 
