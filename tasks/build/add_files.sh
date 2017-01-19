@@ -159,7 +159,8 @@ libreadline
 libopenssl
 libpcre
 ca-certificates
-pkgconfig"
+pkgconfig
+yasm"
 
 mkdir -p "$DEST/usr/lib/opkg/"
 

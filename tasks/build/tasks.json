@@ -679,6 +679,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/nasm-2.12.02"
         },
         {
+            "name": "Make libx264",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libx264-20170102-2245"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
