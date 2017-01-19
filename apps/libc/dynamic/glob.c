@@ -35,6 +35,7 @@ Environment:
 #include <errno.h>
 #include <glob.h>
 #include <pwd.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/param.h>
 #include <unistd.h>

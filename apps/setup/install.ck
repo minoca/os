@@ -917,7 +917,7 @@ if (plat == "panda-usb") {
     //
 
     BootmefiCopy["Destination"] += EFI_DEFAULT_APP;
-    BootPartition["Size"] = 2 * MEGABYTE;
+    BootPartition["Size"] = 3 * MEGABYTE;
     SystemPartition["Size"] = 20 * MEGABYTE;
 }
 

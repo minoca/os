@@ -33,6 +33,7 @@ Environment:
 #include <minoca/devinfo/net.h>
 #include <net/if.h>
 #include <errno.h>
+#include <stdlib.h>
 #include "net.h"
 
 //

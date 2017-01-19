@@ -34,6 +34,7 @@ Environment:
 #include <errno.h>
 #include <fcntl.h>
 #include <spawn.h>
+#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 

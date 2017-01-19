@@ -39,6 +39,7 @@ Environment:
 #include <netdb.h>
 #include <poll.h>
 #include <resolv.h>
+#include <stdlib.h>
 #include "net.h"
 
 //

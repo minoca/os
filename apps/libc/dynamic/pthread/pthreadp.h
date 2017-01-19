@@ -28,6 +28,7 @@ Author:
 #include "../libcp.h"
 #include <pthread.h>
 #include <errno.h>
+#include <stdlib.h>
 
 //
 // ---------------------------------------------------------------- Definitions

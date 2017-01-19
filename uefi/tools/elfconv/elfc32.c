@@ -737,10 +737,10 @@ Return Value:
                 if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                     Difference = Destination - (VOID *)(Context->CoffFile);
                     printf("Copying section from ELF offset %x, size %x to "
-                           "COFF offset %tx.\n",
+                           "COFF offset %lx.\n",
                            ElfSection->sh_offset,
                            ElfSection->sh_size,
-                           Difference);
+                           (long)Difference);
 
                 }
 
@@ -753,8 +753,8 @@ Return Value:
             case SHT_NOBITS:
                 if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                     Difference = Destination - (VOID *)(Context->CoffFile);
-                    printf("Zeroing COFF offset %tx, size %x",
-                           Difference,
+                    printf("Zeroing COFF offset %lx, size %x",
+                           (long)Difference,
                            ElfSection->sh_size);
                 }
 
@@ -854,10 +854,10 @@ Return Value:
                 Difference = (VOID *)Relocation - (VOID *)ElfHeader;
                 fprintf(stderr,
                         "Error: Invalid symbol definition %x, "
-                        "relocation section %d, offset %tx.\n",
+                        "relocation section %d, offset %lx.\n",
                         Symbol->st_shndx,
                         SectionIndex,
-                        Difference);
+                        (long)Difference);
 
                 return FALSE;
             }

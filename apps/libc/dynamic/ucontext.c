@@ -33,6 +33,7 @@ Environment:
 #include "libcp.h"
 #include <errno.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <ucontext.h>
 
 //

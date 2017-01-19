@@ -35,6 +35,7 @@ Environment:
 #include <fcntl.h>
 #include <syslog.h>
 #include <sys/un.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 //
