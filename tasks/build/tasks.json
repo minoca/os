@@ -161,27 +161,27 @@
         {
             "name": "Make binutils",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/binutils-2.23"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/binutils-2.27"
         },
         {
             "name": "Make GMP",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/gmp-4.3.2"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gmp-6.1.2"
         },
         {
             "name": "Make MPFR",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/mpfr-2.4.2"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mpfr-3.1.5"
         },
         {
             "name": "Make MPC",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/mpc-0.8.1"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mpc-1.0.3"
         },
         {
             "name": "Make GCC",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/gcc-4.9.2"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gcc-6.3.0"
         },
         {
             "name": "Make expat",

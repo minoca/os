@@ -82,27 +82,27 @@
         {
             "name": "Make binutils (tools)",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/binutils-2.23 tools"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/binutils-2.27 tools"
         },
         {
             "name": "Make GMP (tools)",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gmp-4.3.2 tools"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gmp-6.1.2 tools"
         },
         {
             "name": "Make MPFR (tools)",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpfr-2.4.2 tools"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpfr-3.1.5 tools"
         },
         {
             "name": "Make MPC (tools)",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpc-0.8.1 tools"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpc-1.0.3 tools"
         },
         {
             "name": "Make GCC (tools)",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gcc-4.9.2 tools"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gcc-6.3.0 tools"
         },
         {
             "name": "Make NCurses (tools)",
@@ -187,27 +187,27 @@
         {
             "name": "Make binutils",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/binutils-2.23"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/binutils-2.27"
         },
         {
             "name": "Make GMP",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gmp-4.3.2"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gmp-6.1.2"
         },
         {
             "name": "Make MPFR",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpfr-2.4.2"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpfr-3.1.5"
         },
         {
             "name": "Make MPC",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpc-0.8.1"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpc-1.0.3"
         },
         {
             "name": "Make GCC",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gcc-4.9.2"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gcc-6.3.0"
         },
         {
             "name": "Make expat",
