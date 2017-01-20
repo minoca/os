@@ -221,20 +221,8 @@ size.
 
 License
 =======
-The contents of this archive are licensed under the Creative Commons
-Non-Commercial Share-Alike license, which can be found at
-http://creativecommons.org/licenses/by-nc-sa/4.0/
-
-
-Limitations
-============
-This is the free edition of Minoca OS. It is licensed for non-commercial use.
-It was compiled with the -O1 flag and with debug checks enabled. Additionally,
-it will automatically reboot itself every 72 hours. An optimized non-debug
-edition of the operating system is available. If you've got a project idea,
-even a hobby project, let us know at info@minocacorp.com; we can help. Minoca
-can also create custom builds of the operating system, and can be hired to
-write device drivers.
+The contents of this archive are licensed under the GNU General Public License
+version 3.
 
 
 Troubleshooting

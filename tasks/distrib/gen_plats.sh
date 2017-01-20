@@ -78,8 +78,9 @@ else
     exit 1
 fi
 
-for image in $IMAGES; do
-    ARCHIVE="Minoca-$image-$REVISION.zip"
+for image in $IMAGES install; do
+    ARCHIVE="Minoca-$image.zip"
+    [ "$image" = "install" ] && ARCHIVE="Minoca-$image-$ARCH$VARIANT.zip"
     7za a -tzip -mmt -mx9 -mtc "$ARCHIVE" "${image}.img"
     FILE_SIZE=`ls -l $ARCHIVE | \
         sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
@@ -88,6 +89,7 @@ for image in $IMAGES; do
         python $SRCROOT/client.py --result "$image Size" integer "$FILE_SIZE"
         python $SRCROOT/client.py --upload schedule $ARCHIVE $ARCHIVE
         echo Uploaded file $ARCHIVE, size $FILE_SIZE
+        upload_to_production "$ARCHIVE"
     fi
 done
 

@@ -68,7 +68,7 @@ if ! test -d ./bin; then
 
     file=minoca-bin-$ARCH$VARIANT$DEBUG.tar.gz
     echo "Downloading $file from schedule instance ID $last_native_build"
-    python ../../client.py --pull $file $file $last_native_build
+    python ../../client.py --pull schedule $file $file $last_native_build
     echo "Extracting $file"
     tar -xzf $file || echo "Ignoring failures from tar."
 fi
@@ -116,6 +116,13 @@ for file in debugui.exe debug.exe kexts.dll msetup.exe; do
 done
 
 ##
+## Prepare the production upload.
+##
+
+. "$SRCROOT/os/tasks/distrib/upload.sh"
+prepare_for_upload
+
+##
 ## Build the distribution files.
 ##
 
@@ -124,18 +131,20 @@ cd "$BINROOT"
 if test "$ARCH$VARIANT" = "x86"; then
     echo "Running gen_bin.sh"
     sh "$SRCROOT/os/tasks/distrib/gen_bin.sh"
-    echo "Running gen_sdk.sh"
-    sh "$SRCROOT/os/tasks/distrib/gen_sdk.sh"
-    echo "Running gen_tp.sh"
-    sh "$SRCROOT/os/tasks/distrib/gen_tp.sh"
 fi
 
 echo "Running gen_plats.sh"
-sh "$SRCROOT/os/tasks/distrib/gen_plats.sh"
+. "$SRCROOT/os/tasks/distrib/gen_plats.sh"
 echo "Running gen_syms.sh"
 sh "$SRCROOT/os/tasks/distrib/gen_syms.sh"
 echo "Running gen_inst.sh"
 sh "$SRCROOT/os/tasks/distrib/gen_inst.sh"
+
+cd "$ORIGINAL_DIRECTORY"
+echo "Running upload_packages.sh"
+. "$SRCROOT/os/tasks/distrib/upload_packages.sh"
+
+update_production_latest
 
 ##
 ## Upload the files.
@@ -149,35 +158,6 @@ if test "$ARCH$VARIANT" = "x86"; then
 
     if test -n "$MBUILD_STEP_ID"; then
         python $SRCROOT/client.py --result "MinocaOS Size" integer "$file_size"
-        python $SRCROOT/client.py --upload schedule $file $file
-        echo Uploaded file $file, size $file_size
-    fi
-
-    ##
-    ## The SDK includes all architectures.
-    ##
-
-    file=MinocaSDK-$REVISION.zip
-    file_size=`ls -l $file | \
-        sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
-
-    if test -n "$MBUILD_STEP_ID"; then
-        python $SRCROOT/client.py --result "MinocaSDK Size" integer "$file_size"
-        python $SRCROOT/client.py --upload schedule $file $file
-        echo Uploaded file $file, size $file_size
-    fi
-
-    ##
-    ## Third-party is just source, so the architecture is irrelevant and
-    ## therefore unspecified.
-    ##
-
-    file=MinocaTP-$REVISION.zip
-    file_size=`ls -l $file | \
-        sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
-
-    if test -n "$MBUILD_STEP_ID"; then
-        python $SRCROOT/client.py --result "MinocaTP Size" integer "$file_size"
         python $SRCROOT/client.py --upload schedule $file $file
         echo Uploaded file $file, size $file_size
     fi

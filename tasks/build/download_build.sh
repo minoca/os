@@ -46,7 +46,7 @@ fi
 
 file=minoca-bin-$ARCH$VARIANT$DEBUG.tar.gz
 echo "Downloading $file from schedule instance ID $last_native_build"
-python ../../client.py --pull $file $file $last_native_build
+python ../../client.py --pull schedule $file $file $last_native_build
 echo "Extracting $file"
 tar -xzf $file
 rm $file

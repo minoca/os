@@ -26,7 +26,7 @@
 set -e
 
 file=build_request.json
-python ../../client.py --pull $file $file 0
+python ../../client.py --pull schedule $file $file 0
 export TASKDIR="$PWD/../../tasks"
 export STRIP=strip
 python $TASKDIR/osbuilder/build_image.py

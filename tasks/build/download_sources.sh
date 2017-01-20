@@ -40,7 +40,9 @@ fi
 mkdir -p $SRCROOT
 file=minoca-src.tar.gz
 echo "Downloading $file from schedule instance ID $last_windows_build"
-python ../../client.py --pull $file $SRCROOT/../$file $last_windows_build
+python ../../client.py --pull schedule $file $SRCROOT/../$file \
+    $last_windows_build
+
 echo "Extracting $file"
 cd $SRCROOT/..
 tar -xzf $file
