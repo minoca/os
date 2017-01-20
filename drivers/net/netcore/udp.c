@@ -619,6 +619,10 @@ Return Value:
            UdpSocket->ReceiveBufferTotalSize);
 
     KeReleaseQueuedLock(UdpSocket->ReceiveLock);
+    if (Socket->Network->Interface.DestroySocket != NULL) {
+        Socket->Network->Interface.DestroySocket(Socket);
+    }
+
     KeDestroyQueuedLock(UdpSocket->ReceiveLock);
     MmFreePagedPool(UdpSocket);
     return;

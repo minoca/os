@@ -1220,6 +1220,10 @@ Return Value:
            GenericSocket->ReceiveBufferTotalSize);
 
     KeReleaseQueuedLock(GenericSocket->ReceiveLock);
+    if (Socket->Network->Interface.DestroySocket != NULL) {
+        Socket->Network->Interface.DestroySocket(Socket);
+    }
+
     KeDestroyQueuedLock(GenericSocket->ReceiveLock);
     MmFreePagedPool(GenericSocket);
     return;

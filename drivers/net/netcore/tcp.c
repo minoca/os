@@ -905,6 +905,10 @@ Return Value:
     ASSERT(LIST_EMPTY(&(TcpSocket->OutgoingSegmentList)) != FALSE);
     ASSERT(TcpSocket->TimerReferenceCount == 0);
 
+    if (Socket->Network->Interface.DestroySocket != NULL) {
+        Socket->Network->Interface.DestroySocket(Socket);
+    }
+
     KeDestroyQueuedLock(TcpSocket->Lock);
     TcpSocket->Lock = NULL;
     TcpSocket->State = TcpStateInvalid;
@@ -7853,8 +7857,8 @@ Return Value:
     //
 
     Status = NewTcpSocket->NetSocket.Network->Interface.Connect(
-                                                     (PNET_SOCKET)NewTcpSocket,
-                                                     RemoteAddress);
+                                                    &(NewTcpSocket->NetSocket),
+                                                    RemoteAddress);
 
     if (!KSUCCESS(Status)) {
         goto TcpHandleIncomingConnectionEnd;
@@ -7888,6 +7892,20 @@ Return Value:
     }
 
     NewTcpSocket->LingerTimeout = ListeningSocket->LingerTimeout;
+
+    //
+    // Copy any network specific socket options.
+    //
+
+    if (NewTcpSocket->NetSocket.Network->Interface.CopyInformation != NULL) {
+        Status = NewTcpSocket->NetSocket.Network->Interface.CopyInformation(
+                                                &(NewTcpSocket->NetSocket),
+                                                &(ListeningSocket->NetSocket));
+
+        if (!KSUCCESS(Status)) {
+            goto TcpHandleIncomingConnectionEnd;
+        }
+    }
 
     //
     // Re-parse any options coming from the SYN packet and set up the sequence

@@ -572,6 +572,10 @@ Return Value:
            RawSocket->ReceiveBufferTotalSize);
 
     KeReleaseQueuedLock(RawSocket->ReceiveLock);
+    if (Socket->Network->Interface.DestroySocket != NULL) {
+        Socket->Network->Interface.DestroySocket(Socket);
+    }
+
     KeDestroyQueuedLock(RawSocket->ReceiveLock);
     MmFreePagedPool(RawSocket);
     return;

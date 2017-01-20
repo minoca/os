@@ -1009,12 +1009,8 @@ Members:
         accepted connections that are allowed to accumulate before connections
         are refused. In the sockets API this is known as the backlog count.
 
-    HopLimit - Stores the hop limit / time-to-live that is to be set in the
-        network layer's header for every packet sent by this socket.
-
-    DifferentiatedServicesCodePoint - Stores the differentiated services code
-        point / traffic class that is to be set in the network layer's header
-        for every packet sent by this socket.
+    NetworkSocketInformation - Stores an optional pointer to the network
+        layer's socket information.
 
 --*/
 
@@ -1039,8 +1035,7 @@ typedef struct _NET_SOCKET {
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     ULONG SendPacketCount;
     ULONG MaxIncomingConnections;
-    UCHAR HopLimit;
-    UCHAR DifferentiatedServicesCodePoint;
+    PVOID NetworkSocketInformation;
 } NET_SOCKET, *PNET_SOCKET;
 
 /*++
@@ -1732,6 +1727,29 @@ Return Value:
 --*/
 
 typedef
+VOID
+(*PNET_NETWORK_DESTROY_SOCKET) (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys any pieces allocated by the network layer for the
+    socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+typedef
 KSTATUS
 (*PNET_NETWORK_BIND_TO_ADDRESS) (
     PNET_SOCKET Socket,
@@ -2005,6 +2023,34 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PNET_NETWORK_COPY_INFORMATION) (
+    PNET_SOCKET DestinationSocket,
+    PNET_SOCKET SourceSocket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine copies socket information properties from the source socket to
+    the destination socket.
+
+Arguments:
+
+    DestinationSocket - Supplies a pointer to the socket whose information will
+        be overwritten with the source socket's information.
+
+    SourceSocket - Supplies a pointer to the socket whose information will
+        be copied to the destination socket.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -2022,6 +2068,10 @@ Members:
 
     InitializeSocket - Stores a pointer to a function that initializes a newly
         created socket.
+
+    DestroySocket - Stores a pointer to a function that destroys network
+        specific socket structures allocated during initialize. This function
+        is optional if the initialize routine made no allocations.
 
     BindToAddress - Stores a pointer to a function that binds an open but
         unbound socket to a particular network address.
@@ -2045,12 +2095,17 @@ Members:
     GetSetInformation - Stores a pointer to a function used to get or set
         socket information.
 
+    CopyInformation - Stores a pointer to a function used to copy socket option
+        information from one socket to another. This function is optional if
+        there are no network specific socket options.
+
 --*/
 
 typedef struct _NET_NETWORK_INTERFACE {
     PNET_NETWORK_INITIALIZE_LINK InitializeLink;
     PNET_NETWORK_DESTROY_LINK DestroyLink;
     PNET_NETWORK_INITIALIZE_SOCKET InitializeSocket;
+    PNET_NETWORK_DESTROY_SOCKET DestroySocket;
     PNET_NETWORK_BIND_TO_ADDRESS BindToAddress;
     PNET_NETWORK_LISTEN Listen;
     PNET_NETWORK_CONNECT Connect;
@@ -2060,6 +2115,7 @@ typedef struct _NET_NETWORK_INTERFACE {
     PNET_NETWORK_PROCESS_RECEIVED_DATA ProcessReceivedData;
     PNET_NETWORK_PRINT_ADDRESS PrintAddress;
     PNET_NETWORK_GET_SET_INFORMATION GetSetInformation;
+    PNET_NETWORK_COPY_INFORMATION CopyInformation;
 } NET_NETWORK_INTERFACE, *PNET_NETWORK_INTERFACE;
 
 /*++

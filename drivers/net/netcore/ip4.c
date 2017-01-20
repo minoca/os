@@ -154,6 +154,28 @@ typedef struct _IP4_FRAGMENT_ENTRY {
     BOOL LastFragment;
 } IP4_FRAGMENT_ENTRY, *PIP4_FRAGMENT_ENTRY;
 
+/*++
+
+Structure Description:
+
+    This structure defines the IP4 socket option information.
+
+Members:
+
+    TimeToLive - Stores the time-to-live that is to be set in the IPv4 header
+        for every packet sent by this socket.
+
+    DifferentiatedServicesCodePoint - Stores the differentiated services code
+        point that is to be set in the IPv4 header for every packet sent by
+        this socket.
+
+--*/
+
+typedef struct _IP4_SOCKET_INFORMATION {
+    UCHAR TimeToLive;
+    UCHAR DifferentiatedServicesCodePoint;
+} IP4_SOCKET_INFORMATION, *PIP4_SOCKET_INFORMATION;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -174,6 +196,11 @@ NetpIp4InitializeSocket (
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
     PNET_SOCKET NewSocket
+    );
+
+VOID
+NetpIp4DestroySocket (
+    PNET_SOCKET Socket
     );
 
 KSTATUS
@@ -233,6 +260,12 @@ NetpIp4GetSetInformation (
     PVOID Data,
     PUINTN DataSize,
     BOOL Set
+    );
+
+KSTATUS
+NetpIp4CopyInformation (
+    PNET_SOCKET DestinationSocket,
+    PNET_SOCKET SourceSocket
     );
 
 USHORT
@@ -347,6 +380,7 @@ Return Value:
     NetworkEntry.Interface.InitializeLink = NetpIp4InitializeLink;
     NetworkEntry.Interface.DestroyLink = NetpIp4DestroyLink;
     NetworkEntry.Interface.InitializeSocket = NetpIp4InitializeSocket;
+    NetworkEntry.Interface.DestroySocket = NetpIp4DestroySocket;
     NetworkEntry.Interface.BindToAddress = NetpIp4BindToAddress;
     NetworkEntry.Interface.Listen = NetpIp4Listen;
     NetworkEntry.Interface.Connect = NetpIp4Connect;
@@ -356,6 +390,7 @@ Return Value:
     NetworkEntry.Interface.ProcessReceivedData = NetpIp4ProcessReceivedData;
     NetworkEntry.Interface.PrintAddress = NetpIp4PrintAddress;
     NetworkEntry.Interface.GetSetInformation = NetpIp4GetSetInformation;
+    NetworkEntry.Interface.CopyInformation = NetpIp4CopyInformation;
     Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
     if (!KSUCCESS(Status)) {
 
@@ -489,6 +524,7 @@ Return Value:
 {
 
     ULONG MaxPacketSize;
+    PIP4_SOCKET_INFORMATION SocketInformation;
 
     //
     // If this is coming from the raw protocol and the network protocol is the
@@ -531,9 +567,53 @@ Return Value:
         NewSocket->PacketSizeInformation.HeaderSize += sizeof(IP4_HEADER);
     }
 
-    NewSocket->HopLimit = IP4_INITIAL_TIME_TO_LIVE;
-    NewSocket->DifferentiatedServicesCodePoint = 0;
+    //
+    // Allocate and initialize a socket information structure for this socket.
+    //
+
+    SocketInformation = MmAllocatePagedPool(sizeof(IP4_SOCKET_INFORMATION),
+                                            IP4_ALLOCATION_TAG);
+
+    if (SocketInformation == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    SocketInformation->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;
+    SocketInformation->DifferentiatedServicesCodePoint = 0;
+    NewSocket->NetworkSocketInformation = SocketInformation;
     return STATUS_SUCCESS;
+}
+
+VOID
+NetpIp4DestroySocket (
+    PNET_SOCKET Socket
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys any pieces allocated by the network layer for the
+    socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Socket->NetworkSocketInformation != NULL) {
+        MmFreePagedPool(Socket->NetworkSocketInformation);
+        Socket->NetworkSocketInformation = NULL;
+    }
+
+    return;
 }
 
 KSTATUS
@@ -901,6 +981,7 @@ Return Value:
     NETWORK_ADDRESS PhysicalNetworkAddressBuffer;
     PIP4_ADDRESS RemoteAddress;
     PNET_DATA_LINK_SEND Send;
+    PIP4_SOCKET_INFORMATION SocketInformation;
     PNETWORK_ADDRESS Source;
     KSTATUS Status;
     ULONG TotalLength;
@@ -908,6 +989,10 @@ Return Value:
     ASSERT((Socket->KernelSocket.Type == NetSocketRaw) ||
            (Socket->KernelSocket.Protocol ==
             Socket->Protocol->ParentProtocolNumber));
+
+    SocketInformation = Socket->NetworkSocketInformation;
+
+    ASSERT(SocketInformation != NULL);
 
     //
     // If an override was supplied, prefer that link and link address.
@@ -1075,7 +1160,9 @@ Return Value:
                      IP4_VERSION | (UCHAR)(sizeof(IP4_HEADER) / sizeof(ULONG));
 
                 Header->Type = 0;
-                Header->Type |= Socket->DifferentiatedServicesCodePoint;
+                Header->Type |=
+                            SocketInformation->DifferentiatedServicesCodePoint;
+
                 TotalLength = Fragment->FooterOffset - Fragment->DataOffset;
                 Header->TotalLength = CPU_TO_NETWORK16(TotalLength);
                 Header->Identification =
@@ -1092,7 +1179,7 @@ Return Value:
                 }
 
                 Header->FragmentOffset = CPU_TO_NETWORK16(FragmentOffset);
-                Header->TimeToLive = Socket->HopLimit;
+                Header->TimeToLive = SocketInformation->TimeToLive;
 
                 ASSERT(Socket->KernelSocket.Protocol !=
                        SOCKET_INTERNET_PROTOCOL_RAW);
@@ -1158,13 +1245,13 @@ Return Value:
                                                      sizeof(ULONG));
 
             Header->Type = 0;
-            Header->Type |= Socket->DifferentiatedServicesCodePoint;
+            Header->Type |= SocketInformation->DifferentiatedServicesCodePoint;
             TotalLength = Packet->FooterOffset - Packet->DataOffset;
             Header->TotalLength = CPU_TO_NETWORK16(TotalLength);
             Header->Identification = CPU_TO_NETWORK16(Socket->SendPacketCount);
             Socket->SendPacketCount += 1;
             Header->FragmentOffset = 0;
-            Header->TimeToLive = Socket->HopLimit;
+            Header->TimeToLive = SocketInformation->TimeToLive;
 
             ASSERT(Socket->KernelSocket.Protocol !=
                    SOCKET_INTERNET_PROTOCOL_RAW);
@@ -1624,11 +1711,18 @@ Return Value:
     ULONG IntegerOption;
     SOCKET_IP4_OPTION Ip4Option;
     UINTN RequiredSize;
+    PIP4_SOCKET_INFORMATION SocketInformation;
     PVOID Source;
     KSTATUS Status;
 
     if (InformationType != SocketInformationIp4) {
         Status = STATUS_INVALID_PARAMETER;
+        goto Ip4GetSetInformationEnd;
+    }
+
+    SocketInformation = Socket->NetworkSocketInformation;
+    if (SocketInformation == NULL) {
+        Status = STATUS_NOT_INITIALIZED;
         goto Ip4GetSetInformationEnd;
     }
 
@@ -1696,11 +1790,11 @@ Return Value:
                 break;
             }
 
-            Socket->HopLimit = (UCHAR)IntegerOption;
+            SocketInformation->TimeToLive = (UCHAR)IntegerOption;
 
         } else {
             Source = &IntegerOption;
-            IntegerOption = Socket->HopLimit;
+            IntegerOption = SocketInformation->TimeToLive;
         }
 
         break;
@@ -1721,11 +1815,12 @@ Return Value:
             }
 
             IntegerOption &= IP4_TYPE_DSCP_MASK;
-            Socket->DifferentiatedServicesCodePoint = (UCHAR)IntegerOption;
+            SocketInformation->DifferentiatedServicesCodePoint =
+                                                          (UCHAR)IntegerOption;
 
         } else {
             Source = &IntegerOption;
-            IntegerOption = Socket->DifferentiatedServicesCodePoint;
+            IntegerOption = SocketInformation->DifferentiatedServicesCodePoint;
         }
 
         break;
@@ -1784,6 +1879,54 @@ Return Value:
 
 Ip4GetSetInformationEnd:
     return Status;
+}
+
+KSTATUS
+NetpIp4CopyInformation (
+    PNET_SOCKET DestinationSocket,
+    PNET_SOCKET SourceSocket
+    )
+
+/*++
+
+Routine Description:
+
+    This routine copies socket information properties from the source socket to
+    the destination socket.
+
+Arguments:
+
+    DestinationSocket - Supplies a pointer to the socket whose information will
+        be overwritten with the source socket's information.
+
+    SourceSocket - Supplies a pointer to the socket whose information will
+        be copied to the destination socket.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    if ((DestinationSocket->NetworkSocketInformation == NULL) ||
+        (SourceSocket->NetworkSocketInformation == NULL)) {
+
+        return STATUS_NOT_INITIALIZED;
+    }
+
+    //
+    // Copy all of the socket information. This routine is invoked when a
+    // connection is accepted and the listening socket is forked. As it stands,
+    // all of the IPv4 socket options get inherited by the forked socket.
+    //
+
+    RtlCopyMemory(DestinationSocket->NetworkSocketInformation,
+                  SourceSocket->NetworkSocketInformation,
+                  sizeof(IP4_SOCKET_INFORMATION));
+
+    return STATUS_SUCCESS;
 }
 
 //
