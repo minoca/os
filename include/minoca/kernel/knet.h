@@ -558,6 +558,10 @@ Values:
     SocketIp4OptionTimeToLive - Indicates the time-to-live value for all
         unicast packets sent from the socket. This option takes a ULONG.
 
+    SocketIp4DifferentiatedServicesCodePoint - Indicates the differentiated
+        services code point (DSCP) for all packets set from the socket. This
+        option takes a ULONG.
+
 --*/
 
 typedef enum _SOCKET_IP4_OPTION {
@@ -568,7 +572,8 @@ typedef enum _SOCKET_IP4_OPTION {
     SocketIp4OptionMulticastInterface,
     SocketIp4OptionMulticastTimeToLive,
     SocketIp4OptionMulticastLoopback,
-    SocketIp4OptionTimeToLive
+    SocketIp4OptionTimeToLive,
+    SocketIp4DifferentiatedServicesCodePoint
 } SOCKET_IP4_OPTION, *PSOCKET_IP4_OPTION;
 
 /*++

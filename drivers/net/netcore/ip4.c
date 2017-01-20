@@ -532,6 +532,7 @@ Return Value:
     }
 
     NewSocket->HopLimit = IP4_INITIAL_TIME_TO_LIVE;
+    NewSocket->DifferentiatedServicesCodePoint = 0;
     return STATUS_SUCCESS;
 }
 
@@ -1074,6 +1075,7 @@ Return Value:
                      IP4_VERSION | (UCHAR)(sizeof(IP4_HEADER) / sizeof(ULONG));
 
                 Header->Type = 0;
+                Header->Type |= Socket->DifferentiatedServicesCodePoint;
                 TotalLength = Fragment->FooterOffset - Fragment->DataOffset;
                 Header->TotalLength = CPU_TO_NETWORK16(TotalLength);
                 Header->Identification =
@@ -1156,6 +1158,7 @@ Return Value:
                                                      sizeof(ULONG));
 
             Header->Type = 0;
+            Header->Type |= Socket->DifferentiatedServicesCodePoint;
             TotalLength = Packet->FooterOffset - Packet->DataOffset;
             Header->TotalLength = CPU_TO_NETWORK16(TotalLength);
             Header->Identification = CPU_TO_NETWORK16(Socket->SendPacketCount);
@@ -1698,6 +1701,31 @@ Return Value:
         } else {
             Source = &IntegerOption;
             IntegerOption = Socket->HopLimit;
+        }
+
+        break;
+
+    case SocketIp4DifferentiatedServicesCodePoint:
+        RequiredSize = sizeof(ULONG);
+        if (Set != FALSE) {
+            if (*DataSize < RequiredSize) {
+                *DataSize = RequiredSize;
+                Status = STATUS_BUFFER_TOO_SMALL;
+                break;
+            }
+
+            IntegerOption = *((PULONG)Data);
+            if (IntegerOption > MAX_UCHAR) {
+                Status = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            IntegerOption &= IP4_TYPE_DSCP_MASK;
+            Socket->DifferentiatedServicesCodePoint = (UCHAR)IntegerOption;
+
+        } else {
+            Source = &IntegerOption;
+            IntegerOption = Socket->DifferentiatedServicesCodePoint;
         }
 
         break;

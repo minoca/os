@@ -322,6 +322,13 @@ extern "C" {
 #define IP_TTL 7
 
 //
+// This options defines the type-of-service value for outgoing packets. This
+// field is now known as the differentiated services code point (DSCP).
+//
+
+#define IP_TOS 8
+
+//
 // Define socket options for IPv6.
 //
 

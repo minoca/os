@@ -108,7 +108,8 @@ Environment:
            (IP_MULTICAST_IF == SocketIp4OptionMulticastInterface) &&     \
            (IP_MULTICAST_TTL == SocketIp4OptionMulticastTimeToLive) &&   \
            (IP_MULTICAST_LOOP == SocketIp4OptionMulticastLoopback) &&    \
-           (IP_TTL == SocketIp4OptionTimeToLive))
+           (IP_TTL == SocketIp4OptionTimeToLive) &&                      \
+           (IP_TOS == SocketIp4DifferentiatedServicesCodePoint))
 
 #define ASSERT_SOCKET_IPV6_OPTIONS_EQUIVALENT()                         \
     ASSERT((IPV6_JOIN_GROUP == SocketIp6OptionJoinMulticastGroup) &&    \

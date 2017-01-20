@@ -1010,7 +1010,11 @@ Members:
         are refused. In the sockets API this is known as the backlog count.
 
     HopLimit - Stores the hop limit / time-to-live that is to be set in the
-        network layer's header of every packet sent by this socket.
+        network layer's header for every packet sent by this socket.
+
+    DifferentiatedServicesCodePoint - Stores the differentiated services code
+        point / traffic class that is to be set in the network layer's header
+        for every packet sent by this socket.
 
 --*/
 
@@ -1036,6 +1040,7 @@ typedef struct _NET_SOCKET {
     ULONG SendPacketCount;
     ULONG MaxIncomingConnections;
     UCHAR HopLimit;
+    UCHAR DifferentiatedServicesCodePoint;
 } NET_SOCKET, *PNET_SOCKET;
 
 /*++
