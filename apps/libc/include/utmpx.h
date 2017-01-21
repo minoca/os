@@ -420,7 +420,7 @@ Return Value:
 --*/
 
 LIBC_API
-int
+void
 updwtmpx (
     const char *FileName,
     const struct utmpx *Record
@@ -441,9 +441,7 @@ Arguments:
 
 Return Value:
 
-    0 on success.
-
-    -1 on failure, and errno will be set to contain more information.
+    None.
 
 --*/
 

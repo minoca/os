@@ -46,12 +46,6 @@ Environment:
 //
 
 //
-// Define the permissions used when creating a user accounting database.
-//
-
-#define UTMPX_CREATE_PERMISSIONS (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -60,34 +54,14 @@ Environment:
 //
 
 INT
-ClpInitializeUserAccountingDatabase (
-    PSTR DatabaseFile,
-    const struct utmpx *Value
-    );
-
-INT
-ClpAddUserAccountingEntry (
-    const struct utmpx *Value
-    );
-
-INT
-ClpRemoveUserAccountingEntry (
-    const struct utmpx *Id
-    );
-
-INT
 ClpOpenUserAccountingDatabase (
     PSTR DatabaseFile
     );
 
-FILE *
-ClpOpenUserAccountingDatabaseForWrite (
-    PSTR DatabaseFile
-    );
-
 INT
-ClpGetUserAccountingEntry (
-    struct utmpx *Value
+ClpReadWriteUserAccountingEntry (
+    struct utmpx *Entry,
+    INT Type
     );
 
 //
@@ -99,7 +73,7 @@ ClpGetUserAccountingEntry (
 //
 
 char *ClUserAccountingFilePath = NULL;
-FILE *ClUserAccountingFile = NULL;
+int ClUserAccountingFile = -1;
 struct utmpx *ClUserAccountingEntry = NULL;
 
 //
@@ -354,7 +328,61 @@ Return Value:
 }
 
 LIBC_API
-int
+void
+logwtmp (
+    const char *Terminal,
+    const char *User,
+    const char *Host
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new utmp entry with the given terminal line, user
+    name, host name, the current process ID, and current time. It appends the
+    new record using updwtmp to the wtmp file.
+
+Arguments:
+
+    Terminal - Supplies an optional pointer to the terminal.
+
+    User - Supplies an optional pointer to the user.
+
+    Host - Supplies a pointer to the host.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    struct utmp Record;
+
+    memset(&Record, 0, sizeof(Record));
+    Record.ut_pid = getpid();
+    if ((User != NULL) && (User[0] != '\0')) {
+        Record.ut_type = USER_PROCESS;
+        strncpy(Record.ut_user, User, sizeof(Record.ut_user));
+
+    } else {
+        Record.ut_type = DEAD_PROCESS;
+    }
+
+    if (Terminal != NULL) {
+        strncpy(Record.ut_line, Terminal, sizeof(Record.ut_line));
+    }
+
+    strncpy(Record.ut_host, Host, sizeof(Record.ut_host));
+    gettimeofday(&(Record.ut_tv), NULL);
+    updwtmp(_PATH_WTMP, (struct utmp *)&Record);
+    return;
+}
+
+LIBC_API
+void
 updwtmp (
     const char *FileName,
     const struct utmp *Record
@@ -375,15 +403,14 @@ Arguments:
 
 Return Value:
 
-    0 on success.
-
-    -1 on failure, and errno will be set to contain more information.
+    None.
 
 --*/
 
 {
 
-    return updwtmpx(FileName, (struct utmpx *)Record);
+    updwtmpx(FileName, (struct utmpx *)Record);
+    return;
 }
 
 LIBC_API
@@ -410,6 +437,18 @@ Return Value:
 --*/
 
 {
+
+    //
+    // Allocate the static space if necessary.
+    //
+
+    if (ClUserAccountingEntry == NULL) {
+        ClUserAccountingEntry = malloc(sizeof(struct utmpx));
+        if (ClUserAccountingEntry == NULL) {
+            errno = ENOMEM;
+            return;
+        }
+    }
 
     ClpOpenUserAccountingDatabase(ClUserAccountingFilePath);
     return;
@@ -440,9 +479,9 @@ Return Value:
 
 {
 
-    if (ClUserAccountingFile != NULL) {
-        fclose(ClUserAccountingFile);
-        ClUserAccountingFile = NULL;
+    if (ClUserAccountingFile >= 0) {
+        close(ClUserAccountingFile);
+        ClUserAccountingFile = -1;
     }
 
     return;
@@ -479,7 +518,7 @@ Return Value:
 
     INT Result;
 
-    Result = ClpGetUserAccountingEntry(NULL);
+    Result = ClpReadWriteUserAccountingEntry(NULL, F_RDLCK);
     if (Result < 0) {
         return NULL;
     }
@@ -524,7 +563,7 @@ Return Value:
     struct utmpx Value;
 
     while (TRUE) {
-        if (ClpGetUserAccountingEntry(&Value) < 0) {
+        if (ClpReadWriteUserAccountingEntry(&Value, F_RDLCK) < 0) {
             return NULL;
         }
 
@@ -551,7 +590,7 @@ Return Value:
             break;
 
         default:
-            if (Value.ut_type== Id->ut_type) {
+            if (Value.ut_type == Id->ut_type) {
                 goto getutxidEnd;
             }
 
@@ -601,7 +640,7 @@ Return Value:
     struct utmpx Value;
 
     while (TRUE) {
-        if (ClpGetUserAccountingEntry(&Value) < 0) {
+        if (ClpReadWriteUserAccountingEntry(&Value, F_RDLCK) < 0) {
             return NULL;
         }
 
@@ -658,7 +697,7 @@ Return Value:
     struct utmpx Value;
 
     while (TRUE) {
-        if (ClpGetUserAccountingEntry(&Value) < 0) {
+        if (ClpReadWriteUserAccountingEntry(&Value, F_RDLCK) < 0) {
             return NULL;
         }
 
@@ -711,49 +750,35 @@ Return Value:
 
 {
 
+    struct utmpx Copy;
+    struct utmpx *Found;
     INT Result;
 
-    switch (Value->ut_type) {
-    case BOOT_TIME:
-        Result = ClpInitializeUserAccountingDatabase(NULL, Value);
-        break;
+    //
+    // Copy the passed in value in case it is the static storage.
+    //
 
-    case OLD_TIME:
-    case NEW_TIME:
-    case USER_PROCESS:
-    case INIT_PROCESS:
-    case LOGIN_PROCESS:
-        Result = ClpAddUserAccountingEntry(Value);
-        break;
+    memcpy(&Copy, Value, sizeof(struct utmpx));
 
-    case DEAD_PROCESS:
-        Result = ClpRemoveUserAccountingEntry(Value);
-        break;
+    //
+    // Find the entry.
+    //
 
-    default:
-        errno = EINVAL;
-        Result = -1;
-        break;
+    Found = getutxid(&Copy);
+    if (Found != NULL) {
+        lseek(ClUserAccountingFile, -sizeof(struct utmpx), SEEK_CUR);
+
+    } else {
+        lseek(ClUserAccountingFile, 0, SEEK_END);
     }
 
-    if (Result != 0) {
+    Result = ClpReadWriteUserAccountingEntry(&Copy, F_WRLCK);
+    if (Result < 0) {
         return NULL;
     }
 
-    //
-    // Allocate the static storage if necesary.
-    //
-
-    if (ClUserAccountingEntry == NULL) {
-        ClUserAccountingEntry = malloc(sizeof(struct utmpx));
-        if (ClUserAccountingEntry == NULL) {
-            errno = ENOMEM;
-            return NULL;
-        }
-    }
-
-    memcpy(ClUserAccountingEntry, Value, sizeof(struct utmpx));
-    return ClUserAccountingEntry;
+    memcpy(ClUserAccountingEntry, &Copy, sizeof(struct utmpx));
+    return (struct utmpx *)Value;
 }
 
 LIBC_API
@@ -804,7 +829,7 @@ Return Value:
 }
 
 LIBC_API
-int
+void
 updwtmpx (
     const char *FileName,
     const struct utmpx *Record
@@ -825,9 +850,7 @@ Arguments:
 
 Return Value:
 
-    0 on success.
-
-    -1 on failure, and errno will be set to contain more information.
+    None.
 
 --*/
 
@@ -838,7 +861,7 @@ Return Value:
 
     Descriptor = open(FileName, O_WRONLY | O_APPEND, 0);
     if (Descriptor < 0) {
-        return -1;
+        return;
     }
 
     do {
@@ -846,12 +869,8 @@ Return Value:
 
     } while ((Written <= 0) && (errno == EINTR));
 
-    if (Written != sizeof(struct utmpx)) {
-        close(Descriptor);
-        return -1;
-    }
-
-    return close(Descriptor);
+    close(Descriptor);
+    return;
 }
 
 LIBC_API
@@ -929,269 +948,6 @@ Return Value:
 //
 
 INT
-ClpInitializeUserAccountingDatabase (
-    PSTR DatabaseFile,
-    const struct utmpx *Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine truncates the user accounting database and adds the given
-    entry.
-
-Arguments:
-
-    DatabaseFile - Supplies an optional pointer to the database file.
-
-    Value - Supplies a pointer to the entry to add.
-
-Return Value:
-
-    0 on success.
-
-    -1 on failure, and errno will be set to contain more information.
-
---*/
-
-{
-
-    ssize_t BytesComplete;
-    int Descriptor;
-
-    if (DatabaseFile == NULL) {
-        DatabaseFile = UTMPX_FILE;
-    }
-
-    //
-    // Open the file and truncate it.
-    //
-
-    Descriptor = open(DatabaseFile,
-                      O_CREAT | O_RDWR | O_TRUNC,
-                      UTMPX_CREATE_PERMISSIONS);
-
-    if (Descriptor < 0) {
-        return -1;
-    }
-
-    do {
-        BytesComplete = write(Descriptor, Value, sizeof(*Value));
-
-    } while ((BytesComplete < 0) && (errno == EINTR));
-
-    assert((BytesComplete <= 0) || (BytesComplete == sizeof(*Value)));
-
-    close(Descriptor);
-    return 0;
-}
-
-INT
-ClpAddUserAccountingEntry (
-    const struct utmpx *Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds a new utmpx entry to the user accounting database.
-
-Arguments:
-
-    Value - Supplies a pointer to the entry to add.
-
-Return Value:
-
-    0 on success.
-
-    -1 on failure, and errno is set to contain more information.
-
---*/
-
-{
-
-    BOOL BreakOut;
-    struct utmpx Entry;
-    FILE *File;
-    int Result;
-    off_t SecondBest;
-
-    File = ClpOpenUserAccountingDatabaseForWrite(NULL);
-    if (File == NULL) {
-        return -1;
-    }
-
-    BreakOut = FALSE;
-    Result = 0;
-    SecondBest = -1;
-    while ((BreakOut == FALSE) &&
-           (fread(&Entry, sizeof(Entry), 1, File) == 1)) {
-
-        switch (Entry.ut_type) {
-
-        //
-        // Leave some records alone.
-        //
-
-        case BOOT_TIME:
-        case NEW_TIME:
-        case OLD_TIME:
-        case RUN_LVL:
-            break;
-
-        case USER_PROCESS:
-        case INIT_PROCESS:
-        case LOGIN_PROCESS:
-        case DEAD_PROCESS:
-
-            //
-            // Overwrite an entry if the ID matches.
-            //
-
-            if (memcmp(Value->ut_id, Entry.ut_id, sizeof(Entry.ut_id)) == 0) {
-                Result = fseeko(File, -(off_t)sizeof(struct utmpx), SEEK_CUR);
-                if (Result < 0) {
-                    goto AddUtxEntryEnd;
-                }
-
-                //
-                // Clear out the second best so that the entry is definitely
-                // written here and be sure the exit the loop.
-                //
-
-                SecondBest = -1;
-                BreakOut = TRUE;
-                break;
-            }
-
-            //
-            // Fall through.
-            //
-
-        case EMPTY:
-        default:
-            if (SecondBest == -1) {
-                SecondBest = ftello(File);
-                if (SecondBest >= sizeof(struct utmpx)) {
-                    SecondBest -= sizeof(struct utmpx);
-
-                } else {
-                    SecondBest = -1;
-                }
-            }
-
-            break;
-        }
-    }
-
-    //
-    // The file is either at the end, or is at the right spot. If there's a
-    // second best option, use that. (If there was a best option, it cleared
-    // out the second best option).
-    //
-
-    if (SecondBest >= 0) {
-        Result = fseeko(File, SecondBest, SEEK_SET);
-        if (Result < 0) {
-            goto AddUtxEntryEnd;
-        }
-    }
-
-    if (fwrite(Value, sizeof(*Value), 1, File) != 1) {
-        Result = -1;
-        goto AddUtxEntryEnd;
-    }
-
-    Result = 0;
-
-AddUtxEntryEnd:
-    if (File != NULL) {
-        fclose(File);
-    }
-
-    return Result;
-}
-
-INT
-ClpRemoveUserAccountingEntry (
-    const struct utmpx *Id
-    )
-
-/*++
-
-Routine Description:
-
-    This routine removes a user login session that matches ut_id, and writes
-    the given entry over it.
-
-Arguments:
-
-    Id - Supplies a pointer to the utmpx structure, which contains the ut_id
-        to match and the value to overwrite.
-
-Return Value:
-
-    0 on success.
-
-    -1 on failure, and errno is set to contain more information.
-
---*/
-
-{
-
-    INT Error;
-    FILE *File;
-    INT Result;
-    struct utmpx Value;
-
-    File = ClpOpenUserAccountingDatabaseForWrite(NULL);
-    if (File == NULL) {
-        return -1;
-    }
-
-    Error = ESRCH;
-    Result = -1;
-    while ((fread(&Value, sizeof(Value), 1, File) == 1) && (Result != 0)) {
-        switch (Value.ut_type) {
-        case USER_PROCESS:
-        case INIT_PROCESS:
-        case LOGIN_PROCESS:
-            if (memcmp(Value.ut_id, Id->ut_id, sizeof(Value.ut_id)) != 0) {
-                break;
-            }
-
-            if (fseeko(File, -(off_t)sizeof(Value), SEEK_CUR) < 0) {
-                Error = errno;
-                break;
-            }
-
-            if (fwrite(Id, sizeof(*Id), 1, File) != 1) {
-                Error = errno;
-                break;
-            }
-
-            Result = 0;
-            break;
-
-        default:
-            break;
-        }
-    }
-
-    if (File != NULL) {
-        fclose(File);
-    }
-
-    if (Result != 0) {
-        errno = Error;
-    }
-
-    return Result;
-}
-
-INT
 ClpOpenUserAccountingDatabase (
     PSTR DatabaseFile
     )
@@ -1221,94 +977,43 @@ Return Value:
         DatabaseFile = UTMPX_FILE;
     }
 
-    if (ClUserAccountingFile != NULL) {
+    if (ClUserAccountingFile >= 0) {
         endutxent();
     }
 
-    assert(ClUserAccountingFile == NULL);
+    assert(ClUserAccountingFile == -1);
 
-    ClUserAccountingFile = fopen(DatabaseFile, "re");
-    if (ClUserAccountingFile == NULL) {
-        return -1;
+    ClUserAccountingFile = open(DatabaseFile, O_RDWR);
+    if (ClUserAccountingFile < 0) {
+        ClUserAccountingFile = open(DatabaseFile, O_RDONLY);
     }
 
-    //
-    // Avoid reading partial records.
-    //
-
-    setvbuf(ClUserAccountingFile,
-            NULL,
-            _IOFBF,
-            rounddown(BUFSIZ, sizeof(struct utmpx)));
+    if (ClUserAccountingFile < 0) {
+        return -1;
+    }
 
     return 0;
 }
 
-FILE *
-ClpOpenUserAccountingDatabaseForWrite (
-    PSTR DatabaseFile
-    )
-
-/*++
-
-Routine Description:
-
-    This routine opens the user accounting database file for write access.
-
-Arguments:
-
-    DatabaseFile - Supplies an optional pointer to a string containing the
-        path to open.
-
-Return Value:
-
-    Returns an open file stream on success.
-
-    NULL on failure.
-
---*/
-
-{
-
-    int Descriptor;
-    FILE *File;
-
-    if (DatabaseFile == NULL) {
-        DatabaseFile = UTMPX_FILE;
-    }
-
-    Descriptor = open(DatabaseFile,
-                      O_CREAT | O_RDWR,
-                      UTMPX_CREATE_PERMISSIONS);
-
-    if (Descriptor < 0) {
-        return NULL;
-    }
-
-    File = fdopen(Descriptor, "r+");
-    if (File == NULL) {
-        close(Descriptor);
-        return NULL;
-    }
-
-    return File;
-}
-
 INT
-ClpGetUserAccountingEntry (
-    struct utmpx *Value
+ClpReadWriteUserAccountingEntry (
+    struct utmpx *Entry,
+    INT Type
     )
 
 /*++
 
 Routine Description:
 
-    This routine reads the next entry out of the user accounting database.
+    This routine reads from or writes to a user accounting database. It uses
+    voluntary file locking to achieve synchronization.
 
 Arguments:
 
-    Value - Supplies an optional pointer where the entry will be returned on
-        success. If this is NULL, the static area will be used.
+    Entry - Supplies a pointer to the entry to read or write.
+
+    Type - Supplies the file locking operation to perform. Valid values are
+        F_WRLCK or F_RDLCK.
 
 Return Value:
 
@@ -1320,36 +1025,57 @@ Return Value:
 
 {
 
-    INT Result;
+    ssize_t BytesDone;
+    struct flock Lock;
+    off_t Offset;
+
+    if (Entry == NULL) {
+        Entry = ClUserAccountingEntry;
+    }
 
     //
-    // Allocate the static space if necessary.
+    // Lock the region of interest in the file.
     //
 
-    if (ClUserAccountingEntry == NULL) {
-        ClUserAccountingEntry = malloc(sizeof(struct utmpx));
-        if (ClUserAccountingEntry == NULL) {
-            errno = ENOMEM;
-            return -1;
+    Lock.l_start = 0;
+    Lock.l_len = sizeof(struct utmpx);
+    Lock.l_pid = 0;
+    Lock.l_type = Type;
+    Lock.l_whence = SEEK_CUR;
+    if (fcntl(ClUserAccountingFile, F_SETLKW, &Lock) != 0) {
+        return -1;
+    }
+
+    //
+    // Save the previous offset in case it has to be restored due to a partial
+    // read or write.
+    //
+
+    Offset = lseek(ClUserAccountingFile, 0, SEEK_CUR);
+    do {
+        if (Type == F_WRLCK) {
+            BytesDone = write(ClUserAccountingFile,
+                              Entry,
+                              sizeof(struct utmpx));
+
+        } else {
+
+            assert(Type == F_RDLCK);
+
+            BytesDone = read(ClUserAccountingFile, Entry, sizeof(struct utmpx));
         }
-    }
 
-    if (Value == NULL) {
-        Value = ClUserAccountingEntry;
-    }
+    } while ((BytesDone < 0) && (errno == EINTR));
 
     //
-    // Open the database if necessary.
+    // Unlock the file.
     //
 
-    if (ClUserAccountingFile == NULL) {
-        Result = ClpOpenUserAccountingDatabase(ClUserAccountingFilePath);
-        if (Result < 0) {
-            return Result;
-        }
-    }
-
-    if (fread(Value, sizeof(*Value), 1, ClUserAccountingFile) != 1) {
+    Lock.l_start = -Lock.l_len;
+    Lock.l_type = F_UNLCK;
+    fcntl(ClUserAccountingFile, F_SETLK, &Lock);
+    if (BytesDone != sizeof(struct utmpx)) {
+        lseek(ClUserAccountingFile, Offset, SEEK_SET);
         return -1;
     }
 
