@@ -40,6 +40,7 @@ Environment:
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <pty.h>

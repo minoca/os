@@ -39,6 +39,8 @@ Environment:
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <paths.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/utsname.h>
@@ -64,6 +66,10 @@ Environment:
 
 #define PASSWORD_ROUNDS_MIN 1000
 #define PASSWORD_ROUNDS_MAX 999999999
+
+#ifndef _PATH_WTMPX
+#define _PATH_WTMPX _PATH_WTMP
+#endif
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -1499,23 +1505,7 @@ Return Value:
 {
 
     struct utmpx Copy;
-    int Descriptor;
     struct utmpx *Entry;
-    struct utmp Utmp;
-
-    //
-    // Create the file if it does not exist.
-    //
-
-    if (access(_PATH_UTMPX, R_OK | W_OK) < 0) {
-        Descriptor = SwOpen(_PATH_UTMPX,
-                            O_WRONLY | O_CREAT,
-                            S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-
-        if (Descriptor >= 0) {
-            close(Descriptor);
-        }
-    }
 
     setutxent();
     while (TRUE) {
@@ -1569,8 +1559,13 @@ Return Value:
         Copy.ut_tv.tv_sec = time(NULL);
         pututxline(&Copy);
         endutxent();
-        getutmp(&Copy, &Utmp);
-        updwtmp(_PATH_WTMP, &Utmp);
+        if ((NewType == USER_PROCESS) || (NewType == DEAD_PROCESS)) {
+            if (NewType == DEAD_PROCESS) {
+                Copy.ut_user[0] = '\0';
+            }
+
+            updwtmpx(_PATH_WTMPX, &Copy);
+        }
     }
 
     return;
