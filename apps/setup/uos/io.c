@@ -40,7 +40,6 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <sys/mount.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -49,6 +48,12 @@ Environment:
 #if defined(__APPLE__) || defined(__FreeBSD__)
 
 #include <sys/disk.h>
+
+#endif
+
+#if defined(__linux__)
+
+#include <sys/mount.h>
 
 #endif
 
@@ -811,7 +816,7 @@ Return Value:
 
 #ifdef DKIOCGETBLOCKCOUNT
 
-    if (ioctl(Descriptor, Size) >= 0) {
+    if (ioctl(Descriptor, DKIOCGETBLOCKCOUNT, Size) >= 0) {
         *Size *= 512;
         return 0;
     }

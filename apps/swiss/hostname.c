@@ -171,7 +171,7 @@ Return Value:
     FILE *File;
     PSTR FilePath;
     struct hostent *HostEntry;
-    CHAR HostName[HOST_NAME_MAX + 1];
+    CHAR HostName[_POSIX_HOST_NAME_MAX + 1];
     PSTR NewName;
     INT Option;
     ULONG Options;
