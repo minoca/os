@@ -105,7 +105,7 @@ fi
 if [ -r /etc/hostname ]; then
     cat > ./keep_hostname <<_EOS
 var HostnameCopy = {
-    "Destination": "/etc/hostname",
+    "Destination": "/apps/etc/hostname",
     "Source": "/etc/hostname",
     "SourceVolume": -1,
 };
