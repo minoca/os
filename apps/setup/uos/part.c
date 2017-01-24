@@ -297,8 +297,14 @@ Return Value:
         }
 
         Description->Partition.Version = PARTITION_DEVICE_INFORMATION_VERSION;
+
+        //
+        // Set the block size to 512. /proc/partitions reports things in 1k
+        // blocks.
+        //
+
         Description->Partition.BlockSize = 512;
-        Description->Partition.LastBlock = Blocks - 1;
+        Description->Partition.LastBlock = (Blocks * 2) - 1;
         Description->Partition.PartitionType = PartitionTypeUnknown;
         if (DestinationType == SetupDestinationDisk) {
             Description->Partition.Flags |= PARTITION_FLAG_RAW_DISK;
