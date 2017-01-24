@@ -28,6 +28,8 @@
 include $(SRCROOT)/os/minoca.mk
 
 BINFILES=$(BINROOT)/skel/usr/sbin/update-rc.d       \
+         $(BINROOT)/skel/var/run/utmp               \
+         $(BINROOT)/skel/var/log/wtmp               \
          $(BINROOT)/skel/etc/passwd                 \
          $(BINROOT)/skel/etc/group                  \
          $(BINROOT)/skel/etc/shadow                 \
@@ -88,4 +90,7 @@ $(BINROOT)/skel/etc/init.d/hostname.sh: init.d/hostname.sh $(BINROOT)/skel/usr/s
 	cp $< $@
 	chmod 0755 $@
 	SYSROOT=$(BINROOT)/skel sh $(BINROOT)/skel/usr/sbin/update-rc.d -f hostname.sh defaults 10
+
+$(BINROOT)/skel/var/run/utmp $(BINROOT)/skel/var/log/wtmp:
+	touch $@
 

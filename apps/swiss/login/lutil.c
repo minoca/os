@@ -1515,7 +1515,6 @@ Return Value:
         }
 
         if ((Entry->ut_pid == ProcessId) &&
-            (Entry->ut_id[0] != 0) &&
             ((Entry->ut_type == INIT_PROCESS) ||
              (Entry->ut_type == LOGIN_PROCESS) ||
              (Entry->ut_type == USER_PROCESS) ||
@@ -1530,16 +1529,11 @@ Return Value:
     }
 
     if (Entry == NULL) {
-        if (NewType == DEAD_PROCESS) {
-            SwpWriteNewUtmpEntry(ProcessId,
-                                 NewType,
-                                 TerminalName,
-                                 UserName,
-                                 HostName);
-
-        } else {
-            endutxent();
-        }
+        SwpWriteNewUtmpEntry(ProcessId,
+                             NewType,
+                             TerminalName,
+                             UserName,
+                             HostName);
 
     } else {
         memcpy(&Copy, Entry, sizeof(struct utmpx));
@@ -1559,13 +1553,14 @@ Return Value:
         Copy.ut_tv.tv_sec = time(NULL);
         pututxline(&Copy);
         endutxent();
-        if ((NewType == USER_PROCESS) || (NewType == DEAD_PROCESS)) {
-            if (NewType == DEAD_PROCESS) {
-                Copy.ut_user[0] = '\0';
-            }
+    }
 
-            updwtmpx(_PATH_WTMPX, &Copy);
+    if ((NewType == USER_PROCESS) || (NewType == DEAD_PROCESS)) {
+        if (NewType == DEAD_PROCESS) {
+            Copy.ut_user[0] = '\0';
         }
+
+        updwtmpx(_PATH_WTMPX, &Copy);
     }
 
     return;

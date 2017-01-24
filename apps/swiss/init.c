@@ -361,6 +361,11 @@ InitSignalHandler (
     int Signal
     );
 
+void
+InitAddUtmpEntry (
+    PINIT_ACTION Action
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1079,6 +1084,7 @@ Return Value:
             "Re-exec init: %s",
             Action->Command);
 
+    InitAddUtmpEntry(Action);
     InitExec(Context, Action->Command);
     InitReboot(Context, RebootTypeHalt);
     return;
@@ -1723,6 +1729,8 @@ Return Value:
         return ProcessId;
     }
 
+    ProcessId = getpid();
+
     //
     // Put signals back to their standard configuration.
     //
@@ -1763,9 +1771,10 @@ Return Value:
             INIT_LOG_SYSLOG,
             "Starting ID %s, PID %d: %s",
             Action->Id,
-            getpid(),
+            ProcessId,
             Action->Command);
 
+    InitAddUtmpEntry(Action);
     InitExec(Context, Action->Command);
     _exit(-1);
 }
@@ -2139,6 +2148,47 @@ Return Value:
 
     InitSignalCounts[0] = 1;
     InitSignalCounts[Signal] += 1;
+    return;
+}
+
+void
+InitAddUtmpEntry (
+    PINIT_ACTION Action
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds an init utmp entry for the process about to be launched.
+
+Arguments:
+
+    Action - Supplies a pointer to the action being launched.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    struct utmpx Entry;
+    char *Terminal;
+
+    memset(&Entry, 0, sizeof(Entry));
+    Entry.ut_type = INIT_PROCESS;
+    Entry.ut_pid = getpid();
+    Terminal = ttyname(STDIN_FILENO);
+    if (Terminal != NULL) {
+        strncpy(Entry.ut_line, Terminal, sizeof(Entry.ut_line));
+    }
+
+    strncpy(Entry.ut_id, Action->Id, sizeof(Entry.ut_id));
+    gettimeofday(&(Entry.ut_tv), NULL);
+    setutxent();
+    pututxline(&Entry);
     return;
 }
 

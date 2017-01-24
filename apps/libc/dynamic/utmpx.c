@@ -560,45 +560,43 @@ Return Value:
 
 {
 
+    BOOL Match;
     struct utmpx Value;
 
+    Match = FALSE;
     while (TRUE) {
         if (ClpReadWriteUserAccountingEntry(&Value, F_RDLCK) < 0) {
             return NULL;
         }
 
-        switch (Value.ut_type) {
-        case USER_PROCESS:
-        case INIT_PROCESS:
-        case LOGIN_PROCESS:
-        case DEAD_PROCESS:
-            switch (Id->ut_type) {
-            case USER_PROCESS:
-            case INIT_PROCESS:
-            case LOGIN_PROCESS:
-            case DEAD_PROCESS:
-                if (memcmp(Id->ut_id, Value.ut_id, sizeof(Value.ut_id)) == 0) {
-                    goto getutxidEnd;
-                }
+        //
+        // If it's any of the one-time entries (RUN_LVL, BOOT_TIME, NEW_TIME,
+        // or OLD_TIME) just match on the type.
+        //
 
-                break;
-
-            default:
+        if ((Id->ut_type != EMPTY) && (Id->ut_type <= OLD_TIME)) {
+            if (Id->ut_type == Value.ut_type) {
+                Match = TRUE;
                 break;
             }
 
-            break;
+        //
+        // If it's a process entry (INIT_PROCESS, LOGIN_PROCESS, USER_PROCESS,
+        // or DEAD_PROCESS) then find one that matches the ID.
+        //
 
-        default:
-            if (Value.ut_type == Id->ut_type) {
-                goto getutxidEnd;
+        } else if (Id->ut_type <= DEAD_PROCESS) {
+            if (strncmp(Id->ut_id, Value.ut_id, sizeof(Value.ut_id)) == 0) {
+                Match = TRUE;
+                break;
             }
-
-            break;
         }
     }
 
-getutxidEnd:
+    if (Match == FALSE) {
+        return NULL;
+    }
+
     memcpy(ClUserAccountingEntry, &Value, sizeof(struct utmpx));
     return ClUserAccountingEntry;
 }
@@ -766,7 +764,7 @@ Return Value:
 
     Found = getutxid(&Copy);
     if (Found != NULL) {
-        lseek(ClUserAccountingFile, -sizeof(struct utmpx), SEEK_CUR);
+        lseek(ClUserAccountingFile, -(off_t)sizeof(struct utmpx), SEEK_CUR);
 
     } else {
         lseek(ClUserAccountingFile, 0, SEEK_END);
