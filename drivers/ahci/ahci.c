@@ -542,11 +542,6 @@ Return Value:
             goto DispatchIoEnd;
         }
 
-        //
-        // Fire off the DMA. If this succeeds, it will have pended the IRP.
-        // Return with the lock held.
-        //
-
         CompleteIrp = FALSE;
         Status = AhcipEnqueueIrp(Device, Irp);
         if (!KSUCCESS(Status)) {

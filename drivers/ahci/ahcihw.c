@@ -947,6 +947,17 @@ Return Value:
         Interrupt &= ~AHCI_INTERRUPT_ERROR_MASK;
     }
 
+    ASSERT((Interrupt &
+            (AHCI_INTERRUPT_D2H_REGISTER_FIS |
+             AHCI_INTERRUPT_PIO_SETUP_FIS)) != 0);
+
+    Interrupt &= ~(AHCI_INTERRUPT_D2H_REGISTER_FIS |
+                   AHCI_INTERRUPT_PIO_SETUP_FIS);
+
+    if (Interrupt != 0) {
+        RtlDebugPrint("AHCI: Got unknown interrupt 0x%x\n", Interrupt);
+    }
+
     //
     // See which commands are no longer outstanding.
     //
@@ -1310,6 +1321,7 @@ Return Value:
     UINTN BytesToComplete;
     ATA_COMMAND Command;
     PAHCI_COMMAND_TABLE CommandTable;
+    UCHAR DeviceSelect;
     UINTN EntrySize;
     PSATA_FIS_REGISTER_H2D Fis;
     PIO_BUFFER_FRAGMENT Fragment;
@@ -1447,6 +1459,7 @@ Return Value:
     // large.
     //
 
+    DeviceSelect = ATA_DRIVE_SELECT_LBA;
     if ((BlockAddress > ATA_MAX_LBA28) ||
         (SectorCount > ATA_MAX_LBA28_SECTOR_COUNT)) {
 
@@ -1465,6 +1478,18 @@ Return Value:
             Command = AtaCommandReadDma28;
         }
 
+        //
+        // The upper 4 bits of the LBA go in the device select register for
+        // LBA28.
+        //
+
+        DeviceSelect |= (BlockAddress >> 24) & 0xF;
+        BlockAddress &= 0x00FFFFFF;
+
+        //
+        // A value of 0 indicates 0x100 sectors in LBA28.
+        //
+
         if (SectorCount == ATA_MAX_LBA28_SECTOR_COUNT) {
             SectorCount = 0;
         }
@@ -1480,8 +1505,8 @@ Return Value:
     Fis->Flags = SATA_FIS_REGISTER_H2D_FLAG_COMMAND;
     Fis->Command = Command;
     SATA_SET_FIS_LBA(Fis, BlockAddress);
+    Fis->Device = DeviceSelect;
     SATA_SET_FIS_COUNT(Fis, SectorCount);
-    Fis->Device = ATA_DRIVE_SELECT_LBA;
     Header = &(Port->Commands[HeaderIndex]);
     Header->Control = AHCI_COMMAND_FIS_SIZE(sizeof(SATA_FIS_REGISTER_H2D));
     if (Write != FALSE) {
@@ -1702,6 +1727,8 @@ Return Value:
 {
 
     ASSERT(KeIsSpinLockHeld(&(Port->DpcLock)) != FALSE);
+
+    RtlMemoryBarrier();
 
     //
     // There is no safe order to do these in, which is why holding the lock
