@@ -50,6 +50,66 @@ extern "C" {
 #define IFNAMSIZ IF_NAMESIZE
 
 //
+// Set if the network interface is up and running.
+//
+
+#define IFF_UP 0x00000001
+
+//
+// Set if the network interface has a valid broadcast address.
+//
+
+#define IFF_BROADCAST 0x00000002
+
+//
+// Set this flag to turn debugging on for the network interface.
+//
+
+#define IFF_DEBUG 0x00000004
+
+//
+// Set if the network interface is the loopback interface.
+//
+
+#define IFF_LOOPBACK 0x00000008
+
+//
+// Set if the network interface is a point-to-point link.
+//
+
+#define IFF_POINTOPOINT 0x00000010
+
+//
+// Set if the network interface is running with resources allocation.
+//
+
+#define IFF_RUNNING 0x00000020
+
+//
+// Set if the network interface has no address resolution protocol.
+//
+
+#define IFF_NOARP 0x00000040
+
+//
+// Set if the network interface is in promiscuous mode, receiving all packets.
+//
+
+#define IFF_PROMISC 0x00000080
+
+//
+// Set if the network interface receives all multicast packets.
+//
+
+#define IFF_ALLMULTI 0x00000100
+
+//
+// Set if the network interface supports multicast packets.
+//
+
+#define IFF_MULTICAST 0x00000200
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -57,7 +117,7 @@ extern "C" {
 
 Structure Description:
 
-    This structure defines a network interface.
+    This structure defines a network interface name index.
 
 Members:
 
