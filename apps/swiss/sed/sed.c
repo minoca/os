@@ -462,6 +462,7 @@ Return Value:
     BOOL Result;
     INT Status;
 
+    Context->TestResult = FALSE;
     Pattern = Context->PatternSpace;
     Status = 0;
 
@@ -720,7 +721,6 @@ Return Value:
     INT Status;
 
     Status = 0;
-    Context->TestResult = FALSE;
     if (LIST_EMPTY(&(Context->HeadCommand.Function.U.ChildList)) != FALSE) {
         return 0;
     }

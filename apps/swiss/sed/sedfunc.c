@@ -1426,7 +1426,7 @@ Return Value:
     // Mark if a substitution was made for any future test commands.
     //
 
-    Context->TestResult = SubstitutionMade;
+    Context->TestResult |= SubstitutionMade;
     Result = 0;
 
 ExecuteSubstituteEnd:
