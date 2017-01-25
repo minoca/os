@@ -2176,6 +2176,7 @@ Return Value:
 
     struct utmpx Entry;
     char *Terminal;
+    struct timeval Time;
 
     memset(&Entry, 0, sizeof(Entry));
     Entry.ut_type = INIT_PROCESS;
@@ -2186,7 +2187,15 @@ Return Value:
     }
 
     strncpy(Entry.ut_id, Action->Id, sizeof(Entry.ut_id));
-    gettimeofday(&(Entry.ut_tv), NULL);
+
+    //
+    // Manually set the time members in case this is a 64 bit system doing some
+    // sort of weird 32-bit time_t compatibility thing.
+    //
+
+    gettimeofday(&Time, NULL);
+    Entry.ut_tv.tv_sec = Time.tv_sec;
+    Entry.ut_tv.tv_usec = Time.tv_usec;
     setutxent();
     pututxline(&Entry);
     return;
