@@ -32,6 +32,8 @@ Environment:
 #include "libcp.h"
 #include <minoca/devinfo/net.h>
 #include <net/if.h>
+#include <net/if_dl.h>
+#include <net/if_types.h>
 #include <netinet/in.h>
 #include <ifaddrs.h>
 #include <errno.h>
@@ -39,10 +41,23 @@ Environment:
 #include "net.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This routine returns the network name index for a given network domain.
+//
+
+#define CL_NETWORK_NAME_INDEX_FROM_DOMAIN(_Domain) \
+    (((_Domain) - NET_DOMAIN_PHYSICAL_BASE) + CL_NETWORK_NAME_DOMAIN_OFFSET)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
-#define CL_NETWORK_NAME_FORMAT_COUNT 2
+#define CL_NETWORK_NAME_FORMAT_COUNT 3
+#define CL_NETWORK_NAME_LINK_LAYER_INDEX 0
+#define CL_NETWORK_NAME_DOMAIN_OFFSET 1
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -68,7 +83,7 @@ ClpGetNetworkDeviceName (
 KSTATUS
 ClpCreateNetworkDeviceName (
     DEVICE_ID DeviceId,
-    NET_DOMAIN_TYPE Domain,
+    PCSTR FormatString,
     PSTR *Buffer,
     ULONG BufferLength
     );
@@ -88,7 +103,8 @@ ClpGetNetworkDeviceInformation (
 KSTATUS
 ClpCreateNetworkInterfaceAddress (
     DEVICE_ID DeviceId,
-    struct ifaddrs **Interface
+    struct ifaddrs **Interface,
+    struct ifaddrs **LinkInterface
     );
 
 VOID
@@ -100,7 +116,8 @@ ClpDestroyNetworkInterfaceAddress (
 // -------------------------------------------------------------------- Globals
 //
 
-PSTR ClNetworkNameFormats[CL_NETWORK_NAME_FORMAT_COUNT] = {
+PCSTR ClNetworkNameFormats[CL_NETWORK_NAME_FORMAT_COUNT] = {
+    "il%d",
     "eth%d",
     "wlan%d"
 };
@@ -382,6 +399,7 @@ Return Value:
     PDEVICE_INFORMATION_RESULT Devices;
     ULONG Index;
     struct ifaddrs *Interface;
+    struct ifaddrs *LinkInterface;
     struct ifaddrs **PreviousNextPointer;
     KSTATUS Status;
 
@@ -409,14 +427,16 @@ Return Value:
     PreviousNextPointer = Interfaces;
     for (Index = 0; Index < DeviceCount; Index += 1) {
         Status = ClpCreateNetworkInterfaceAddress(Devices[Index].DeviceId,
-                                                  &Interface);
+                                                  &Interface,
+                                                  &LinkInterface);
 
         if (!KSUCCESS(Status)) {
             break;
         }
 
         *PreviousNextPointer = Interface;
-        PreviousNextPointer = &(Interface->ifa_next);
+        Interface->ifa_next = LinkInterface;
+        PreviousNextPointer = &(LinkInterface->ifa_next);
     }
 
     Status = STATUS_SUCCESS;
@@ -608,6 +628,8 @@ Return Value:
 {
 
     NET_DOMAIN_TYPE Domain;
+    PCSTR FormatString;
+    ULONG Index;
     KSTATUS Status;
 
     Status = ClpGetNetworkDeviceDomain(DeviceId, &Domain);
@@ -615,7 +637,15 @@ Return Value:
         goto GetNetworkDeviceNameEnd;
     }
 
-    Status = ClpCreateNetworkDeviceName(DeviceId, Domain, Buffer, BufferLength);
+    ASSERT(Domain >= NET_DOMAIN_PHYSICAL_BASE);
+
+    Index = CL_NETWORK_NAME_INDEX_FROM_DOMAIN(Domain);
+    FormatString = ClNetworkNameFormats[Index];
+    Status = ClpCreateNetworkDeviceName(DeviceId,
+                                        FormatString,
+                                        Buffer,
+                                        BufferLength);
+
     if (!KSUCCESS(Status)) {
         goto GetNetworkDeviceNameEnd;
     }
@@ -627,7 +657,7 @@ GetNetworkDeviceNameEnd:
 KSTATUS
 ClpCreateNetworkDeviceName (
     DEVICE_ID DeviceId,
-    NET_DOMAIN_TYPE Domain,
+    PCSTR FormatString,
     PSTR *Buffer,
     ULONG BufferLength
     )
@@ -637,14 +667,15 @@ ClpCreateNetworkDeviceName (
 Routine Description:
 
     This routine creates a network device name based on the given device ID and
-    network domain. The caller is expected to release the name if a NULL buffer
-    is supplied.
+    the format string. The caller is expected to release the name if a NULL
+    buffer is supplied.
 
 Arguments:
 
     DeviceId - Supplies the ID of a network device.
 
-    Domain - Supplies the domain of the network device.
+    FormatString - Supplies a pointer to the format string to use to create the
+        device name.
 
     Buffer - Supplies a pointer to a buffer that receives the device name
         string. If the buffer is NULL, then a buffer will be allocated for the
@@ -660,17 +691,13 @@ Return Value:
 
 {
 
-    ULONG FormatIndex;
     ULONG NameLength;
     KSTATUS Status;
 
-    ASSERT(Domain >= NET_DOMAIN_PHYSICAL_BASE);
-
-    FormatIndex = Domain - NET_DOMAIN_PHYSICAL_BASE;
     NameLength = RtlPrintToString(NULL,
                                   0,
                                   CharacterEncodingDefault,
-                                  ClNetworkNameFormats[FormatIndex],
+                                  FormatString,
                                   DeviceId);
 
     if (*Buffer != NULL) {
@@ -690,7 +717,7 @@ Return Value:
     NameLength = RtlPrintToString(*Buffer,
                                   NameLength,
                                   CharacterEncodingDefault,
-                                  ClNetworkNameFormats[FormatIndex],
+                                  FormatString,
                                   DeviceId);
 
     Status = STATUS_SUCCESS;
@@ -808,15 +835,17 @@ Return Value:
 KSTATUS
 ClpCreateNetworkInterfaceAddress (
     DEVICE_ID DeviceId,
-    struct ifaddrs **Interface
+    struct ifaddrs **Interface,
+    struct ifaddrs **LinkInterface
     )
 
 /*++
 
 Routine Description:
 
-    This routine creates a network interface address structure for the network
-    device indicated by the given device ID.
+    This routine creates network interface address structures for the network
+    device indicated by the given device ID and for its associated link-layer
+    address.
 
 Arguments:
 
@@ -825,6 +854,11 @@ Arguments:
 
     Interface - Supplies a pointer that receives a pointer to a newly allocated
         network interface address structure. The caller is responsible for
+        releasing the allocation.
+
+    LinkInterface - Supplies a pointer that receives a pointer to a newly
+        allocated network interface address structure for the link-layer
+        associated with this network device. The caller is responsible for
         releasing the allocation.
 
 Return Value:
@@ -837,13 +871,23 @@ Return Value:
 
     ULONG Address;
     socklen_t AddressLength;
+    size_t AllocationSize;
     struct sockaddr_in *Broadcast;
+    size_t DataLength;
+    NET_DOMAIN_TYPE Domain;
+    PCSTR FormatString;
+    ULONG Index;
     NETWORK_DEVICE_INFORMATION Information;
+    struct sockaddr_dl *LinkAddress;
+    size_t MaxDataLength;
+    size_t NameLength;
     struct ifaddrs *NewInterface;
+    struct ifaddrs *NewLinkInterface;
     KSTATUS Status;
     ULONG Subnet;
 
     NewInterface = NULL;
+    NewLinkInterface = NULL;
 
     //
     // Query the system for the network information associated with this
@@ -867,8 +911,14 @@ Return Value:
     }
 
     memset(NewInterface, 0, sizeof(struct ifaddrs));
+    Domain = Information.PhysicalAddress.Domain;
+
+    ASSERT(Domain >= NET_DOMAIN_PHYSICAL_BASE);
+
+    Index = CL_NETWORK_NAME_INDEX_FROM_DOMAIN(Domain);
+    FormatString = ClNetworkNameFormats[Index];
     Status = ClpCreateNetworkDeviceName(DeviceId,
-                                        Information.PhysicalAddress.Domain,
+                                        FormatString,
                                         &(NewInterface->ifa_name),
                                         0);
 
@@ -948,15 +998,102 @@ Return Value:
         NewInterface->ifa_flags = IFF_BROADCAST;
     }
 
+    //
+    // Create a C library network interface structure for the link-layer
+    // address. The native Minoca system returns both the link and socket layer
+    // addresses together. The C library needs them separate.
+    //
+
+    NewLinkInterface = malloc(sizeof(struct ifaddrs));
+    if (NewLinkInterface == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateNetworkInterfaceAddressEnd;
+    }
+
+    memset(NewLinkInterface, 0, sizeof(struct ifaddrs));
+    FormatString = ClNetworkNameFormats[CL_NETWORK_NAME_LINK_LAYER_INDEX];
+    Status = ClpCreateNetworkDeviceName(DeviceId,
+                                        FormatString,
+                                        &(NewLinkInterface->ifa_name),
+                                        0);
+
+    if (!KSUCCESS(Status)) {
+        goto CreateNetworkInterfaceAddressEnd;
+    }
+
+    //
+    // If the network device is present in the query, then consider it "up". It
+    // is only "running" if it fully configured and ready to receive traffic.
+    //
+
+    NewLinkInterface->ifa_flags = IFF_UP;
+    if ((Information.Flags & NETWORK_DEVICE_FLAG_CONFIGURED) != 0) {
+        NewLinkInterface->ifa_flags |= IFF_RUNNING;
+    }
+
+    if (Information.PhysicalAddress.Domain != NetDomainInvalid) {
+        AllocationSize = sizeof(struct sockaddr_dl);
+        MaxDataLength = AllocationSize -
+                        FIELD_OFFSET(struct sockaddr_dl, sdl_data);
+
+        NameLength = strlen(NewLinkInterface->ifa_name);
+        DataLength = NameLength + ETHERNET_ADDRESS_SIZE;
+        if (DataLength > MaxDataLength) {
+            AllocationSize += DataLength - MaxDataLength;
+        }
+
+        //
+        // The name length better not be too long for the socket address
+        // structure.
+        //
+
+        if (NameLength > MAX_UCHAR) {
+            Status = STATUS_NAME_TOO_LONG;
+            goto CreateNetworkInterfaceAddressEnd;
+        }
+
+        LinkAddress = malloc(AllocationSize);
+        if (LinkAddress == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CreateNetworkInterfaceAddressEnd;
+        }
+
+        RtlZeroMemory(LinkAddress, AllocationSize);
+        LinkAddress->sdl_len = AllocationSize;
+        LinkAddress->sdl_family = AF_LINK;
+        LinkAddress->sdl_type = IFT_ETHER;
+        if (Information.PhysicalAddress.Domain == NetDomain80211) {
+            LinkAddress->sdl_type = IFT_IEEE80211;
+        }
+
+        LinkAddress->sdl_nlen = NameLength;
+        LinkAddress->sdl_alen = ETHERNET_ADDRESS_SIZE;
+        RtlCopyMemory(LinkAddress->sdl_data,
+                      NewLinkInterface->ifa_name,
+                      NameLength);
+
+        RtlCopyMemory(LLADDR(LinkAddress),
+                      Information.PhysicalAddress.Address,
+                      ETHERNET_ADDRESS_SIZE);
+
+        NewLinkInterface->ifa_addr = (struct sockaddr *)LinkAddress;
+    }
+
 CreateNetworkInterfaceAddressEnd:
     if (!KSUCCESS(Status)) {
         if (NewInterface != NULL) {
             ClpDestroyNetworkInterfaceAddress(NewInterface);
             NewInterface = NULL;
         }
+
+        if (NewLinkInterface != NULL) {
+            ClpDestroyNetworkInterfaceAddress(NewLinkInterface);
+            NewLinkInterface = NULL;
+        }
     }
 
     *Interface = NewInterface;
+    *LinkInterface = NewLinkInterface;
     return Status;
 }
 

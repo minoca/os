@@ -277,6 +277,12 @@ Author:
 #define SOCKET_FLAG_RECEIVE_TIMEOUT_SET 0x00000002
 
 //
+// Define the size of an ethernet address.
+//
+
+#define ETHERNET_ADDRESS_SIZE 6
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

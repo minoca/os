@@ -154,12 +154,6 @@ Author:
 #define NET_SPEED_2500_MBPS 2500000000ULL
 
 //
-// Define the size of an ethernet address.
-//
-
-#define ETHERNET_ADDRESS_SIZE 6
-
-//
 // Define well-known protocol numbers.
 //
 
