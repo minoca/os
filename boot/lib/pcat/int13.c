@@ -292,7 +292,7 @@ Return Value:
             continue;
         }
 
-        Status = FwpPcatOpenPartitionOnDrive(BoBootDriveNumber,
+        Status = FwpPcatOpenPartitionOnDrive(Drive,
                                              PartitionId,
                                              Handle);
 
