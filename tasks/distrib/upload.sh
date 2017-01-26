@@ -51,9 +51,26 @@ create_todays_directory() {
     $SSH_CMD "mkdir -p $NIGHTLIES/$UPLOAD_DATE/"
 }
 
+get_latests() {
+    latests=
+    for arch in x86 x86q armv7 armv6; do
+        latests="$latests `readlink latest-$arch`"
+    done
+
+    echo "$latests"
+}
+
 prune_stale_builds() {
     # The + number at the end is one greater than the number of builds to keep.
     stale=`run_ssh_cmd "ls $NIGHTLIES | grep 201 | sort -r | tail --lines=+$KEEPCOUNT"`
+
+    # Don't blow away the latest build from any particular architecture. ARMv6
+    # for instance might be way behind.
+    latests=`get_latests`
+
+    # Combine the two lists, sort them, and then ask uniq to print everything
+    # that's not repeated.
+    stale=`echo $stale $latests | sed 's/ /\n/g' | sort | uniq -u`
     for d in $stale; do
         echo "Deleting build $d"
         "$SSH_CMD" "rm -rf $NIGHTLIES/$d/"

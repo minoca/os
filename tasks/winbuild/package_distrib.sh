@@ -144,7 +144,7 @@ cd "$ORIGINAL_DIRECTORY"
 echo "Running upload_packages.sh"
 . "$SRCROOT/os/tasks/distrib/upload_packages.sh"
 
-update_production_latest
+update_production_latest "$ARCH$VARIANT"
 
 ##
 ## Upload the files.
