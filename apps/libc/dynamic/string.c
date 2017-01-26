@@ -1587,6 +1587,89 @@ Return Value:
 }
 
 LIBC_API
+char *
+strsep (
+    char **InputString,
+    const char *Delimiters
+    )
+
+/*++
+
+Routine Description:
+
+    This routine breaks a string into a series of tokens delimited by any
+    character from the given delimiter set. It scans looking for a delimiter
+    character and sets that byte to the null terminator to delimit the first
+    token. This may result in an empty field where the returned token is made
+    up of just the null terminator. This routine is thread safe and re-entrant
+    so long as the input string is not used by multiple threads.
+
+Arguments:
+
+    InputString - Supplies a pointer to a pointer to the input string to
+        tokenize. On output, this will point to the character after the
+        modified delimiter or NULL if the end of the string was reached without
+        finding a delimiter.
+
+    Delimiters - Supplies a pointer to a null terminated string containing the
+        set of characters that delimit tokens.
+
+Return Value:
+
+    Returns a pointer to the the original input string (now delimited).
+
+    NULL if there are no more tokens or no string was supplied.
+
+--*/
+
+{
+
+    size_t Count;
+    PSTR OriginalString;
+    PSTR Token;
+
+    if ((InputString == NULL) || (*InputString == NULL)) {
+        return NULL;
+    }
+
+    //
+    // The original string is always returned. Save it.
+    //
+
+    OriginalString = *InputString;
+    Token = OriginalString;
+
+    //
+    // Get the count of characters not in the set. This may be 0, indicating an
+    // empty field. The original string is still returned and the character is
+    // still converted to the null terminator, unless of course it is already
+    // the null terminator.
+    //
+
+    Count = strcspn(Token, Delimiters);
+
+    //
+    // If this is the end of the string, then there are no more tokens. The
+    // input string is set to NULL so the next call fails.
+    //
+
+    if (Token[Count] == '\0') {
+        *InputString = NULL;
+
+    //
+    // Otherwise, null terminate the token and save the subsequent character
+    // for the next time.
+    //
+
+    } else {
+        Token[Count] = '\0';
+        *InputString = Token + Count + 1;
+    }
+
+    return OriginalString;
+}
+
+LIBC_API
 size_t
 strxfrm (
     char *Result,

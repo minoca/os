@@ -999,6 +999,42 @@ Return Value:
 
 LIBC_API
 char *
+strsep (
+    char **InputString,
+    const char *Delimiters
+    );
+
+/*++
+
+Routine Description:
+
+    This routine breaks a string into a series of tokens delimited by any
+    character from the given delimiter set. It scans looking for a delimiter
+    character and sets that byte to the null terminator to delimit the first
+    token. This may result in an empty field where the returned token is made
+    up of just the null terminator. This routine is thread safe and re-entrant
+    so long as the input string is not used by multiple threads.
+
+Arguments:
+
+    InputString - Supplies a pointer to a pointer to the input string to
+        tokenize. On output, this will point to the character after the
+        modified delimiter or NULL if the end of the string was reached without
+        finding a delimiter.
+
+    Delimiters - Supplies a pointer to a null terminated string containing the
+        set of characters that delimit tokens.
+
+Return Value:
+
+    Returns a pointer to the the original input string (now delimited).
+
+    NULL if there are no more tokens or no string was supplied.
+
+--*/
+
+LIBC_API
+char *
 strerror (
     int ErrorNumber
     );
