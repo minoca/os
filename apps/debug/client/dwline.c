@@ -328,8 +328,8 @@ Return Value:
 
     LoadingContext = Context->LoadingContext;
     Unit = LoadingContext->CurrentUnit;
-    CompileDirectory = DwarfpGetStringAttribute(Die, DwarfAtCompDir);
-    OffsetAttribute = DwarfpGetAttribute(Die, DwarfAtStatementList);
+    CompileDirectory = DwarfpGetStringAttribute(Context, Die, DwarfAtCompDir);
+    OffsetAttribute = DwarfpGetAttribute(Context, Die, DwarfAtStatementList);
     if (OffsetAttribute == NULL) {
         return 0;
     }

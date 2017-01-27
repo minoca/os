@@ -289,6 +289,9 @@ Members:
     Capacity - Stores the number of possible attributes in the array before
         the array needs to be resized.
 
+    Specification - Stores a pointer to the cached specification DIE, if this
+        DIE is "backed" by another DIE.
+
 --*/
 
 struct _DWARF_DIE {
@@ -303,6 +306,7 @@ struct _DWARF_DIE {
     PDWARF_ATTRIBUTE_VALUE Attributes;
     UINTN Count;
     UINTN Capacity;
+    PDWARF_DIE Specification;
 };
 
 /*++
@@ -619,6 +623,7 @@ Return Value:
 
 PSTR
 DwarfpGetStringAttribute (
+    PDWARF_CONTEXT Context,
     PDWARF_DIE Die,
     DWARF_ATTRIBUTE Attribute
     );
@@ -630,6 +635,8 @@ Routine Description:
     This routine returns the given attribute with type string.
 
 Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
 
     Die - Supplies a pointer to the DIE to get the attribute from.
 
@@ -645,6 +652,7 @@ Return Value:
 
 BOOL
 DwarfpGetAddressAttribute (
+    PDWARF_CONTEXT Context,
     PDWARF_DIE Die,
     DWARF_ATTRIBUTE Attribute,
     PULONGLONG Address
@@ -657,6 +665,8 @@ Routine Description:
     This routine returns the given attribute, ensuring it is of type address.
 
 Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
 
     Die - Supplies a pointer to the DIE to get the attribute from.
 
@@ -674,6 +684,7 @@ Return Value:
 
 BOOL
 DwarfpGetIntegerAttribute (
+    PDWARF_CONTEXT Context,
     PDWARF_DIE Die,
     DWARF_ATTRIBUTE Attribute,
     PULONGLONG Integer
@@ -687,6 +698,8 @@ Routine Description:
     (data or flag).
 
 Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
 
     Die - Supplies a pointer to the DIE to get the attribute from.
 
@@ -742,6 +755,7 @@ Return Value:
 
 BOOL
 DwarfpGetLocalReferenceAttribute (
+    PDWARF_CONTEXT Context,
     PDWARF_DIE Die,
     DWARF_ATTRIBUTE Attribute,
     PULONGLONG Offset
@@ -754,6 +768,8 @@ Routine Description:
     This routine returns the given attribute, ensuring it is of type reference.
 
 Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
 
     Die - Supplies a pointer to the DIE to get the attribute from.
 
@@ -771,6 +787,7 @@ Return Value:
 
 BOOL
 DwarfpGetGlobalReferenceAttribute (
+    PDWARF_CONTEXT Context,
     PDWARF_DIE Die,
     DWARF_ATTRIBUTE Attribute,
     PULONGLONG Offset
@@ -784,6 +801,8 @@ Routine Description:
     address.
 
 Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
 
     Die - Supplies a pointer to the DIE to get the attribute from.
 
@@ -801,6 +820,7 @@ Return Value:
 
 PDWARF_ATTRIBUTE_VALUE
 DwarfpGetAttribute (
+    PDWARF_CONTEXT Context,
     PDWARF_DIE Die,
     DWARF_ATTRIBUTE Attribute
     );
@@ -809,9 +829,12 @@ DwarfpGetAttribute (
 
 Routine Description:
 
-    This routine returns the requested attribute from a DIE.
+    This routine returns the requested attribute from a DIE. This will follow
+    a Specification attribute if needed.
 
 Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
 
     Die - Supplies a pointer to the DIE to get the attribute from.
 

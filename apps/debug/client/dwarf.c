@@ -1345,10 +1345,11 @@ Return Value:
     INT Status;
 
     LoadingContext = Context->LoadingContext;
-    SourceFile = DwarfpFindSource(Context,
-                                  DwarfpGetStringAttribute(Die, DwarfAtCompDir),
-                                  DwarfpGetStringAttribute(Die, DwarfAtName),
-                                  TRUE);
+    SourceFile = DwarfpFindSource(
+                        Context,
+                        DwarfpGetStringAttribute(Context, Die, DwarfAtCompDir),
+                        DwarfpGetStringAttribute(Context, Die, DwarfAtName),
+                        TRUE);
 
     if (SourceFile == NULL) {
         return ENOMEM;
@@ -1362,13 +1363,15 @@ Return Value:
     // if this compilation unit has no code (only data).
     //
 
-    Result = DwarfpGetAddressAttribute(Die,
+    Result = DwarfpGetAddressAttribute(Context,
+                                       Die,
                                        DwarfAtLowPc,
                                        &(SourceFile->StartAddress));
 
     if (Result != FALSE) {
         SourceFile->EndAddress = SourceFile->StartAddress + 1;
-        Result = DwarfpGetAddressAttribute(Die,
+        Result = DwarfpGetAddressAttribute(Context,
+                                           Die,
                                            DwarfAtHighPc,
                                            &(SourceFile->EndAddress));
 
@@ -1379,7 +1382,8 @@ Return Value:
             // it's an offset from low PC.
             //
 
-            Result = DwarfpGetIntegerAttribute(Die,
+            Result = DwarfpGetIntegerAttribute(Context,
+                                               Die,
                                                DwarfAtHighPc,
                                                &(SourceFile->EndAddress));
 
@@ -1468,7 +1472,11 @@ Return Value:
 
     LoadingContext = Context->LoadingContext;
     memset(&Numeric, 0, sizeof(DATA_TYPE_NUMERIC));
-    Result = DwarfpGetIntegerAttribute(Die, DwarfAtEncoding, &Encoding);
+    Result = DwarfpGetIntegerAttribute(Context,
+                                       Die,
+                                       DwarfAtEncoding,
+                                       &Encoding);
+
     if (Result != FALSE) {
         switch ((ULONG)Encoding) {
         case DwarfAteAddress:
@@ -1513,12 +1521,12 @@ Return Value:
         return 0;
     }
 
-    Result = DwarfpGetIntegerAttribute(Die, DwarfAtByteSize, &Size);
+    Result = DwarfpGetIntegerAttribute(Context, Die, DwarfAtByteSize, &Size);
     if (Result != FALSE) {
         Size *= BITS_PER_BYTE;
 
     } else {
-        Result = DwarfpGetIntegerAttribute(Die, DwarfAtBitSize, &Size);
+        Result = DwarfpGetIntegerAttribute(Context, Die, DwarfAtBitSize, &Size);
     }
 
     if (Result == FALSE) {
@@ -1537,7 +1545,7 @@ Return Value:
     PreviousType = LoadingContext->CurrentType;
     LoadingContext->CurrentType = Type;
     Type->ParentFunction = LoadingContext->CurrentFunction;
-    Type->Name = DwarfpGetStringAttribute(Die, DwarfAtName);
+    Type->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
     Type->TypeNumber = DWARF_DIE_ID(Context, Die);
     Type->Type = DataTypeNumeric;
     memcpy(&(Type->U.Numeric), &Numeric, sizeof(DATA_TYPE_NUMERIC));
@@ -1618,7 +1626,7 @@ Return Value:
     PreviousType = LoadingContext->CurrentType;
     LoadingContext->CurrentType = Type;
     Type->ParentFunction = LoadingContext->CurrentFunction;
-    Type->Name = DwarfpGetStringAttribute(Die, DwarfAtName);
+    Type->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
     Type->TypeNumber = DWARF_DIE_ID(Context, Die);
     Type->Type = DataTypeRelation;
     memcpy(&(Type->U.Relation), &Relation, sizeof(DATA_TYPE_RELATION));
@@ -1673,7 +1681,11 @@ Return Value:
     // then make the array into a pointer.
     //
 
-    Result = DwarfpGetIntegerAttribute(Die, DwarfAtUpperBound, &UpperBound);
+    Result = DwarfpGetIntegerAttribute(Context,
+                                       Die,
+                                       DwarfAtUpperBound,
+                                       &UpperBound);
+
     if (Result == FALSE) {
         LoadingContext->CurrentType->U.Relation.Pointer =
                                       LoadingContext->CurrentUnit->AddressSize;
@@ -1742,7 +1754,7 @@ Return Value:
     // Get the size. If this is a declaration, there might not be one.
     //
 
-    Result = DwarfpGetIntegerAttribute(Die, DwarfAtByteSize, &Size);
+    Result = DwarfpGetIntegerAttribute(Context, Die, DwarfAtByteSize, &Size);
     if (Result == FALSE) {
         Size = 0;
     }
@@ -1757,7 +1769,7 @@ Return Value:
     PreviousType = LoadingContext->CurrentType;
     LoadingContext->CurrentType = Type;
     Type->ParentFunction = LoadingContext->CurrentFunction;
-    Type->Name = DwarfpGetStringAttribute(Die, DwarfAtName);
+    Type->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
     Type->TypeNumber = DWARF_DIE_ID(Context, Die);
     if ((Die->Tag == DwarfTagStructureType) ||
         (Die->Tag == DwarfTagUnionType) ||
@@ -1833,9 +1845,13 @@ Return Value:
     // Try to get the bit size, and if it's not there try to get the byte size.
     //
 
-    Result = DwarfpGetIntegerAttribute(Die, DwarfAtBitSize, &BitSize);
+    Result = DwarfpGetIntegerAttribute(Context, Die, DwarfAtBitSize, &BitSize);
     if (Result == FALSE) {
-        Result = DwarfpGetIntegerAttribute(Die, DwarfAtByteSize, &BitSize);
+        Result = DwarfpGetIntegerAttribute(Context,
+                                           Die,
+                                           DwarfAtByteSize,
+                                           &BitSize);
+
         if (Result != FALSE) {
             BitSize *= BITS_PER_BYTE;
         }
@@ -1846,9 +1862,17 @@ Return Value:
     // older bit offset if not found.
     //
 
-    Result = DwarfpGetIntegerAttribute(Die, DwarfAtDataBitOffset, &BitOffset);
+    Result = DwarfpGetIntegerAttribute(Context,
+                                       Die,
+                                       DwarfAtDataBitOffset,
+                                       &BitOffset);
+
     if (Result == FALSE) {
-        Result = DwarfpGetIntegerAttribute(Die, DwarfAtBitOffset, &BitOffset);
+        Result = DwarfpGetIntegerAttribute(Context,
+                                           Die,
+                                           DwarfAtBitOffset,
+                                           &BitOffset);
+
         if (Result != FALSE) {
 
             //
@@ -1856,7 +1880,8 @@ Return Value:
             // size to determine storage unit size.
             //
 
-            Result = DwarfpGetIntegerAttribute(Die,
+            Result = DwarfpGetIntegerAttribute(Context,
+                                               Die,
                                                DwarfAtByteSize,
                                                &StorageSize);
 
@@ -1884,7 +1909,10 @@ Return Value:
     // unions.
     //
 
-    LocationAttribute = DwarfpGetAttribute(Die, DwarfAtDataMemberLocation);
+    LocationAttribute = DwarfpGetAttribute(Context,
+                                           Die,
+                                           DwarfAtDataMemberLocation);
+
     if (LocationAttribute != NULL) {
         memset(&LocationContext, 0, sizeof(DWARF_LOCATION_CONTEXT));
         LocationContext.Unit = LoadingContext->CurrentUnit;
@@ -1928,7 +1956,7 @@ Return Value:
     }
 
     memset(Member, 0, sizeof(STRUCTURE_MEMBER));
-    Member->Name = DwarfpGetStringAttribute(Die, DwarfAtName);
+    Member->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
     Member->BitOffset = BitOffset;
     Member->BitSize = BitSize;
     Result = DwarfpGetTypeReferenceAttribute(Context,
@@ -2003,7 +2031,7 @@ Return Value:
     ULONGLONG Value;
 
     LoadingContext = Context->LoadingContext;
-    Result = DwarfpGetIntegerAttribute(Die, DwarfAtConstValue, &Value);
+    Result = DwarfpGetIntegerAttribute(Context, Die, DwarfAtConstValue, &Value);
     if (Result == FALSE) {
         DWARF_ERROR("DWARF: Enumerator with no value.\n");
         return EINVAL;
@@ -2019,7 +2047,7 @@ Return Value:
     }
 
     memset(Enumeration, 0, sizeof(ENUMERATION_MEMBER));
-    Enumeration->Name = DwarfpGetStringAttribute(Die, DwarfAtName);
+    Enumeration->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
     Enumeration->Value = Value;
 
     //
@@ -2093,7 +2121,7 @@ Return Value:
     PreviousType = LoadingContext->CurrentType;
     LoadingContext->CurrentType = Type;
     Type->ParentFunction = LoadingContext->CurrentFunction;
-    Type->Name = DwarfpGetStringAttribute(Die, DwarfAtName);
+    Type->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
     Type->TypeNumber = DWARF_DIE_ID(Context, Die);
     Type->Type = DataTypeFunctionPointer;
     Type->U.FunctionPointer.SizeInBytes =
@@ -2158,7 +2186,7 @@ Return Value:
     //
 
     Declaration = 0;
-    DwarfpGetIntegerAttribute(Die, DwarfAtDeclaration, &Declaration);
+    DwarfpGetIntegerAttribute(Context, Die, DwarfAtDeclaration, &Declaration);
     if (Declaration != FALSE) {
         return 0;
     }
@@ -2168,7 +2196,12 @@ Return Value:
     // (indicating not inlined) results in no low-pc value.
     //
 
-    if (DwarfpGetIntegerAttribute(Die, DwarfAtInline, &Declaration) != FALSE) {
+    Result = DwarfpGetIntegerAttribute(Context,
+                                       Die,
+                                       DwarfAtInline,
+                                       &Declaration);
+
+    if (Result != FALSE) {
         return 0;
     }
 
@@ -2199,8 +2232,9 @@ Return Value:
 
     PreviousFunction = LoadingContext->CurrentFunction;
     LoadingContext->CurrentFunction = Function;
-    Function->Name = DwarfpGetStringAttribute(Die, DwarfAtName);
-    Result = DwarfpGetAddressAttribute(Die,
+    Function->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
+    Result = DwarfpGetAddressAttribute(Context,
+                                       Die,
                                        DwarfAtLowPc,
                                        &(Function->StartAddress));
 
@@ -2209,7 +2243,8 @@ Return Value:
                     Function->Name);
     }
 
-    Result = DwarfpGetAddressAttribute(Die,
+    Result = DwarfpGetAddressAttribute(Context,
+                                       Die,
                                        DwarfAtHighPc,
                                        &(Function->EndAddress));
 
@@ -2220,7 +2255,8 @@ Return Value:
         // it's an offset from low PC.
         //
 
-        Result = DwarfpGetIntegerAttribute(Die,
+        Result = DwarfpGetIntegerAttribute(Context,
+                                           Die,
                                            DwarfAtHighPc,
                                            &(Function->EndAddress));
 
@@ -2235,7 +2271,7 @@ Return Value:
         Function->EndAddress = Function->StartAddress + 1;
     }
 
-    FrameBase = DwarfpGetAttribute(Die, DwarfAtFrameBase);
+    FrameBase = DwarfpGetAttribute(Context, Die, DwarfAtFrameBase);
     if (FrameBase != NULL) {
         memcpy(&(DwarfFunction->FrameBase),
                FrameBase,
@@ -2291,7 +2327,7 @@ Return Value:
 
     LoadingContext = Context->LoadingContext;
     Unit = LoadingContext->CurrentUnit;
-    Location = DwarfpGetAttribute(Die, DwarfAtLocation);
+    Location = DwarfpGetAttribute(Context, Die, DwarfAtLocation);
 
     //
     // Ignore variables with no location (optimized away probably).
@@ -2332,7 +2368,7 @@ Return Value:
         return EINVAL;
     }
 
-    Variable->Name = DwarfpGetStringAttribute(Die, DwarfAtName);
+    Variable->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
     DwarfSymbol = (PDWARF_COMPLEX_DATA_SYMBOL)(Variable + 1);
     Variable->LocationType = DataLocationComplex;
     Variable->Location.Complex = DwarfSymbol;
