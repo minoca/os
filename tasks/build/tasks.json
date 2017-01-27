@@ -684,6 +684,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/libx264-20170102-2245"
         },
         {
+            "name": "Make cloud-init",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/cloud-init-0.7.6"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
@@ -692,6 +697,11 @@
             "name": "Make OS (Distribution)",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh os"
+        },
+        {
+            "name": "Make Packet",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/build_packet.sh"
         },
         {
             "name": "Add Files",

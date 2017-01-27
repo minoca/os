@@ -77,7 +77,7 @@ if [ "$ARCH$VARIANT" = "x86q" ]; then
 fi
 
 ##
-## Perform an offline install of distributed.
+## Perform an offline install of the minimal set of packages.
 ##
 
 PACKAGES="opkg gzip tar wget nano libpcre"
