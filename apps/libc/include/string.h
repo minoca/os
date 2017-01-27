@@ -919,6 +919,35 @@ Return Value:
 
 LIBC_API
 char *
+strcasestr (
+    const char *InputString,
+    const char *QueryString
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the first occurrence of the query string in
+    the given input string. This routine is case insensitive.
+
+Arguments:
+
+    InputString - Supplies a pointer to the input string to search.
+
+    QueryString - Supplies a pointer to the query string to search for.
+
+Return Value:
+
+    Returns a pointer within the input string to the first instance of the
+    query string.
+
+    NULL if no instances of the query string were found in the input string.
+
+--*/
+
+LIBC_API
+char *
 strtok (
     char *InputString,
     const char *Separators
