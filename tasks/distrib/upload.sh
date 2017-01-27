@@ -36,13 +36,14 @@ UPPORT=2222
 KEEPCOUNT=16
 
 SSH="$SRCROOT/git/usr/bin/ssh.exe"
+SCP="$SRCROOT/git/usr/bin/scp.exe"
 UPLOAD_DATE=
 NIGHTLIES=nightlies
 
 SSH_CMD="$SSH -p $UPPORT $UPUSER@$UPDEST -- "
 
 run_ssh_cmd() {
-    echo "Running: $@"
+    echo "Running: $@" >&2
     $SSH_CMD $@
 }
 
@@ -54,7 +55,7 @@ create_todays_directory() {
 get_latests() {
     latests=
     for arch in x86 x86q armv7 armv6; do
-        latests="$latests `readlink latest-$arch`"
+        latests="$latests `run_ssh_cmd readlink $NIGHTLIES/latest-$arch`"
     done
 
     echo "$latests"
@@ -73,7 +74,7 @@ prune_stale_builds() {
     stale=`echo $stale $latests | sed 's/ /\n/g' | sort | uniq -u`
     for d in $stale; do
         echo "Deleting build $d"
-        "$SSH_CMD" "rm -rf $NIGHTLIES/$d/"
+        run_ssh_cmd rm -rf $NIGHTLIES/$d/
     done
 }
 
@@ -91,7 +92,7 @@ mkdir_on_production() {
 upload_to_production() {
     for f in $@; do
         echo "Uploading $f to production in $UPLOAD_DATE"
-        $SCP -p $UPPORT $f $UPUSER@$UPDEST:$NIGHTLIES/$UPLOAD_DATE/$f
+        $SCP -P $UPPORT $f $UPUSER@$UPDEST:$NIGHTLIES/$UPLOAD_DATE/$f
     done
 }
 

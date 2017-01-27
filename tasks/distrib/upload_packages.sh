@@ -33,17 +33,15 @@ if test -z "$ARCH"; then
     exit 1
 fi
 
-if test -z "$REVISION"; then
-    echo "Error: REVISION must be set (from gen_plats.sh)."
-    exit 1
-fi
-
 if test -z "$UPLOAD_DATE"; then
     echo "Uploads not prepared."
     exit 1
 fi
 
-VERSION=`echo $REVISION | sed 's/\([0-9]*\)\.\([0-9]*\)\..*/\1.\2/'`
+BINROOT=$SRCROOT/${ARCH}${VARIANT}dbg/bin
+VERSION=`cat $BINROOT/kernel-version | \
+    sed 's/\([0-9]*\)\.\([0-9]*\)\..*/\1.\2/'`
+
 parch=$ARCH$VARIANT
 case "$ARCH$VARIANT" in
   x86) parch=i686 ;;
@@ -85,7 +83,7 @@ for repo in main; do
     ##
 
     mkdir_on_production "$repo_dir"
-    mkdir "$repo_dir"
+    mkdir -p "$repo_dir"
 
     ##
     ## Download each package and upload it to production.
