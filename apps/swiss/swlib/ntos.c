@@ -3722,9 +3722,11 @@ Return Value:
 
     OriginalMode = SwOriginalConsoleMode;
     RawMode = OriginalMode;
-    RawMode &= ~(ENABLE_ECHO_INPUT | ENABLE_INSERT_MODE | ENABLE_LINE_INPUT);
-    RawMode |= ENABLE_EXTENDED_FLAGS | ENABLE_PROCESSED_INPUT |
-               ENABLE_QUICK_EDIT_MODE | ENABLE_INSERT_MODE;
+    RawMode &= ~(ENABLE_ECHO_INPUT | ENABLE_INSERT_MODE |
+                 ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
+
+    RawMode |= ENABLE_EXTENDED_FLAGS | ENABLE_QUICK_EDIT_MODE |
+               ENABLE_INSERT_MODE;
 
     Result = SetConsoleMode(Console, RawMode);
     if (Result == FALSE) {

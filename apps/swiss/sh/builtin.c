@@ -756,6 +756,14 @@ Return Value:
     Shell->Options |= OriginalOptions;
 
     //
+    // The signals may have been modified by a subshell and then restored. The
+    // problem is that the interactive option was not set. Reset the signal
+    // dispositions now that the options have been restored.
+    //
+
+    ShSetAllSignalDispositions(Shell);
+
+    //
     // Restore the original lexer.
     //
 
