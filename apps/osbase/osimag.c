@@ -2570,12 +2570,13 @@ Return Value:
     // Allocate more space.
     //
 
-    NewCapacity = OsImModuleNumberBitmapSize * 2;
     if (OsImModuleNumberBitmap == &OsImStaticModuleNumberBitmap) {
+        NewCapacity = 8;
         NewBuffer = OsHeapAllocate(NewCapacity * sizeof(UINTN),
                                    OS_IMAGE_ALLOCATION_TAG);
 
     } else {
+        NewCapacity = OsImModuleNumberBitmapSize * 2;
         NewBuffer = OsHeapReallocate(OsImModuleNumberBitmap,
                                      NewCapacity * sizeof(UINTN),
                                      OS_IMAGE_ALLOCATION_TAG);
@@ -2595,7 +2596,7 @@ Return Value:
     Image->ModuleNumber = OsImModuleNumberBitmapSize * sizeof(UINTN) *
                           BITS_PER_BYTE;
 
-    OsImModuleNumberBitmap[OsImModuleNumberBitmapSize] = 1;
+    NewBuffer[OsImModuleNumberBitmapSize] = 1;
     if (Image->ModuleNumber > OsImModuleGeneration) {
         OsImModuleGeneration += 1;
     }
