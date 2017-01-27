@@ -763,6 +763,17 @@ Return Value:
         }
 
         //
+        // TODO: Remove this when IPv6 is supported. Allowing the IPv6
+        // translation is problematic because the name servers returned may
+        // also be IPv6 addresses, causing the translation to fail rather than
+        // fall back to IPv4.
+        //
+
+        if (Family == AF_UNSPEC) {
+            Family = AF_INET;
+        }
+
+        //
         // This is going to take the big leagues, translating a real address.
         // If IPv6 or any family is requested, get IPv6 translations.
         //
