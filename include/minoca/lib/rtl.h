@@ -2404,6 +2404,43 @@ Return Value:
 --*/
 
 RTL_API
+PSTR
+RtlStringSearchIgnoringCase (
+    PSTR InputString,
+    UINTN InputStringLength,
+    PSTR QueryString,
+    UINTN QueryStringLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine searches a string for the first instance of the given string
+    within it. This routine is case insensitive.
+
+Arguments:
+
+    InputString - Supplies a pointer to the string to search.
+
+    InputStringLength - Supplies the length of the string, in bytes, including
+        the NULL terminator.
+
+    QueryString - Supplies a pointer to the null terminated string to search
+        for.
+
+    QueryStringLength - Supplies the length of the query string in bytes
+        including the null terminator.
+
+Return Value:
+
+    Returns a pointer to the first instance of the string on success.
+
+    NULL if the character could not be found in the string.
+
+--*/
+
+RTL_API
 ULONG
 RtlStringCopyWide (
     PWSTR Destination,

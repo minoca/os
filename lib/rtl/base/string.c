@@ -558,6 +558,144 @@ Return Value:
     return NULL;
 }
 
+RTL_API
+PSTR
+RtlStringSearchIgnoringCase (
+    PSTR InputString,
+    UINTN InputStringLength,
+    PSTR QueryString,
+    UINTN QueryStringLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine searches a string for the first instance of the given string
+    within it. This routine is case insensitive.
+
+Arguments:
+
+    InputString - Supplies a pointer to the string to search.
+
+    InputStringLength - Supplies the length of the string, in bytes, including
+        the NULL terminator.
+
+    QueryString - Supplies a pointer to the null terminated string to search
+        for.
+
+    QueryStringLength - Supplies the length of the query string in bytes
+        including the null terminator.
+
+Return Value:
+
+    Returns a pointer to the first instance of the string on success.
+
+    NULL if the character could not be found in the string.
+
+--*/
+
+{
+
+    size_t BadCharacterShift[MAX_UCHAR + 1];
+    char Character1;
+    char Character2;
+    size_t LastIndex;
+    size_t ScanIndex;
+    int ShiftIndex;
+
+    if ((QueryString == NULL) || (InputString == NULL)) {
+        return NULL;
+    }
+
+    if (QueryStringLength <= 1) {
+        return (char *)InputString;
+    }
+
+    if (InputStringLength < QueryStringLength) {
+        return NULL;
+    }
+
+    InputStringLength -= 1;
+    QueryStringLength -= 1;
+
+    //
+    // Initialize the bad shift table assuming that no character exists in the
+    // query string, and thus the search can be advanced by the entire query
+    // string.
+    //
+
+    for (ScanIndex = 0; ScanIndex <= MAX_UCHAR; ScanIndex += 1) {
+        BadCharacterShift[ScanIndex] = QueryStringLength;
+    }
+
+    //
+    // Now find the last occurrence of each character and save it in the shift
+    // table.
+    //
+
+    LastIndex = QueryStringLength - 1;
+    for (ScanIndex = 0; ScanIndex < LastIndex; ScanIndex += 1) {
+        Character1 = QueryString[ScanIndex];
+        if ((Character1 >= 'a') && (Character1 <= 'z')) {
+            Character1 = Character1 - 'a' + 'A';
+        }
+
+        ShiftIndex = (UCHAR)Character1;
+        BadCharacterShift[ShiftIndex] = LastIndex - ScanIndex;
+    }
+
+    //
+    // Search the query string.
+    //
+
+    while (InputStringLength >= QueryStringLength) {
+
+        //
+        // Scan from the end.
+        //
+
+        ScanIndex = LastIndex;
+        while (TRUE) {
+            Character1 = InputString[ScanIndex];
+            Character2 = QueryString[ScanIndex];
+            if ((Character1 >= 'a') && (Character1 <= 'z')) {
+                Character1 = Character1 - 'a' + 'A';
+            }
+
+            if ((Character2 >= 'a') && (Character2 <= 'z')) {
+                Character2 = Character2 - 'a' + 'A';
+            }
+
+            if (Character1 != Character2) {
+                break;
+            }
+
+            if (ScanIndex == 0) {
+                return (PSTR)InputString;
+            }
+
+            ScanIndex -= 1;
+        }
+
+        //
+        // Move on to a new position. Skip based on the last character of the
+        // input no matter where the mismatch is.
+        //
+
+        Character1 = InputString[LastIndex];
+        if ((Character1 >= 'a') && (Character1 <= 'z')) {
+            Character1 = Character1 - 'a' + 'A';
+        }
+
+        ShiftIndex = (UCHAR)Character1;
+        InputStringLength -= BadCharacterShift[ShiftIndex];
+        InputString += BadCharacterShift[ShiftIndex];
+    }
+
+    return NULL;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
