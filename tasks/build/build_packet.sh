@@ -50,6 +50,8 @@ export TEMP=$TMPDIR
 BINROOT="$SRCROOT/$ARCH$VARIANT$DEBUG/bin"
 DEST="$BINROOT/apps"
 
+cd $BINROOT
+
 ##
 ## Move the install image aside temporarily.
 ##
@@ -61,7 +63,7 @@ mv install.img install_.img
 ## scripts.
 ##
 
-cp -Rp $BINROOT/skel/* $BINROOT/apps/
+cp -Rpf $BINROOT/skel/* $BINROOT/apps/ || true
 
 ##
 ## Create a local opkg configuration that prefers the local package repository.
@@ -76,6 +78,7 @@ sed "s|src/gz main.*|src/gz local file:///$package_dir|" ./myopkg.conf.orig > \
 ## Install python-setuptools on the build machine.
 ##
 
+opkg --conf=$PWD/myopkg.conf update
 opkg --conf=$PWD/myopkg.conf install python-pip
 
 ##

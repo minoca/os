@@ -78,7 +78,7 @@ fi
 ## scripts.
 ##
 
-cp -Rp $BINROOT/skel/* $BINROOT/apps/
+cp -Rpf $BINROOT/skel/* $BINROOT/apps/ || true
 
 ##
 ## Copy the script that automatically loads the Python build client.
