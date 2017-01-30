@@ -60,10 +60,10 @@ Structure Description:
 
 Members:
 
-    sdl_len - Stores the total length of this socket address.
-
     sdl_family - Stores the family name, which is always AF_LINK for link-layer
         addresses.
+
+    sdl_len - Stores the total length of this socket address.
 
     sdl_index - Stores the system interface index if not set to zero.
 
@@ -81,8 +81,8 @@ Members:
 --*/
 
 struct sockaddr_dl {
+    sa_family_t sdl_family;
     u_char sdl_len;
-    u_char sdl_family;
     u_char sdl_index;
     u_char sdl_type;
     u_char sdl_nlen;

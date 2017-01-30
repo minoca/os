@@ -995,7 +995,7 @@ Return Value:
         Address |= ~Subnet;
         Broadcast->sin_addr.s_addr = Address;
         NewInterface->ifa_broadaddr = (struct sockaddr *)Broadcast;
-        NewInterface->ifa_flags = IFF_BROADCAST;
+        NewInterface->ifa_flags |= IFF_BROADCAST;
     }
 
     //
