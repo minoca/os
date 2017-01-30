@@ -275,7 +275,7 @@ Return Value:
     SplitEntry = MmAllocateNonPagedPool(sizeof(FILE_LOCK_ENTRY),
                                         FILE_LOCK_ALLOCATION_TAG);
 
-    if (NewEntry == NULL) {
+    if (SplitEntry == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SetFileLockEnd;
     }
@@ -359,7 +359,7 @@ Return Value:
 
         //
         // Do this for real. This should not fail, as any failures should
-        // have happened during the try run.
+        // have happened during the dry run.
         //
 
         Status = IopTryToSetFileLock(FileObject, NewEntry, &FreeList, FALSE);
@@ -618,7 +618,7 @@ Return Value:
         // Another process owns this lock.
         //
 
-        } else {
+        } else if (NewEntry->Type != FileLockUnlock) {
 
             //
             // Read locks can coexist.
