@@ -2233,15 +2233,10 @@ Return Value:
     PreviousFunction = LoadingContext->CurrentFunction;
     LoadingContext->CurrentFunction = Function;
     Function->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
-    Result = DwarfpGetAddressAttribute(Context,
-                                       Die,
-                                       DwarfAtLowPc,
-                                       &(Function->StartAddress));
-
-    if (Result == FALSE) {
-        DWARF_ERROR("DWARF: Warning: Failed to get low pc for function %s.\n",
-                    Function->Name);
-    }
+    DwarfpGetAddressAttribute(Context,
+                              Die,
+                              DwarfAtLowPc,
+                              &(Function->StartAddress));
 
     Result = DwarfpGetAddressAttribute(Context,
                                        Die,

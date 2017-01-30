@@ -999,13 +999,12 @@ Return Value:
             LocationList = Context->Sections.Locations.Data +
                            AttributeValue->Value.Offset;
 
-            Base = Complex->Unit->LowPc;
-
             //
             // Loop over all the location entries.
             //
 
             while (TRUE) {
+                Base = LocationContext.Unit->LowPc;
                 if (Complex->Unit->AddressSize == 8) {
                     LocationStart = DwarfpRead8(&LocationList);
                     LocationEnd = DwarfpRead8(&LocationList);
