@@ -24,7 +24,7 @@
 ##
 
 if test -z "$SRCROOT"; then
-    SRCROOT=`pwd`/src
+    export SRCROOT=`pwd`/src
 fi
 
 if test -z "$ARCH"; then

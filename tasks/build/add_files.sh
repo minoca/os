@@ -75,10 +75,12 @@ fi
 
 ##
 ## Copy the skeleton over so the proper environment is set up for postinst
-## scripts.
+## scripts. Don't do this if it has already been done.
 ##
 
-cp -Rpf $BINROOT/skel/* $BINROOT/apps/ || true
+if ! [ -f $BINROOT/apps/etc/inittab ]; then
+    cp -Rpf $BINROOT/skel/* $BINROOT/apps/ || true
+fi
 
 ##
 ## Copy the script that automatically loads the Python build client.

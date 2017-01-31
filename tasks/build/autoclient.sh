@@ -71,8 +71,9 @@ case "$1" in
         ##
 
         log_daemon_msg "Running Minoca Build client" || true
-        if start-stop-daemon -S -p /var/run/mbuild.pid -d "$AUTO_ROOT" -bqom \
-            -x /usr/bin/python -- $ARGS ; then
+        if start-stop-daemon -S -p /var/run/mbuild.pid -d "$AUTO_ROOT" -bqomC \
+            -x /usr/bin/python -- $ARGS \
+            >>/var/log/autoclient.log 2>&1; then
 
             log_end_msg 0 || true
 
@@ -84,8 +85,7 @@ case "$1" in
 
     stop)
         log_daemon_msg "Stopping Minoca Build client" || true
-        if start-stop-daemon -K -p /var/run/mbuild.pid -qo -n python \
-            -x /usr/bin/python; then
+        if start-stop-daemon -K -p /var/run/mbuild.pid -qo -n python; then
 
             log_end_msg 0 || true
 
@@ -95,17 +95,8 @@ case "$1" in
         ;;
 
     reload|force-reload|restart)
-        log_daemon_msg "Restarting Minoca Build client"
-        start-stop-daemon -K -p /var/run/mbuild.pid -qo -n python
-        sleep 2
-        if start-stop-daemon -S -p /var/run/mbuild.pid -d /auto -bqom \
-            -x /usr/bin/python -- $ARGS ; then
-
-            log_end_msg 0 || true
-
-        else
-            log_end_msg 1 || true
-        fi
+        $0 stop
+        $0 start
         ;;
 
     *)
