@@ -634,6 +634,13 @@ Return Value:
 
         } else {
             CkpEmitByteOp(Compiler, CkOpIndirectCall, Signature.Arity);
+
+            //
+            // Manually track stack usage since the op doesn't inherently
+            // know it's stack effects.
+            //
+
+            Compiler->StackSlots -= Signature.Arity;
         }
 
         break;

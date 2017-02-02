@@ -156,7 +156,7 @@ CHAR CkOpcodeStackEffects[CkOpcodeCount] = {
     -1, // CkOpAnd
     -1, // CkOpOr
     -1, // CkOpCloseUpvalue
-    0,  // CkOpReturn
+    -1,  // CkOpReturn
     1,  // CkOpClosure
     -1, // CkOpClass
     -2, // CkOpMethod
