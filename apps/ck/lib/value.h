@@ -1848,8 +1848,37 @@ Return Value:
 --*/
 
 UINTN
+CkpStringFindLast (
+    PCK_STRING Haystack,
+    PCK_STRING Needle
+    );
+
+/*++
+
+Routine Description:
+
+    This routine searches for the last instance of a given substring within a
+    string.
+
+Arguments:
+
+    Haystack - Supplies a pointer to the string to search.
+
+    Needle - Supplies a pointer to the string to search for.
+
+Return Value:
+
+    Returns the index of the last instance of the needle within the haystack on
+    success.
+
+    (UINTN)-1 if the needle could not be found in the haystack.
+
+--*/
+
+UINTN
 CkpStringFind (
     PCK_STRING Haystack,
+    UINTN Offset,
     PCK_STRING Needle
     );
 
@@ -1862,6 +1891,8 @@ Routine Description:
 Arguments:
 
     Haystack - Supplies a pointer to the string to search.
+
+    Offset - Supplies the offset from within the haystack to begin searching.
 
     Needle - Supplies a pointer to the string to search for.
 
