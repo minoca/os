@@ -248,20 +248,13 @@ NetlinkpGenericSend (
 
 VOID
 NetlinkpGenericProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNET_PROTOCOL_ENTRY ProtocolEntry
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 KSTATUS
 NetlinkpGenericProcessReceivedSocketData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 KSTATUS
@@ -305,11 +298,8 @@ NetlinkpGenericInsertReceivedPacket (
 
 KSTATUS
 NetlinkpGenericProcessReceivedKernelData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 PNETLINK_GENERIC_FAMILY
@@ -1675,11 +1665,7 @@ GenericSendEnd:
 
 VOID
 NetlinkpGenericProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNET_PROTOCOL_ENTRY ProtocolEntry
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -1690,22 +1676,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
-
-    ProtocolEntry - Supplies a pointer to this protocol's protocol entry.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -1722,11 +1694,8 @@ Return Value:
 
 KSTATUS
 NetlinkpGenericProcessReceivedSocketData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -1738,23 +1707,10 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that received the packet.
-
     Socket - Supplies a pointer to the socket that received the packet.
 
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        Use of this structure depends on its packet flags and the socket type.
-        If it is a multicast packet or it was sent to a kernel socket, then it
-        must not be modified. Otherwise this routine is responsible for the
-        destruction of the packet.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -1766,6 +1722,7 @@ Return Value:
 
     ULONG AllocationSize;
     PNETLINK_GENERIC_SOCKET GenericSocket;
+    PNET_PACKET_BUFFER Packet;
     PNET_PACKET_BUFFER PacketCopy;
     ULONG PacketLength;
     PNETLINK_GENERIC_RECEIVED_PACKET ReceivePacket;
@@ -1773,6 +1730,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    Packet = ReceiveContext->Packet;
     PacketCopy = NULL;
     GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
 
@@ -1782,13 +1740,7 @@ Return Value:
     //
 
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-        Status = NetlinkpGenericProcessReceivedKernelData(Link,
-                                                          Socket,
-                                                          Packet,
-                                                          SourceAddress,
-                                                          DestinationAddress);
-
-        return Status;
+        return NetlinkpGenericProcessReceivedKernelData(Socket, ReceiveContext);
     }
 
     //
@@ -1808,7 +1760,7 @@ Return Value:
     }
 
     RtlCopyMemory(&(ReceivePacket->Address),
-                  SourceAddress,
+                  ReceiveContext->Source,
                   sizeof(NETWORK_ADDRESS));
 
     //
@@ -1855,6 +1807,7 @@ ProcessReceivedSocketDataEnd:
 
         if ((Packet->Flags & NET_PACKET_FLAG_MULTICAST) == 0) {
             NetFreeBuffer(Packet);
+            ReceiveContext->Packet = NULL;
         }
     }
 
@@ -2796,11 +2749,8 @@ Return Value:
 
 KSTATUS
 NetlinkpGenericProcessReceivedKernelData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -2811,21 +2761,10 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
+    Socket - Supplies a pointer to the socket that received the packet.
 
-    Socket - Supplies a pointer to the network socket that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may not be used as a scratch space and must not be
-        modified by this routine.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -2843,6 +2782,7 @@ Return Value:
     PNETLINK_HEADER Header;
     ULONG Index;
     NET_PACKET_BUFFER LocalPacket;
+    PNET_PACKET_BUFFER Packet;
     ULONG PacketLength;
     USHORT RequiredFlags;
     KSTATUS Status;
@@ -2854,6 +2794,7 @@ Return Value:
     // be modified. The original is not allowed to be modified.
     //
 
+    Packet = ReceiveContext->Packet;
     RtlCopyMemory(&LocalPacket, Packet, sizeof(NET_PACKET_BUFFER));
     PacketLength = LocalPacket.FooterOffset - LocalPacket.DataOffset;
     Header = LocalPacket.Buffer + LocalPacket.DataOffset;
@@ -2914,8 +2855,8 @@ Return Value:
         goto ProcessReceivedKernelDataEnd;
     }
 
-    CommandInformation.Message.SourceAddress = SourceAddress;
-    CommandInformation.Message.DestinationAddress = DestinationAddress;
+    CommandInformation.Message.SourceAddress = ReceiveContext->Source;
+    CommandInformation.Message.DestinationAddress = ReceiveContext->Destination;
     CommandInformation.Message.SequenceNumber = Header->SequenceNumber;
     CommandInformation.Message.Type = Header->Type;
     CommandInformation.Command = GenericHeader->Command;

@@ -947,6 +947,7 @@ typedef struct _NET_LINK_LOCAL_ADDRESS {
 
 typedef struct _NET_PROTOCOL_ENTRY NET_PROTOCOL_ENTRY, *PNET_PROTOCOL_ENTRY;
 typedef struct _NET_NETWORK_ENTRY NET_NETWORK_ENTRY, *PNET_NETWORK_ENTRY;
+typedef struct _NET_RECEIVE_CONTEXT NET_RECEIVE_CONTEXT, *PNET_RECEIVE_CONTEXT;
 
 /*++
 
@@ -1319,11 +1320,7 @@ Return Value:
 typedef
 VOID
 (*PNET_PROTOCOL_PROCESS_RECEIVED_DATA) (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNET_PROTOCOL_ENTRY ProtocolEntry
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 /*++
@@ -1334,22 +1331,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
-
-    ProtocolEntry - Supplies a pointer to this protocol entry.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -1361,11 +1344,8 @@ Return Value:
 typedef
 KSTATUS
 (*PNET_PROTOCOL_PROCESS_RECEIVED_SOCKET_DATA) (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 /*++
@@ -1377,22 +1357,10 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that received the packet.
-
     Socket - Supplies a pointer to the socket that received the packet.
 
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        Use of this structure depends on its flags. If it is a multicast
-        packet, then it cannot be modified by this routine. Otherwise it can
-        be used as scratch space and modified.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -1904,8 +1872,7 @@ Return Value:
 typedef
 VOID
 (*PNET_NETWORK_PROCESS_RECEIVED_DATA) (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 /*++
@@ -1916,12 +1883,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link and packet information.
 
 Return Value:
 
@@ -2138,6 +2101,45 @@ struct _NET_NETWORK_ENTRY {
     NET_DOMAIN_TYPE Domain;
     ULONG ParentProtocolNumber;
     NET_NETWORK_INTERFACE Interface;
+};
+
+/*++
+
+Structure Description:
+
+    This structure defines the context for receiving a network packet. Each
+    layer will fill in the portions of the context it owns and pass it up the
+    stack. This structure and even the address pointers can be stack allocated
+    as it will not be referenced after the network layers have completed the
+    receive.
+
+Members:
+
+    Packet - Supplies a pointer to the packet that came in over the network.
+        This structure may be used as a scratch space while the packet travels
+        up the stack, but will not be accessed after the network layers are
+        done receiving the packet.
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Network - Supplies a pointer to the network to which the packet belongs.
+
+    Protocol - Supplies a pointer to the protocol to which the packet belongs.
+
+    Source - Supplies a pointer to the source (remote) address of the packet.
+
+    Destination - Supplies a pointer to the destination (local) address of the
+        packet.
+
+--*/
+
+struct _NET_RECEIVE_CONTEXT {
+    PNET_PACKET_BUFFER Packet;
+    PNET_LINK Link;
+    PNET_NETWORK_ENTRY Network;
+    PNET_PROTOCOL_ENTRY Protocol;
+    PNETWORK_ADDRESS Source;
+    PNETWORK_ADDRESS Destination;
 };
 
 //
@@ -3148,10 +3150,7 @@ Return Value:
 NET_API
 VOID
 NetRawSocketsProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
+    PNET_RECEIVE_CONTEXT ReceiveContext,
     ULONG NetworkProtocol
     );
 
@@ -3165,16 +3164,9 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to the network packet. It is only guaranteed to
-        include network layer headers, not physical layer headers.
-
-    SourceAddress - Supplies a pointer to the source (remote) address of the
-        packet.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        of the packet.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, network entry, source address, destination address, and the
+        packet that was received.
 
     NetworkProtocol - Supplies the network protocol of the packet.
 

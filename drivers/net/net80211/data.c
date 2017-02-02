@@ -310,6 +310,7 @@ Return Value:
     PNET8022_LLC_HEADER LlcHeader;
     PNET_NETWORK_ENTRY NetworkEntry;
     ULONG NetworkProtocol;
+    NET_RECEIVE_CONTEXT ReceiveContext;
     PNET8022_SNAP_EXTENSION SnapExtension;
     UCHAR SourceSap;
     KSTATUS Status;
@@ -426,7 +427,11 @@ Return Value:
     }
 
     Packet->DataOffset += sizeof(NET8022_SNAP_EXTENSION);
-    NetworkEntry->Interface.ProcessReceivedData(Link->NetworkLink, Packet);
+    RtlZeroMemory(&ReceiveContext, sizeof(NET_RECEIVE_CONTEXT));
+    ReceiveContext.Packet = Packet;
+    ReceiveContext.Link = Link->NetworkLink;
+    ReceiveContext.Network = NetworkEntry;
+    NetworkEntry->Interface.ProcessReceivedData(&ReceiveContext);
     return;
 }
 

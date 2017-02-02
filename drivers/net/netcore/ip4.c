@@ -241,8 +241,7 @@ NetpIp4Send (
 
 VOID
 NetpIp4ProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 ULONG
@@ -1332,8 +1331,7 @@ Ip4SendEnd:
 
 VOID
 NetpIp4ProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -1344,12 +1342,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link and packet information.
 
 Return Value:
 
@@ -1366,12 +1360,14 @@ Return Value:
     USHORT FragmentOffset;
     PIP4_HEADER Header;
     ULONG HeaderSize;
+    PNET_PACKET_BUFFER Packet;
     PNET_PROTOCOL_ENTRY ProtocolEntry;
     PNET_PACKET_BUFFER ReassembledPacket;
     IP4_ADDRESS SourceAddress;
     USHORT TotalLength;
 
     ReassembledPacket = NULL;
+    Packet = ReceiveContext->Packet;
     Header = (PIP4_HEADER)(Packet->Buffer + Packet->DataOffset);
 
     //
@@ -1488,7 +1484,9 @@ Return Value:
             goto Ip4ProcessReceivedDataEnd;
         }
 
-        ReassembledPacket = NetpIp4ProcessPacketFragment(Link, Packet);
+        ReassembledPacket = NetpIp4ProcessPacketFragment(ReceiveContext->Link,
+                                                         Packet);
+
         if (ReassembledPacket == NULL) {
             goto Ip4ProcessReceivedDataEnd;
         }
@@ -1519,14 +1517,17 @@ Return Value:
     }
 
     //
+    // Add the source and destination addresses to the receive context.
+    //
+
+    ReceiveContext->Source = (PNETWORK_ADDRESS)&SourceAddress;
+    ReceiveContext->Destination = (PNETWORK_ADDRESS)&DestinationAddress;
+
+    //
     // Give raw sockets a chance to look at the packet.
     //
 
-    NetRawSocketsProcessReceivedData(Link,
-                                     Packet,
-                                     (PNETWORK_ADDRESS)&SourceAddress,
-                                     (PNETWORK_ADDRESS)&DestinationAddress,
-                                     Header->Protocol);
+    NetRawSocketsProcessReceivedData(ReceiveContext, Header->Protocol);
 
     //
     // Find the local protocol entry for the protocol specified in the header
@@ -1547,12 +1548,8 @@ Return Value:
     //
 
     Packet->DataOffset += HeaderSize;
-    ProtocolEntry->Interface.ProcessReceivedData(
-                                         Link,
-                                         Packet,
-                                         (PNETWORK_ADDRESS)&SourceAddress,
-                                         (PNETWORK_ADDRESS)&DestinationAddress,
-                                         ProtocolEntry);
+    ReceiveContext->Protocol = ProtocolEntry;
+    ProtocolEntry->Interface.ProcessReceivedData(ReceiveContext);
 
 Ip4ProcessReceivedDataEnd:
     if (ReassembledPacket != NULL) {

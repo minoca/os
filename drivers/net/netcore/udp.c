@@ -284,20 +284,13 @@ NetpUdpSend (
 
 VOID
 NetpUdpProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNET_PROTOCOL_ENTRY ProtocolEntry
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 KSTATUS
 NetpUdpProcessReceivedSocketData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 KSTATUS
@@ -1207,11 +1200,7 @@ UdpSendEnd:
 
 VOID
 NetpUdpProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNET_PROTOCOL_ENTRY ProtocolEntry
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -1222,22 +1211,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
-
-    ProtocolEntry - Supplies a pointer to this protocol's protocol entry.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -1250,10 +1225,12 @@ Return Value:
 
     PUDP_HEADER Header;
     USHORT Length;
+    PNET_PACKET_BUFFER Packet;
     PNET_SOCKET Socket;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    Packet = ReceiveContext->Packet;
     Header = (PUDP_HEADER)(Packet->Buffer + Packet->DataOffset);
     Length = NETWORK_TO_CPU16(Header->Length);
     if (Length > (Packet->FooterOffset - Packet->DataOffset)) {
@@ -1265,14 +1242,18 @@ Return Value:
         return;
     }
 
-    SourceAddress->Port = NETWORK_TO_CPU16(Header->SourcePort);
-    DestinationAddress->Port = NETWORK_TO_CPU16(Header->DestinationPort);
+    ReceiveContext->Source->Port = NETWORK_TO_CPU16(Header->SourcePort);
+    ReceiveContext->Destination->Port =
+                                     NETWORK_TO_CPU16(Header->DestinationPort);
 
     //
     // Find a socket willing to take this packet.
     //
 
-    Socket = NetFindSocket(ProtocolEntry, DestinationAddress, SourceAddress);
+    Socket = NetFindSocket(ReceiveContext->Protocol,
+                           ReceiveContext->Destination,
+                           ReceiveContext->Source);
+
     if (Socket == NULL) {
         return;
     }
@@ -1282,11 +1263,7 @@ Return Value:
     // data is read.
     //
 
-    NetpUdpProcessReceivedSocketData(Link,
-                                     Socket,
-                                     Packet,
-                                     SourceAddress,
-                                     DestinationAddress);
+    NetpUdpProcessReceivedSocketData(Socket, ReceiveContext);
 
     //
     // Release the reference on the socket added by the find socket call.
@@ -1298,11 +1275,8 @@ Return Value:
 
 KSTATUS
 NetpUdpProcessReceivedSocketData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -1314,22 +1288,10 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that received the packet.
-
     Socket - Supplies a pointer to the socket that received the packet.
 
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        Use of this structure depends on its flags. If it is a multicast
-        packet, then it cannot be modified by this routine. Otherwise it can
-        be used as scratch space and modified.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -1342,6 +1304,7 @@ Return Value:
     ULONG AllocationSize;
     PUDP_HEADER Header;
     USHORT Length;
+    PNET_PACKET_BUFFER Packet;
     USHORT PayloadLength;
     KSTATUS Status;
     PUDP_RECEIVED_PACKET UdpPacket;
@@ -1350,6 +1313,7 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     UdpSocket = (PUDP_SOCKET)Socket;
+    Packet = ReceiveContext->Packet;
     Header = (PUDP_HEADER)(Packet->Buffer + Packet->DataOffset);
     Length = NETWORK_TO_CPU16(Header->Length);
     if (Length > (Packet->FooterOffset - Packet->DataOffset)) {
@@ -1367,8 +1331,10 @@ Return Value:
     // addresses better be completely filled in.
     //
 
-    ASSERT(SourceAddress->Port == NETWORK_TO_CPU16(Header->SourcePort));
-    ASSERT(DestinationAddress->Port ==
+    ASSERT(ReceiveContext->Source->Port ==
+           NETWORK_TO_CPU16(Header->SourcePort));
+
+    ASSERT(ReceiveContext->Destination->Port ==
            NETWORK_TO_CPU16(Header->DestinationPort));
 
     //
@@ -1386,7 +1352,7 @@ Return Value:
     }
 
     RtlCopyMemory(&(UdpPacket->Address),
-                  SourceAddress,
+                  ReceiveContext->Source,
                   sizeof(NETWORK_ADDRESS));
 
     UdpPacket->DataBuffer = (PVOID)(UdpPacket + 1);

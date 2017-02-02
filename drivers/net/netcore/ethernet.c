@@ -536,6 +536,7 @@ Return Value:
     PNET_LINK Link;
     PNET_NETWORK_ENTRY NetworkEntry;
     ULONG NetworkProtocol;
+    NET_RECEIVE_CONTEXT ReceiveContext;
 
     Link = (PNET_LINK)DataLinkContext;
 
@@ -562,7 +563,11 @@ Return Value:
     //
 
     Packet->DataOffset += (2 * ETHERNET_ADDRESS_SIZE) + sizeof(USHORT);
-    NetworkEntry->Interface.ProcessReceivedData(Link, Packet);
+    RtlZeroMemory(&ReceiveContext, sizeof(NET_RECEIVE_CONTEXT));
+    ReceiveContext.Packet = Packet;
+    ReceiveContext.Link = Link;
+    ReceiveContext.Network = NetworkEntry;
+    NetworkEntry->Interface.ProcessReceivedData(&ReceiveContext);
     return;
 }
 

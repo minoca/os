@@ -123,8 +123,7 @@ NetpArpDestroyLink (
 
 VOID
 NetpArpProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 ULONG
@@ -438,8 +437,7 @@ Return Value:
 
 VOID
 NetpArpProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -450,12 +448,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link and packet information.
 
 Return Value:
 
@@ -468,14 +462,19 @@ Return Value:
 
     PARP_PACKET ArpPacket;
     PUCHAR CurrentPointer;
+    PNET_LINK Link;
     PNET_LINK_ADDRESS_ENTRY LinkAddressEntry;
     USHORT Operation;
+    PNET_PACKET_BUFFER Packet;
     ULONG PacketSize;
     NETWORK_ADDRESS SenderNetworkAddress;
     NETWORK_ADDRESS SenderPhysicalAddress;
     KSTATUS Status;
     NETWORK_ADDRESS TargetNetworkAddress;
     NETWORK_ADDRESS TargetPhysicalAddress;
+
+    Packet = ReceiveContext->Packet;
+    Link = ReceiveContext->Link;
 
     //
     // Skip packets that are too small.

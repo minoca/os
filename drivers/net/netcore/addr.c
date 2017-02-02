@@ -2928,10 +2928,7 @@ GetSetNetworkDeviceInformationEnd:
 NET_API
 VOID
 NetRawSocketsProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
+    PNET_RECEIVE_CONTEXT ReceiveContext,
     ULONG NetworkProtocol
     )
 
@@ -2945,16 +2942,9 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to the network packet. It is only guaranteed to
-        include network layer headers, not physical layer headers.
-
-    SourceAddress - Supplies a pointer to the source (remote) address of the
-        packet.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        of the packet.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, network entry, source address, destination address, and the
+        packet that was received.
 
     NetworkProtocol - Supplies the network protocol of the packet.
 
@@ -2972,9 +2962,10 @@ Return Value:
     PNET_PROTOCOL_ENTRY RawProtocol;
     PNET_SOCKET Socket;
 
-    ASSERT(SourceAddress->Port == 0);
-    ASSERT(DestinationAddress->Port == 0);
-    ASSERT(SourceAddress->Domain == DestinationAddress->Domain);
+    ASSERT(ReceiveContext->Source->Port == 0);
+    ASSERT(ReceiveContext->Destination->Port == 0);
+    ASSERT(ReceiveContext->Source->Domain ==
+           ReceiveContext->Destination->Domain);
 
     //
     // Exit immediately if the raw socket list is empty.
@@ -3011,7 +3002,9 @@ Return Value:
         // might not make sense.
         //
 
-        if (Socket->KernelSocket.Domain != DestinationAddress->Domain) {
+        if (Socket->KernelSocket.Domain !=
+            ReceiveContext->Destination->Domain) {
+
             continue;
         }
 
@@ -3040,7 +3033,7 @@ Return Value:
                  PartIndex += 1) {
 
                 if (Socket->LocalAddress.Address[PartIndex] !=
-                    DestinationAddress->Address[PartIndex]) {
+                    ReceiveContext->Destination->Address[PartIndex]) {
 
                     Match = FALSE;
                     break;
@@ -3067,7 +3060,7 @@ Return Value:
                  PartIndex += 1) {
 
                 if (Socket->RemoteAddress.Address[PartIndex] !=
-                    SourceAddress->Address[PartIndex]) {
+                    ReceiveContext->Source->Address[PartIndex]) {
 
                     Match = FALSE;
                     break;
@@ -3083,11 +3076,8 @@ Return Value:
         // This raw socket is lucky. It gets to look at the packet.
         //
 
-        RawProtocol->Interface.ProcessReceivedSocketData(Link,
-                                                         Socket,
-                                                         Packet,
-                                                         SourceAddress,
-                                                         DestinationAddress);
+        RawProtocol->Interface.ProcessReceivedSocketData(Socket,
+                                                         ReceiveContext);
     }
 
     KeReleaseSharedExclusiveLockShared(NetRawSocketsLock);

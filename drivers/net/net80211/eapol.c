@@ -552,8 +552,7 @@ Net80211pEapolDestroyLink (
 
 VOID
 Net80211pEapolProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 ULONG
@@ -1164,8 +1163,7 @@ Return Value:
 
 VOID
 Net80211pEapolProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -1176,12 +1174,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link and packet information.
 
 Return Value:
 
@@ -1195,6 +1189,8 @@ Return Value:
     PEAPOL_CONTEXT Context;
     PRED_BLACK_TREE_NODE FoundNode;
     PEAPOL_KEY_FRAME KeyFrame;
+    PNET_LINK Link;
+    PNET_PACKET_BUFFER Packet;
     USHORT PacketBodyLength;
     EAPOL_CONTEXT SearchEntry;
 
@@ -1205,6 +1201,8 @@ Return Value:
     //
 
     Context = NULL;
+    Link = ReceiveContext->Link;
+    Packet = ReceiveContext->Packet;
     SearchEntry.NetworkLink = Link;
     KeAcquireQueuedLock(Net80211EapolTreeLock);
     FoundNode = RtlRedBlackTreeSearch(&Net80211EapolTree,

@@ -120,8 +120,7 @@ NetlinkpSend (
 
 VOID
 NetlinkpProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 ULONG
@@ -143,29 +142,20 @@ NetlinkpGetSetInformation (
 
 VOID
 NetlinkpProcessReceivedPackets (
-    PNET_LINK Link,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNET_PACKET_LIST PacketList,
-    PNET_PROTOCOL_ENTRY Protocol
+    PNET_RECEIVE_CONTEXT ReceiveContext,
+    PNET_PACKET_LIST PacketList
     );
 
 VOID
 NetlinkpProcessReceivedSocketData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 VOID
 NetlinkpProcessReceivedKernelData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
 VOID
@@ -755,19 +745,20 @@ Return Value:
 
 {
 
-    NetlinkpProcessReceivedPackets(Socket->Link,
-                                   &Socket->LocalAddress,
-                                   Destination,
-                                   PacketList,
-                                   Socket->Protocol);
+    NET_RECEIVE_CONTEXT ReceiveContext;
 
+    ReceiveContext.Link = Socket->Link;
+    ReceiveContext.Protocol = Socket->Protocol;
+    ReceiveContext.Network = Socket->Network;
+    ReceiveContext.Source = &(Socket->LocalAddress);
+    ReceiveContext.Destination = Destination;
+    NetlinkpProcessReceivedPackets(&ReceiveContext, PacketList);
     return STATUS_SUCCESS;
 }
 
 VOID
 NetlinkpProcessReceivedData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -778,12 +769,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link and packet information.
 
 Return Value:
 
@@ -1549,11 +1536,8 @@ Return Value:
 
 VOID
 NetlinkpProcessReceivedPackets (
-    PNET_LINK Link,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNET_PACKET_LIST PacketList,
-    PNET_PROTOCOL_ENTRY Protocol
+    PNET_RECEIVE_CONTEXT ReceiveContext,
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -1565,19 +1549,10 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packets.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
     PacketList - Supplies a list of packets to process.
-
-    Protocol - Supplies a pointer to this protocol's protocol entry.
 
 Return Value:
 
@@ -1606,7 +1581,7 @@ Return Value:
     // during multicast processing; fall through and do that at the end.
     //
 
-    Destination = (PNETLINK_ADDRESS)DestinationAddress;
+    Destination = (PNETLINK_ADDRESS)ReceiveContext->Destination;
     if (Destination->Group != 0) {
         PacketEntry = PacketList->Head.Next;
         while (PacketEntry != &(PacketList->Head)) {
@@ -1623,7 +1598,7 @@ Return Value:
 
                 Socket = &(NetlinkSocket->NetSocket);
                 SocketEntry = SocketEntry->Next;
-                if (Socket->Protocol != Protocol) {
+                if (Socket->Protocol != ReceiveContext->Protocol) {
                     continue;
                 }
 
@@ -1651,11 +1626,8 @@ Return Value:
 
                 ASSERT((Socket->Flags & NET_SOCKET_FLAG_KERNEL) == 0);
 
-                NetlinkpProcessReceivedSocketData(Link,
-                                                  Socket,
-                                                  Packet,
-                                                  SourceAddress,
-                                                  DestinationAddress);
+                ReceiveContext->Packet = Packet;
+                NetlinkpProcessReceivedSocketData(Socket, ReceiveContext);
             }
 
             KeReleaseSharedExclusiveLockShared(NetlinkMulticastLock);
@@ -1687,12 +1659,15 @@ Return Value:
     // Find the socket targeted by the destination address.
     //
 
-    Socket = NetFindSocket(Protocol, DestinationAddress, SourceAddress);
+    Socket = NetFindSocket(ReceiveContext->Protocol,
+                           ReceiveContext->Destination,
+                           ReceiveContext->Source);
+
     if (Socket == NULL) {
         goto ProcessReceivedPacketsEnd;
     }
 
-    ASSERT(Socket->Protocol == Protocol);
+    ASSERT(Socket->Protocol == ReceiveContext->Protocol);
 
     //
     // Send each packet on to the protocol layer for processing. The packet
@@ -1709,11 +1684,8 @@ Return Value:
 
         ASSERT((Packet->Flags & NET_PACKET_FLAG_MULTICAST) == 0);
 
-        NetlinkpProcessReceivedSocketData(Link,
-                                          Socket,
-                                          Packet,
-                                          SourceAddress,
-                                          DestinationAddress);
+        ReceiveContext->Packet = Packet;
+        NetlinkpProcessReceivedSocketData(Socket, ReceiveContext);
     }
 
 ProcessReceivedPacketsEnd:
@@ -1726,11 +1698,8 @@ ProcessReceivedPacketsEnd:
 
 VOID
 NetlinkpProcessReceivedSocketData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -1741,22 +1710,10 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that received the packet.
-
     Socket - Supplies a pointer to the socket that received the packet.
 
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        Use of this structure depends on its flags. If it is a multicast
-        packet, then it cannot be modified by this routine. Otherwise it can
-        be used as scratch space and modified.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -1774,19 +1731,11 @@ Return Value:
     //
 
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-        NetlinkpProcessReceivedKernelData(Link,
-                                          Socket,
-                                          Packet,
-                                          SourceAddress,
-                                          DestinationAddress);
+        NetlinkpProcessReceivedKernelData(Socket, ReceiveContext);
 
     } else {
         Protocol = Socket->Protocol;
-        Protocol->Interface.ProcessReceivedSocketData(Link,
-                                                      Socket,
-                                                      Packet,
-                                                      SourceAddress,
-                                                      DestinationAddress);
+        Protocol->Interface.ProcessReceivedSocketData(Socket, ReceiveContext);
     }
 
     return;
@@ -1794,11 +1743,8 @@ Return Value:
 
 VOID
 NetlinkpProcessReceivedKernelData (
-    PNET_LINK Link,
     PNET_SOCKET Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext
     )
 
 /*++
@@ -1809,21 +1755,10 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that received the packet.
-
     Socket - Supplies a pointer to the socket that received the packet.
 
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space and this routine will
-        release it when it is done.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
 
 Return Value:
 
@@ -1835,11 +1770,13 @@ Return Value:
 
     PNETLINK_HEADER Header;
     ULONG MessageSize;
+    PNET_PACKET_BUFFER Packet;
     ULONG PacketLength;
     PNET_PROTOCOL_PROCESS_RECEIVED_SOCKET_DATA ProcessReceivedSocketData;
     PNET_PROTOCOL_ENTRY Protocol;
     KSTATUS Status;
 
+    Packet = ReceiveContext->Packet;
     Protocol = Socket->Protocol;
     ProcessReceivedSocketData = Protocol->Interface.ProcessReceivedSocketData;
 
@@ -1883,12 +1820,7 @@ Return Value:
         }
 
         Packet->FooterOffset = Packet->DataOffset + MessageSize;
-        Status = ProcessReceivedSocketData(Link,
-                                           Socket,
-                                           Packet,
-                                           SourceAddress,
-                                           DestinationAddress);
-
+        Status = ProcessReceivedSocketData(Socket, ReceiveContext);
         if (!KSUCCESS(Status)) {
             goto ProcessReceivedKernelDataNextMessage;
         }
@@ -1904,7 +1836,7 @@ ProcessReceivedKernelDataNextMessage:
             ((Header->Flags & NETLINK_HEADER_FLAG_ACK) != 0)) {
 
             Packet->FooterOffset = Packet->DataOffset + MessageSize;
-            NetlinkpSendAck(Socket, Packet, SourceAddress, Status);
+            NetlinkpSendAck(Socket, Packet, ReceiveContext->Source, Status);
         }
 
         Packet->DataOffset += MessageSize;
