@@ -32,6 +32,7 @@ Environment:
 #include <errno.h>
 #include <string.h>
 #include <sys/utsname.h>
+#include <unistd.h>
 
 #include "osp.h"
 
@@ -140,6 +141,7 @@ Return Value:
 
     if (uname(&UtsName) < 0) {
         CkpOsRaiseError(Vm);
+        return;
     }
 
     String = UtsName.nodename;
@@ -170,15 +172,14 @@ Return Value:
 
 {
 
-    PSTR String;
-    struct utsname UtsName;
+    CHAR Line[256];
 
-    if (uname(&UtsName) < 0) {
+    if (getdomainname(Line, sizeof(Line)) < 0) {
         CkpOsRaiseError(Vm);
+        return;
     }
 
-    String = UtsName.domainname;
-    CkReturnString(Vm, String, strlen(String));
+    CkReturnString(Vm, Line, strlen(Line));
     return;
 }
 
