@@ -42,13 +42,13 @@ ifeq ($(OS),Windows_NT)
 BINARY := os.dll
 BINARYTYPE := dll
 
-# OBJS += $(WIN32_OBJS)
+OBJS += $(WIN32_OBJS)
 
 DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/chalk.dll
 
 else
 
-# OBJS += $(POSIX_OBJS)
+OBJS += $(POSIX_OBJS)
 
 endif
 

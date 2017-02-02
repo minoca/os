@@ -39,11 +39,11 @@ include $(SRCDIR)/../sources
 
 ifeq ($(OS),Windows_NT)
 
-# OBJS += $(WIN32_OBJS)
+OBJS += $(WIN32_OBJS)
 
 else
 
-# OBJS += $(POSIX_OBJS)
+OBJS += $(POSIX_OBJS)
 
 endif
 

@@ -34,8 +34,11 @@ Environment:
 
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "osp.h"
@@ -98,6 +101,31 @@ CkpOsStat (
     );
 
 VOID
+CkpOsGetcwd (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsBasename (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsDirname (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsGetenv (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsSetenv (
+    PCK_VM Vm
+    );
+
+VOID
 CkpOsCreateStatDict (
     PCK_VM Vm,
     struct stat *Stat
@@ -144,6 +172,11 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "isatty", CkpOsIsatty, 1},
     {CkTypeFunction, "fstat", CkpOsFstat, 1},
     {CkTypeFunction, "stat", CkpOsStat, 1},
+    {CkTypeFunction, "getcwd", CkpOsGetcwd, 0},
+    {CkTypeFunction, "basename", CkpOsBasename, 1},
+    {CkTypeFunction, "dirname", CkpOsDirname, 1},
+    {CkTypeFunction, "getenv", CkpOsGetenv, 1},
+    {CkTypeFunction, "setenv", CkpOsGetenv, 2},
     {CkTypeInvalid, NULL, NULL, 0}
 };
 
@@ -600,6 +633,271 @@ Return Value:
 
     CkpOsCreateStatDict(Vm, &Stat);
     CkStackReplace(Vm, 0);
+    return;
+}
+
+VOID
+CkpOsGetcwd (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current working directory as a string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR Directory;
+
+    Directory = getcwd(NULL, 0);
+    if (Directory == NULL) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkPushString(Vm, Directory, strlen(Directory));
+    free(Directory);
+    CkStackReplace(Vm, 0);
+    return;
+}
+
+VOID
+CkpOsBasename (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the basename call. It takes a path and gets the
+    file name portion of that path.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR BaseName;
+    PSTR Path;
+
+    //
+    // The function takes a string and returns a string.
+    //
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Path = strdup(CkGetString(Vm, 1, NULL));
+    if (Path == NULL) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    BaseName = basename(Path);
+    if (BaseName == NULL) {
+        free(Path);
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkReturnString(Vm, BaseName, strlen(BaseName));
+    free(Path);
+    return;
+}
+
+VOID
+CkpOsDirname (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the dirname call. It takes a path and gets the
+    directory portion of it. If the path has no directory portion, "." is
+    returned.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR DirName;
+    PSTR Path;
+
+    //
+    // The function takes a string and returns a string.
+    //
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Path = strdup(CkGetString(Vm, 1, NULL));
+    if (Path == NULL) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    DirName = dirname(Path);
+    if (DirName == NULL) {
+        free(Path);
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkReturnString(Vm, DirName, strlen(DirName));
+    free(Path);
+    return;
+}
+
+VOID
+CkpOsGetenv (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the getenv call. It returns a value from the
+    environment.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Name;
+    PCSTR Value;
+
+    //
+    // The function takes a string and returns a string.
+    //
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Name = CkGetString(Vm, 1, NULL);
+    Value = getenv(Name);
+    if (Value == NULL) {
+        CkReturnNull(Vm);
+
+    } else {
+        CkReturnString(Vm, Value, strlen(Value));
+    }
+
+    return;
+}
+
+VOID
+CkpOsSetenv (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the setenv call. It sets an environment variable
+    value. If the value is null, then this unsets the environment variable.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Name;
+    UINTN NameLength;
+    UINTN Size;
+    PSTR String;
+    PCSTR Value;
+    UINTN ValueLength;
+
+    //
+    // The function takes two strings.
+    //
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Name = CkGetString(Vm, 1, &NameLength);
+    if (CkIsString(Vm, 2)) {
+        Value = CkGetString(Vm, 2, &ValueLength);
+        Size = NameLength + ValueLength + 2;
+        String = malloc(Size);
+        if (String == NULL) {
+            CkpOsRaiseError(Vm);
+            return;
+        }
+
+        snprintf(String, Size, "%s=%s", Name, Value);
+        if (putenv(String) != 0) {
+            CkpOsRaiseError(Vm);
+            return;
+        }
+
+    } else {
+        Size = NameLength + 2;
+        String = malloc(Size);
+        if (String == NULL) {
+            CkpOsRaiseError(Vm);
+            return;
+        }
+
+        snprintf(String, Size, "%s=", Name);
+        if (putenv(String) != 0) {
+            CkpOsRaiseError(Vm);
+            return;
+        }
+    }
+
+    CkReturnNull(Vm);
     return;
 }
 

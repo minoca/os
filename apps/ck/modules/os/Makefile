@@ -31,7 +31,7 @@ BINARYTYPE = library
 
 include $(SRCDIR)/sources
 
-# OBJS += $(POSIX_OBJS)
+OBJS += $(POSIX_OBJS)
 
 DIRS = build   \
        dynamic \

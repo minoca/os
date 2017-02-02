@@ -161,3 +161,24 @@ Return Value:
 
 --*/
 
+VOID
+CkpOsInitializeInfo (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the OS information functions and globals.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+

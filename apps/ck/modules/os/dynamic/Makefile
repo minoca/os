@@ -33,7 +33,7 @@ VPATH += ..:
 
 include $(SRCDIR)/../sources
 
-# OBJS += $(POSIX_OBJS)
+OBJS += $(POSIX_OBJS)
 
 ENTRY := 0
 

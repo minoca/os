@@ -134,6 +134,7 @@ Return Value:
     CkDeclareVariables(Vm, 0, CkOsErrnoValues);
     CkDeclareVariables(Vm, 0, CkOsIoModuleValues);
     CkDeclareVariables(Vm, 0, CkOsModuleValues);
+    CkpOsInitializeInfo(Vm);
     return;
 }
 
