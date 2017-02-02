@@ -55,7 +55,7 @@ create_todays_directory() {
 get_latests() {
     latests=
     for arch in x86 x86q armv7 armv6; do
-        latests="$latests `run_ssh_cmd readlink $NIGHTLIES/latest-$arch`"
+        latests="$latests `run_ssh_cmd readlink $NIGHTLIES/latest-$arch || true`"
     done
 
     echo "$latests"
