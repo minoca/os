@@ -145,6 +145,7 @@ Return Value:
 {
 
     PCK_FIBER Fiber;
+    UINTN FrameCount;
     PCK_STRING Frozen;
     CK_LOAD_MODULE_RESULT LoadStatus;
     PCK_MODULE Module;
@@ -162,6 +163,7 @@ Return Value:
     NameString = CK_AS_STRING(ModuleName);
     PathValue = CkNullValue;
     Fiber = Vm->Fiber;
+    FrameCount = Fiber->FrameCount;
     TryCount = Fiber->TryCount;
 
     //
@@ -210,6 +212,7 @@ Return Value:
                                      ModuleData.Source.Text,
                                      ModuleData.Source.Length,
                                      1,
+                                     CK_COMPILE_PRINT_ERRORS,
                                      &WasPrecompiled);
 
         CkFree(Vm, ModuleData.Source.Text);
@@ -295,11 +298,11 @@ Return Value:
     //
 
     case CkLoadModuleNotFound:
-        CkpRuntimeError(Vm, "ImportError", "Module not found");
+        CkpRuntimeError(Vm, "ImportError", "Module '%s' not found", NameOrPath);
         return CkNullValue;
 
     case CkLoadModuleNoMemory:
-        if (!CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
+        if (!CK_EXCEPTION_RAISED(Vm, Fiber, TryCount, FrameCount)) {
             CkpRuntimeError(Vm, "MemoryError", "Allocation failure");
         }
 
@@ -335,6 +338,7 @@ CkpModuleLoadSource (
     PCSTR Source,
     UINTN Length,
     LONG Line,
+    ULONG CompilerFlags,
     PBOOL WasPrecompiled
     )
 
@@ -360,6 +364,9 @@ Arguments:
 
     Line - Supplies the line number this code starts on. Supply 1 to start at
         the beginning.
+
+    CompilerFlags - Supplies the bitfield of compiler flags to pass along.
+        See CK_COMPILER_* definitions.
 
     WasPrecompiled - Supplies a pointer where a boolean will be returned
         indicating if this was precompiled code or not.
@@ -420,7 +427,7 @@ Return Value:
     //
 
     } else {
-        Function = CkpCompile(Vm, Module, Source, Length, Line, TRUE);
+        Function = CkpCompile(Vm, Module, Source, Length, Line, CompilerFlags);
         if (Function == NULL) {
             goto ModuleLoadSourceEnd;
         }
@@ -934,14 +941,16 @@ Return Value:
 {
 
     PCK_FIBER Fiber;
+    UINTN FrameCount;
     PCK_MODULE Module;
     UINTN TryCount;
 
     Fiber = Vm->Fiber;
+    FrameCount = Fiber->FrameCount;
     TryCount = Fiber->TryCount;
     Module = CK_AS_MODULE(Arguments[0]);
     Arguments[0] = CkpModuleFreeze(Vm, Module);
-    if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount, FrameCount)) {
         return FALSE;
     }
 

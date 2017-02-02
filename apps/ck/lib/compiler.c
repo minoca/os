@@ -289,7 +289,7 @@ CkpCompile (
     PCSTR Source,
     UINTN Length,
     LONG Line,
-    BOOL PrintErrors
+    ULONG Flags
     )
 
 /*++
@@ -312,8 +312,8 @@ Arguments:
     Line - Supplies the line number this code starts on. Supply 1 to start at
         the beginning.
 
-    PrintErrors - Supplies a boolean indicating whether or not errors should be
-        printed.
+    Flags - Supplies a bitfield of flags governing the behavior of the
+        compiler. See CK_COMPILE_* definitions.
 
 Return Value:
 
@@ -337,7 +337,10 @@ Return Value:
     Parser.Module = Module;
     Parser.Source = Source;
     Parser.SourceLength = Length;
-    Parser.PrintErrors = PrintErrors;
+    if ((Flags & CK_COMPILE_PRINT_ERRORS) != 0) {
+        Parser.PrintErrors = TRUE;
+    }
+
     CkpInitializeLexer(&(Parser.Lexer), Source, Length, Line);
     Parser.Parser.Grammar = &CkGrammar;
     Parser.Parser.Reallocate = CkpCompilerReallocate;
@@ -353,6 +356,8 @@ Return Value:
         Parser.Errors += 1;
         goto CompileEnd;
     }
+
+    Compiler.Flags = Flags;
 
     //
     // Parse the grammar into an abstract syntax tree.
@@ -2204,11 +2209,30 @@ Return Value:
     // expression;.
     //
 
-    if (Node->Children == 2) {
-        CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex));
-        CkpEmitOp(Compiler, CkOpPop);
+    if (Node->Children < 2) {
+        return;
     }
 
+    //
+    // If printing expressions, then load Core up in preparation for Core.print.
+    //
+
+    if ((Compiler->Flags & CK_COMPILE_PRINT_EXPRESSIONS) != 0) {
+        CkpLoadCoreVariable(Compiler, "Core");
+    }
+
+    CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex));
+
+    //
+    // The expression result is now on the stack. Either call print and pop off
+    // the return value of print, or just pop off the expression itself.
+    //
+
+    if ((Compiler->Flags & CK_COMPILE_PRINT_EXPRESSIONS) != 0) {
+        CkpEmitMethodCall(Compiler, 1, "print@1", 7);
+    }
+
+    CkpEmitOp(Compiler, CkOpPop);
     return;
 }
 

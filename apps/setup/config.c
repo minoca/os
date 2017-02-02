@@ -208,7 +208,7 @@ Return Value:
     // Execute the script.
     //
 
-    Status = CkInterpret(Context->ChalkVm, NULL, Buffer, Size, 1);
+    Status = CkInterpret(Context->ChalkVm, NULL, Buffer, Size, 1, FALSE);
     if (Status != CkSuccess) {
         fprintf(stderr,
                 "msetup: Failed to execute configuration script: %d\n",
@@ -286,7 +286,13 @@ Return Value:
     }
 
     Buffer[Stat.st_size] = '\0';
-    Status = CkInterpret(Context->ChalkVm, Path, Buffer, Stat.st_size, 1);
+    Status = CkInterpret(Context->ChalkVm,
+                         Path,
+                         Buffer,
+                         Stat.st_size,
+                         1,
+                         FALSE);
+
     if (Status != CkSuccess) {
         fprintf(stderr, "Failed to interpret script %s: %d\n", Path, Status);
         Status = -1;
@@ -341,7 +347,8 @@ Return Value:
                          NULL,
                          Expression,
                          strlen(Expression),
-                         1);
+                         1,
+                         FALSE);
 
     if (Status != CkSuccess) {
         fprintf(stderr,

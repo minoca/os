@@ -59,7 +59,7 @@ Environment:
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n"
 
-#define CHALK_OPTIONS_STRING "c:chV"
+#define CHALK_OPTIONS_STRING "+c:chV"
 
 #define CHALK_LINE_MAX 2048
 
@@ -307,10 +307,14 @@ Return Value:
     //
 
     if (Expression != NULL) {
-        Status = 0;
-        if (CkInterpret(Context.Vm, NULL, Expression, strlen(Expression), 1) !=
-            CkSuccess) {
+        Status = CkInterpret(Context.Vm,
+                             NULL,
+                             Expression,
+                             strlen(Expression),
+                             1,
+                             FALSE);
 
+        if (Status != CkSuccess) {
             Status = 1;
         }
 
@@ -332,7 +336,12 @@ Return Value:
 
         CkAppArgc = ArgumentCount - ArgumentIndex;
         CkAppArgv = Arguments + ArgumentIndex;
-        Status = CkInterpret(Context.Vm, ScriptPath, FileBuffer, FileSize, 1);
+        Status = CkInterpret(Context.Vm,
+                             ScriptPath,
+                             FileBuffer,
+                             FileSize,
+                             1,
+                             FALSE);
 
     //
     // With no arguments, run the interactive interpreter.
@@ -640,7 +649,8 @@ Return Value:
                     NULL,
                     Context->Line,
                     strlen(Context->Line),
-                    Line);
+                    Line,
+                    TRUE);
     }
 
     return Status;
@@ -695,6 +705,7 @@ Return Value:
         return EOF;
     }
 
+    fprintf(stderr, "Failed to read line: %s", strerror(errno));
     return errno;
 }
 

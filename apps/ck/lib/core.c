@@ -378,7 +378,8 @@ Return Value:
                          NULL,
                          (PSTR)&_binary_ckcore_ck_start,
                          Size,
-                         1);
+                         1,
+                         0);
 
     if (Error != CkSuccess) {
         return Error;

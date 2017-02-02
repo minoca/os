@@ -600,7 +600,8 @@ CkInterpret (
     PCSTR Path,
     PCSTR Source,
     UINTN Length,
-    LONG Line
+    LONG Line,
+    BOOL Interactive
     );
 
 /*++
@@ -625,6 +626,10 @@ Arguments:
 
     Line - Supplies the line number this code starts on. Supply 1 to start at
         the beginning.
+
+    Interactive - Supplies a boolean indicating whether this is an interactive
+        session or not. For interactive sessions, expression statements will be
+        printed.
 
 Return Value:
 

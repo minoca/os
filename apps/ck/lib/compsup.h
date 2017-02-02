@@ -349,6 +349,9 @@ Members:
     FinallyOffset - Stores the offset of the finally block if a try-except
         block is being compiled.
 
+    Flags - Stores a bitfield of flags governing the compiler behavior. See
+        CK_COMPILE_* definitions.
+
 --*/
 
 struct _CK_COMPILER {
@@ -374,6 +377,7 @@ struct _CK_COMPILER {
     PUCHAR LastLineOp;
     BOOL Assign;
     UINTN FinallyOffset;
+    ULONG Flags;
 };
 
 //

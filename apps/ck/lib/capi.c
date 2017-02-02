@@ -2244,11 +2244,13 @@ Return Value:
     PCK_CLASS Class;
     PCK_CLOSURE Closure;
     PCK_FIBER Fiber;
+    UINTN FrameCount;
     BOOL FramePushed;
     UINTN TryCount;
 
     Fiber = Vm->Fiber;
     TryCount = Fiber->TryCount;
+    FrameCount = Fiber->FrameCount;
 
     CK_ASSERT(CK_CAN_POP(Fiber, ArgumentCount + 1));
 
@@ -2292,7 +2294,7 @@ CallEnd:
 
     CK_ASSERT((Vm->Fiber == Fiber) || (Vm->Fiber == NULL));
 
-    if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount, FrameCount)) {
         return FALSE;
     }
 
@@ -2339,6 +2341,7 @@ Return Value:
     PCK_CLOSURE Closure;
     CK_STRING FakeString;
     PCK_FIBER Fiber;
+    UINTN FrameCount;
     UINTN Length;
     CK_VALUE Method;
     CHAR Name[CK_MAX_METHOD_SIGNATURE];
@@ -2348,6 +2351,7 @@ Return Value:
     CK_VALUE Value;
 
     Fiber = Vm->Fiber;
+    FrameCount = Fiber->FrameCount;
     TryCount = Fiber->TryCount;
 
     CK_ASSERT(CK_CAN_POP(Fiber, ArgumentCount + 1));
@@ -2398,7 +2402,7 @@ CallMethodEnd:
     // is tied with the C stack.
     //
 
-    if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount)) {
+    if (CK_EXCEPTION_RAISED(Vm, Fiber, TryCount, FrameCount)) {
         return FALSE;
     }
 

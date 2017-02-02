@@ -57,6 +57,7 @@ Environment:
 #ifdef __APPLE__
 
 #define fseeko64 fseeko
+#define ftello64 ftello
 
 #endif
 
@@ -464,7 +465,7 @@ Return Value:
         goto BundleCreateEnd;
     }
 
-    ChecksumOffset = fseeko64(File, 0, SEEK_CUR);
+    ChecksumOffset = ftello64(File);
     if (ChecksumOffset == -1) {
         Status = errno;
         goto BundleCreateEnd;
@@ -695,7 +696,7 @@ Return Value:
     // Write the length in its final place place.
     //
 
-    EndOffset = fseeko64(File, 0, SEEK_CUR);
+    EndOffset = ftello64(File);
     if ((EndOffset == -1) || (EndOffset < ChecksumOffset)) {
         Status = EINVAL;
         goto BundleCreateEnd;
@@ -1067,7 +1068,12 @@ LoadBundleEnd:
         //
 
         if (Expression != NULL) {
-            Status = CkInterpret(Vm, NULL, Expression, ExpressionSize, 1);
+            Status = CkInterpret(Vm,
+                                 NULL,
+                                 Expression,
+                                 ExpressionSize,
+                                 1,
+                                 FALSE);
         }
     }
 

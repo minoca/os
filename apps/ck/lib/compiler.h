@@ -65,6 +65,22 @@ Author:
 #define CK_MAX_JUMP 0x10000
 
 //
+// Define the compiler flags.
+//
+
+//
+// Set this flag to print errors if compilation fails.
+//
+
+#define CK_COMPILE_PRINT_ERRORS 0x00000001
+
+//
+// Set this flag to wrap any expression statement in Core.print.
+//
+
+#define CK_COMPILE_PRINT_EXPRESSIONS 0x00000002
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -83,7 +99,7 @@ CkpCompile (
     PCSTR Source,
     UINTN Length,
     LONG Line,
-    BOOL PrintErrors
+    ULONG Flags
     );
 
 /*++
@@ -106,8 +122,8 @@ Arguments:
     Line - Supplies the line number this code starts on. Supply 1 to start at
         the beginning.
 
-    PrintErrors - Supplies a boolean indicating whether or not errors should be
-        printed.
+    Flags - Supplies a bitfield of flags governing the behavior of the
+        compiler. See CK_COMPILE_* definitions.
 
 Return Value:
 
