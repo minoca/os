@@ -276,6 +276,7 @@ NetpIp4ChecksumData (
 
 KSTATUS
 NetpIp4TranslateNetworkAddress (
+    PNET_SOCKET Socket,
     PNETWORK_ADDRESS NetworkAddress,
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
@@ -1025,18 +1026,6 @@ Return Value:
     ASSERT((Link != NULL) && (LinkAddress != NULL));
 
     //
-    // Sending to the broadcast address must be specifically requested through
-    // socket options.
-    //
-
-    if ((RemoteAddress->Address == IP4_BROADCAST_ADDRESS) &&
-        ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_ENABLED) == 0)) {
-
-        Status = STATUS_ACCESS_DENIED;
-        goto Ip4SendEnd;
-    }
-
-    //
     // Figure out the physical network address for the given IP destination
     // address. This answer is the same for every packet. Use the cached
     // version in the network socket if it's there and the destination matches
@@ -1051,7 +1040,8 @@ Return Value:
             PhysicalNetworkAddress = &PhysicalNetworkAddressBuffer;
         }
 
-        Status = NetpIp4TranslateNetworkAddress(Destination,
+        Status = NetpIp4TranslateNetworkAddress(Socket,
+                                                Destination,
                                                 Link,
                                                 LinkAddress,
                                                 PhysicalNetworkAddress);
@@ -2010,6 +2000,7 @@ Return Value:
 
 KSTATUS
 NetpIp4TranslateNetworkAddress (
+    PNET_SOCKET Socket,
     PNETWORK_ADDRESS NetworkAddress,
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
@@ -2023,6 +2014,8 @@ Routine Description:
     This routine translates a network level address to a physical address.
 
 Arguments:
+
+    Socket - Supplies a pointer to the socket requesting the translation.
 
     NetworkAddress - Supplies a pointer to the network address to translate.
 
@@ -2043,16 +2036,20 @@ Return Value:
 {
 
     ULONG BitsDifferentInSubnet;
+    BOOL Broadcast;
     NETWORK_ADDRESS DefaultGateway;
     PIP4_ADDRESS Ip4Address;
     PIP4_ADDRESS LocalIpAddress;
     BOOL LockHeld;
     KSTATUS Status;
+    ULONG SubnetBroadcast;
     PIP4_ADDRESS SubnetMask;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    Broadcast = FALSE;
     Ip4Address = (PIP4_ADDRESS)NetworkAddress;
+    LockHeld = FALSE;
 
     //
     // This function is very simple: it perform some filtering on known
@@ -2070,8 +2067,8 @@ Return Value:
     //
 
     if (Ip4Address->Address == IP4_BROADCAST_ADDRESS) {
-        Link->DataLinkEntry->Interface.GetBroadcastAddress(PhysicalAddress);
-        return STATUS_SUCCESS;
+        Broadcast = TRUE;
+        goto Ip4TranslateNetworkAddressEnd;
     }
 
     //
@@ -2109,6 +2106,19 @@ Return Value:
                       sizeof(NETWORK_ADDRESS));
 
         NetworkAddress = &DefaultGateway;
+
+    //
+    // Check to see if the address is a subnet broadcast address.
+    //
+
+    } else {
+        SubnetBroadcast = (LocalIpAddress->Address & SubnetMask->Address) |
+                          ~SubnetMask->Address;
+
+        if (Ip4Address->Address == SubnetBroadcast) {
+            Broadcast = TRUE;
+            goto Ip4TranslateNetworkAddressEnd;
+        }
     }
 
     KeReleaseQueuedLock(Link->QueuedLock);
@@ -2127,6 +2137,21 @@ Return Value:
 Ip4TranslateNetworkAddressEnd:
     if (LockHeld != FALSE) {
         KeReleaseQueuedLock(Link->QueuedLock);
+    }
+
+    //
+    // Sending to a broadcast address must be specifically requested through
+    // socket options.
+    //
+
+    if (Broadcast != FALSE) {
+        if ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_ENABLED) == 0) {
+            Status = STATUS_ACCESS_DENIED;
+
+        } else {
+            Link->DataLinkEntry->Interface.GetBroadcastAddress(PhysicalAddress);
+            Status = STATUS_SUCCESS;
+        }
     }
 
     return Status;
