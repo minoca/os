@@ -250,6 +250,12 @@ Author:
 #define NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT 0x00000002
 
 //
+// Define the protocol entry flags.
+//
+
+#define NET_PROTOCOL_FLAG_UNICAST_ONLY 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -265,6 +271,14 @@ typedef enum _NET_LINK_INFORMATION_TYPE {
     NetLinkInformationInvalid,
     NetLinkInformationChecksumOffload
 } NET_LINK_INFORMATION_TYPE, *PNET_LINK_INFORMATION_TYPE;
+
+typedef enum _NET_ADDRESS_TYPE {
+    NetAddressInvalid,
+    NetAddressAny,
+    NetAddressUnicast,
+    NetAddressBroadcast,
+    NetAddressUnknown
+} NET_ADDRESS_TYPE, *PNET_ADDRESS_TYPE;
 
 /*++
 
@@ -1584,6 +1598,9 @@ Members:
     ParentProtocolNumber - Stores the protocol number in the parent layer's
         protocol.
 
+    Flags - Stores a bitmask of protocol flags. See NET_PROTOCOL_FLAG_* for
+        definitions.
+
     LastSocket - Stores a pointer to the last socket that received a packet.
 
     SocketLock - Stores a pointer to a shared exclusive lock that protects the
@@ -1601,6 +1618,7 @@ struct _NET_PROTOCOL_ENTRY {
     LIST_ENTRY ListEntry;
     NET_SOCKET_TYPE Type;
     ULONG ParentProtocolNumber;
+    ULONG Flags;
     volatile PNET_SOCKET LastSocket;
     PSHARED_EXCLUSIVE_LOCK SocketLock;
     RED_BLACK_TREE SocketTree[SocketBindingTypeCount];
@@ -2008,6 +2026,35 @@ Return Value:
 
 --*/
 
+typedef
+NET_ADDRESS_TYPE
+(*PNET_NETWORK_GET_ADDRESS_TYPE) (
+    PNET_LINK Link,
+    PNET_NETWORK_ENTRY Network,
+    PNETWORK_ADDRESS Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the type of the given address, categorizing it as unicast,
+    broadcast, or multicast.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link to which the address is bound.
+
+    Network - Supplies a pointer to the network information.
+
+    Address - Supplies a pointer to the network address to categorize.
+
+Return Value:
+
+    Returns the type of the specified address.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -2056,6 +2103,11 @@ Members:
         information from one socket to another. This function is optional if
         there are no network specific socket options.
 
+    GetAddressType - Stores a pointer to a function used to categorize a given
+        network address into one of many types (e.g. unicast, broadcast,
+        mulitcast). This function is optional if unicast is the only supported
+        address type.
+
 --*/
 
 typedef struct _NET_NETWORK_INTERFACE {
@@ -2073,6 +2125,7 @@ typedef struct _NET_NETWORK_INTERFACE {
     PNET_NETWORK_PRINT_ADDRESS PrintAddress;
     PNET_NETWORK_GET_SET_INFORMATION GetSetInformation;
     PNET_NETWORK_COPY_INFORMATION CopyInformation;
+    PNET_NETWORK_GET_ADDRESS_TYPE GetAddressType;
 } NET_NETWORK_INTERFACE, *PNET_NETWORK_INTERFACE;
 
 /*++
@@ -3078,35 +3131,42 @@ Return Value:
 --*/
 
 NET_API
-PNET_SOCKET
+KSTATUS
 NetFindSocket (
-    PNET_PROTOCOL_ENTRY ProtocolEntry,
-    PNETWORK_ADDRESS LocalAddress,
-    PNETWORK_ADDRESS RemoteAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext,
+    PNET_SOCKET *Socket
     );
 
 /*++
 
 Routine Description:
 
-    This routine attempts to find a socket that matches the given parameters.
-    If the socket is found and returned, the reference count will be increased
-    on it. It is the caller's responsiblity to release that reference.
+    This routine attempts to find a socket on the receiving end of the given
+    context based on matching the addresses and protocol. If the socket is
+    found and returned, the reference count will be increased on it. It is the
+    caller's responsiblity to release that reference. If this routine returns
+    that more processing is required, then subsequent calls should pass the
+    previously found socket back to the routine and the search will pick up
+    where it left off.
 
 Arguments:
 
-    ProtocolEntry - Supplies the protocol the socket must be on.
+    ReceiveContext - Supplies a pointer to the receive context used to find
+        the socket. This contains the remote address, local address, protocol,
+        and network to match on.
 
-    LocalAddress - Supplies a pointer to the local address of the socket.
-
-    RemoteAddress - Supplies a pointer to the remote address of the socket.
+    Socket - Supplies a pointer that receives a pointer to the found socket on
+        output. On input, it can optionally contain a pointer to the socket
+        from which the search for a new socket should start.
 
 Return Value:
 
-    Returns a pointer to a socket matching the given parameters, with an
-    increased reference count.
+    STATUS_SUCCESS if a socket was found.
 
-    NULL if no socket matches.
+    STATUS_MORE_PROCESSING_REQUIRED if a socket was found, but more sockets
+    may match the given address tuple.
+
+    Error status code otherwise.
 
 --*/
 

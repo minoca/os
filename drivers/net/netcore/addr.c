@@ -2470,72 +2470,125 @@ Return Value:
 }
 
 NET_API
-PNET_SOCKET
+KSTATUS
 NetFindSocket (
-    PNET_PROTOCOL_ENTRY ProtocolEntry,
-    PNETWORK_ADDRESS LocalAddress,
-    PNETWORK_ADDRESS RemoteAddress
+    PNET_RECEIVE_CONTEXT ReceiveContext,
+    PNET_SOCKET *Socket
     )
 
 /*++
 
 Routine Description:
 
-    This routine attempts to find an active socket that matches the given
-    parameters. If the socket is found and returned, the reference count will
-    be increased on it. It is the caller's responsiblity to release that
-    reference.
+    This routine attempts to find a socket on the receiving end of the given
+    context based on matching the addresses and protocol. If the socket is
+    found and returned, the reference count will be increased on it. It is the
+    caller's responsiblity to release that reference. If this routine returns
+    that more processing is required, then subsequent calls should pass the
+    previously found socket back to the routine and the search will pick up
+    where it left off.
 
 Arguments:
 
-    ProtocolEntry - Supplies the protocol the socket must be on.
+    ReceiveContext - Supplies a pointer to the receive context used to find
+        the socket. This contains the remote address, local address, protocol,
+        and network to match on.
 
-    LocalAddress - Supplies a pointer to the local address of the socket.
-
-    RemoteAddress - Supplies a pointer to the remote address of the socket.
+    Socket - Supplies a pointer that receives a pointer to the found socket on
+        output. On input, it can optionally contain a pointer to the socket
+        from which the search for a new socket should start.
 
 Return Value:
 
-    Returns a pointer to a socket matching the given parameters, with an
-    increased reference count.
+    STATUS_SUCCESS if a socket was found.
 
-    NULL if no socket matches.
+    STATUS_MORE_PROCESSING_REQUIRED if a socket was found, but more sockets
+    may match the given address tuple.
+
+    Error status code otherwise.
 
 --*/
 
 {
 
+    NET_ADDRESS_TYPE AddressType;
+    NET_SOCKET_BINDING_TYPE BindingType;
+    BOOL FindMultiple;
     PRED_BLACK_TREE_NODE FoundNode;
     PNET_SOCKET FoundSocket;
     PNET_SOCKET LastSocket;
+    PNETWORK_ADDRESS LocalAddress;
+    PNET_NETWORK_ENTRY Network;
+    PRED_BLACK_TREE_NODE NextNode;
+    PNET_SOCKET NextSocket;
+    PRED_BLACK_TREE_NODE PreviousNode;
+    PNET_SOCKET PreviousSocket;
+    PNET_PROTOCOL_ENTRY Protocol;
+    PNETWORK_ADDRESS RemoteAddress;
     COMPARISON_RESULT Result;
     NET_SOCKET SearchEntry;
+    KSTATUS Status;
     PRED_BLACK_TREE Tree;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     FoundSocket = NULL;
+    LocalAddress = ReceiveContext->Destination;
+    RemoteAddress = ReceiveContext->Source;
+    Network = ReceiveContext->Network;
+    Protocol = ReceiveContext->Protocol;
+    PreviousSocket = *Socket;
+    *Socket = NULL;
+
+    //
+    // If broadcast addresses are allowed for this protocol (the default), then
+    // test to see if the destination address is a broadcast address. This test
+    // is not necessary if a previous socket is supplied; assume that a
+    // previous invocation determined that multiple sockets needed to be found
+    // for this address tuple.
+    //
+
+    FindMultiple = FALSE;
+    if ((Protocol->Flags & NET_PROTOCOL_FLAG_UNICAST_ONLY) == 0) {
+        if (PreviousSocket != NULL) {
+            FindMultiple = TRUE;
+
+        } else if (Network->Interface.GetAddressType != NULL) {
+            AddressType = Network->Interface.GetAddressType(
+                                                          ReceiveContext->Link,
+                                                          Network,
+                                                          LocalAddress);
+
+            if (AddressType == NetAddressBroadcast) {
+                FindMultiple = TRUE;
+            }
+        }
+    }
 
     //
     // Check to see if the given remote and local addresses match the last
     // fully bound socket found. This speeds up the search process when there
-    // isn't a whole lot of activity.
+    // isn't a whole lot of activity. This cannot be done if multiple sockets
+    // need to be found as it would start the search iteration in the wrong
+    // location.
     //
 
-    KeAcquireSharedExclusiveLockShared(ProtocolEntry->SocketLock);
-    LastSocket = ProtocolEntry->LastSocket;
-    if (LastSocket != NULL) {
+    KeAcquireSharedExclusiveLockShared(Protocol->SocketLock);
+    if (FindMultiple == FALSE) {
+        LastSocket = Protocol->LastSocket;
+        if (LastSocket != NULL) {
 
-        ASSERT(LastSocket->BindingType == SocketFullyBound);
+            ASSERT(LastSocket->BindingType == SocketFullyBound);
 
-        Result = NetpMatchFullyBoundSocket(LastSocket,
-                                           LocalAddress,
-                                           RemoteAddress);
+            Result = NetpMatchFullyBoundSocket(LastSocket,
+                                               LocalAddress,
+                                               RemoteAddress);
 
-        if (Result == ComparisonResultSame) {
-            FoundNode = NULL;
-            FoundSocket = LastSocket;
-            goto FindSocketEnd;
+            if (Result == ComparisonResultSame) {
+                FoundNode = NULL;
+                FoundSocket = LastSocket;
+                goto FindSocketEnd;
+            }
         }
     }
 
@@ -2552,27 +2605,169 @@ Return Value:
                   sizeof(NETWORK_ADDRESS));
 
     //
-    // Loop through each tree looking for a match, starting with the most
-    // specified parameters (local and remote address), and working towards the
-    // most generic parameters (local port only).
+    // If only one socket needs to be found check each binding tree looking
+    // for a match, starting with the most specified parameters (local and
+    // remote address), and working towards the most generic parameters
+    // (local port only).
     //
 
-    Tree = &(ProtocolEntry->SocketTree[SocketFullyBound]);
-    FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
-    if (FoundNode != NULL) {
-        goto FindSocketEnd;
-    }
+    if (FindMultiple == FALSE) {
+        Tree = &(Protocol->SocketTree[SocketFullyBound]);
+        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
+        if (FoundNode != NULL) {
+            goto FindSocketEnd;
+        }
 
-    Tree = &(ProtocolEntry->SocketTree[SocketLocallyBound]);
-    FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
-    if (FoundNode != NULL) {
-        goto FindSocketEnd;
-    }
+        Tree = &(Protocol->SocketTree[SocketLocallyBound]);
+        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
+        if (FoundNode != NULL) {
+            goto FindSocketEnd;
+        }
 
-    Tree = &(ProtocolEntry->SocketTree[SocketUnbound]);
-    FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
-    if (FoundNode != NULL) {
-        goto FindSocketEnd;
+        Tree = &(Protocol->SocketTree[SocketUnbound]);
+        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
+        if (FoundNode != NULL) {
+            goto FindSocketEnd;
+        }
+
+    //
+    // Otherwise go about finding the lowest socket in the unbound tree that
+    // matches the criteria. Return it. The caller should call again and this
+    // will pick up where it left off, iterating through that first tree. When
+    // that tree is exhausted of matches, it will move to the next tree. This
+    // could greatly benefit from a hash table. RTL is yet to include a hash
+    // table library as the problem of how to grow hash tables is yet to be
+    // investigated.
+    //
+
+    } else {
+        BindingType = SocketUnbound;
+        if (PreviousSocket != NULL) {
+            BindingType = PreviousSocket->BindingType;
+        }
+
+        FoundNode = NULL;
+        while (BindingType < SocketBindingTypeCount) {
+            Tree = &(Protocol->SocketTree[BindingType]);
+            BindingType += 1;
+
+            //
+            // Pick up where the last search left off if a previous socket was
+            // provided.
+            //
+
+            if (PreviousSocket != NULL) {
+                PreviousNode = &(PreviousSocket->U.TreeEntry);
+                while (TRUE) {
+                    NextNode = RtlRedBlackTreeGetNextNode(Tree,
+                                                          FALSE,
+                                                          PreviousNode);
+
+                    if (NextNode == NULL) {
+                        break;
+                    }
+
+                    NextSocket = RED_BLACK_TREE_VALUE(NextNode,
+                                                      NET_SOCKET,
+                                                      U.TreeEntry);
+
+                    if ((NextSocket->Flags & NET_SOCKET_FLAG_ACTIVE) == 0) {
+                        PreviousNode = NextNode;
+                        continue;
+                    }
+
+                    break;
+                }
+
+                if (NextNode != NULL) {
+                    Result = Tree->CompareFunction(Tree,
+                                                   NextNode,
+                                                   &(SearchEntry.U.TreeEntry));
+
+                    if (Result == ComparisonResultSame) {
+                        FoundNode = NextNode;
+                        goto FindSocketEnd;
+                    }
+                }
+
+                //
+                // There are no more matching sockets in this tree. Skip to the
+                // next tree.
+                //
+
+                PreviousSocket = NULL;
+                continue;
+
+            //
+            // Otherwise find the first matching, active socket in the new tree.
+            //
+
+            } else {
+                NextNode = RtlRedBlackTreeSearch(Tree,
+                                                 &(SearchEntry.U.TreeEntry));
+
+                if (NextNode == NULL) {
+                    continue;
+                }
+
+                //
+                // A match was found. Find the lowest match in the tree. When
+                // the loop exits, it will be the previous node touched.
+                //
+
+                do {
+                    PreviousNode = NextNode;
+                    NextNode = RtlRedBlackTreeGetNextNode(Tree,
+                                                          TRUE,
+                                                          PreviousNode);
+
+                    if (NextNode == NULL) {
+                        break;
+                    }
+
+                    Result = Tree->CompareFunction(Tree,
+                                                   NextNode,
+                                                   &(SearchEntry.U.TreeEntry));
+
+                } while (Result == ComparisonResultSame);
+
+                //
+                // Now move forward finding the first active socket that
+                // matches.
+                //
+
+                NextNode = PreviousNode;
+                do {
+                    NextSocket = RED_BLACK_TREE_VALUE(NextNode,
+                                                      NET_SOCKET,
+                                                      U.TreeEntry);
+
+                    if ((NextSocket->Flags & NET_SOCKET_FLAG_ACTIVE) != 0) {
+                        FoundNode = NextNode;
+                        goto FindSocketEnd;
+                    }
+
+                    NextNode = RtlRedBlackTreeGetNextNode(Tree,
+                                                          FALSE,
+                                                          NextNode);
+
+                    if (NextNode == NULL) {
+                        break;
+                    }
+
+                    Result = Tree->CompareFunction(Tree,
+                                                   NextNode,
+                                                   &(SearchEntry.U.TreeEntry));
+
+                } while (Result == ComparisonResultSame);
+
+                //
+                // If no active sockets were found, move to the next tree.
+                //
+
+                continue;
+            }
+        }
     }
 
 FindSocketEnd:
@@ -2580,6 +2775,7 @@ FindSocketEnd:
         FoundSocket = RED_BLACK_TREE_VALUE(FoundNode, NET_SOCKET, U.TreeEntry);
     }
 
+    Status = STATUS_NOT_FOUND;
     if (FoundSocket != NULL) {
 
         //
@@ -2590,7 +2786,7 @@ FindSocketEnd:
 
         if ((FoundSocket->Flags & NET_SOCKET_FLAG_ACTIVE) == 0) {
 
-            ASSERT(FoundSocket != ProtocolEntry->LastSocket);
+            ASSERT(FoundSocket != Protocol->LastSocket);
 
             FoundSocket = NULL;
 
@@ -2601,14 +2797,22 @@ FindSocketEnd:
 
         } else {
             IoSocketAddReference(&(FoundSocket->KernelSocket));
-            if (FoundSocket->BindingType == SocketFullyBound) {
-                ProtocolEntry->LastSocket = FoundSocket;
+            if (FindMultiple != FALSE) {
+                Status = STATUS_MORE_PROCESSING_REQUIRED;
+
+            } else {
+                if (FoundSocket->BindingType == SocketFullyBound) {
+                    Protocol->LastSocket = FoundSocket;
+                }
+
+                Status = STATUS_SUCCESS;
             }
         }
     }
 
-    KeReleaseSharedExclusiveLockShared(ProtocolEntry->SocketLock);
-    return FoundSocket;
+    KeReleaseSharedExclusiveLockShared(Protocol->SocketLock);
+    *Socket = FoundSocket;
+    return Status;
 }
 
 NET_API

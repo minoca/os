@@ -1572,6 +1572,7 @@ Return Value:
     PLIST_ENTRY PacketEntry;
     PNET_SOCKET Socket;
     PLIST_ENTRY SocketEntry;
+    KSTATUS Status;
 
     //
     // If a group ID is supplied in the address, then send the packet to all
@@ -1659,11 +1660,9 @@ Return Value:
     // Find the socket targeted by the destination address.
     //
 
-    Socket = NetFindSocket(ReceiveContext->Protocol,
-                           ReceiveContext->Destination,
-                           ReceiveContext->Source);
-
-    if (Socket == NULL) {
+    Socket = NULL;
+    Status = NetFindSocket(ReceiveContext, &Socket);
+    if (!KSUCCESS(Status)) {
         goto ProcessReceivedPacketsEnd;
     }
 

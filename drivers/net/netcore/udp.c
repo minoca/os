@@ -328,6 +328,7 @@ NET_PROTOCOL_ENTRY NetUdpProtocol = {
     {NULL, NULL},
     NetSocketDatagram,
     SOCKET_INTERNET_PROTOCOL_UDP,
+    0,
     NULL,
     NULL,
     {{0}, {0}, {0}},
@@ -1226,7 +1227,9 @@ Return Value:
     PUDP_HEADER Header;
     USHORT Length;
     PNET_PACKET_BUFFER Packet;
+    PNET_SOCKET PreviousSocket;
     PNET_SOCKET Socket;
+    KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -1247,29 +1250,41 @@ Return Value:
                                      NETWORK_TO_CPU16(Header->DestinationPort);
 
     //
-    // Find a socket willing to take this packet.
+    // Find all the sockets willing to take this packet.
     //
 
-    Socket = NetFindSocket(ReceiveContext->Protocol,
-                           ReceiveContext->Destination,
-                           ReceiveContext->Source);
+    Socket = NULL;
+    PreviousSocket = NULL;
+    do {
+        Status = NetFindSocket(ReceiveContext, &Socket);
+        if (!KSUCCESS(Status) && (Status != STATUS_MORE_PROCESSING_REQUIRED)) {
+            break;
+        }
 
-    if (Socket == NULL) {
-        return;
+        //
+        // Pass the packet onto the socket for copying and safe keeping until
+        // the data is read.
+        //
+
+        NetpUdpProcessReceivedSocketData(Socket, ReceiveContext);
+
+        //
+        // Release the reference on the previous socket added by the find
+        // socket call.
+        //
+
+        if (PreviousSocket != NULL) {
+            IoSocketReleaseReference(&(PreviousSocket->KernelSocket));
+        }
+
+        PreviousSocket = Socket;
+
+    } while (Status == STATUS_MORE_PROCESSING_REQUIRED);
+
+    if (PreviousSocket != NULL) {
+        IoSocketReleaseReference(&(PreviousSocket->KernelSocket));
     }
 
-    //
-    // Pass the packet onto the socket for copying and safe keeping until the
-    // data is read.
-    //
-
-    NetpUdpProcessReceivedSocketData(Socket, ReceiveContext);
-
-    //
-    // Release the reference on the socket added by the find socket call.
-    //
-
-    IoSocketReleaseReference(&(Socket->KernelSocket));
     return;
 }
 

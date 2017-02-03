@@ -431,6 +431,7 @@ NET_PROTOCOL_ENTRY NetTcpProtocol = {
     {NULL, NULL},
     NetSocketStream,
     SOCKET_INTERNET_PROTOCOL_TCP,
+    NET_PROTOCOL_FLAG_UNICAST_ONLY,
     NULL,
     NULL,
     {{0}, {0}, {0}},
@@ -2178,6 +2179,7 @@ Return Value:
     ULONG RelativeAcknowledgeNumber;
     ULONG RelativeSequenceNumber;
     PNET_SOCKET Socket;
+    KSTATUS Status;
     PTCP_SOCKET TcpSocket;
     ULONG WindowSize;
 
@@ -2229,11 +2231,12 @@ Return Value:
     ReceiveContext->Destination->Port =
                                      NETWORK_TO_CPU16(Header->DestinationPort);
 
-    Socket = NetFindSocket(ReceiveContext->Protocol,
-                           ReceiveContext->Destination,
-                           ReceiveContext->Source);
+    Socket = NULL;
+    Status = NetFindSocket(ReceiveContext, &Socket);
+    if (!KSUCCESS(Status)) {
 
-    if (Socket == NULL) {
+        ASSERT(Status != STATUS_MORE_PROCESSING_REQUIRED);
+
         NetpTcpHandleUnconnectedPacket(ReceiveContext, Header);
         return;
     }

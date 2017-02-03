@@ -267,6 +267,13 @@ NetpIp4CopyInformation (
     PNET_SOCKET SourceSocket
     );
 
+NET_ADDRESS_TYPE
+NetpIp4GetAddressType (
+    PNET_LINK Link,
+    PNET_NETWORK_ENTRY Network,
+    PNETWORK_ADDRESS Address
+    );
+
 USHORT
 NetpIp4ChecksumData (
     PVOID Data,
@@ -391,6 +398,7 @@ Return Value:
     NetworkEntry.Interface.PrintAddress = NetpIp4PrintAddress;
     NetworkEntry.Interface.GetSetInformation = NetpIp4GetSetInformation;
     NetworkEntry.Interface.CopyInformation = NetpIp4CopyInformation;
+    NetworkEntry.Interface.GetAddressType = NetpIp4GetAddressType;
     Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
     if (!KSUCCESS(Status)) {
 
@@ -1914,6 +1922,97 @@ Return Value:
                   sizeof(IP4_SOCKET_INFORMATION));
 
     return STATUS_SUCCESS;
+}
+
+NET_ADDRESS_TYPE
+NetpIp4GetAddressType (
+    PNET_LINK Link,
+    PNET_NETWORK_ENTRY Network,
+    PNETWORK_ADDRESS Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the type of the given address, categorizing it as unicast,
+    broadcast, or multicast.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link to which the address is bound.
+
+    Network - Supplies a pointer to the network information.
+
+    Address - Supplies a pointer to the network address to categorize.
+
+Return Value:
+
+    Returns the type of the specified address.
+
+--*/
+
+{
+
+    PNET_LINK_ADDRESS_ENTRY AddressEntry;
+    PIP4_ADDRESS Ip4Address;
+    PIP4_ADDRESS LocalAddress;
+    ULONG LocalIpAddress;
+    PIP4_ADDRESS SubnetAddress;
+    ULONG SubnetBroadcast;
+    volatile ULONG SubnetMask;
+
+    ASSERT(Address->Domain == Network->Domain);
+    ASSERT(Address->Domain == NetDomainIp4);
+
+    Ip4Address = (PIP4_ADDRESS)Address;
+    if (Ip4Address->Address == 0) {
+        return NetAddressAny;
+    }
+
+    if (Ip4Address->Address == IP4_BROADCAST_ADDRESS) {
+        return NetAddressBroadcast;
+    }
+
+    //
+    // Check to see if this is the local IP address. This requires getting the
+    // link address entry for the current domain. Normally this requires
+    // acquiring a lock and searching over the link's list of network address
+    // entries. That is costly on every DGRAM packet receive. The network
+    // address entry list needs to be reconsidered anyway, so just grab the
+    // first one off the list (as only IPv4 is present anyway).
+    //
+    // TODO: Replace link address list with an array for constant lookup.
+    //
+
+    AddressEntry = LIST_VALUE(Link->LinkAddressList.Next,
+                              NET_LINK_ADDRESS_ENTRY,
+                              ListEntry);
+
+    ASSERT(AddressEntry->Address.Domain == NetDomainIp4);
+
+    LocalAddress = (PIP4_ADDRESS)&(AddressEntry->Address);
+    LocalIpAddress = LocalAddress->Address;
+    if (Ip4Address->Address == LocalIpAddress) {
+        return NetAddressUnicast;
+    }
+
+    //
+    // Check to see if the address is the local subnet's broadcast address.
+    // Without the lock held, this address entry may change if the network goes
+    // down. This would trigger all existing sockets to receive the
+    // disconnected event. A broadcast address may not properly be determined,
+    // so return it as unknown.
+    //
+
+    SubnetAddress = (PIP4_ADDRESS)&(AddressEntry->Subnet);
+    SubnetMask = SubnetAddress->Address;
+    SubnetBroadcast = (LocalIpAddress & SubnetMask) | ~SubnetMask;
+    if (Ip4Address->Address == SubnetBroadcast) {
+        return NetAddressBroadcast;
+    }
+
+    return NetAddressUnknown;
 }
 
 //

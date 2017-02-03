@@ -348,6 +348,7 @@ NET_PROTOCOL_ENTRY NetlinkGenericProtocol = {
     {NULL, NULL},
     NetSocketDatagram,
     SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
+    NET_PROTOCOL_FLAG_UNICAST_ONLY,
     NULL,
     NULL,
     {{0}, {0}, {0}},
