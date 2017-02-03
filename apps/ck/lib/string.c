@@ -148,6 +148,12 @@ CkpStringReplace (
     );
 
 BOOL
+CkpStringCompare (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpStringAdd (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -198,6 +204,7 @@ CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[] = {
     {"split@2", 2, CkpStringSplit},
     {"rsplit@2", 2, CkpStringRightSplit},
     {"replace@3", 3, CkpStringReplace},
+    {"compare@1", 1, CkpStringCompare},
     {"__add@1", 1, CkpStringAdd},
     {"__mul@1", 1, CkpStringMultiply},
     {"__slice@1", 1, CkpStringSlice},
@@ -2303,6 +2310,99 @@ Return Value:
 
     CkpStringHash(Result);
     CK_OBJECT_VALUE(Arguments[0], Result);
+    return TRUE;
+}
+
+BOOL
+CkpStringCompare (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine compares two strings.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    UINTN CommonLength;
+    PCSTR Left;
+    PCK_STRING LeftString;
+    PCSTR Right;
+    PCK_STRING RightString;
+
+    LeftString = CK_AS_STRING(Arguments[0]);
+    if (!CK_IS_STRING(Arguments[1])) {
+        CkpRuntimeError(Vm, "TypeError", "Expected a string");
+        return FALSE;
+    }
+
+    RightString = CK_AS_STRING(Arguments[1]);
+    Left = LeftString->Value;
+    Right = RightString->Value;
+
+    //
+    // Compare the minimum of their two lengths. Byte-wise compare works on
+    // UTF-8 strings.
+    //
+
+    CommonLength = LeftString->Length;
+    if (CommonLength > RightString->Length) {
+        CommonLength = RightString->Length;
+    }
+
+    while (CommonLength != 0) {
+        if (*Left != *Right) {
+            CK_INT_VALUE(Arguments[0],
+                         (unsigned char)*Left - (unsigned char )*Right);
+
+            return TRUE;
+        }
+
+        Left += 1;
+        Right += 1;
+        CommonLength -= 1;
+    }
+
+    //
+    // If they're the same length and they got this far, they completely match.
+    //
+
+    if (LeftString->Length == RightString->Length) {
+        CK_INT_VALUE(Arguments[0], 0);
+        return TRUE;
+    }
+
+    //
+    // If the left is at the end, then 0 - Right.
+    //
+
+    if (Left == LeftString->Value + LeftString->Length) {
+        CK_INT_VALUE(Arguments[0], 0 - (unsigned char)*Right);
+        return TRUE;
+    }
+
+    //
+    // The right must be at the end. Return Left - 0.
+    //
+
+    CK_INT_VALUE(Arguments[0], (unsigned char)*Left);
     return TRUE;
 }
 
