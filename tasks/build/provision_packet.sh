@@ -35,5 +35,5 @@ wget https://www.minocacorp.com/downloads/packet/msetup.alpine
 chmod +x ./msetup.alpine
 mv packet.img install.img
 ./msetup -d/dev/sda
-: Everything's all set. Hit reboot to boot into Minoca OS.
+: Everythings all set. Hit reboot to boot into Minoca OS.
 
