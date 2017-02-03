@@ -157,7 +157,7 @@ chmod 700 "$DEST/root/.ssh"
 ## Set up the cloud.cfg file.
 ##
 
-cat > "$DEST/etc/cloud.cfg" <<"_EOF"
+cat > "$DEST/etc/cloud/cloud.cfg" <<"_EOF"
 disable_root: 0
 ssh_pwauth:   0
 datasource:
