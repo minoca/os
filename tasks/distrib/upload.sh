@@ -71,7 +71,7 @@ prune_stale_builds() {
 
     # Combine the two lists, sort them, and then ask uniq to print everything
     # that's not repeated.
-    stale=`echo $stale $latests | sed 's/ /\n/g' | sort | uniq -u`
+    stale=`echo $stale $latests $latests | sed 's/ /\n/g' | sort | uniq -u`
     for d in $stale; do
         echo "Deleting build $d"
         run_ssh_cmd rm -rf $NIGHTLIES/$d/
