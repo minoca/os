@@ -1421,6 +1421,7 @@ Return Value:
 
     if ((Request->IoFlags & IO_FLAG_SERVICING_FAULT) != 0) {
         Thread->ResourceUsage.HardPageFaults += 1;
+        Request->IoFlags &= ~IO_FLAG_SERVICING_FAULT;
     }
 
     //
