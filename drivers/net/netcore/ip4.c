@@ -270,7 +270,7 @@ NetpIp4CopyInformation (
 NET_ADDRESS_TYPE
 NetpIp4GetAddressType (
     PNET_LINK Link,
-    PNET_NETWORK_ENTRY Network,
+    PNET_LINK_ADDRESS_ENTRY LinkAddressEntry,
     PNETWORK_ADDRESS Address
     );
 
@@ -653,7 +653,6 @@ Return Value:
 
 {
 
-    BOOL AnyAddress;
     NET_SOCKET_BINDING_TYPE BindingType;
     PIP4_ADDRESS Ip4Address;
     NET_LINK_LOCAL_ADDRESS LocalInformation;
@@ -664,23 +663,25 @@ Return Value:
     LocalInformation.Link = NULL;
 
     //
+    // Classify the address and binding type. Leaving it as unknown is OK.
+    // Differentiating between a unicast address and a subnet broadcast address
+    // is not possible without the link address entry's information.
+    //
+
+    BindingType = SocketLocallyBound;
+    if (Ip4Address->Address == 0) {
+        BindingType = SocketUnbound;
+    }
+
+    //
     // If a specific link is given, try to find the given address in that link.
     //
 
     if (Link != NULL) {
-        if (Ip4Address->Address == 0) {
-            BindingType = SocketUnbound;
-            AnyAddress = TRUE;
-
-        } else {
-            BindingType = SocketLocallyBound;
-            AnyAddress = FALSE;
-        }
-
         Port = Address->Port;
         Address->Port = 0;
-        Status = NetFindLinkForLocalAddress(Address,
-                                            AnyAddress,
+        Status = NetFindLinkForLocalAddress(Socket->Network,
+                                            Address,
                                             Link,
                                             &LocalInformation);
 
@@ -698,16 +699,17 @@ Return Value:
     } else {
 
         //
-        // If the address is not the "unbound" address, then look for the link
-        // that owns this address.
+        // If the address is not the "any" or broadcast address, then look for
+        // the link that owns this address.
         //
 
-        if (Ip4Address->Address != 0) {
-            BindingType = SocketLocallyBound;
+        if ((Ip4Address->Address != 0) &&
+            (Ip4Address->Address != IP4_BROADCAST_ADDRESS)) {
+
             Port = Address->Port;
             Address->Port = 0;
-            Status = NetFindLinkForLocalAddress(Address,
-                                                FALSE,
+            Status = NetFindLinkForLocalAddress(Socket->Network,
+                                                Address,
                                                 NULL,
                                                 &LocalInformation);
 
@@ -719,12 +721,11 @@ Return Value:
             LocalInformation.LocalAddress.Port = Port;
 
         //
-        // No link nor address was passed, this is a generic bind to a port on
-        // any address.
+        // No link was passed, this is a generic bind to a port on any or the
+        // broadcast address.
         //
 
         } else {
-            BindingType = SocketUnbound;
             LocalInformation.Link = NULL;
             LocalInformation.LinkAddress = NULL;
             RtlCopyMemory(&(LocalInformation.LocalAddress),
@@ -1927,7 +1928,7 @@ Return Value:
 NET_ADDRESS_TYPE
 NetpIp4GetAddressType (
     PNET_LINK Link,
-    PNET_NETWORK_ENTRY Network,
+    PNET_LINK_ADDRESS_ENTRY LinkAddressEntry,
     PNETWORK_ADDRESS Address
     )
 
@@ -1942,7 +1943,8 @@ Arguments:
 
     Link - Supplies a pointer to the network link to which the address is bound.
 
-    Network - Supplies a pointer to the network information.
+    LinkAddressEntry - Supplies an optional pointer to a network link address
+        entry to use while classifying the address.
 
     Address - Supplies a pointer to the network address to categorize.
 
@@ -1954,16 +1956,16 @@ Return Value:
 
 {
 
-    PNET_LINK_ADDRESS_ENTRY AddressEntry;
     PIP4_ADDRESS Ip4Address;
     PIP4_ADDRESS LocalAddress;
-    ULONG LocalIpAddress;
+    volatile ULONG LocalIpAddress;
     PIP4_ADDRESS SubnetAddress;
     ULONG SubnetBroadcast;
     volatile ULONG SubnetMask;
 
-    ASSERT(Address->Domain == Network->Domain);
-    ASSERT(Address->Domain == NetDomainIp4);
+    if (Address->Domain != NetDomainIp4) {
+        return NetAddressUnknown;
+    }
 
     Ip4Address = (PIP4_ADDRESS)Address;
     if (Ip4Address->Address == 0) {
@@ -1976,22 +1978,24 @@ Return Value:
 
     //
     // Check to see if this is the local IP address. This requires getting the
-    // link address entry for the current domain. Normally this requires
-    // acquiring a lock and searching over the link's list of network address
-    // entries. That is costly on every DGRAM packet receive. The network
-    // address entry list needs to be reconsidered anyway, so just grab the
-    // first one off the list (as only IPv4 is present anyway).
+    // link address entry for the current domain (if not supplied). Normally
+    // this requires acquiring a lock and searching over the link's list of
+    // network address entries. That is costly on every DGRAM packet receive.
+    // The network address entry list needs to be reconsidered anyway, so just
+    // grab the first one off the list (as only IPv4 is present anyway).
     //
     // TODO: Replace link address list with an array for constant lookup.
     //
 
-    AddressEntry = LIST_VALUE(Link->LinkAddressList.Next,
-                              NET_LINK_ADDRESS_ENTRY,
-                              ListEntry);
+    if (LinkAddressEntry == NULL) {
+        LinkAddressEntry = LIST_VALUE(Link->LinkAddressList.Next,
+                                      NET_LINK_ADDRESS_ENTRY,
+                                      ListEntry);
 
-    ASSERT(AddressEntry->Address.Domain == NetDomainIp4);
+        ASSERT(LinkAddressEntry->Address.Domain == NetDomainIp4);
+    }
 
-    LocalAddress = (PIP4_ADDRESS)&(AddressEntry->Address);
+    LocalAddress = (PIP4_ADDRESS)&(LinkAddressEntry->Address);
     LocalIpAddress = LocalAddress->Address;
     if (Ip4Address->Address == LocalIpAddress) {
         return NetAddressUnicast;
@@ -2005,7 +2009,7 @@ Return Value:
     // so return it as unknown.
     //
 
-    SubnetAddress = (PIP4_ADDRESS)&(AddressEntry->Subnet);
+    SubnetAddress = (PIP4_ADDRESS)&(LinkAddressEntry->Subnet);
     SubnetMask = SubnetAddress->Address;
     SubnetBroadcast = (LocalIpAddress & SubnetMask) | ~SubnetMask;
     if (Ip4Address->Address == SubnetBroadcast) {

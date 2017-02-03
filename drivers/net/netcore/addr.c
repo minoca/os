@@ -947,8 +947,8 @@ Return Value:
 NET_API
 KSTATUS
 NetFindLinkForLocalAddress (
+    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS LocalAddress,
-    BOOL AnyAddress,
     PNET_LINK Link,
     PNET_LINK_LOCAL_ADDRESS LinkResult
     )
@@ -964,10 +964,10 @@ Routine Description:
 
 Arguments:
 
-    LocalAddress - Supplies a pointer to the local address to test against.
+    Network - Supplies a pointer to the network entry to which the address
+        belongs.
 
-    AnyAddress - Supplies a boolean indicating whether or not the local address
-        is the network's any address.
+    LocalAddress - Supplies a pointer to the local address to test against.
 
     Link - Supplies an optional pointer to a link that the local address must
         be from.
@@ -1013,8 +1013,8 @@ Return Value:
         }
 
         Status = NetFindEntryForAddress(Link,
+                                        Network,
                                         LocalAddress,
-                                        AnyAddress,
                                         &LinkAddress);
 
     //
@@ -1036,8 +1036,8 @@ Return Value:
             }
 
             Status = NetFindEntryForAddress(CurrentLink,
+                                            Network,
                                             LocalAddress,
-                                            AnyAddress,
                                             &LinkAddress);
 
             if (KSUCCESS(Status)) {
@@ -1620,8 +1620,8 @@ NET_API
 KSTATUS
 NetFindEntryForAddress (
     PNET_LINK Link,
+    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS Address,
-    BOOL AnyAddress,
     PNET_LINK_ADDRESS_ENTRY *AddressEntry
     )
 
@@ -1636,10 +1636,10 @@ Arguments:
 
     Link - Supplies the link whose address entries should be searched.
 
-    Address - Supplies the address to search for.
+    Network - Supplies an optional pointer to the network entry to which the
+        address belongs.
 
-    AnyAddress - Supplies a boolean indicating whether or not the given address
-        is the owning network's any address.
+    Address - Supplies the address to search for.
 
     AddressEntry - Supplies a pointer where the address entry will be returned
         on success.
@@ -1654,6 +1654,7 @@ Return Value:
 
 {
 
+    NET_ADDRESS_TYPE AddressType;
     COMPARISON_RESULT ComparisonResult;
     PNET_LINK_ADDRESS_ENTRY CurrentAddress;
     PLIST_ENTRY CurrentAddressEntry;
@@ -1678,33 +1679,81 @@ Return Value:
         CurrentAddressEntry = CurrentAddressEntry->Next;
 
         //
+        // If the network is known, classify the address type using this link
+        // address entry. It is necessary to classify the address for each link
+        // address entry in case it is the subnet broadcast address.
+        //
+
+        if ((Network != NULL) &&
+            (Network->Interface.GetAddressType != NULL)) {
+
+            AddressType = Network->Interface.GetAddressType(Link,
+                                                            CurrentAddress,
+                                                            Address);
+
+            //
+            // If the address type is unknown, then it definitely cannot be
+            // satisfied by this link address entry.
+            //
+
+            if (AddressType == NetAddressUnknown) {
+                continue;
+            }
+
+        //
+        // Otherwise, assume it is a unicast address, meaning it must exactly
+        // match the link address entry's local address.
+        //
+
+        } else {
+            AddressType = NetAddressUnicast;
+        }
+
+        //
         // Only a search for an any address can match a non-configured link
         // address entry.
         //
 
-        if ((CurrentAddress->Configured == FALSE) && (AnyAddress == FALSE)) {
+        if ((CurrentAddress->Configured == FALSE) &&
+            (AddressType != NetAddressAny)) {
+
             continue;
         }
 
         //
-        // Compare the full addresses unless the any address was supplied. In
-        // that case, only the port and network need to match.
+        // The domain and port must always match.
         //
 
-        if (AnyAddress == FALSE) {
-            ComparisonResult = NetpCompareNetworkAddresses(
+        if ((CurrentAddress->Address.Domain != Address->Domain) ||
+            (CurrentAddress->Address.Port != Address->Port)) {
+
+            continue;
+        }
+
+        //
+        // The any and broadcast addresses only need the domain and port to
+        // match.
+        //
+
+        if ((AddressType == NetAddressAny) ||
+            (AddressType == NetAddressBroadcast)) {
+
+            *AddressEntry = CurrentAddress;
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+        ASSERT(AddressType == NetAddressUnicast);
+
+        //
+        // A unicast address must match the link address entry's local address.
+        //
+
+        ComparisonResult = NetpCompareNetworkAddresses(
                                                     &(CurrentAddress->Address),
                                                     Address);
 
-            if (ComparisonResult == ComparisonResultSame) {
-                *AddressEntry = CurrentAddress;
-                Status = STATUS_SUCCESS;
-                break;
-            }
-
-        } else if ((CurrentAddress->Address.Port == Address->Port) &&
-                   (CurrentAddress->Address.Domain == Address->Domain)) {
-
+        if (ComparisonResult == ComparisonResultSame) {
             *AddressEntry = CurrentAddress;
             Status = STATUS_SUCCESS;
             break;
@@ -1948,8 +1997,7 @@ Return Value:
     // specifically as a link that can reach the remote address.
     //
 
-    if (((Socket->BindingType == SocketLocallyBound) ||
-         (Socket->BindingType == SocketFullyBound)) &&
+    if ((Socket->Link != NULL) &&
         (BindingType == SocketFullyBound) &&
         ((Socket->Link != LocalInformation->Link) ||
          (Socket->LinkAddress != LocalInformation->LinkAddress))) {
@@ -1959,33 +2007,27 @@ Return Value:
     }
 
     //
-    // Determine the local address and link. They're in the socket if the
-    // socket was already locally bound. Otherwise they're in the local
-    // information.
+    // Determine the local address and link. Use the ones in the socket if
+    // available. They should be set for sockets that are fully or locally
+    // bound, with exception for sockets locally bound to a global broadcast
+    // address.
     //
 
-    if ((Socket->BindingType == SocketLocallyBound) ||
-        (Socket->BindingType == SocketFullyBound)) {
-
-        ASSERT(Socket->Link != NULL);
-
-        Link = Socket->Link;
-        LocalAddress = &(Socket->LocalAddress);
-
-    } else {
+    Link = Socket->Link;
+    LocalAddress = &(Socket->LocalAddress);
+    if (Link == NULL) {
 
         ASSERT(LocalInformation != NULL);
-        ASSERT(Socket->Link == NULL);
 
         Link = LocalInformation->Link;
         LocalAddress = &(LocalInformation->LocalAddress);
 
         //
-        // If the socket used to be unbound, then the local address gets the
-        // unbound port.
+        // If the socket was previously bound, use the local port that was
+        // already assigned.
         //
 
-        if (Socket->BindingType == SocketUnbound) {
+        if (Socket->BindingType != SocketBindingInvalid) {
             LocalAddress->Port = Socket->LocalAddress.Port;
         }
     }
@@ -2199,14 +2241,11 @@ Return Value:
     }
 
     //
-    // Set the local information in the socket if it isn't already locally
-    // bound.
+    // Set the local information in the socket if it isn't already set.
     //
 
-    if ((Socket->BindingType != SocketLocallyBound) &&
-        (Socket->BindingType != SocketFullyBound)) {
+    if (Socket->Link == NULL) {
 
-        ASSERT(Socket->Link == NULL);
         ASSERT(LocalInformation != NULL);
 
         if (LocalInformation->Link != NULL) {
@@ -2556,7 +2595,7 @@ Return Value:
         } else if (Network->Interface.GetAddressType != NULL) {
             AddressType = Network->Interface.GetAddressType(
                                                           ReceiveContext->Link,
-                                                          Network,
+                                                          NULL,
                                                           LocalAddress);
 
             if (AddressType == NetAddressBroadcast) {

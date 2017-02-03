@@ -557,8 +557,8 @@ Return Value:
         }
 
         Status = NetFindEntryForAddress(Link,
+                                        NULL,
                                         &TargetNetworkAddress,
-                                        FALSE,
                                         &LinkAddressEntry);
 
         if (!KSUCCESS(Status)) {

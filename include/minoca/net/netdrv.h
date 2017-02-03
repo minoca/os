@@ -273,11 +273,10 @@ typedef enum _NET_LINK_INFORMATION_TYPE {
 } NET_LINK_INFORMATION_TYPE, *PNET_LINK_INFORMATION_TYPE;
 
 typedef enum _NET_ADDRESS_TYPE {
-    NetAddressInvalid,
+    NetAddressUnknown,
     NetAddressAny,
     NetAddressUnicast,
-    NetAddressBroadcast,
-    NetAddressUnknown
+    NetAddressBroadcast
 } NET_ADDRESS_TYPE, *PNET_ADDRESS_TYPE;
 
 /*++
@@ -2030,7 +2029,7 @@ typedef
 NET_ADDRESS_TYPE
 (*PNET_NETWORK_GET_ADDRESS_TYPE) (
     PNET_LINK Link,
-    PNET_NETWORK_ENTRY Network,
+    PNET_LINK_ADDRESS_ENTRY LinkAddressEntry,
     PNETWORK_ADDRESS Address
     );
 
@@ -2045,7 +2044,8 @@ Arguments:
 
     Link - Supplies a pointer to the network link to which the address is bound.
 
-    Network - Supplies a pointer to the network information.
+    LinkAddressEntry - Supplies an optional pointer to a network link address
+        entry to use while classifying the address.
 
     Address - Supplies a pointer to the network address to categorize.
 
@@ -2715,8 +2715,8 @@ Return Value:
 NET_API
 KSTATUS
 NetFindLinkForLocalAddress (
+    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS LocalAddress,
-    BOOL AnyAddress,
     PNET_LINK Link,
     PNET_LINK_LOCAL_ADDRESS LinkResult
     );
@@ -2732,10 +2732,10 @@ Routine Description:
 
 Arguments:
 
-    LocalAddress - Supplies a pointer to the local address to test against.
+    Network - Supplies a pointer to the network entry to which the address
+        belongs.
 
-    AnyAddress - Supplies a boolean indicating whether or not the local address
-        is the network's any address.
+    LocalAddress - Supplies a pointer to the local address to test against.
 
     Link - Supplies an optional pointer to a link that the local address must
         be from.
@@ -2949,8 +2949,8 @@ NET_API
 KSTATUS
 NetFindEntryForAddress (
     PNET_LINK Link,
+    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS Address,
-    BOOL AnyAddress,
     PNET_LINK_ADDRESS_ENTRY *AddressEntry
     );
 
@@ -2965,10 +2965,10 @@ Arguments:
 
     Link - Supplies the link whose address entries should be searched.
 
-    Address - Supplies the address to search for.
+    Network - Supplies an optional pointer to the network entry to which the
+        address belongs.
 
-    AnyAddress - Supplies a boolean indicating whether or not the given address
-        is the owning network's any address.
+    Address - Supplies the address to search for.
 
     AddressEntry - Supplies a pointer where the address entry will be returned
         on success.
