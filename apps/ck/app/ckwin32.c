@@ -101,12 +101,17 @@ Return Value:
     HRESULT Result;
     PSTR ScriptBase;
 
+    Copy = strdup(Script);
+    if (Copy == NULL) {
+        return;
+    }
+
     //
     // If a script was supplied, add the directory of the script.
     //
 
     if (Script != NULL) {
-        ScriptBase = dirname(Script);
+        ScriptBase = dirname(Copy);
         ChalkAddSearchPath(Vm, ScriptBase, NULL);
 
     //
@@ -118,6 +123,8 @@ Return Value:
             ChalkAddSearchPath(Vm, Directory, NULL);
         }
     }
+
+    free(Copy);
 
     //
     // Add the special environment variable directory.
