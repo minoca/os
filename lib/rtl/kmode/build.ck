@@ -25,14 +25,21 @@ Environment:
 
 --*/
 
+from menv import staticLibrary;
+
 function build() {
+    var entries;
+    var includes;
+    var lib;
+    var sources;
+
     sources = [
         "assert.c",
         "kprint.c"
     ];
 
     includes = [
-        "$//lib/rtl"
+        "$S/lib/rtl"
     ];
 
     lib = {
@@ -41,8 +48,7 @@ function build() {
         "includes": includes
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
     return entries;
 }
 
-return build();

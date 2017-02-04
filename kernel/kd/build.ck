@@ -27,24 +27,35 @@ Environment:
 
 --*/
 
+from menv import staticLibrary, mconfig;
+
 function build() {
-    base_sources = [
+    var arch = mconfig.arch;
+    var archSources;
+    var baseSources;
+    var bootArchSources;
+    var bootLib;
+    var bootSources;
+    var entries;
+    var lib;
+
+    baseSources = [
         "kdebug.c"
     ];
 
-    boot_sources = [
+    bootSources = [
         ":kdebug.o",
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        arch_sources = [
+        archSources = [
             "armv7/kdarch.c",
             "armv7/kdatomic.S",
             "armv7/kdsup.S",
             "armv7/kdsupc.c"
         ];
 
-        boot_arch_sources = [
+        bootArchSources = [
             ":armv7/kdarch.o",
             "boot/armv7/kdatomic.S",
             ":armv7/kdsup.o",
@@ -52,12 +63,12 @@ function build() {
         ];
 
     } else if ((arch == "x86") || (arch == "x64")) {
-        arch_sources = [
+        archSources = [
             "x86/kdarch.c",
             "x86/kdsup.S"
         ];
 
-        boot_arch_sources = [
+        bootArchSources = [
             ":x86/kdarch.o",
             ":x86/kdsup.o"
         ];
@@ -65,17 +76,16 @@ function build() {
 
     lib = {
         "label": "kd",
-        "inputs": base_sources + arch_sources,
+        "inputs": baseSources + archSources,
     };
 
-    boot_lib = {
+    bootLib = {
         "label": "kdboot",
-        "inputs": boot_sources + boot_arch_sources,
+        "inputs": bootSources + bootArchSources,
     };
 
-    entries = static_library(lib);
-    entries += static_library(boot_lib);
+    entries = staticLibrary(lib);
+    entries += staticLibrary(bootLib);
     return entries;
 }
 
-return build();

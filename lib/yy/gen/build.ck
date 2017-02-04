@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -9,60 +9,54 @@ Copyright (c) 2014 Minoca Corp.
 
 Module Name:
 
-    KD USB
+    Lex/Parse LALR(1) Library
 
 Abstract:
 
-    This library contains the USB kernel debugger support library.
+    This module implements support for an LALR(1) grammar parser generator.
 
 Author:
 
-    Evan Green 18-Apr-2014
+    Evan Green 3-Feb-2017
 
 Environment:
 
-    Kernel, Boot
+    Any
 
 --*/
 
 from menv import staticLibrary;
 
 function build() {
+    var buildLib;
     var entries;
-    var includes;
     var lib;
     var sources;
-    var stubLib;
-    var stubSources;
 
     sources = [
-        "ftdi.c",
-        "hub.c",
-        "kdehci.c",
-        "kdusb.c"
-    ];
-
-    stubSources = [
-        "kdnousb/stubs.c"
-    ];
-
-    includes = [
-        "$S/drivers/usb/ehci"
+        "lalr.c",
+        "lr0.c",
+        "output.c",
+        "parcon.c",
+        "verbose.c",
+        "yygen.c"
     ];
 
     lib = {
-        "label": "kdusb",
+        "label": "yygen",
         "inputs": sources,
-        "includes": includes
     };
 
-    stubLib = {
-        "label": "kdnousb",
-        "inputs": stubSources
+    buildLib = {
+        "label": "build_yygen",
+        "output": "yy",
+        "inputs": sources,
+        "build": true,
+        "prefix": "build"
     };
 
     entries = staticLibrary(lib);
-    entries += staticLibrary(stubLib);
+    entries += staticLibrary(buildLib);
     return entries;
 }
 

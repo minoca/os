@@ -28,8 +28,24 @@ Environment:
 
 --*/
 
+from menv import staticLibrary, mconfig;
+
 function build() {
-    base_sources = [
+    var arch = mconfig.arch;
+    var archSources;
+    var armSources;
+    var armv6Sources;
+    var armv7Sources;
+    var baseSources;
+    var bootLib;
+    var bootSources;
+    var buildArchSources;
+    var buildLib;
+    var entries;
+    var lib;
+    var x86Sources;
+
+    baseSources = [
         "block.c",
         "imgsec.c",
         "info.c",
@@ -45,26 +61,26 @@ function build() {
         "fault.c"
     ];
 
-    boot_sources = [
+    bootSources = [
         ":mdl.o"
     ];
 
-    arm_sources = [
+    armSources = [
         "armv7/archcomc.c",
         "armv7/flush.c",
         "armv7/mapping.c",
         "armv7/usermem.S"
     ];
 
-    armv7_sources = arm_sources + [
+    armv7Sources = armSources + [
         "armv7/archsupc.c"
     ];
 
-    armv6_sources = arm_sources + [
+    armv6Sources = armSources + [
         "armv6/archsupc.c"
     ];
 
-    x86_sources = [
+    x86Sources = [
         "x86/archsupc.c",
         "x86/flush.c",
         "x86/mapping.c",
@@ -72,47 +88,46 @@ function build() {
     ];
 
     if (arch == "armv7") {
-        arch_sources = armv7_sources;
+        archSources = armv7Sources;
 
     } else if (arch == "armv6") {
-        arch_sources = armv6_sources;
+        archSources = armv6Sources;
 
     } else if (arch == "x86") {
-        arch_sources = x86_sources;
+        archSources = x86Sources;
     }
 
-    if (build_arch == "armv7") {
-        build_arch_sources = armv7_sources;
+    if (mconfig.build_arch == "armv7") {
+        buildArchSources = armv7Sources;
 
-    } else if (build_arch == "armv6") {
-        build_arch_sources = armv6_sources;
+    } else if (mconfig.build_arch == "armv6") {
+        buildArchSources = armv6Sources;
 
-    } else if (build_arch == "x86") {
-        build_arch_sources = x86_sources;
+    } else if (mconfig.build_arch == "x86") {
+        buildArchSources = x86Sources;
     }
 
     lib = {
         "label": "mm",
-        "inputs": base_sources + arch_sources,
+        "inputs": baseSources + archSources,
     };
 
-    boot_lib = {
+    bootLib = {
         "label": "mmboot",
-        "inputs": boot_sources
+        "inputs": bootSources
     };
 
-    build_lib = {
+    buildLib = {
         "label": "build_mm",
         "output": "mm",
-        "inputs": base_sources + build_arch_sources,
-        "build": TRUE,
+        "inputs": baseSources + buildArchSources,
+        "build": true,
         "prefix": "build"
     };
 
-    entries = static_library(lib);
-    entries += static_library(boot_lib);
-    entries += static_library(build_lib);
+    entries = staticLibrary(lib);
+    entries += staticLibrary(bootLib);
+    entries += staticLibrary(buildLib);
     return entries;
 }
 
-return build();

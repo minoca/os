@@ -30,8 +30,19 @@ Environment:
 
 --*/
 
+from menv import staticLibrary, mconfig;
+
 function build() {
-    base_sources = [
+    var arch = mconfig.arch;
+    var archBootSources;
+    var archSources;
+    var baseSources;
+    var bootLib;
+    var bootSources;
+    var entries;
+    var lib;
+
+    baseSources = [
         "cache.c",
         "calendar.c",
         "clock.c",
@@ -50,14 +61,14 @@ function build() {
         "timer.c"
     ];
 
-    boot_sources = [
+    bootSources = [
         "boot/hmodapi.c",
         ":dbgdev.o",
         ":ns16550.o"
     ];
 
     if (arch == "armv7") {
-        arch_sources = [
+        archSources = [
             "armv7/am335int.c",
             "armv7/am335pwr.c",
             "armv7/am335tmr.c",
@@ -91,7 +102,7 @@ function build() {
             "armv7/b2709tmr.c"
         ];
 
-        arch_boot_sources = [
+        archBootSources = [
             ":armv7/archdbg.o",
             ":armv7/regacces.o",
             ":armv7/uartpl11.o",
@@ -99,7 +110,7 @@ function build() {
         ];
 
     } else if (arch == "armv6") {
-        arch_sources = [
+        archSources = [
             "armv6/archcach.c",
             "armv6/archdbg.c",
             "armv6/archintr.c",
@@ -115,14 +126,14 @@ function build() {
             "armv7/uartpl11.c",
         ];
 
-        arch_boot_sources = [
+        archBootSources = [
             ":armv6/archdbg.o",
             ":armv7/regacces.o",
             ":armv7/uartpl11.o",
         ];
 
     } else if ((arch == "x86") || (arch == "x64")) {
-        arch_sources = [
+        archSources = [
             "x86/apic.c",
             "x86/apictimr.c",
             "x86/apinit.c",
@@ -140,7 +151,7 @@ function build() {
             "x86/tsc.c"
         ];
 
-        arch_boot_sources = [
+        archBootSources = [
             ":x86/archdbg.o",
             ":x86/ioport.o",
             ":x86/regacces.o"
@@ -149,17 +160,16 @@ function build() {
 
     lib = {
         "label": "hl",
-        "inputs": base_sources + arch_sources,
+        "inputs": baseSources + archSources,
     };
 
-    boot_lib = {
+    bootLib = {
         "label": "hlboot",
-        "inputs": boot_sources + arch_boot_sources
+        "inputs": bootSources + archBootSources
     };
 
-    entries = static_library(lib);
-    entries += static_library(boot_lib);
+    entries = staticLibrary(lib);
+    entries += staticLibrary(bootLib);
     return entries;
 }
 
-return build();

@@ -25,195 +25,315 @@ Environment:
 
 --*/
 
-function build() {
-    cflags_line = "$BASE_CPPFLAGS $CPPFLAGS $BASE_CFLAGS $CFLAGS " +
-                  "-MMD -MF $OUT.d ";
+import menv;
+from menv import setupEnv, group;
 
-    cc = {
+function build() {
+    var allGroup;
+    var buildCflagsLine = "$BUILD_BASE_CPPFLAGS $CPPFLAGS " +
+                          "$BUILD_BASE_CFLAGS $CFLAGS -MMD -MF $OUT.d ";
+
+    var buildAsflagsLine = buildCflagsLine +
+                           "$BUILD_BASE_ASFLAGS $ASFLAGS ";
+
+    var buildLdflagsLine = "-Wl,-Map=$OUT.map $BUILD_BASE_LDFLAGS $LDFLAGS ";
+    var cflagsLine = "$BASE_CPPFLAGS $CPPFLAGS $BASE_CFLAGS $CFLAGS "
+                     "-MMD -MF $OUT.d ";
+
+    var asflagsLine = cflagsLine + "$BASE_ASFLAGS $ASFLAGS ";
+    var entries;
+    var ldflagsLine = "-Wl,-Map=$OUT.map $BASE_LDFLAGS $LDFLAGS ";
+    var mconfig;
+    var symlinkCommand = "ln -sf $SYMLINK_IN $OUT";
+    var buildLdLine = "$BUILD_CC " + buildLdflagsLine +
+                      "-o $OUT $IN -Bdynamic $DYNLIBS";
+
+    var tools;
+
+    setupEnv();
+    mconfig = menv.mconfig;
+    if (mconfig.build_os == "Windows") {
+        symlinkCommand = "cp $IN $OUT";
+    }
+
+    //
+    // On Mac OS there shouldn't be a -Bdynamic flag to indicate the start of
+    // the dynamic libraries section.
+    //
+
+    if (mconfig.build_os == "Darwin") {
+        buildLdLine = "$BUILD_CC " + buildLdflagsLine +
+                      "-o $OUT $IN $DYNLIBS";
+    }
+
+    //
+    // Define the tools used.
+    //
+
+    tools = [
+
+    //
+    // C compiler for target binaries.
+    //
+
+    {
         "type": "tool",
         "name": "cc",
-        "command": "$CC " + cflags_line + "-c -o $OUT $IN",
+        "command": "$CC " + cflagsLine + "-c -o $OUT $IN",
         "description": "Compiling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
-    };
+    },
 
-    cxx = {
+    //
+    // C++ compiler for target binaries.
+    //
+
+    {
         "type": "tool",
         "name": "cxx",
-        "command": "$CXX " + cflags_line + "-c -o $OUT $IN",
+        "command": "$CXX " + cflagsLine + "-c -o $OUT $IN",
         "description": "Compiling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
-    };
+    },
 
-    ldflags_line = "-Wl,-Map=$OUT.map $BASE_LDFLAGS $LDFLAGS ";
-    ld = {
+    //
+    // Linker for target binaries.
+    //
+
+    {
         "type": "tool",
         "name": "ld",
-        "command": "$CC " + ldflags_line + "-o $OUT $IN -Bdynamic $DYNLIBS",
+        "command": "$CC " + ldflagsLine + "-o $OUT $IN -Bdynamic $DYNLIBS",
         "description": "Linking - $OUT",
-    };
+    },
 
-    ar = {
+    //
+    // Static archiver for target binaries.
+    //
+
+    {
         "type": "tool",
         "name": "ar",
         "command": "$AR rcs $OUT $IN",
         "description": "Building Library - $OUT",
-    };
+    },
 
-    asflags_line = cflags_line + "$BASE_ASFLAGS $ASFLAGS ";
-    as = {
+    //
+    // Assembler for target binaries.
+    //
+
+    {
         "type": "tool",
         "name": "as",
-        "command": "$CC " + asflags_line + "-c -o $OUT $IN",
+        "command": "$CC " + asflagsLine + "-c -o $OUT $IN",
         "description": "Assembling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
-    };
+    },
 
-    objcopy = {
+    //
+    // Objcopy for target binaries.
+    //
+
+    {
         "type": "tool",
         "name": "objcopy",
         "command": "$SHELL -c \"cd `dirname $IN` && $OBJCOPY $OBJCOPY_FLAGS `basename $IN` $OUT\"",
         "description": "Objectifying - $IN"
-    };
+    },
 
-    strip_tool = {
+    //
+    // Strip for target binaries.
+    //
+
+    {
         "type": "tool",
         "name": "strip",
         "command": "$STRIP $STRIP_FLAGS -o $OUT $IN",
         "description": "Stripping - $OUT",
-    };
+    },
 
-    build_cflags_line = "$BUILD_BASE_CPPFLAGS $CPPFLAGS $BUILD_BASE_CFLAGS " +
-                        "$CFLAGS -MMD -MF $OUT.d ";
+    //
+    // C compiler for the build machine.
+    //
 
-    build_cc = {
+    {
         "type": "tool",
         "name": "build_cc",
-        "command": "$BUILD_CC " + build_cflags_line + "-c -o $OUT $IN",
+        "command": "$BUILD_CC " + buildCflagsLine + "-c -o $OUT $IN",
         "description": "Compiling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
-    };
+    },
 
-    build_cxx = {
+    //
+    // C++ compiler for the build machine.
+    //
+
+    {
         "type": "tool",
         "name": "build_cxx",
-        "command": "$BUILD_CXX " + build_cflags_line + "-c -o $OUT $IN",
+        "command": "$BUILD_CXX " + buildCflagsLine + "-c -o $OUT $IN",
         "description": "Compiling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
-    };
+    },
 
-    build_ldflags_line = "-Wl,-Map=$OUT.map $BUILD_BASE_LDFLAGS $LDFLAGS ";
-    build_ld = {
+    //
+    // Linker for the build machine.
+    //
+
+    {
         "type": "tool",
         "name": "build_ld",
-        "command": "$BUILD_CC " + build_ldflags_line + "-o $OUT $IN -Bdynamic $DYNLIBS",
+        "command": "$BUILD_CC " + buildLdflagsLine + "-o $OUT $IN -Bdynamic $DYNLIBS",
         "description": "Linking - $OUT",
-    };
+    },
 
-    build_ar = {
+    //
+    // Static archiver for the build machine.
+    //
+
+    {
         "type": "tool",
         "name": "build_ar",
         "command": "$BUILD_AR rcs $OUT $IN",
         "description": "Building Library - $OUT",
-    };
+    },
 
-    build_asflags_line = build_cflags_line + "$BUILD_BASE_ASFLAGS $ASFLAGS ";
-    build_as = {
+    //
+    // Assembler for the build machine.
+    //
+
+    {
         "type": "tool",
         "name": "build_as",
-        "command": "$BUILD_CC " + build_asflags_line + "-c -o $OUT $IN",
+        "command": "$BUILD_CC " + buildAsflagsLine + "-c -o $OUT $IN",
         "description": "Assembling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
-    };
+    },
 
-    build_strip = {
+    //
+    // Strip for the build machine.
+    //
+
+    {
         "type": "tool",
         "name": "build_strip",
         "command": "$BUILD_STRIP $STRIP_FLAGS -o $OUT $IN",
         "description": "Stripping - $OUT",
-    };
+    },
 
-    build_rcc = {
+    //
+    // Windows resource compiler for the build machine.
+    //
+
+    {
         "type": "tool",
         "name": "build_rcc",
         "command": "$RCC -o $OUT $IN",
         "description": "Compiling Resource - $IN",
-    };
+    },
 
-    iasl = {
+    //
+    // ACPI assembler used to build firmware images.
+    //
+
+    {
         "type": "tool",
         "name": "iasl",
         "command": "$SHELL -c \"$IASL $IASL_FLAGS -p $OUT $IN > $OUT.stdout\"",
         "description": "Compiling ASL - $IN"
-    };
+    },
 
-    cp = {
+    //
+    // Copy files from one location to another.
+    //
+
+    {
         "type": "tool",
         "name": "copy",
         "command": "$SHELL -c \"cp $CPFLAGS $IN $OUT && [ -z $CHMOD_FLAGS ] || chmod $CHMOD_FLAGS $OUT\"",
         "description": "Copying - $IN -> $OUT"
-    };
+    },
 
-    if (build_os == "Windows") {
-        symlink_command = "cp $IN $OUT";
+    //
+    // Create symbolic links (or just copy on Windows).
+    //
 
-    } else {
-        symlink_command = "ln -sf $SYMLINK_IN $OUT";
-    }
-
-    symlink = {
+    {
         "type": "tool",
         "name": "symlink",
-        "command": symlink_command,
+        "command": symlinkCommand,
         "description": "Symlinking - $OUT"
-    };
+    },
 
-    stamp = {
+    //
+    // Touch a file with the date.
+    //
+
+    {
         "type": "tool",
         "name": "stamp",
         "command": "$SHELL -c \"date > $OUT\"",
         "description": "Stamp - $OUT"
-    };
+    },
 
-    touch = {
+    //
+    // Touch to create a timestamped empty file.
+    //
+
+    {
         "type": "tool",
         "name": "touch",
         "command": "touch $OUT",
         "description": "Touch - $OUT"
-    };
+    },
 
-    gen_version = {
+    //
+    // Generate a version.h.
+    //
+
+    {
         "type": "tool",
         "name": "gen_version",
-        "command": "$SHELL $//tasks/build/print_version.sh $OUT $FORM $MAJOR $MINOR $REVISION $RELEASE $SERIAL $BUILD_STRING",
+        "command": "$SHELL $S/tasks/build/print_version.sh $OUT $FORM $MAJOR $MINOR $REVISION $RELEASE $SERIAL $BUILD_STRING",
         "description": "Versioning - $OUT"
-    };
+    }];
 
-    config_entry = {
-        "type": "global_config",
-        "config": global_config
-    };
-
-    entries = [cc, cxx, ld, ar, as, objcopy, strip_tool,
-               build_cc, build_cxx, build_ld, build_ar, build_as, build_rcc,
-               build_strip, iasl, cp, symlink, stamp, touch, gen_version,
-               config_entry];
-
-    all = [
-        "//lib:test_apps",
-        "//images:"
+    entries = [
+        "lib/basevid:basevid",
+        "lib/basevid:build_basevid",
+        "lib/bconflib:bconf",
+        "lib/bconflib:build_bconf",
+        "lib/crypto:crypto",
+        "lib/crypto:build_crypto",
+        "lib/crypto/ssl:ssl",
+        "lib/crypto/testcryp:build_testcryp",
+        "lib/rtl/testrtl:build_testrtl",
+        "lib/fatlib:fat",
+        "lib/fatlib/fattest:build_fattest",
+        "lib/im:im",
+        "lib/im:build_im",
+        "lib/partlib:partlib",
+        "lib/partlib:build_partlib",
+        "lib/termlib:termlib",
+        "lib/termlib:build_termlib",
+        "lib/yy:yy",
+        "lib/yy:build_yy",
+        "lib/yy/yytest:build_yytest",
+        "lib/yy/gen:yygen",
+        "lib/yy/gen:build_yygen",
+        "lib:test_apps",
+        "kernel:kernel"
     ];
 
-    all_group = group("all", all);
-    all_group[0]["default"] = TRUE;
-    entries += all_group;
+    allGroup = group("all", entries);
+    allGroup[0].default = true;
+    entries = allGroup + tools;
     return entries;
 }
 
-return build();

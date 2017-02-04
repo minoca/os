@@ -27,7 +27,14 @@ Environment:
 
 --*/
 
+from menv import staticLibrary;
+
 function build() {
+    var buildLib;
+    var entries;
+    var lib;
+    var sources;
+
     sources = [
         "fontdata.c",
         "textvid.c"
@@ -38,17 +45,16 @@ function build() {
         "inputs": sources,
     };
 
-    build_lib = {
+    buildLib = {
         "label": "build_basevid",
         "output": "basevid",
         "inputs": sources,
-        "build": TRUE,
+        "build": true,
         "prefix": "build"
     };
 
-    entries = static_library(lib);
-    entries += static_library(build_lib);
+    entries = staticLibrary(lib);
+    entries += staticLibrary(buildLib);
     return entries;
 }
 
-return build();

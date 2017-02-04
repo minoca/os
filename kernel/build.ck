@@ -25,14 +25,32 @@ Environment:
 
 --*/
 
+from menv import staticLibrary, copy, driver, createVersionHeader, mconfig;
+
 function build() {
-    base_sources = [
+    var arch = mconfig.arch;
+    var archSources;
+    var armSources;
+    var baseSources;
+    var binroot = mconfig.binroot;
+    var bootArchLib;
+    var bootArchSources;
+    var entries;
+    var kernel;
+    var kernelConfig;
+    var kernelLibs;
+    var versionConfig;
+    var versionFile;
+    var versionMajor;
+    var versionMinor;
+    var versionRevision;
+
+    baseSources = [
         "init.c"
     ];
 
-    boot_arch_sources = [];
     if ((arch == "armv7") || (arch == "armv6")) {
-        arm_sources = [
+        armSources = [
             "armv7/commsup.S",
             "armv7/inttable.S",
             "armv7/prochw.c",
@@ -41,22 +59,22 @@ function build() {
             "armv7/vfp.c"
         ];
 
-        boot_arch_sources = [":armv7/sstep.o"];
+        bootArchSources = [":armv7/sstep.o"];
         if (arch == "armv7") {
-            arch_sources = arm_sources + [
+            archSources = armSources + [
                 "armv7/archsup.S",
                 "armv7/archsupc.c"
             ];
 
         } else {
-            arch_sources = arm_sources + [
+            archSources = armSources + [
                 "armv6/archsup.S",
                 "armv6/archsupc.c"
             ];
         }
 
     } else if (arch == "x86") {
-        arch_sources = [
+        archSources = [
             "x86/archsup.S",
             "x86/archsupc.c",
             "x86/prochw.c",
@@ -64,45 +82,45 @@ function build() {
         ];
     }
 
-    kernel_libs = [
-        "//kernel/acpi:acpi",
-        "//lib/crypto:crypto",
-        "//kernel/ob:ob",
-        "//lib/rtl/base:basertl",
-        "//lib/rtl/kmode:krtl",
-        "//lib/im:im",
-        "//lib/basevid:basevid",
-        "//lib/termlib:termlib",
-        "//kernel/kd:kd",
-        "//kernel/kd/kdusb:kdusb",
-        "//kernel/ps:ps",
-        "//kernel/ke:ke",
-        "//kernel/io:io",
-        "//kernel/hl:hl",
-        "//kernel/mm:mm",
-        "//kernel/sp:sp"
+    kernelLibs = [
+        "kernel/acpi:acpi",
+        "lib/crypto:crypto",
+        "kernel/ob:ob",
+        "lib/rtl/base:basertl",
+        "lib/rtl/kmode:krtl",
+        "lib/im:im",
+        "lib/basevid:basevid",
+        "lib/termlib:termlib",
+        "kernel/kd:kd",
+        "kernel/kd/kdusb:kdusb",
+        "kernel/ps:ps",
+        "kernel/ke:ke",
+        "kernel/io:io",
+        "kernel/hl:hl",
+        "kernel/mm:mm",
+        "kernel/sp:sp"
     ];
 
-    kernel_config = {
+    kernelConfig = {
         "LDFLAGS": ["-Wl,--whole-archive"]
     };
 
     kernel = {
         "label": "kernel",
-        "inputs": base_sources + arch_sources + kernel_libs,
+        "inputs": baseSources + archSources + kernelLibs,
         "implicit": [":kernel-version"],
         "entry": "KepStartSystem",
-        "config": kernel_config
+        "config": kernelConfig
     };
 
-    boot_arch_lib = {
+    bootArchLib = {
         "label": "archboot",
-        "inputs": boot_arch_sources
+        "inputs": bootArchSources
     };
 
     entries = driver(kernel);
-    if (boot_arch_sources) {
-        entries += static_library(boot_arch_lib);
+    if (bootArchSources) {
+        entries += staticLibrary(bootArchLib);
     }
 
     //
@@ -137,35 +155,33 @@ function build() {
     // Create the version header.
     //
 
-    version_major = "0";
-    version_minor = "2";
-    version_revision = "0";
-    entries += create_version_header(version_major,
-                                     version_minor,
-                                     version_revision);
+    versionMajor = "0";
+    versionMinor = "3";
+    versionRevision = "1";
+    entries += createVersionHeader(versionMajor,
+                                   versionMinor,
+                                   versionRevision);
 
     //
     // Also create a version file in the binroot.
     //
 
-    version_config = {
-        "MAJOR": version_major,
-        "MINOR": version_minor,
-        "REVISION": version_revision,
+    versionConfig = {
+        "MAJOR": versionMajor,
+        "MINOR": versionMinor,
+        "REVISION": versionRevision,
         "FORM": "simple"
     };
 
-    version_file = {
+    versionFile = {
         "type": "target",
         "label": "kernel-version",
         "output": binroot + "/kernel-version",
         "tool": "gen_version",
-        "config": version_config
+        "config": versionConfig
     };
 
-    entries += [version_file];
+    entries += [versionFile];
     return entries;
 }
-
-return build();
 

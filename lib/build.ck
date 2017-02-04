@@ -26,17 +26,21 @@ Environment:
 
 --*/
 
+from menv import group;
+
 function build() {
-    test_apps = [
-        "//lib/crypto/testcryp:",
-        "//lib/fatlib/fattest:",
-        "//lib/rtl/testrtl:",
-        "//lib/yy/yytest:",
-        "//kernel/mm/testmm:",
+    var entries;
+    var testApps;
+
+    testApps = [
+        "lib/crypto/testcryp:",
+        "lib/fatlib/fattest:",
+        "lib/rtl/testrtl:",
+        "lib/yy/yytest:",
+        "kernel/mm/testmm:",
     ];
 
-    entries = group("test_apps", test_apps);
+    entries = group("test_apps", testApps);
     return entries;
 }
 
-return build();

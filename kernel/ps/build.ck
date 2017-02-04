@@ -27,8 +27,16 @@ Environment:
 
 --*/
 
+from menv import staticLibrary, mconfig;
+
 function build() {
-    base_sources = [
+    var arch = mconfig.arch;
+    var archSources;
+    var baseSources;
+    var entries;
+    var lib;
+
+    baseSources = [
         "env.c",
         "info.c",
         "init.c",
@@ -44,23 +52,22 @@ function build() {
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        arch_sources = [
+        archSources = [
             "armv7/psarch.c"
         ];
 
     } else if (arch == "x86") {
-        arch_sources = [
+        archSources = [
             "x86/psarch.c"
         ];
     }
 
     lib = {
         "label": "ps",
-        "inputs": base_sources + arch_sources,
+        "inputs": baseSources + archSources,
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
     return entries;
 }
 
-return build();

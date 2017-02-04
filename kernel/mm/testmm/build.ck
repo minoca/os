@@ -26,7 +26,14 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var buildApp;
+    var buildLibs;
+    var entries;
+    var sources;
+
     sources = [
         "stubs.c",
         "testmm.c",
@@ -34,23 +41,21 @@ function build() {
         "testuva.c"
     ];
 
-    build_libs = [
-        "//kernel/mm:build_mm",
-        "//lib/rtl/rtlc:build_rtlc",
-        "//lib/rtl/base:build_basertl"
+    buildLibs = [
+        "kernel/mm:build_mm",
+        "lib/rtl/rtlc:build_rtlc",
+        "lib/rtl/base:build_basertl"
     ];
 
-    build_app = {
+    buildApp = {
         "label": "build_testmm",
         "output": "testmm",
-        "inputs": sources + build_libs,
-        "build": TRUE,
+        "inputs": sources + buildLibs,
+        "build": true,
         "prefix": "build"
     };
 
-    entries = application(build_app);
+    entries = application(buildApp);
     return entries;
 }
-
-return build();
 

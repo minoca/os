@@ -27,7 +27,15 @@ Environment:
 
 --*/
 
+from menv import staticLibrary, addConfig, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var archSources;
+    var entries;
+    var lib;
+    var sources;
+
     sources = [
         "crash.c",
         "crashdmp.c",
@@ -52,7 +60,7 @@ function build() {
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        arch_sources = [
+        archSources = [
             "armv7/archinit.c",
             "armv7/ctxswap.S",
             "armv7/ctxswapc.c",
@@ -61,7 +69,7 @@ function build() {
         ];
 
     } else if ((arch == "x86") || (arch == "x64")) {
-        arch_sources = [
+        archSources = [
             "x86/archinit.c",
             "x86/ctxswap.S",
             "x86/ctxswapc.c",
@@ -72,10 +80,10 @@ function build() {
 
     lib = {
         "label": "ke",
-        "inputs": sources + arch_sources,
+        "inputs": sources + archSources,
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
 
     //
     // Add the include and dependency for version.c.
@@ -83,8 +91,8 @@ function build() {
 
     for (entry in entries) {
         if (entry["output"] == "version.o") {
-            add_config(entry, "CPPFLAGS", "-I$^/kernel");
-            entry["implicit"] = ["//kernel:version.h", "//.git/HEAD"];
+            addConfig(entry, "CPPFLAGS", "-I$O/kernel/ke");
+            entry["implicit"] = ["kernel:version.h", "$S/.git/index"];
             break;
         }
     }
@@ -92,4 +100,3 @@ function build() {
     return entries;
 }
 
-return build();

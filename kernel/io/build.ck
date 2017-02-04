@@ -28,8 +28,16 @@ Environment:
 
 --*/
 
+from menv import staticLibrary, mconfig;
+
 function build() {
-    base_sources = [
+    var arch = mconfig.arch;
+    var archSources;
+    var baseSources;
+    var entries;
+    var lib;
+
+    baseSources = [
         "arb.c",
         "cachedio.c",
         "cstate.c",
@@ -68,13 +76,13 @@ function build() {
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        arch_sources = [
+        archSources = [
             "armv7/archio.c",
             "armv7/archpm.c"
         ];
 
     } else if ((arch == "x86") || (arch == "x64")) {
-        arch_sources = [
+        archSources = [
             "x86/archio.c",
             "x86/archpm.c",
             "x86/intelcst.c"
@@ -83,11 +91,10 @@ function build() {
 
     lib = {
         "label": "io",
-        "inputs": base_sources + arch_sources,
+        "inputs": baseSources + archSources,
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
     return entries;
 }
 
-return build();

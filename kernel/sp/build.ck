@@ -26,30 +26,37 @@ Environment:
 
 --*/
 
+from menv import staticLibrary, mconfig;
+
 function build() {
-    base_sources = [
+    var arch = mconfig.arch;
+    var archSources;
+    var baseSources;
+    var entries;
+    var lib;
+
+    baseSources = [
         "info.c",
         "profiler.c"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        arch_sources = [
+        archSources = [
             "armv7/archprof.c"
         ];
 
     } else if (arch == "x86") {
-        arch_sources = [
+        archSources = [
             "x86/archprof.c"
         ];
     }
 
     lib = {
         "label": "sp",
-        "inputs": base_sources + arch_sources,
+        "inputs": baseSources + archSources,
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
     return entries;
 }
 
-return build();

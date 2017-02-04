@@ -26,29 +26,34 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var buildLibs;
+    var buildApp;
+    var entries;
+    var sources;
+
     sources = [
         "testcryp.c"
     ];
 
-    build_libs = [
-        "//lib/crypto/ssl:build_ssl",
-        "//lib/crypto:build_crypto",
-        "//lib/rtl/rtlc:build_rtlc",
-        "//lib/rtl/base:build_basertl"
+    buildLibs = [
+        "lib/crypto/ssl:build_ssl",
+        "lib/crypto:build_crypto",
+        "lib/rtl/rtlc:build_rtlc",
+        "lib/rtl/base:build_basertl"
     ];
 
-    build_app = {
+    buildApp = {
         "label": "build_testcryp",
         "output": "testcryp",
-        "inputs": sources + build_libs,
-        "build": TRUE,
+        "inputs": sources + buildLibs,
+        "build": true,
         "prefix": "build"
     };
 
-    entries = application(build_app);
+    entries = application(buildApp);
     return entries;
 }
-
-return build();
 

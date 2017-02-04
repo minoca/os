@@ -25,27 +25,33 @@ Environment:
 
 --*/
 
+from menv import staticLibrary;
+
 function build() {
+    var bconfLib;
+    var buildBconfLib;
+    var entries;
+    var sources;
+
     sources = [
         "bconf.c"
     ];
 
-    bconf_lib = {
+    bconfLib = {
         "label": "bconf",
         "inputs": sources,
     };
 
-    build_bconf_lib = {
+    buildBconfLib = {
         "label": "build_bconf",
         "output": "bconf",
         "inputs": sources,
-        "build": TRUE,
+        "build": true,
         "prefix": "build"
     };
 
-    entries = static_library(bconf_lib);
-    entries += static_library(build_bconf_lib);
+    entries = staticLibrary(bconfLib);
+    entries += staticLibrary(buildBconfLib);
     return entries;
 }
 
-return build();
