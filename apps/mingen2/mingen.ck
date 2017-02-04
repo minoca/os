@@ -204,6 +204,7 @@ var usage =
 var config = {
     "build_os": os.system,
     "is_unix": os.isUnix,
+    "build_machine": os.machine,
     "debug": false,
     "format": null,
     "generator": true,
@@ -213,7 +214,6 @@ var config = {
     "build_module_name": "build",
     "default_target": ":",
     "targets": [],
-    "source_root": null,
     "input_variable": "S",
     "output_variable": "O",
     "vars": {},
@@ -259,6 +259,7 @@ Return Value:
 
     var appOptions = gnuGetopt(argv[1...-1], shortOptions, longOptions);
     var args = appOptions[1];
+    var currentDirectory = getcwd().replace("\\", "/", -1);
     var entries = {};
     var name;
     var value;
@@ -326,20 +327,15 @@ Return Value:
 
     config.targets = args;
     config.argv = argv;
-
-    //
-    // Add the input directory to the module search path, or assume that the
-    // world starts at the current directory.
-    //
-
-    if (config.input) {
-        Core.setModulePath(Core.modulePath().append(config.input));
-
-    } else {
-        config.input = getcwd();
+    if (!config.input) {
+        config.input = currentDirectory;
     }
 
-    config.source_root = config.input;
+    Core.setModulePath([config.input] + Core.modulePath());
+    if (config.debug) {
+        Core.print("Module search path: " + Core.modulePath().__str());
+    }
+
     _loadProjectRoot();
     config.format ?= "make";
     _processEntries();
@@ -401,15 +397,6 @@ Return Value:
     module.run();
     modules[""] = module;
     scripts[config.build_module_name + ".ck"] = true;
-
-    //
-    // Set the current directory as the output if none was specified.
-    //
-
-    if (!config.output) {
-        config.output = getcwd();
-    }
-
     if (config.debug) {
         Core.print("Initial Config:");
         for (key in config) {
@@ -422,6 +409,10 @@ Return Value:
     build = module.build;
     entries = build();
     _validateEntries("", entries);
+    if (!config.output) {
+        config.output = config.input;
+    }
+
     return;
 }
 
@@ -1020,8 +1011,11 @@ Return Value:
 
 {
 
-    var description;
     var name = entry.get("label");
+
+    if (moduleName == "") {
+        moduleName = "<root>";
+    }
 
     if (!name) {
         name = entry.get("output");

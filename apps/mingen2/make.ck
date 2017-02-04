@@ -227,6 +227,9 @@ Return Value:
     var tools;
 
     makefilePath = config.output + "/Makefile";
+    makefilePath = makefilePath.template({config.input_variable: config.input},
+                                         0);
+
     if (config.verbose) {
         Core.print("Creating %s" % makefilePath);
     }
@@ -615,7 +618,12 @@ Return Value:
 
 {
 
+    var argv0 = config.argv[0];
     var args;
+
+    if (argv0.contains(".ck")) {
+        argv0 = "chalk " + argv0;
+    }
 
     //
     // Putting input, output, and format first will cause later specifications
@@ -623,7 +631,7 @@ Return Value:
     //
 
     file.write("%s --input=\"$(%s)\" --output=\"$(%s)\" --format=%s" %
-               [config.argv[0],
+               [argv0,
                 config.input_variable,
                 config.output_variable,
                 "make"]);
