@@ -1550,9 +1550,11 @@ Return Value:
     // hidden exception local. The compiler will emit a pop to remove that
     // scope, but by jumping directly to the finally case (which is also
     // executed when no exception occured), execution flow skips that pop.
-    // Add an explicit pop now to remove the hidden exception local.
+    // Add an explicit pop now to remove the hidden exception local. But tweak
+    // the stack slot count to avoid counting it twice.
     //
 
+    Compiler->StackSlots += 1;
     CkpEmitOp(Compiler, CkOpPop);
 
     //
@@ -1706,6 +1708,7 @@ Return Value:
     //
 
     CkpPushScope(Compiler);
+    Compiler->StackSlots += 1;
     ExceptionLocal = CkpAddLocal(Compiler, " e", 2);
     PreviousFinallyOffset = Compiler->FinallyOffset;
     Compiler->FinallyOffset = FinallyOffset - 1;
