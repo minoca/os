@@ -371,7 +371,7 @@ Return Value:
     Entry->Value = CK_TRUE_VALUE;
     Dict->Count -= 1;
     if ((Dict->Capacity > DICT_MIN_CAPACITY) &&
-        (Dict->Count /
+        (Dict->Count <
          (Dict->Capacity / DICT_SHRINK_FACTOR * DICT_LOAD_FACTOR / 1024))) {
 
         if (CK_IS_OBJECT(Value)) {
