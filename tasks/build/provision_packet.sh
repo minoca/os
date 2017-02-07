@@ -26,14 +26,10 @@
 
 set -xe
 
-##
-## TODO: Check these paths.
-##
-
-wget https://www.minocacorp.com/downloads/packet/packet.img
-wget https://www.minocacorp.com/downloads/packet/msetup.alpine
+wget https://www.minocacorp.com/download/packet/packet.img
+wget https://www.minocacorp.com/download/packet/msetup.alpine
 chmod +x ./msetup.alpine
 mv packet.img install.img
-./msetup -d/dev/sda
+./msetup.alpine -d/dev/sda
 : Everythings all set. Hit reboot to boot into Minoca OS.
 
