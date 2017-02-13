@@ -537,17 +537,32 @@ Return Value:
 
 {
 
-    PCK_LIST Destination;
-    PCK_LIST Source;
+    PCK_LIST Left;
+    PCK_LIST Result;
+    PCK_LIST Right;
 
-    Destination = CK_AS_LIST(Arguments[0]);
+    Left = CK_AS_LIST(Arguments[0]);
     if (!CK_IS_LIST(Arguments[1])) {
         CkpRuntimeError(Vm, "TypeError", "Expected a list");
         return FALSE;
     }
 
-    Source = CK_AS_LIST(Arguments[1]);
-    CkpListConcatenate(Vm, Destination, Source);
+    Right = CK_AS_LIST(Arguments[1]);
+    Result = CkpListConcatenate(Vm, NULL, Left);
+    if (Result == NULL) {
+        return FALSE;
+    }
+
+    //
+    // Move the result to the stack to avoid it getting released. The left
+    // list is done with anyway.
+    //
+
+    CK_OBJECT_VALUE(Arguments[0], Result);
+    if (CkpListConcatenate(Vm, Result, Right) == NULL) {
+        return FALSE;
+    }
+
     return TRUE;
 }
 
