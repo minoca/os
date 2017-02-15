@@ -29,6 +29,20 @@ Author:
 #include <minoca/lib/chalk.h>
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// The windows version of mkdir doesn't have a permissions argument.
+//
+
+#ifdef _WIN32
+
+#define mkdir(_Path, _Permissions) mkdir(_Path)
+
+#endif
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 

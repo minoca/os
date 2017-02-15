@@ -126,6 +126,11 @@ CkpOsSetenv (
     );
 
 VOID
+CkpOsMkdir (
+    PCK_VM Vm
+    );
+
+VOID
 CkpOsCreateStatDict (
     PCK_VM Vm,
     struct stat *Stat
@@ -177,6 +182,7 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "dirname", CkpOsDirname, 1},
     {CkTypeFunction, "getenv", CkpOsGetenv, 1},
     {CkTypeFunction, "setenv", CkpOsGetenv, 2},
+    {CkTypeFunction, "mkdir", CkpOsMkdir, 2},
     {CkTypeInvalid, NULL, NULL, 0}
 };
 
@@ -898,6 +904,50 @@ Return Value:
     }
 
     CkReturnNull(Vm);
+    return;
+}
+
+VOID
+CkpOsMkdir (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a directory. It takes two arguments, the path of the
+    directory to create and the permissions to apply to the directory.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+
+    //
+    // The function takes a path and a set of permissions.
+    //
+
+    if (!CkCheckArguments(Vm, 2, CkTypeString, CkTypeInteger)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    if (mkdir(Path, CkGetInteger(Vm, 2)) != 0) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkReturnInteger(Vm, 0);
     return;
 }
 
