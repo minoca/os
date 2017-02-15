@@ -25,15 +25,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "uhci";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "uhci";
+    var sources;
+
     sources = [
         "uhci.c",
         "uhcihc.c"
     ];
 
     dynlibs = [
-        "//drivers/usb/usbcore:usbcore"
+        "drivers/usb/usbcore:usbcore"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

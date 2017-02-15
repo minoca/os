@@ -26,34 +26,43 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var app;
+    var entries;
+    var includes;
+    var libs;
+    var sources;
+    var tool;
+
     sources = [
         "fwbuild.c",
     ];
 
     libs = [
-        "//lib/crypto/ssl:build_ssl",
-        "//lib/crypto:build_crypto",
-        "//lib/rtl/base:build_basertl",
-        "//lib/rtl/rtlc:build_rtlc",
+        "lib/crypto/ssl:build_ssl",
+        "lib/crypto:build_crypto",
+        "lib/rtl/base:build_basertl",
+        "lib/rtl/rtlc:build_rtlc",
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
     app = {
         "label": "veyrnfwb",
         "inputs": sources + libs,
         "includes": includes,
-        "build": TRUE
+        "build": true
     };
 
     entries = application(app);
     tool = {
         "type": "tool",
         "name": "veyrnfwb",
-        "command": "$^//uefi/plat/veyron/fwbuild/veyrnfwb $TEXT_ADDRESS $IN $OUT",
+        "command": "$O/uefi/plat/veyron/fwbuild/veyrnfwb $TEXT_ADDRESS $IN $OUT",
         "description": "Creating Verified Boot Image - $OUT"
     };
 
@@ -61,4 +70,3 @@ function build() {
     return entries;
 }
 
-return build();

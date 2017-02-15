@@ -25,9 +25,16 @@ Environment:
 
 --*/
 
+from menv import addConfig, driver;
+
 function build() {
-    name = "am3soc";
-    fw_name = "am3cm3fw";
+    var drv;
+    var entries;
+    var fwName;
+    var name = "am3soc";
+    var sources;
+
+    fwName = "am3cm3fw";
     sources = [
         "am3soc.c",
         "am3cm3fw.S",
@@ -41,7 +48,13 @@ function build() {
     };
 
     entries = driver(drv);
+    for (entry in entries) {
+        if ((entry.get("output")) && (entry.output.endsWith("am3cm3fw.o"))) {
+            addConfig(entry, "CPPFLAGS", "-I$S/drivers/plat/ti/am3soc");
+            break;
+        }
+    }
+
     return entries;
 }
 
-return build();

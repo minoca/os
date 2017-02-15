@@ -28,23 +28,28 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
-    boot_apps = [
-        "//boot/bootman:bootmefi.efi",
-        "//boot/loader:loadefi"
+    var arch = mconfig.arch;
+    var bootApps;
+    var entries;
+
+    bootApps = [
+        "boot/bootman:bootmefi.efi",
+        "boot/loader:loadefi"
     ];
 
     if (arch == "x86") {
-        boot_apps += [
-            "//boot/bootman:bootman.bin",
-            "//boot/fatboot:fatboot.bin",
-            "//boot/loader:loader",
-            "//boot/mbr:mbr.bin"
+        bootApps += [
+            "boot/bootman:bootman.bin",
+            "boot/fatboot:fatboot.bin",
+            "boot/loader:loader",
+            "boot/mbr:mbr.bin"
         ];
     }
 
-    entries = group("boot_apps", boot_apps);
+    entries = group("boot_apps", bootApps);
     return entries;
 }
 
-return build();

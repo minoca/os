@@ -28,36 +28,46 @@ Environment:
 
 --*/
 
+from menv import executable, flattenedBinary;
+
 function build() {
+    var entries;
+    var flattened;
+    var image;
+    var linkConfig;
+    var linkLdflags;
+    var includes;
+    var sources;
+
     sources = [
         "vbr.S",
         "fatboot.c",
         "prochw.c",
-        "//boot/lib:x86/archsup.o",
-        "//boot/lib:pcat/realmode.o",
-        "//boot/lib:pcat/realmexe.o"
+        "boot/lib:x86/archsup.o",
+        "boot/lib:pcat/realmode.o",
+        "boot/lib:pcat/realmexe.o"
     ];
 
     includes = [
-        "$//boot/lib/include",
-        "$//boot/lib/pcat"
+        "$S/boot/lib/include",
+        "$S/boot/lib/pcat"
     ];
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-Wl,-zmax-page-size=1",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
     image = {
         "label": "fatboot.elf",
         "inputs": sources,
         "includes": includes,
-        "config": link_config,
+        "config": linkConfig,
         "text_address": "0x7C00",
     };
 
@@ -71,13 +81,12 @@ function build() {
     flattened = {
         "label": "fatboot.bin",
         "inputs": [":fatboot.elf"],
-        "binplace": TRUE,
-        "nostrip": TRUE
+        "binplace": true,
+        "nostrip": true
     };
 
-    flattened = flattened_binary(flattened);
+    flattened = flattenedBinary(flattened);
     entries += flattened;
     return entries;
 }
 
-return build();

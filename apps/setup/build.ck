@@ -25,14 +25,34 @@ Environment:
 
 --*/
 
+from menv import application, copy, mconfig;
+
 function build() {
-    common_sources = [
+    var app;
+    var buildApp;
+    var buildConfig;
+    var buildIncludes;
+    var buildLibs;
+    var buildOs = mconfig.build_os;
+    var buildSources;
+    var commonSources;
+    var entries;
+    var imagePool;
+    var minocaSources;
+    var setupTool;
+    var targetDynlibs;
+    var targetIncludes;
+    var targetLibs;
+    var targetSources;
+    var uosSources;
+    var win32Sources;
+
+    commonSources = [
         "cache.c",
-        "config.S",
+        "config.c",
         "disk.c",
         "fatdev.c",
         "fileio.c",
-        "indat.c",
         "partio.c",
         "plat.c",
         "setup.c",
@@ -40,19 +60,19 @@ function build() {
         "util.c"
     ];
 
-    minoca_sources = [
+    minocaSources = [
         "minoca/io.c",
         "minoca/misc.c",
         "minoca/part.c"
     ];
 
-    uos_sources = [
+    uosSources = [
         "uos/io.c",
         "uos/misc.c",
         "uos/part.c"
     ];
 
-    win32_sources = [
+    win32Sources = [
         "win32/io.c",
         "win32/misc.c",
         "win32/msetuprc.rc",
@@ -60,89 +80,96 @@ function build() {
         "win32/win32sup.c"
     ];
 
-    target_libs = [
-        "//lib/partlib:partlib",
-        "//lib/fatlib:fat",
-        "//lib/bconflib:bconf",
-        "//lib/rtl/base:basertl",
-        "//apps/osbase/urtl:urtl",
-        "//apps/lib/chalk:chalk",
-        "//lib/yy:yy"
+    targetLibs = [
+        "lib/partlib:partlib",
+        "lib/fatlib:fat",
+        "lib/bconflib:bconf",
+        "lib/rtl/base:basertl",
+        "apps/osbase/urtl:urtl",
+        "apps/ck/lib:libchalk_static",
+        "lib/yy:yy"
     ];
 
-    build_libs = [
-        "//lib/partlib:build_partlib",
-        "//lib/fatlib:build_fat",
-        "//lib/bconflib:build_bconf",
-        "//lib/rtl/base:build_basertl",
-        "//lib/rtl/rtlc:build_rtlc",
-        "//apps/lib/chalk:build_chalk",
-        "//lib/yy:build_yy"
+    buildLibs = [
+        "lib/partlib:build_partlib",
+        "lib/fatlib:build_fat",
+        "lib/bconflib:build_bconf",
+        "lib/rtl/base:build_basertl",
+        "lib/rtl/rtlc:build_rtlc",
+        "apps/ck/lib:build_libchalk_static",
+        "lib/yy:build_yy"
     ];
 
-    target_dynlibs = [
-        "//apps/osbase:libminocaos"
+    targetDynlibs = [
+        "apps/osbase:libminocaos"
     ];
 
-    build_includes = [
-        "$//apps/lib/chalk",
-        "$//apps/setup/config"
+    buildIncludes = [];
+    targetIncludes = [
+        "$S/apps/libc/include",
     ];
 
-    target_includes = build_includes + [
-        "$//apps/libc/include",
-    ];
+    targetSources = commonSources + minocaSources + targetLibs +
+                     targetDynlibs;
 
-    target_sources = common_sources + minoca_sources + target_libs +
-                     target_dynlibs;
+    buildConfig = {};
+    if (buildOs == "Windows") {
+        buildSources = commonSources + win32Sources;
+        buildConfig["DYNLIBS"] = ["-lsetupapi"];
 
-    build_config = {};
-    if (build_os == "Windows") {
-        build_sources = common_sources + win32_sources;
-        build_config["DYNLIBS"] = ["-lsetupapi"];
-
-    } else if (build_os == "Minoca") {
-        build_sources = common_sources + minoca_sources + target_dynlibs;
-        build_includes = target_includes;
+    } else if (buildOs == "Minoca") {
+        buildSources = commonSources + minocaSources + targetDynlibs;
+        buildIncludes = targetIncludes;
 
     } else {
-        build_sources = common_sources + uos_sources;
+        buildSources = commonSources + uosSources;
     }
 
     app = {
         "label": "msetup",
-        "inputs": target_sources,
-        "includes": target_includes
-    };
-
-    build_app = {
-        "label": "build_msetup",
-        "output": "msetup",
-        "inputs": build_sources + build_libs,
-        "includes": build_includes,
-        "config": build_config,
-        "build": TRUE,
-        "prefix": "build"
+        "inputs": targetSources,
+        "includes": targetIncludes
     };
 
     entries = application(app);
-    entries += application(build_app);
-    setup_tool = {
+    buildApp = {
+        "label": "build_msetup",
+        "output": "msetup",
+        "inputs": buildSources + buildLibs,
+        "implicit": [":install.ck"],
+        "includes": buildIncludes,
+        "config": buildConfig,
+        "build": true,
+        "prefix": "build"
+    };
+
+    entries += application(buildApp);
+    setupTool = {
         "type": "tool",
         "name": "msetup_image",
-        "command": "$^/apps/setup/build/msetup $MSETUP_FLAGS -d $OUT",
+        "command": "$O/apps/setup/build/msetup $MSETUP_FLAGS -d $OUT",
         "description": "Building Image - $OUT",
         "pool": "image"
     };
 
-    image_pool = {
+    imagePool = {
         "type": "pool",
         "name": "image",
         "depth": 1
     };
 
-    entries += [setup_tool, image_pool];
+    entries += [setupTool, imagePool];
+
+    //
+    // Add the copy of install.ck to the bin root.
+    //
+
+    entries += copy("install.ck",
+                    mconfig.binroot + "/install.ck",
+                    "install.ck",
+                    null,
+                    null);
+
     return entries;
 }
 
-return build();

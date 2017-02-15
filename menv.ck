@@ -81,6 +81,322 @@ Return Value:
 }
 
 function
+getTools (
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called as part of setupEnv, at the end. It returns the
+    basic set of tools used by the environment.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a list of the basic tools used in the environment.
+
+--*/
+
+{
+
+    var buildCflagsLine = "$BUILD_BASE_CPPFLAGS $CPPFLAGS " +
+                          "$BUILD_BASE_CFLAGS $CFLAGS -MMD -MF $OUT.d ";
+
+    var buildAsflagsLine = buildCflagsLine +
+                           "$BUILD_BASE_ASFLAGS $ASFLAGS ";
+
+    var buildLdflagsLine = "-Wl,-Map=$OUT.map $BUILD_BASE_LDFLAGS $LDFLAGS ";
+    var cflagsLine = "$BASE_CPPFLAGS $CPPFLAGS $BASE_CFLAGS $CFLAGS "
+                     "-MMD -MF $OUT.d ";
+
+    var asflagsLine = cflagsLine + "$BASE_ASFLAGS $ASFLAGS ";
+    var entries;
+    var ldflagsLine = "-Wl,-Map=$OUT.map $BASE_LDFLAGS $LDFLAGS ";
+    var symlinkCommand = "ln -sf $SYMLINK_IN $OUT";
+    var buildLdLine = "$BUILD_CC " + buildLdflagsLine +
+                      "-o $OUT $IN -Bdynamic $DYNLIBS";
+
+    var tools;
+
+    if (mconfig.build_os == "Windows") {
+        symlinkCommand = "cp $IN $OUT";
+    }
+
+    //
+    // On Mac OS there shouldn't be a -Bdynamic flag to indicate the start of
+    // the dynamic libraries section.
+    //
+
+    if (mconfig.build_os == "Darwin") {
+        buildLdLine = "$BUILD_CC " + buildLdflagsLine +
+                      "-o $OUT $IN $DYNLIBS";
+    }
+
+    //
+    // Define the tools used.
+    //
+
+    tools = [
+
+    //
+    // C compiler for target binaries.
+    //
+
+    {
+        "type": "tool",
+        "name": "cc",
+        "command": "$CC " + cflagsLine + "-c -o $OUT $IN",
+        "description": "Compiling - $IN",
+        "depsformat": "gcc",
+        "depfile": "$OUT.d"
+    },
+
+    //
+    // C++ compiler for target binaries.
+    //
+
+    {
+        "type": "tool",
+        "name": "cxx",
+        "command": "$CXX " + cflagsLine + "-c -o $OUT $IN",
+        "description": "Compiling - $IN",
+        "depsformat": "gcc",
+        "depfile": "$OUT.d"
+    },
+
+    //
+    // Linker for target binaries.
+    //
+
+    {
+        "type": "tool",
+        "name": "ld",
+        "command": "$CC " + ldflagsLine + "-o $OUT $IN -Bdynamic $DYNLIBS",
+        "description": "Linking - $OUT",
+    },
+
+    //
+    // Static archiver for target binaries.
+    //
+
+    {
+        "type": "tool",
+        "name": "ar",
+        "command": "$AR rcs $OUT $IN",
+        "description": "Building Library - $OUT",
+    },
+
+    //
+    // Assembler for target binaries.
+    //
+
+    {
+        "type": "tool",
+        "name": "as",
+        "command": "$CC " + asflagsLine + "-c -o $OUT $IN",
+        "description": "Assembling - $IN",
+        "depsformat": "gcc",
+        "depfile": "$OUT.d"
+    },
+
+    //
+    // Objcopy for target binaries.
+    //
+
+    {
+        "type": "tool",
+        "name": "objcopy",
+        "command": "$SHELL -c \"cd `dirname $IN` && "
+                   "$OBJCOPY $OBJCOPY_FLAGS `basename $IN` $OUT\"",
+
+        "description": "Objectifying - $IN"
+    },
+
+    //
+    // Strip for target binaries.
+    //
+
+    {
+        "type": "tool",
+        "name": "strip",
+        "command": "$STRIP $STRIP_FLAGS -o $OUT $IN",
+        "description": "Stripping - $OUT",
+    },
+
+    //
+    // C compiler for the build machine.
+    //
+
+    {
+        "type": "tool",
+        "name": "build_cc",
+        "command": "$BUILD_CC " + buildCflagsLine + "-c -o $OUT $IN",
+        "description": "Compiling - $IN",
+        "depsformat": "gcc",
+        "depfile": "$OUT.d"
+    },
+
+    //
+    // C++ compiler for the build machine.
+    //
+
+    {
+        "type": "tool",
+        "name": "build_cxx",
+        "command": "$BUILD_CXX " + buildCflagsLine + "-c -o $OUT $IN",
+        "description": "Compiling - $IN",
+        "depsformat": "gcc",
+        "depfile": "$OUT.d"
+    },
+
+    //
+    // Linker for the build machine.
+    //
+
+    {
+        "type": "tool",
+        "name": "build_ld",
+        "command": "$BUILD_CC " + buildLdflagsLine +
+                   "-o $OUT $IN -Bdynamic $DYNLIBS",
+
+        "description": "Linking - $OUT",
+    },
+
+    //
+    // Static archiver for the build machine.
+    //
+
+    {
+        "type": "tool",
+        "name": "build_ar",
+        "command": "$BUILD_AR rcs $OUT $IN",
+        "description": "Building Library - $OUT",
+    },
+
+    //
+    // Assembler for the build machine.
+    //
+
+    {
+        "type": "tool",
+        "name": "build_as",
+        "command": "$BUILD_CC " + buildAsflagsLine + "-c -o $OUT $IN",
+        "description": "Assembling - $IN",
+        "depsformat": "gcc",
+        "depfile": "$OUT.d"
+    },
+
+    //
+    // Strip for the build machine.
+    //
+
+    {
+        "type": "tool",
+        "name": "build_strip",
+        "command": "$BUILD_STRIP $STRIP_FLAGS -o $OUT $IN",
+        "description": "Stripping - $OUT",
+    },
+
+    //
+    // Windows resource compiler for the build machine.
+    //
+
+    {
+        "type": "tool",
+        "name": "build_rcc",
+        "command": "$RCC -o $OUT $IN",
+        "description": "Compiling Resource - $IN",
+    },
+
+    //
+    // ACPI assembler used to build firmware images.
+    //
+
+    {
+        "type": "tool",
+        "name": "iasl",
+        "command": "$SHELL -c \"$IASL $IASL_FLAGS -p $OUT $IN > $OUT.stdout\"",
+        "description": "Compiling ASL - $IN"
+    },
+
+    //
+    // Copy files from one location to another.
+    //
+
+    {
+        "type": "tool",
+        "name": "copy",
+        "command": "$SHELL -c \"cp $CPFLAGS $IN $OUT && [ -z $CHMOD_FLAGS ] || "
+                   "chmod $CHMOD_FLAGS $OUT\"",
+
+        "description": "Copying - $IN -> $OUT"
+    },
+
+    //
+    // Create symbolic links (or just copy on Windows).
+    //
+
+    {
+        "type": "tool",
+        "name": "symlink",
+        "command": symlinkCommand,
+        "description": "Symlinking - $OUT"
+    },
+
+    //
+    // Touch a file with the date.
+    //
+
+    {
+        "type": "tool",
+        "name": "stamp",
+        "command": "$SHELL -c \"date > $OUT\"",
+        "description": "Stamp - $OUT"
+    },
+
+    //
+    // Touch to create a timestamped empty file.
+    //
+
+    {
+        "type": "tool",
+        "name": "touch",
+        "command": "touch $OUT",
+        "description": "Touch - $OUT"
+    },
+
+    //
+    // Create a directory.
+    //
+
+    {
+        "type": "tool",
+        "name": "mkdir",
+        "command": "mkdir -p $OUT",
+        "description": "mkdir $OUT"
+    },
+
+    //
+    // Generate a version.h.
+    //
+
+    {
+        "type": "tool",
+        "name": "gen_version",
+        "command": "$SHELL $S/tasks/build/print_version.sh $OUT $FORM "
+                   "$MAJOR $MINOR $REVISION $RELEASE $SERIAL $BUILD_STRING",
+
+        "description": "Versioning - $OUT"
+    }];
+
+    return tools;
+}
+
+function
 setupEnv (
     )
 
@@ -96,7 +412,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns the basic set of tools used by the environment.
 
 --*/
 
@@ -243,7 +559,10 @@ Return Value:
     // Windows cannot handle -fpic, but everyone else can.
     //
 
-    if (mconfig.build_os != "Windows") {
+    if (mconfig.build_os == "Windows") {
+        mconfig.build_cflags += ["-mno-ms-bitfields"];
+
+    } else {
         mconfig.build_cflags += ["-fpic"];
     }
 
@@ -310,7 +629,7 @@ Return Value:
         }
     }
 
-    return;
+    return getTools();
 }
 
 function
@@ -393,10 +712,94 @@ Return Value:
 }
 
 function
+touch (
+    destination,
+    destinationLabel,
+    mode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates an empty file target.
+
+Arguments:
+
+    destination - Supplies the copy destination.
+
+    destinationLabel - Supplies a label naming the target.
+
+    mode - Supplies the chmod mode of the destination.
+
+Return Value:
+
+    Returns a list containing the copy entry.
+
+--*/
+
+{
+
+    var config = {};
+
+    if (mode) {
+        config["CHMOD_FLAGS"] = mode;
+    }
+
+    destinationLabel ?= destination;
+    var entry = {
+        "type": "target",
+        "tool": "touch",
+        "label": destinationLabel,
+        "output": destination,
+        "config": config
+    };
+
+    return [entry];
+}
+
+function
+makedir (
+    destination,
+    destinationLabel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates an empty directory target.
+
+Arguments:
+
+    destination - Supplies the copy destination.
+
+    destinationLabel - Supplies a label naming the target.
+
+Return Value:
+
+    Returns a list containing the copy entry.
+
+--*/
+
+{
+
+    destinationLabel ?= destination;
+    var entry = {
+        "type": "target",
+        "tool": "mkdir",
+        "label": destinationLabel,
+        "output": destination,
+    };
+
+    return [entry];
+}
+
+function
 copy (
     source,
     destination,
-    destination_label,
+    destinationLabel,
     flags,
     mode
     )
@@ -413,7 +816,7 @@ Arguments:
 
     destination - Supplies the copy destination.
 
-    destination_label - Supplies a label naming the copy target.
+    destinationLabel - Supplies a label naming the copy target.
 
     flags - Supplies the flags to include in the copy.
 
@@ -440,13 +843,13 @@ Return Value:
     var entry = {
         "type": "target",
         "tool": "copy",
-        "label": destination_label,
+        "label": destinationLabel,
         "inputs": [source],
         "output": destination,
         "config": config
     };
 
-    if (!destination_label) {
+    if (!destinationLabel) {
         entry["label"] = destination;
     }
 
@@ -537,6 +940,7 @@ Return Value:
     //
 
     params.output = source;
+    params.type = "target";
     fileName = basename(source);
     if (build) {
         destination = mconfig.binroot + "/tools/bin/" + fileName;
@@ -673,6 +1077,10 @@ Return Value:
         }
 
         objName = inputParts[0] + suffix;
+        if (objName[0] == ":") {
+            objName = objName[1...-1];
+        }
+
         if (prefix) {
             objName = prefix + "/" + objName;
         }
@@ -811,7 +1219,10 @@ Return Value:
         addConfig(params, "LDFLAGS", "-pie");
     }
 
-    params.binplace = true;
+    if (params.get("binplace") == null) {
+        params.binplace = true;
+    }
+
     return executable(params);
 }
 
@@ -857,6 +1268,7 @@ Return Value:
     if (build && (mconfig.build_os == "Darwin")) {
         majorVersion ?= 0;
         minorVersion ?= 0;
+        soname += ".%s.dylib" % majorVersion;
         addConfig(params,
                   "LDFLAGS",
                   "-undefined dynamic_lookup -dynamiclib");
@@ -886,7 +1298,10 @@ Return Value:
     }
 
     params.output = soname;
-    params.binplace = true;
+    if (params.get("binplace") == null) {
+        params.binplace = true;
+    }
+
     return executable(params);
 }
 
@@ -1203,7 +1618,10 @@ Return Value:
 
     var soname = params.get("output");
 
-    params.entry ?= "DriverEntry";
+    if (!params.get("entry")) {
+        params.entry = "DriverEntry";
+    }
+
     params.binplace = true;
 
     soname ?= params.get("label");
@@ -1272,6 +1690,7 @@ Return Value:
 
 function
 uefiFwvol (
+    path,
     name,
     ffs
     )
@@ -1285,7 +1704,12 @@ Routine Description:
 
 Arguments:
 
-    params - Supplies the entry with inputs filled out.
+    path - Supplies the path to the source. The object directory version of
+        this path will be added to the include path.
+
+    name - Supplies the name of the firmware volume.
+
+    ffs - Supplies the FFS inputs.
 
 Return Value:
 
@@ -1298,6 +1722,7 @@ Return Value:
     var fwv;
     var fwvO;
     var fwvName = name + "fwv";
+    var fwvS;
 
     fwv = {
         "type": "target",
@@ -1307,8 +1732,15 @@ Return Value:
         "tool": "genfv"
     };
 
-    fwvO = compiledSources({"inputs": [fwvName + ".S"]});
-    return [fwv] + fwvO;
+    fwvS = {
+        "inputs": [fwvName + ".S"],
+        "includes": ["$O/" + path]
+    };
+
+    fwvO = compiledSources(fwvS);
+    fwvO = fwvO[1][0];
+    fwvO["implicit"] = [":" + fwvName];
+    return [fwv, fwvO];
 }
 
 //

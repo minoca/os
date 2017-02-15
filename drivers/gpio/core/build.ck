@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "gpio";
+    var drv;
+    var entries;
+    var name = "gpio";
+    var sources;
+
     sources = [
         "gpio.c"
     ];
@@ -41,4 +47,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -25,28 +25,40 @@ Environment:
 
 --*/
 
+from menv import copy, group, makedir, mconfig, strip, touch;
+
 function build() {
-    skel = binroot + "/skel";
-    skelbin = skel + "/bin";
-    skellib = skel + "/lib";
-    skeletc = skel + "/etc";
+    var all;
+    var binfiles;
+    var emptydirs;
+    var emptyfiles;
+    var entries;
+    var entry;
+    var libfiles;
+    var posixfiles;
+    var skel = mconfig.binroot + "/skel";
+    var skelbin = skel + "/bin";
+    var skeletc = skel + "/etc";
+    var skellib = skel + "/lib";
+    var updateRcCommand;
+    var updateRcTool;
 
     binfiles = [
-        ["//apps/efiboot:efiboot", "efiboot"],
-        ["//apps/mount:mount", "mount"],
-        ["//apps/netcon:netcon", "netcon"],
-        ["//apps/profile:profile", "profile"],
-        ["//apps/setup:msetup", "msetup"],
-        ["//apps/swiss:swiss", "swiss"],
-        ["//apps/unmount:umount", "umount"],
-        ["//apps/debug/client:debug", "debug"]
+        ["apps/efiboot:efiboot", "efiboot"],
+        ["apps/mount:mount", "mount"],
+        ["apps/netcon:netcon", "netcon"],
+        ["apps/profile:profile", "profile"],
+        ["apps/setup:msetup", "msetup"],
+        ["apps/swiss:swiss", "sh"],
+        ["apps/unmount:umount", "umount"],
+        ["apps/debug/client:debug", "debug"]
     ];
 
     libfiles = [
-        ["//apps/libc/crypt:libcrypt", "libcrypt.so.1"],
-        ["//apps/libc/dynamic:libc", "libc.so.1"],
-        ["//apps/netlink:libnetlink", "libnetlink.so.1"],
-        ["//apps/osbase:libminocaos", "libminocaos.so.1"],
+        ["apps/libc/crypt:libcrypt", "libcrypt.so.1"],
+        ["apps/libc/dynamic:libc", "libc.so.1"],
+        ["apps/netlink:libnetlink", "libnetlink.so.1"],
+        ["apps/osbase:libminocaos", "libminocaos.so.1"],
     ];
 
     posixfiles = [
@@ -57,7 +69,19 @@ function build() {
         [skeletc, "inittab", "0644"],
         [skeletc, "issue", "0644"],
         [skeletc, "init.d/rc", "0755"],
-        [skeletc, "init.d/init-functions", "0755"]
+        [skeletc, "init.d/init-functions", "0755"],
+        [skeletc, "init.d/hostname.sh", "0755"]
+    ];
+
+    emptyfiles = [
+        [skel + "/var/run", "utmp", "0664"],
+        [skel + "/var/log", "wtmp", "0664"]
+    ];
+
+    emptydirs = [
+        [skel + "/root", "root"],
+        [skel + "/home", "home"],
+        [skel + "/tmp", "tmp"]
     ];
 
     all = [];
@@ -95,26 +119,50 @@ function build() {
                         null,
                         file[2]);
 
-        all += [file[1]];
+        all += [":" + file[1]];
     }
 
     //
-    // Create a symlink to swiss at /bin/sh.
+    // Create empty files and directories.
     //
 
-    entry = {
-        "label": "sh",
-        "output": skelbin + "/sh",
-        "inputs": [":swiss"],
-        "tool": "symlink",
-        "config": {"SYMLINK_IN": "swiss"}
+    for (file in emptyfiles) {
+        entries += touch(file[0] + "/" + file[1], file[1], file[2]);
+        all += [":" + file[1]];
+    }
+
+    for (dir in emptydirs) {
+        entries += makedir(dir[0], dir[1]);
+        all += [":" + dir[1]];
+    }
+
+    //
+    // Define a tool for using update-rc.d.
+    //
+
+    updateRcCommand = "$SHELL -c \"SYSROOT=" + skel +
+                      " sh $S/apps/posix/update-rc.d $UPDATERC_ARGS\"";
+
+    updateRcTool = {
+        "type": "tool",
+        "name": "updaterc",
+        "command": updateRcCommand,
+        "description": "mkdir $OUT"
     };
 
-    entries += [entry];
-    all += [":sh"];
+    entries.append(updateRcTool);
+    entry = {
+        "type": "target",
+        "inputs": [":init.d/hostname.sh"],
+        "output": skeletc + "/rc2.d/S10hostname.sh",
+        "label": "init_hostname",
+        "tool": "updaterc",
+        "config": {"UPDATERC_ARGS": "-f hostname.sh defaults 10"}
+    };
+
+    entries.append(entry);
+    all += [":init_hostname"];
     entries += group("skel", all);
     return entries;
 }
-
-return build();
 

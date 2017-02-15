@@ -26,14 +26,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "rk32spi";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "rk32spi";
+    var sources;
+
     sources = [
         "rk32spi.c"
     ];
 
     dynlibs = [
-        "//drivers/spb/core:spb"
+        "drivers/spb/core:spb"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

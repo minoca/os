@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "special";
+    var drv;
+    var entries;
+    var name = "special";
+    var sources;
+
     sources = [
         "special.c"
     ];
@@ -41,4 +47,3 @@ function build() {
     return entries;
 }
 
-return build();

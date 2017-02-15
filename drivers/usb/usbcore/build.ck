@@ -27,8 +27,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "usbcore";
+    var drv;
+    var entries;
+    var name = "usbcore";
+    var sources;
+
     sources = [
         "enum.c",
         "hub.c",
@@ -45,4 +51,3 @@ function build() {
     return entries;
 }
 
-return build();

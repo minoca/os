@@ -25,41 +25,50 @@ Environment:
 
 --*/
 
+from menv import group;
+
 function build() {
-    test_apps = [
-        "//apps/libc/dynamic/testc:build_testc",
-        "//apps/testapps:testapps",
+    var allApps;
+    var apps;
+    var entries;
+    var libc;
+    var mingenBuild;
+    var testApps;
+
+    testApps = [
+        "apps/libc/dynamic/testc:build_testc",
+        "apps/testapps:testapps",
     ];
 
     libc = [
-        "//apps/libc/crypt:libcrypt",
-        "//apps/libc/dynamic/pthread/static:libpthread_nonshared",
-        "//apps/libc/static:libc_nonshared",
+        "apps/libc/crypt:libcrypt",
+        "apps/libc/dynamic/pthread/static:libpthread_nonshared",
+        "apps/libc/static:libc_nonshared",
     ];
 
-    mingen_build = [
-        "//apps/mingen:build_mingen"
+    mingenBuild = [
+        "apps/mingen:build_mingen"
     ];
 
     apps = [
-        "//apps/debug:debug",
-        "//apps/efiboot:efiboot",
-        "//apps/mingen:mingen",
-        "//apps/mount:mount",
-        "//apps/netcon:netcon",
-        "//apps/profile:profile",
-        "//apps/setup:msetup",
-        "//apps/setup:build_msetup",
-        "//apps/swiss:swiss",
-        "//apps/swiss:build_swiss",
-        "//apps/tzcomp:tz_files",
-        "//apps/unmount:umount",
-        "//apps/vmstat:vmstat",
+        "apps/ck:chalk",
+        "apps/debug:debug",
+        "apps/efiboot:efiboot",
+        "apps/mingen:mingen",
+        "apps/mount:mount",
+        "apps/netcon:netcon",
+        "apps/profile:profile",
+        "apps/setup:msetup",
+        "apps/setup:build_msetup",
+        "apps/swiss:swiss",
+        "apps/swiss:build_swiss",
+        "apps/tzcomp:tz_files",
+        "apps/unmount:umount",
+        "apps/vmstat:vmstat",
     ];
 
-    all_apps = test_apps + libc + mingen_build + apps;
-    entries = group("all_apps", all_apps);
+    allApps = testApps + libc + mingenBuild + apps;
+    entries = group("all_apps", allApps);
     return entries;
 }
 
-return build();

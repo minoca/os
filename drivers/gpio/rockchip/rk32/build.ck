@@ -26,14 +26,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "rk32gpio";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "rk32gpio";
+    var sources;
+
     sources = [
         "rk32gpio.c"
     ];
 
     dynlibs = [
-        "//drivers/gpio/core:gpio"
+        "drivers/gpio/core:gpio"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -25,7 +25,16 @@ Environment:
 
 --*/
 
+from menv import sharedLibrary;
+
 function build() {
+    var buildLib;
+    var buildLibs;
+    var entries;
+    var lib;
+    var sources;
+    var targetLibs;
+
     sources = [
         "acpiext.c",
         "kexts.c",
@@ -35,30 +44,29 @@ function build() {
         "threads.c"
     ];
 
-    target_libs = [
-        "//apps/debug/dbgext:dbgext"
+    targetLibs = [
+        "apps/debug/dbgext:dbgext"
     ];
 
-    build_libs = [
-        "//apps/debug/dbgext:build_dbgext"
+    buildLibs = [
+        "apps/debug/dbgext:build_dbgext"
     ];
 
     lib = {
         "label": "kexts",
-        "inputs": sources + target_libs,
+        "inputs": sources + targetLibs,
     };
 
-    build_lib = {
+    buildLib = {
         "label": "build_kexts",
         "output": "kexts",
-        "inputs": sources + build_libs,
-        "build": TRUE,
+        "inputs": sources + buildLibs,
+        "build": true,
         "prefix": "build"
     };
 
-    entries = shared_library(lib);
-    entries += shared_library(build_lib);
+    entries = sharedLibrary(lib);
+    entries += sharedLibrary(buildLib);
     return entries;
 }
 
-return build();

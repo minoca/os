@@ -25,8 +25,15 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "am3usb";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "am3usb";
+    var sources;
+
     sources = [
         "am3usb.c",
         "am3usbhw.c",
@@ -35,7 +42,7 @@ function build() {
     ];
 
     dynlibs = [
-        "//drivers/usb/usbcore:usbcore"
+        "drivers/usb/usbcore:usbcore"
     ];
 
     drv = {
@@ -47,4 +54,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -25,29 +25,34 @@ Environment:
 
 --*/
 
-function build_image(name, msetup_flags) {
-    install_deps = [
-        "//apps:all_apps",
-        "//apps/posix:skel",
-        "//apps/tzcomp:tz_files",
-        "//kernel:kernel",
-        "//kernel:devmap.set",
-        "//kernel:dev2drv.set",
-        "//kernel:init.set",
-        "//kernel:init.sh",
-        "//boot:boot_apps",
-        "//drivers:drivers",
-        "//uefi:platfw",
-        "//apps/setup:build_msetup"
+from menv import group, mconfig;
+
+function buildImage(name, msetupFlags) {
+    var entry;
+    var installDeps;
+
+    installDeps = [
+        "apps:all_apps",
+        "apps/posix:skel",
+        "apps/tzcomp:tz_files",
+        "kernel:kernel",
+        "kernel:devmap.set",
+        "kernel:dev2drv.set",
+        "kernel:init.set",
+        "kernel:init.sh",
+        "boot:boot_apps",
+        "drivers:drivers",
+        "uefi:platfw",
+        "apps/setup:build_msetup"
     ];
 
     entry = {
         "type": "target",
         "tool": "msetup_image",
         "label": name,
-        "output": binroot + "/" + name,
-        "implicit": install_deps,
-        "config": {"MSETUP_FLAGS": msetup_flags}
+        "output": mconfig.binroot + "/" + name,
+        "implicit": installDeps,
+        "config": {"MSETUP_FLAGS": msetupFlags}
     };
 
     if (name != "install.img") {
@@ -58,80 +63,87 @@ function build_image(name, msetup_flags) {
 }
 
 function build() {
-    image_size = "-G512M";
-    tiny_image_size = "-G30M";
-    common_image_flags = [
+    var arch = mconfig.arch;
+    var commonImageFlags;
+    var entries;
+    var flags;
+    var imageSize = "-G512M";
+    var installFlags;
+    var ramdiskImages;
+    var tinyImageSize = "-G30M";
+    var variant = mconfig.variant;
+
+    commonImageFlags = [
         "-q"
     ];
 
-    if (debug == "dbg") {
-        common_image_flags += ["-D"];
+    if (mconfig.debug == "dbg") {
+        commonImageFlags += ["-D"];
     }
 
-    install_flags = common_image_flags + [
+    installFlags = commonImageFlags + [
         "-linstall-" + arch,
-        "-i$" + outroot,
-        image_size,
+        "-i$" + mconfig.outroot,
+        imageSize,
     ];
 
-    common_image_flags += [
-        "-i$" + binroot + "/install.img"
+    commonImageFlags += [
+        "-i$" + mconfig.binroot + "/install.img"
     ];
 
-    entries = build_image("install.img", install_flags);
+    entries = buildImage("install.img", installFlags);
     if (arch == "x86") {
         if (variant == "q") {
-            flags = common_image_flags + [
+            flags = commonImageFlags + [
                 "-lgalileo",
-                image_size
+                imageSize
             ];
 
-            entries += build_image("galileo.img", flags);
+            entries += buildImage("galileo.img", flags);
 
         } else {
-            flags = common_image_flags + [
+            flags = commonImageFlags + [
                 "-lpc",
-                image_size
+                imageSize
             ];
 
-            entries += build_image("pc.img", flags);
-            flags = common_image_flags + [
+            entries += buildImage("pc.img", flags);
+            flags = commonImageFlags + [
                 "-lpcefi",
-                image_size
+                imageSize
             ];
 
-            entries += build_image("pcefi.img", flags);
-            flags = common_image_flags + [
+            entries += buildImage("pcefi.img", flags);
+            flags = commonImageFlags + [
                 "-lpc-tiny",
-                tiny_image_size
+                tinyImageSize
             ];
 
-            entries += build_image("pctiny.img", flags);
+            entries += buildImage("pctiny.img", flags);
         }
 
     } else if (arch == "armv7") {
-        flags = common_image_flags + [image_size];
-        entries += build_image("bbone.img", flags + ["-lbeagleboneblack"]);
-        entries += build_image("panda.img", flags + ["-lpanda"]);
-        entries += build_image("rpi2.img", flags + ["-lraspberrypi2"]);
-        entries += build_image("veyron.img", flags + ["-lveyron"]);
-        ramdisk_images = [
-            "//uefi/plat/integcp:integ.img",
-            "//uefi/plat/panda:pandausb.img"
+        flags = commonImageFlags + [imageSize];
+        entries += buildImage("bbone.img", flags + ["-lbeagleboneblack"]);
+        entries += buildImage("panda.img", flags + ["-lpanda"]);
+        entries += buildImage("rpi2.img", flags + ["-lraspberrypi2"]);
+        entries += buildImage("veyron.img", flags + ["-lveyron"]);
+        ramdiskImages = [
+            "uefi/plat/integcp:integ.img",
+            "uefi/plat/panda:pandausb.img"
         ];
 
-        entries += group("ramdisk_images", ramdisk_images);
+        entries += group("ramdisk_images", ramdiskImages);
 
     } else if (arch == "armv6") {
-        flags = common_image_flags + [
-            image_size,
+        flags = commonImageFlags + [
+            imageSize,
             "-lraspberrypi"
         ];
 
-        entries += build_image("rpi.img", flags + ["-lraspberrypi"]);
+        entries += buildImage("rpi.img", flags + ["-lraspberrypi"]);
     }
 
     return entries;
 }
 
-return build();

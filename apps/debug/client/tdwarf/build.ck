@@ -25,36 +25,41 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var buildApp;
+    var buildLibs;
+    var entries;
+    var sources;
+
     sources = [
         "tdwarf.c",
-        "//apps/debug/client:build/coff.o",
-        "//apps/debug/client:build/elf.o",
-        "//apps/debug/client:build/dwarf.o",
-        "//apps/debug/client:build/dwexpr.o",
-        "//apps/debug/client:build/dwframe.o",
-        "//apps/debug/client:build/dwline.o",
-        "//apps/debug/client:build/dwread.o",
-        "//apps/debug/client:build/stabs.o",
-        "//apps/debug/client:build/symbols.o"
+        "apps/debug/client:build/coff.o",
+        "apps/debug/client:build/elf.o",
+        "apps/debug/client:build/dwarf.o",
+        "apps/debug/client:build/dwexpr.o",
+        "apps/debug/client:build/dwframe.o",
+        "apps/debug/client:build/dwline.o",
+        "apps/debug/client:build/dwread.o",
+        "apps/debug/client:build/stabs.o",
+        "apps/debug/client:build/symbols.o"
     ];
 
-    build_libs = [
-        "//lib/im:build_im",
-        "//lib/rtl/base:build_basertl",
-        "//lib/rtl/rtlc:build_rtlc",
+    buildLibs = [
+        "lib/im:build_im",
+        "lib/rtl/base:build_basertl",
+        "lib/rtl/rtlc:build_rtlc",
     ];
 
-    build_app = {
+    buildApp = {
         "label": "build_tdwarf",
         "output": "tdwarf",
-        "inputs": sources + build_libs,
-        "build": TRUE
+        "inputs": sources + buildLibs,
+        "build": true
     };
 
-    entries = application(build_app);
+    entries = application(buildApp);
     return entries;
 }
-
-return build();
 

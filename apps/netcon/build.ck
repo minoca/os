@@ -25,18 +25,26 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var app;
+    var dynlibs;
+    var entries;
+    var includes;
+    var sources;
+
     sources = [
         "netcon.c"
     ];
 
     dynlibs = [
-        "//apps/osbase:libminocaos",
-        "//apps/netlink:libnetlink"
+        "apps/osbase:libminocaos",
+        "apps/netlink:libnetlink"
     ];
 
     includes = [
-        "$//apps/libc/include"
+        "$S/apps/libc/include"
     ];
 
     app = {
@@ -49,4 +57,3 @@ function build() {
     return entries;
 }
 
-return build();

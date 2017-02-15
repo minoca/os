@@ -26,8 +26,15 @@ Environment:
 
 --*/
 
+from menv import copy, group, mconfig;
+
 function build() {
-    plat = "rpi2";
+    var blobs;
+    var blobTargets;
+    var entries;
+    var plat = "rpi2";
+    var rpibin;
+
     blobs = [
         "bootcode.bin",
         "config.txt",
@@ -36,21 +43,20 @@ function build() {
         "start.elf"
     ];
 
-    rpibin = binroot + "/rpi/";
-    blob_targets = [];
+    rpibin = mconfig.binroot + "/rpi/";
+    blobTargets = [];
     entries = [];
     for (blob in blobs) {
         entries += copy(blob,
-                        rpibin + blob,
+                        rpibin + "/" + blob,
                         blob,
                         null,
                         null);
 
-        blob_targets += [":" + blob];
+        blobTargets += [":" + blob];
     }
 
-    entries += group("blobs", blob_targets);
+    entries += group("blobs", blobTargets);
     return entries;
 }
 
-return build();

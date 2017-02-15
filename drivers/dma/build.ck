@@ -25,17 +25,23 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var dmaDrivers;
+    var entries;
 
-    assert(((arch == "armv7") || (arch == "armv6")), "Unexpected architecture");
+    if (!(["armv7", "armv6"].contains(arch))) {
+        Core.raise(ValueError("Unexpected Architecture"));
+    }
 
-    dma_drivers = [
-        "//drivers/dma/bcm2709:dmab2709",
-        "//drivers/dma/edma3:edma3",
+    dmaDrivers = [
+        "drivers/dma/bcm2709:dmab2709",
+        "drivers/dma/edma3:edma3",
     ];
 
-    entries = group("dma_drivers", dma_drivers);
+    entries = group("dma_drivers", dmaDrivers);
     return entries;
 }
 
-return build();

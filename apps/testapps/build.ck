@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import group;
+
 function build() {
-    app_names = [
+    var appNames;
+    var apps;
+    var testappsGroup;
+
+    appNames = [
         "dbgtest",
         "filetest",
         "ktest",
@@ -41,12 +47,11 @@ function build() {
     ];
 
     apps = [];
-    for (app in app_names) {
-        apps += ["//apps/testapps/" + app + ":" + app];
+    for (app in appNames) {
+        apps += ["apps/testapps/" + app + ":" + app];
     }
 
-    testapps_group = group("testapps", apps);
-    return testapps_group;
+    testappsGroup = group("testapps", apps);
+    return testappsGroup;
 }
 
-return build();

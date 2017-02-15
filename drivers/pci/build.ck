@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "pci";
+    var drv;
+    var entries;
+    var name = "pci";
+    var sources;
+
     sources = [
         "msi.c",
         "pci.c",
@@ -43,4 +49,3 @@ function build() {
     return entries;
 }
 
-return build();

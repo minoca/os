@@ -27,41 +27,49 @@ Environment:
 
 --*/
 
+from menv import mconfig, staticLibrary;
+
 function build() {
+    var arch = mconfig.arch;
+    var archSources;
+    var entries;
+    var includes;
+    var lib;
+    var sources;
+
     sources = [
         "init.c",
         "atexit.c"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        arch_sources = [
+        archSources = [
             "armv7/aatexit.c",
             "armv7/crt0.S"
         ];
 
     } else if (arch == "x86") {
-        arch_sources = [
+        archSources = [
             "x86/crt0.S"
         ];
 
     } else if (arch == "x64") {
-        arch_sources = [
+        archSources = [
             "x64/crt0.S"
         ];
     }
 
     includes = [
-        "$//apps/libc/include"
+        "$S/apps/libc/include"
     ];
 
     lib = {
         "label": "libc_nonshared",
-        "inputs": arch_sources + sources,
+        "inputs": archSources + sources,
         "includes": includes
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
     return entries;
 }
 
-return build();

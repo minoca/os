@@ -26,14 +26,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "bc27gpio";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "bc27gpio";
+    var sources;
+
     sources = [
         "bc27gpio.c"
     ];
 
     dynlibs = [
-        "//drivers/gpio/core:gpio"
+        "drivers/gpio/core:gpio"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

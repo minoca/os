@@ -25,9 +25,27 @@ Environment:
 
 --*/
 
+from menv import binplace, executable, uefiFwvol, flattenedBinary;
+
 function build() {
-    plat = "bbone";
-    text_address = "0x82000000";
+    var commonLibs;
+    var elf;
+    var entries;
+    var ffs;
+    var flattened;
+    var fwVolume;
+    var includes;
+    var libs;
+    var linkConfig;
+    var link_ldflags;
+    var plat = "bbone";
+    var platfw;
+    var sources;
+    var sourcesConfig;
+    var textAddress = "0x82000000";
+    var uboot;
+    var ubootConfig;
+
     sources = [
         "armv7/entry.S",
         "clock.c",
@@ -47,10 +65,10 @@ function build() {
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"]
     };
 
@@ -60,35 +78,35 @@ function build() {
         "-static"
     ];
 
-    link_config = {
+    linkConfig = {
         "LDFLAGS": link_ldflags
     };
 
-    common_libs = [
-        "//uefi/core:ueficore",
-        "//kernel/kd:kdboot",
-        "//uefi/core:ueficore",
-        "//uefi/archlib:uefiarch",
-        "//lib/fatlib:fat",
-        "//lib/basevid:basevid",
-        "//lib/rtl/base:basertlb",
-        "//kernel/kd/kdusb:kdnousb",
-        "//kernel:archboot",
-        "//uefi/core:emptyrd",
+    commonLibs = [
+        "uefi/core:ueficore",
+        "kernel/kd:kdboot",
+        "uefi/core:ueficore",
+        "uefi/archlib:uefiarch",
+        "lib/fatlib:fat",
+        "lib/basevid:basevid",
+        "lib/rtl/base:basertlb",
+        "kernel/kd/kdusb:kdnousb",
+        "kernel:archboot",
+        "uefi/core:emptyrd",
     ];
 
-    libs = common_libs + [
-        "//uefi/dev/sd/core:sd",
-        "//uefi/dev/omapuart:omapuart"
+    libs = commonLibs + [
+        "uefi/dev/sd/core:sd",
+        "uefi/dev/omapuart:omapuart"
     ];
 
     platfw = plat + "fw";
     elf = {
         "label": platfw + ".elf",
         "inputs": sources + libs,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": link_config
+        "config": linkConfig
     };
 
     entries = executable(elf);
@@ -98,13 +116,13 @@ function build() {
     //
 
     ffs = [
-        "//uefi/core/runtime:rtbase.ffs",
-        "//uefi/plat/beagbone/runtime:" + plat + "rt.ffs",
-        "//uefi/plat/beagbone/acpi:acpi.ffs"
+        "uefi/core/runtime:rtbase.ffs",
+        "uefi/plat/beagbone/runtime:" + plat + "rt.ffs",
+        "uefi/plat/beagbone/acpi:acpi.ffs"
     ];
 
-    fw_volume = uefi_fwvol_o(plat, ffs);
-    entries += fw_volume;
+    fwVolume = uefiFwvol("uefi/plat/beagbone", plat, ffs);
+    entries += fwVolume;
 
     //
     // Flatten the firmware image and convert to u-boot.
@@ -115,24 +133,24 @@ function build() {
         "inputs": [":" + platfw + ".elf"]
     };
 
-    flattened = flattened_binary(flattened);
+    flattened = flattenedBinary(flattened);
     entries += flattened;
-    uboot_config = {
-        "TEXT_ADDRESS": text_address,
+    ubootConfig = {
+        "TEXT_ADDRESS": textAddress,
         "MKUBOOT_FLAGS": "-c -a arm -f legacy"
     };
 
     uboot = {
+        "type": "target",
         "label": platfw,
         "inputs": [":" + platfw + ".bin"],
-        "orderonly": ["//uefi/tools/mkuboot:mkuboot"],
+        "orderonly": ["uefi/tools/mkuboot:mkuboot"],
         "tool": "mkuboot",
-        "config": uboot_config,
-        "nostrip": TRUE
+        "config": ubootConfig,
+        "nostrip": true
     };
 
     entries += binplace(uboot);
     return entries;
 }
 
-return build();

@@ -25,9 +25,25 @@ Environment:
 
 --*/
 
+from menv import executable, uefiFwvol, flattenedBinary;
+
 function build() {
-    plat = "rpi2";
-    text_address = "0x00008000";
+    var commonLibs;
+    var elf;
+    var entries;
+    var ffs;
+    var flattened;
+    var fwVolume;
+    var includes;
+    var libs;
+    var linkConfig;
+    var linkLdflags;
+    var plat = "rpi2";
+    var platfw;
+    var sources;
+    var sourcesConfig;
+    var textAddress = "0x00008000";
+
     sources = [
         "armv7/entry.S",
         "armv7/smpa.S",
@@ -45,51 +61,51 @@ function build() {
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-Wl,--no-wchar-size-warning",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
-    common_libs = [
-        "//uefi/core:ueficore",
-        "//kernel/kd:kdboot",
-        "//uefi/core:ueficore",
-        "//uefi/archlib:uefiarch",
-        "//lib/fatlib:fat",
-        "//lib/basevid:basevid",
-        "//lib/rtl/base:basertlb",
-        "//kernel/kd/kdusb:kdnousb",
-        "//kernel:archboot",
-        "//uefi/core:emptyrd",
+    commonLibs = [
+        "uefi/core:ueficore",
+        "kernel/kd:kdboot",
+        "uefi/core:ueficore",
+        "uefi/archlib:uefiarch",
+        "lib/fatlib:fat",
+        "lib/basevid:basevid",
+        "lib/rtl/base:basertlb",
+        "kernel/kd/kdusb:kdnousb",
+        "kernel:archboot",
+        "uefi/core:emptyrd",
     ];
 
     libs = [
-        "//uefi/dev/pl11:pl11",
-        "//uefi/dev/bcm2709:bcm2709",
-        "//uefi/dev/sd/core:sd",
+        "uefi/dev/pl11:pl11",
+        "uefi/dev/bcm2709:bcm2709",
+        "uefi/dev/sd/core:sd",
     ];
 
-    libs += common_libs;
+    libs += commonLibs;
     platfw = plat + "fw";
     elf = {
         "label": platfw + ".elf",
         "inputs": sources + libs,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": link_config,
-        "text_address": text_address
+        "config": linkConfig,
+        "text_address": textAddress
     };
 
     entries = executable(elf);
@@ -99,13 +115,13 @@ function build() {
     //
 
     ffs = [
-        "//uefi/core/runtime:rtbase.ffs",
-        "//uefi/plat/" + plat + "/runtime:" + plat + "rt.ffs",
-        "//uefi/plat/" + plat + "/acpi:acpi.ffs"
+        "uefi/core/runtime:rtbase.ffs",
+        "uefi/plat/" + plat + "/runtime:" + plat + "rt.ffs",
+        "uefi/plat/" + plat + "/acpi:acpi.ffs"
     ];
 
-    fw_volume = uefi_fwvol_o(plat, ffs);
-    entries += fw_volume;
+    fwVolume = uefiFwvol("uefi/plat/rpi2", plat, ffs);
+    entries += fwVolume;
 
     //
     // Flatten the firmware image.
@@ -114,12 +130,11 @@ function build() {
     flattened = {
         "label": platfw,
         "inputs": [":" + platfw + ".elf"],
-        "implicit": ["//uefi/plat/rpi2/blobs:blobs"],
-        "binplace": TRUE
+        "implicit": ["uefi/plat/rpi2/blobs:blobs"],
+        "binplace": true
     };
 
-    entries += flattened_binary(flattened);
+    entries += flattenedBinary(flattened);
     return entries;
 }
 
-return build();

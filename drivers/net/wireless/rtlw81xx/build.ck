@@ -26,35 +26,43 @@ Environment:
 
 --*/
 
+from menv import copy, driver, mconfig;
+
 function build() {
-    name = "rtlw81xx";
+    var drv;
+    var dynlibs;
+    var entries = [];
+    var firmwareFiles;
+    var implicits = [];
+    var name = "rtlw81xx";
+    var sources;
+
     sources = [
         "rtlw81.c",
         "rtlw81hw.c"
     ];
 
     dynlibs = [
-        "//drivers/net/netcore:netcore",
-        "//drivers/net/net80211:net80211",
-        "//drivers/usb/usbcore:usbcore"
+        "drivers/net/netcore:netcore",
+        "drivers/net/net80211:net80211",
+        "drivers/usb/usbcore:usbcore"
     ];
 
-    fw_files = [
+    firmwareFiles = [
         "rtlw8188cufwUMC.bin",
         "rtlw8188eufw.bin",
         "rtlw8192cufw.bin"
     ];
 
-    entries = [];
     implicits = [];
-    for (fw_file in fw_files) {
-        entries += copy("firmware/" + fw_file,
-                        binroot + "/" + fw_file,
-                        fw_file,
+    for (fwFile in firmwareFiles) {
+        entries += copy("firmware/" + fwFile,
+                        mconfig.binroot + "/" + fwFile,
+                        fwFile,
                         null,
                         null);
 
-        implicits += [":" + fw_file];
+        implicits += [":" + fwFile];
     }
 
     drv = {
@@ -67,4 +75,3 @@ function build() {
     return entries;
 }
 
-return build();

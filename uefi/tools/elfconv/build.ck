@@ -28,32 +28,39 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var app;
+    var entries;
+    var includes;
+    var sources;
+    var tool;
+
     sources = [
         "elfc32.c",
         "elfconv.c",
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
     app = {
         "label": "elfconv",
         "inputs": sources,
         "includes": includes,
-        "build": TRUE
+        "build": true
     };
 
     entries = application(app);
     tool = {
         "type": "tool",
         "name": "elfconv",
-        "command": "$^//uefi/tools/elfconv/elfconv $ELFCONV_FLAGS -o $OUT $IN",
+        "command": "$O/uefi/tools/elfconv/elfconv $ELFCONV_FLAGS -o $OUT $IN",
         "description": "Converting to PE - $IN"
     };
 
     return entries + [tool];
 }
 
-return build();

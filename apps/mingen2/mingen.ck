@@ -585,11 +585,25 @@ Return Value:
 
     for (entry in entries) {
         if (!(entry is Dict)) {
-            Core.raise(TypeError("Expected a dict, got a %s: %s" %
-                                 [entry.type().name(), entry.__str()]));
+            Core.raise(TypeError("In %s: Expected a dict, got a %s: %s" %
+                                 [moduleName,
+                                  entry.type().name(),
+                                  entry.__str()]));
         }
 
-        entryType = entry.type;
+        try {
+            entryType = entry.type;
+
+        } except KeyError {
+            Core.print("In entry:");
+            for (key in entry) {
+                Core.print("  %s: %s" % [key, entry[key].__str()]);
+            }
+
+            Core.raise(ValueError("In %s: Dict must have a 'type' member" %
+                                  moduleName));
+        }
+
         if (entryType == "target") {
             _validateTargetEntry(moduleName, entry);
 

@@ -26,14 +26,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "rk3i2c";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "rk3i2c";
+    var sources;
+
     sources = [
         "rk3i2c.c"
     ];
 
     dynlibs = [
-        "//drivers/spb/core:spb"
+        "drivers/spb/core:spb"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -29,7 +29,14 @@ Environment:
 
 --*/
 
+from menv import driver, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var drv;
+    var entries;
+    var sources;
+
     sources = [
         "acpidrv.c",
         "aml.c",
@@ -67,4 +74,3 @@ function build() {
     return entries;
 }
 
-return build();

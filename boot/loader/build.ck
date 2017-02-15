@@ -27,67 +27,91 @@ Environment:
 
 --*/
 
+from menv import application, mconfig;
+
 function build() {
-    common_sources = [
+    var arch = mconfig.arch;
+    var baseLibs;
+    var commonArmSources;
+    var commonLibs;
+    var commonSources;
+    var efiApp;
+    var efiAppLibs;
+    var efiLibs;
+    var efiLinkConfig;
+    var efiLinkLdflags;
+    var efiSources;
+    var entries;
+    var includes;
+    var linkLdflags;
+    var pcatApp;
+    var pcatAppLibs;
+    var pcatLibs;
+    var pcatLinkConfig;
+    var pcatLinkLdflags;
+    var pcatSources;
+    var sourcesConfig;
+
+    commonSources = [
         "bootim.c",
         "dbgport.c",
         "loader.c"
     ];
 
-    pcat_sources = [
+    pcatSources = [
         "pcat/memory.c",
     ];
 
-    efi_sources = [
+    efiSources = [
         "efi/memory.c",
     ];
 
     includes = [
-        "$//boot/lib/include",
-        "$//boot/loader"
+        "$S/boot/lib/include",
+        "$S/boot/loader"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"],
     };
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-pie",
         "-static"
     ];
 
-    efi_libs = [
-        "//boot/lib:bootefi"
+    efiLibs = [
+        "boot/lib:bootefi"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        common_arm_sources = [
+        commonArmSources = [
             "armv7/dbgparch.c",
             "armv7/paging.c",
             "armv7/kernxfr.S"
         ];
 
         if (arch == "armv7") {
-            common_sources += common_arm_sources + [
+            commonSources += commonArmSources + [
                 "armv7/archsupc.c"
             ];
 
         } else {
-            common_sources += common_arm_sources + [
+            commonSources += commonArmSources + [
                 "armv6/archsupc.c"
             ];
         }
 
-        efi_link_ldflags = link_ldflags + [
+        efiLinkLdflags = linkLdflags + [
             "-Wl,--no-wchar-size-warning"
         ];
 
-        efi_libs = ["//kernel:archboot"] + efi_libs;
+        efiLibs = ["kernel:archboot"] + efiLibs;
 
     } else if (arch == "x86") {
-        efi_link_ldflags = link_ldflags;
-        common_sources += [
+        efiLinkLdflags = linkLdflags;
+        commonSources += [
             "x86/archsupc.c",
             "x86/dbgparch.c",
             "x86/entry.S",
@@ -96,12 +120,12 @@ function build() {
         ];
     }
 
-    efi_link_config = {
-        "LDFLAGS": efi_link_ldflags
+    efiLinkConfig = {
+        "LDFLAGS": efiLinkLdflags
     };
 
-    pcat_link_config = {
-        "LDFLAGS": link_ldflags
+    pcatLinkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
     //
@@ -109,61 +133,60 @@ function build() {
     // must go after the boot library.
     //
 
-    base_libs = [
-        "//lib/basevid:basevid",
-        "//lib/fatlib:fat",
-        "//kernel/mm:mmboot",
-        "//lib/rtl/kmode:krtl",
-        "//lib/rtl/base:basertlb"
+    baseLibs = [
+        "lib/basevid:basevid",
+        "lib/fatlib:fat",
+        "kernel/mm:mmboot",
+        "lib/rtl/kmode:krtl",
+        "lib/rtl/base:basertlb"
     ];
 
-    common_libs = [
-        "//kernel/kd:kdboot",
-        "//kernel/hl:hlboot",
-        "//lib/im:im",
-        "//lib/bconflib:bconf",
-        "//kernel/kd/kdusb:kdnousb"
+    commonLibs = [
+        "kernel/kd:kdboot",
+        "kernel/hl:hlboot",
+        "lib/im:im",
+        "lib/bconflib:bconf",
+        "kernel/kd/kdusb:kdnousb"
     ];
 
-    pcat_libs = [
-        "//boot/lib:bootpcat",
-        "//lib/partlib:partlib"
+    pcatLibs = [
+        "boot/lib:bootpcat",
+        "lib/partlib:partlib"
     ];
 
-    efi_app_libs = common_libs + efi_libs + base_libs;
-    efi_app = {
+    efiAppLibs = commonLibs + efiLibs + baseLibs;
+    efiApp = {
         "label": "loadefi",
-        "inputs": common_sources + efi_sources + efi_app_libs,
-        "sources_config": sources_config,
+        "inputs": commonSources + efiSources + efiAppLibs,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": efi_link_config,
+        "config": efiLinkConfig,
         "entry": "BoMain",
-        "binplace": TRUE
+        "binplace": true
     };
 
-    entries = application(efi_app);
+    entries = application(efiApp);
 
     //
     // On PC machines, build the BIOS loader as well.
     //
 
     if (arch == "x86") {
-        pcat_app_libs = common_libs + pcat_libs + base_libs;
-        pcat_app = {
+        pcatAppLibs = commonLibs + pcatLibs + baseLibs;
+        pcatApp = {
             "label": "loader",
-            "inputs": common_sources + pcat_sources + pcat_app_libs,
-            "sources_config": sources_config,
+            "inputs": commonSources + pcatSources + pcatAppLibs,
+            "sources_config": sourcesConfig,
             "includes": includes,
-            "config": pcat_link_config,
+            "config": pcatLinkConfig,
             "entry": "BoMain",
             "prefix": "pcat",
-            "binplace": TRUE
+            "binplace": true
         };
 
-        entries += application(pcat_app);
+        entries += application(pcatApp);
     }
 
     return entries;
 }
 
-return build();

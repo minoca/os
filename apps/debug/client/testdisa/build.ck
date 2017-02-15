@@ -25,32 +25,37 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var buildApp;
+    var buildLibs;
+    var entries;
+    var sources;
+
     sources = [
         "testdisa.c",
-        "//apps/debug/client:build/x86dis.o",
-        "//apps/debug/client:build/armdis.o",
-        "//apps/debug/client:build/disasm.o",
-        "//apps/debug/client:build/thmdis.o",
-        "//apps/debug/client:build/thm32dis.o",
+        "apps/debug/client:build/x86dis.o",
+        "apps/debug/client:build/armdis.o",
+        "apps/debug/client:build/disasm.o",
+        "apps/debug/client:build/thmdis.o",
+        "apps/debug/client:build/thm32dis.o",
     ];
 
-    build_libs = [
-        "//lib/im:build_im",
-        "//lib/rtl/base:build_basertl",
-        "//lib/rtl/rtlc:build_rtlc",
+    buildLibs = [
+        "lib/im:build_im",
+        "lib/rtl/base:build_basertl",
+        "lib/rtl/rtlc:build_rtlc",
     ];
 
-    build_app = {
+    buildApp = {
         "label": "build_testdisa",
         "output": "testdisa",
-        "inputs": sources + build_libs,
-        "build": TRUE
+        "inputs": sources + buildLibs,
+        "build": true
     };
 
-    entries = application(build_app);
+    entries = application(buildApp);
     return entries;
 }
-
-return build();
 

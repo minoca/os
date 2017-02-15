@@ -25,7 +25,23 @@ Environment:
 
 --*/
 
+from menv import application, mconfig;
+
 function build() {
+    var app;
+    var base_sources;
+    var build_app;
+    var build_includes;
+    var build_libs;
+    var build_sources;
+    var build_os = mconfig.build_os;
+    var entries;
+    var includes;
+    var libs;
+    var sources;
+    var uos_sources;
+    var win32_sources;
+
     base_sources = [
         "chkfuncs.c",
         "make.c",
@@ -50,25 +66,25 @@ function build() {
     }
 
     libs = [
-        "//apps/lib/chalk:chalk",
-        "//lib/yy:yy",
-        "//lib/rtl/rtlc:rtlc",
-        "//lib/rtl/base/:basertl"
+        "apps/lib/chalk:chalk",
+        "lib/yy:yy",
+        "lib/rtl/rtlc:rtlc",
+        "lib/rtl/base:basertl"
     ];
 
     build_libs = [
-        "//apps/lib/chalk:build_chalk",
-        "//lib/yy:build_yy",
-        "//lib/rtl/rtlc:build_rtlc",
-        "//lib/rtl/base:build_basertl"
+        "apps/lib/chalk:build_chalk",
+        "lib/yy:build_yy",
+        "lib/rtl/rtlc:build_rtlc",
+        "lib/rtl/base:build_basertl"
     ];
 
     build_includes = [
-        "$//apps/lib/chalk"
+        "$S/apps/lib/chalk"
     ];
 
     includes = build_includes + [
-        "$//apps/libc/include"
+        "$S/apps/libc/include"
     ];
 
     app = {
@@ -82,7 +98,7 @@ function build() {
         "output": "mingen",
         "inputs": build_sources + build_libs,
         "includes": build_includes,
-        "build": TRUE,
+        "build": true,
         "prefix": "build"
     };
 
@@ -90,6 +106,4 @@ function build() {
     entries += application(build_app);
     return entries;
 }
-
-return build();
 

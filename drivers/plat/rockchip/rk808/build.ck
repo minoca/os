@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "rk808";
+    var drv;
+    var entries;
+    var name = "rk808";
+    var sources;
+
     sources = [
         "rk808.c"
     ];
@@ -41,4 +47,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -37,7 +37,8 @@ function build() {
 
     sources = [
         "lex.c",
-        "parse.c"
+        "parse.c",
+        "parser.c"
     ];
 
     lib = {

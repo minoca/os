@@ -28,8 +28,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "null";
+    var drv;
+    var entries;
+    var name = "null";
+    var sources;
+
     sources = [
         "null.c"
     ];
@@ -43,4 +49,3 @@ function build() {
     return entries;
 }
 
-return build();

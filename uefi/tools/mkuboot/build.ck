@@ -26,39 +26,55 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var app;
+    var entries;
+    var includes;
+    var mkubootCommand;
+    var sources;
+    var tool;
+
     sources = [
         "mkuboot.c",
-    ];
-
-    libs = [
-        "//lib/rtl/base:build_basertl",
-        "//lib/rtl/rtlc:build_rtlc"
+        "../../core/crc32.c"
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
     app = {
         "label": "mkuboot",
-        "inputs": sources + libs,
+        "inputs": sources,
         "includes": includes,
-        "build": TRUE
+        "build": true
     };
 
     entries = application(app);
-    mkuboot_command = "$^//uefi/tools/mkuboot/mkuboot $MKUBOOT_FLAGS " +
-                      "-l $TEXT_ADDRESS -e $TEXT_ADDRESS -o $OUT $IN";
+
+    //
+    // Adjust crc32.o so it doesn't collide with the native version.
+    //
+
+    for (entry in entries) {
+        if ((entry.get("output")) && (entry.output.endsWith("crc32.o"))) {
+            entry.output = "crc32.o";
+            break;
+        }
+    }
+
+    mkubootCommand = "$O/uefi/tools/mkuboot/mkuboot $MKUBOOT_FLAGS " +
+                     "-l $TEXT_ADDRESS -e $TEXT_ADDRESS -o $OUT $IN";
 
     tool = {
         "type": "tool",
         "name": "mkuboot",
-        "command": mkuboot_command,
+        "command": mkubootCommand,
         "description": "Creating U-Boot Image - $OUT"
     };
 
     return entries + [tool];
 }
 
-return build();

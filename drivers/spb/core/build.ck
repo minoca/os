@@ -27,8 +27,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "spb";
+    var drv;
+    var entries;
+    var name = "spb";
+    var sources;
+
     sources = [
         "spb.c"
     ];
@@ -42,4 +48,3 @@ function build() {
     return entries;
 }
 
-return build();

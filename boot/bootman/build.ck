@@ -27,13 +27,39 @@ Environment:
 
 --*/
 
+from menv import application, binplace, executable, flattenedBinary, mconfig;
+
 function build() {
-    common_sources = [
+    var arch = mconfig.arch;
+    var baseLibs;
+    var bootmanPe;
+    var commonLibs;
+    var commonSources;
+    var efiApp;
+    var efiAppLibs;
+    var efiLibs;
+    var efiLinkConfig;
+    var efiLinkLdflags;
+    var efiSources;
+    var elfconvConfig;
+    var entries;
+    var flattened;
+    var includes;
+    var linkerScript;
+    var pcatApp;
+    var pcatAppLibs;
+    var pcatLibs;
+    var pcatLinkConfig;
+    var pcatLinkLdflags;
+    var pcatSources;
+    var sourcesConfig;
+
+    commonSources = [
         "bootman.c",
         "bootim.c"
     ];
 
-    pcat_sources = [
+    pcatSources = [
         "pcat/x86/entry.S",
         ":bootman.o",
         ":bootim.o",
@@ -41,53 +67,53 @@ function build() {
         "pcat/main.c",
     ];
 
-    efi_sources = [
+    efiSources = [
         "efi/bootxfr.c",
         "efi/main.c"
     ];
 
     includes = [
-        "$//boot/lib/include",
-        "$//boot/bootman"
+        "$S/boot/lib/include",
+        "$S/boot/bootman"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"],
     };
 
-    efi_link_ldflags = [
+    efiLinkLdflags = [
         "-nostdlib",
         "-pie",
         "-static",
     ];
 
-    pcat_link_ldflags = [
+    pcatLinkLdflags = [
         "-nostdlib",
         "-static"
     ];
 
-    efi_libs = [
-        "//boot/lib:bootefi",
+    efiLibs = [
+        "boot/lib:bootefi",
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        linker_script = "$//uefi/include/link_arm.x";
-        efi_link_ldflags += [
+        linkerScript = "$S/uefi/include/link_arm.x";
+        efiLinkLdflags += [
             "-Wl,--no-wchar-size-warning"
         ];
 
-        efi_libs = ["//kernel:archboot"] + efi_libs;
+        efiLibs = ["kernel:archboot"] + efiLibs;
 
     } else if (arch == "x86") {
-        linker_script = "$//uefi/include/link_x86.x";
+        linkerScript = "$S/uefi/include/link_x86.x";
     }
 
-    efi_link_config = {
-        "LDFLAGS": efi_link_ldflags
+    efiLinkConfig = {
+        "LDFLAGS": efiLinkLdflags
     };
 
-    pcat_link_config = {
-        "LDFLAGS": pcat_link_ldflags
+    pcatLinkConfig = {
+        "LDFLAGS": pcatLinkLdflags
     };
 
     //
@@ -95,77 +121,77 @@ function build() {
     // must go after the boot library.
     //
 
-    base_libs = [
-        "//lib/basevid:basevid",
-        "//lib/fatlib:fat",
-        "//kernel/mm:mmboot",
-        "//lib/rtl/kmode:krtl",
-        "//lib/rtl/base:basertlb"
+    baseLibs = [
+        "lib/basevid:basevid",
+        "lib/fatlib:fat",
+        "kernel/mm:mmboot",
+        "lib/rtl/kmode:krtl",
+        "lib/rtl/base:basertlb"
     ];
 
-    common_libs = [
-        "//kernel/kd:kdboot",
-        "//kernel/hl:hlboot",
-        "//lib/im:im",
-        "//lib/bconflib:bconf",
-        "//kernel/kd/kdusb:kdnousb"
+    commonLibs = [
+        "kernel/kd:kdboot",
+        "kernel/hl:hlboot",
+        "lib/im:im",
+        "lib/bconflib:bconf",
+        "kernel/kd/kdusb:kdnousb"
     ];
 
-    pcat_libs = [
-        "//boot/lib:bootpcat",
-        "//lib/partlib:partlib"
+    pcatLibs = [
+        "boot/lib:bootpcat",
+        "lib/partlib:partlib"
     ];
 
-    efi_app_libs = common_libs + efi_libs + base_libs;
-    efi_app = {
+    efiAppLibs = commonLibs + efiLibs + baseLibs;
+    efiApp = {
         "label": "bootmefi.elf",
-        "inputs": common_sources + efi_sources + efi_app_libs,
-        "sources_config": sources_config,
+        "inputs": commonSources + efiSources + efiAppLibs,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": efi_link_config,
+        "config": efiLinkConfig,
         "entry": "BmEfiApplicationMain",
-        "linker_script": linker_script
+        "linker_script": linkerScript
     };
 
-    entries = application(efi_app);
+    entries = application(efiApp);
 
     //
     // Convert the ELF image into an EFI PE image.
     //
 
-    elfconv_config = {
+    elfconvConfig = {
         "ELFCONV_FLAGS": "-t efiapp"
     };
 
-    bootman_pe = {
+    bootmanPe = {
         "type": "target",
         "label": "bootmefi.efi",
         "inputs": [":bootmefi.elf"],
-        "implicit": ["//uefi/tools/elfconv:elfconv"],
+        "implicit": ["uefi/tools/elfconv:elfconv"],
         "tool": "elfconv",
-        "config": elfconv_config,
-        "nostrip": TRUE
+        "config": elfconvConfig,
+        "nostrip": true
     };
 
-    entries += binplace(bootman_pe);
+    entries += binplace(bootmanPe);
 
     //
     // On PC machines, build the BIOS library as well.
     //
 
     if (arch == "x86") {
-        pcat_app_libs = common_libs + pcat_libs + base_libs;
-        pcat_app = {
+        pcatAppLibs = commonLibs + pcatLibs + baseLibs;
+        pcatApp = {
             "label": "bootman.elf",
-            "inputs": pcat_sources + pcat_app_libs,
-            "sources_config": sources_config,
+            "inputs": pcatSources + pcatAppLibs,
+            "sources_config": sourcesConfig,
             "includes": includes,
-            "config": pcat_link_config,
+            "config": pcatLinkConfig,
             "text_address": "0x100000",
-            "binplace": TRUE
+            "binplace": true
         };
 
-        entries += executable(pcat_app);
+        entries += executable(pcatApp);
 
         //
         // Flatten the image so the VBR can load it directly into memory.
@@ -174,15 +200,14 @@ function build() {
         flattened = {
             "label": "bootman.bin",
             "inputs": [":bootman.elf"],
-            "binplace": TRUE,
-            "nostrip": TRUE
+            "binplace": true,
+            "nostrip": true
         };
 
-        flattened = flattened_binary(flattened);
+        flattened = flattenedBinary(flattened);
         entries += flattened;
     }
 
     return entries;
 }
 
-return build();

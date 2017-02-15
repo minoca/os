@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "tps65217";
+    var drv;
+    var entries;
+    var name = "tps65217";
+    var sources;
+
     sources = [
         "tps65217.c"
     ];
@@ -41,4 +47,3 @@ function build() {
     return entries;
 }
 
-return build();

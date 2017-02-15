@@ -1390,13 +1390,6 @@ Return Value:
                        (UINT32)RelocationElementSize);
             }
 
-            if ((RelocationOffset == 0) || (RelocationSize == 0) ||
-                (RelocationElementSize == 0)) {
-
-                fprintf(stderr, "Error: Bad ARM relocations.\n");
-                return FALSE;
-            }
-
             for (RelocationIndex = 0;
                  RelocationIndex < RelocationSize;
                  RelocationIndex += RelocationElementSize) {

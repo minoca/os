@@ -25,8 +25,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "devrem";
+    var drv;
+    var entries;
+    var name = "devrem";
+    var sources;
+
     sources = [
         "devrem.c"
     ];
@@ -40,4 +46,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -25,15 +25,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "videocon";
+    var drv;
+    var libs;
+    var entries;
+    var name = "videocon";
+    var sources;
+
     sources = [
         "videocon.c"
     ];
 
     libs = [
-        "//lib/basevid:basevid",
-        "//lib/termlib:termlib"
+        "lib/basevid:basevid",
+        "lib/termlib:termlib"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

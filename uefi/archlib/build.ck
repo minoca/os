@@ -25,59 +25,70 @@ Environment:
 
 --*/
 
+from menv import mconfig, staticLibrary;
+
 function build() {
-    x86_sources = [
+    var arch = mconfig.arch;
+    var armSources;
+    var armv6Sources;
+    var armv7Sources;
+    var entries;
+    var includes;
+    var lib;
+    var sources;
+    var sourcesConfig;
+    var x86Sources;
+
+    x86Sources = [
         "x86/archlib.c",
         "x86/archsup.S",
         "x86/ioport.S",
         "x86/regacces.c"
     ];
 
-    arm_sources = [
+    armSources = [
         "armv7/archlib.c",
         "armv7/regacces.c"
     ];
 
-    armv7_sources = arm_sources + [
+    armv7Sources = armSources + [
         "armv7/archsup.S"
     ];
 
-    armv6_sources = arm_sources + [
+    armv6Sources = armSources + [
         "armv6/archsup.S"
     ];
 
     if (arch == "armv7") {
-        sources = armv7_sources;
+        sources = armv7Sources;
 
     } else if (arch == "armv6") {
-        sources = armv6_sources;
+        sources = armv6Sources;
 
     } else if (arch == "x86") {
-        sources = x86_sources;
+        sources = x86Sources;
 
     } else {
-
-        assert(0, "Unknown architecture");
+        Core.raise(ValueError("Unknown Architecture"));
     }
 
     includes = [
-        "$//uefi/include",
-        "$//uefi/core"
+        "$S/uefi/include",
+        "$S/uefi/core"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"],
     };
 
     lib = {
         "label": "uefiarch",
         "inputs": sources,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
     return entries;
 }
 
-return build();

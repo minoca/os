@@ -33,7 +33,19 @@ Environment:
 
 --*/
 
+from menv import sharedLibrary, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var archSources;
+    var entries;
+    var ldflags;
+    var libs;
+    var linkConfig;
+    var so;
+    var sources;
+    var textAddress;
+
     sources = [
         "env.c",
         "heap.c",
@@ -47,59 +59,57 @@ function build() {
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        text_base = "0x10000000";
-        arch_sources = [
+        textAddress = "0x10000000";
+        archSources = [
             "armv7/features.c",
             "armv7/osbasea.S",
             "armv7/syscall.c"
         ];
 
     } else if (arch == "x86") {
-        text_base = "0x200000";
-        arch_sources = [
+        textAddress = "0x200000";
+        archSources = [
             "x86/features.c",
             "x86/osbasea.S",
             "x86/syscall.c"
         ];
 
     } else if (arch == "x64") {
-        text_base = "0x200000";
-        arch_sources = [
+        textAddress = "0x200000";
+        archSources = [
             "x64/osbasea.S",
             "x64/syscall.c"
         ];
     }
 
-    link_ldflags = [
+    ldflags = [
         "-Wl,-Bsymbolic",
         "-nostdlib",
         "-Wl,--whole-archive",
-        "-Wl,-Ttext-segment=" + text_base,
+        "-Wl,-Ttext-segment=" + textAddress,
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": ldflags
     };
 
     libs = [
-        "//lib/rtl/base:basertl",
-        "//lib/rtl/base:basertlw",
-        "//lib/im:im",
-        "//apps/osbase/urtl:urtl",
-        "//lib/crypto:crypto"
+        "lib/rtl/base:basertl",
+        "lib/rtl/base:basertlw",
+        "lib/im:im",
+        "apps/osbase/urtl:urtl",
+        "lib/crypto:crypto"
     ];
 
     so = {
         "label": "libminocaos",
-        "inputs": sources + arch_sources + libs,
+        "inputs": sources + archSources + libs,
         "entry": "OsDynamicLoaderMain",
-        "config": link_config,
+        "config": linkConfig,
         "major_version": "1"
     };
 
-    entries = shared_library(so);
+    entries = sharedLibrary(so);
     return entries;
 }
-
-return build();
 

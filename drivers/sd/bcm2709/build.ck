@@ -25,15 +25,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "sdbm2709";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "sdbm2709";
+    var sources;
+
     sources = [
         "emmc.c",
         "sdbm2709.c"
     ];
 
     dynlibs = [
-        "//drivers/sd/core:sd"
+        "drivers/sd/core:sd"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

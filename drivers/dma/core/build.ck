@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "dma";
+    var drv;
+    var entries;
+    var name = "dma";
+    var sources;
+
     sources = [
         "dma.c"
     ];
@@ -41,4 +47,3 @@ function build() {
     return entries;
 }
 
-return build();

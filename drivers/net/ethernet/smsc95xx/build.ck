@@ -26,16 +26,23 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "smsc95xx";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "smsc95xx";
+    var sources;
+
     sources = [
         "smsc95.c",
         "smsc95hw.c"
     ];
 
     dynlibs = [
-        "//drivers/net/netcore:netcore",
-        "//drivers/usb/usbcore:usbcore"
+        "drivers/net/netcore:netcore",
+        "drivers/usb/usbcore:usbcore"
     ];
 
     drv = {
@@ -47,4 +54,3 @@ function build() {
     return entries;
 }
 
-return build();

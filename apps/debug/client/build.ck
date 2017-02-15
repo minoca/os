@@ -26,8 +26,37 @@ Environment:
 
 --*/
 
+from menv import application, mconfig;
+
 function build() {
-    common_sources = [
+    var arch = mconfig.arch;
+    var archSources;
+    var armSources;
+    var buildApp;
+    var buildArch = mconfig.build_arch;
+    var buildArchSources;
+    var buildConfig;
+    var buildGuiApp;
+    var buildGuiConfig;
+    var buildGuiSources;
+    var buildOs = mconfig.build_os;
+    var buildLibs;
+    var buildSources;
+    var commonSources;
+    var entries;
+    var includes;
+    var minocaSources;
+    var targetApp;
+    var targetDynlibs;
+    var targetLibs;
+    var targetSources;
+    var win32CmdSources;
+    var win32CommonSources;
+    var win32GuiSources;
+    var win32Sources;
+    var x86Sources;
+
+    commonSources = [
         "armdis.c",
         "cmdtab.c",
         "coff.c",
@@ -56,21 +85,21 @@ function build() {
         "x86dis.c"
     ];
 
-    x86_sources = [
+    x86Sources = [
         "x86/dbgarch.c"
     ];
 
-    arm_sources = [
+    armSources = [
         "armv7/dbgarch.c"
     ];
 
-    minoca_sources = [
+    minocaSources = [
         "minoca/cmdln.c",
         "minoca/extsup.c",
         "minoca/sock.c"
     ];
 
-    win32_sources = [
+    win32Sources = [
         "win32/ntcomm.c",
         "win32/ntextsup.c",
         "win32/ntsock.c",
@@ -78,125 +107,122 @@ function build() {
         "win32/ntusrsup.c"
     ];
 
-    win32_cmd_sources = [
+    win32CmdSources = [
         "win32/cmdln/ntcmdln.c",
     ];
 
-    win32_gui_sources = [
+    win32GuiSources = [
         "win32/ui/debugres.rc",
         "win32/ui/ntdbgui.c"
     ];
 
-    target_libs = [
-        "//lib/im:im"
+    targetLibs = [
+        "lib/im:im"
     ];
 
-    build_libs = [
-        "//lib/im:build_im",
-        "//lib/rtl/base:build_basertl",
-        "//lib/rtl/rtlc:build_rtlc"
+    buildLibs = [
+        "lib/im:build_im",
+        "lib/rtl/base:build_basertl",
+        "lib/rtl/rtlc:build_rtlc"
     ];
 
-    target_dynlibs = [
-        "//apps/osbase:libminocaos"
+    targetDynlibs = [
+        "apps/osbase:libminocaos"
     ];
 
     includes = [
-        "$//lib/im",
-        "$//apps/debug/client",
+        "$S/lib/im",
+        "$S/apps/debug/client",
     ];
 
     if (arch == "x86") {
-        arch_sources = x86_sources;
+        archSources = x86Sources;
 
     } else if ((arch == "armv7") || (arch == "armv6")) {
-        arch_sources = arm_sources;
+        archSources = armSources;
 
     } else {
-
-        assert(0, "Unknown architecture");
+        Core.raise(ValueError("Unknown architecture"));
     }
 
-    target_sources = common_sources + minoca_sources + target_libs +
-                     target_dynlibs + arch_sources;
+    targetSources = commonSources + minocaSources + targetLibs +
+                     targetDynlibs + archSources;
 
-    if (build_arch == "x86") {
-        build_arch_sources = x86_sources;
+    if (buildArch == "x86") {
+        buildArchSources = x86Sources;
 
-    } else if ((build_arch == "armv7") || (build_arch == "armv6")) {
-        build_arch_sources = arm_sources;
+    } else if ((buildArch == "armv7") || (buildArch == "armv6")) {
+        buildArchSources = armSources;
 
     } else {
-
-        assert(0, "Unknown architecture");
+        Core.raise(ValueError("Unknown architecture"));
     }
 
-    build_config = {};
-    build_gui_config = {};
-    if (build_os == "Windows") {
-        win32_common_sources = common_sources + build_arch_sources +
-                               win32_sources;
+    buildConfig = {};
+    buildGuiConfig = {};
+    if (buildOs == "Windows") {
+        win32CommonSources = commonSources + buildArchSources +
+                               win32Sources;
 
-        build_sources = win32_common_sources + win32_cmd_sources;
-        build_gui_sources = win32_common_sources + win32_gui_sources;
-        build_config["DYNLIBS"] = [
+        buildSources = win32CommonSources + win32CmdSources;
+        buildGuiSources = win32CommonSources + win32GuiSources;
+        buildConfig["DYNLIBS"] = [
             "-lpsapi",
             "-lws2_32",
             "-lmswsock",
             "-ladvapi32"
         ];
 
-        build_gui_config["DYNLIBS"] = build_config["DYNLIBS"] + ["-lshlwapi"];
-        build_gui_config["LDFLAGS"] = ["-mwindows"];
+        buildGuiConfig["DYNLIBS"] = buildConfig["DYNLIBS"] + ["-lshlwapi"];
+        buildGuiConfig["LDFLAGS"] = ["-mwindows"];
 
-    } else if (build_os == "Minoca") {
-        build_sources = common_sources + minoca_sources + target_libs;
-        build_config["DYNLIBS"] = ["-lminocaos"];
+    } else if (buildOs == "Minoca") {
+        buildSources = commonSources + minocaSources + targetLibs;
+        buildConfig["DYNLIBS"] = ["-lminocaos"];
 
     } else {
-        build_sources = null;
+        buildSources = null;
     }
 
-    target_app = {
+    targetApp = {
         "label": "debug",
-        "inputs": target_sources,
+        "inputs": targetSources,
         "includes": includes
     };
 
-    entries = application(target_app);
-    if (build_sources) {
-        build_app = {
+    entries = application(targetApp);
+    if (buildSources) {
+        buildApp = {
             "label": "build_debug",
             "output": "debug",
-            "inputs": build_sources + build_libs,
+            "inputs": buildSources + buildLibs,
             "includes": includes,
-            "config": build_config,
-            "build": TRUE,
+            "config": buildConfig,
+            "build": true,
             "prefix": "build"
         };
 
-        entries += application(build_app);
+        entries += application(buildApp);
     }
 
     //
     // Build the Windows GUI application if applicable.
     //
 
-    if (build_os == "Windows") {
-        build_gui_app = {
+    if (buildOs == "Windows") {
+        buildGuiApp = {
             "label": "build_debugui",
             "output": "debugui",
-            "inputs": build_gui_sources + build_libs,
+            "inputs": buildGuiSources + buildLibs,
             "includes": includes,
-            "config": build_gui_config,
-            "build": TRUE,
+            "config": buildGuiConfig,
+            "build": true,
             "prefix": "buildui"
         };
 
-        entries += application(build_gui_app);
+        entries += application(buildGuiApp);
     }
 
     return entries;
 }
 
-return build();

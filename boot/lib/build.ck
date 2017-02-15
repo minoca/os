@@ -25,8 +25,24 @@ Environment:
 
 --*/
 
+from menv import addConfig, compiledSources, mconfig, staticLibrary;
+
 function build() {
-    common_sources = [
+    var arch = mconfig.arch;
+    var commonArmEfiSources;
+    var commonArmSources;
+    var commonLib;
+    var commonList;
+    var commonSources;
+    var entries;
+    var includes;
+    var efiLib;
+    var efiSources;
+    var pcatLib;
+    var pcatSources;
+    var sourcesConfig;
+
+    commonSources = [
         "bootfat.c",
         "bootmem.c",
         "file.c",
@@ -34,7 +50,7 @@ function build() {
         "version.c"
     ];
 
-    pcat_sources = [
+    pcatSources = [
         "pcat/fwapi.c",
         "pcat/int10.c",
         "pcat/int13.c",
@@ -46,7 +62,7 @@ function build() {
         "pcat/time.c"
     ];
 
-    efi_sources = [
+    efiSources = [
         "efi/dbgser.c",
         "efi/disk.c",
         "efi/fwapi.c",
@@ -56,60 +72,60 @@ function build() {
         "efi/video.c"
     ];
 
-    common_arm_sources = [
+    commonArmSources = [
         "armv7/commsup.S",
         "armv7/inttable.S",
         "armv7/prochw.c"
     ];
 
-    common_arm_efi_sources = [
+    commonArmEfiSources = [
         "efi/armv7/efia.S",
         "efi/armv7/efiarch.c"
     ];
 
     if (arch == "armv7") {
-        common_sources += common_arm_sources + [
+        commonSources += commonArmSources + [
             "armv7/archsup.S"
         ];
 
-        efi_sources += common_arm_efi_sources;
+        efiSources += commonArmEfiSources;
 
     } else if (arch == "armv6") {
-        common_sources += common_arm_sources + [
+        commonSources += commonArmSources + [
             "armv6/archsup.S"
         ];
 
-        efi_sources += common_arm_efi_sources;
+        efiSources += commonArmEfiSources;
 
     } else if (arch == "x86") {
-        common_sources += [
+        commonSources += [
             "x86/archsup.S",
             "x86/prochw.c"
         ];
 
-        efi_sources += [
+        efiSources += [
             "efi/x86/efia.S",
             "efi/x86/efiarch.c"
         ];
     }
 
     includes = [
-        "$//boot/lib/include",
-        "$//boot/lib"
+        "$S/boot/lib/include",
+        "$S/boot/lib"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"],
     };
 
-    common_lib = {
-        "inputs": common_sources,
-        "sources_config": sources_config,
+    commonLib = {
+        "inputs": commonSources,
+        "sources_config": sourcesConfig,
         "includes": includes
     };
 
-    common_list = compiled_sources(common_lib);
-    entries = common_list[1];
+    commonList = compiledSources(commonLib);
+    entries = commonList[1];
 
     //
     // Add the include and dependency for version.c, which uses the kernel's
@@ -118,36 +134,35 @@ function build() {
 
     for (entry in entries) {
         if (entry["output"] == "version.o") {
-            add_config(entry, "CPPFLAGS", "-I$^/kernel");
-            entry["implicit"] = ["//kernel:version.h"];
+            addConfig(entry, "CPPFLAGS", "-I$O/kernel");
+            entry["implicit"] = ["kernel:version.h"];
             break;
         }
     }
 
-    efi_lib = {
+    efiLib = {
         "label": "bootefi",
-        "inputs": common_list[0] + efi_sources,
-        "sources_config": sources_config
+        "inputs": commonList[0] + efiSources,
+        "sources_config": sourcesConfig
     };
 
-    entries += static_library(efi_lib);
+    entries += staticLibrary(efiLib);
 
     //
     // On PC machines, build the BIOS library as well.
     //
 
     if (arch == "x86") {
-        pcat_lib = {
+        pcatLib = {
             "label": "bootpcat",
-            "inputs": common_list[0] + pcat_sources,
-            "sources_config": sources_config,
+            "inputs": commonList[0] + pcatSources,
+            "sources_config": sourcesConfig,
             "includes": includes
         };
 
-        entries += static_library(pcat_lib);
+        entries += staticLibrary(pcatLib);
     }
 
     return entries;
 }
 
-return build();

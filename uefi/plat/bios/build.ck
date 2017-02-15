@@ -26,9 +26,25 @@ Environment:
 
 --*/
 
+from menv import executable, uefiFwvol, flattenedBinary;
+
 function build() {
-    plat = "bios";
-    text_address = "0x100000";
+    var commonLibs;
+    var elf;
+    var entries;
+    var ffs;
+    var flattened;
+    var fwVolume;
+    var includes;
+    var libs;
+    var linkConfig;
+    var linkLdflags;
+    var plat = "bios";
+    var platfw;
+    var sources;
+    var sourcesConfig;
+    var textAddress = "0x100000";
+
     sources = [
         "acpi.c",
         "bioscall.c",
@@ -46,46 +62,46 @@ function build() {
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
-    common_libs = [
-        "//uefi/core:ueficore",
-        "//kernel/kd:kdboot",
-        "//uefi/core:ueficore",
-        "//uefi/archlib:uefiarch",
-        "//lib/fatlib:fat",
-        "//lib/basevid:basevid",
-        "//lib/rtl/base:basertlb",
-        "//kernel/kd/kdusb:kdnousb",
-        "//uefi/core:emptyrd",
+    commonLibs = [
+        "uefi/core:ueficore",
+        "kernel/kd:kdboot",
+        "uefi/core:ueficore",
+        "uefi/archlib:uefiarch",
+        "lib/fatlib:fat",
+        "lib/basevid:basevid",
+        "lib/rtl/base:basertlb",
+        "kernel/kd/kdusb:kdnousb",
+        "uefi/core:emptyrd",
     ];
 
     libs = [
-        "//uefi/dev/ns16550:ns16550"
+        "uefi/dev/ns16550:ns16550"
     ];
 
-    libs += common_libs;
+    libs += commonLibs;
     platfw = plat + "fw";
     elf = {
         "label": platfw + ".elf",
         "inputs": sources + libs,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": link_config
+        "config": linkConfig
     };
 
     entries = executable(elf);
@@ -95,20 +111,19 @@ function build() {
     //
 
     ffs = [
-        "//uefi/core/runtime:rtbase.ffs",
-        "//uefi/plat/bios/runtime:" + plat + "rt.ffs"
+        "uefi/core/runtime:rtbase.ffs",
+        "uefi/plat/bios/runtime:" + plat + "rt.ffs"
     ];
 
-    fw_volume = uefi_fwvol_o(plat, ffs);
-    entries += fw_volume;
+    fwVolume = uefiFwvol("uefi/plat/bios", plat, ffs);
+    entries += fwVolume;
     flattened = {
         "label": platfw,
         "inputs": [":" + platfw + ".elf"]
     };
 
-    flattened = flattened_binary(flattened);
+    flattened = flattenedBinary(flattened);
     entries += flattened;
     return entries;
 }
 
-return build();

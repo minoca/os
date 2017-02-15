@@ -25,25 +25,31 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var entries;
+    var platfw;
+
     if (arch == "armv7") {
         platfw = [
-            "//uefi/plat/beagbone:bbonefw",
-            "//uefi/plat/beagbone/init:bbonemlo",
-            "//uefi/plat/panda/init:omap4mlo",
-            "//uefi/plat/panda:pandafw",
-            "//uefi/plat/rpi2:rpi2fw",
-            "//uefi/plat/veyron:veyronfw",
+            "uefi/plat/beagbone:bbonefw",
+            "uefi/plat/beagbone/init:bbonemlo",
+            "uefi/plat/panda/init:omap4mlo",
+            "uefi/plat/panda:pandafw",
+            "uefi/plat/rpi2:rpi2fw",
+            "uefi/plat/veyron:veyronfw",
         ];
 
     } else if (arch == "armv6") {
         platfw = [
-            "//uefi/plat/rpi:rpifw"
+            "uefi/plat/rpi:rpifw"
         ];
 
     } else if (arch == "x86") {
         platfw = [
-            "//uefi/plat/bios:biosfw",
+            "uefi/plat/bios:biosfw",
         ];
     }
 
@@ -51,4 +57,3 @@ function build() {
     return entries;
 }
 
-return build();

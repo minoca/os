@@ -25,15 +25,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "smsc91c1";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "smsc91c1";
+    var sources;
+
     sources = [
         "sm91c1.c",
         "sm91c1hw.c"
     ];
 
     dynlibs = [
-        "//drivers/net/netcore:netcore"
+        "drivers/net/netcore:netcore"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

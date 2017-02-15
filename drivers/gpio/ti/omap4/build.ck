@@ -26,14 +26,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "om4gpio";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "om4gpio";
+    var sources;
+
     sources = [
         "om4gpio.c"
     ];
 
     dynlibs = [
-        "//drivers/gpio/core:gpio"
+        "drivers/gpio/core:gpio"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -26,15 +26,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "rtl81xx";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "rtl81xx";
+    var sources;
+
     sources = [
         "rtl81.c",
         "rtl81hw.c"
     ];
 
     dynlibs = [
-        "//drivers/net/netcore:netcore"
+        "drivers/net/netcore:netcore"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

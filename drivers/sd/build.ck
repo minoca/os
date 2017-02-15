@@ -26,23 +26,28 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var entries;
+    var sdDrivers;
+
     if ((arch == "armv7") || (arch == "armv6")) {
-        sd_drivers = [
-            "//drivers/sd/bcm2709:sdbm2709",
-            "//drivers/sd/omap4:sdomap4",
-            "//drivers/sd/rk32xx:sdrk32xx",
-            "//drivers/plat/ti/tps65217:tps65217"
+        sdDrivers = [
+            "drivers/sd/bcm2709:sdbm2709",
+            "drivers/sd/omap4:sdomap4",
+            "drivers/sd/rk32xx:sdrk32xx",
+            "drivers/plat/ti/tps65217:tps65217"
         ];
 
     } else if (arch == "x86") {
-        sd_drivers = [
-            "//drivers/sd/core:sd"
+        sdDrivers = [
+            "drivers/sd/core:sd"
         ];
     }
 
-    entries = group("sd_drivers", sd_drivers);
+    entries = group("sd_drivers", sdDrivers);
     return entries;
 }
 
-return build();

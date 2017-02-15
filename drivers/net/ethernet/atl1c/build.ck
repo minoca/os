@@ -26,15 +26,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "atl1c";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "atl1c";
+    var sources;
+
     sources = [
         "atl1c.c",
         "atl1chw.c"
     ];
 
     dynlibs = [
-        "//drivers/net/netcore:netcore"
+        "drivers/net/netcore:netcore"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

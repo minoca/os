@@ -25,8 +25,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "ata";
+    var drv;
+    var entries;
+    var name = "ata";
+    var sources;
+
     sources = [
         "ata.c"
     ];
@@ -40,4 +46,3 @@ function build() {
     return entries;
 }
 
-return build();

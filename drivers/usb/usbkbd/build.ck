@@ -25,16 +25,23 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "usbkbd";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "usbkbd";
+    var sources;
+
     sources = [
         "keycode.c",
         "usbkbd.c"
     ];
 
     dynlibs = [
-        "//drivers/usb/usbcore:usbcore",
-        "//drivers/usrinput:usrinput"
+        "drivers/usb/usbcore:usbcore",
+        "drivers/usrinput:usrinput"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

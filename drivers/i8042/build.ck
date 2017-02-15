@@ -26,15 +26,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "i8042";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "i8042";
+    var sources;
+
     sources = [
         "i8042.c",
         "scancode.c"
     ];
 
     dynlibs = [
-        "//drivers/usrinput:usrinput"
+        "drivers/usrinput:usrinput"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

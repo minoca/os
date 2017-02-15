@@ -26,31 +26,38 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var app;
+    var entries;
+    var includes;
+    var sources;
+    var tool;
+
     sources = [
         "genfv.c",
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
     app = {
         "label": "genfv",
         "inputs": sources,
         "includes": includes,
-        "build": TRUE
+        "build": true
     };
 
     entries = application(app);
     tool = {
         "type": "tool",
         "name": "genfv",
-        "command": "$^//uefi/tools/genfv/genfv $GENFV_FLAGS -o $OUT $IN",
+        "command": "$O/uefi/tools/genfv/genfv $GENFV_FLAGS -o $OUT $IN",
         "description": "GenFV - $OUT"
     };
 
     return entries + [tool];
 }
 
-return build();

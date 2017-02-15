@@ -26,38 +26,48 @@ Environment:
 
 --*/
 
+from menv import application, mconfig;
+
 function build() {
+    var app;
+    var arch = mconfig.arch;
+    var dynlibs;
+    var entries;
+    var includes;
+    var linkConfig;
+    var sources;
+    var sourcesConfig;
+
     sources = [
         "efiboot.c"
     ];
 
     dynlibs = [
-        "//apps/osbase:libminocaos"
+        "apps/osbase:libminocaos"
     ];
 
     includes = [
-        "$//apps/libc/include"
+        "$Sapps/libc/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    link_config = {};
+    linkConfig = {};
     if ((arch == "armv6") || (arch == "armv7")) {
-        link_config["LDFLAGS"] = ["-Wl,--no-wchar-size-warning"];
+        linkConfig["LDFLAGS"] = ["-Wl,--no-wchar-size-warning"];
     }
 
     app = {
         "label": "efiboot",
         "inputs": sources + dynlibs,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": link_config
+        "config": linkConfig
     };
 
     entries = application(app);
     return entries;
 }
 
-return build();

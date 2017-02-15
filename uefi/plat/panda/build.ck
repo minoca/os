@@ -25,15 +25,43 @@ Environment:
 
 --*/
 
+from menv import addConfig, binplace, executable, uefiFwvol, flattenedBinary,
+    mconfig, staticLibrary;
+
 function build() {
-    plat = "panda";
-    text_address = "0x82000000";
+    var commonLibs;
+    var elf;
+    var entries;
+    var entry;
+    var flattened;
+    var flattenedUsb;
+    var ffs;
+    var fwLib;
+    var fwVolume;
+    var includes;
+    var libfw;
+    var libfwTarget;
+    var libs;
+    var linkConfig;
+    var linkLdflags;
+    var msetupFlags;
+    var plat = "panda";
+    var platfw;
+    var platfwUsb;
+    var sources;
+    var sourcesConfig;
+    var textAddress = "0x82000000";
+    var uboot;
+    var ubootConfig;
+    var ubootUsb;
+    var usbElf;
+
     sources = [
         "armv7/entry.S",
         "armv7/smpa.S",
         "debug.c",
         "fwvol.c",
-        "//uefi/plat/panda/init:id.o",
+        "uefi/plat/panda/init:id.o",
         "intr.c",
         "main.c",
         "memmap.c",
@@ -49,87 +77,87 @@ function build() {
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-Wl,--no-wchar-size-warning",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
     platfw = plat + "fw";
-    platfw_usb = platfw + "_usb";
+    platfwUsb = platfw + "_usb";
     libfw = "lib" + platfw;
-    libfw_target = ":" + libfw;
-    common_libs = [
-        "//uefi/core:ueficore",
-        "//kernel/kd:kdboot",
-        "//uefi/core:ueficore",
-        "//uefi/archlib:uefiarch",
-        "//lib/fatlib:fat",
-        "//lib/basevid:basevid",
-        "//lib/rtl/kmode:krtl",
-        "//lib/rtl/base:basertlb",
-        "//kernel/kd/kdusb:kdnousb",
-        "//kernel:archboot",
+    libfwTarget = ":" + libfw;
+    commonLibs = [
+        "uefi/core:ueficore",
+        "kernel/kd:kdboot",
+        "uefi/core:ueficore",
+        "uefi/archlib:uefiarch",
+        "lib/fatlib:fat",
+        "lib/basevid:basevid",
+        "lib/rtl/kmode:krtl",
+        "lib/rtl/base:basertlb",
+        "kernel/kd/kdusb:kdnousb",
+        "kernel:archboot",
     ];
 
     libs = [
-        libfw_target,
-        "//uefi/dev/gic:gic",
-        "//uefi/dev/sd/core:sd",
-        "//uefi/dev/omap4:omap4",
-        "//uefi/dev/omapuart:omapuart",
+        libfwTarget,
+        "uefi/dev/gic:gic",
+        "uefi/dev/sd/core:sd",
+        "uefi/dev/omap4:omap4",
+        "uefi/dev/omapuart:omapuart",
     ];
 
-    libs += common_libs + [libfw_target];
-    fw_lib = {
+    libs += commonLibs + [libfwTarget];
+    fwLib = {
         "label": libfw,
         "inputs": sources,
-        "sources_config": sources_config
+        "sources_config": sourcesConfig
     };
 
-    entries = static_library(fw_lib);
+    entries = staticLibrary(fwLib);
     elf = {
         "label": platfw + ".elf",
-        "inputs": libs + ["//uefi/core:emptyrd"],
-        "sources_config": sources_config,
+        "inputs": libs + ["uefi/core:emptyrd"],
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": link_config
+        "config": linkConfig
     };
 
     entries += executable(elf);
-    usb_elf = {
-        "label": platfw_usb + ".elf",
-        "inputs": [":ramdisk.o"] + libs,
-        "sources_config": sources_config,
+    usbElf = {
+        "label": platfwUsb + ".elf",
+        "inputs": ["ramdisk.S"] + libs,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": link_config
+        "config": linkConfig
     };
 
-    entries += executable(usb_elf);
+    entries += executable(usbElf);
 
     //
     // Build the firmware volume.
     //
 
     ffs = [
-        "//uefi/core/runtime:rtbase.ffs",
-        "//uefi/plat/" + plat + "/runtime:" + plat + "rt.ffs",
-        "//uefi/plat/" + plat + "/acpi:acpi.ffs"
+        "uefi/core/runtime:rtbase.ffs",
+        "uefi/plat/" + plat + "/runtime:" + plat + "rt.ffs",
+        "uefi/plat/" + plat + "/acpi:acpi.ffs"
     ];
 
-    fw_volume = uefi_fwvol_o(plat, ffs);
-    entries += fw_volume;
+    fwVolume = uefiFwvol("uefi/plat/panda", plat, ffs);
+    entries += fwVolume;
 
     //
     // Flatten the firmware image and convert to u-boot.
@@ -140,51 +168,51 @@ function build() {
         "inputs": [":" + platfw + ".elf"]
     };
 
-    flattened = flattened_binary(flattened);
+    flattened = flattenedBinary(flattened);
     entries += flattened;
-    flattened_usb = {
-        "label": platfw_usb + ".bin",
-        "inputs": [":" + platfw_usb + ".elf"]
+    flattenedUsb = {
+        "label": platfwUsb + ".bin",
+        "inputs": [":" + platfwUsb + ".elf"]
     };
 
-    flattened_usb = flattened_binary(flattened_usb);
-    entries += flattened_usb;
-    uboot_config = {
-        "TEXT_ADDRESS": text_address,
+    flattenedUsb = flattenedBinary(flattenedUsb);
+    entries += flattenedUsb;
+    ubootConfig = {
+        "TEXT_ADDRESS": textAddress,
         "MKUBOOT_FLAGS": "-c -a arm -f legacy"
     };
 
     uboot = {
         "label": platfw,
         "inputs": [":" + platfw + ".bin"],
-        "orderonly": ["//uefi/tools/mkuboot:mkuboot"],
+        "orderonly": ["uefi/tools/mkuboot:mkuboot"],
         "tool": "mkuboot",
-        "config": uboot_config,
-        "nostrip": TRUE
+        "config": ubootConfig,
+        "nostrip": true
     };
 
     entries += binplace(uboot);
-    uboot_usb = {
+    ubootUsb = {
         "label": "pandausb.img",
-        "inputs": [":" + platfw_usb + ".bin"],
-        "orderonly": ["//uefi/tools/mkuboot:mkuboot"],
+        "inputs": [":" + platfwUsb + ".bin"],
+        "orderonly": ["uefi/tools/mkuboot:mkuboot"],
         "tool": "mkuboot",
-        "config": uboot_config,
-        "nostrip": TRUE
+        "config": ubootConfig,
+        "nostrip": true
     };
 
-    entries += binplace(uboot_usb);
+    entries += binplace(ubootUsb);
 
     //
     // Create the RAM disk image. Debugging is always enabled in these RAM disk
     // images since they're only used for development.
     //
 
-    msetup_flags = [
+    msetupFlags = [
         "-q",
         "-G30M",
         "-lpanda-usb",
-        "-i$" + binroot + "/install.img",
+        "-i" + mconfig.binroot + "/install.img",
         "-D"
     ];
 
@@ -193,17 +221,24 @@ function build() {
         "tool": "msetup_image",
         "label": "ramdisk",
         "output": "ramdisk",
-        "inputs": ["//images:install.img"],
-        "config": {"MSETUP_FLAGS": msetup_flags}
+        "inputs": ["images:install.img"],
+        "config": {"MSETUP_FLAGS": msetupFlags}
     };
 
     entries += [entry];
 
     //
-    // TODO: Assemble ramdisk.o and add it to the entries.
+    // The ramdisk.o object depends on the ramdisk target just created.
     //
+
+    for (entry in entries) {
+        if ((entry.get("output")) && (entry.output.endsWith("ramdisk.o"))) {
+            entry["implicit"] = [":ramdisk"];
+            addConfig(entry, "CPPFLAGS", "-I$O/uefi/plat/panda");
+            break;
+        }
+    }
 
     return entries;
 }
 
-return build();

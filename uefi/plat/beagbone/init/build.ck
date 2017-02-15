@@ -25,41 +25,55 @@ Environment:
 
 --*/
 
+from menv import application, binplace, executable, flattenedBinary;
+
 function build() {
-    text_address = "0x402F0408";
+    var bbonefwb;
+    var bbonefwbTool;
+    var builderApp;
+    var builderSources;
+    var elf;
+    var entries;
+    var flattened;
+    var includes;
+    var linkConfig;
+    var linkLdflags;
+    var sources;
+    var textAddress = "0x402F0408";
+
     sources = [
         "armv7/start.S",
         "boot.c",
         "clock.c",
-        "//uefi/plat/panda/init:crc32.o",
-        "//uefi/plat/panda/init:fatboot.o",
+        "uefi/plat/panda/init:crc32.o",
+        "uefi/plat/panda/init:fatboot.o",
         "mux.c",
         "power.c",
         "serial.c",
-        "//uefi/plat/panda/init:rommem.o"
+        "uefi/plat/panda/init:rommem.o"
     ];
 
     includes = [
-        "$//uefi/include",
-        "$//uefi/plat/panda/init"
+        "$S/uefi/include",
+        "$S/uefi/plat/panda/init"
     ];
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
     elf = {
         "label": "bbonemlo.elf",
         "inputs": sources,
         "includes": includes,
-        "linker_script": "$//uefi/plat/panda/init/link.x",
-        "text_address": text_address,
-        "config": link_config
+        "linker_script": "$S/uefi/plat/panda/init/link.x",
+        "text_address": textAddress,
+        "config": linkConfig
     };
 
     entries = executable(elf);
@@ -73,24 +87,24 @@ function build() {
         "inputs": [":bbonemlo.elf"]
     };
 
-    flattened = flattened_binary(flattened);
+    flattened = flattenedBinary(flattened);
     entries += flattened;
-    bbonefwb_tool = {
+    bbonefwbTool = {
         "type": "tool",
         "name": "bbonefwb",
-        "command": "$^//uefi/plat/beagbone/init/fwbuild $TEXT_ADDRESS $IN $OUT",
+        "command": "$O/uefi/plat/beagbone/init/fwbuild $TEXT_ADDRESS $IN $OUT",
         "description": "Building BeagleBone Firmware - $OUT"
     };
 
-    entries += [bbonefwb_tool];
+    entries += [bbonefwbTool];
     bbonefwb = {
         "type": "target",
         "label": "bbonemlo",
         "tool": "bbonefwb",
         "inputs": [":bbonemlo.bin"],
         "implicit": [":fwbuild"],
-        "config": {"TEXT_ADDRESS": text_address},
-        "nostrip": TRUE
+        "config": {"TEXT_ADDRESS": textAddress},
+        "nostrip": true
     };
 
     entries += binplace(bbonefwb);
@@ -99,18 +113,17 @@ function build() {
     // Add the firmware builder tool.
     //
 
-    builder_sources = [
+    builderSources = [
         "bbonefwb/fwbuild.c"
     ];
 
-    builder_app = {
+    builderApp = {
         "label": "fwbuild",
-        "inputs": builder_sources,
-        "build": TRUE
+        "inputs": builderSources,
+        "build": true
     };
 
-    entries += application(builder_app);
+    entries += application(builderApp);
     return entries;
 }
 
-return build();

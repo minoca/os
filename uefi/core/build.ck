@@ -27,8 +27,24 @@ Environment:
 
 --*/
 
+from menv import addConfig, createVersionHeader, mconfig, staticLibrary;
+
 function build() {
-    base_sources = [
+    var arch = mconfig.arch;
+    var armSources;
+    var baseSources;
+    var emptyrdLib;
+    var entries;
+    var fwCoreVersionMajor;
+    var fwCoreVersionMinor;
+    var fwCoreVersionRevision;
+    var includes;
+    var lib;
+    var sources;
+    var sourcesConfig;
+    var x86_sources;
+
+    baseSources = [
         "acpi.c",
         "acpitabs.c",
         "basepe.c",
@@ -79,29 +95,28 @@ function build() {
         "x86/prochw.c"
     ];
 
-    arm_sources = [
+    armSources = [
         "armv7/commsup.S",
         "armv7/inttable.S",
         "armv7/prochw.c"
     ];
 
     if ((arch == "armv6") || (arch == "armv7")) {
-        sources = base_sources + arm_sources;
+        sources = baseSources + armSources;
 
     } else if (arch == "x86") {
-        sources = base_sources + x86_sources;
+        sources = baseSources + x86_sources;
 
     } else {
-
-        assert(0, "Unknown architecture");
+        Core.raise(ValueError("Unknown architecture"));
     }
 
     includes = [
-        "$//uefi/include",
-        "$//uefi/core"
+        "$S/uefi/include",
+        "$S/uefi/core"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"],
     };
 
@@ -109,26 +124,26 @@ function build() {
     // Create the version.h header.
     //
 
-    fw_core_version_major = "1";
-    fw_core_version_minor = "0";
-    fw_core_version_revision = "0";
-    entries = create_version_header(fw_core_version_major,
-                                    fw_core_version_minor,
-                                    fw_core_version_revision);
+    fwCoreVersionMajor = "1";
+    fwCoreVersionMinor = "0";
+    fwCoreVersionRevision = "0";
+    entries = createVersionHeader(fwCoreVersionMajor,
+                                  fwCoreVersionMinor,
+                                  fwCoreVersionRevision);
 
     lib = {
         "label": "ueficore",
         "inputs": sources,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes
     };
 
-    emptyrd_lib = {
+    emptyrdLib = {
         "label": "emptyrd",
-        "inputs": ["emptyrd.c"]
+        "inputs": ["emptyrd/emptyrd.S"]
     };
 
-    entries += static_library(lib);
+    entries += staticLibrary(lib);
 
     //
     // Add the include and dependency for version.c.
@@ -136,14 +151,13 @@ function build() {
 
     for (entry in entries) {
         if (entry["output"] == "version.o") {
-            add_config(entry, "CPPFLAGS", "-I$^/uefi/core");
+            addConfig(entry, "CPPFLAGS", "-I$O/uefi/core");
             entry["implicit"] = [":version.h"];
             break;
         }
     }
 
-    entries += static_library(emptyrd_lib);
+    entries += staticLibrary(emptyrdLib);
     return entries;
 }
 
-return build();

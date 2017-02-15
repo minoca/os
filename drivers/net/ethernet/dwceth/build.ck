@@ -25,15 +25,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "dwceth";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "dwceth";
+    var sources;
+
     sources = [
         "dwceth.c",
         "dwcethhw.c"
     ];
 
     dynlibs = [
-        "//drivers/net/netcore:netcore"
+        "drivers/net/netcore:netcore"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

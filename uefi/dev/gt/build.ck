@@ -25,29 +25,36 @@ Environment:
 
 --*/
 
+from menv import staticLibrary;
+
 function build() {
+    var entries;
+    var includes;
+    var lib;
+    var sources;
+    var sourcesConfig;
+
     sources = [
         "gt.c",
         "gta.S",
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"],
     };
 
     lib = {
         "label": "gt",
         "inputs": sources,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
     return entries;
 }
 
-return build();

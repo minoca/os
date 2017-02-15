@@ -26,13 +26,20 @@ Environment:
 
 --*/
 
+from menv import sharedLibrary;
+
 function build() {
+    var dynlibs;
+    var entries;
+    var so;
+    var sources;
+
     sources = [
         "crypt.c"
     ];
 
     dynlibs = [
-        "//apps/libc/dynamic:libc"
+        "apps/libc/dynamic:libc"
     ];
 
     so = {
@@ -41,9 +48,7 @@ function build() {
         "major_version": "1"
     };
 
-    entries = shared_library(so);
+    entries = sharedLibrary(so);
     return entries;
 }
-
-return build();
 

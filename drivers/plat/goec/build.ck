@@ -25,15 +25,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "goec";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "goec";
+    var sources;
+
     sources = [
         "goec.c",
         "keymap.c"
     ];
 
     dynlibs = [
-        "//drivers/usrinput:usrinput"
+        "drivers/usrinput:usrinput"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -26,14 +26,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "onering";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "onering";
+    var sources;
+
     sources = [
         "onering.c"
     ];
 
     dynlibs = [
-        "//drivers/usb/usbcore:usbcore"
+        "drivers/usb/usbcore:usbcore"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

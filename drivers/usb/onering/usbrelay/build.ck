@@ -27,14 +27,21 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
-    name = "usbrelay";
+    var app;
+    var dynlibs;
+    var entries;
+    var name = "usbrelay";
+    var sources;
+
     sources = [
         "usbrelay.c"
     ];
 
     dynlibs = [
-        "//apps/osbase:libminocaos"
+        "apps/osbase:libminocaos"
     ];
 
     app = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

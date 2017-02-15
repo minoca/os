@@ -22,36 +22,43 @@ Author:
 
 Environment:
 
-    Debug
+    Build
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var drivers;
+    var entries;
+
     drivers = [
-        "//drivers/acpi:acpi",
-        "//drivers/ata:ata",
-        "//drivers/devrem:devrem",
-        "//drivers/fat:fat",
-        "//drivers/i8042:i8042",
-        "//drivers/net:net_drivers",
-        "//drivers/null:null",
-        "//drivers/part:part",
-        "//drivers/pci:pci",
-        "//drivers/plat:platform_drivers",
-        "//drivers/ramdisk:ramdisk",
-        "//drivers/sd:sd_drivers",
-        "//drivers/special:special",
-        "//drivers/term/ser16550:ser16550",
-        "//drivers/usb:usb_drivers",
-        "//drivers/videocon:videocon"
+        "drivers/acpi:acpi",
+        "drivers/ahci:ahci",
+        "drivers/ata:ata",
+        "drivers/devrem:devrem",
+        "drivers/fat:fat",
+        "drivers/i8042:i8042",
+        "drivers/net:net_drivers",
+        "drivers/null:null",
+        "drivers/part:part",
+        "drivers/pci:pci",
+        "drivers/plat:platform_drivers",
+        "drivers/ramdisk:ramdisk",
+        "drivers/sd:sd_drivers",
+        "drivers/special:special",
+        "drivers/term/ser16550:ser16550",
+        "drivers/usb:usb_drivers",
+        "drivers/videocon:videocon"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
         drivers += [
-            "//drivers/dma:dma_drivers",
-            "//drivers/gpio:gpio_drivers",
-            "//drivers/i8042/pl050:pl050",
-            "//drivers/spb:spb_drivers"
+            "drivers/dma:dma_drivers",
+            "drivers/gpio:gpio_drivers",
+            "drivers/i8042/pl050:pl050",
+            "drivers/spb:spb_drivers"
         ];
     }
 
@@ -59,4 +66,3 @@ function build() {
     return entries;
 }
 
-return build();

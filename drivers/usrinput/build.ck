@@ -29,15 +29,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "usrinput";
+    var drv;
+    var entries;
+    var libs;
+    var name = "usrinput";
+    var sources;
+
     sources = [
         "uskeys.c",
         "usrinput.c"
     ];
 
     libs = [
-        "//lib/termlib:termlib"
+        "lib/termlib:termlib"
     ];
 
     drv = {
@@ -49,4 +56,3 @@ function build() {
     return entries;
 }
 
-return build();

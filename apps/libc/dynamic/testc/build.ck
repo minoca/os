@@ -25,7 +25,15 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var buildApp;
+    var buildLibs;
+    var entries;
+    var includes;
+    var sources;
+
     sources = [
         "bsrchtst.c",
         "getoptst.c",
@@ -36,26 +44,24 @@ function build() {
         "testc.c"
     ];
 
-    build_libs = [
-        "//apps/libc/dynamic:build_libc",
+    buildLibs = [
+        "apps/libc/dynamic:build_libc",
     ];
 
     includes = [
-        "$//apps/libc/include"
+        "$S/apps/libc/include"
     ];
 
-    build_app = {
+    buildApp = {
         "label": "build_testc",
         "output": "testc",
-        "inputs": sources + build_libs,
+        "inputs": sources + buildLibs,
         "includes": includes,
-        "build": TRUE,
+        "build": true,
         "prefix": "build"
     };
 
-    entries = application(build_app);
+    entries = application(buildApp);
     return entries;
 }
-
-return build();
 

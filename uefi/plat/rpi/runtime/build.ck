@@ -27,48 +27,58 @@ Environment:
 
 --*/
 
+from menv import executable, uefiRuntimeFfs;
+
 function build() {
+    var elf;
+    var entries;
+    var includes;
+    var libs;
+    var linkConfig;
+    var LinkLdflags;
+    var sources;
+    var sourcesConfig;
+
     sources = [
         "runtime.c"
     ];
 
     libs = [
-        "//uefi/core/rtlib:rtlib",
-        "//uefi/archlib:uefiarch"
+        "uefi/core/rtlib:rtlib",
+        "uefi/archlib:uefiarch"
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"],
     };
 
-    link_ldflags = [
+    LinkLdflags = [
         "-pie",
         "-nostdlib",
         "-Wl,--no-wchar-size-warning",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": LinkLdflags
     };
 
     elf = {
         "label": "rpirt.elf",
         "inputs": sources + libs,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes,
         "entry": "EfiRuntimeCoreEntry",
-        "linker_script": "$//uefi/include/link_arm.x",
-        "config": link_config
+        "linker_script": "$S/uefi/include/link_arm.x",
+        "config": linkConfig
     };
 
     entries = executable(elf);
-    entries += uefi_runtime_ffs("rpirt");
+    entries += uefiRuntimeFfs("rpirt");
     return entries;
 }
 
-return build();

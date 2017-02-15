@@ -25,8 +25,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "ser16550";
+    var drv;
+    var entries;
+    var name = "ser16550";
+    var sources;
+
     sources = [
         "ser16550.c"
     ];
@@ -40,4 +46,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -26,25 +26,34 @@ Environment:
 
 --*/
 
+from menv import executable, flattenedBinary;
+
 function build() {
+    var entries;
+    var flattened;
+    var image;
+    var linkConfig;
+    var linkLdFlags;
+    var sources;
+
     sources = [
         "mbr.S"
     ];
 
-    link_ldflags = [
+    linkLdFlags = [
         "-nostdlib",
         "-Wl,-zmax-page-size=1",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdFlags
     };
 
     image = {
         "label": "mbr.elf",
         "inputs": sources,
-        "config": link_config,
+        "config": linkConfig,
         "text_address": "0x600",
     };
 
@@ -58,13 +67,12 @@ function build() {
     flattened = {
         "label": "mbr.bin",
         "inputs": [":mbr.elf"],
-        "binplace": TRUE,
-        "nostrip": TRUE
+        "binplace": true,
+        "nostrip": true
     };
 
-    flattened = flattened_binary(flattened);
+    flattened = flattenedBinary(flattened);
     entries += flattened;
     return entries;
 }
 
-return build();

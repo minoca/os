@@ -27,17 +27,25 @@ Environment:
 
 --*/
 
+from menv import sharedLibrary;
+
 function build() {
+    var entries;
+    var libConfig;
+    var lib;
+    var includes;
+    var sources;
+
     sources = [
         "generic.c",
         "netlink.c",
     ];
 
     includes = [
-        "$//apps/libc/include"
+        "$S/apps/libc/include"
     ];
 
-    lib_config = {
+    libConfig = {
         "LDFLAGS": ["-nostdlib"]
     };
 
@@ -46,13 +54,11 @@ function build() {
         "inputs": sources,
         "entry": "NlInitialize",
         "includes": includes,
-        "config": lib_config,
+        "config": libConfig,
         "major_version": "1",
     };
 
-    entries = shared_library(lib);
+    entries = sharedLibrary(lib);
     return entries;
 }
-
-return build();
 

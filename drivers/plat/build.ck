@@ -25,23 +25,28 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var entries;
+    var platformDrivers;
+
     if ((arch == "armv7") || (arch == "armv6")) {
-        platform_drivers = [
-            "//drivers/plat/goec:goec",
-            "//drivers/plat/rockchip/rk808:rk808",
-            "//drivers/plat/ti/am3soc:am3soc",
-            "//drivers/plat/ti/tps65217:tps65217"
+        platformDrivers = [
+            "drivers/plat/goec:goec",
+            "drivers/plat/rockchip/rk808:rk808",
+            "drivers/plat/ti/am3soc:am3soc",
+            "drivers/plat/ti/tps65217:tps65217"
         ];
 
     } else if (arch == "x86") {
-        platform_drivers = [
-            "//drivers/plat/quark/qrkhostb:qrkhostb"
+        platformDrivers = [
+            "drivers/plat/quark/qrkhostb:qrkhostb"
         ];
     }
 
-    entries = group("platform_drivers", platform_drivers);
+    entries = group("platform_drivers", platformDrivers);
     return entries;
 }
 
-return build();

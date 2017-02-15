@@ -25,30 +25,35 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
-    debug_binaries = [
-        "//apps/debug/client:debug",
-        "//apps/debug/kexts:kexts",
-        "//apps/debug/kexts:build_kexts"
+    var buildOs = mconfig.build_os;
+    var debugBinaries;
+    var entries;
+
+    debugBinaries = [
+        "apps/debug/client:debug",
+        "apps/debug/kexts:kexts",
+        "apps/debug/kexts:build_kexts"
     ];
 
-    if ((build_os == "Windows") || (build_os == "Minoca")) {
-        debug_binaries += [
-            "//apps/debug/client:build_debug",
-            "//apps/debug/client/tdwarf:build_tdwarf",
-            "//apps/debug/client/testdisa:build_testdisa",
-            "//apps/debug/client/teststab:build_teststab",
+    if ((buildOs == "Windows") || (buildOs == "Minoca")) {
+        debugBinaries += [
+            "apps/debug/client:build_debug",
+            "apps/debug/client/tdwarf:build_tdwarf",
+            "apps/debug/client/testdisa:build_testdisa",
+            "apps/debug/client/teststab:build_teststab",
         ];
     }
 
-    if (build_os == "Windows") {
-        debug_binaries += [
-            "//apps/debug/client:build_debugui"
+    if (buildOs == "Windows") {
+        debugBinaries += [
+            "apps/debug/client:build_debugui"
         ];
     }
 
-    entries = group("debug", debug_binaries);
+    entries = group("debug", debugBinaries);
     return entries;
 }
 
-return build();

@@ -27,17 +27,25 @@ Environment:
 
 --*/
 
+from menv import application;
+
 function build() {
+    var app;
+    var dynlibs;
+    var entries;
+    var includes;
+    var sources;
+
     sources = [
         "mount.c"
     ];
 
     dynlibs = [
-        "//apps/osbase:libminocaos"
+        "apps/osbase:libminocaos"
     ];
 
     includes = [
-        "$//apps/libc/include"
+        "$S/apps/libc/include"
     ];
 
     app = {
@@ -50,4 +58,3 @@ function build() {
     return entries;
 }
 
-return build();

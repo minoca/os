@@ -26,15 +26,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "fat";
+    var drv;
+    var entries;
+    var libs;
+    var name = "fat";
+    var sources;
+
     sources = [
         "fatfs.c",
         "fatio.c"
     ];
 
     libs = [
-        "//lib/fatlib:fat"
+        "lib/fatlib:fat"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

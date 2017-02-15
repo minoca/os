@@ -26,14 +26,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "usbcomp";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "usbcomp";
+    var sources;
+
     sources = [
         "usbcomp.c"
     ];
 
     dynlibs = [
-        "//drivers/usb/usbcore:usbcore"
+        "drivers/usb/usbcore:usbcore"
     ];
 
     drv = {
@@ -45,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -29,8 +29,28 @@ Environment:
 
 --*/
 
+from menv import mconfig, sharedLibrary, staticLibrary;
+
 function build() {
-    math_sources = [
+    var arch = mconfig.arch;
+    var arch_sources;
+    var buildLib;
+    var buildSources;
+    var dynlibs;
+    var entries;
+    var libs;
+    var linkConfig;
+    var linkLdflags;
+    var mathSources;
+    var so;
+    var sources;
+    var sourcesConfig;
+    var sourcesIncludes;
+    var wincsup;
+    var wincsupIncludes;
+    var wincsupSources;
+
+    mathSources = [
         "math/abs.c",
         "math/ceil.c",
         "math/ceilf.c",
@@ -156,7 +176,7 @@ function build() {
         "wstring.c",
     ];
 
-    build_sources = [
+    buildSources = [
         "bsearch.c",
         "getopt.c",
         "qsort.c",
@@ -164,7 +184,7 @@ function build() {
         "regexexe.c"
     ];
 
-    wincsup_sources = [
+    wincsupSources = [
         "regexcmp.c",
         "regexexe.c",
         "wincsup/strftime.c"
@@ -200,68 +220,66 @@ function build() {
         ];
     }
 
-    sources_includes = [
-        "$//apps/libc/include"
+    sourcesIncludes = [
+        "$S/apps/libc/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-ftls-model=initial-exec"]
     };
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-Wl,--whole-archive"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
     libs = [
-        "//lib/rtl/base:intrins",
+        "lib/rtl/base:intrins",
     ];
 
     dynlibs = [
-        "//apps/osbase:libminocaos"
+        "apps/osbase:libminocaos"
     ];
 
-    wincsup_includes = [
-        "$//apps/libc/dynamic/wincsup/include"
+    wincsupIncludes = [
+        "$S/apps/libc/dynamic/wincsup/include"
     ];
 
     so = {
         "label": "libc",
-        "inputs": sources + math_sources + arch_sources + libs + dynlibs,
-        "sources_config": sources_config,
-        "includes": sources_includes,
+        "inputs": sources + mathSources + arch_sources + libs + dynlibs,
+        "sources_config": sourcesConfig,
+        "includes": sourcesIncludes,
         "entry": "ClInitialize",
-        "config": link_config,
+        "config": linkConfig,
         "major_version": "1"
     };
 
-    build_lib = {
+    buildLib = {
         "label": "build_libc",
         "output": "build_libc",
-        "inputs": build_sources + math_sources,
-        "sources_config": sources_config,
-        "includes": sources_includes,
-        "build": TRUE,
+        "inputs": buildSources + mathSources,
+        "sources_config": sourcesConfig,
+        "includes": sourcesIncludes,
+        "build": true,
         "prefix": "build"
     };
 
     wincsup = {
         "label": "wincsup",
-        "inputs": wincsup_sources,
-        "includes": wincsup_includes,
-        "build": TRUE,
+        "inputs": wincsupSources,
+        "includes": wincsupIncludes,
+        "build": true,
         "prefix": "wincsup"
     };
 
-    entries = shared_library(so);
-    entries += static_library(build_lib);
-    entries += static_library(wincsup);
+    entries = sharedLibrary(so);
+    entries += staticLibrary(buildLib);
+    entries += staticLibrary(wincsup);
     return entries;
 }
-
-return build();
 

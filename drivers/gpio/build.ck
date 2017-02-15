@@ -25,18 +25,24 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var entries;
+    var gpioDrivers;
 
-    assert(((arch == "armv7") || (arch == "armv6")), "Unexpected architecture");
+    if ((arch != "armv7") && (arch != "armv6")) {
+        Core.raise(ValueError("UnexpectedArchitecture"));
+    }
 
-    gpio_drivers = [
-        "//drivers/gpio/broadcom/bc27:bc27gpio",
-        "//drivers/gpio/rockchip/rk32:rk32gpio",
-        "//drivers/gpio/ti/omap4:om4gpio",
+    gpioDrivers = [
+        "drivers/gpio/broadcom/bc27:bc27gpio",
+        "drivers/gpio/rockchip/rk32:rk32gpio",
+        "drivers/gpio/ti/omap4:om4gpio",
     ];
 
-    entries = group("gpio_drivers", gpio_drivers);
+    entries = group("gpio_drivers", gpioDrivers);
     return entries;
 }
 
-return build();

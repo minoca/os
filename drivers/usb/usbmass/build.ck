@@ -25,14 +25,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "usbmass";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "usbmass";
+    var sources;
+
     sources = [
         "usbmass.c"
     ];
 
     dynlibs = [
-        "//drivers/usb/usbcore:usbcore"
+        "drivers/usb/usbcore:usbcore"
     ];
 
     drv = {
@@ -44,4 +51,3 @@ function build() {
     return entries;
 }
 
-return build();

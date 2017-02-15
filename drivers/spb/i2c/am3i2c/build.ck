@@ -25,14 +25,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "am3i2c";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "am3i2c";
+    var sources;
+
     sources = [
         "am3i2c.c"
     ];
 
     dynlibs = [
-        "//drivers/spb/core:spb"
+        "drivers/spb/core:spb"
     ];
 
     drv = {
@@ -44,4 +51,3 @@ function build() {
     return entries;
 }
 
-return build();

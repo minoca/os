@@ -91,8 +91,8 @@ function build() {
 
     for (entry in entries) {
         if (entry["output"] == "version.o") {
-            addConfig(entry, "CPPFLAGS", "-I$O/kernel/ke");
-            entry["implicit"] = ["kernel:version.h", "$S/.git/index"];
+            addConfig(entry, "CPPFLAGS", "-I$O/kernel");
+            entry["implicit"] = ["kernel:version.h"];
             break;
         }
     }

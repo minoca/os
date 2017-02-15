@@ -25,14 +25,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "edma3";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "edma3";
+    var sources;
+
     sources = [
         "edma3.c"
     ];
 
     dynlibs = [
-        "//drivers/dma/core:dma"
+        "drivers/dma/core:dma"
     ];
 
     drv = {
@@ -44,4 +51,3 @@ function build() {
     return entries;
 }
 
-return build();

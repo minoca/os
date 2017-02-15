@@ -26,15 +26,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "e100";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "e100";
+    var sources;
+
     sources = [
         "e100.c",
         "e100hw.c"
     ];
 
     dynlibs = [
-        "//drivers/net/netcore:netcore"
+        "drivers/net/netcore:netcore"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

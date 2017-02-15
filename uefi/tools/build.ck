@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import group;
+
 function build() {
-    tool_names = [
+    var apps;
+    var toolNames;
+    var toolsGroup;
+
+    toolNames = [
         "elfconv",
         "genffs",
         "genfv",
@@ -35,12 +41,11 @@ function build() {
     ];
 
     apps = [];
-    for (tool_name in tool_names) {
-        apps += ["//uefi/tools/" + tool_name + ":" + tool_name];
+    for (name in toolNames) {
+        apps += ["uefi/tools/" + name + ":" + name];
     }
 
-    uefitools_group = group("uefitools", apps);
-    return uefitools_group;
+    toolsGroup = group("uefitools", apps);
+    return toolsGroup;
 }
 
-return build();

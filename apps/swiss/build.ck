@@ -26,8 +26,29 @@ Environment:
 
 --*/
 
+from menv import application, createVersionHeader, mconfig;
+
 function build() {
-    base_sources = [
+    var app;
+    var baseSources;
+    var buildApp;
+    var buildConfig;
+    var buildLibs;
+    var buildIncludes;
+    var buildOs = mconfig.build_os;
+    var buildSources;
+    var buildSourcesConfig;
+    var entries;
+    var minocaSources;
+    var sourcesConfig;
+    var targetIncludes;
+    var targetLibs;
+    var targetSources;
+    var uosOnlyCommands;
+    var uosSources;
+    var win32Sources;
+
+    baseSources = [
         "basename.c",
         "cat.c",
         "cecho.c",
@@ -109,8 +130,9 @@ function build() {
         "xargs.c",
     ];
 
-    uos_only_commands = [
+    uosOnlyCommands = [
         "chown.c",
+        "hostname.c",
         "init.c",
         "login/chpasswd.c",
         "login/getty.c",
@@ -135,20 +157,20 @@ function build() {
         "telnetd.c",
     ];
 
-    minoca_sources = [
+    minocaSources = [
         "cmds.c",
         "dw.c",
         "swlib/minocaos.c"
     ];
 
-    uos_sources = [
+    uosSources = [
         "dw.c",
         "hostname.c",
         "swlib/linux.c",
         "uos/uoscmds.c",
     ];
 
-    win32_sources = [
+    win32Sources = [
         "dw.c",
         "sh/shntos.c",
         "swlib/ntos.c",
@@ -156,76 +178,76 @@ function build() {
         "win32/w32cmds.c"
     ];
 
-    target_libs = [
-        "//lib/termlib:termlib",
-        "//apps/osbase:libminocaos"
+    targetLibs = [
+        "lib/termlib:termlib",
+        "apps/osbase:libminocaos"
     ];
 
-    build_libs = [
-        "//lib/termlib:build_termlib",
-        "//lib/rtl/base:build_basertl",
-        "//lib/rtl/rtlc:build_rtlc"
+    buildLibs = [
+        "lib/termlib:build_termlib",
+        "lib/rtl/base:build_basertl",
+        "lib/rtl/rtlc:build_rtlc"
     ];
 
-    build_includes = [];
-    target_includes = build_includes + [
-        "$//apps/libc/include"
+    buildIncludes = [];
+    targetIncludes = buildIncludes + [
+        "$S/apps/libc/include"
     ];
 
-    target_sources = base_sources + uos_only_commands + minoca_sources;
-    build_config = {
+    targetSources = baseSources + uosOnlyCommands + minocaSources;
+    buildConfig = {
         "LDFLAGS": [],
         "DYNLIBS": []
     };
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-ftls-model=initial-exec"],
     };
 
-    build_sources_config = sources_config + {};
-    if (build_os == "Minoca") {
-        build_sources = target_sources;
-        build_config["DYNLIBS"] += ["-lminocaos"];
+    buildSourcesConfig = sourcesConfig.copy();
+    if (buildOs == "Minoca") {
+        buildSources = targetSources;
+        buildConfig["DYNLIBS"] += ["-lminocaos"];
 
-    } else if (build_os == "Windows") {
-        build_sources = base_sources + win32_sources;
-        build_libs = ["//apps/libc/dynamic:wincsup"] + build_libs;
-        build_includes += ["$//apps/libc/dynamic/wincsup/include"];
-        build_config["DYNLIBS"] += ["-lpsapi", "-lws2_32"];
+    } else if (buildOs == "Windows") {
+        buildSources = baseSources + win32Sources;
+        buildLibs = ["apps/libc/dynamic:wincsup"] + buildLibs;
+        buildIncludes += ["$S/apps/libc/dynamic/wincsup/include"];
+        buildConfig["DYNLIBS"] += ["-lpsapi", "-lws2_32"];
 
     } else {
-        build_sources = base_sources + uos_only_commands + uos_sources;
-        if (build_os == "Linux") {
-            build_config["DYNLIBS"] += ["-ldl", "-lutil"];
+        buildSources = baseSources + uosOnlyCommands + uosSources;
+        if (buildOs == "Linux") {
+            buildConfig["DYNLIBS"] += ["-ldl", "-lutil"];
         }
     }
 
     app = {
         "label": "swiss",
-        "inputs": target_sources + target_libs,
-        "sources_config": sources_config,
-        "includes": target_includes
+        "inputs": targetSources + targetLibs,
+        "sources_config": sourcesConfig,
+        "includes": targetIncludes
     };
 
-    build_app = {
+    buildApp = {
         "label": "build_swiss",
         "output": "swiss",
-        "inputs": build_sources + build_libs,
-        "sources_config": build_sources_config,
-        "includes": build_includes,
-        "config": build_config,
-        "build": TRUE,
+        "inputs": buildSources + buildLibs,
+        "sources_config": buildSourcesConfig,
+        "includes": buildIncludes,
+        "config": buildConfig,
+        "build": true,
         "prefix": "build"
     };
 
     entries = application(app);
-    entries += application(build_app);
+    entries += application(buildApp);
 
     //
     // Create the version header.
     //
 
-    entries += create_version_header("0", "0", "0");
+    entries += createVersionHeader("0", "0", "0");
 
     //
     // Add the include and dependency for version.c.
@@ -233,16 +255,14 @@ function build() {
 
     for (entry in entries) {
         if (entry["inputs"][0] == "swlib/userio.c") {
-            entry["config"] = entry["config"] + {};
+            entry["config"] = entry["config"].copy();
             entry["config"]["CPPFLAGS"] = entry["config"]["CPPFLAGS"] +
-                                          ["-I$^/apps/swiss"];
+                                          ["-I$O/apps/swiss"];
 
-            entry["implicit"] = [":version.h", "//.git/HEAD"];
+            entry["implicit"] = [":version.h"];
         }
     }
 
     return entries;
 }
-
-return build();
 

@@ -25,9 +25,25 @@ Environment:
 
 --*/
 
+from menv import addConfig, executable, mconfig, uefiFwvol;
+
 function build() {
-    plat = "integ";
-    text_address = "0x80100000";
+    var commonLibs;
+    var elf;
+    var entries;
+    var ffs;
+    var fwVolume;
+    var includes;
+    var libs;
+    var linkConfig;
+    var linkLdflags;
+    var msetupFlags;
+    var plat = "integ";
+    var ramdiskImage;
+    var sources;
+    var sourcesConfig;
+    var textAddress = "0x80100000";
+
     sources = [
         "armv7/entry.S",
         "debug.c",
@@ -37,7 +53,7 @@ function build() {
         "main.c",
         "memmap.c",
         "ramdenum.c",
-        ":ramdisk.o",
+        "ramdisk.S",
         "serial.c",
         "smbios.c",
         "timer.c",
@@ -45,48 +61,48 @@ function build() {
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-Wl,--no-wchar-size-warning",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
-    common_libs = [
-        "//uefi/core:ueficore",
-        "//kernel/kd:kdboot",
-        "//uefi/core:ueficore",
-        "//uefi/archlib:uefiarch",
-        "//lib/fatlib:fat",
-        "//lib/basevid:basevid",
-        "//lib/rtl/base:basertlb",
-        "//kernel/kd/kdusb:kdnousb",
-        "//kernel:archboot",
+    commonLibs = [
+        "uefi/core:ueficore",
+        "kernel/kd:kdboot",
+        "uefi/core:ueficore",
+        "uefi/archlib:uefiarch",
+        "lib/fatlib:fat",
+        "lib/basevid:basevid",
+        "lib/rtl/base:basertlb",
+        "kernel/kd/kdusb:kdnousb",
+        "kernel:archboot",
     ];
 
-    libs = common_libs + [
-        "//uefi/dev/pl11:pl11",
-        "//uefi/dev/pl110:pl110"
+    libs = commonLibs + [
+        "uefi/dev/pl11:pl11",
+        "uefi/dev/pl110:pl110"
     ];
 
     elf = {
         "label": plat + ".img",
         "inputs": sources + libs,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "config": link_config,
-        "text_address": text_address,
-        "binplace": TRUE
+        "config": linkConfig,
+        "text_address": textAddress,
+        "binplace": true
     };
 
     entries = executable(elf);
@@ -96,46 +112,50 @@ function build() {
     //
 
     ffs = [
-        "//uefi/core/runtime:rtbase.ffs",
-        "//uefi/plat/integcp/runtime:" + plat + "rt.ffs",
-        "//uefi/plat/integcp/acpi:acpi.ffs"
+        "uefi/core/runtime:rtbase.ffs",
+        "uefi/plat/integcp/runtime:" + plat + "rt.ffs",
+        "uefi/plat/integcp/acpi:acpi.ffs"
     ];
 
-    fw_volume = uefi_fwvol_o(plat, ffs);
-    entries += fw_volume;
+    fwVolume = uefiFwvol("uefi/plat/integcp", plat, ffs);
+    entries += fwVolume;
 
     //
     // Create the RAM disk image. Debugging is always enabled in these images
     // since they're only used for development.
     //
 
-    msetup_flags = [
+    msetupFlags = [
         "-q",
         "-D",
         "-G30M",
         "-lintegrd",
-        "-i$" + binroot + "/install.img"
+        "-i$" + mconfig.binroot + "/install.img"
     ];
 
-    ramdisk_image = {
+    ramdiskImage = {
         "type": "target",
         "tool": "msetup_image",
         "label": "ramdisk",
         "output": "ramdisk",
-        "inputs": ["//images:install.img"],
-        "config": {"MSETUP_FLAGS": msetup_flags}
+        "inputs": ["images:install.img"],
+        "config": {"MSETUP_FLAGS": msetupFlags}
     };
 
-    entries += [ramdisk_image];
-    ramdisk_o = {
-        "type": "target",
-        "label": "ramdisk.o",
-        "inputs": [":ramdisk"],
-        "tool": "objcopy"
-    };
+    entries += [ramdiskImage];
 
-    entries += [ramdisk_o];
+    //
+    // The ramdisk.o object depends on the ramdisk target just created.
+    //
+
+    for (entry in entries) {
+        if ((entry.get("output")) && (entry.output.endsWith("ramdisk.o"))) {
+            entry["implicit"] = [":ramdisk"];
+            addConfig(entry, "CPPFLAGS", "-I$O/uefi/plat/integcp");
+            break;
+        }
+    }
+
     return entries;
 }
 
-return build();

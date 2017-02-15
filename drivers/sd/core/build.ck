@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "sd";
+    var drv;
+    var entries;
+    var name = "sd";
+    var sources;
+
     sources = [
         "sd.c",
         "sdlib.c",
@@ -43,4 +49,3 @@ function build() {
     return entries;
 }
 
-return build();

@@ -26,15 +26,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "am3eth";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "am3eth";
+    var sources;
+
     sources = [
         "am3eth.c",
         "am3ethhw.c"
     ];
 
     dynlibs = [
-        "//drivers/net/netcore:netcore"
+        "drivers/net/netcore:netcore"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

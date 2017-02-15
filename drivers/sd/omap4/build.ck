@@ -25,8 +25,15 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "sdomap4";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "sdomap4";
+    var sources;
+
     sources = [
         "i2c.c",
         "pmic.c",
@@ -34,7 +41,7 @@ function build() {
     ];
 
     dynlibs = [
-        "//drivers/sd/core:sd"
+        "drivers/sd/core:sd"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

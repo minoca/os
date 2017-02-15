@@ -27,31 +27,36 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
-    usb_drivers = [
-        "//drivers/usb/ehci:ehci",
-        "//drivers/usb/onering:onering",
-        "//drivers/usb/onering/usbrelay:usbrelay",
-        "//drivers/usb/usbcomp:usbcomp",
-        "//drivers/usb/usbhub:usbhub",
-        "//drivers/usb/usbkbd:usbkbd",
-        "//drivers/usb/usbmass:usbmass"
+    var arch = mconfig.arch;
+    var entries;
+    var usbDrivers;
+
+    usbDrivers = [
+        "drivers/usb/ehci:ehci",
+        "drivers/usb/onering:onering",
+        "drivers/usb/onering/usbrelay:usbrelay",
+        "drivers/usb/usbcomp:usbcomp",
+        "drivers/usb/usbhub:usbhub",
+        "drivers/usb/usbkbd:usbkbd",
+        "drivers/usb/usbmass:usbmass"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        usb_drivers += [
-            "//drivers/usb/am3usb:am3usb",
-            "//drivers/usb/dwhci:dwhci"
+        usbDrivers += [
+            "drivers/usb/am3usb:am3usb",
+            "drivers/usb/dwhci:dwhci"
         ];
 
     } else if (arch == "x86") {
-        usb_drivers += [
-            "//drivers/usb/uhci:uhci"
+        usbDrivers += [
+            "drivers/usb/uhci:uhci"
         ];
     }
 
-    entries = group("usb_drivers", usb_drivers);
+    entries = group("usb_drivers", usbDrivers);
     return entries;
 }
 
-return build();

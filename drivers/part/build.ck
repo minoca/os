@@ -25,14 +25,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "part";
+    var drv;
+    var entries;
+    var libs;
+    var name = "part";
+    var sources;
+
     sources = [
         "part.c"
     ];
 
     libs = [
-        "//lib/partlib:partlib"
+        "lib/partlib:partlib"
     ];
 
     drv = {
@@ -44,4 +51,3 @@ function build() {
     return entries;
 }
 
-return build();

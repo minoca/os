@@ -25,8 +25,23 @@ Environment:
 
 --*/
 
+from menv import application, binplace, executable, flattenedBinary;
+
 function build() {
-    text_address = "0x40308000";
+    var elf;
+    var entries;
+    var builderApp;
+    var builderSources;
+    var flattened;
+    var fwbTool;
+    var includes;
+    var linkConfig;
+    var linkLdflags;
+    var mlo;
+    var sources;
+    var sourcesConfig;
+    var textAddress = "0x40308000";
+
     sources = [
         "armv7/start.S",
         "boot.c",
@@ -42,30 +57,30 @@ function build() {
     ];
 
     includes = [
-        "$//uefi/include"
+        "$S/uefi/include"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-marm"]
     };
 
-    link_ldflags = [
+    linkLdflags = [
         "-nostdlib",
         "-static"
     ];
 
-    link_config = {
-        "LDFLAGS": link_ldflags
+    linkConfig = {
+        "LDFLAGS": linkLdflags
     };
 
     elf = {
         "label": "omap4mlo.elf",
         "inputs": sources,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes,
-        "linker_script": "$//uefi/plat/panda/init/link.x",
-        "text_address": text_address,
-        "config": link_config
+        "linker_script": "$S/uefi/plat/panda/init/link.x",
+        "text_address": textAddress,
+        "config": linkConfig
     };
 
     entries = executable(elf);
@@ -79,16 +94,16 @@ function build() {
         "inputs": [":omap4mlo.elf"]
     };
 
-    flattened = flattened_binary(flattened);
+    flattened = flattenedBinary(flattened);
     entries += flattened;
-    fwb_tool = {
+    fwbTool = {
         "type": "tool",
         "name": "pandafwb",
-        "command": "$^//uefi/plat/panda/init/pandafwb $TEXT_ADDRESS $IN $OUT",
+        "command": "$O/uefi/plat/panda/init/pandafwb $TEXT_ADDRESS $IN $OUT",
         "description": "Building PandaBoard Firmware - $OUT"
     };
 
-    entries += [fwb_tool];
+    entries += [fwbTool];
     mlo = {
         "type": "target",
         "label": "omap4mlo",
@@ -96,7 +111,7 @@ function build() {
         "inputs": [":omap4mlo.bin"],
         "implicit": [":pandafwb"],
         "config": {"TEXT_ADDRESS": "0x40300000"},
-        "nostrip": TRUE
+        "nostrip": true
     };
 
     entries += binplace(mlo);
@@ -105,18 +120,17 @@ function build() {
     // Add the firmware builder tool.
     //
 
-    builder_sources = [
+    builderSources = [
         "fwbuild/fwbuild.c"
     ];
 
-    builder_app = {
+    builderApp = {
         "label": "pandafwb",
-        "inputs": builder_sources,
-        "build": TRUE
+        "inputs": builderSources,
+        "build": true
     };
 
-    entries += application(builder_app);
+    entries += application(builderApp);
     return entries;
 }
 
-return build();

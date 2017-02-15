@@ -25,14 +25,21 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "sdrk32xx";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "sdrk32xx";
+    var sources;
+
     sources = [
         "sdrk32.c"
     ];
 
     dynlibs = [
-        "//drivers/sd/core:sd"
+        "drivers/sd/core:sd"
     ];
 
     drv = {
@@ -44,4 +51,3 @@ function build() {
     return entries;
 }
 
-return build();

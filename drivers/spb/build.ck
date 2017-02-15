@@ -25,18 +25,24 @@ Environment:
 
 --*/
 
+from menv import group, mconfig;
+
 function build() {
+    var arch = mconfig.arch;
+    var entries;
+    var spbDrivers;
 
-    assert(((arch == "armv7") || (arch == "armv6")), "Unexpected architecture");
+    if ((arch != "armv7") && (arch != "armv6")) {
+        Core.raise(ValueError("Unexpected architecture"));
+    }
 
-    spb_drivers = [
-        "//drivers/spb/i2c/am3i2c:am3i2c",
-        "//drivers/spb/i2c/rk3i2c:rk3i2c",
-        "//drivers/spb/spi/rk32spi:rk32spi"
+    spbDrivers = [
+        "drivers/spb/i2c/am3i2c:am3i2c",
+        "drivers/spb/i2c/rk3i2c:rk3i2c",
+        "drivers/spb/spi/rk32spi:rk32spi"
     ];
 
-    entries = group("spb_drivers", spb_drivers);
+    entries = group("spb_drivers", spbDrivers);
     return entries;
 }
 
-return build();

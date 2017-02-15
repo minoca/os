@@ -25,8 +25,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "ramdisk";
+    var drv;
+    var entries;
+    var name = "ramdisk";
+    var sources;
+
     sources = [
         "ramdisk.c"
     ];
@@ -40,4 +46,3 @@ function build() {
     return entries;
 }
 
-return build();

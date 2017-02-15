@@ -26,15 +26,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "dwhci";
+    var drv;
+    var dynlibs;
+    var entries;
+    var name = "dwhci";
+    var sources;
+
     sources = [
         "dwhci.c",
         "dwhcihc.c",
     ];
 
     dynlibs = [
-        "//drivers/usb/usbcore:usbcore"
+        "drivers/usb/usbcore:usbcore"
     ];
 
     drv = {
@@ -46,4 +53,3 @@ function build() {
     return entries;
 }
 
-return build();

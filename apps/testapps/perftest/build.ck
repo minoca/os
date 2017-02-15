@@ -25,7 +25,17 @@ Environment:
 
 --*/
 
+from menv import application, sharedLibrary;
+
 function build() {
+    var app;
+    var dynlibs;
+    var entries;
+    var includes;
+    var libSources;
+    var perfLib;
+    var sources;
+
     sources = [
         "copy.c",
         "create.c",
@@ -48,16 +58,16 @@ function build() {
         "write.c"
     ];
 
-    lib_sources = [
+    libSources = [
         "perflib/perflib.c"
     ];
 
     dynlibs = [
-        "//apps/osbase:libminocaos"
+        "apps/osbase:libminocaos"
     ];
 
     includes = [
-        "$//apps/libc/include"
+        "$S/apps/libc/include"
     ];
 
     app = {
@@ -67,15 +77,14 @@ function build() {
         "includes": includes
     };
 
-    perf_lib = {
+    perfLib = {
         "label": "perflib",
-        "inputs": lib_sources,
+        "inputs": libSources,
         "includes": includes
     };
 
     entries = application(app);
-    entries += shared_library(perf_lib);
+    entries += sharedLibrary(perfLib);
     return entries;
 }
 
-return build();

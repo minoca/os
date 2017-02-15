@@ -26,8 +26,14 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
-    name = "qrkhostb";
+    var drv;
+    var entries;
+    var name = "qrkhostb";
+    var sources;
+
     sources = [
         "qrkhostb.c"
     ];
@@ -41,4 +47,3 @@ function build() {
     return entries;
 }
 
-return build();

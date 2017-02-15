@@ -26,34 +26,41 @@ Environment:
 
 --*/
 
+from menv import staticLibrary;
+
 function build() {
+    var entries;
+    var includes;
+    var lib;
+    var sources;
+    var sourcesConfig;
+
     sources = [
-        "//uefi/core:crc32.o",
-        "//uefi/core:div.o",
+        "uefi/core:crc32.o",
+        "uefi/core:div.o",
         "init.c",
         "time.c",
-        "//uefi/core:util.o",
+        "uefi/core:util.o",
         "var.c"
     ];
 
     includes = [
-        "$//uefi/include",
-        "$//uefi/core"
+        "$S/uefi/include",
+        "$S/uefi/core"
     ];
 
-    sources_config = {
+    sourcesConfig = {
         "CFLAGS": ["-fshort-wchar"],
     };
 
     lib = {
         "label": "rtlib",
         "inputs": sources,
-        "sources_config": sources_config,
+        "sources_config": sourcesConfig,
         "includes": includes
     };
 
-    entries = static_library(lib);
+    entries = staticLibrary(lib);
     return entries;
 }
 
-return build();

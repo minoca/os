@@ -3105,6 +3105,7 @@ Return Value:
         return Result;
     }
 
+    *Separator = 0;
     return FALSE;
 }
 

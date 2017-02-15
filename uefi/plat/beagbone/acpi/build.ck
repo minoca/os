@@ -25,7 +25,15 @@ Environment:
 
 --*/
 
+from menv import compiledAsl;
+
 function build() {
+    var asl;
+    var entries;
+    var ffs;
+    var ffsSources;
+    var sources;
+
     sources = [
         "am33.asl",
         "dbg2.asl",
@@ -34,13 +42,14 @@ function build() {
         "facs.asl"
     ];
 
-    asl = compiled_asl(sources);
+    asl = compiledAsl(sources);
     entries = asl[1];
-    ffs_sources = asl[0];
+    ffsSources = asl[0];
     ffs = {
+        "type": "target",
         "label": "acpi.ffs",
-        "inputs": ffs_sources,
-        "implicit": ["//uefi/tools/genffs:genffs"],
+        "inputs": ffsSources,
+        "implicit": ["uefi/tools/genffs:genffs"],
         "tool": "genffs_acpi"
     };
 
@@ -48,4 +57,3 @@ function build() {
     return entries;
 }
 
-return build();
