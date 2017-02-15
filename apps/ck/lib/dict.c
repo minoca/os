@@ -124,6 +124,12 @@ CkpDictIteratorValue (
     PCK_VALUE Arguments
     );
 
+BOOL
+CkpDictCopy (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
 PCK_DICT_ENTRY
 CkpDictFindEntry (
     PCK_DICT Dict,
@@ -171,6 +177,7 @@ CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[] = {
     {"length@0", 0, CkpDictLength},
     {"iterate@1", 1, CkpDictIteratePrimitive},
     {"iteratorValue@1", 1, CkpDictIteratorValue},
+    {"copy@0", 0, CkpDictCopy},
     {NULL, 0, NULL}
 };
 
@@ -875,6 +882,58 @@ Return Value:
     }
 
     Arguments[0] = Entry->Key;
+    return TRUE;
+}
+
+BOOL
+CkpDictCopy (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the primitive for copying a dict.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+    PCK_DICT NewDict;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    NewDict = CkpDictCreate(Vm);
+    if (NewDict == NULL) {
+        return FALSE;
+    }
+
+    CkpPushRoot(Vm, &(NewDict->Header));
+    CkpDictResize(Vm, NewDict, Dict->Capacity);
+    if (NewDict->Capacity == Dict->Capacity) {
+        CkCopy(NewDict->Entries,
+               Dict->Entries,
+               sizeof(CK_DICT_ENTRY) * NewDict->Capacity);
+
+        NewDict->Count = Dict->Count;
+    }
+
+    CkpPopRoot(Vm);
+    CK_OBJECT_VALUE(Arguments[0], NewDict);
     return TRUE;
 }
 
