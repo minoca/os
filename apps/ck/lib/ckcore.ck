@@ -439,7 +439,7 @@ class String {
             if (character == "$") {
                 result += "$";
                 index += 1;
-                input = input[end...-1];
+                input = input[index...-1];
                 continue;
 
             //
