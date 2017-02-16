@@ -184,7 +184,8 @@ function build() {
         "major_version": majorVersion,
         "build": true,
         "prefix": "build",
-        "binplace": "tools/bin"
+        "binplace": "tools/bin",
+        "nostrip": true
     };
 
     if (buildOs == "Windows") {

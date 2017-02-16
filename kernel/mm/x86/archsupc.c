@@ -85,7 +85,7 @@ Return Value:
 
     PVOID InstructionPointer;
 
-    InstructionPointer = (PVOID)(TrapFrame->Eip);
+    InstructionPointer = (PVOID)(UINTN)(TrapFrame->Eip);
     if ((InstructionPointer >= (PVOID)MmpCopyUserModeMemory) &&
         (InstructionPointer < (PVOID)&MmpUserModeMemoryReturn)) {
 

@@ -63,7 +63,8 @@ function build() {
         "inputs": sources + buildLibs,
         "build": true,
         "prefix": "build",
-        "binplace": "tools/bin"
+        "binplace": "tools/bin",
+        "nostrip": true
     };
 
     entries = sharedLibrary(lib);

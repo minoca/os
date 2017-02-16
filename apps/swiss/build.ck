@@ -39,6 +39,7 @@ function build() {
     var buildSources;
     var buildSourcesConfig;
     var entries;
+    var loginSources;
     var minocaSources;
     var sourcesConfig;
     var targetIncludes;
@@ -133,6 +134,16 @@ function build() {
     uosOnlyCommands = [
         "chown.c",
         "hostname.c",
+        "mkfifo.c",
+        "readlink.c",
+        "sh/shuos.c",
+        "stty.c",
+        "swlib/chownutl.c",
+        "swlib/uos.c",
+        "telnet.c",
+    ];
+
+    loginSources = [
         "init.c",
         "login/chpasswd.c",
         "login/getty.c",
@@ -146,14 +157,7 @@ function build() {
         "login/useradd.c",
         "login/userdel.c",
         "login/vlock.c",
-        "mkfifo.c",
-        "readlink.c",
-        "sh/shuos.c",
         "ssdaemon.c",
-        "stty.c",
-        "swlib/chownutl.c",
-        "swlib/uos.c",
-        "telnet.c",
         "telnetd.c",
     ];
 
@@ -165,7 +169,6 @@ function build() {
 
     uosSources = [
         "dw.c",
-        "hostname.c",
         "swlib/linux.c",
         "uos/uoscmds.c",
     ];
@@ -194,7 +197,9 @@ function build() {
         "$S/apps/libc/include"
     ];
 
-    targetSources = baseSources + uosOnlyCommands + minocaSources;
+    targetSources = baseSources + uosOnlyCommands + loginSources +
+                    minocaSources;
+
     buildConfig = {
         "LDFLAGS": [],
         "DYNLIBS": []
@@ -219,6 +224,10 @@ function build() {
         buildSources = baseSources + uosOnlyCommands + uosSources;
         if (buildOs == "Linux") {
             buildConfig["DYNLIBS"] += ["-ldl", "-lutil"];
+        }
+
+        if (buildOs != "Darwin") {
+            buildSources += loginSources;
         }
     }
 

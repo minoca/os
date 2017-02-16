@@ -51,6 +51,7 @@ function chalkSharedModule(params) {
         params.binplace = libPath;
     }
 
+    params.nostrip = true;
     return sharedLibrary(params);
 }
 

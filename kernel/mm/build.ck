@@ -105,6 +105,9 @@ function build() {
 
     } else if (mconfig.build_arch == "x86") {
         buildArchSources = x86Sources;
+
+    } else if (mconfig.build_arch == "x64") {
+        buildArchSources = x86Sources;
     }
 
     lib = {

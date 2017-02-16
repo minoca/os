@@ -109,13 +109,13 @@ Return Value:
     var buildAsflagsLine = buildCflagsLine +
                            "$BUILD_BASE_ASFLAGS $ASFLAGS ";
 
-    var buildLdflagsLine = "-Wl,-Map=$OUT.map $BUILD_BASE_LDFLAGS $LDFLAGS ";
+    var buildLdflagsLine = "$BUILD_BASE_LDFLAGS $LDFLAGS ";
     var cflagsLine = "$BASE_CPPFLAGS $CPPFLAGS $BASE_CFLAGS $CFLAGS "
                      "-MMD -MF $OUT.d ";
 
     var asflagsLine = cflagsLine + "$BASE_ASFLAGS $ASFLAGS ";
     var entries;
-    var ldflagsLine = "-Wl,-Map=$OUT.map $BASE_LDFLAGS $LDFLAGS ";
+    var ldflagsLine = "$BASE_LDFLAGS $LDFLAGS ";
     var symlinkCommand = "ln -sf $SYMLINK_IN $OUT";
     var buildLdLine = "$BUILD_CC " + buildLdflagsLine +
                       "-o $OUT $IN -Bdynamic $DYNLIBS";
@@ -566,6 +566,11 @@ Return Value:
         mconfig.build_cflags += ["-fpic"];
     }
 
+    if (mconfig.build_os == "Darwin") {
+        mconfig.build_cflags += ["-Wno-tautological-compare",
+                                 "-Wno-parentheses-equality"];
+    }
+
     //
     // Add some architecture variant flags.
     //
@@ -577,18 +582,22 @@ Return Value:
         mconfig.cflags += ["-march=armv6zk", "-marm", "-mfpu=vfp"];
     }
 
+    mconfig.build_asflags = [];
     mconfig.asflags += ["-Wa,-g"];
     mconfig.build_ldflags = initListFromEnvironment("BUILD_LDFLAGS",
                                                     [] + mconfig.ldflags);
 
-    mconfig.ldflags += ["-Wl,--gc-sections"];
+    mconfig.ldflags += ["-Wl,--gc-sections",
+                        "-Wl,-Map=$OUT.map"];
 
     //
     // Mac OS cannot handle --gc-sections or strip -p.
     //
 
     if (mconfig.build_os != "Darwin") {
-        mconfig.build_ldflags += ["-Wl,--gc-sections"];
+        mconfig.build_ldflags += ["-Wl,--gc-sections",
+                                  "-Wl,-Map=$OUT.map"];
+
         mconfig.stripflags += ["-p"];
     }
 
@@ -617,7 +626,7 @@ Return Value:
         "BUILD_BASE_CFLAGS": mconfig.build_cflags,
         "BUILD_BASE_CPPFLAGS": mconfig.build_cppflags,
         "BUILD_BASE_LDFLAGS": mconfig.build_ldflags,
-        "BUILD_BASE_ASFLAGS": mconfig.asflags,
+        "BUILD_BASE_ASFLAGS": mconfig.build_asflags,
         "STRIP_FLAGS": mconfig.stripflags,
         "IASL_FLAGS": ["-we"]
     };
@@ -1265,8 +1274,8 @@ Return Value:
     //
 
     if (build && (mconfig.build_os == "Darwin")) {
-        majorVersion ?= 0;
-        minorVersion ?= 0;
+        majorVersion ?= "0";
+        minorVersion ?= "0";
         soname += ".%s.dylib" % majorVersion;
         addConfig(params,
                   "LDFLAGS",
@@ -1274,11 +1283,11 @@ Return Value:
 
         addConfig(params,
                   "LDFLAGS",
-                  "-current_version %d.%d" % [majorVersion, minorVersion]);
+                  "-current_version %s.%s" % [majorVersion, minorVersion]);
 
         addConfig(params,
                   "LDFLAGS",
-                  "-compatibility_version %d.%d" % [majorVersion, 0]);
+                  "-compatibility_version %s.%d" % [majorVersion, 0]);
 
 
     } else {

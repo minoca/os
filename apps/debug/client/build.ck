@@ -148,7 +148,7 @@ function build() {
     targetSources = commonSources + minocaSources + targetLibs +
                      targetDynlibs + archSources;
 
-    if (buildArch == "x86") {
+    if ((buildArch == "x86") || (buildArch == "x64")) {
         buildArchSources = x86Sources;
 
     } else if ((buildArch == "armv7") || (buildArch == "armv6")) {

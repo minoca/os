@@ -49,7 +49,8 @@ function build() {
         "inputs": sources,
         "build": true,
         "prefix": "build",
-        "binplace": "tools/lib"
+        "binplace": "tools/lib",
+        "nostrip": true
     };
 
     entries = staticLibrary(lib);
