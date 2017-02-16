@@ -30,6 +30,7 @@ from menv import application;
 function build() {
     var buildApp;
     var buildLibs;
+    var config;
     var entries;
     var includes;
     var sources;
@@ -52,13 +53,18 @@ function build() {
         "$S/apps/libc/include"
     ];
 
+    config = {
+        "CFLAGS": ["-ffreestanding"]
+    };
+
     buildApp = {
         "label": "build_testc",
         "output": "testc",
         "inputs": sources + buildLibs,
         "includes": includes,
         "build": true,
-        "prefix": "build"
+        "prefix": "build",
+        "sources_config": config
     };
 
     entries = application(buildApp);

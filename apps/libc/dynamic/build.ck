@@ -36,6 +36,7 @@ function build() {
     var arch_sources;
     var buildLib;
     var buildSources;
+    var buildSourcesConfig;
     var dynlibs;
     var entries;
     var libs;
@@ -228,6 +229,10 @@ function build() {
         "CFLAGS": ["-ftls-model=initial-exec"]
     };
 
+    buildSourcesConfig = {
+        "CFLAGS": ["-ftls-model=initial-exec", "-ffreestanding"]
+    };
+
     linkLdflags = [
         "-nostdlib",
         "-Wl,--whole-archive"
@@ -263,7 +268,7 @@ function build() {
         "label": "build_libc",
         "output": "build_libc",
         "inputs": buildSources + mathSources,
-        "sources_config": sourcesConfig,
+        "sources_config": buildSourcesConfig,
         "includes": sourcesIncludes,
         "build": true,
         "prefix": "build"

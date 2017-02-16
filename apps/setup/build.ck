@@ -123,6 +123,9 @@ function build() {
 
     } else {
         buildSources = commonSources + uosSources;
+        if (buildOs != "Darwin") {
+            buildConfig["DYNLIBS"] = ["-ldl"];
+        }
     }
 
     app = {

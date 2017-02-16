@@ -98,16 +98,16 @@ function build() {
     }
 
     if (mconfig.build_arch == "armv7") {
-        buildArchSources = armv7Sources;
+        buildArchSources = ["armv7/mapping.c"];
 
     } else if (mconfig.build_arch == "armv6") {
-        buildArchSources = armv6Sources;
+        buildArchSources = ["armv6/mapping.c"];
 
     } else if (mconfig.build_arch == "x86") {
-        buildArchSources = x86Sources;
+        buildArchSources = ["x86/mapping.c"];
 
     } else if (mconfig.build_arch == "x64") {
-        buildArchSources = x86Sources;
+        buildArchSources = ["x86/mapping.c"];
     }
 
     lib = {

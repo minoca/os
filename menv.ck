@@ -115,7 +115,7 @@ Return Value:
 
     var asflagsLine = cflagsLine + "$BASE_ASFLAGS $ASFLAGS ";
     var entries;
-    var ldflagsLine = "$BASE_LDFLAGS $LDFLAGS ";
+    var ldflagsLine = "-Wl,-Map=$OUT.map $BASE_LDFLAGS $LDFLAGS ";
     var symlinkCommand = "ln -sf $SYMLINK_IN $OUT";
     var buildLdLine = "$BUILD_CC " + buildLdflagsLine +
                       "-o $OUT $IN -Bdynamic $DYNLIBS";
@@ -134,6 +134,13 @@ Return Value:
     if (mconfig.build_os == "Darwin") {
         buildLdLine = "$BUILD_CC " + buildLdflagsLine +
                       "-o $OUT $IN $DYNLIBS";
+
+    //
+    // Create a .map file (except on Mac, which doesn't support it).
+    //
+
+    } else {
+        buildLdflagsLine = "-Wl,-Map=$OUT.map " + buildLdflagsLine;
     }
 
     //
@@ -587,17 +594,14 @@ Return Value:
     mconfig.build_ldflags = initListFromEnvironment("BUILD_LDFLAGS",
                                                     [] + mconfig.ldflags);
 
-    mconfig.ldflags += ["-Wl,--gc-sections",
-                        "-Wl,-Map=$OUT.map"];
+    mconfig.ldflags += ["-Wl,--gc-sections"];
 
     //
     // Mac OS cannot handle --gc-sections or strip -p.
     //
 
     if (mconfig.build_os != "Darwin") {
-        mconfig.build_ldflags += ["-Wl,--gc-sections",
-                                  "-Wl,-Map=$OUT.map"];
-
+        mconfig.build_ldflags += ["-Wl,--gc-sections"];
         mconfig.stripflags += ["-p"];
     }
 

@@ -31,6 +31,7 @@ from menv import addConfig, application, compiledSources, mconfig,
     sharedLibrary, staticLibrary;
 
 function build() {
+    var buildLibConfig = {};
     var buildLibs;
     var buildObjs;
     var buildSources;
@@ -41,7 +42,6 @@ function build() {
     var genTool;
     var grammar;
     var includes;
-    var libConfig;
     var lib;
     var libs;
     var majorVersion = "1";
@@ -169,11 +169,15 @@ function build() {
     // Create the dynamic libraries.
     //
 
+    if (buildOs != "Darwin") {
+       buildLibConfig["DYNLIBS"] = ["-ldl"];
+    }
+
     lib = {
         "label": "libchalk_dynamic",
         "output": "libchalk",
         "inputs": objs[0] + libs,
-        "major_version": majorVersion
+        "major_version": majorVersion,
     };
 
     entries += sharedLibrary(lib);
@@ -182,6 +186,7 @@ function build() {
         "output": "libchalk",
         "inputs": buildObjs[0] + buildLibs,
         "major_version": majorVersion,
+        "config": buildLibConfig,
         "build": true,
         "prefix": "build",
         "binplace": "tools/bin",
