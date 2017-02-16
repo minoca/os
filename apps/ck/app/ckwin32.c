@@ -101,9 +101,12 @@ Return Value:
     HRESULT Result;
     PSTR ScriptBase;
 
-    Copy = strdup(Script);
-    if (Copy == NULL) {
-        return;
+    Copy = NULL;
+    if (Script != NULL) {
+        Copy = strdup(Script);
+        if (Copy == NULL) {
+            return;
+        }
     }
 
     //
@@ -124,7 +127,10 @@ Return Value:
         }
     }
 
-    free(Copy);
+    if (Copy != NULL) {
+        free(Copy);
+        Copy = NULL;
+    }
 
     //
     // Add the special environment variable directory.

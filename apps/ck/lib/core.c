@@ -196,6 +196,12 @@ CkpCoreWrite (
     );
 
 BOOL
+CkpCoreGetModules (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpCoreGetModulePath (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -271,6 +277,7 @@ CK_PRIMITIVE_DESCRIPTION CkCorePrimitives[] = {
     {"gc@0", 0, CkpCoreGarbageCollect},
     {"importModule@1", 1, CkpCoreImportModule},
     {"_write@1", 1, CkpCoreWrite},
+    {"modules@0", 0, CkpCoreGetModules},
     {"modulePath@0", 0, CkpCoreGetModulePath},
     {"setModulePath@1", 1, CkpCoreSetModulePath},
     {"raise@1", 1, CkpCoreRaise},
@@ -1725,6 +1732,38 @@ Return Value:
         Vm->Configuration.Write(Vm, String->Value);
     }
 
+    return TRUE;
+}
+
+BOOL
+CkpCoreGetModules (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the modules dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    CK_OBJECT_VALUE(Arguments[0], Vm->Modules);
     return TRUE;
 }
 

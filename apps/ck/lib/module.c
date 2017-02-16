@@ -710,7 +710,7 @@ Return Value:
     CK_VALUE Module;
 
     Module = CkpDictGet(Vm->Modules, Name);
-    if (CK_IS_UNDEFINED(Module)) {
+    if ((CK_IS_UNDEFINED(Module)) || (!CK_IS_MODULE(Module))) {
         return NULL;
     }
 

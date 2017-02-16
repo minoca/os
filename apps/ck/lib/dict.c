@@ -113,6 +113,12 @@ CkpDictLength (
     );
 
 BOOL
+CkpDictKeys (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpDictIteratePrimitive (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -175,6 +181,7 @@ CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[] = {
     {"clear@0", 0, CkpDictClearPrimitive},
     {"containsKey@1", 1, CkpDictContainsKey},
     {"length@0", 0, CkpDictLength},
+    {"keys@0", 0, CkpDictKeys},
     {"iterate@1", 1, CkpDictIteratePrimitive},
     {"iteratorValue@1", 1, CkpDictIteratorValue},
     {"copy@0", 0, CkpDictCopy},
@@ -761,6 +768,68 @@ Return Value:
 
     Dict = CK_AS_DICT(Arguments[0]);
     CK_INT_VALUE(Arguments[0], Dict->Count);
+    return TRUE;
+}
+
+BOOL
+CkpDictKeys (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the dictionary keys method primitive, which returns
+    a list of dictionary keys.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+    PCK_DICT_ENTRY Entry;
+    UINTN Index;
+    PCK_LIST List;
+    UINTN ListIndex;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    List = CkpListCreate(Vm, Dict->Count);
+    if (List == NULL) {
+        return FALSE;
+    }
+
+    //
+    // Go through the entire dictionary and add all keys that are not undefined.
+    //
+
+    ListIndex = 0;
+    Entry = Dict->Entries;
+    for (Index = 0; Index < Dict->Capacity; Index += 1) {
+        if (!CK_IS_UNDEFINED(Entry->Key)) {
+            List->Elements.Data[ListIndex] = Entry->Key;
+            ListIndex += 1;
+        }
+
+        Entry += 1;
+    }
+
+    CK_ASSERT(ListIndex == Dict->Count);
+
+    CK_OBJECT_VALUE(Arguments[0], List);
     return TRUE;
 }
 

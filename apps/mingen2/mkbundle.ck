@@ -84,6 +84,8 @@ Return Value:
 
 {
 
+    var ignoredModules = [null, "__main", "app", "bundle"];
+    var modules;
     var command = "from mingen import main;"
                   "from os import exit;"
                   "exit(main());";
@@ -92,7 +94,14 @@ Return Value:
         Core.raise(ValueError("Usage: %s output_file" % [argv[0]]));
     }
 
-    create(argv[1], [io, make, mingen, ninja, os], command);
+    modules = [];
+    for (key in Core.modules()) {
+        if (!ignoredModules.contains(key)) {
+            modules.append(Core.modules()[key]);
+        }
+    }
+
+    create(argv[1], modules, command);
     return 0;
 }
 

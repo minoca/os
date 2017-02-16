@@ -294,8 +294,8 @@ Return Value:
 
     BaseName = basename(Arguments[0]);
     if (strncasecmp(BaseName, "chalk", 5) != 0) {
-        CkAppArgv = Arguments + 1;
-        CkAppArgc = ArgumentCount - 1;
+        CkAppArgv = Arguments;
+        CkAppArgc = ArgumentCount;
         Status = CkBundleThaw(Context.Vm);
         if (Status != -1) {
             goto MainEnd;
