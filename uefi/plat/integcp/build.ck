@@ -102,7 +102,7 @@ function build() {
         "includes": includes,
         "config": linkConfig,
         "text_address": textAddress,
-        "binplace": true
+        "binplace": "bin"
     };
 
     entries = executable(elf);

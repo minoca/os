@@ -75,7 +75,8 @@ function build() {
         "output": "chalk",
         "inputs": buildSources + buildLibs,
         "build": true,
-        "prefix": "build"
+        "prefix": "build",
+        "binplace": "tools/bin"
     };
 
     entries += application(app);

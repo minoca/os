@@ -28,18 +28,26 @@ Environment:
 from menv import group;
 
 function build() {
+    var buildChalk;
     var chalk;
     var entries;
 
-    chalk = [
-        "apps/ck/lib:libchalk_dynamic",
+    buildChalk = [
+        "apps/ck/lib:build_libchalk_static",
         "apps/ck/lib:build_libchalk_dynamic",
-        "apps/ck/app:chalk",
         "apps/ck/app:build_chalk",
+        "apps/ck/modules:build_modules",
+    ];
+
+    chalk = [
+        "apps/ck/lib:libchalk_static",
+        "apps/ck/lib:libchalk_dynamic",
+        "apps/ck/app:chalk",
         "apps/ck/modules:modules",
     ];
 
     entries = group("chalk", chalk);
+    entries += group("build_chalk", buildChalk);
     return entries;
 }
 

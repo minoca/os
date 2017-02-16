@@ -162,7 +162,7 @@ function build() {
         "includes": includes,
         "config": efiLinkConfig,
         "entry": "BoMain",
-        "binplace": true
+        "binplace": "bin"
     };
 
     entries = application(efiApp);
@@ -181,7 +181,7 @@ function build() {
             "config": pcatLinkConfig,
             "entry": "BoMain",
             "prefix": "pcat",
-            "binplace": true
+            "binplace": "bin"
         };
 
         entries += application(pcatApp);

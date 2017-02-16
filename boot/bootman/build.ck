@@ -188,7 +188,7 @@ function build() {
             "includes": includes,
             "config": pcatLinkConfig,
             "text_address": "0x100000",
-            "binplace": true
+            "binplace": "bin"
         };
 
         entries += executable(pcatApp);
@@ -200,7 +200,7 @@ function build() {
         flattened = {
             "label": "bootman.bin",
             "inputs": [":bootman.elf"],
-            "binplace": true,
+            "binplace": "bin",
             "nostrip": true
         };
 

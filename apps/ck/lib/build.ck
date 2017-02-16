@@ -183,7 +183,8 @@ function build() {
         "inputs": buildObjs[0] + buildLibs,
         "major_version": majorVersion,
         "build": true,
-        "prefix": "build"
+        "prefix": "build",
+        "binplace": "tools/bin"
     };
 
     if (buildOs == "Windows") {

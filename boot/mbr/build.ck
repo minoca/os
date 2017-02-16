@@ -67,7 +67,7 @@ function build() {
     flattened = {
         "label": "mbr.bin",
         "inputs": [":mbr.elf"],
-        "binplace": true,
+        "binplace": "bin",
         "nostrip": true
     };
 

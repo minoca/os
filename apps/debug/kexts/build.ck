@@ -62,7 +62,8 @@ function build() {
         "output": "kexts",
         "inputs": sources + buildLibs,
         "build": true,
-        "prefix": "build"
+        "prefix": "build",
+        "binplace": "tools/bin"
     };
 
     entries = sharedLibrary(lib);

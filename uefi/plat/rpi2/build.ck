@@ -131,7 +131,7 @@ function build() {
         "label": platfw,
         "inputs": [":" + platfw + ".elf"],
         "implicit": ["uefi/plat/rpi2/blobs:blobs"],
-        "binplace": true
+        "binplace": "bin"
     };
 
     entries += flattenedBinary(flattened);

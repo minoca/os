@@ -30,7 +30,6 @@ from menv import compiledSources, group, mconfig, staticLibrary;
 from apps.ck.modules.build import chalkSharedModule;
 
 function build() {
-    var all;
     var buildOs = mconfig.build_os;
     var buildSources;
     var commonSources;
@@ -107,15 +106,8 @@ function build() {
     };
 
     entries += chalkSharedModule(lib);
-
-    all = [
-        ":os_static",
-        ":os_dynamic",
-        ":build_os_static",
-        ":build_os_dynamic"
-    ];
-
-    entries += group("all", all);
+    entries += group("all", [":os_static", ":os_dynamic"]);
+    entries += group("build_all", [":build_os_static", ":build_os_dynamic"]);
     return entries;
 }
 

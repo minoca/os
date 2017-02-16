@@ -477,6 +477,7 @@ Return Value:
 
 {
 
+    var first = true;
     var label;
     var moduleTargets;
     var target;
@@ -497,6 +498,11 @@ Return Value:
             target = targets.get(entry);
             if (!target) {
                 Core.raise(ValueError("Unknown target '%s' requested" % entry));
+            }
+
+            if (first) {
+                target.default = true;
+                first = false;
             }
 
             _markTargetActive(target);
@@ -859,12 +865,15 @@ Return Value:
     }
 
     //
-    // Add the target as a build directory.
+    // Add the target as a build directory if no selective targets are
+    // requested.
     //
 
-    if ((!target.get("tool")) || (target.tool == "phony")) {
-        directory = target.output.rsplit("/", 1)[0];
-        buildDirectories[directory] = true;
+    if (config.targets.length() == 0) {
+        if ((!target.get("tool")) || (target.tool != "phony")) {
+            directory = target.output.rsplit("/", 1)[0];
+            buildDirectories[directory] = true;
+        }
     }
 
     //
@@ -1176,6 +1185,7 @@ Return Value:
 
 {
 
+    var directory;
     var inputs;
     var pool;
     var tool;
@@ -1184,14 +1194,24 @@ Return Value:
         return;
     }
 
-    tool = target.get(tool);
+    target.active = true;
+    tool = target.get("tool");
     if ((tool) && (tool != "phony")) {
         tools[tool].active = true;
     }
 
-    pool = target.get(pool);
+    pool = target.get("pool");
     if (pool) {
         pools[pool].active = true;
+    }
+
+    //
+    // Add the target to the list of build directories.
+    //
+
+    if ((!target.get("tool")) || (target.tool != "phony")) {
+        directory = target.output.rsplit("/", 1)[0];
+        buildDirectories[directory] = true;
     }
 
     //

@@ -54,8 +54,8 @@ function build() {
     };
 
     entries += staticLibrary(lib);
-    all = [":bundle", ":build_bundle"];
-    entries += group("all", all);
+    entries += group("all", [":bundle"]);
+    entries += group("build_all", [":build_bundle"]);
     return entries;
 }
 

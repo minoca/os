@@ -94,7 +94,7 @@ function build() {
         "inputs": tzFiles,
         "implicit": [":build_tzcomp"],
         "tool": "tzcomp",
-        "nostrip": true
+        "nostrip": true,
     };
 
     tzDefaultConfig = {

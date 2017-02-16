@@ -51,6 +51,7 @@ function build() {
     ];
 
     apps = [
+        "apps/ck:build_chalk",
         "apps/ck:chalk",
         "apps/debug:debug",
         "apps/efiboot:efiboot",

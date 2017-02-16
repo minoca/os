@@ -48,7 +48,8 @@ function build() {
         "output": "dbgext",
         "inputs": sources,
         "build": true,
-        "prefix": "build"
+        "prefix": "build",
+        "binplace": "tools/lib"
     };
 
     entries = staticLibrary(lib);

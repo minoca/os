@@ -27,13 +27,15 @@ Environment:
 
 from menv import copy, group, mconfig, sharedLibrary;
 
-var libPath = mconfig.binroot + "/chalk1/";
-var buildLibPath = mconfig.outroot + "/tools/lib/chalk1/";
+//
+// Define the destination library paths, which when binplaced are relative to
+// outroot.
+//
+
+var libPath = "bin/chalk1";
+var buildLibPath = "tools/lib/chalk1";
 
 function chalkSharedModule(params) {
-    var destinationPath;
-    var newLabel;
-    var result;
 
     //
     // Add the Chalk library dependency, and figure out the destination copy
@@ -42,33 +44,18 @@ function chalkSharedModule(params) {
 
     if (params.get("build")) {
         params.inputs.append("apps/ck/lib:build_libchalk_dynamic");
-        destinationPath = buildLibPath;
+        params.binplace = buildLibPath;
 
     } else {
         params.inputs.append("apps/ck/lib:libchalk_dynamic");
-        destinationPath = libPath;
+        params.binplace = libPath;
     }
 
-    params.binplace = false;
-    result = sharedLibrary(params);
-
-    //
-    // Copy the file to the destination, then rename the label so that the copy
-    // result gets linked into the dependency chain.
-    //
-
-    newLabel = params.label + "_orig";
-    result += copy(":" + newLabel,
-                   destinationPath + params.output,
-                   params.label,
-                   null,
-                   null);
-
-    params.label = newLabel;
-    return result;
+    return sharedLibrary(params);
 }
 
 function build() {
+    var buildAll = [];
     var all = [];
     var chalkModules;
     var entries = [];
@@ -93,15 +80,20 @@ function build() {
     //
 
     for (module in chalkModules) {
-        entries += copy(module, libPath + module, module, null, null);
         entries += copy(module,
-                        buildLibPath + module,
+                        mconfig.outroot + "/" + libPath + "/" + module,
+                        module,
+                        null,
+                        null);
+
+        entries += copy(module,
+                        mconfig.outroot + "/" + buildLibPath + "/" + module,
                         "build_" + module,
                         null,
                         null);
 
         all.append(":" + module);
-        all.append(":build_" + module);
+        buildAll.append(":build_" + module);
     }
 
     //
@@ -110,9 +102,11 @@ function build() {
 
     for (module in foreignModules) {
         all.append("apps/ck/modules/" + module + ":all");
+        buildAll.append("apps/ck/modules/" + module + ":build_all");
     }
 
     entries += group("modules", all);
+    entries += group("build_modules", buildAll);
     return entries;
 }
 

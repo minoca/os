@@ -29,7 +29,6 @@ Environment:
 from menv import group, staticLibrary;
 
 function build() {
-    var all;
     var entries;
     var lib;
     var sources;
@@ -52,8 +51,8 @@ function build() {
     };
 
     entries += staticLibrary(lib);
-    all = [":app", ":build_app"];
-    entries += group("all", all);
+    entries += group("all", [":app"]);
+    entries += group("build_all", [":build_app"]);
     return entries;
 }
 

@@ -140,7 +140,8 @@ function build() {
         "includes": buildIncludes,
         "config": buildConfig,
         "build": true,
-        "prefix": "build"
+        "prefix": "build",
+        "binplace": "tools/bin"
     };
 
     entries += application(buildApp);

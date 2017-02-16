@@ -942,13 +942,12 @@ Return Value:
     params.output = source;
     params.type = "target";
     fileName = basename(source);
-    if (build) {
-        destination = mconfig.binroot + "/tools/bin/" + fileName;
-
-    } else {
-        destination = mconfig.binroot + "/" + fileName;
+    destination = params.get("binplace");
+    if (!destination) {
+        destination = "bin";
     }
 
+    destination = mconfig.outroot + "/" + destination + "/" + fileName;
     newOriginalLabel = label + "_orig";
     originalTarget = ":" + newOriginalLabel;
     copiedEntry = copy(originalTarget, destination, label, cpflags, mode)[0];
@@ -1219,8 +1218,8 @@ Return Value:
         addConfig(params, "LDFLAGS", "-pie");
     }
 
-    if (params.get("binplace") == null) {
-        params.binplace = true;
+    if ((!build) && (params.get("binplace") == null)) {
+        params.binplace = "bin";
     }
 
     return executable(params);
@@ -1298,8 +1297,8 @@ Return Value:
     }
 
     params.output = soname;
-    if (params.get("binplace") == null) {
-        params.binplace = true;
+    if ((!build) && (params.get("binplace") == null)) {
+        params.binplace = "bin";
     }
 
     return executable(params);
@@ -1622,8 +1621,7 @@ Return Value:
         params.entry = "DriverEntry";
     }
 
-    params.binplace = true;
-
+    params.binplace = "bin";
     soname ?= params.get("label");
     if (soname != "kernel") {
         soname += ".drv";

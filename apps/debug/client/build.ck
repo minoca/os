@@ -199,7 +199,8 @@ function build() {
             "includes": includes,
             "config": buildConfig,
             "build": true,
-            "prefix": "build"
+            "prefix": "build",
+            "binplace": "tools/bin"
         };
 
         entries += application(buildApp);
@@ -217,7 +218,8 @@ function build() {
             "includes": includes,
             "config": buildGuiConfig,
             "build": true,
-            "prefix": "buildui"
+            "prefix": "buildui",
+            "binplace": "tools/bin"
         };
 
         entries += application(buildGuiApp);
