@@ -55,7 +55,7 @@ Environment:
     "  -d, --decompress - Decompress data.\n" \
     "  -i, --input=<file> - Read input from the given file (default stdin).\n" \
     "  -o, --output=<file> - Write output fo the given file (default stoud).\n"\
-    "  -123456789, --level=<level> - Set decompression level (default 5).\n" \
+    "  -0123456789, --level=<level> - Set decompression level (default 5).\n" \
     "  --mode=[0|1] - Set compression mode (default 1: max).\n" \
     "  --dict-size=<size> - Set dictionary size [12, 30] (default 24).\n" \
     "  --fast-bytes=<size> - Set fast byte count [5, 273] (default 128).\n"\
@@ -69,7 +69,7 @@ Environment:
     "  --help - Display this help message.\n" \
     "  --version -- Display the version information and exit.\n"
 
-#define LZMA_OPTIONS_STRING "cdi:o:123456789hvV"
+#define LZMA_OPTIONS_STRING "cdi:o:0123456789hvV"
 
 #define LZMA_UTIL_VERSION_MAJOR 1
 #define LZMA_UTIL_VERSION_MINOR 0
@@ -220,6 +220,7 @@ Return Value:
     Context.Lz.Read = LzpUtilRead;
     Context.Lz.Write = LzpUtilWrite;
     LzLzmaEncoderInitializeProperties(&(Context.EncoderProperties));
+    Context.EncoderProperties.WriteEndMark = TRUE;
     Status = 1;
 
     //
@@ -264,6 +265,7 @@ Return Value:
             OutputPath = optarg;
             break;
 
+        case '0':
         case '1':
         case '2':
         case '3':

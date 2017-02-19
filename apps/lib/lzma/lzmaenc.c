@@ -521,6 +521,8 @@ Return Value:
 {
 
     PLZMA_ENCODER Encoder;
+    UCHAR PropertiesData[LZMA_PROPERTIES_SIZE];
+    UINTN PropertiesSize;
     LZ_STATUS Result;
 
     Encoder = LzpLzmaCreateEncoder(Context);
@@ -530,6 +532,23 @@ Return Value:
 
     Result = LzpLzmaEncoderSetProperties(Encoder, Properties);
     if (Result != LzSuccess) {
+        goto LzmaEncodeStreamEnd;
+    }
+
+    //
+    // Write the properties bytes out.
+    //
+
+    PropertiesSize = sizeof(PropertiesData);
+    Result = LzpLzmaWriteProperties(Encoder, PropertiesData, &PropertiesSize);
+    if (Result != LzSuccess) {
+        goto LzmaEncodeStreamEnd;
+    }
+
+    if (Context->Write(Context, PropertiesData, PropertiesSize) !=
+        PropertiesSize) {
+
+        Result = LzErrorWrite;
         goto LzmaEncodeStreamEnd;
     }
 
@@ -661,6 +680,44 @@ Return Value:
     if (Position < LZMA_FULL_DISTANCES) {
         return Encoder->FastPosition[Position];
     }
+
+    if (Position < (1 << (LZMA_DICT_LOG_BITS + 6))) {
+        Shift = 6;
+
+    } else {
+        Shift = 6 + LZMA_DICT_LOG_BITS - 1;
+    }
+
+    return Encoder->FastPosition[Position >> Shift] + (Shift * 2);
+}
+
+ULONG
+LzpLzmaGetPositionSlot2 (
+    PLZMA_ENCODER Encoder,
+    ULONG Position
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the slot associated with the given position.
+
+Arguments:
+
+    Encoder - Supplies a pointer to the encoder.
+
+    Position - Supplies the current position.
+
+Return Value:
+
+    Returns the slot associated with the given position.
+
+--*/
+
+{
+
+    ULONG Shift;
 
     if (Position < (1 << (LZMA_DICT_LOG_BITS + 6))) {
         Shift = 6;
@@ -929,7 +986,7 @@ Return Value:
     Properties[0] =
                 (UCHAR)((((Encoder->Pb * 5) + Encoder->Lp) * 9) + Encoder->Lc);
 
-    if (DictSize >= (1 >> 22)) {
+    if (DictSize >= (1 << 22)) {
         DictMask = (1 << 20) - 1;
         if (DictSize < 0xFFFFFFFF - DictMask) {
             DictSize = (DictSize + DictMask) & ~DictMask;
@@ -1465,7 +1522,7 @@ Return Value:
     Encoder->OptimumCurrentIndex = 0;
     Encoder->AdditionalOffset = 0;
     Encoder->PbMask = (1 << Encoder->Pb) - 1;
-    Encoder->LpMask = (1 << Encoder->Lc) - 1;
+    Encoder->LpMask = (1 << Encoder->Lp) - 1;
     return;
 }
 
@@ -2504,14 +2561,13 @@ Return Value:
 
     } else {
         LzpRangeEncodeBit(RangeEncoder, &(LengthEncoder->Choice), 1);
-        Symbol -= LZMA_LENGTH_LOW_SYMBOLS;
         if (Symbol < LZMA_LENGTH_LOW_SYMBOLS + LZMA_LENGTH_MID_SYMBOLS) {
             LzpRangeEncodeBit(RangeEncoder, &(LengthEncoder->Choice2), 0);
             LzpRcTreeEncode(
                   RangeEncoder,
                   LengthEncoder->Mid + (PositionState << LZMA_LENGTH_MID_BITS),
                   LZMA_LENGTH_MID_BITS,
-                  Symbol);
+                  Symbol - LZMA_LENGTH_LOW_SYMBOLS);
 
         //
         // The value is greater than the mid cutoff, so 11 is written, then the
@@ -2519,7 +2575,7 @@ Return Value:
         //
 
         } else {
-            Symbol -= LZMA_LENGTH_MID_SYMBOLS;
+            Symbol -= LZMA_LENGTH_LOW_SYMBOLS + LZMA_LENGTH_MID_SYMBOLS;
             LzpRangeEncodeBit(RangeEncoder, &(LengthEncoder->Choice2), 1);
             LzpRcTreeEncode(RangeEncoder,
                             LengthEncoder->High,

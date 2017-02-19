@@ -60,7 +60,7 @@ Author:
 #define LZP_IS_CHARACTER_STATE(_State) ((_State) < 7)
 
 #define LZP_GET_LENGTH_TO_POSITION_STATE(_Length) \
-    (((_Length) < LZMA_LENGTH_TO_POSITION_STATES) ? \
+    (((_Length) < LZMA_LENGTH_TO_POSITION_STATES + 1) ? \
      ((_Length) - 2) : \
      (LZMA_LENGTH_TO_POSITION_STATES - 1))
 
@@ -154,7 +154,7 @@ Members:
     PositionPrevious - Stores the uncompressed size of the substring encoded by
         all packets except the last one.
 
-    BackPrevious - Storse -1 if the last packet is a LIT, 0-3 if it is a REP,
+    BackPrevious - Stores -1 if the last packet is a LIT, 0-3 if it is a REP,
         or 4 + distance if it is a MATCH. This is always 0 if
         PreviousIsCharacter is TRUE, since the last packet can only be a
         LONGREP[0] in that case).
@@ -542,6 +542,30 @@ Return Value:
 
 ULONG
 LzpLzmaGetPositionSlot (
+    PLZMA_ENCODER Encoder,
+    ULONG Position
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the slot associated with the given position.
+
+Arguments:
+
+    Encoder - Supplies a pointer to the encoder.
+
+    Position - Supplies the current position.
+
+Return Value:
+
+    Returns the slot associated with the given position.
+
+--*/
+
+ULONG
+LzpLzmaGetPositionSlot2 (
     PLZMA_ENCODER Encoder,
     ULONG Position
     );

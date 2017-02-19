@@ -371,6 +371,7 @@ Return Value:
     ULONG AdjustedLength;
     ULONG AvailableCount;
     ULONG AvailableCountFull;
+    ULONG BackPrevious;
     UCHAR Byte;
     PCUCHAR CheckData;
     ULONG Current;
@@ -380,6 +381,7 @@ Return Value:
     ULONG CurrentPrice;
     PCUCHAR Data;
     ULONG Distance;
+    ULONG EndOffset;
     ULONG ExtraLength;
     ULONG Index;
     ULONG Length;
@@ -630,7 +632,7 @@ Return Value:
         Length = RepLengths[0] + 1;
     }
 
-    if (Length < MainLength) {
+    if (Length <= MainLength) {
         Offset = 0;
         while (Length > Matches[Offset]) {
             Offset += 2;
@@ -649,7 +651,7 @@ Return Value:
                     Encoder->DistancesPrices[LengthToPositionState][Distance];
 
             } else {
-                Slot = LzpLzmaGetPositionSlot(Encoder, Distance);
+                Slot = LzpLzmaGetPositionSlot2(Encoder, Distance);
                 CurrentAndLengthPrice +=
                              Encoder->AlignPrices[Distance & LZMA_ALIGN_MASK] +
                              Encoder->SlotPrices[LengthToPositionState][Slot];
@@ -659,7 +661,7 @@ Return Value:
             if (CurrentAndLengthPrice < Optimal->Price) {
                 Optimal->Price = CurrentAndLengthPrice;
                 Optimal->PositionPrevious = 0;
-                Optimal->BackPrevious = Distance = LZMA_REP_COUNT;
+                Optimal->BackPrevious = Distance + LZMA_REP_COUNT;
                 Optimal->PreviousIsCharacter = FALSE;
             }
 
@@ -729,12 +731,12 @@ Return Value:
                 (Optimal->Previous2 != FALSE)) {
 
                 PositionPrevious = Optimal->PositionPrevious2;
-                Position = Optimal->BackPrevious2;
+                BackPrevious = Optimal->BackPrevious2;
                 State = LzLzmaRepNextStates[State];
 
             } else {
-                Position = Optimal->BackPrevious;
-                if (Position < LZMA_REP_COUNT) {
+                BackPrevious = Optimal->BackPrevious;
+                if (BackPrevious < LZMA_REP_COUNT) {
                     State = LzLzmaRepNextStates[State];
 
                 } else {
@@ -743,19 +745,19 @@ Return Value:
             }
 
             PreviousOptimal = &(Encoder->Optimal[PositionPrevious]);
-            if (Position < LZMA_REP_COUNT) {
-                Reps[0] = PreviousOptimal->Backs[Position];
-                for (Index = 1; Index <= Position; Index += 1) {
+            if (BackPrevious < LZMA_REP_COUNT) {
+                Reps[0] = PreviousOptimal->Backs[BackPrevious];
+                for (Index = 1; Index <= BackPrevious; Index += 1) {
                     Reps[Index] = PreviousOptimal->Backs[Index - 1];
                 }
 
                 while (Index < LZMA_REP_COUNT) {
-                    Reps[Index] = PreviousOptimal->Backs[Index - 1];
+                    Reps[Index] = PreviousOptimal->Backs[Index];
                     Index += 1;
                 }
 
             } else {
-                Reps[0] = Position - LZMA_REP_COUNT;
+                Reps[0] = BackPrevious - LZMA_REP_COUNT;
                 for (Index = 1; Index < LZMA_REP_COUNT; Index += 1) {
                     Reps[Index] = PreviousOptimal->Backs[Index - 1];
                 }
@@ -806,7 +808,7 @@ Return Value:
             NextIsCharacter = TRUE;
         }
 
-        MatchPrice =
+        MatchPrice = CurrentPrice +
              LZP_GET_PRICE(Encoder, Encoder->IsMatch[State][PositionState], 1);
 
         RepMatchPrice = MatchPrice +
@@ -820,7 +822,7 @@ Return Value:
                          RepMatchPrice +
                          LzpLzmaGetRepLen1Price(Encoder, State, PositionState);
 
-            if (ShortRepPrice < NextOptimal->Price) {
+            if (ShortRepPrice <= NextOptimal->Price) {
                 NextOptimal->Price = ShortRepPrice;
                 NextOptimal->PositionPrevious = Current;
                 LzpOptimalMakeAsShortRep(NextOptimal);
@@ -915,7 +917,7 @@ Return Value:
 
             LengthTest = 2;
             while ((LengthTest < AvailableCount) &&
-                   (Data[LengthTest] == Data[LengthTest])) {
+                   (Data[LengthTest] == CheckData[LengthTest])) {
 
                 LengthTest += 1;
             }
@@ -1062,7 +1064,7 @@ Return Value:
             }
 
             CurrentBack = Matches[Offset + 1];
-            Slot = LzpLzmaGetPositionSlot(Encoder, CurrentBack);
+            Slot = LzpLzmaGetPositionSlot2(Encoder, CurrentBack);
             LengthTest = StartLength;
             while (TRUE) {
                 SymbolIndex = LengthTest - LZMA_MIN_MATCH_LENGTH;
@@ -1148,8 +1150,8 @@ Return Value:
                                 Encoder->IsRep[TestState],
                                 1);
 
-                        Offset = Current + LengthTest + 1 + ExtraLength;
-                        while (LengthEnd < Offset) {
+                        EndOffset = Current + LengthTest + 1 + ExtraLength;
+                        while (LengthEnd < EndOffset) {
                             LengthEnd += 1;
                             Encoder->Optimal[LengthEnd].Price =
                                                            LZMA_INFINITY_PRICE;
@@ -1163,7 +1165,7 @@ Return Value:
                                                            TestState,
                                                            PositionStateNext);
 
-                        Optimal = &(Encoder->Optimal[Offset]);
+                        Optimal = &(Encoder->Optimal[EndOffset]);
                         if (CurrentAndLengthPrice < Optimal->Price) {
                             Optimal->Price = CurrentAndLengthPrice;
                             Optimal->PositionPrevious =
@@ -1185,7 +1187,7 @@ Return Value:
 
                     CurrentBack = Matches[Offset + 1];
                     if (CurrentBack >= LZMA_FULL_DISTANCES) {
-                        Slot = LzpLzmaGetPositionSlot(Encoder, CurrentBack);
+                        Slot = LzpLzmaGetPositionSlot2(Encoder, CurrentBack);
                     }
                 }
 

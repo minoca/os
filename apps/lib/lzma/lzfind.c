@@ -835,6 +835,7 @@ Return Value:
         LengthLimit = Finder->LengthLimit;
         if (LengthLimit < 4) {
             LZP_MATCH_FINDER_ADVANCE(Finder);
+            Size -= 1;
             continue;
         }
 
@@ -962,6 +963,7 @@ Return Value:
         LengthLimit = Finder->LengthLimit;
         if (LengthLimit < 2) {
             LZP_MATCH_FINDER_ADVANCE(Finder);
+            Size -= 1;
             continue;
         }
 
@@ -1113,6 +1115,7 @@ Return Value:
         LengthLimit = Finder->LengthLimit;
         if (LengthLimit < 3) {
             LZP_MATCH_FINDER_ADVANCE(Finder);
+            Size -= 1;
             continue;
         }
 
@@ -1291,6 +1294,7 @@ Return Value:
         LengthLimit = Finder->LengthLimit;
         if (LengthLimit < 4) {
             LZP_MATCH_FINDER_ADVANCE(Finder);
+            Size -= 1;
             continue;
         }
 
@@ -1554,10 +1558,8 @@ Return Value:
             (*Search == *Current)) {
 
             Length = 1;
-            while (Length != LengthLimit) {
-                if (Search[Length] == Current[Length]) {
-                    break;
-                }
+            while ((Length != LengthLimit) &&
+                   (Search[Length] == Current[Length])) {
 
                 Length += 1;
             }
@@ -1845,6 +1847,8 @@ Return Value:
         if (LZP_MATCH_FINDER_NEEDS_MOVE(Finder)) {
             LzpMatchFinderMoveBlock(Finder);
         }
+
+        LzpMatchFinderReadBlock(Finder);
     }
 
     if (Finder->CyclicBufferPosition == Finder->CyclicBufferSize) {
