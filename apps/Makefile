@@ -32,7 +32,6 @@
 APPS = ck       \
        debug    \
        efiboot  \
-       mingen   \
        mount    \
        netcon   \
        profile  \
