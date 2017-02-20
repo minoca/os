@@ -89,15 +89,11 @@ function build() {
 
     sources += posixSources;
     libs = [
-        "lib/yy:yy",
-        "lib/rtl/base:basertl",
-        "lib/rtl/rtlc:rtlc"
+        "lib/yy:yy"
     ];
 
     buildLibs = [
-        "lib/yy:build_yy",
-        "lib/rtl/base:build_basertl",
-        "lib/rtl/rtlc:build_rtlc"
+        "lib/yy:build_yy"
     ];
 
     //
@@ -106,8 +102,6 @@ function build() {
 
     genSources = [
         "gram/gramgen.c",
-        "lib/rtl/base:build_basertl",
-        "lib/rtl/rtlc:build_rtlc",
         "lib/yy/gen:build_yygen"
     ];
 
@@ -169,7 +163,7 @@ function build() {
     // Create the dynamic libraries.
     //
 
-    if (buildOs != "Darwin") {
+    if ((buildOs != "Darwin") && (buildOs != "Windows")) {
        buildLibConfig["DYNLIBS"] = ["-ldl"];
     }
 

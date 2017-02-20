@@ -33,11 +33,10 @@ Author:
 #define CK_API __DLLEXPORT
 
 //
-// The parser and Rtl libraries are statically linked in.
+// The parser library is statically linked in.
 //
 
 #define YY_API
-#define RTL_API
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/chalk.h>

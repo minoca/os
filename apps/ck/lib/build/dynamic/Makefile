@@ -61,8 +61,6 @@ endif
 endif
 
 TARGETLIBS = $(OBJROOT)/os/lib/yy/build/yy.a                     \
-             $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
-             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a             \
 
 include $(SRCROOT)/os/minoca.mk
 

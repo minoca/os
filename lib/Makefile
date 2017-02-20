@@ -38,5 +38,5 @@ DIRS = basevid  \
 
 include $(SRCROOT)/os/minoca.mk
 
-fatlib crypto yy: rtl
+fatlib crypto: rtl
 

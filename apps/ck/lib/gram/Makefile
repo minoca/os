@@ -32,9 +32,7 @@ BINARYTYPE = build
 
 BUILD = yes
 
-TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
-             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a             \
-             $(OBJROOT)/os/lib/yy/gen/yygen.a                    \
+TARGETLIBS = $(OBJROOT)/os/lib/yy/gen/yygen.a                    \
 
 OBJS = gramgen.o \
 

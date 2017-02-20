@@ -32,7 +32,6 @@ function build() {
     var apps;
     var entries;
     var libc;
-    var mingenBuild;
     var testApps;
 
     testApps = [
@@ -44,10 +43,6 @@ function build() {
         "apps/libc/crypt:libcrypt",
         "apps/libc/dynamic/pthread/static:libpthread_nonshared",
         "apps/libc/static:libc_nonshared",
-    ];
-
-    mingenBuild = [
-        "apps/mingen:build_mingen"
     ];
 
     apps = [
@@ -67,7 +62,7 @@ function build() {
         "apps/vmstat:vmstat",
     ];
 
-    allApps = testApps + libc + mingenBuild + apps;
+    allApps = testApps + libc + apps;
     entries = group("all_apps", allApps);
     return entries;
 }

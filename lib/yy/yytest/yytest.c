@@ -29,14 +29,13 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#define RTL_API
 #define YY_API
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>
-#include <minoca/lib/rtl.h>
 #include <minoca/lib/yy.h>
 
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
@@ -1308,8 +1307,8 @@ Return Value:
     Failures = 0;
     Input = NULL;
     TranslationUnit = NULL;
-    RtlZeroMemory(&Lexer, sizeof(LEXER));
-    RtlZeroMemory(&Parser, sizeof(PARSER));
+    memset(&Lexer, 0, sizeof(LEXER));
+    memset(&Parser, 0, sizeof(PARSER));
     Status = YyTestReadFile(Path, &Input, &Size);
     if (Status != 0) {
         Failures += 1;
@@ -1433,7 +1432,7 @@ Return Value:
 
         DeclarationSpecifiers = Node->Nodes[0];
 
-        ASSERT(DeclarationSpecifiers->GrammarElement ==
+        assert(DeclarationSpecifiers->GrammarElement ==
                CNodeDeclarationSpecifiers);
 
         if (DeclarationSpecifiers->NodeCount != 0) {
@@ -1441,7 +1440,7 @@ Return Value:
             if (StorageClassSpecifier->GrammarElement ==
                 CNodeStorageClassSpecifier) {
 
-                ASSERT(StorageClassSpecifier->TokenCount == 1);
+                assert(StorageClassSpecifier->TokenCount == 1);
 
                 if (StorageClassSpecifier->Tokens[0]->Value == CTokenTypedef) {
                     IsTypedef = TRUE;
@@ -1456,7 +1455,7 @@ Return Value:
 
     InitDeclaratorList = Node->Nodes[1];
 
-    ASSERT(InitDeclaratorList->GrammarElement == CNodeInitDeclaratorList);
+    assert(InitDeclaratorList->GrammarElement == CNodeInitDeclaratorList);
 
     for (DeclaratorListIndex = 0;
          DeclaratorListIndex < InitDeclaratorList->NodeCount;
@@ -1464,8 +1463,8 @@ Return Value:
 
         InitDeclarator = InitDeclaratorList->Nodes[DeclaratorListIndex];
 
-        ASSERT(InitDeclarator->GrammarElement == CNodeInitDeclarator);
-        ASSERT(InitDeclarator->NodeCount != 0);
+        assert(InitDeclarator->GrammarElement == CNodeInitDeclarator);
+        assert(InitDeclarator->NodeCount != 0);
 
         Declarator = InitDeclarator->Nodes[0];
         YyTestVisitDeclarator(Context, Declarator, Create);
@@ -1508,7 +1507,7 @@ Return Value:
     PPARSER_NODE DirectDeclarator;
     PLEXER_TOKEN Token;
 
-    ASSERT(Declarator->GrammarElement == CNodeDeclarator);
+    assert(Declarator->GrammarElement == CNodeDeclarator);
 
     for (DeclaratorIndex = 0;
          DeclaratorIndex < Declarator->NodeCount;
@@ -1519,7 +1518,7 @@ Return Value:
             continue;
         }
 
-        ASSERT(DirectDeclarator->TokenCount != 0);
+        assert(DirectDeclarator->TokenCount != 0);
 
         Token = DirectDeclarator->Tokens[0];
         if (Token->Value == CTokenIdentifier) {
@@ -1527,8 +1526,8 @@ Return Value:
 
         } else {
 
-            ASSERT(Token->Value == CTokenOpenParentheses);
-            ASSERT(DirectDeclarator->NodeCount != 0);
+            assert(Token->Value == CTokenOpenParentheses);
+            assert(DirectDeclarator->NodeCount != 0);
 
             YyTestVisitDeclarator(Context, DirectDeclarator->Nodes[0], Create);
         }
@@ -1573,14 +1572,14 @@ Return Value:
     ExistingType = YyTestFindType(Lexer, Token);
     if (ExistingType != NULL) {
 
-        ASSERT(Create == FALSE);
+        assert(Create == FALSE);
 
         LIST_REMOVE(&(ExistingType->ListEntry));
         free(ExistingType);
 
     } else {
 
-        ASSERT(Create != FALSE);
+        assert(Create != FALSE);
 
         Type = malloc(sizeof(C_TYPE));
         if (Type == NULL) {
@@ -1623,9 +1622,9 @@ Return Value:
 
 {
 
+    INT Compare;
     PLIST_ENTRY CurrentEntry;
     PCSTR Input;
-    BOOL Match;
     PC_TYPE Type;
 
     Input = Lexer->Input;
@@ -1637,11 +1636,11 @@ Return Value:
             continue;
         }
 
-        Match = RtlCompareMemory(Input + Identifier->Position,
-                                 Input + Type->Token->Position,
-                                 Identifier->Size);
+        Compare = memcmp(Input + Identifier->Position,
+                         Input + Type->Token->Position,
+                         Identifier->Size);
 
-        if (Match != FALSE) {
+        if (Compare == 0) {
             return Type;
         }
     }

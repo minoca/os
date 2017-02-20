@@ -30,7 +30,6 @@ Author:
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>
-#include <minoca/lib/rtl.h>
 #include <minoca/lib/yy.h>
 
 //

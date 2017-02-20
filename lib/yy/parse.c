@@ -29,6 +29,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+
 #include "yyp.h"
 
 //
@@ -351,7 +355,7 @@ Return Value:
 
     NodeCount = Node->NodeCount;
 
-    ASSERT(Node->GrammarElement != (ULONG)-1);
+    assert(Node->GrammarElement != (ULONG)-1);
 
     if ((Node->GrammarIndex != (ULONG)-1) && (Parser->NodeCallback != NULL)) {
         Parser->NodeCallback(Parser->Context, Node, FALSE);
@@ -438,11 +442,11 @@ Return Value:
 
     LeftRecursive = FALSE;
     if ((Parser->Flags & YY_PARSE_FLAG_DEBUG) != 0) {
-        RtlDebugPrint("%*s %s %x\n",
-                      Parser->RecursionDepth,
-                      "",
-                      GrammarElement->Name,
-                      Node);
+        printf("%*s %s %x\n",
+               Parser->RecursionDepth,
+               "",
+               GrammarElement->Name,
+               Node);
     }
 
     //
@@ -578,7 +582,7 @@ Return Value:
 
                 if (OuterNode != Node) {
 
-                    ASSERT((OuterNode->NodeCount == 1) &&
+                    assert((OuterNode->NodeCount == 1) &&
                            (OuterNode->TokenCount == 0));
 
                     OuterNode->NodeCount = 0;
@@ -600,7 +604,7 @@ Return Value:
 
                 Child = Node->Nodes[0];
 
-                ASSERT(OuterNode->Nodes[0] == Node);
+                assert(OuterNode->Nodes[0] == Node);
 
                 OuterNode->Nodes[0] = Child;
                 Node->NodeCount = 0;
@@ -634,12 +638,12 @@ Return Value:
 
 ParseNodeEnd:
     if ((Parser->Flags & YY_PARSE_FLAG_DEBUG) != 0) {
-        RtlDebugPrint("%*s %s %x Done: %d\n",
-                      Parser->RecursionDepth,
-                      "",
-                      GrammarElement->Name,
-                      Node,
-                      Status);
+        printf("%*s %s %x Done: %d\n",
+               Parser->RecursionDepth,
+               "",
+               GrammarElement->Name,
+               Node,
+               Status);
     }
 
     Parser->RecursionDepth -= 1;
@@ -705,7 +709,7 @@ Return Value:
 
     ElementIndex = 0;
 
-    ASSERT(Node->GrammarElement != (ULONG)-1);
+    assert(Node->GrammarElement != (ULONG)-1);
 
     //
     // Save the current state.
@@ -762,9 +766,9 @@ Return Value:
                     }
 
                     TokenBase = Parser->Lexer->TokenBase;
-                    RtlDebugPrint("No Match: Wanted %s got %s\n",
-                                  ExpressionNames[Rule - TokenBase],
-                                  ExpressionNames[Token->Value - TokenBase]);
+                    printf("No Match: Wanted %s got %s\n",
+                           ExpressionNames[Rule - TokenBase],
+                           ExpressionNames[Token->Value - TokenBase]);
                 }
 
                 break;
@@ -779,10 +783,10 @@ Return Value:
                 }
 
                 TokenBase = Parser->Lexer->TokenBase;
-                RtlDebugPrint("Match: %s (%d:%d)\n",
-                              ExpressionNames[Token->Value - TokenBase],
-                              Token->Line,
-                              Token->Column);
+                printf("Match: %s (%d:%d)\n",
+                       ExpressionNames[Token->Value - TokenBase],
+                       Token->Line,
+                       Token->Column);
             }
 
             Status = YypNodeAddToken(Parser, Node, Token);
@@ -871,11 +875,11 @@ Return Value:
     // If the array needs to be expanded, do that now.
     //
 
-    ASSERT(Parser->NextTokenIndex == Parser->TokenCount);
+    assert(Parser->NextTokenIndex == Parser->TokenCount);
 
     if (Parser->TokenCount >= Parser->TokenCapacity) {
 
-        ASSERT(Parser->TokenCount == Parser->TokenCapacity);
+        assert(Parser->TokenCount == Parser->TokenCapacity);
 
         Status = YypAllocateMoreTokens(Parser);
         if (!KSUCCESS(Status)) {
@@ -951,9 +955,7 @@ Return Value:
     }
 
     if (ArrayCount != 0) {
-        RtlCopyMemory(NewArrays,
-                      Parser->TokenArrays,
-                      ArrayCount * sizeof(PVOID));
+        memcpy(NewArrays, Parser->TokenArrays, ArrayCount * sizeof(PVOID));
     }
 
     NewChunk = Parser->Allocate(NewCapacity * sizeof(LEXER_TOKEN));
@@ -1060,7 +1062,7 @@ Return Value:
 
     for (ArrayIndex = 0; ArrayIndex < ArrayCount; ArrayIndex += 1) {
 
-        ASSERT(Parser->TokenArrays[ArrayIndex] != NULL);
+        assert(Parser->TokenArrays[ArrayIndex] != NULL);
 
         Parser->Free(Parser->TokenArrays[ArrayIndex]);
     }
@@ -1109,7 +1111,7 @@ Return Value:
     if (Parser->FreeNodes != NULL) {
         Node = Parser->FreeNodes;
 
-        ASSERT((Node->NodeCapacity != 0) &&
+        assert((Node->NodeCapacity != 0) &&
                (Node->GrammarElement == (ULONG)-1));
 
         Parser->FreeNodes = Node->Nodes[0];
@@ -1120,7 +1122,7 @@ Return Value:
             return NULL;
         }
 
-        RtlZeroMemory(Node, sizeof(PARSER_NODE));
+        memset(Node, 0, sizeof(PARSER_NODE));
         Node->Nodes = Parser->Allocate(
                                     YY_PARSE_INITIAL_CHILDREN * sizeof(PVOID));
 
@@ -1132,7 +1134,7 @@ Return Value:
         Node->NodeCapacity = YY_PARSE_INITIAL_CHILDREN;
     }
 
-    ASSERT(GrammarElement != (ULONG)-1);
+    assert(GrammarElement != (ULONG)-1);
 
     Node->GrammarElement = GrammarElement;
     Node->GrammarIndex = (ULONG)-1;
@@ -1251,7 +1253,7 @@ Return Value:
 
     if (Node->TokenCount >= Node->TokenCapacity) {
 
-        ASSERT(Node->TokenCount == Node->TokenCapacity);
+        assert(Node->TokenCount == Node->TokenCapacity);
 
         if (Node->TokenCapacity == 0) {
             NewCapacity = YY_PARSE_INITIAL_CHILDREN;
@@ -1266,10 +1268,7 @@ Return Value:
         }
 
         if (Node->TokenCapacity != 0) {
-            RtlCopyMemory(NewBuffer,
-                          Node->Tokens,
-                          Node->TokenCount * sizeof(PVOID));
-
+            memcpy(NewBuffer, Node->Tokens, Node->TokenCount * sizeof(PVOID));
             Parser->Free(Node->Tokens);
         }
 
@@ -1316,12 +1315,12 @@ Return Value:
     PVOID NewBuffer;
     ULONG NewCapacity;
 
-    ASSERT(Child->GrammarElement != (ULONG)-1);
+    assert(Child->GrammarElement != (ULONG)-1);
 
     if (Node->NodeCount >= Node->NodeCapacity) {
 
-        ASSERT(Node->NodeCount == Node->NodeCapacity);
-        ASSERT(Node->NodeCapacity != 0);
+        assert(Node->NodeCount == Node->NodeCapacity);
+        assert(Node->NodeCapacity != 0);
 
         NewCapacity = Node->NodeCapacity * 2;
         NewBuffer = Parser->Allocate(NewCapacity * sizeof(PVOID));
@@ -1329,10 +1328,7 @@ Return Value:
             return STATUS_INSUFFICIENT_RESOURCES;
         }
 
-        RtlCopyMemory(NewBuffer,
-                      Node->Nodes,
-                      Node->NodeCount * sizeof(PVOID));
-
+        memcpy(NewBuffer, Node->Nodes, Node->NodeCount * sizeof(PVOID));
         Parser->Free(Node->Nodes);
         Node->NodeCapacity = NewCapacity;
         Node->Nodes = NewBuffer;
@@ -1378,7 +1374,7 @@ Return Value:
     ULONG Count;
     ULONG Index;
 
-    ASSERT((Node->TokenCount >= TokenCount) && (Node->NodeCount >= NodeCount));
+    assert((Node->TokenCount >= TokenCount) && (Node->NodeCount >= NodeCount));
 
     Node->TokenCount = TokenCount;
     Count = Node->NodeCount;
