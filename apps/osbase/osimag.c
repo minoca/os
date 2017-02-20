@@ -2030,12 +2030,13 @@ Return Value:
 
 {
 
-    KSTATUS Status;
+    //
+    // This might fail if an image has multiple segments with unmapped space
+    // between, and both segments have relocations. Ignore failures, as the
+    // kernel flushes everything it can, which is all that's needed.
+    //
 
-    Status = OsFlushCache(Address, Size);
-
-    ASSERT(KSUCCESS(Status));
-
+    OsFlushCache(Address, Size);
     return;
 }
 

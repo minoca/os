@@ -287,10 +287,7 @@ Return Value:
     Status = STATUS_SUCCESS;
     ArSerializeExecution();
     Result = MmpCleanCacheRegion(AlignedAddress, Size);
-    if (Result != FALSE) {
-        Result = MmpInvalidateInstructionCacheRegion(AlignedAddress, Size);
-    }
-
+    Result &= MmpInvalidateInstructionCacheRegion(AlignedAddress, Size);
     if (Result == FALSE) {
         Status = STATUS_ACCESS_VIOLATION;
     }
@@ -428,14 +425,11 @@ Return Value:
     Size += REMAINDER((UINTN)Address, CacheLineSize);
     Size = ALIGN_RANGE_UP(Size, CacheLineSize);
     while (Size != 0) {
-        Result = MmpInvalidateInstructionCacheLine(CurrentAddress);
-        if (Result == FALSE) {
+        Result &= MmpInvalidateInstructionCacheLine(CurrentAddress);
 
-            ASSERT((Address < KERNEL_VA_START) &&
-                   (Address + Size <= KERNEL_VA_START));
-
-            break;
-        }
+        ASSERT((Result != FALSE) ||
+               ((Address < KERNEL_VA_START) &&
+                (Address + Size <= KERNEL_VA_START)));
 
         CurrentAddress += CacheLineSize;
         Size -= CacheLineSize;
@@ -492,14 +486,11 @@ Return Value:
     ASSERT(ALIGN_RANGE_DOWN((UINTN)Address, CacheLineSize) == (UINTN)Address);
 
     while (Size != 0) {
-        Result = MmpCleanCacheLine(Address);
-        if (Result == FALSE) {
+        Result &= MmpCleanCacheLine(Address);
 
-            ASSERT((Address < KERNEL_VA_START) &&
-                   (Address + Size <= KERNEL_VA_START));
-
-            break;
-        }
+        ASSERT((Result != FALSE) ||
+               ((Address < KERNEL_VA_START) &&
+                (Address + Size <= KERNEL_VA_START)));
 
         Address += CacheLineSize;
         Size -= CacheLineSize;
@@ -560,14 +551,11 @@ Return Value:
     ASSERT(ALIGN_RANGE_DOWN((UINTN)Address, CacheLineSize) == (UINTN)Address);
 
     while (Size != 0) {
-        Result = MmpCleanInvalidateCacheLine(Address);
-        if (Result == FALSE) {
+        Result &= MmpCleanInvalidateCacheLine(Address);
 
-            ASSERT((Address < KERNEL_VA_START) &&
-                   (Address + Size <= KERNEL_VA_START));
-
-            break;
-        }
+        ASSERT((Result != FALSE) ||
+               ((Address < KERNEL_VA_START) &&
+                (Address + Size <= KERNEL_VA_START)));
 
         Address += CacheLineSize;
         Size -= CacheLineSize;
@@ -625,14 +613,11 @@ Return Value:
     ASSERT(ALIGN_RANGE_DOWN((UINTN)Address, CacheLineSize) == (UINTN)Address);
 
     while (Size != 0) {
-        Result = MmpInvalidateCacheLine(Address);
-        if (Result == FALSE) {
+        Result &= MmpInvalidateCacheLine(Address);
 
-            ASSERT((Address < KERNEL_VA_START) &&
-                   (Address + Size <= KERNEL_VA_START));
-
-            break;
-        }
+        ASSERT((Result != FALSE) ||
+               ((Address < KERNEL_VA_START) &&
+                (Address + Size <= KERNEL_VA_START)));
 
         Address += CacheLineSize;
         Size -= CacheLineSize;
