@@ -68,7 +68,7 @@ Author:
 // applications seem to be heavily using the DWARF expression stack.
 //
 
-#define DWARF_EXPRESSION_STACK_SIZE 12
+#define DWARF_EXPRESSION_STACK_SIZE 20
 
 //
 // ------------------------------------------------------ Data Type Definitions
