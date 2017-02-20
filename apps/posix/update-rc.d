@@ -99,12 +99,12 @@ create_links () {
         ## Only create the link if nothing already exists there.
         ##
 
-        if [ -f "$link_dest" -o -L "$link_dest" ]; then
+        if [ -z "$force" ] && [ -f "$link_dest" -o -L "$link_dest" ]; then
             echo "$me: Skipping pre-existing $link_dest."
 
         else
             $do_it cd $SYSROOT/etc/rc$level.d
-            $do_it ln -s "../init.d/$name" "$link_dest"
+            $do_it ln -sf "../init.d/$name" "$link_dest"
         fi
     done
 }

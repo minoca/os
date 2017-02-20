@@ -43,6 +43,7 @@ fi
 
 if [ "$ARCH$VARIANT" != "x86" ]; then
     echo "Skipping Packet build on $ARCH$VARIANT."
+    exit 0
 fi
 
 export TMPDIR=$PWD
@@ -221,6 +222,20 @@ make install.img
 cd $BINROOT
 mv install.img packet.img
 mv install_.img install.img
+
+##
+## Remove cloud-init.
+##
+
+opkg --conf=$PWD/myopkg.conf --offline-root="$DEST" --force-postinstall \
+    remove python-cloud-init
+
+export SYSROOT="$DEST"
+for step in cloud-init-local cloud-init cloud-init-config cloud-init-final;
+do
+    update-rc.d -f $step remove
+    rm -f $SYSROOT/etc/init.d/$step
+done
 
 echo Done building Packet image.
 
