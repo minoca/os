@@ -570,18 +570,6 @@ Return Value:
                 goto SysMapOrUnmapMemoryEnd;
             }
 
-            //
-            // The I/O handle must be cacheable to support mapping shared image
-            // sections.
-            //
-
-            if (((MapFlags & SYS_MAP_FLAG_SHARED) != 0) &&
-                (IoIoHandleIsCacheable(IoHandle) == FALSE)) {
-
-                Status = STATUS_NO_ELIGIBLE_DEVICES;
-                goto SysMapOrUnmapMemoryEnd;
-            }
-
             FileOffset = Parameters->Offset;
 
         //

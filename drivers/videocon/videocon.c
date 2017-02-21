@@ -353,6 +353,13 @@ Members:
     TabStops - Stores a bitfield of the current tab stops. Each bit represents
         a column, and that bit is set if the column is a tab stop.
 
+    CreationTime - Stores the time of creation of this device.
+
+    OpenHandles - Stores the number of open device handles. If any device
+        handles are open, then the terminal is not drawn.
+
+    Size - Stores the size of the frame buffer in bytes.
+
 --*/
 
 typedef struct _VIDEO_CONSOLE_DEVICE {
@@ -383,6 +390,9 @@ typedef struct _VIDEO_CONSOLE_DEVICE {
     LONG SavedRow;
     LONG SavedAttributes;
     PULONG TabStops;
+    SYSTEM_TIME CreationTime;
+    ULONG OpenHandles;
+    UINTN Size;
 } VIDEO_CONSOLE_DEVICE, *PVIDEO_CONSOLE_DEVICE;
 
 //
@@ -587,7 +597,6 @@ Return Value:
     PSYSTEM_RESOURCE_HEADER GenericHeader;
     ULONG Height;
     LONG LineSize;
-    PHYSICAL_ADDRESS PhysicalAddress;
     LONG Rows;
     ULONG RowSize;
     KSTATUS Status;
@@ -595,7 +604,6 @@ Return Value:
     ULONG TabStopSize;
     UINTN TopOffset;
     SYSTEM_RESOURCE_FRAME_BUFFER VideoResource;
-    PVOID VirtualAddress;
     ULONG Width;
     TERMINAL_WINDOW_SIZE WindowSize;
 
@@ -677,10 +685,6 @@ Return Value:
             Rows = Height / VidDefaultFont->CellHeight;
         }
 
-        VirtualAddress = FrameBufferResource->Header.VirtualAddress + TopOffset;
-        PhysicalAddress = FrameBufferResource->Header.PhysicalAddress +
-                          TopOffset;
-
         ConsoleDevice = MmAllocatePagedPool(sizeof(VIDEO_CONSOLE_DEVICE),
                                             VIDEO_CONSOLE_ALLOCATION_TAG);
 
@@ -734,8 +738,19 @@ Return Value:
             goto DriverEntryEnd;
         }
 
-        ConsoleDevice->PhysicalAddress = PhysicalAddress;
-        ConsoleDevice->FrameBuffer = VirtualAddress;
+        ConsoleDevice->PhysicalAddress =
+                                   FrameBufferResource->Header.PhysicalAddress;
+
+        ConsoleDevice->FrameBuffer = FrameBufferResource->Header.VirtualAddress;
+
+        //
+        // The frame buffer must be page aligned because otherwise handing
+        // back direct I/O buffers to the frame buffer won't work for mmap.
+        //
+
+        ASSERT((IS_ALIGNED(ConsoleDevice->PhysicalAddress, MmPageSize())) &&
+               (IS_POINTER_ALIGNED(ConsoleDevice->FrameBuffer, MmPageSize())));
+
         ConsoleDevice->Width = Width;
         ConsoleDevice->Height = Height;
         ConsoleDevice->BitsPerPixel = FrameBufferResource->BitsPerPixel;
@@ -744,6 +759,8 @@ Return Value:
         ConsoleDevice->BufferRows = Rows;
         ConsoleDevice->MaxRows = VIDEO_CONSOLE_MAX_LINES;
         ConsoleDevice->Mode = VIDEO_CONSOLE_MODE_DEFAULTS;
+        ConsoleDevice->Size = RowSize * FrameBufferResource->Height;
+        KeGetSystemTime(&(ConsoleDevice->CreationTime));
 
         //
         // Set up some default tab stops every 8 characters, since things seem
@@ -767,8 +784,12 @@ Return Value:
                       FrameBufferResource,
                       sizeof(SYSTEM_RESOURCE_FRAME_BUFFER));
 
-        VideoResource.Header.VirtualAddress = VirtualAddress;
-        VideoResource.Header.PhysicalAddress = PhysicalAddress;
+        VideoResource.Header.VirtualAddress =
+                                        ConsoleDevice->FrameBuffer + TopOffset;
+
+        VideoResource.Header.PhysicalAddress =
+                                    ConsoleDevice->PhysicalAddress + TopOffset;
+
         VideoResource.Width = Width;
         VideoResource.Height = Height;
         Status = VidInitialize(&(ConsoleDevice->VideoContext), &VideoResource);
@@ -1036,6 +1057,14 @@ Return Value:
 
 {
 
+    PVIDEO_CONSOLE_DEVICE Console;
+    ULONG PreviousHandles;
+
+    Console = (PVIDEO_CONSOLE_DEVICE)DeviceContext;
+    PreviousHandles = RtlAtomicAdd32(&(Console->OpenHandles), 1);
+
+    ASSERT(PreviousHandles < 0x10000000);
+
     IoCompleteIrp(VcDriver, Irp, STATUS_SUCCESS);
     return;
 }
@@ -1071,6 +1100,14 @@ Return Value:
 --*/
 
 {
+
+    PVIDEO_CONSOLE_DEVICE Console;
+    ULONG PreviousHandles;
+
+    Console = (PVIDEO_CONSOLE_DEVICE)DeviceContext;
+    PreviousHandles = RtlAtomicAdd32(&(Console->OpenHandles), -1);
+
+    ASSERT((PreviousHandles <= 0x10000000) && (PreviousHandles != 0));
 
     IoCompleteIrp(VcDriver, Irp, STATUS_SUCCESS);
     return;
@@ -1109,52 +1146,73 @@ Return Value:
 {
 
     PVIDEO_CONSOLE_DEVICE Console;
-    UINTN FragmentIndex;
-    UINTN FragmentSize;
-    PIO_BUFFER IoBuffer;
+    ULONGLONG Offset;
     UINTN Size;
     KSTATUS Status;
 
-    ASSERT(Irp->Direction == IrpDown);
-
     Console = (PVIDEO_CONSOLE_DEVICE)DeviceContext;
-
-    //
-    // Fail reads.
-    //
-
-    if (Irp->MinorCode != IrpMinorIoWrite) {
-        Status = STATUS_NOT_SUPPORTED;
-        goto DispatchIoEnd;
-    }
-
-    IoBuffer = Irp->U.ReadWrite.IoBuffer;
-    Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
-    if (!KSUCCESS(Status)) {
+    Offset = Irp->U.ReadWrite.IoOffset;
+    if (Offset >= Console->Size) {
+        Status = STATUS_END_OF_FILE;
         goto DispatchIoEnd;
     }
 
     Size = Irp->U.ReadWrite.IoSizeInBytes;
-    for (FragmentIndex = 0;
-         FragmentIndex < IoBuffer->FragmentCount;
-         FragmentIndex += 1) {
-
-        FragmentSize = IoBuffer->Fragment[FragmentIndex].Size;
-        if (FragmentSize > Size) {
-            FragmentSize = Size;
-        }
-
-        VcpWriteToConsole(Console,
-                          IoBuffer->Fragment[FragmentIndex].VirtualAddress,
-                          FragmentSize);
-
-        Size -= FragmentSize;
+    if ((Offset + Size < Offset) || (Offset + Size > Console->Size)) {
+        Size = Console->Size - Offset;
     }
 
-    Irp->U.ReadWrite.IoBytesCompleted = Irp->U.ReadWrite.IoSizeInBytes;
-    Status = STATUS_SUCCESS;
+    //
+    // Writes just copy to the frame buffer.
+    //
+
+    if (Irp->MinorCode == IrpMinorIoWrite) {
+        Status = MmCopyIoBufferData(Irp->U.ReadWrite.IoBuffer,
+                                    Console->FrameBuffer + Offset,
+                                    0,
+                                    Size,
+                                    FALSE);
+
+        if (!KSUCCESS(Status)) {
+            goto DispatchIoEnd;
+        }
+
+    } else {
+
+        //
+        // If an I/O buffer was already supplied, then copy into it (for things
+        // like regular user mode reads).
+        //
+
+        if (Irp->U.ReadWrite.IoBuffer->FragmentCount != 0) {
+            Status = MmCopyIoBufferData(Irp->U.ReadWrite.IoBuffer,
+                                        Console->FrameBuffer + Offset,
+                                        0,
+                                        Size,
+                                        TRUE);
+
+        //
+        // Return the frame buffer directly (for things like mmap).
+        //
+
+        } else {
+            Status = MmAppendIoBufferData(Irp->U.ReadWrite.IoBuffer,
+                                          Console->FrameBuffer + Offset,
+                                          Console->PhysicalAddress + Offset,
+                                          Size);
+        }
+
+        if (!KSUCCESS(Status)) {
+            goto DispatchIoEnd;
+        }
+    }
 
 DispatchIoEnd:
+    if (KSUCCESS(Status)) {
+        Irp->U.ReadWrite.IoBytesCompleted = Size;
+        Irp->U.ReadWrite.NewIoOffset = Offset + Size;
+    }
+
     IoCompleteIrp(VcDriver, Irp, Status);
     return;
 }
@@ -1191,11 +1249,64 @@ Return Value:
 
 {
 
-    ASSERT(Irp->MajorCode == IrpMajorSystemControl);
+    PVIDEO_CONSOLE_DEVICE Console;
+    PVOID Context;
+    PSYSTEM_CONTROL_LOOKUP Lookup;
+    PFILE_PROPERTIES Properties;
+    KSTATUS Status;
+
+    Console = (PVIDEO_CONSOLE_DEVICE)DeviceContext;
+    Context = Irp->U.SystemControl.SystemContext;
+    switch (Irp->MinorCode) {
+    case IrpMinorSystemControlLookup:
+        Lookup = (PSYSTEM_CONTROL_LOOKUP)Context;
+        Lookup->Flags = LOOKUP_FLAG_NON_CACHED;
+        Status = STATUS_PATH_NOT_FOUND;
+        if (Lookup->Root != FALSE) {
+
+            //
+            // Enable opening of the root as a single file.
+            //
+
+            Properties = Lookup->Properties;
+            Properties->FileId = 0;
+            Properties->Type = IoObjectCharacterDevice;
+            Properties->HardLinkCount = 1;
+            Properties->BlockSize = 1;
+            Properties->BlockCount = 0;
+            Properties->UserId = 0;
+            Properties->GroupId = 0;
+            Properties->StatusChangeTime = Console->CreationTime;
+            Properties->ModifiedTime = Properties->StatusChangeTime;
+            Properties->AccessTime = Properties->StatusChangeTime;
+            Properties->Permissions = FILE_PERMISSION_ALL;
+            WRITE_INT64_SYNC(&(Properties->FileSize), 0);
+            Status = STATUS_SUCCESS;
+        }
+
+        IoCompleteIrp(VcDriver, Irp, Status);
+        break;
 
     //
-    // Do no processing on any IRPs. Let them flow.
+    // Succeed for the basics.
     //
+
+    case IrpMinorSystemControlWriteFileProperties:
+    case IrpMinorSystemControlTruncate:
+        Status = STATUS_SUCCESS;
+        IoCompleteIrp(VcDriver, Irp, Status);
+        break;
+
+    //
+    // Ignore everything unrecognized.
+    //
+
+    default:
+
+        ASSERT(FALSE);
+
+        break;
+    }
 
     return;
 }

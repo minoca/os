@@ -126,6 +126,7 @@ Author:
 #define IMAGE_SECTION_DESTROYING        0x00000100
 #define IMAGE_SECTION_DESTROYED         0x00000200
 #define IMAGE_SECTION_WAS_WRITABLE      0x00000400
+#define IMAGE_SECTION_CACHEABLE         0x00000800
 
 //
 // Define a mask of image section flags that should be transfered when an image
@@ -135,7 +136,7 @@ Author:
 #define IMAGE_SECTION_COPY_MASK                             \
     (IMAGE_SECTION_ACCESS_MASK | IMAGE_SECTION_NON_PAGED |  \
      IMAGE_SECTION_SHARED | IMAGE_SECTION_MAP_SYSTEM_CALL | \
-     IMAGE_SECTION_WAS_WRITABLE)
+     IMAGE_SECTION_WAS_WRITABLE | IMAGE_SECTION_CACHEABLE)
 
 //
 // Define a mask of image section access flags.
@@ -150,7 +151,8 @@ Author:
 //
 
 #define IMAGE_SECTION_INTERNAL_MASK \
-    (IMAGE_SECTION_PAGE_CACHE_BACKED | IMAGE_SECTION_NO_IMAGE_BACKING)
+    (IMAGE_SECTION_PAGE_CACHE_BACKED | IMAGE_SECTION_NO_IMAGE_BACKING | \
+     IMAGE_SECTION_CACHEABLE)
 
 //
 // Define flags used for unmapping image sections.
@@ -1112,6 +1114,39 @@ Arguments:
 
     Flags - Supplies a bitmask of flags used to initialize the I/O buffer. See
         IO_BUFFER_FLAG_* for definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KERNEL_API
+KSTATUS
+MmAppendIoBufferData (
+    PIO_BUFFER IoBuffer,
+    PVOID VirtualAddress,
+    PHYSICAL_ADDRESS PhysicalAddress,
+    UINTN SizeInBytes
+    );
+
+/*++
+
+Routine Description:
+
+    This routine appends a fragment to and I/O buffer.
+
+Arguments:
+
+    IoBuffer - Supplies a pointer to the I/O buffer to initialize.
+
+    VirtualAddress - Supplies the starting virtual address of the data to
+        append.
+
+    PhysicalAddress - Supplies the starting physical address of the data to
+        append.
+
+    SizeInBytes - Supplies the size of the I/O buffer data, in bytes.
 
 Return Value:
 

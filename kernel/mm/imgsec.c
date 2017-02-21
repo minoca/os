@@ -1248,7 +1248,6 @@ Return Value:
 
     if ((SectionToCopy->Flags & IMAGE_SECTION_SHARED) != 0) {
 
-        ASSERT((SectionToCopy->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
         ASSERT(SectionToCopy->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
         Flags = SectionToCopy->Flags & IMAGE_SECTION_COPY_MASK;
@@ -1677,27 +1676,31 @@ Return Value:
             LastDirtyPage = PageIndex;
         }
 
-        //
-        // The page cache entries are in paged pool, but since this is a
-        // shared section, all mapped pages are from the page cache and not
-        // eligible for page-out. So this cannot cause a dead-lock.
-        //
+        if ((Section->Flags & IMAGE_SECTION_CACHEABLE) != 0) {
 
-        CacheEntry = MmpGetPageCacheEntryForPhysicalAddress(PhysicalAddress);
+            //
+            // The page cache entries are in paged pool, but since this is a
+            // shared section, all mapped pages are from the page cache and not
+            // eligible for page-out. So this cannot cause a dead-lock.
+            //
 
-        //
-        // The page cache entry must be present. It was mapped and the only
-        // way for it to be removed is for the page cache to have unmapped
-        // it, which requires obtaining the image section lock.
-        //
+            CacheEntry =
+                       MmpGetPageCacheEntryForPhysicalAddress(PhysicalAddress);
 
-        ASSERT(CacheEntry != NULL);
+            //
+            // The page cache entry must be present. It was mapped and the only
+            // way for it to be removed is for the page cache to have unmapped
+            // it, which requires obtaining the image section lock.
+            //
 
-        //
-        // Mark it dirty.
-        //
+            ASSERT(CacheEntry != NULL);
 
-        IoMarkPageCacheEntryDirty(CacheEntry);
+            //
+            // Mark it dirty.
+            //
+
+            IoMarkPageCacheEntryDirty(CacheEntry);
+        }
     }
 
     //
@@ -2669,10 +2672,12 @@ Return Value:
     //
 
     if ((ImageHandle != INVALID_HANDLE) &&
-        (IS_ALIGNED(ImageOffset, IoGetCacheEntryDataSize()) != FALSE) &&
-        (IoIoHandleIsCacheable(ImageHandle) != FALSE)) {
+        (IS_ALIGNED(ImageOffset, IoGetCacheEntryDataSize()) != FALSE)) {
 
         Flags |= IMAGE_SECTION_PAGE_CACHE_BACKED;
+        if (IoIoHandleIsCacheable(ImageHandle) != FALSE) {
+            Flags |= IMAGE_SECTION_CACHEABLE;
+        }
 
         //
         // Non-paged, cache-backed sections need a dirty page bitmap in order
@@ -3805,13 +3810,12 @@ Return Value:
         //
 
         if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) &&
+            ((Section->Flags & IMAGE_SECTION_CACHEABLE) != 0) &&
             ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
             (PageWasDirty != FALSE)) {
 
             PageCacheEntry = MmpGetPageCacheEntryForPhysicalAddress(
                                                               PhysicalAddress);
-
-            ASSERT(PageCacheEntry != NULL);
 
             IoMarkPageCacheEntryDirty(PageCacheEntry);
         }
@@ -4017,7 +4021,6 @@ Return Value:
             ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0)) {
 
             ASSERT(LIST_EMPTY(&(Section->ChildList)) != FALSE);
-            ASSERT((Section->Flags & IMAGE_SECTION_SHARED) == 0);
 
             UnmapFlags = UNMAP_FLAG_SEND_INVALIDATE_IPI |
                          UNMAP_FLAG_FREE_PHYSICAL_PAGES;
@@ -4173,6 +4176,7 @@ Return Value:
         //
 
         if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) &&
+            ((Section->Flags & IMAGE_SECTION_CACHEABLE) != 0) &&
             ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
             (PageWasDirty != FALSE)) {
 
@@ -4188,14 +4192,6 @@ Return Value:
 
             PageCacheEntry = MmpGetPageCacheEntryForPhysicalAddress(
                                                               PhysicalAddress);
-
-            //
-            // The page cache entry must be present. It was mapped and the only
-            // way for it to be removed is for the page cache to have unmapped
-            // it.
-            //
-
-            ASSERT(PageCacheEntry != NULL);
 
             //
             // Mark it dirty.

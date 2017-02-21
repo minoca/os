@@ -944,6 +944,80 @@ Return Value:
 }
 
 KERNEL_API
+KSTATUS
+MmAppendIoBufferData (
+    PIO_BUFFER IoBuffer,
+    PVOID VirtualAddress,
+    PHYSICAL_ADDRESS PhysicalAddress,
+    UINTN SizeInBytes
+    )
+
+/*++
+
+Routine Description:
+
+    This routine appends a fragment to and I/O buffer.
+
+Arguments:
+
+    IoBuffer - Supplies a pointer to the I/O buffer to initialize.
+
+    VirtualAddress - Supplies the starting virtual address of the data to
+        append.
+
+    PhysicalAddress - Supplies the starting physical address of the data to
+        append.
+
+    SizeInBytes - Supplies the size of the I/O buffer data, in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PIO_BUFFER_FRAGMENT Fragment;
+
+    //
+    // First see if the fragment can be appended onto the end of the previous
+    // one.
+    //
+
+    if (IoBuffer->FragmentCount != 0) {
+        Fragment = &(IoBuffer->Fragment[IoBuffer->FragmentCount - 1]);
+        if (Fragment->PhysicalAddress + Fragment->Size == PhysicalAddress) {
+            if (((VirtualAddress == NULL) &&
+                 (Fragment->VirtualAddress == NULL)) ||
+                ((VirtualAddress != NULL) &&
+                 (Fragment->VirtualAddress + Fragment->Size ==
+                  VirtualAddress))) {
+
+                if (Fragment->Size + SizeInBytes >= Fragment->Size) {
+                    Fragment->Size += SizeInBytes;
+                    return STATUS_SUCCESS;
+                }
+            }
+        }
+    }
+
+    if (IoBuffer->FragmentCount >= IoBuffer->Internal.MaxFragmentCount) {
+
+        ASSERT(FALSE);
+
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    Fragment = &(IoBuffer->Fragment[IoBuffer->FragmentCount]);
+    Fragment->VirtualAddress = VirtualAddress;
+    Fragment->PhysicalAddress = PhysicalAddress;
+    Fragment->Size = SizeInBytes;
+    IoBuffer->FragmentCount += 1;
+    return STATUS_SUCCESS;
+}
+
+KERNEL_API
 VOID
 MmFreeIoBuffer (
     PIO_BUFFER IoBuffer

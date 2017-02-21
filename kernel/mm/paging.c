@@ -3106,7 +3106,6 @@ Return Value:
     VirtualAddress = ImageSection->VirtualAddress + (PageOffset << PageShift);
 
     ASSERT((ImageSection->Flags & IMAGE_SECTION_SHARED) != 0);
-    ASSERT((ImageSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
     ASSERT(ImageSection->Parent == NULL);
     ASSERT(LIST_EMPTY(&(ImageSection->ChildList)) != FALSE);
 
@@ -3209,9 +3208,9 @@ Return Value:
         PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, 0);
         PhysicalAddress = IoBuffer->Fragment[0].PhysicalAddress;
 
-        ASSERT(PageCacheEntry != NULL);
-        ASSERT(PhysicalAddress ==
-               IoGetPageCacheEntryPhysicalAddress(PageCacheEntry));
+        ASSERT((PageCacheEntry == NULL) ||
+               (PhysicalAddress ==
+                IoGetPageCacheEntryPhysicalAddress(PageCacheEntry)));
 
         //
         // Acquire the image section lock.
@@ -3306,7 +3305,6 @@ PageInSharedSectionEnd:
 
         if (ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
 
-            ASSERT(PageCacheEntry != NULL);
             ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
 
             //
@@ -3358,7 +3356,6 @@ PageInSharedSectionEnd:
 
         if (LockedIoBuffer != NULL) {
 
-            ASSERT(PageCacheEntry != NULL);
             ASSERT((ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) ||
                    (ExistingPhysicalAddress == PhysicalAddress));
 
@@ -3377,10 +3374,21 @@ PageInSharedSectionEnd:
                                           IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
             if (KSUCCESS(Status)) {
-                MmIoBufferAppendPage(LockedIoBuffer,
-                                     PageCacheEntry,
-                                     NULL,
-                                     INVALID_PHYSICAL_ADDRESS);
+                if (PageCacheEntry != NULL) {
+                    MmIoBufferAppendPage(LockedIoBuffer,
+                                         PageCacheEntry,
+                                         NULL,
+                                         INVALID_PHYSICAL_ADDRESS);
+
+                } else {
+
+                    ASSERT(ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS);
+
+                    Status = MmAppendIoBufferData(LockedIoBuffer,
+                                                  VirtualAddress,
+                                                  ExistingPhysicalAddress,
+                                                  1 << PageShift);
+                }
             }
         }
     }
@@ -3459,6 +3467,7 @@ Return Value:
     PIMAGE_SECTION RootSection;
     KSTATUS Status;
     ULONG TruncateCount;
+    PVOID VirtualAddress;
 
     BitmapIndex = IMAGE_SECTION_BITMAP_INDEX(PageOffset);
     BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageOffset);
@@ -3477,6 +3486,7 @@ Return Value:
     PageShift = MmPageShift();
     PageSize = MmPageSize();
     RootSection = NULL;
+    VirtualAddress = ImageSection->VirtualAddress + (PageOffset << PageShift);
 
     ASSERT((ImageSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
 
@@ -3553,8 +3563,9 @@ Return Value:
             PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, 0);
             PageCacheAddress = IoBuffer->Fragment[0].PhysicalAddress;
 
-            ASSERT(PageCacheAddress ==
-                   IoGetPageCacheEntryPhysicalAddress(PageCacheEntry));
+            ASSERT((PageCacheEntry == NULL) ||
+                   (PageCacheAddress ==
+                    IoGetPageCacheEntryPhysicalAddress(PageCacheEntry)));
 
             //
             // Reset or initialize the locked page cache I/O buffer for use.
@@ -3581,10 +3592,22 @@ Return Value:
             // a reference on the page cache entry.
             //
 
-            MmIoBufferAppendPage(LockedPageCacheIoBuffer,
-                                 PageCacheEntry,
-                                 NULL,
-                                 INVALID_PHYSICAL_ADDRESS);
+            if (PageCacheEntry != NULL) {
+                MmIoBufferAppendPage(LockedPageCacheIoBuffer,
+                                     PageCacheEntry,
+                                     NULL,
+                                     INVALID_PHYSICAL_ADDRESS);
+
+            } else {
+                Status = MmAppendIoBufferData(LockedPageCacheIoBuffer,
+                                              VirtualAddress,
+                                              PageCacheAddress,
+                                              PageSize);
+
+                if (!KSUCCESS(Status)) {
+                    goto PageInCacheBackedSectionEnd;
+                }
+            }
         }
 
         //
@@ -3752,8 +3775,9 @@ Return Value:
         PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, 0);
         PageCacheAddress = IoBuffer->Fragment[0].PhysicalAddress;
 
-        ASSERT(PageCacheAddress ==
-               IoGetPageCacheEntryPhysicalAddress(PageCacheEntry));
+        ASSERT((PageCacheEntry == NULL) ||
+               (PageCacheAddress ==
+                IoGetPageCacheEntryPhysicalAddress(PageCacheEntry)));
 
         //
         // Store the page cache entry in the locked I/O buffer.
@@ -3776,10 +3800,22 @@ Return Value:
                 }
             }
 
-            MmIoBufferAppendPage(LockedPageCacheIoBuffer,
-                                 PageCacheEntry,
-                                 NULL,
-                                 INVALID_PHYSICAL_ADDRESS);
+            if (PageCacheEntry != NULL) {
+                MmIoBufferAppendPage(LockedPageCacheIoBuffer,
+                                     PageCacheEntry,
+                                     NULL,
+                                     INVALID_PHYSICAL_ADDRESS);
+
+            } else {
+                Status = MmAppendIoBufferData(LockedPageCacheIoBuffer,
+                                              VirtualAddress,
+                                              PageCacheAddress,
+                                              PageSize);
+
+                if (!KSUCCESS(Status)) {
+                    goto PageInCacheBackedSectionEnd;
+                }
+            }
         }
 
         //
@@ -3941,7 +3977,6 @@ PageInCacheBackedSectionEnd:
 
             } else {
 
-                ASSERT(PageCacheEntry != NULL);
                 ASSERT(PageCacheAddress == ExistingPhysicalAddress);
                 ASSERT(LockedPageCacheIoBuffer != NULL);
 
