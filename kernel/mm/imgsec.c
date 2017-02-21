@@ -423,7 +423,7 @@ Return Value:
                                     IMAGE_SECTION,
                                     ImageListEntry);
 
-        ASSERT((CurrentSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
+        ASSERT((CurrentSection->Flags & IMAGE_SECTION_BACKED) != 0);
         ASSERT(CurrentSection->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
         //
@@ -1308,13 +1308,13 @@ Return Value:
     NewSection->ImageListEntry.Next = NULL;
 
     //
-    // If the image section is page cache backed, then it will add itself to
-    // the backing image's list of image sections. Take a reference on the
-    // backing image while this section is around so it is not removed while
-    // the image section's entry is in the list.
+    // If the image section is backed, then it will add itself to the backing
+    // image's list of image sections. Take a reference on the backing image
+    // while this section is around so it is not removed while the image
+    // section's entry is in the list.
     //
 
-    if ((NewSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) {
+    if ((NewSection->Flags & IMAGE_SECTION_BACKED) != 0) {
         IoIoHandleAddReference(SectionToCopy->ImageBacking.DeviceHandle);
         NewSection->ImageBacking.DeviceHandle =
                                       SectionToCopy->ImageBacking.DeviceHandle;
@@ -1342,13 +1342,12 @@ Return Value:
     ObAddReference(NewSection->Lock);
 
     //
-    // If the image section is backed by the page cache, then insert it into
-    // the owning file object's list of image sections. This allows file size
-    // modifications to unmap any portions of the image section beyond the new
-    // file size.
+    // If the image section is backed, then insert it into the owning file
+    // object's list of image sections. This allows file size modifications to
+    // unmap any portions of the image section beyond the new file size.
     //
 
-    if ((NewSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) {
+    if ((NewSection->Flags & IMAGE_SECTION_BACKED) != 0) {
 
         ASSERT(NewSection->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
@@ -1618,7 +1617,7 @@ Return Value:
     //
 
     if (((Section->Flags & IMAGE_SECTION_SHARED) == 0) ||
-        ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+        ((Section->Flags & IMAGE_SECTION_BACKED) == 0) ||
         ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0)) {
 
         goto FlushImageSectionRegionEnd;
@@ -2071,7 +2070,7 @@ Return Value:
     //
     // This routine needs to create a private page for each of the section's
     // inheriting children and potentially a private page for itself if it
-    // inherits from a parent or the page cache. Shared sections are the
+    // inherits from a parent or is backed. Shared sections are the
     // exception. Write faults for those just need the mapping access bits
     // changed. All of these pages need to be allocated with the section lock
     // released. The routine needs to set the private page for itself after
@@ -2085,7 +2084,7 @@ Return Value:
         ((Section->Flags & IMAGE_SECTION_SHARED) == 0) &&
         (((Section->Parent != NULL) &&
           ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0)) ||
-         (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
+         (((Section->Flags & IMAGE_SECTION_BACKED) != 0) &&
           ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0)))) {
 
         if ((Section->Flags & IMAGE_SECTION_NON_PAGED) == 0) {
@@ -2140,11 +2139,11 @@ Return Value:
         }
 
         //
-        // If the section is page cache backed and clean, then the children can
-        // continue to map the page cache page after clearing the inheritance.
+        // If the section is backed and clean, then the children can continue
+        // to map the backing page after clearing the inheritance.
         //
 
-        if (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
+        if (((Section->Flags & IMAGE_SECTION_BACKED) != 0) &&
             ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0)) {
 
             ASSERT((Child->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0);
@@ -2352,7 +2351,7 @@ Return Value:
 
     //
     // The page is no longer shared with any children. If it's not inherited
-    // from a parent or the page cache and the section is writable, then simply
+    // from a parent or backed and the section is writable, then simply
     // change the attributes on the page. Shared sections always get the page
     // attributes set.
     //
@@ -2360,7 +2359,7 @@ Return Value:
     if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) ||
         (((Section->Parent == NULL) ||
           ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) == 0)) &&
-         (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+         (((Section->Flags & IMAGE_SECTION_BACKED) == 0) ||
           ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0) ||
           ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) != 0)))) {
 
@@ -2379,11 +2378,11 @@ Return Value:
     } else {
 
         //
-        // A page cache backed section better be writable if a private page,
-        // potentially with a paging entry, is being set.
+        // A backed section better be writable if a private page, potentially
+        // with a paging entry, is being set.
         //
 
-        ASSERT(((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+        ASSERT(((Section->Flags & IMAGE_SECTION_BACKED) == 0) ||
                ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0));
 
         ASSERT((Section->Flags & IMAGE_SECTION_SHARED) == 0);
@@ -2666,15 +2665,15 @@ Return Value:
     }
 
     //
-    // If an image section can use pages directly collected from the page cache
-    // then mark it as page cache backed. This is only the case if there is an
+    // If an image section can use pages directly collected from the backing
+    // image then mark it as backed. This is only the case if there is an
     // image handle and the offset is cache-aligned.
     //
 
     if ((ImageHandle != INVALID_HANDLE) &&
         (IS_ALIGNED(ImageOffset, IoGetCacheEntryDataSize()) != FALSE)) {
 
-        Flags |= IMAGE_SECTION_PAGE_CACHE_BACKED;
+        Flags |= IMAGE_SECTION_BACKED;
         if (IoIoHandleIsCacheable(ImageHandle) != FALSE) {
             Flags |= IMAGE_SECTION_CACHEABLE;
         }
@@ -2707,7 +2706,7 @@ Return Value:
             goto AllocateImageSectionEnd;
         }
 
-        Flags &= ~IMAGE_SECTION_PAGE_CACHE_BACKED;
+        Flags &= ~IMAGE_SECTION_BACKED;
     }
 
     //
@@ -2786,11 +2785,11 @@ Return Value:
         ASSERT(BitmapCount == 1);
 
         //
-        // If a non-paged section has a bitmap, it better be cache backed.
+        // If a non-paged section has a bitmap, it better be backed.
         //
 
         ASSERT(((Flags & IMAGE_SECTION_NON_PAGED) == 0) ||
-               ((Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0));
+               ((Flags & IMAGE_SECTION_BACKED) != 0));
 
         NewSection->DirtyPageBitmap = (PULONG)(NewSection + 1);
         RtlZeroMemory(NewSection->DirtyPageBitmap, BitmapSize);
@@ -2820,12 +2819,12 @@ Return Value:
     MmpCreatePageTables(NewSection->VirtualAddress, NewSection->Size);
 
     //
-    // If the image section is backed by the page cache, then insert it into
-    // the owning file object's list of image sections. This allows the page
-    // cache to unmap from this section when it wants to evict a page.
+    // If the image section is backed, then insert it into the owning file
+    // object's list of image sections. This allows the page cache to unmap
+    // from this section when it wants to evict a page.
     //
 
-    if ((NewSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) {
+    if ((NewSection->Flags & IMAGE_SECTION_BACKED) != 0) {
 
         ASSERT(NewSection->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
@@ -3644,7 +3643,7 @@ Return Value:
     KSTATUS Status;
 
     ASSERT(((Flags & IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY) == 0) ||
-           ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0));
+           ((Section->Flags & IMAGE_SECTION_BACKED) != 0));
 
     ASSERT(KeIsQueuedLockHeld(Section->Lock) != FALSE);
 
@@ -3713,7 +3712,7 @@ Return Value:
         CurrentPageOffset = PageOffset + PageIndex;
 
         //
-        // If only unmapping page cache pages, skip the page if the owner is
+        // If only unmapping backed pages, skip the page if the owner is
         // dirty, as it could only be mapping a private page. Shared sections
         // never map private pages.
         //
@@ -3721,7 +3720,7 @@ Return Value:
         if (((Flags & IMAGE_SECTION_UNMAP_FLAG_PAGE_CACHE_ONLY) != 0) &&
             ((Section->Flags & IMAGE_SECTION_SHARED) == 0)) {
 
-            ASSERT((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
+            ASSERT((Section->Flags & IMAGE_SECTION_BACKED) != 0);
 
             OwningSection = MmpGetOwningSection(Section, CurrentPageOffset);
             DirtyPageBitmap = OwningSection->DirtyPageBitmap;
@@ -3777,14 +3776,14 @@ Return Value:
         }
 
         //
-        // If the section is mapped shared or the section is backed by the page
-        // cache and isn't dirty (i.e. it still maps the page cache), then do
-        // not free the physical page.
+        // If the section is mapped shared or the section is backed and isn't
+        // dirty (i.e. it still maps the backing image), then do not free the
+        // physical page.
         //
 
         FreePhysicalPage = TRUE;
         if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) ||
-            (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
+            (((Section->Flags & IMAGE_SECTION_BACKED) != 0) &&
              ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0))) {
 
             FreePhysicalPage = FALSE;
@@ -4012,13 +4011,13 @@ Return Value:
         (AddressSpace == MmKernelAddressSpace)) {
 
         //
-        // If the section has no parent and is not backed by the page cache
-        // then it should have no children and own all its pages. Freely unmap
-        // and release all pages. The work here is then done.
+        // If the section has no parent and is not backed then it should have
+        // no children and own all its pages. Freely unmap and release all
+        // pages. The work here is then done.
         //
 
         if ((Section->Parent == NULL) &&
-            ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0)) {
+            ((Section->Flags & IMAGE_SECTION_BACKED) == 0)) {
 
             ASSERT(LIST_EMPTY(&(Section->ChildList)) != FALSE);
 
@@ -4094,14 +4093,14 @@ Return Value:
 
         //
         // If the page is shared with the section's parent, the section is
-        // mapped shared, or the section is backed by the page cache and is not
+        // mapped shared, or the section is backed by something and is not
         // dirty, then do not free the physical page on unmap.
         //
 
         if (((Section->Parent != NULL) &&
              ((Section->InheritPageBitmap[BitmapIndex] & BitmapMask) != 0)) ||
             ((Section->Flags & IMAGE_SECTION_SHARED) != 0) ||
-            (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
+            (((Section->Flags & IMAGE_SECTION_BACKED) != 0) &&
              ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0))) {
 
             UnmapFlags &= ~UNMAP_FLAG_FREE_PHYSICAL_PAGES;

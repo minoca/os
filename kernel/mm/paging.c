@@ -256,7 +256,7 @@ MmpPageInSharedSection (
     );
 
 KSTATUS
-MmpPageInCacheBackedSection (
+MmpPageInBackedSection (
     PIMAGE_SECTION ImageSection,
     UINTN PageOffset,
     PIO_BUFFER LockedIoBuffer
@@ -1146,13 +1146,13 @@ Return Value:
                                         LockedIoBuffer);
 
     //
-    // Handle image sections backed by page cache pages.
+    // Handle image sections backed by something.
     //
 
-    } else if ((ImageSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) {
-        Status = MmpPageInCacheBackedSection(ImageSection,
-                                             PageOffset,
-                                             LockedIoBuffer);
+    } else if ((ImageSection->Flags & IMAGE_SECTION_BACKED) != 0) {
+        Status = MmpPageInBackedSection(ImageSection,
+                                        PageOffset,
+                                        LockedIoBuffer);
 
     //
     // Otherwise handle default image sections. These have a backing image, but
@@ -1427,11 +1427,11 @@ Return Value:
         }
 
         //
-        // If the section is page cache backed and this page is using the page
-        // cache, then it can't be freed, as the page cache owns it.
+        // If the section is backed and this page is using the page cache, then
+        // it can't be freed, as the backing image owns it.
         //
 
-        if (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
+        if (((Section->Flags & IMAGE_SECTION_BACKED) != 0) &&
             ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0)) {
 
             ASSERT((SwapOffset != 0) || (PagingEntry == NULL));
@@ -2727,7 +2727,7 @@ Return Value:
     PVOID VirtualAddress;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT((ImageSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0);
+    ASSERT((ImageSection->Flags & IMAGE_SECTION_BACKED) == 0);
     ASSERT((ImageSection->Flags & IMAGE_SECTION_SHARED) == 0);
     ASSERT(ImageSection->ImageBacking.DeviceHandle == INVALID_HANDLE);
 
@@ -3410,7 +3410,7 @@ PageInSharedSectionEnd:
 }
 
 KSTATUS
-MmpPageInCacheBackedSection (
+MmpPageInBackedSection (
     PIMAGE_SECTION ImageSection,
     UINTN PageOffset,
     PIO_BUFFER LockedIoBuffer
@@ -3420,8 +3420,8 @@ MmpPageInCacheBackedSection (
 
 Routine Description:
 
-    This routine pages a physical page in from a page file or the page cache.
-    This routine must be called at low level.
+    This routine pages a physical page in from a page file or an aligned
+    backing image. This routine must be called at low level.
 
 Arguments:
 
@@ -3488,7 +3488,7 @@ Return Value:
     RootSection = NULL;
     VirtualAddress = ImageSection->VirtualAddress + (PageOffset << PageShift);
 
-    ASSERT((ImageSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
+    ASSERT((ImageSection->Flags & IMAGE_SECTION_BACKED) != 0);
 
     //
     // The presence of a locked I/O buffer indicates that the page should be
@@ -4136,7 +4136,7 @@ Return Value:
     PVOID VirtualAddress;
 
     ASSERT(KeIsQueuedLockHeld(Section->Lock) != FALSE);
-    ASSERT((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
+    ASSERT((Section->Flags & IMAGE_SECTION_BACKED) != 0);
 
     OwningSection = NULL;
     PageShift = MmPageShift();
@@ -4281,7 +4281,7 @@ Return Value:
     RootSection = NULL;
     VirtualAddress = ImageSection->VirtualAddress + (PageOffset << PageShift);
 
-    ASSERT((ImageSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0);
+    ASSERT((ImageSection->Flags & IMAGE_SECTION_BACKED) == 0);
 
     //
     // Loop trying to page into the section.
@@ -5137,7 +5137,7 @@ Return Value:
 
     ASSERT(IoGetCacheEntryDataSize() == PageSize);
 
-    if (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) &&
+    if (((Section->Flags & IMAGE_SECTION_BACKED) == 0) &&
         (IS_ALIGNED(ReadOffset, PageSize) == FALSE)) {
 
         ReadSize = 2 << PageShift;
@@ -5487,7 +5487,7 @@ Return Value:
         // cache then the page cannot be marked writable.
         //
 
-        if (((Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
+        if (((Flags & IMAGE_SECTION_BACKED) != 0) &&
             ((Section->DirtyPageBitmap[BitmapIndex] & BitmapMask) == 0)) {
 
             CanWrite = FALSE;

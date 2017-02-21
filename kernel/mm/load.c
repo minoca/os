@@ -960,12 +960,12 @@ Return Value:
         TotalSyncSize += OverlapSize;
 
         //
-        // If the image section is not cache-backed, shared, and writable, then
+        // If the image section is not backed, shared, and writable, then
         // there is nothing to synchronize.
         //
 
         if (((CurrentSection->Flags & IMAGE_SECTION_SHARED) == 0) ||
-            ((CurrentSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) ||
+            ((CurrentSection->Flags & IMAGE_SECTION_BACKED) == 0) ||
             ((CurrentSection->Flags & IMAGE_SECTION_WAS_WRITABLE) == 0)) {
 
             CurrentEntry = CurrentEntry->Next;
