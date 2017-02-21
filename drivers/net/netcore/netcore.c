@@ -2128,7 +2128,16 @@ Return Value:
 
                 ASSERT(BasicOption == SocketBasicOptionRemoteAddress);
 
-                RtlCopyMemory(Data, &(NetSocket->RemoteAddress), *DataSize);
+                //
+                // Fail if there is not a valid remote address.
+                //
+
+                if (NetSocket->RemoteAddress.Domain == NetDomainInvalid) {
+                    Status = STATUS_NOT_CONNECTED;
+
+                } else {
+                    RtlCopyMemory(Data, &(NetSocket->RemoteAddress), *DataSize);
+                }
             }
 
             if (NetSocket->KernelSocket.Type == NetSocketRaw) {
