@@ -3270,7 +3270,7 @@ Return Value:
         // might not make sense.
         //
 
-        if (Socket->KernelSocket.Domain !=
+        if (Socket->LocalReceiveAddress.Domain !=
             ReceiveContext->Destination->Domain) {
 
             continue;
@@ -3278,10 +3278,10 @@ Return Value:
 
         //
         // The protocol must match. There are no wildcard protocols to receive
-        // all packets.
+        // all packets. The protocol is stored in the port of the local address.
         //
 
-        if (Socket->KernelSocket.Protocol != NetworkProtocol) {
+        if (Socket->LocalReceiveAddress.Port != NetworkProtocol) {
             continue;
         }
 
@@ -3292,8 +3292,6 @@ Return Value:
 
         if ((Socket->BindingType == SocketLocallyBound) ||
             (Socket->BindingType == SocketFullyBound)) {
-
-            ASSERT(Socket->LocalReceiveAddress.Port == 0);
 
             Match = TRUE;
             for (PartIndex = 0;
@@ -3319,9 +3317,6 @@ Return Value:
         //
 
         if (Socket->BindingType == SocketFullyBound) {
-
-            ASSERT(Socket->RemoteAddress.Port == 0);
-
             Match = TRUE;
             for (PartIndex = 0;
                  PartIndex < MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN);
@@ -4133,6 +4128,18 @@ Return Value:
 
     ASSERT(Socket->KernelSocket.Type == NetSocketRaw);
     ASSERT(LocalInformation != NULL);
+
+    //
+    // If the socket was previously bound, then copy the port into the local
+    // information.
+    //
+
+    if (Socket->BindingType != SocketBindingInvalid) {
+        LocalInformation->ReceiveAddress.Port =
+                                              Socket->LocalReceiveAddress.Port;
+
+        LocalInformation->SendAddress.Port = Socket->LocalSendAddress.Port;
+    }
 
     //
     // This routine is simple. It updates the local and/or remote address for

@@ -2122,15 +2122,6 @@ Return Value:
                     Address.Domain = NetSocket->KernelSocket.Domain;
                 }
 
-                //
-                // The port should be zero for all raw sockets. The address
-                // request returns the protocol as the port value.
-                //
-
-                if (NetSocket->KernelSocket.Type == NetSocketRaw) {
-                    Address.Port = NetSocket->KernelSocket.Protocol;
-                }
-
                 RtlCopyMemory(Data, &Address, *DataSize);
 
             } else {

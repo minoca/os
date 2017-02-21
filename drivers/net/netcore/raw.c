@@ -477,6 +477,18 @@ Return Value:
     }
 
     //
+    // The receive address always has the port set to the raw protocol value.
+    // Set the send address's port for consistency; it does not matter as the
+    // underlying networks (e.g. IPv4) do not use ports. This eliminates the
+    // need to special case raw sockets when get/set information asks for the
+    // local address, where the protocol is supposed to be returned in the
+    // port's place.
+    //
+
+    NetSocket->LocalReceiveAddress.Port = NetworkProtocol;
+    NetSocket->LocalSendAddress.Port = NetworkProtocol;
+
+    //
     // Give the lower layers a chance to initialize. Start the maximum packet
     // size at the largest possible value.
     //
@@ -630,11 +642,13 @@ Return Value:
     }
 
     //
-    // The port doesn't make a difference on raw sockets, so zero it out.
+    // The port doesn't make a difference on raw sockets. Set it to the
+    // protocol value, which was stored in the local receive address's port
+    // during creation.
     //
 
     OriginalPort = Address->Port;
-    Address->Port = 0;
+    Address->Port = Socket->LocalReceiveAddress.Port;
 
     //
     // Pass the request down to the network layer.
@@ -751,22 +765,13 @@ Return Value:
 
 {
 
-    ULONG OriginalPort;
     KSTATUS Status;
-
-    //
-    // The port doesn't make a different on raw sockets, so zero it out.
-    //
-
-    OriginalPort = Address->Port;
-    Address->Port = 0;
 
     //
     // Pass the request down to the network layer.
     //
 
     Status = Socket->Network->Interface.Connect(Socket, Address);
-    Address->Port = OriginalPort;
     if (!KSUCCESS(Status)) {
         goto RawConnectEnd;
     }
