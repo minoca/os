@@ -2179,7 +2179,8 @@ Members:
         for a null terminator (which may be a null terminator or may be a
         garbage character).
 
-    Properties - Stores the file properties if the file was found.
+    Properties - Stores a pointer where the file properties are returned by the
+        driver upon success.
 
 --*/
 
@@ -2189,7 +2190,7 @@ typedef struct _SYSTEM_CONTROL_LOOKUP {
     PFILE_PROPERTIES DirectoryProperties;
     PCSTR FileName;
     ULONG FileNameSize;
-    FILE_PROPERTIES Properties;
+    PFILE_PROPERTIES Properties;
 } SYSTEM_CONTROL_LOOKUP, *PSYSTEM_CONTROL_LOOKUP;
 
 /*++

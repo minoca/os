@@ -1315,7 +1315,7 @@ Return Value:
                            DirectoryFileId,
                            Lookup->FileName,
                            Lookup->FileNameSize,
-                           &(Lookup->Properties));
+                           Lookup->Properties);
 
         if (Lookup->DirectoryProperties != NULL) {
 

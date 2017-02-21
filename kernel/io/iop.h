@@ -2108,14 +2108,16 @@ IopSendLookupRequest (
     PFILE_OBJECT Directory,
     PCSTR FileName,
     ULONG FileNameSize,
-    PFILE_PROPERTIES Properties
+    PFILE_PROPERTIES Properties,
+    PULONG Flags
     );
 
 /*++
 
 Routine Description:
 
-    This routine sends a lookup request IRP.
+    This routine sends a lookup request IRP. This routine assumes that the
+    directory's lock is held exclusively.
 
 Arguments:
 
@@ -2129,38 +2131,13 @@ Arguments:
 
     FileNameSize - Supplies the size of the file name buffer including space
         for a null terminator (which may be a null terminator or may be a
-        garbage character).
+        garbage character). Supply 0 to perform a root lookup request.
 
     Properties - Supplies a pointer where the file properties will be returned
         if the file was found.
 
-Return Value:
-
-    Status code.
-
---*/
-
-KSTATUS
-IopSendRootLookupRequest (
-    PDEVICE Device,
-    PFILE_PROPERTIES Properties,
-    PULONG Flags
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sends a lookup request IRP for the device's root.
-
-Arguments:
-
-    Device - Supplies a pointer to the device to send the request to.
-
-    Properties - Supplies the file properties if the file was found.
-
-    Flags - Supplies a pointer that receives the flags returned by the root
-        lookup call. See LOOKUP_FLAG_* for definitions.
+    Flags - Supplies a pointer where the translated file object flags will be
+        returned. See FILE_OBJECT_FLAG_* definitions.
 
 Return Value:
 

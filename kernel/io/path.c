@@ -2262,7 +2262,6 @@ Return Value:
     PPATH_ENTRY PathEntry;
     PDEVICE PathRoot;
     FILE_PROPERTIES Properties;
-    ULONG RootLookupFlags;
     PPATH_POINT ShmDirectory;
     KSTATUS Status;
     PKTHREAD Thread;
@@ -2477,11 +2476,13 @@ Return Value:
 
             ASSERT(IS_DEVICE_OR_VOLUME(DirectoryDevice));
 
+            FileObjectFlags = 0;
             Status = IopSendLookupRequest(DirectoryDevice,
                                           DirectoryFileObject,
                                           Name,
                                           NameSize,
-                                          &Properties);
+                                          &Properties,
+                                          &FileObjectFlags);
 
             if (!KSUCCESS(Status)) {
                 if (Status == STATUS_PATH_NOT_FOUND) {
@@ -2497,7 +2498,6 @@ Return Value:
 
             } else {
                 Properties.DeviceId = DirectoryFileObject->Properties.DeviceId;
-                FileObjectFlags = 0;
                 if ((OpenFlags & OPEN_FLAG_NON_CACHED) != 0) {
                     FileObjectFlags |= FILE_OBJECT_FLAG_NON_CACHED;
                 }
@@ -2682,16 +2682,16 @@ Return Value:
             Status = STATUS_UNSUCCESSFUL;
             FileObjectFlags = 0;
             if (Child->Type == ObjectDevice) {
-                Status = IopSendRootLookupRequest((PDEVICE)Child,
-                                                  &Properties,
-                                                  &RootLookupFlags);
+                Status = IopSendLookupRequest((PDEVICE)Child,
+                                              NULL,
+                                              NULL,
+                                              0,
+                                              &Properties,
+                                              &FileObjectFlags);
 
                 if (KSUCCESS(Status)) {
                     PathRoot = (PDEVICE)Child;
                     Properties.DeviceId = PathRoot->DeviceId;
-                    if ((RootLookupFlags & LOOKUP_FLAG_NON_CACHED) != 0) {
-                        FileObjectFlags |= FILE_OBJECT_FLAG_NON_CACHED;
-                    }
 
                 } else if (Status == STATUS_DEVICE_NOT_CONNECTED) {
                     goto PathLookupThroughFileSystemEnd;

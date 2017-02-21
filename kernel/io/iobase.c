@@ -4176,7 +4176,8 @@ IopSendLookupRequest (
     PFILE_OBJECT Directory,
     PCSTR FileName,
     ULONG FileNameSize,
-    PFILE_PROPERTIES Properties
+    PFILE_PROPERTIES Properties,
+    PULONG Flags
     )
 
 /*++
@@ -4198,11 +4199,14 @@ Arguments:
 
     FileNameSize - Supplies the size of the file name buffer including space
         for a null terminator (which may be a null terminator or may be a
-        garbage character).
+        garbage character). Supply 0 to perform a root lookup request.
 
     Properties - Supplies a pointer where the file properties will be returned
         if the file was found.
 
+    Flags - Supplies a pointer where the translated file object flags will be
+        returned. See FILE_OBJECT_FLAG_* definitions.
+
 Return Value:
 
     Status code.
@@ -4213,64 +4217,36 @@ Return Value:
 
     SYSTEM_CONTROL_LOOKUP Request;
     KSTATUS Status;
-
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(Directory->Lock) != FALSE);
-    ASSERT(Directory->Properties.HardLinkCount != 0);
 
     RtlZeroMemory(&Request, sizeof(SYSTEM_CONTROL_LOOKUP));
     Request.Root = FALSE;
-    Request.DirectoryProperties = &(Directory->Properties);
+    if (FileNameSize == 0) {
+        Request.Root = TRUE;
+
+        ASSERT(Directory == NULL);
+    }
+
+    if (Directory != NULL) {
+
+        ASSERT(KeIsSharedExclusiveLockHeldExclusive(Directory->Lock) != FALSE);
+        ASSERT(Directory->Properties.HardLinkCount != 0);
+        ASSERT(FileNameSize != 0);
+
+        Request.DirectoryProperties = &(Directory->Properties);
+    }
+
     Request.FileName = FileName;
     Request.FileNameSize = FileNameSize;
+    Request.Properties = Properties;
     Status = IopSendSystemControlIrp(Device,
                                      IrpMinorSystemControlLookup,
                                      &Request);
 
-    RtlCopyMemory(Properties, &(Request.Properties), sizeof(FILE_PROPERTIES));
-    return Status;
-}
+    *Flags = 0;
+    if ((Request.Flags & LOOKUP_FLAG_NON_CACHED) != 0) {
+        *Flags |= FILE_OBJECT_FLAG_NON_CACHED;
+    }
 
-KSTATUS
-IopSendRootLookupRequest (
-    PDEVICE Device,
-    PFILE_PROPERTIES Properties,
-    PULONG Flags
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sends a lookup request IRP for the device's root.
-
-Arguments:
-
-    Device - Supplies a pointer to the device to send the request to.
-
-    Properties - Supplies the file properties if the file was found.
-
-    Flags - Supplies a pointer that receives the flags returned by the root
-        lookup call. See LOOKUP_FLAG_* for definitions.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    SYSTEM_CONTROL_LOOKUP Request;
-    KSTATUS Status;
-
-    RtlZeroMemory(&Request, sizeof(SYSTEM_CONTROL_LOOKUP));
-    Request.Root = TRUE;
-    Status = IopSendSystemControlIrp(Device,
-                                     IrpMinorSystemControlLookup,
-                                     &Request);
-
-    RtlCopyMemory(Properties, &(Request.Properties), sizeof(FILE_PROPERTIES));
-    *Flags = Request.Flags;
     return Status;
 }
 
@@ -5500,9 +5476,14 @@ Return Value:
     Parameters.TimeoutInMilliseconds = Context->TimeoutInMilliseconds;
     Parameters.IoSizeInBytes = Context->SizeInBytes;
     Parameters.IoBytesCompleted = 0;
-    Parameters.IoOffset = 0;
-    Parameters.NewIoOffset = 0;
+    Parameters.IoOffset = Context->Offset;
     Parameters.FileProperties = &(FileObject->Properties);
+    if (Context->Offset == IO_OFFSET_NONE) {
+        Parameters.IoOffset =
+                        RtlAtomicOr64((PULONGLONG)&(Handle->CurrentOffset), 0);
+    }
+
+    Parameters.NewIoOffset = Context->Offset;
     Device = FileObject->Device;
 
     ASSERT(IS_DEVICE_OR_VOLUME(Device));
@@ -5520,6 +5501,11 @@ Return Value:
 
     Status = IopSendIoIrp(Device, MinorCode, &Parameters);
     Context->BytesCompleted = Parameters.IoBytesCompleted;
+    if (Context->Offset == IO_OFFSET_NONE) {
+        RtlAtomicExchange64((PULONGLONG)&(Handle->CurrentOffset),
+                            Parameters.NewIoOffset);
+    }
+
     return Status;
 }
 

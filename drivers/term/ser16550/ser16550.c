@@ -2565,7 +2565,7 @@ Return Value:
             // Enable opening of the root as a character device.
             //
 
-            Properties = &(Lookup->Properties);
+            Properties = Lookup->Properties;
             Properties->FileId = 0;
             Properties->Type = IoObjectCharacterDevice;
             Properties->HardLinkCount = 1;
