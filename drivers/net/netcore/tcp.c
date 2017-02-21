@@ -3597,7 +3597,7 @@ Return Value:
     RtlDebugPrint("TCP %I64dms: ", Milliseconds);
     if (Transmit != FALSE) {
         if (NetTcpDebugPrintLocalAddress != FALSE) {
-            NetDebugPrintAddress(&(Socket->NetSocket.LocalAddress));
+            NetDebugPrintAddress(&(Socket->NetSocket.LocalSendAddress));
             RtlDebugPrint(" to ");
         }
     }
@@ -3606,7 +3606,7 @@ Return Value:
     if (Transmit == FALSE) {
         if (NetTcpDebugPrintLocalAddress != FALSE) {
             RtlDebugPrint(" to ");
-            NetDebugPrintAddress(&(Socket->NetSocket.LocalAddress));
+            NetDebugPrintAddress(&(Socket->NetSocket.LocalReceiveAddress));
         }
     }
 
@@ -4840,11 +4840,12 @@ Return Value:
 {
 
     PVOID Buffer;
-    USHORT Checksum;
+    PNETWORK_ADDRESS DestinationAddress;
     PTCP_HEADER Header;
     ULONG PacketSize;
     ULONG RelativeAcknowledgeNumber;
     ULONG RelativeSequenceNumber;
+    PNETWORK_ADDRESS SourceAddress;
     ULONG WindowSize;
 
     //
@@ -4859,10 +4860,10 @@ Return Value:
 
     Buffer = Packet->Buffer + Packet->DataOffset;
     Header = (PTCP_HEADER)Buffer;
-    Header->SourcePort = CPU_TO_NETWORK16(Socket->NetSocket.LocalAddress.Port);
-    Header->DestinationPort =
-                        CPU_TO_NETWORK16(Socket->NetSocket.RemoteAddress.Port);
-
+    SourceAddress = &(Socket->NetSocket.LocalSendAddress);
+    DestinationAddress = &(Socket->NetSocket.RemoteAddress);
+    Header->SourcePort = CPU_TO_NETWORK16(SourceAddress->Port);
+    Header->DestinationPort = CPU_TO_NETWORK16(DestinationAddress->Port);
     Header->SequenceNumber = CPU_TO_NETWORK32(SequenceNumber);
     Header->HeaderLength = ((sizeof(TCP_HEADER) + OptionsLength) >> 2) <<
                            TCP_HEADER_LENGTH_SHIFT;
@@ -4889,12 +4890,10 @@ Return Value:
     if ((Socket->NetSocket.Link->Properties.ChecksumFlags &
          NET_LINK_CHECKSUM_FLAG_TRANSMIT_TCP_OFFLOAD) == 0) {
 
-        Checksum = NetpTcpChecksumData(Header,
-                                       PacketSize,
-                                       &(Socket->NetSocket.LocalAddress),
-                                       &(Socket->NetSocket.RemoteAddress));
-
-        Header->Checksum = Checksum;
+        Header->Checksum = NetpTcpChecksumData(Header,
+                                               PacketSize,
+                                               SourceAddress,
+                                               DestinationAddress);
 
     } else {
         Packet->Flags |= NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD;

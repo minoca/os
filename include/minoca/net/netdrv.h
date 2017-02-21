@@ -948,14 +948,17 @@ Members:
     LinkAdress - Stores a pointer to the link address entry that owns the local
         address.
 
-    LocalAddress - Stores the local address.
+    ReceiveAddress - Stores the local address on which packets can be received.
+
+    SendAddress - Stores the local address from which packets will be sent.
 
 --*/
 
 typedef struct _NET_LINK_LOCAL_ADDRESS {
     PNET_LINK Link;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
-    NETWORK_ADDRESS LocalAddress;
+    NETWORK_ADDRESS ReceiveAddress;
+    NETWORK_ADDRESS SendAddress;
 } NET_LINK_LOCAL_ADDRESS, *PNET_LINK_LOCAL_ADDRESS;
 
 typedef struct _NET_PROTOCOL_ENTRY NET_PROTOCOL_ENTRY, *PNET_PROTOCOL_ENTRY;
@@ -978,7 +981,12 @@ Members:
     Network - Stores a pointer to the network layer entry responsible for this
         socket.
 
-    LocalAddress - Stores the local address of this connection.
+    LocalReceiveAddress - Stores the local address to which the socket is bound
+        to for receiving packets. This may be the any address or broadcast
+        address.
+
+    LocalSendAddress - Stores the local address to which the socket is bound to
+        for sending packets. This must be a unicast address.
 
     RemoteAddress - Stores the remote address of this connection.
 
@@ -1026,7 +1034,8 @@ typedef struct _NET_SOCKET {
     SOCKET KernelSocket;
     PNET_PROTOCOL_ENTRY Protocol;
     PNET_NETWORK_ENTRY Network;
-    NETWORK_ADDRESS LocalAddress;
+    NETWORK_ADDRESS LocalReceiveAddress;
+    NETWORK_ADDRESS LocalSendAddress;
     NETWORK_ADDRESS RemoteAddress;
     NETWORK_ADDRESS RemotePhysicalAddress;
     union {

@@ -655,7 +655,7 @@ Return Value:
 
     KSTATUS Status;
 
-    if (Socket->LocalAddress.Domain != NetDomainInvalid) {
+    if (Socket->LocalReceiveAddress.Domain != NetDomainInvalid) {
         Status = STATUS_INVALID_PARAMETER;
         goto UdpBindToAddressEnd;
     }
@@ -1050,7 +1050,7 @@ Return Value:
     // The socket needs to at least be bound to a local port.
     //
 
-    ASSERT(Socket->LocalAddress.Port != 0);
+    ASSERT(Socket->LocalSendAddress.Port != 0);
 
     //
     // If the socket has no link, then try to find a link that can service the
@@ -1065,7 +1065,7 @@ Return Value:
             // The link override should use the socket's port.
             //
 
-            LinkInformation.LocalAddress.Port = Socket->LocalAddress.Port;
+            LinkInformation.SendAddress.Port = Socket->LocalSendAddress.Port;
 
             //
             // Synchronously get the correct header, footer, and max packet
@@ -1098,7 +1098,7 @@ Return Value:
         Link = LinkOverrideBuffer.LinkInformation.Link;
         HeaderSize = LinkOverrideBuffer.PacketSizeInformation.HeaderSize;
         FooterSize = LinkOverrideBuffer.PacketSizeInformation.FooterSize;
-        SourcePort = LinkOverrideBuffer.LinkInformation.LocalAddress.Port;
+        SourcePort = LinkOverrideBuffer.LinkInformation.SendAddress.Port;
 
     } else {
 
@@ -1107,7 +1107,7 @@ Return Value:
         Link = Socket->Link;
         HeaderSize = Socket->PacketSizeInformation.HeaderSize;
         FooterSize = Socket->PacketSizeInformation.FooterSize;
-        SourcePort = Socket->LocalAddress.Port;
+        SourcePort = Socket->LocalSendAddress.Port;
     }
 
     NetworkLocalPort = CPU_TO_NETWORK16(SourcePort);

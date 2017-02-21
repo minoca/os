@@ -1260,8 +1260,8 @@ Return Value:
     // Netlink sockets are allowed to be rebound to different multicast groups.
     //
 
-    if ((Socket->LocalAddress.Domain != NetDomainInvalid) &&
-        (Socket->LocalAddress.Port != Address->Port)) {
+    if ((Socket->LocalReceiveAddress.Domain != NetDomainInvalid) &&
+        (Socket->LocalReceiveAddress.Port != Address->Port)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto GenericBindToAddressEnd;

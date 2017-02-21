@@ -382,6 +382,7 @@ Return Value:
     // Register the IPv4 handlers with the core networking library.
     //
 
+    RtlZeroMemory(&NetworkEntry, sizeof(NET_NETWORK_ENTRY));
     NetworkEntry.Domain = NetDomainIp4;
     NetworkEntry.ParentProtocolNumber = IP4_PROTOCOL_NUMBER;
     NetworkEntry.Interface.InitializeLink = NetpIp4InitializeLink;
@@ -690,7 +691,8 @@ Return Value:
             goto Ip4BindToAddressEnd;
         }
 
-        LocalInformation.LocalAddress.Port = Port;
+        LocalInformation.ReceiveAddress.Port = Port;
+        LocalInformation.SendAddress.Port = Port;
 
     //
     // No specific link was passed.
@@ -718,7 +720,8 @@ Return Value:
                 goto Ip4BindToAddressEnd;
             }
 
-            LocalInformation.LocalAddress.Port = Port;
+            LocalInformation.ReceiveAddress.Port = Port;
+            LocalInformation.SendAddress.Port = Port;
 
         //
         // No link was passed, this is a generic bind to a port on any or the
@@ -728,9 +731,19 @@ Return Value:
         } else {
             LocalInformation.Link = NULL;
             LocalInformation.LinkAddress = NULL;
-            RtlCopyMemory(&(LocalInformation.LocalAddress),
+            RtlCopyMemory(&(LocalInformation.ReceiveAddress),
                           Address,
                           sizeof(NETWORK_ADDRESS));
+
+            //
+            // Even in the broadcast case, the send address should be the any
+            // address. It should only get the port from the supplied address.
+            //
+
+            RtlZeroMemory(&(LocalInformation.SendAddress),
+                          sizeof(NETWORK_ADDRESS));
+
+            LocalInformation.SendAddress.Port = Address->Port;
         }
     }
 
@@ -922,7 +935,7 @@ Return Value:
     // Now that the socket is deactiviated, destroy any pending fragments.
     //
 
-    if (Socket->LocalAddress.Domain == NetDomainIp4) {
+    if (Socket->LocalReceiveAddress.Domain == NetDomainIp4) {
         KeAcquireQueuedLock(NetIp4FragmentedPacketLock);
         NetpIp4RemoveFragmentedPackets(Socket);
         KeReleaseQueuedLock(NetIp4FragmentedPacketLock);
@@ -1011,7 +1024,7 @@ Return Value:
         Link = LinkOverride->LinkInformation.Link;
         LinkAddress = LinkOverride->LinkInformation.LinkAddress;
         MaxPacketSize = LinkOverride->PacketSizeInformation.MaxPacketSize;
-        Source = &(LinkOverride->LinkInformation.LocalAddress);
+        Source = &(LinkOverride->LinkInformation.SendAddress);
 
     //
     // Otherwise use the socket's information.
@@ -1021,7 +1034,7 @@ Return Value:
         Link = Socket->Link;
         LinkAddress = Socket->LinkAddress;
         MaxPacketSize = Socket->PacketSizeInformation.MaxPacketSize;
-        Source = &(Socket->LocalAddress);
+        Source = &(Socket->LocalSendAddress);
     }
 
     LocalAddress = (PIP4_ADDRESS)Source;
@@ -2775,11 +2788,11 @@ Return Value:
 
     if (Socket != NULL) {
 
-        ASSERT(Socket->LocalAddress.Domain == NetDomainIp4);
+        ASSERT(Socket->LocalReceiveAddress.Domain == NetDomainIp4);
         ASSERT((Socket->RemoteAddress.Domain == NetDomainIp4) ||
                (Socket->RemoteAddress.Domain == NetDomainInvalid));
 
-        LocalAddress = (PIP4_ADDRESS)&(Socket->LocalAddress);
+        LocalAddress = (PIP4_ADDRESS)&(Socket->LocalReceiveAddress);
         RemoteAddress = (PIP4_ADDRESS)&(Socket->RemoteAddress);
 
     //

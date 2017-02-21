@@ -1055,8 +1055,12 @@ Return Value:
         NetLinkAddReference(Link);
         LinkResult->Link = Link;
         LinkResult->LinkAddress = LinkAddress;
-        RtlCopyMemory(&(LinkResult->LocalAddress),
+        RtlCopyMemory(&(LinkResult->ReceiveAddress),
                       LocalAddress,
+                      sizeof(NETWORK_ADDRESS));
+
+        RtlCopyMemory(&(LinkResult->SendAddress),
+                      &(LinkAddress->Address),
                       sizeof(NETWORK_ADDRESS));
     }
 
@@ -1142,11 +1146,15 @@ Return Value:
 
         if (CurrentLinkAddressEntry->Configured != FALSE) {
             FoundAddress = CurrentLinkAddressEntry;
-            RtlCopyMemory(&(LinkResult->LocalAddress),
+            RtlCopyMemory(&(LinkResult->ReceiveAddress),
                           &(FoundAddress->Address),
                           sizeof(NETWORK_ADDRESS));
 
-            ASSERT(LinkResult->LocalAddress.Port == 0);
+            RtlCopyMemory(&(LinkResult->SendAddress),
+                          &(FoundAddress->Address),
+                          sizeof(NETWORK_ADDRESS));
+
+            ASSERT(LinkResult->SendAddress.Port == 0);
         }
 
         KeReleaseQueuedLock(CurrentLink->QueuedLock);
@@ -1898,14 +1906,15 @@ Return Value:
     PRED_BLACK_TREE_NODE ExistingNode;
     PNET_SOCKET ExistingSocket;
     PNET_LINK Link;
-    PNETWORK_ADDRESS LocalAddress;
     NET_LINK_LOCAL_ADDRESS LocalInformationBuffer;
     BOOL LockHeld;
     ULONG OldFlags;
     ULONG OriginalPort;
     PNET_PROTOCOL_ENTRY Protocol;
+    PNETWORK_ADDRESS ReceiveAddress;
     BOOL Reinsert;
     NET_SOCKET SearchSocket;
+    PNETWORK_ADDRESS SendAddress;
     BOOL SkipValidation;
     KSTATUS Status;
     PRED_BLACK_TREE Tree;
@@ -1983,9 +1992,10 @@ Return Value:
     // if they do not match.
     //
 
-    if ((Socket->LocalAddress.Port != LocalInformation->LocalAddress.Port) &&
-        (Socket->LocalAddress.Port != 0) &&
-        (LocalInformation->LocalAddress.Port != 0)) {
+    if ((Socket->LocalReceiveAddress.Port !=
+         LocalInformation->ReceiveAddress.Port) &&
+        (Socket->LocalReceiveAddress.Port != 0) &&
+        (LocalInformation->ReceiveAddress.Port != 0)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto BindSocketEnd;
@@ -2014,13 +2024,15 @@ Return Value:
     //
 
     Link = Socket->Link;
-    LocalAddress = &(Socket->LocalAddress);
+    ReceiveAddress = &(Socket->LocalReceiveAddress);
+    SendAddress = &(Socket->LocalSendAddress);
     if (Link == NULL) {
 
         ASSERT(LocalInformation != NULL);
 
         Link = LocalInformation->Link;
-        LocalAddress = &(LocalInformation->LocalAddress);
+        ReceiveAddress = &(LocalInformation->ReceiveAddress);
+        SendAddress = &(LocalInformation->SendAddress);
 
         //
         // If the socket was previously bound, use the local port that was
@@ -2028,7 +2040,8 @@ Return Value:
         //
 
         if (Socket->BindingType != SocketBindingInvalid) {
-            LocalAddress->Port = Socket->LocalAddress.Port;
+            ReceiveAddress->Port = Socket->LocalReceiveAddress.Port;
+            SendAddress->Port = Socket->LocalSendAddress.Port;
         }
     }
 
@@ -2044,13 +2057,13 @@ Return Value:
 
         case SocketLocallyBound:
             RtlDebugPrint("Net: Binding locally bound socket %x: ", Socket);
-            NetpDebugPrintNetworkAddress(Socket->Network, LocalAddress);
+            NetpDebugPrintNetworkAddress(Socket->Network, ReceiveAddress);
             RtlDebugPrint("\n");
             break;
 
         case SocketFullyBound:
             RtlDebugPrint("Net: Binding fully bound socket %x, Local ", Socket);
-            NetpDebugPrintNetworkAddress(Socket->Network, LocalAddress);
+            NetpDebugPrintNetworkAddress(Socket->Network, ReceiveAddress);
             RtlDebugPrint(", Remote ");
             NetpDebugPrintNetworkAddress(Socket->Network, RemoteAddress);
             RtlDebugPrint(".\n");
@@ -2111,7 +2124,7 @@ Return Value:
 
         ASSERT(LocalInformation != NULL);
         ASSERT(BindingType == SocketLocallyBound);
-        ASSERT(LocalInformation->LocalAddress.Port != 0);
+        ASSERT(LocalInformation->ReceiveAddress.Port != 0);
 
         SkipValidation = TRUE;
     }
@@ -2123,7 +2136,7 @@ Return Value:
     // indicated by the binding flags.
     //
 
-    if ((LocalAddress->Port == 0) &&
+    if ((ReceiveAddress->Port == 0) &&
         ((Flags & NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT) == 0)) {
 
         ASSERT(SkipValidation == FALSE);
@@ -2139,18 +2152,20 @@ Return Value:
              AttemptIndex < NET_EPHEMERAL_PORT_COUNT;
              AttemptIndex += 1) {
 
-            LocalAddress->Port = CurrentPort + NET_EPHEMERAL_PORT_START;
+            ReceiveAddress->Port = CurrentPort + NET_EPHEMERAL_PORT_START;
 
             //
             // If the ephemeral port is already being used by a socket, then
             // try again.
             //
 
-            Available = NetpCheckLocalAddressAvailability(Socket, LocalAddress);
+            Available = NetpCheckLocalAddressAvailability(Socket,
+                                                          ReceiveAddress);
+
             if (Available != FALSE) {
                 if (NetGlobalDebug != FALSE) {
                     RtlDebugPrint("Net: Using ephemeral port %d.\n",
-                                  LocalAddress->Port);
+                                  ReceiveAddress->Port);
                 }
 
                 Status = STATUS_SUCCESS;
@@ -2173,6 +2188,10 @@ Return Value:
             }
         }
 
+        ASSERT(SendAddress->Port == 0);
+
+        SendAddress->Port = ReceiveAddress->Port;
+
     //
     // Do checks for the case where the port was already defined. If the socket
     // was previously in the tree, then the local address is OK. Just make sure
@@ -2183,7 +2202,9 @@ Return Value:
 
     } else {
         if (SkipValidation == FALSE) {
-            Available = NetpCheckLocalAddressAvailability(Socket, LocalAddress);
+            Available = NetpCheckLocalAddressAvailability(Socket,
+                                                          ReceiveAddress);
+
             if (Available == FALSE) {
                 Status = STATUS_ADDRESS_IN_USE;
                 goto BindSocketEnd;
@@ -2192,8 +2213,8 @@ Return Value:
 
         if (BindingType == SocketFullyBound) {
             SearchSocket.Protocol = Socket->Protocol;
-            RtlCopyMemory(&(SearchSocket.LocalAddress),
-                          LocalAddress,
+            RtlCopyMemory(&(SearchSocket.LocalReceiveAddress),
+                          ReceiveAddress,
                           sizeof(NETWORK_ADDRESS));
 
             RtlCopyMemory(&(SearchSocket.RemoteAddress),
@@ -2266,8 +2287,12 @@ Return Value:
                                          &(Socket->PacketSizeInformation));
         }
 
-        RtlCopyMemory(&(Socket->LocalAddress),
-                      LocalAddress,
+        RtlCopyMemory(&(Socket->LocalReceiveAddress),
+                      ReceiveAddress,
+                      sizeof(NETWORK_ADDRESS));
+
+        RtlCopyMemory(&(Socket->LocalSendAddress),
+                      SendAddress,
                       sizeof(NETWORK_ADDRESS));
     }
 
@@ -2635,7 +2660,7 @@ Return Value:
     // Fill out a fake socket entry for search purposes.
     //
 
-    RtlCopyMemory(&(SearchEntry.LocalAddress),
+    RtlCopyMemory(&(SearchEntry.LocalReceiveAddress),
                   LocalAddress,
                   sizeof(NETWORK_ADDRESS));
 
@@ -3268,14 +3293,14 @@ Return Value:
         if ((Socket->BindingType == SocketLocallyBound) ||
             (Socket->BindingType == SocketFullyBound)) {
 
-            ASSERT(Socket->LocalAddress.Port == 0);
+            ASSERT(Socket->LocalReceiveAddress.Port == 0);
 
             Match = TRUE;
             for (PartIndex = 0;
                  PartIndex < MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN);
                  PartIndex += 1) {
 
-                if (Socket->LocalAddress.Address[PartIndex] !=
+                if (Socket->LocalReceiveAddress.Address[PartIndex] !=
                     ReceiveContext->Destination->Address[PartIndex]) {
 
                     Match = FALSE;
@@ -3552,7 +3577,7 @@ Return Value:
     FirstSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, U.TreeEntry);
     SecondSocket = RED_BLACK_TREE_VALUE(SecondNode, NET_SOCKET, U.TreeEntry);
     Result = NetpMatchFullyBoundSocket(FirstSocket,
-                                       &(SecondSocket->LocalAddress),
+                                       &(SecondSocket->LocalReceiveAddress),
                                        &(SecondSocket->RemoteAddress));
 
     return Result;
@@ -3598,8 +3623,8 @@ Return Value:
 
     FirstSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, U.TreeEntry);
     SecondSocket = RED_BLACK_TREE_VALUE(SecondNode, NET_SOCKET, U.TreeEntry);
-    Result = NetpCompareNetworkAddresses(&(FirstSocket->LocalAddress),
-                                         &(SecondSocket->LocalAddress));
+    Result = NetpCompareNetworkAddresses(&(FirstSocket->LocalReceiveAddress),
+                                         &(SecondSocket->LocalReceiveAddress));
 
     return Result;
 }
@@ -3650,8 +3675,8 @@ Return Value:
     // Compare the local port numbers.
     //
 
-    FirstLocalAddress = &(FirstSocket->LocalAddress);
-    SecondLocalAddress = &(SecondSocket->LocalAddress);
+    FirstLocalAddress = &(FirstSocket->LocalReceiveAddress);
+    SecondLocalAddress = &(SecondSocket->LocalReceiveAddress);
     if (FirstLocalAddress->Port < SecondLocalAddress->Port) {
         return ComparisonResultAscending;
 
@@ -4144,7 +4169,7 @@ Return Value:
 
         case SocketLocallyBound:
             RtlDebugPrint("Net: Binding locally bound raw socket %x: ", Socket);
-            NetDebugPrintAddress(&(LocalInformation->LocalAddress));
+            NetDebugPrintAddress(&(LocalInformation->ReceiveAddress));
             RtlDebugPrint("\n");
             break;
 
@@ -4152,7 +4177,7 @@ Return Value:
             RtlDebugPrint("Net: Binding fully bound raw socket %x, Local ",
                           Socket);
 
-            NetDebugPrintAddress(&(LocalInformation->LocalAddress));
+            NetDebugPrintAddress(&(LocalInformation->ReceiveAddress));
             RtlDebugPrint(", Remote ");
             NetDebugPrintAddress(RemoteAddress);
             RtlDebugPrint(".\n");
@@ -4239,8 +4264,12 @@ Return Value:
                                      &(Socket->PacketSizeInformation));
     }
 
-    RtlCopyMemory(&(Socket->LocalAddress),
-                  &(LocalInformation->LocalAddress),
+    RtlCopyMemory(&(Socket->LocalReceiveAddress),
+                  &(LocalInformation->ReceiveAddress),
+                  sizeof(NETWORK_ADDRESS));
+
+    RtlCopyMemory(&(Socket->LocalSendAddress),
+                  &(LocalInformation->SendAddress),
                   sizeof(NETWORK_ADDRESS));
 
     //
@@ -4394,17 +4423,17 @@ Return Value:
     // only matching local ports.
     //
 
-    if (Socket->LocalAddress.Port < LocalAddress->Port) {
+    if (Socket->LocalReceiveAddress.Port < LocalAddress->Port) {
         return ComparisonResultAscending;
 
-    } else if (Socket->LocalAddress.Port > LocalAddress->Port) {
+    } else if (Socket->LocalReceiveAddress.Port > LocalAddress->Port) {
         return ComparisonResultDescending;
     }
 
-    if (Socket->LocalAddress.Domain < LocalAddress->Domain) {
+    if (Socket->LocalReceiveAddress.Domain < LocalAddress->Domain) {
         return ComparisonResultAscending;
 
-    } else if (Socket->LocalAddress.Domain > LocalAddress->Domain) {
+    } else if (Socket->LocalReceiveAddress.Domain > LocalAddress->Domain) {
         return ComparisonResultDescending;
     }
 
@@ -4429,12 +4458,12 @@ Return Value:
          PartIndex < MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN);
          PartIndex += 1) {
 
-        if (Socket->LocalAddress.Address[PartIndex] <
+        if (Socket->LocalReceiveAddress.Address[PartIndex] <
             LocalAddress->Address[PartIndex]) {
 
             return ComparisonResultAscending;
 
-        } else if (Socket->LocalAddress.Address[PartIndex] >
+        } else if (Socket->LocalReceiveAddress.Address[PartIndex] >
                    LocalAddress->Address[PartIndex]) {
 
             return ComparisonResultDescending;
@@ -4569,7 +4598,7 @@ Return Value:
     // Create a search entry that does not have a remote address.
     //
 
-    RtlCopyMemory(&(SearchSocket.LocalAddress),
+    RtlCopyMemory(&(SearchSocket.LocalReceiveAddress),
                   LocalAddress,
                   sizeof(NETWORK_ADDRESS));
 
@@ -4598,11 +4627,11 @@ Return Value:
 
     while (FoundNode != NULL) {
         FoundSocket = RED_BLACK_TREE_VALUE(FoundNode, NET_SOCKET, U.TreeEntry);
-        if (FoundSocket->LocalAddress.Port != LocalAddress->Port) {
+        if (FoundSocket->LocalReceiveAddress.Port != LocalAddress->Port) {
             break;
         }
 
-        if (FoundSocket->LocalAddress.Domain != LocalAddress->Domain) {
+        if (FoundSocket->LocalReceiveAddress.Domain != LocalAddress->Domain) {
             break;
         }
 
@@ -4629,7 +4658,7 @@ Return Value:
                  PartIndex < MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN);
                  PartIndex += 1) {
 
-                if (FoundSocket->LocalAddress.Address[PartIndex] !=
+                if (FoundSocket->LocalReceiveAddress.Address[PartIndex] !=
                     LocalAddress->Address[PartIndex]) {
 
                     AddressesMatch = FALSE;
@@ -4709,11 +4738,13 @@ Return Value:
                                                NET_SOCKET,
                                                U.TreeEntry);
 
-            if (FoundSocket->LocalAddress.Port != LocalAddress->Port) {
+            if (FoundSocket->LocalReceiveAddress.Port != LocalAddress->Port) {
                 break;
             }
 
-            if (FoundSocket->LocalAddress.Domain != LocalAddress->Domain) {
+            if (FoundSocket->LocalReceiveAddress.Domain !=
+                LocalAddress->Domain) {
+
                 break;
             }
 
@@ -4746,7 +4777,7 @@ Return Value:
                      PartIndex < MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN);
                      PartIndex += 1) {
 
-                    if (FoundSocket->LocalAddress.Address[PartIndex] !=
+                    if (FoundSocket->LocalReceiveAddress.Address[PartIndex] !=
                         LocalAddress->Address[PartIndex]) {
 
                         AddressesMatch = FALSE;
@@ -4843,11 +4874,13 @@ Return Value:
                                                NET_SOCKET,
                                                U.TreeEntry);
 
-            if (FoundSocket->LocalAddress.Port != LocalAddress->Port) {
+            if (FoundSocket->LocalReceiveAddress.Port != LocalAddress->Port) {
                 break;
             }
 
-            if (FoundSocket->LocalAddress.Domain != LocalAddress->Domain) {
+            if (FoundSocket->LocalReceiveAddress.Domain !=
+                LocalAddress->Domain) {
+
                 break;
             }
 

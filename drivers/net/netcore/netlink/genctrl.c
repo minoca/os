@@ -331,7 +331,7 @@ Return Value:
     // handles all family oriented control commands.
     //
 
-    SendCommand.Message.SourceAddress = &(Socket->LocalAddress);
+    SendCommand.Message.SourceAddress = &(Socket->LocalSendAddress);
     SendCommand.Message.DestinationAddress = Command->Message.SourceAddress;
     SendCommand.Message.SequenceNumber = Command->Message.SequenceNumber;
     SendCommand.Command = NETLINK_CONTROL_COMMAND_NEW_FAMILY;

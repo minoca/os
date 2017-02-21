@@ -222,6 +222,7 @@ Return Value:
     // Register the netlink handlers with the core networking library.
     //
 
+    RtlZeroMemory(&NetworkEntry, sizeof(NET_NETWORK_ENTRY));
     NetworkEntry.Domain = NetDomainNetlink;
     NetworkEntry.ParentProtocolNumber = INVALID_PROTOCOL_NUMBER;
     NetworkEntry.Interface.InitializeLink = NetlinkpInitializeLink;
@@ -448,7 +449,7 @@ Return Value:
             BindingFlags |= NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT;
         }
 
-        LocalAddress = &(LocalInformation.LocalAddress);
+        LocalAddress = &(LocalInformation.ReceiveAddress);
         RtlCopyMemory(LocalAddress, Address, sizeof(NETWORK_ADDRESS));
 
         //
@@ -459,6 +460,15 @@ Return Value:
 
         LocalNetlinkAddress = (PNETLINK_ADDRESS)LocalAddress;
         LocalNetlinkAddress->Group = 0;
+
+        //
+        // For netlink sockets, the receive and send addresses are always the
+        // same.
+        //
+
+        RtlCopyMemory(&(LocalInformation.SendAddress),
+                      LocalAddress,
+                      sizeof(NETWORK_ADDRESS));
 
         //
         // There are no "unbound" netlink sockets. The Port ID is either filled
@@ -483,10 +493,12 @@ Return Value:
     //
 
     } else {
-        if (Socket->LocalAddress.Port != Address->Port) {
+        if (Socket->LocalReceiveAddress.Port != Address->Port) {
             Status = STATUS_INVALID_PARAMETER;
             goto BindToAddressEnd;
         }
+
+        ASSERT(Socket->LocalSendAddress.Port == Address->Port);
     }
 
     //
@@ -750,7 +762,7 @@ Return Value:
     ReceiveContext.Link = Socket->Link;
     ReceiveContext.Protocol = Socket->Protocol;
     ReceiveContext.Network = Socket->Network;
-    ReceiveContext.Source = &(Socket->LocalAddress);
+    ReceiveContext.Source = &(Socket->LocalSendAddress);
     ReceiveContext.Destination = Destination;
     NetlinkpProcessReceivedPackets(&ReceiveContext, PacketList);
     return STATUS_SUCCESS;
@@ -1213,7 +1225,7 @@ Return Value:
         goto AppendHeaderEnd;
     }
 
-    SourceAddress = (PNETLINK_ADDRESS)&(Socket->LocalAddress);
+    SourceAddress = (PNETLINK_ADDRESS)&(Socket->LocalSendAddress);
     Header = Packet->Buffer + Packet->DataOffset;
     Header->Length = Length;
     Header->Type = Type;
@@ -1603,7 +1615,7 @@ Return Value:
                     continue;
                 }
 
-                if (Socket->LocalAddress.Port == Destination->Port) {
+                if (Socket->LocalReceiveAddress.Port == Destination->Port) {
                     continue;
                 }
 

@@ -2110,7 +2110,7 @@ Return Value:
 
             if (BasicOption == SocketBasicOptionLocalAddress) {
                 RtlCopyMemory(&Address,
-                              &(NetSocket->LocalAddress),
+                              &(NetSocket->LocalReceiveAddress),
                               sizeof(NETWORK_ADDRESS));
 
                 //
