@@ -299,7 +299,7 @@ NET_PROTOCOL_ENTRY NetRawProtocol = {
     {NULL, NULL},
     NetSocketRaw,
     SOCKET_INTERNET_PROTOCOL_RAW,
-    0,
+    NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL,
     NULL,
     NULL,
     {{0}, {0}, {0}},

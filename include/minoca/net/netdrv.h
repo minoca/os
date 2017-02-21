@@ -253,7 +253,8 @@ Author:
 // Define the protocol entry flags.
 //
 
-#define NET_PROTOCOL_FLAG_UNICAST_ONLY 0x00000001
+#define NET_PROTOCOL_FLAG_UNICAST_ONLY       0x00000001
+#define NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions

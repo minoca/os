@@ -1380,6 +1380,7 @@ Return Value:
     PNET_NETWORK_ENTRY NetworkEntry;
     BOOL NetworkFound;
     PNET_PROTOCOL_ENTRY ProtocolEntry;
+    ULONG ProtocolFlags;
     BOOL ProtocolFound;
     PNET_SOCKET Socket;
     KSTATUS Status;
@@ -1401,7 +1402,9 @@ Return Value:
     //
     // Attempt to find a handler for this protocol and network. Make sure that
     // the supplied network protocol matches the found protocol entry's parent
-    // protocol. If not, then it's a protocol for a different network.
+    // protocol. If not, then it's a protocol for a different network. Skip
+    // this check if the protocol entry specifies that it will match any given
+    // protocol value.
     //
 
     ProtocolFound = FALSE;
@@ -1415,8 +1418,9 @@ Return Value:
             continue;
         }
 
-        if ((Type != NetSocketRaw) &&
-            (Protocol != 0) &&
+        ProtocolFlags = ProtocolEntry->Flags;
+        if ((Protocol != 0) &&
+            ((ProtocolFlags & NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL) == 0) &&
             (ProtocolEntry->ParentProtocolNumber != Protocol)) {
 
             continue;
