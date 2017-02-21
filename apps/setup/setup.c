@@ -92,13 +92,13 @@ Environment:
 #define SETUP_OPTIONS_STRING "Aa:b:BDd:G:hi:l:p:f:qrs:vx:V"
 
 #define SETUP_ADD_PARTITION_SCRIPT_FORMAT \
-    "Partitions += [{" \
+    "Partitions.append({" \
     "\"Index\": %d," \
     "\"Size\": %lld," \
     "\"PartitionType\": PARTITION_TYPE_MINOCA," \
     "\"MbrType\": PARTITION_ID_MINOCA," \
     "\"Attributes\": 0," \
-    "\"Alignment\": 4 * KILOBYTE}];"
+    "\"Alignment\": 4 * KILOBYTE});"
 
 //
 // ------------------------------------------------------ Data Type Definitions
