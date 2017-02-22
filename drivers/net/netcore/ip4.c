@@ -207,7 +207,8 @@ KSTATUS
 NetpIp4BindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
-    PNETWORK_ADDRESS Address
+    PNETWORK_ADDRESS Address,
+    ULONG Flags
     );
 
 KSTATUS
@@ -629,7 +630,8 @@ KSTATUS
 NetpIp4BindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
-    PNETWORK_ADDRESS Address
+    PNETWORK_ADDRESS Address,
+    ULONG Flags
     )
 
 /*++
@@ -645,6 +647,9 @@ Arguments:
     Link - Supplies an optional pointer to a link to bind to.
 
     Address - Supplies a pointer to the address to bind the socket to.
+
+    Flags - Supplies a bitmask of binding flags. See NET_SOCKET_BINDING_FLAG_*
+        for definitions.
 
 Return Value:
 
@@ -752,7 +757,7 @@ Return Value:
     // unable to receive packets.
     //
 
-    Status = NetBindSocket(Socket, BindingType, &LocalInformation, NULL, 0);
+    Status = NetBindSocket(Socket, BindingType, &LocalInformation, NULL, Flags);
     if (!KSUCCESS(Status)) {
         goto Ip4BindToAddressEnd;
     }
@@ -798,7 +803,7 @@ Return Value:
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
         LocalAddress.Domain = NetDomainIp4;
-        Status = NetpIp4BindToAddress(Socket, NULL, &LocalAddress);
+        Status = NetpIp4BindToAddress(Socket, NULL, &LocalAddress, 0);
         if (!KSUCCESS(Status)) {
             goto Ip4ListenEnd;
         }
@@ -1544,12 +1549,18 @@ Return Value:
 
     ReceiveContext->Source = (PNETWORK_ADDRESS)&SourceAddress;
     ReceiveContext->Destination = (PNETWORK_ADDRESS)&DestinationAddress;
+    ReceiveContext->ParentProtocolNumber = Header->Protocol;
 
     //
     // Give raw sockets a chance to look at the packet.
     //
 
-    NetRawSocketsProcessReceivedData(ReceiveContext, Header->Protocol);
+    ProtocolEntry = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_RAW);
+    if (ProtocolEntry != NULL) {
+        ReceiveContext->Protocol = ProtocolEntry;
+        ProtocolEntry->Interface.ProcessReceivedData(ReceiveContext);
+        ReceiveContext->Protocol = NULL;
+    }
 
     //
     // Find the local protocol entry for the protocol specified in the header

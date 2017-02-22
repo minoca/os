@@ -947,7 +947,7 @@ Return Value:
     // Pass the request down to the network layer.
     //
 
-    Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address);
+    Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address, 0);
     if (!KSUCCESS(Status)) {
         goto TcpBindToAddressEnd;
     }
@@ -4736,7 +4736,8 @@ Return Value:
     Status = NewTcpSocket->NetSocket.Network->Interface.BindToAddress(
                                                   &(NewTcpSocket->NetSocket),
                                                   ReceiveContext->Link,
-                                                  ReceiveContext->Destination);
+                                                  ReceiveContext->Destination,
+                                                  0);
 
     if (!KSUCCESS(Status)) {
         goto TcpHandleUnconnectedPacketEnd;
@@ -7766,7 +7767,8 @@ Return Value:
     Status = NewTcpSocket->NetSocket.Network->Interface.BindToAddress(
                                                     &(NewTcpSocket->NetSocket),
                                                     ReceiveContext->Link,
-                                                    LocalAddress);
+                                                    LocalAddress,
+                                                    0);
 
     if (!KSUCCESS(Status)) {
         goto TcpHandleIncomingConnectionEnd;

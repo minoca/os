@@ -673,7 +673,7 @@ Return Value:
     // Pass the request down to the network layer.
     //
 
-    Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address);
+    Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address, 0);
     if (!KSUCCESS(Status)) {
         goto UdpBindToAddressEnd;
     }

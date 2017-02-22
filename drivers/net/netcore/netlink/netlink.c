@@ -86,7 +86,8 @@ KSTATUS
 NetlinkpBindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
-    PNETWORK_ADDRESS Address
+    PNETWORK_ADDRESS Address,
+    ULONG Flags
     );
 
 KSTATUS
@@ -379,7 +380,8 @@ KSTATUS
 NetlinkpBindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
-    PNETWORK_ADDRESS Address
+    PNETWORK_ADDRESS Address,
+    ULONG Flags
     )
 
 /*++
@@ -395,6 +397,9 @@ Arguments:
     Link - Supplies an optional pointer to a link to bind to.
 
     Address - Supplies a pointer to the address to bind the socket to.
+
+    Flags - Supplies a bitmask of binding flags. See NET_SOCKET_BINDING_FLAG_*
+        for definitions.
 
 Return Value:
 
@@ -435,7 +440,7 @@ Return Value:
         // bound is port zero. Fail if this is not the case.
         //
 
-        BindingFlags = 0;
+        BindingFlags = Flags;
         if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
             if (NetlinkAddress->Port != 0) {
                 Status = STATUS_INVALID_PARAMETER;
@@ -552,7 +557,7 @@ Return Value:
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
         LocalAddress.Domain = NetDomainNetlink;
-        Status = NetlinkpBindToAddress(Socket, NULL, &LocalAddress);
+        Status = NetlinkpBindToAddress(Socket, NULL, &LocalAddress, 0);
         if (!KSUCCESS(Status)) {
             goto ListenEnd;
         }
@@ -764,6 +769,9 @@ Return Value:
     ReceiveContext.Network = Socket->Network;
     ReceiveContext.Source = &(Socket->LocalSendAddress);
     ReceiveContext.Destination = Destination;
+    ReceiveContext.ParentProtocolNumber =
+                                        Socket->Protocol->ParentProtocolNumber;
+
     NetlinkpProcessReceivedPackets(&ReceiveContext, PacketList);
     return STATUS_SUCCESS;
 }

@@ -77,13 +77,6 @@ extern LIST_ENTRY NetDataLinkList;
 extern PSHARED_EXCLUSIVE_LOCK NetPluginListLock;
 
 //
-// Define the list of raw sockets. These do not get put in the socket trees.
-//
-
-extern LIST_ENTRY NetRawSocketsList;
-extern PSHARED_EXCLUSIVE_LOCK NetRawSocketsLock;
-
-//
 // -------------------------------------------------------- Function Prototypes
 //
 

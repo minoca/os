@@ -183,6 +183,7 @@ Author:
 #define NET_SOCKET_FLAG_FORKED_LISTENER         0x00000080
 #define NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED 0x00000100
 #define NET_SOCKET_FLAG_KERNEL                  0x00000200
+#define NET_SOCKET_FLAG_SKIP_BIND_VALIDATION    0x00000400
 
 //
 // Define the set of network socket flags that should be carried over to a
@@ -246,8 +247,12 @@ Author:
 // Define the socket binding flags.
 //
 
-#define NET_SOCKET_BINDING_FLAG_ACTIVATE           0x00000001
-#define NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT 0x00000002
+#define NET_SOCKET_BINDING_FLAG_ACTIVATE                0x00000001
+#define NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT      0x00000002
+#define NET_SOCKET_BINDING_FLAG_ALLOW_REBIND            0x00000004
+#define NET_SOCKET_BINDING_FLAG_ALLOW_UNBIND            0x00000008
+#define NET_SOCKET_BINDING_FLAG_OVERWRITE_LOCAL         0x00000010
+#define NET_SOCKET_BINDING_FLAG_SKIP_ADDRESS_VALIDATION 0x00000020
 
 //
 // Define the protocol entry flags.
@@ -255,6 +260,7 @@ Author:
 
 #define NET_PROTOCOL_FLAG_UNICAST_ONLY       0x00000001
 #define NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL 0x00000002
+#define NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS   0x00000004
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -1743,7 +1749,8 @@ KSTATUS
 (*PNET_NETWORK_BIND_TO_ADDRESS) (
     PNET_SOCKET Socket,
     PNET_LINK Link,
-    PNETWORK_ADDRESS Address
+    PNETWORK_ADDRESS Address,
+    ULONG Flags
     );
 
 /*++
@@ -1759,6 +1766,9 @@ Arguments:
     Link - Supplies an optional pointer to a link to bind to.
 
     Address - Supplies a pointer to the address to bind the socket to.
+
+    Flags - Supplies a bitmask of binding flags. See NET_SOCKET_BINDING_FLAG_*
+        for definitions.
 
 Return Value:
 
@@ -2194,6 +2204,9 @@ Members:
     Destination - Supplies a pointer to the destination (local) address of the
         packet.
 
+    ParentProtocolNumber - Stores the protocol number in the parent layer's
+        protocol. This will always be set after the network layer executes.
+
 --*/
 
 struct _NET_RECEIVE_CONTEXT {
@@ -2203,6 +2216,7 @@ struct _NET_RECEIVE_CONTEXT {
     PNET_PROTOCOL_ENTRY Protocol;
     PNETWORK_ADDRESS Source;
     PNETWORK_ADDRESS Destination;
+    ULONG ParentProtocolNumber;
 };
 
 //
@@ -3058,9 +3072,7 @@ Routine Description:
     This routine officially binds a socket to a local address, local port,
     remote address and remote port tuple by adding it to the appropriate socket
     tree. It can also re-bind a socket in the case where it has already been
-    bound to a different tree. Raw sockets are handled specially as ports do
-    not make sense for raw sockets; they are put in a list that contains all
-    raw sockets.
+    bound to a different tree.
 
 Arguments:
 
@@ -3214,35 +3226,6 @@ Arguments:
 Return Value:
 
     Status code.
-
---*/
-
-NET_API
-VOID
-NetRawSocketsProcessReceivedData (
-    PNET_RECEIVE_CONTEXT ReceiveContext,
-    ULONG NetworkProtocol
-    );
-
-/*++
-
-Routine Description:
-
-    This routine processes a received packet and sends it to any raw sockets
-    that should be receiving it based on the protocol, source address, and
-    destination address.
-
-Arguments:
-
-    ReceiveContext - Supplies a pointer to the receive context that stores the
-        link, network entry, source address, destination address, and the
-        packet that was received.
-
-    NetworkProtocol - Supplies the network protocol of the packet.
-
-Return Value:
-
-    None.
 
 --*/
 

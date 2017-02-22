@@ -299,7 +299,7 @@ NET_PROTOCOL_ENTRY NetRawProtocol = {
     {NULL, NULL},
     NetSocketRaw,
     SOCKET_INTERNET_PROTOCOL_RAW,
-    NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL,
+    NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL | NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS,
     NULL,
     NULL,
     {{0}, {0}, {0}},
@@ -357,6 +357,12 @@ RAW_SOCKET_OPTION NetRawSocketOptions[] = {
         TRUE
     },
 };
+
+//
+// Store the number of raw sockets that could potentially receive a packet.
+//
+
+volatile UINTN NetRawSocketCount = 0;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -477,6 +483,14 @@ Return Value:
     }
 
     //
+    // Raw sockets should never validate addresses on bind. There are no ports,
+    // which means that multiple sockets should be allowed to bind to the same
+    // local/remote address pair.
+    //
+
+    RtlAtomicOr32(&(NetSocket->Flags), NET_SOCKET_FLAG_SKIP_BIND_VALIDATION);
+
+    //
     // The receive address always has the port set to the raw protocol value.
     // Set the send address's port for consistency; it does not matter as the
     // underlying networks (e.g. IPv4) do not use ports. This eliminates the
@@ -507,6 +521,7 @@ Return Value:
     }
 
     Status = STATUS_SUCCESS;
+    RtlAtomicAdd(&NetRawSocketCount, 1);
 
 RawCreateSocketEnd:
     if (!KSUCCESS(Status)) {
@@ -584,6 +599,7 @@ Return Value:
 
     KeDestroyQueuedLock(RawSocket->ReceiveLock);
     MmFreePagedPool(RawSocket);
+    RtlAtomicAdd(&NetRawSocketCount, (UINTN)-1);
     return;
 }
 
@@ -618,6 +634,7 @@ Return Value:
 
 {
 
+    ULONG Flags;
     ULONG OriginalPort;
     KSTATUS Status;
 
@@ -651,10 +668,21 @@ Return Value:
     Address->Port = Socket->LocalReceiveAddress.Port;
 
     //
-    // Pass the request down to the network layer.
+    // Pass the request down to the network layer. Raw sockets have slightly
+    // different bind behavior than other socket types. Indicate this with the
+    // flags.
     //
 
-    Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address);
+    Flags = NET_SOCKET_BINDING_FLAG_ALLOW_REBIND |
+            NET_SOCKET_BINDING_FLAG_ALLOW_UNBIND |
+            NET_SOCKET_BINDING_FLAG_OVERWRITE_LOCAL |
+            NET_SOCKET_BINDING_FLAG_SKIP_ADDRESS_VALIDATION;
+
+    Status = Socket->Network->Interface.BindToAddress(Socket,
+                                                      Link,
+                                                      Address,
+                                                      Flags);
+
     Address->Port = OriginalPort;
     if (!KSUCCESS(Status)) {
         goto RawBindToAddressEnd;
@@ -765,13 +793,30 @@ Return Value:
 
 {
 
+    ULONG OriginalPort;
     KSTATUS Status;
+
+    //
+    // Ports don't mean anything to raw sockets. Zero it out. Other
+    // implementations seem to keep the port and return it for APIs like
+    // getpeername(). This is confusing as a packet is never matched to a
+    // socket based on the port. Setting it to zero also makes life easier when
+    // searching for sockets during packet reception. The received packet has
+    // no raw protocol port. If the socket were connected to some user defined
+    // port, then the search compare routines would have to know to skip port
+    // validation. Setting the port to zero allows the default compare routines
+    // to be used.
+    //
+
+    OriginalPort = Address->Port;
+    Address->Port = 0;
 
     //
     // Pass the request down to the network layer.
     //
 
     Status = Socket->Network->Interface.Connect(Socket, Address);
+    Address->Port = OriginalPort;
     if (!KSUCCESS(Status)) {
         goto RawConnectEnd;
     }
@@ -1140,13 +1185,67 @@ Return Value:
 
 {
 
+    PNET_SOCKET PreviousSocket;
+    PNET_SOCKET Socket;
+    KSTATUS Status;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
     //
-    // No incoming packets should match the raw socket protocol. Raw sockets
-    // receive data directly from net core and not their networking layer.
+    // If no raw sockets are present, then immediately exit.
     //
 
-    ASSERT(FALSE);
+    if (NetRawSocketCount == 0) {
+        return;
+    }
 
+    //
+    // Each raw sockets' local receive address was initialized with the port
+    // set to the protocol number. Each raw socket's remote address was set to
+    // 0 when it was fully bound. Initialize the receive context in this way
+    // as well so that the ports will match any activated sockets.
+    //
+
+    ReceiveContext->Source->Port = 0;
+    ReceiveContext->Destination->Port = ReceiveContext->ParentProtocolNumber;;
+
+    //
+    // Find all the sockets willing to take this packet.
+    //
+
+    Socket = NULL;
+    PreviousSocket = NULL;
+    do {
+        Status = NetFindSocket(ReceiveContext, &Socket);
+        if (!KSUCCESS(Status) && (Status != STATUS_MORE_PROCESSING_REQUIRED)) {
+            break;
+        }
+
+        //
+        // Pass the packet onto the socket for copying and safe keeping until
+        // the data is read.
+        //
+
+        NetpRawProcessReceivedSocketData(Socket, ReceiveContext);
+
+        //
+        // Release the reference on the previous socket added by the find
+        // socket call.
+        //
+
+        if (PreviousSocket != NULL) {
+            IoSocketReleaseReference(&(PreviousSocket->KernelSocket));
+        }
+
+        PreviousSocket = Socket;
+
+    } while (Status == STATUS_MORE_PROCESSING_REQUIRED);
+
+    if (PreviousSocket != NULL) {
+        IoSocketReleaseReference(&(PreviousSocket->KernelSocket));
+    }
+
+    ReceiveContext->Destination->Port = 0;
     return;
 }
 

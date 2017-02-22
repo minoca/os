@@ -2105,13 +2105,7 @@ Return Value:
             // Acquire the lock to not return a torn address.
             //
 
-            if (NetSocket->KernelSocket.Type == NetSocketRaw) {
-                KeAcquireSharedExclusiveLockShared(NetRawSocketsLock);
-
-            } else {
-                KeAcquireSharedExclusiveLockShared(Protocol->SocketLock);
-            }
-
+            KeAcquireSharedExclusiveLockShared(Protocol->SocketLock);
             if (BasicOption == SocketBasicOptionLocalAddress) {
                 RtlCopyMemory(&Address,
                               &(NetSocket->LocalReceiveAddress),
@@ -2144,13 +2138,7 @@ Return Value:
                 }
             }
 
-            if (NetSocket->KernelSocket.Type == NetSocketRaw) {
-                KeReleaseSharedExclusiveLockShared(NetRawSocketsLock);
-
-            } else {
-                KeReleaseSharedExclusiveLockShared(Protocol->SocketLock);
-            }
-
+            KeReleaseSharedExclusiveLockShared(Protocol->SocketLock);
             break;
 
         case SocketBasicOptionReuseAnyAddress:
