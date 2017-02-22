@@ -2040,7 +2040,6 @@ Return Value:
 
 {
 
-    NETWORK_ADDRESS LocalAddress;
     PFILE_OBJECT NewFileObject;
     PSOCKET_CREATION_PARAMETERS Parameters;
     FILE_PROPERTIES Properties;
@@ -2170,25 +2169,6 @@ Return Value:
 
     (*FileObject)->IoState = Socket->IoState;
     (*FileObject)->SpecialIo = Socket;
-
-    //
-    // The socket is finally ready to go. If it is a raw socket it needs to get
-    // bound to the any address.
-    //
-
-    if ((Socket->Type == NetSocketRaw) &&
-        (Socket->Domain != NetDomainLocal)) {
-
-        ASSERT(Parameters->ExistingSocket == NULL);
-
-        RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
-        LocalAddress.Domain = Socket->Domain;
-        Status = IoNetInterface.BindToAddress(Socket, NULL, &LocalAddress);
-        if (!KSUCCESS(Status)) {
-            goto CreateSocketEnd;
-        }
-    }
-
     Status = STATUS_SUCCESS;
 
 CreateSocketEnd:

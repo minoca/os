@@ -1472,7 +1472,8 @@ Return Value:
     Status = ProtocolEntry->Interface.CreateSocket(ProtocolEntry,
                                                    NetworkEntry,
                                                    Protocol,
-                                                   &Socket);
+                                                   &Socket,
+                                                   0);
 
     if (!KSUCCESS(Status)) {
         goto CreateSocketEnd;
@@ -1489,6 +1490,21 @@ Return Value:
     RtlCopyMemory(&(Socket->UnboundPacketSizeInformation),
                   &(Socket->PacketSizeInformation),
                   sizeof(NET_PACKET_SIZE_INFORMATION));
+
+    //
+    // Allow the protocol a chance to do more work now that the socket is
+    // initialized by netcore.
+    //
+
+    Status = ProtocolEntry->Interface.CreateSocket(ProtocolEntry,
+                                                   NetworkEntry,
+                                                   Protocol,
+                                                   &Socket,
+                                                   1);
+
+    if (!KSUCCESS(Status)) {
+        goto CreateSocketEnd;
+    }
 
 CreateSocketEnd:
     if (!KSUCCESS(Status)) {

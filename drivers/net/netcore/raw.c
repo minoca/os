@@ -211,7 +211,8 @@ NetpRawCreateSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
-    PNET_SOCKET *NewSocket
+    PNET_SOCKET *NewSocket,
+    ULONG Phase
     );
 
 VOID
@@ -424,7 +425,8 @@ NetpRawCreateSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
-    PNET_SOCKET *NewSocket
+    PNET_SOCKET *NewSocket,
+    ULONG Phase
     )
 
 /*++
@@ -449,7 +451,13 @@ Arguments:
         socket structure will be returned. The caller is responsible for
         allocating the socket (and potentially a larger structure for its own
         context). The core network library will fill in the standard socket
-        structure after this routine returns.
+        structure after this routine returns. In phase 1, this will contain
+        a pointer to the socket allocated during phase 0.
+
+    Phase - Supplies the socket creation phase. Phase 0 is the allocation phase
+        and phase 1 is the advanced initialization phase, which is invoked
+        after net core is done filling out common portions of the socket
+        structure.
 
 Return Value:
 
@@ -459,6 +467,7 @@ Return Value:
 
 {
 
+    NETWORK_ADDRESS LocalAddress;
     PNET_SOCKET NetSocket;
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     PRAW_SOCKET RawSocket;
@@ -468,62 +477,98 @@ Return Value:
     ASSERT(ProtocolEntry->ParentProtocolNumber == SOCKET_INTERNET_PROTOCOL_RAW);
 
     NetSocket = NULL;
-    RawSocket = MmAllocatePagedPool(sizeof(RAW_SOCKET),
-                                    RAW_PROTOCOL_ALLOCATION_TAG);
+    RawSocket = NULL;
 
-    if (RawSocket == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto RawCreateSocketEnd;
+    //
+    // Phase 0 allocates the socket and begins initialization.
+    //
+
+    if (Phase == 0) {
+        RawSocket = MmAllocatePagedPool(sizeof(RAW_SOCKET),
+                                        RAW_PROTOCOL_ALLOCATION_TAG);
+
+        if (RawSocket == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto RawCreateSocketEnd;
+        }
+
+        RtlZeroMemory(RawSocket, sizeof(RAW_SOCKET));
+        NetSocket = &(RawSocket->NetSocket);
+        NetSocket->KernelSocket.Protocol = NetworkProtocol;
+        NetSocket->KernelSocket.ReferenceCount = 1;
+        INITIALIZE_LIST_HEAD(&(RawSocket->ReceivedPacketList));
+        RawSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
+        RawSocket->ReceiveBufferTotalSize = RAW_DEFAULT_RECEIVE_BUFFER_SIZE;
+        RawSocket->ReceiveBufferFreeSize = RawSocket->ReceiveBufferTotalSize;
+        RawSocket->ReceiveMinimum = RAW_DEFAULT_RECEIVE_MINIMUM;
+        RawSocket->MaxPacketSize = RAW_MAX_PACKET_SIZE;
+        RawSocket->ReceiveLock = KeCreateQueuedLock();
+        if (RawSocket->ReceiveLock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto RawCreateSocketEnd;
+        }
+
+        //
+        // Set some kernel socket fields. A raw socket needs to be bound to the
+        // any address and made ready to receive as soon as create returns. To
+        // avoid requiring common code to handle this, initialize the kernel
+        // socket so that the bind routines can be invoked.
+        //
+
+        NetSocket->KernelSocket.IoState = IoCreateIoObjectState(FALSE);
+        if (NetSocket->KernelSocket.IoState == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto RawCreateSocketEnd;
+        }
+
+        NetSocket->KernelSocket.Domain = NetworkEntry->Domain;
+        NetSocket->KernelSocket.Type = ProtocolEntry->Type;
+
+        //
+        // Give the lower layers a chance to initialize. Start the maximum
+        // packet size at the largest possible value.
+        //
+
+        ASSERT(RAW_MAX_PACKET_SIZE == MAX_ULONG);
+
+        PacketSizeInformation = &(NetSocket->PacketSizeInformation);
+        PacketSizeInformation->MaxPacketSize = RAW_MAX_PACKET_SIZE;
+        Status = NetworkEntry->Interface.InitializeSocket(ProtocolEntry,
+                                                          NetworkEntry,
+                                                          NetworkProtocol,
+                                                          NetSocket);
+
+        if (!KSUCCESS(Status)) {
+            goto RawCreateSocketEnd;
+        }
+
+        RtlAtomicAdd(&NetRawSocketCount, 1);
+        Status = STATUS_SUCCESS;
+
+    //
+    // Phase 1 finishes raw specific initialization after netcore is done with
+    // its initialization steps.
+    //
+
+    } else {
+
+        ASSERT(Phase == 1);
+        ASSERT(*NewSocket != NULL);
+        ASSERT(RawSocket == NULL);
+
+        NetSocket = *NewSocket;
+
+        //
+        // Perform the implicit bind to the any address.
+        //
+
+        RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
+        LocalAddress.Domain = NetSocket->KernelSocket.Domain;
+        Status = NetpRawBindToAddress(NetSocket, NULL, &LocalAddress);
+        if (!KSUCCESS(Status)) {
+            goto RawCreateSocketEnd;
+        }
     }
-
-    RtlZeroMemory(RawSocket, sizeof(RAW_SOCKET));
-    NetSocket = &(RawSocket->NetSocket);
-    NetSocket->KernelSocket.Protocol = NetworkProtocol;
-    NetSocket->KernelSocket.ReferenceCount = 1;
-    INITIALIZE_LIST_HEAD(&(RawSocket->ReceivedPacketList));
-    RawSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
-    RawSocket->ReceiveBufferTotalSize = RAW_DEFAULT_RECEIVE_BUFFER_SIZE;
-    RawSocket->ReceiveBufferFreeSize = RawSocket->ReceiveBufferTotalSize;
-    RawSocket->ReceiveMinimum = RAW_DEFAULT_RECEIVE_MINIMUM;
-    RawSocket->MaxPacketSize = RAW_MAX_PACKET_SIZE;
-    RawSocket->ReceiveLock = KeCreateQueuedLock();
-    if (RawSocket->ReceiveLock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto RawCreateSocketEnd;
-    }
-
-    //
-    // The receive address always has the port set to the raw protocol value.
-    // Set the send address's port for consistency; it does not matter as the
-    // underlying networks (e.g. IPv4) do not use ports. This eliminates the
-    // need to special case raw sockets when get/set information asks for the
-    // local address, where the protocol is supposed to be returned in the
-    // port's place.
-    //
-
-    NetSocket->LocalReceiveAddress.Port = NetworkProtocol;
-    NetSocket->LocalSendAddress.Port = NetworkProtocol;
-
-    //
-    // Give the lower layers a chance to initialize. Start the maximum packet
-    // size at the largest possible value.
-    //
-
-    ASSERT(RAW_MAX_PACKET_SIZE == MAX_ULONG);
-
-    PacketSizeInformation = &(NetSocket->PacketSizeInformation);
-    PacketSizeInformation->MaxPacketSize = RAW_MAX_PACKET_SIZE;
-    Status = NetworkEntry->Interface.InitializeSocket(ProtocolEntry,
-                                                      NetworkEntry,
-                                                      NetworkProtocol,
-                                                      NetSocket);
-
-    if (!KSUCCESS(Status)) {
-        goto RawCreateSocketEnd;
-    }
-
-    Status = STATUS_SUCCESS;
-    RtlAtomicAdd(&NetRawSocketCount, 1);
 
 RawCreateSocketEnd:
     if (!KSUCCESS(Status)) {
@@ -662,12 +707,11 @@ Return Value:
 
     //
     // The port doesn't make a difference on raw sockets. Set it to the
-    // protocol value, which was stored in the local receive address's port
-    // during creation.
+    // protocol value, which is storked in the kernel socket.
     //
 
     OriginalPort = Address->Port;
-    Address->Port = Socket->LocalReceiveAddress.Port;
+    Address->Port = Socket->KernelSocket.Protocol;
 
     //
     // Pass the request down to the network layer. Raw sockets have slightly

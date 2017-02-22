@@ -97,7 +97,8 @@ NetpTcpCreateSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
-    PNET_SOCKET *NewSocket
+    PNET_SOCKET *NewSocket,
+    ULONG Phase
     );
 
 VOID
@@ -687,7 +688,8 @@ NetpTcpCreateSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
-    PNET_SOCKET *NewSocket
+    PNET_SOCKET *NewSocket,
+    ULONG Phase
     )
 
 /*++
@@ -712,7 +714,13 @@ Arguments:
         socket structure will be returned. The caller is responsible for
         allocating the socket (and potentially a larger structure for its own
         context). The core network library will fill in the standard socket
-        structure after this routine returns.
+        structure after this routine returns. In phase 1, this will contain
+        a pointer to the socket allocated during phase 0.
+
+    Phase - Supplies the socket creation phase. Phase 0 is the allocation phase
+        and phase 1 is the advanced initialization phase, which is invoked
+        after net core is done filling out common portions of the socket
+        structure.
 
 Return Value:
 
@@ -731,6 +739,14 @@ Return Value:
     ASSERT((ProtocolEntry->ParentProtocolNumber ==
             SOCKET_INTERNET_PROTOCOL_TCP) &&
            (NetworkProtocol == ProtocolEntry->ParentProtocolNumber));
+
+    //
+    // TCP only operates in phase 0.
+    //
+
+    if (Phase != 0) {
+        return STATUS_SUCCESS;
+    }
 
     IoState = NULL;
     TcpSocket = MmAllocatePagedPool(sizeof(TCP_SOCKET), TCP_ALLOCATION_TAG);
