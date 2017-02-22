@@ -1388,6 +1388,7 @@ Return Value:
     Socket = NULL;
     NetworkEntry = NULL;
     ProtocolEntry = NULL;
+    ProtocolFlags = 0;
 
     //
     // If the domain is not within the bounds of the socket portion of the
@@ -1452,7 +1453,15 @@ Return Value:
         goto CreateSocketEnd;
     }
 
-    if (Protocol == 0) {
+    //
+    // A supplied protocol value of 0 typically indicates that the default
+    // protocol value should be set. There are some protocol entries, however,
+    // that may actually want 0 to be supplied to socket creation.
+    //
+
+    if ((Protocol == 0) &&
+        ((ProtocolFlags & NET_PROTOCOL_FLAG_NO_DEFAULT_PROTOCOL) == 0)) {
+
         Protocol = ProtocolEntry->ParentProtocolNumber;
     }
 

@@ -183,7 +183,6 @@ Author:
 #define NET_SOCKET_FLAG_FORKED_LISTENER         0x00000080
 #define NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED 0x00000100
 #define NET_SOCKET_FLAG_KERNEL                  0x00000200
-#define NET_SOCKET_FLAG_SKIP_BIND_VALIDATION    0x00000400
 
 //
 // Define the set of network socket flags that should be carried over to a
@@ -258,9 +257,11 @@ Author:
 // Define the protocol entry flags.
 //
 
-#define NET_PROTOCOL_FLAG_UNICAST_ONLY       0x00000001
-#define NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL 0x00000002
-#define NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS   0x00000004
+#define NET_PROTOCOL_FLAG_UNICAST_ONLY        0x00000001
+#define NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL  0x00000002
+#define NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS    0x00000004
+#define NET_PROTOCOL_FLAG_NO_DEFAULT_PROTOCOL 0x00000008
+#define NET_PROTOCOL_FLAG_PORTLESS            0x00000010
 
 //
 // ------------------------------------------------------ Data Type Definitions

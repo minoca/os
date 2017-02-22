@@ -84,6 +84,16 @@ Environment:
 #define RAW_MAX_PACKET_SIZE MAX_ULONG
 
 //
+// Define the default protocol entry flags.
+//
+
+#define RAW_DEFAULT_PROTOCOL_FLAGS \
+    NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL | \
+    NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS | \
+    NET_PROTOCOL_FLAG_NO_DEFAULT_PROTOCOL | \
+    NET_PROTOCOL_FLAG_PORTLESS
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -299,7 +309,7 @@ NET_PROTOCOL_ENTRY NetRawProtocol = {
     {NULL, NULL},
     NetSocketRaw,
     SOCKET_INTERNET_PROTOCOL_RAW,
-    NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL | NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS,
+    RAW_DEFAULT_PROTOCOL_FLAGS,
     NULL,
     NULL,
     {{0}, {0}, {0}},
@@ -481,14 +491,6 @@ Return Value:
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto RawCreateSocketEnd;
     }
-
-    //
-    // Raw sockets should never validate addresses on bind. There are no ports,
-    // which means that multiple sockets should be allowed to bind to the same
-    // local/remote address pair.
-    //
-
-    RtlAtomicOr32(&(NetSocket->Flags), NET_SOCKET_FLAG_SKIP_BIND_VALIDATION);
 
     //
     // The receive address always has the port set to the raw protocol value.
@@ -675,6 +677,7 @@ Return Value:
 
     Flags = NET_SOCKET_BINDING_FLAG_ALLOW_REBIND |
             NET_SOCKET_BINDING_FLAG_ALLOW_UNBIND |
+            NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT |
             NET_SOCKET_BINDING_FLAG_OVERWRITE_LOCAL |
             NET_SOCKET_BINDING_FLAG_SKIP_ADDRESS_VALIDATION;
 

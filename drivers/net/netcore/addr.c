@@ -2096,7 +2096,7 @@ Return Value:
     //
 
     if (((Flags & NET_SOCKET_BINDING_FLAG_SKIP_ADDRESS_VALIDATION) != 0) ||
-        ((Socket->Flags & NET_SOCKET_FLAG_SKIP_BIND_VALIDATION) != 0)) {
+        ((Protocol->Flags & NET_PROTOCOL_FLAG_PORTLESS) != 0)) {
 
         SkipLocalValidation = TRUE;
         SkipRemoteValidation = TRUE;
@@ -2110,6 +2110,7 @@ Return Value:
     //
 
     if ((ReceiveAddress->Port == 0) &&
+        ((Protocol->Flags & NET_PROTOCOL_FLAG_PORTLESS) == 0) &&
         ((Flags & NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT) == 0)) {
 
         ASSERT(SkipLocalValidation == FALSE);
