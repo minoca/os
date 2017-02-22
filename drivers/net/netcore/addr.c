@@ -2277,9 +2277,24 @@ Return Value:
                                          &(Socket->PacketSizeInformation));
         }
 
-        RtlCopyMemory(&(Socket->LocalReceiveAddress),
-                      ReceiveAddress,
-                      sizeof(NETWORK_ADDRESS));
+        //
+        // The receive address can only be updated if the socket is less than
+        // locally bound or local overwrites are allowed. This is necessary to
+        // prevent a socket locally bound to a broadcast or multicast address
+        // from having that broadcast/multicast address being overwritten when
+        // it connects to a remote address. The send address, however, should
+        // be updated, as that is specific to the link that can reach the
+        // remote address.
+        //
+
+        if ((Socket->BindingType < SocketLocallyBound) ||
+            (Socket->BindingType == SocketBindingInvalid) ||
+            ((Flags & NET_SOCKET_BINDING_FLAG_OVERWRITE_LOCAL) != 0)) {
+
+            RtlCopyMemory(&(Socket->LocalReceiveAddress),
+                          ReceiveAddress,
+                          sizeof(NETWORK_ADDRESS));
+        }
 
         RtlCopyMemory(&(Socket->LocalSendAddress),
                       SendAddress,
