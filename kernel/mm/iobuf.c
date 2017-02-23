@@ -996,6 +996,7 @@ Return Value:
 
                 if (Fragment->Size + SizeInBytes >= Fragment->Size) {
                     Fragment->Size += SizeInBytes;
+                    IoBuffer->Internal.TotalSize += SizeInBytes;
                     return STATUS_SUCCESS;
                 }
             }
@@ -1014,6 +1015,7 @@ Return Value:
     Fragment->PhysicalAddress = PhysicalAddress;
     Fragment->Size = SizeInBytes;
     IoBuffer->FragmentCount += 1;
+    IoBuffer->Internal.TotalSize += SizeInBytes;
     return STATUS_SUCCESS;
 }
 
@@ -2455,7 +2457,8 @@ Return Value:
     //
 
     Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-    if (((Fragment->PhysicalAddress + Fragment->Size) == PhysicalAddress) &&
+    if ((IoBuffer->FragmentCount != 0) &&
+        ((Fragment->PhysicalAddress + Fragment->Size) == PhysicalAddress) &&
         (((VirtualAddress == NULL) && (Fragment->VirtualAddress == NULL)) ||
          (((VirtualAddress != NULL) && (Fragment->VirtualAddress != NULL)) &&
           ((Fragment->VirtualAddress + Fragment->Size) == VirtualAddress)))) {
