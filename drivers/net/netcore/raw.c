@@ -87,11 +87,12 @@ Environment:
 // Define the default protocol entry flags.
 //
 
-#define RAW_DEFAULT_PROTOCOL_FLAGS \
-    NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL | \
-    NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS | \
+#define RAW_DEFAULT_PROTOCOL_FLAGS          \
+    NET_PROTOCOL_FLAG_MATCH_ANY_PROTOCOL |  \
+    NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS |    \
     NET_PROTOCOL_FLAG_NO_DEFAULT_PROTOCOL | \
-    NET_PROTOCOL_FLAG_PORTLESS
+    NET_PROTOCOL_FLAG_PORTLESS |            \
+    NET_PROTOCOL_FLAG_NO_BIND_PERMISSIONS
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -478,6 +479,15 @@ Return Value:
 
     NetSocket = NULL;
     RawSocket = NULL;
+
+    //
+    // The thread must have permission to create raw sockets.
+    //
+
+    Status = PsCheckPermission(PERMISSION_NET_RAW);
+    if (!KSUCCESS(Status)) {
+        goto RawCreateSocketEnd;
+    }
 
     //
     // Phase 0 allocates the socket and begins initialization.

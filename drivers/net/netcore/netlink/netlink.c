@@ -160,6 +160,12 @@ NetlinkpProcessReceivedKernelData (
     );
 
 VOID
+NetlinkpBroadcastPackets (
+    PNET_RECEIVE_CONTEXT ReceiveContext,
+    PNET_PACKET_LIST PacketList
+    );
+
+VOID
 NetlinkpSendAck (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -1582,105 +1588,42 @@ Return Value:
 
 {
 
-    ULONG Count;
     PNETLINK_ADDRESS Destination;
-    ULONG GroupIndex;
-    ULONG GroupMask;
-    PULONG MulticastBitmap;
-    PNETLINK_SOCKET NetlinkSocket;
     PNET_PACKET_BUFFER Packet;
-    PLIST_ENTRY PacketEntry;
     PNET_SOCKET Socket;
-    PLIST_ENTRY SocketEntry;
     KSTATUS Status;
 
+    Socket = NULL;
+
     //
-    // If a group ID is supplied in the address, then send the packet to all
-    // sockets listening to that multicast group. A socket must match on the
-    // protocol and have its bitmap set for the group. If a port is also
-    // specified in the address, do not send it to the socket with the port
-    // during multicast processing; fall through and do that at the end.
+    // Attempt broadcast processing on the packet list.
+    //
+
+    NetlinkpBroadcastPackets(ReceiveContext, PacketList);
+
+    //
+    // The kernel should never get any multicast packets, so just drop it
+    // now before getting to the kernel.
     //
 
     Destination = (PNETLINK_ADDRESS)ReceiveContext->Destination;
-    if (Destination->Group != 0) {
-        PacketEntry = PacketList->Head.Next;
-        while (PacketEntry != &(PacketList->Head)) {
-            Packet = LIST_VALUE(PacketEntry, NET_PACKET_BUFFER, ListEntry);
-            Packet->Flags |= NET_PACKET_FLAG_MULTICAST;
-            GroupIndex = NETLINK_SOCKET_BITMAP_INDEX(Destination->Group);
-            GroupMask = NETLINK_SOCKET_BITMAP_MASK(Destination->Group);
-            KeAcquireSharedExclusiveLockShared(NetlinkMulticastLock);
-            SocketEntry = NetlinkMulticastSocketList.Next;
-            while (SocketEntry != &NetlinkMulticastSocketList) {
-                NetlinkSocket = LIST_VALUE(SocketEntry,
-                                           NETLINK_SOCKET,
-                                           MulticastListEntry);
+    if ((Destination->Group != 0) &&
+        (Destination->Port == NETLINK_KERNEL_PORT_ID)) {
 
-                Socket = &(NetlinkSocket->NetSocket);
-                SocketEntry = SocketEntry->Next;
-                if (Socket->Protocol != ReceiveContext->Protocol) {
-                    continue;
-                }
-
-                if (Socket->LocalReceiveAddress.Port == Destination->Port) {
-                    continue;
-                }
-
-                Count = NETLINK_SOCKET_BITMAP_GROUP_ID_COUNT(NetlinkSocket);
-                if (Destination->Group >= Count) {
-                    continue;
-                }
-
-                MulticastBitmap = NetlinkSocket->MulticastBitmap;
-                if ((MulticastBitmap[GroupIndex] & GroupMask) == 0) {
-                    continue;
-                }
-
-                //
-                // This needs to be reconsidered if kernel sockets are signed
-                // up for multicast groups. Kernel sockets are known to respond
-                // to requests with multicast messages as an event notification
-                // mechanism. This could potentially deadlock as the lock is
-                // held during packet processing.
-                //
-
-                ASSERT((Socket->Flags & NET_SOCKET_FLAG_KERNEL) == 0);
-
-                ReceiveContext->Packet = Packet;
-                NetlinkpProcessReceivedSocketData(Socket, ReceiveContext);
-            }
-
-            KeReleaseSharedExclusiveLockShared(NetlinkMulticastLock);
-
-            //
-            // Clear out the multicast group and send it on to the socket
-            // specified by the port.
-            //
-
-            Packet->Flags &= ~NET_PACKET_FLAG_MULTICAST;
-            PacketEntry = PacketEntry->Next;
-        }
-
-        Destination->Group = 0;
-        Socket = NULL;
-
-        //
-        // The kernel should never get any multicast packets, so just drop it
-        // now before getting to the kernel.
-        //
-
-        if (Destination->Port == NETLINK_KERNEL_PORT_ID) {
-            NetDestroyBufferList(PacketList);
-            goto ProcessReceivedPacketsEnd;
-        }
+        NetDestroyBufferList(PacketList);
+        goto ProcessReceivedPacketsEnd;
     }
+
+    //
+    // Zero out the group so that sockets can match.
+    //
+
+    Destination->Group = 0;
 
     //
     // Find the socket targeted by the destination address.
     //
 
-    Socket = NULL;
     Status = NetFindSocket(ReceiveContext, &Socket);
     if (!KSUCCESS(Status)) {
         goto ProcessReceivedPacketsEnd;
@@ -1863,6 +1806,133 @@ ProcessReceivedKernelDataNextMessage:
     }
 
     NetFreeBuffer(Packet);
+    return;
+}
+
+VOID
+NetlinkpBroadcastPackets (
+    PNET_RECEIVE_CONTEXT ReceiveContext,
+    PNET_PACKET_LIST PacketList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine broadcasts a list of packets to all netlink sockets listening
+    on the destination address's multicast group.
+
+Arguments:
+
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link, packet, network, protocol, and source and destination addresses.
+
+    PacketList - Supplies a list of packets to process.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Count;
+    PNETLINK_ADDRESS Destination;
+    ULONG GroupIndex;
+    ULONG GroupMask;
+    PULONG MulticastBitmap;
+    PNETLINK_SOCKET NetlinkSocket;
+    PNET_PACKET_BUFFER Packet;
+    PLIST_ENTRY PacketEntry;
+    PNET_SOCKET Socket;
+    PLIST_ENTRY SocketEntry;
+    KSTATUS Status;
+
+    //
+    // If a group ID is not supplied, then this is a unicast list of packets.
+    //
+
+    Destination = (PNETLINK_ADDRESS)ReceiveContext->Destination;
+    if (Destination->Group == 0) {
+        return;
+    }
+
+    //
+    // Threads sending to multiple sockets must have the broadcast permission
+    // set.
+    //
+
+    Status = PsCheckPermission(PERMISSION_NET_BROADCAST);
+    if (!KSUCCESS(Status)) {
+        return;
+    }
+
+    //
+    // Send the packet to all sockets listening to that multicast group. A
+    // socket must match on the protocol and have its bitmap set for the group.
+    // If a port is also specified in the address, do not send it to the socket
+    // with the port during multicast processing.
+    //
+
+    PacketEntry = PacketList->Head.Next;
+    while (PacketEntry != &(PacketList->Head)) {
+        Packet = LIST_VALUE(PacketEntry, NET_PACKET_BUFFER, ListEntry);
+        Packet->Flags |= NET_PACKET_FLAG_MULTICAST;
+        GroupIndex = NETLINK_SOCKET_BITMAP_INDEX(Destination->Group);
+        GroupMask = NETLINK_SOCKET_BITMAP_MASK(Destination->Group);
+        KeAcquireSharedExclusiveLockShared(NetlinkMulticastLock);
+        SocketEntry = NetlinkMulticastSocketList.Next;
+        while (SocketEntry != &NetlinkMulticastSocketList) {
+            NetlinkSocket = LIST_VALUE(SocketEntry,
+                                       NETLINK_SOCKET,
+                                       MulticastListEntry);
+
+            Socket = &(NetlinkSocket->NetSocket);
+            SocketEntry = SocketEntry->Next;
+            if (Socket->Protocol != ReceiveContext->Protocol) {
+                continue;
+            }
+
+            if (Socket->LocalReceiveAddress.Port == Destination->Port) {
+                continue;
+            }
+
+            Count = NETLINK_SOCKET_BITMAP_GROUP_ID_COUNT(NetlinkSocket);
+            if (Destination->Group >= Count) {
+                continue;
+            }
+
+            MulticastBitmap = NetlinkSocket->MulticastBitmap;
+            if ((MulticastBitmap[GroupIndex] & GroupMask) == 0) {
+                continue;
+            }
+
+            //
+            // This needs to be reconsidered if kernel sockets are signed
+            // up for multicast groups. Kernel sockets are known to respond
+            // to requests with multicast messages as an event notification
+            // mechanism. This could potentially deadlock as the lock is
+            // held during packet processing.
+            //
+
+            ASSERT((Socket->Flags & NET_SOCKET_FLAG_KERNEL) == 0);
+
+            ReceiveContext->Packet = Packet;
+            NetlinkpProcessReceivedSocketData(Socket, ReceiveContext);
+        }
+
+        KeReleaseSharedExclusiveLockShared(NetlinkMulticastLock);
+
+        //
+        // Clear out the multicast group and send it on to the socket
+        // specified by the port.
+        //
+
+        Packet->Flags &= ~NET_PACKET_FLAG_MULTICAST;
+        PacketEntry = PacketEntry->Next;
+    }
+
     return;
 }
 

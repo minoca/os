@@ -38,6 +38,12 @@ Environment:
 //
 
 //
+// Define the maximum port value that requires special bind permission.
+//
+
+#define NET_PORT_PERMISSIONS_MAX 1023
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -1603,9 +1609,28 @@ Return Value:
 {
 
     PNET_SOCKET NetSocket;
+    ULONG ProtocolFlags;
     KSTATUS Status;
 
+    //
+    // If the port is non-zero and less than or equal to the maximum port that
+    // requires a permission check, make sure the thread as the right
+    // privilege. Some protocols do not have this geneirc port restriction and
+    // can opt out of the check.
+    //
+
     NetSocket = (PNET_SOCKET)Socket;
+    ProtocolFlags = NetSocket->Protocol->Flags;
+    if ((Address->Port != 0) &&
+        (Address->Port <= NET_PORT_PERMISSIONS_MAX) &&
+        (ProtocolFlags & NET_PROTOCOL_FLAG_NO_BIND_PERMISSIONS) == 0) {
+
+        Status = PsCheckPermission(PERMISSION_NET_BIND);
+        if (!KSUCCESS(Status)) {
+            goto BindToAddressEnd;
+        }
+    }
+
     Status = NetSocket->Protocol->Interface.BindToAddress(NetSocket,
                                                           Link,
                                                           Address);
@@ -2237,6 +2262,19 @@ Return Value:
             break;
 
         case SocketBasicOptionDebug:
+
+            //
+            // Administrator priveleges are required to change the debug
+            // option.
+            //
+
+            if (Set != FALSE) {
+                Status = PsCheckPermission(PERMISSION_NET_ADMINISTRATOR);
+                if (!KSUCCESS(Status)) {
+                    break;
+                }
+            }
+
         case SocketBasicOptionInlineOutOfBand:
         case SocketBasicOptionRoutingDisabled:
 

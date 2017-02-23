@@ -262,6 +262,7 @@ Author:
 #define NET_PROTOCOL_FLAG_FIND_ALL_SOCKETS    0x00000004
 #define NET_PROTOCOL_FLAG_NO_DEFAULT_PROTOCOL 0x00000008
 #define NET_PROTOCOL_FLAG_PORTLESS            0x00000010
+#define NET_PROTOCOL_FLAG_NO_BIND_PERMISSIONS 0x00000020
 
 //
 // ------------------------------------------------------ Data Type Definitions

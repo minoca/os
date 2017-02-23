@@ -237,7 +237,7 @@ Author:
 //   * Setting debug options on sockets.
 //   * Modifying routing tables.
 //   * Setting arbitraty process and process group ownership on sockets.
-//   * Binding to any address.
+//   * Binding to any address for transparent proxying.
 //   * Setting promiscuous mode.
 //   * Clearing statistics.
 //   * Multicasting.

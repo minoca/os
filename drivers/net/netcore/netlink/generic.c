@@ -84,6 +84,14 @@ Environment:
 #define NETLINK_GENERIC_SEND_MINIMUM 1
 
 //
+// Define the default set of protocol flags for the netlink generic protocol.
+//
+
+#define NETLINK_GENERIC_DEFAULT_PROTOCOL_FLAGS \
+    NET_PROTOCOL_FLAG_UNICAST_ONLY |           \
+    NET_PROTOCOL_FLAG_NO_BIND_PERMISSIONS
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -349,7 +357,7 @@ NET_PROTOCOL_ENTRY NetlinkGenericProtocol = {
     {NULL, NULL},
     NetSocketDatagram,
     SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
-    NET_PROTOCOL_FLAG_UNICAST_ONLY,
+    NETLINK_GENERIC_DEFAULT_PROTOCOL_FLAGS,
     NULL,
     NULL,
     {{0}, {0}, {0}},
