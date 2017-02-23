@@ -2921,12 +2921,6 @@ Return Value:
         goto StartDiskEnd;
     }
 
-    BufferSize = sizeof(SCSI_INQUIRY_PAGE0);
-    Status = UsbMasspSendInquiry(Disk, 0, (PVOID)&Page0, &BufferSize);
-    if (!KSUCCESS(Status)) {
-        goto StartDiskEnd;
-    }
-
     //
     // Get the block device parameters of the disk.
     //
