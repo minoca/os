@@ -3106,6 +3106,7 @@ Return Value:
     VirtualAddress = ImageSection->VirtualAddress + (PageOffset << PageShift);
 
     ASSERT((ImageSection->Flags & IMAGE_SECTION_SHARED) != 0);
+    ASSERT((ImageSection->Flags & IMAGE_SECTION_BACKED) != 0);
     ASSERT(ImageSection->Parent == NULL);
     ASSERT(LIST_EMPTY(&(ImageSection->ChildList)) != FALSE);
 

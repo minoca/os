@@ -1248,6 +1248,7 @@ Return Value:
 
     if ((SectionToCopy->Flags & IMAGE_SECTION_SHARED) != 0) {
 
+        ASSERT((SectionToCopy->Flags & IMAGE_SECTION_BACKED) != 0);
         ASSERT(SectionToCopy->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
         Flags = SectionToCopy->Flags & IMAGE_SECTION_COPY_MASK;
@@ -3816,6 +3817,8 @@ Return Value:
             PageCacheEntry = MmpGetPageCacheEntryForPhysicalAddress(
                                                               PhysicalAddress);
 
+            ASSERT(PageCacheEntry != NULL);
+
             IoMarkPageCacheEntryDirty(PageCacheEntry);
         }
 
@@ -4020,6 +4023,7 @@ Return Value:
             ((Section->Flags & IMAGE_SECTION_BACKED) == 0)) {
 
             ASSERT(LIST_EMPTY(&(Section->ChildList)) != FALSE);
+            ASSERT((Section->Flags & IMAGE_SECTION_SHARED) == 0);
 
             UnmapFlags = UNMAP_FLAG_SEND_INVALIDATE_IPI |
                          UNMAP_FLAG_FREE_PHYSICAL_PAGES;
