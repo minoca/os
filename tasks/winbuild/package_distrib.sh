@@ -150,6 +150,7 @@ update_production_latest "$ARCH$VARIANT"
 ## Upload the files.
 ##
 
+cd "$BINROOT"
 if test "$ARCH$VARIANT" = "x86"; then
     REVISION=`cat $BINROOT/build-revision`
     file=MinocaOS-Starter-$REVISION.zip
