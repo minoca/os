@@ -2554,7 +2554,10 @@ Return Value:
             }
 
             Command->PreviousCommand = Command->Command;
-            Command->Command = DebugCommandInvalid;
+            if (BreakOut == FALSE) {
+                Command->Command = DebugCommandInvalid;
+            }
+
             KeSignalEvent(DebugData->DebugCommandCompleteEvent,
                           SignalOptionSignalAll);
         }

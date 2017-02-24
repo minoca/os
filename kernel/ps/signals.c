@@ -3794,10 +3794,14 @@ Return Value:
                         }
 
                         //
-                        // Kill is the only signal that wakes all threads.
+                        // Kill, stop, and continue are the only signals that
+                        // wake all threads.
                         //
 
-                        if (SignalNumber != SIGNAL_KILL) {
+                        if ((SignalNumber != SIGNAL_KILL) &&
+                            (SignalNumber != SIGNAL_STOP) &&
+                            (SignalNumber != SIGNAL_CONTINUE)) {
+
                             break;
                         }
                     }
