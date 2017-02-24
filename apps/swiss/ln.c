@@ -54,12 +54,15 @@ Environment:
     "The ln utility creates a symbolic or hard link to the given file or \n"   \
     "within the given target directory. Options are:\n"                        \
     "  -f, --force -- Remove existing destination files.\n"                    \
+    "  -L, --logical -- Dereference targets that are symbolic links.\n"        \
+    "  -n, --no-dereference -- Treat the destination as a normal file if it \n"\
+    "      is a symbolic link to a directory.\n"                               \
     "  -s, --symbolic -- Create symbolic links instead of hard links.\n"       \
     "  -v, --verbose -- Print files being linked.\n"                           \
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n"
 
-#define LN_OPTIONS_STRING "fsv"
+#define LN_OPTIONS_STRING "fLnsv"
 
 //
 // Define ln options.
@@ -84,6 +87,13 @@ Environment:
 #define LN_OPTION_VERBOSE 0x00000004
 
 //
+// Set this option to treat the destination as a normal file if it is a
+// symbolic link to a directory.
+//
+
+#define LN_OPTION_NO_DEREFERENCE 0x00000008
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -104,6 +114,8 @@ LnLink (
 
 struct option LnLongOptions[] = {
     {"force", no_argument, 0, 'f'},
+    {"logical", no_argument, 0, 'L'},
+    {"no-dereference", no_argument, 0, 'n'},
     {"symbolic", no_argument, 0, 's'},
     {"help", no_argument, 0, 'h'},
     {"version", no_argument, 0, 'V'},
@@ -146,6 +158,7 @@ Return Value:
     ULONG AppendedPathSize;
     PSTR Argument;
     ULONG ArgumentIndex;
+    BOOL FollowLink;
     INT Option;
     ULONG Options;
     PSTR SourceBaseName;
@@ -184,6 +197,14 @@ Return Value:
         switch (Option) {
         case 'f':
             Options |= LN_OPTION_FORCE;
+            break;
+
+        case 'L':
+            Options &= ~LN_OPTION_NO_DEREFERENCE;
+            break;
+
+        case 'n':
+            Options |= LN_OPTION_NO_DEREFERENCE;
             break;
 
         case 's':
@@ -237,8 +258,13 @@ Return Value:
     // Figure out if the target is a directory.
     //
 
+    FollowLink = TRUE;
+    if ((Options & LN_OPTION_NO_DEREFERENCE) != 0) {
+        FollowLink = FALSE;
+    }
+
     TargetIsDirectory = FALSE;
-    Status = SwStat(Target, TRUE, &Stat);
+    Status = SwStat(Target, FollowLink, &Stat);
     if (Status == 0) {
         if (S_ISDIR(Stat.st_mode)) {
             TargetIsDirectory = TRUE;
