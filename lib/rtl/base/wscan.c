@@ -1343,8 +1343,6 @@ Return Value:
 
     WCHAR Character;
     ULONG CharacterCount;
-    WCHAR MaxDigit;
-    WCHAR MaxLetter;
     BOOL Negative;
     ULONGLONG NewValue;
     BOOL Result;
@@ -1466,21 +1464,6 @@ Return Value:
         }
     }
 
-    //
-    // Compute the maximum digit or letter value.
-    //
-
-    ASSERT(Base != 0);
-
-    if (Base <= 10) {
-        MaxDigit = L'0' + Base - 1;
-        MaxLetter = L'A' - 1;
-
-    } else {
-        MaxDigit = L'9';
-        MaxLetter = L'A' + Base - 1 - 10;
-    }
-
     Status = STATUS_SUCCESS;
     Value = 0;
 
@@ -1491,19 +1474,11 @@ Return Value:
     while (TRUE) {
 
         //
-        // Uppercase any letters.
-        //
-
-        if ((Character >= L'a') && (Character <= L'z')) {
-            Character = L'A' + Character - L'a';
-        }
-
-        //
         // Potentially add the next digit.
         //
 
         if ((Character >= L'0') && (Character <= L'9')) {
-            if (Character > MaxDigit) {
+            if (Character > L'0' + Base - 1) {
                 break;
             }
 
@@ -1514,11 +1489,18 @@ Return Value:
         //
 
         } else if ((Character >= L'A') && (Character <= L'Z')) {
-            if (Character > MaxLetter) {
+            if (Character > L'A' + Base - 0xA - 1) {
                 break;
             }
 
             Character -= L'A' - 0xA;
+
+        } else if ((Character >= L'a') && (Character <= L'z')) {
+            if (Character > L'a' + Base - 0xA - 1) {
+                break;
+            }
+
+            Character -= L'a' - 0xA;
 
         //
         // Or it could be something entirely different, in which case the
