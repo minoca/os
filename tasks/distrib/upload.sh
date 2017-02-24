@@ -99,6 +99,6 @@ upload_to_production() {
 update_production_latest() {
     arch="$1"
     [ -z "$arch" ] && echo "Error: architecture must be specified" && exit 1
-    $SSH_CMD "ln -sf $UPLOAD_DATE $NIGHTLIES/latest-$arch"
+    $SSH_CMD "ln -nsf $UPLOAD_DATE $NIGHTLIES/latest-$arch"
 }
 
