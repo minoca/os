@@ -183,6 +183,9 @@ extern PHYSICAL_ADDRESS FwFrameBufferPhysical;
 extern ULONG FwFrameBufferWidth;
 extern ULONG FwFrameBufferHeight;
 extern ULONG FwFrameBufferBitsPerPixel;
+extern ULONG FwFrameBufferRedMask;
+extern ULONG FwFrameBufferGreenMask;
+extern ULONG FwFrameBufferBlueMask;
 
 //
 // -------------------------------------------------------- Function Prototypes

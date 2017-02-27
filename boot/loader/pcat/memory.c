@@ -127,9 +127,9 @@ Return Value:
         FrameBufferResource->BitsPerPixel = FwFrameBufferBitsPerPixel;
         FrameBufferResource->PixelsPerScanLine = FrameBufferResource->Width;
         if (FwFrameBufferMode == BaseVideoModeFrameBuffer) {
-            FrameBufferResource->RedMask = 0x00FF0000;
-            FrameBufferResource->GreenMask = 0x0000FF00;
-            FrameBufferResource->BlueMask = 0x000000FF;
+            FrameBufferResource->RedMask = FwFrameBufferRedMask;
+            FrameBufferResource->GreenMask = FwFrameBufferGreenMask;
+            FrameBufferResource->BlueMask = FwFrameBufferBlueMask;
         }
 
         Status = BoMapPhysicalAddress(
