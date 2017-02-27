@@ -1237,6 +1237,7 @@ Return Value:
                          I8042_COMMAND_BYTE_KEYBOARD_INTERRUPT_ENABLED |
                          I8042_COMMAND_BYTE_MOUSE_INTERRUPT_ENABLED);
 
+        CommandByte |= I8042_COMMAND_BYTE_TRANSLATION_ENABLED;
         I8042pWriteCommandByte(Device, CommandByte);
 
         //
