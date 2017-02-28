@@ -68,20 +68,6 @@ extern "C" {
 #define OS_LOCK_DEFAULT_SPIN_COUNT 500
 
 //
-// Provide this handle to search for symbols in the executing program's global
-// scope.
-//
-
-#define OS_LIBRARY_DEFAULT ((HANDLE)NULL)
-
-//
-// Provide this handle to search for symbols in the executable after the
-// currently executing program. "Next" is defined in terms of load order.
-//
-
-#define OS_LIBRARY_NEXT ((HANDLE)-1)
-
-//
 // Set this flag when initializing a read-write lock to indicate the lock
 // should be shared across processes.
 //
@@ -237,14 +223,14 @@ typedef struct _TLS_INDEX {
 
 Structure Description:
 
-    This structure defines a dynamic library's symbol.
+    This structure defines a loaded executable image symbol.
 
 Members:
 
-    LibraryName - Stores the name of the library that contains the symbol.
+    ImagePath - Stores the file path of the image that contains the symbol.
 
-    LibraryBaseAddress - Stores the base address of the library that contains
-        the symbol.
+    ImageBase - Stores the loaded base address of the image that contains the
+        symbol.
 
     SymbolName - Stores the name of the symbol.
 
@@ -252,12 +238,12 @@ Members:
 
 --*/
 
-typedef struct _OS_LIBRARY_SYMBOL {
-    PSTR LibraryName;
-    PVOID LibraryBaseAddress;
+typedef struct _OS_IMAGE_SYMBOL {
+    PSTR ImagePath;
+    PVOID ImageBase;
     PSTR SymbolName;
     PVOID SymbolAddress;
-} OS_LIBRARY_SYMBOL, *POS_LIBRARY_SYMBOL;
+} OS_IMAGE_SYMBOL, *POS_IMAGE_SYMBOL;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -3676,7 +3662,7 @@ Return Value:
 
 OS_API
 KSTATUS
-OsGetLibrarySymbolAddress (
+OsGetSymbolAddress (
     HANDLE Library,
     PSTR SymbolName,
     PVOID *Address
@@ -3686,14 +3672,13 @@ OsGetLibrarySymbolAddress (
 
 Routine Description:
 
-    This routine returns the address of the given symbol in the given library.
-    Both the library and all of its imports will be searched.
+    This routine returns the address of the given symbol in the given image.
+    Both the image and all of its imports will be searched.
 
 Arguments:
 
-    Library - Supplies the library to look up. Use OS_LIBRARY_DEFAULT to search
-        the current executable or OS_LIBRARY_NEXT to start the search after the
-        current executable.
+    Library - Supplies the image to look up. Supply NULL to search the global
+        scope.
 
     SymbolName - Supplies a pointer to a null terminated string containing the
         name of the symbol to look up.
@@ -3713,24 +3698,19 @@ Return Value:
 
 OS_API
 KSTATUS
-OsGetLibrarySymbolForAddress (
-    HANDLE Library,
+OsGetImageSymbolForAddress (
     PVOID Address,
-    POS_LIBRARY_SYMBOL Symbol
+    POS_IMAGE_SYMBOL Symbol
     );
 
 /*++
 
 Routine Description:
 
-    This routine resolves the given address into a symbol by searching the
-    given library. Both the library and all its imports will be searched.
+    This routine resolves the given address into an image and closest symbol
+    whose address is less than or equal to the given address.
 
 Arguments:
-
-    Library - Supplies the library to look up. Use OS_LIBRARY_DEFAULT to search
-        the current executable or OS_LIBRARY_NEXT to start the search after the
-        current executable.
 
     Address - Supplies the address to look up.
 

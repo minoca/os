@@ -230,7 +230,7 @@ Return Value:
 
 ULONG
 ImpElfOriginalHash (
-    PSTR SymbolName
+    PCSTR SymbolName
     )
 
 /*++
@@ -271,7 +271,7 @@ Return Value:
 
 ULONG
 ImpElfGnuHash (
-    PSTR SymbolName
+    PCSTR SymbolName
     )
 
 /*++

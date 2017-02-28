@@ -1676,7 +1676,8 @@ Return Value:
 
         LoadFlags = IMAGE_LOAD_FLAG_IGNORE_INTERPRETER |
                     IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS |
-                    IMAGE_LOAD_FLAG_BIND_NOW;
+                    IMAGE_LOAD_FLAG_BIND_NOW |
+                    IMAGE_LOAD_FLAG_GLOBAL;
 
         Status = ImLoad(&BoLoadedImageList,
                         DriverName,

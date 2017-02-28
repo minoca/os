@@ -1204,7 +1204,6 @@ Return Value:
 
 PVOID
 ImpElf32ResolvePltEntry (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     ULONG RelocationOffset
     );
@@ -1220,9 +1219,6 @@ Routine Description:
     relocation and returns a pointer to the function to jump to.
 
 Arguments:
-
-    ListHead - Supplies a pointer to the head of the list of images to use for
-        symbol resolution.
 
     Image - Supplies a pointer to the loaded image whose PLT needs resolution.
         This is really whatever pointer is in GOT + 4.
@@ -1597,7 +1593,6 @@ Return Value:
 
 PVOID
 ImpElf64ResolvePltEntry (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     ULONG RelocationOffset
     );
@@ -1613,9 +1608,6 @@ Routine Description:
     relocation and returns a pointer to the function to jump to.
 
 Arguments:
-
-    ListHead - Supplies a pointer to the head of the list of images to use for
-        symbol resolution.
 
     Image - Supplies a pointer to the loaded image whose PLT needs resolution.
         This is really whatever pointer is in GOT + 4.

@@ -96,6 +96,12 @@ Author:
 #define IMAGE_LOAD_FLAG_BIND_NOW 0x00000080
 
 //
+// Set this flag to place the image in the global scope.
+//
+
+#define IMAGE_LOAD_FLAG_GLOBAL 0x00000100
+
+//
 // Define flags passed into the map image section routine.
 //
 
@@ -499,10 +505,15 @@ Members:
     StaticFunctions - Stores an optional pointer to an array of static
         functions.
 
-    VisitMarker - Stores space for the address search routine to mark nodes
-        as visited so as to avoid cycles.
-
     Debug - Stores debug information.
+
+    Scope - Stores an array of all images in the dependency tree rooted at
+        this image. This is used for breadth first search of symbols.
+
+    ScopeSize - Stores the number of elements in the scope array.
+
+    ScopeCapacity - Stores the maximum number of elements that can be put in
+        the scope tree before it will have to be reallocated.
 
 --*/
 
@@ -536,7 +547,7 @@ struct _LOADED_IMAGE {
     BOOL PltRelocationsAddends;
     ULONG ImportDepth;
     ULONG ImportCount;
-    PVOID *Imports;
+    PLOADED_IMAGE *Imports;
     PVOID TlsImage;
     UINTN TlsImageSize;
     UINTN TlsSize;
@@ -546,8 +557,10 @@ struct _LOADED_IMAGE {
     ULONG Flags;
     ULONG LoadFlags;
     PIMAGE_STATIC_FUNCTIONS StaticFunctions;
-    ULONG VisitMarker;
     IMAGE_DEBUG Debug;
+    PLOADED_IMAGE *Scope;
+    UINTN ScopeSize;
+    UINTN ScopeCapacity;
 };
 
 /*++
@@ -1129,6 +1142,16 @@ typedef struct _IM_IMPORT_TABLE {
 // -------------------------------------------------------------------- Globals
 //
 
+//
+// Store a pointer to the primary executable, the root of the global scope.
+//
+
+extern PLOADED_IMAGE ImPrimaryExecutable;
+
+//
+// -------------------------------------------------------- Function Prototypes
+//
+
 KSTATUS
 ImInitialize (
     PIM_IMPORT_TABLE ImportTable
@@ -1457,7 +1480,6 @@ KSTATUS
 ImGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
-    BOOL Recursive,
     PIMAGE_SYMBOL Symbol
     );
 
@@ -1476,9 +1498,6 @@ Arguments:
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
 
-    Recursive - Supplies a boolean indicating if the routine should recurse
-        into imports or just query this binary.
-
     Symbol - Supplies a pointer to a structure that receives the symbol's
         information on success.
 
@@ -1488,11 +1507,36 @@ Return Value:
 
 --*/
 
+PLOADED_IMAGE
+ImGetImageByAddress (
+    PLIST_ENTRY ListHead,
+    PVOID Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the image that covers the given address.
+
+Arguments:
+
+    ListHead - Supplies the list of loaded images.
+
+    Address - Supplies the address to search for.
+
+Return Value:
+
+    Returns a pointer to an image covering the given address on success.
+
+    NULL if no loaded image covers the given address.
+
+--*/
+
 KSTATUS
 ImGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
-    BOOL Recursive,
     PIMAGE_SYMBOL Symbol
     );
 
@@ -1500,18 +1544,13 @@ ImGetSymbolByAddress (
 
 Routine Description:
 
-    This routine attempts to resolve the given address into a symbol. This
-    routine also looks through the image imports if the recursive flag is
-    specified.
+    This routine attempts to resolve the given address into a symbol.
 
 Arguments:
 
     Image - Supplies a pointer to the image to query.
 
     Address - Supplies the address to search for.
-
-    Recursive - Supplies a boolean indicating if the routine should recurse
-        into imports or just query this binary.
 
     Symbol - Supplies a pointer to a structure that receives the address's
         symbol information on success.
@@ -1549,7 +1588,6 @@ Return Value:
 
 PVOID
 ImResolvePltEntry (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     UINTN RelocationOffset
     );
@@ -1565,9 +1603,6 @@ Routine Description:
     relocation and returns a pointer to the function to jump to.
 
 Arguments:
-
-    ListHead - Supplies a pointer to the head of the list of images to use for
-        symbol resolution.
 
     Image - Supplies a pointer to the loaded image whose PLT needs resolution.
         This is really whatever pointer is in GOT + 4.

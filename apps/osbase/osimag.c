@@ -341,8 +341,9 @@ Return Value:
         Environment->StartData->OsLibraryBase) {
 
         LoadFlags = IMAGE_LOAD_FLAG_IGNORE_INTERPRETER |
-                    IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE |
-                    IMAGE_LOAD_FLAG_NO_RELOCATIONS;
+                    IMAGE_LOAD_FLAG_PRIMARY_LOAD |
+                    IMAGE_LOAD_FLAG_NO_RELOCATIONS |
+                    IMAGE_LOAD_FLAG_GLOBAL;
 
         if (OspImGetEnvironmentVariable(LD_BIND_NOW) != NULL) {
             LoadFlags |= IMAGE_LOAD_FLAG_BIND_NOW;
@@ -415,13 +416,10 @@ Return Value:
         if (CurrentImage->ModuleNumber == 0) {
             OspImAssignModuleNumber(CurrentImage);
         }
+    }
 
-        if ((Image == NULL) &&
-            ((CurrentImage->LoadFlags &
-              IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0)) {
-
-            Image = CurrentImage;
-        }
+    if (Image == NULL) {
+        Image = ImPrimaryExecutable;
     }
 
     OsImExecutableLoaded = TRUE;
@@ -491,7 +489,8 @@ Arguments:
 
     LibraryName - Supplies a pointer to the library name to load.
 
-    Flags - Supplies a bitfield of flags associated with the request.
+    Flags - Supplies a bitfield of flags associated with the request. See
+        IMAGE_LOAD_FLAG_* definitions.
 
     Handle - Supplies a pointer where a handle to the dynamic library will be
         returned on success. INVALID_HANDLE will be returned on failure.
@@ -505,7 +504,6 @@ Return Value:
 {
 
     PLOADED_IMAGE LoadedImage;
-    ULONG LoadFlags;
     KSTATUS Status;
 
     //
@@ -525,13 +523,12 @@ Return Value:
 
     *Handle = INVALID_HANDLE;
     LoadedImage = NULL;
-    LoadFlags = 0;
     Status = ImLoad(&OsLoadedImagesHead,
                     LibraryName,
                     NULL,
                     NULL,
                     NULL,
-                    LoadFlags,
+                    Flags,
                     &LoadedImage,
                     NULL);
 
@@ -585,7 +582,7 @@ Return Value:
 
 OS_API
 KSTATUS
-OsGetLibrarySymbolAddress (
+OsGetSymbolAddress (
     HANDLE Library,
     PSTR SymbolName,
     PVOID *Address
@@ -595,14 +592,13 @@ OsGetLibrarySymbolAddress (
 
 Routine Description:
 
-    This routine returns the address of the given symbol in the given library.
-    Both the library and all of its imports will be searched.
+    This routine returns the address of the given symbol in the given image.
+    Both the image and all of its imports will be searched.
 
 Arguments:
 
-    Library - Supplies the library to look up. Use OS_LIBRARY_DEFAULT to search
-        the current executable or OS_LIBRARY_NEXT to start the search after the
-        current executable.
+    Library - Supplies the image to look up. Supply NULL to search the global
+        scope.
 
     SymbolName - Supplies a pointer to a null terminated string containing the
         name of the symbol to look up.
@@ -622,15 +618,12 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
-    BOOL ExecutableFound;
     PLOADED_IMAGE Image;
     KSTATUS Status;
     IMAGE_SYMBOL Symbol;
     TLS_INDEX TlsIndex;
 
     *Address = NULL;
-    RtlZeroMemory(&Symbol, sizeof(IMAGE_SYMBOL));
     Symbol.Image = INVALID_HANDLE;
     OspAcquireImageLock(FALSE);
     if (OsLoadedImagesHead.Next == NULL) {
@@ -640,53 +633,11 @@ Return Value:
         }
     }
 
-    //
-    // The default and next libraries are special cases that search the global
-    // scope starting with the primary executable and the next library after
-    // the primary executable. These must iterate in order to include any
-    // libraries added via OsLoadLibrary.
-    //
-
-    if ((Library == OS_LIBRARY_DEFAULT) || (Library == OS_LIBRARY_NEXT)) {
-        ExecutableFound = FALSE;
-        CurrentEntry = OsLoadedImagesHead.Next;
-        while (CurrentEntry != &OsLoadedImagesHead) {
-            Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
-            CurrentEntry = CurrentEntry->Next;
-
-            //
-            // Do not start searching until the primary executable is found. If
-            // the next library is actually the start, loop one more time and
-            // then start.
-            //
-
-            if (ExecutableFound == FALSE) {
-                if ((Image->LoadFlags &
-                     IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) == 0) {
-
-                    continue;
-                }
-
-                ExecutableFound = TRUE;
-                if (Library == OS_LIBRARY_NEXT) {
-                    continue;
-                }
-            }
-
-            Status = ImGetSymbolByName(Image, SymbolName, TRUE, &Symbol);
-            if (KSUCCESS(Status)) {
-                break;
-            }
-        }
-
-    //
-    // Otherwise only search the supplied library and its imports.
-    //
-
-    } else {
-        Status = ImGetSymbolByName(Library, SymbolName, TRUE, &Symbol);
+    if (Library == NULL) {
+        Library = ImPrimaryExecutable;
     }
 
+    Status = ImGetSymbolByName(Library, SymbolName, &Symbol);
     if (KSUCCESS(Status)) {
         if (Symbol.TlsAddress != FALSE) {
             Image = Symbol.Image;
@@ -710,24 +661,19 @@ GetLibrarySymbolAddressEnd:
 
 OS_API
 KSTATUS
-OsGetLibrarySymbolForAddress (
-    HANDLE Library,
+OsGetImageSymbolForAddress (
     PVOID Address,
-    POS_LIBRARY_SYMBOL Symbol
+    POS_IMAGE_SYMBOL Symbol
     )
 
 /*++
 
 Routine Description:
 
-    This routine resolves the given address into a symbol by searching the
-    given library. Both the library and all its imports will be searched.
+    This routine resolves the given address into an image and closest symbol
+    whose address is less than or equal to the given address.
 
 Arguments:
-
-    Library - Supplies the library to look up. Use OS_LIBRARY_DEFAULT to search
-        the current executable or OS_LIBRARY_NEXT to start the search after the
-        current executable.
 
     Address - Supplies the address to look up.
 
@@ -746,70 +692,28 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
-    BOOL ExecutableFound;
     PLOADED_IMAGE Image;
     IMAGE_SYMBOL ImageSymbol;
     KSTATUS Status;
 
-    RtlZeroMemory(Symbol, sizeof(OS_LIBRARY_SYMBOL));
+    RtlZeroMemory(Symbol, sizeof(OS_IMAGE_SYMBOL));
     RtlZeroMemory(&ImageSymbol, sizeof(IMAGE_SYMBOL));
     ImageSymbol.Image = INVALID_HANDLE;
     OspAcquireImageLock(FALSE);
     if (OsLoadedImagesHead.Next == NULL) {
         Status = OspLoadInitialImageList(FALSE);
         if (!KSUCCESS(Status)) {
-            goto GetLibrarySymbolForAddress;
+            goto GetLibrarySymbolForAddressEnd;
         }
     }
 
-    //
-    // The default and next libraries are special cases that search the global
-    // scope starting with the primary executable and the next library after
-    // the primary executable. These must iterate in order to include any
-    // libraries added via OsLoadLibrary.
-    //
-
-    if ((Library == OS_LIBRARY_DEFAULT) || (Library == OS_LIBRARY_NEXT)) {
-        ExecutableFound = FALSE;
-        CurrentEntry = OsLoadedImagesHead.Next;
-        while (CurrentEntry != &OsLoadedImagesHead) {
-            Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
-            CurrentEntry = CurrentEntry->Next;
-
-            //
-            // Do not start searching until the primary executable is found. If
-            // the next library is actually the start, loop one more time and
-            // then start.
-            //
-
-            if (ExecutableFound == FALSE) {
-                if ((Image->LoadFlags &
-                     IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) == 0) {
-
-                    continue;
-                }
-
-                ExecutableFound = TRUE;
-                if (Library == OS_LIBRARY_NEXT) {
-                    continue;
-                }
-            }
-
-            Status = ImGetSymbolByAddress(Image, Address, TRUE, &ImageSymbol);
-            if (KSUCCESS(Status)) {
-                break;
-            }
-        }
-
-    //
-    // Otherwise only search through the supplied library.
-    //
-
-    } else {
-        Status = ImGetSymbolByAddress(Library, Address, TRUE, &ImageSymbol);
+    Image = ImGetImageByAddress(&OsLoadedImagesHead, Address);
+    if (Image == NULL) {
+        Status = STATUS_NOT_FOUND;
+        goto GetLibrarySymbolForAddressEnd;
     }
 
+    Status = ImGetSymbolByAddress(Image, Address, &ImageSymbol);
     if (KSUCCESS(Status)) {
 
         //
@@ -818,19 +722,19 @@ Return Value:
         //
 
         Image = ImageSymbol.Image;
-        Symbol->LibraryName = Image->FileName;
-        if ((Symbol->LibraryName == NULL) &&
+        Symbol->ImagePath = Image->FileName;
+        if ((Symbol->ImagePath == NULL) &&
             ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0)) {
 
-            Symbol->LibraryName = OsEnvironment->ImageName;
+            Symbol->ImagePath = OsEnvironment->ImageName;
         }
 
-        Symbol->LibraryBaseAddress = Image->LoadedImageBuffer;
+        Symbol->ImageBase = Image->LoadedImageBuffer;
         Symbol->SymbolName = ImageSymbol.Name;
         Symbol->SymbolAddress = ImageSymbol.Address;
     }
 
-GetLibrarySymbolForAddress:
+GetLibrarySymbolForAddressEnd:
     OspReleaseImageLock();
     return Status;
 }
@@ -2386,10 +2290,7 @@ Return Value:
     PVOID FunctionAddress;
 
     OspAcquireImageLock(FALSE);
-    FunctionAddress = ImResolvePltEntry(&OsLoadedImagesHead,
-                                        Image,
-                                        RelocationOffset);
-
+    FunctionAddress = ImResolvePltEntry(Image, RelocationOffset);
     OspReleaseImageLock();
     return FunctionAddress;
 }
@@ -2474,6 +2375,10 @@ Return Value:
         Executable = OsLibrary;
     }
 
+    ASSERT(ImPrimaryExecutable == NULL);
+
+    ImPrimaryExecutable = Executable;
+    Executable->FileName = OsEnvironment->ImageName;
     Executable->LoadFlags |= IMAGE_LOAD_FLAG_PRIMARY_LOAD |
                              IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE;
 

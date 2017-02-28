@@ -63,10 +63,17 @@ Author:
 #define ImFinalizeSegments ImImportTable->FinalizeSegments
 
 //
-// Define the maximum import recursion depth.
+// Define the initial scope array size.
 //
 
-#define MAX_IMPORT_RECURSION_DEPTH 1000
+#define IM_INITIAL_SCOPE_SIZE 8
+
+//
+// Define the maximum size a collection of shared object dependencies can
+// reasonably grow to.
+//
+
+#define IM_MAX_SCOPE_SIZE 0x10000
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -74,6 +81,10 @@ Author:
 
 //
 // -------------------------------------------------------------------- Globals
+//
+
+//
+// Define the table of functions called by the image library.
 //
 
 extern PIM_IMPORT_TABLE ImImportTable;
@@ -171,27 +182,31 @@ Return Value:
 
 --*/
 
-PLOADED_IMAGE
-ImpGetPrimaryExecutable (
-    PLIST_ENTRY ListHead
+KSTATUS
+ImpAddImageToScope (
+    PLOADED_IMAGE Parent,
+    PLOADED_IMAGE Child
     );
 
 /*++
 
 Routine Description:
 
-    This routine returns the primary executable in the list, if there is one.
+    This routine appends a breadth first traversal of the child's dependencies
+    to the image scope.
 
 Arguments:
 
-    ListHead - Supplies a pointer to the head of the list of loaded images.
+    Parent - Supplies a pointer to the innermost scope to add the child to.
+
+    Child - Supplies a pointer to the child to add to the scope. This is often
+        the parent itself.
 
 Return Value:
 
-    Returns a pointer to the primary executable if it exists. This routine does
-    not add a reference on the image.
+    STATUS_SUCCESS on success.
 
-    NULL if no primary executable is currently loaded in the list.
+    STATUS_INSUFFICIENT_RESOURCES if there was an allocation failure.
 
 --*/
 

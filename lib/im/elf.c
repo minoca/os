@@ -66,6 +66,7 @@ Environment:
 #define ImpElfProcessRelocateSection ImpElf64ProcessRelocateSection
 #define ImpElfAdjustJumpSlots ImpElf64AdjustJumpSlots
 #define ImpElfGetSymbolValue ImpElf64GetSymbolValue
+#define ImpElfGetSymbolInScope ImpElf64GetSymbolInScope
 #define ImpElfGetSymbol ImpElf64GetSymbol
 #define ImpElfApplyRelocation ImpElf64ApplyRelocation
 #define ImpElfFreeContext ImpElf64FreeContext
@@ -93,6 +94,7 @@ Environment:
 #define ImpElfProcessRelocateSection ImpElf32ProcessRelocateSection
 #define ImpElfAdjustJumpSlots ImpElf32AdjustJumpSlots
 #define ImpElfGetSymbolValue ImpElf32GetSymbolValue
+#define ImpElfGetSymbolInScope ImpElf32GetSymbolInScope
 #define ImpElfGetSymbol ImpElf32GetSymbol
 #define ImpElfApplyRelocation ImpElf32ApplyRelocation
 #define ImpElfFreeContext ImpElf32FreeContext
@@ -175,13 +177,11 @@ ImpElfGetDynamicEntry (
 
 KSTATUS
 ImpElfRelocateImage (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image
     );
 
 KSTATUS
 ImpElfProcessRelocateSection (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     PVOID Relocations,
     ELF_XWORD RelocationsSize,
@@ -198,7 +198,6 @@ ImpElfAdjustJumpSlots (
 
 ELF_ADDR
 ImpElfGetSymbolValue (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     PELF_SYMBOL Symbol,
     PLOADED_IMAGE *FoundImage,
@@ -206,15 +205,22 @@ ImpElfGetSymbolValue (
     );
 
 PELF_SYMBOL
+ImpElfGetSymbolInScope (
+    PLOADED_IMAGE ScopeImage,
+    PLOADED_IMAGE Skip,
+    PCSTR SymbolName,
+    PLOADED_IMAGE *FoundImage
+    );
+
+PELF_SYMBOL
 ImpElfGetSymbol (
     PLOADED_IMAGE Image,
     ULONG Hash,
-    PSTR SymbolName
+    PCSTR SymbolName
     );
 
 BOOL
 ImpElfApplyRelocation (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     PELF_RELOCATION_ADDEND_ENTRY RelocationEntry,
     BOOL AddendEntry,
@@ -326,7 +332,7 @@ Return Value:
         //
 
         if ((PrimaryLoad & IMAGE_LOAD_FLAG_PRIMARY_LOAD) == 0) {
-            PrimaryExecutable = ImpGetPrimaryExecutable(ListHead);
+            PrimaryExecutable = ImPrimaryExecutable;
             if ((PrimaryExecutable != NULL) &&
                 (PrimaryExecutable != Parent) &&
                 (PrimaryExecutable->DynamicSection != NULL)) {
@@ -863,6 +869,18 @@ Return Value:
     }
 
     //
+    // If this image is really being loaded and is the primary executable,
+    // set it in the global.
+    //
+
+    if ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0) {
+
+        ASSERT(ImPrimaryExecutable == NULL);
+
+        ImPrimaryExecutable = Image;
+    }
+
+    //
     // Gather information not in the loaded part of the file needed for
     // resolving exports from this image.
     //
@@ -1173,6 +1191,7 @@ Return Value:
 {
 
     UINTN ImportIndex;
+    PLOADED_IMAGE PrimaryExecutable;
     UINTN SegmentIndex;
 
     ASSERT((Image->ImportCount == 0) || (Image->Imports != NULL));
@@ -1214,6 +1233,33 @@ Return Value:
     if (Image->StaticFunctions != NULL) {
         ImFreeMemory(Image->StaticFunctions);
         Image->StaticFunctions = NULL;
+    }
+
+    //
+    // Remove the image from the global scope if it was there.
+    //
+
+    PrimaryExecutable = ImPrimaryExecutable;
+    if (PrimaryExecutable != NULL) {
+        for (ImportIndex = 0;
+             ImportIndex < PrimaryExecutable->ScopeSize;
+             ImportIndex += 1) {
+
+            //
+            // If found, copy everything else down.
+            //
+
+            if (PrimaryExecutable->Scope[ImportIndex] == Image) {
+                while (ImportIndex < PrimaryExecutable->ScopeSize - 1) {
+                    PrimaryExecutable->Scope[ImportIndex] =
+                                     PrimaryExecutable->Scope[ImportIndex + 1];
+
+                    ImportIndex += 1;
+                }
+
+                break;
+            }
+        }
     }
 
     return;
@@ -1525,6 +1571,36 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
     }
 
+    //
+    // Loop through again and create the depth first scope for this image.
+    //
+
+    CurrentEntry = ListHead->Next;
+    while (CurrentEntry != ListHead) {
+        CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        Status = ImpAddImageToScope(CurrentImage, CurrentImage);
+        if (!KSUCCESS(Status)) {
+            goto LoadAllImportsEnd;
+        }
+
+        //
+        // If it's a global image, add this image and its dependencies to
+        // the global scope as well.
+        //
+
+        if ((CurrentImage->LoadFlags & IMAGE_LOAD_FLAG_GLOBAL) != 0) {
+            if (ImPrimaryExecutable != NULL) {
+                Status = ImpAddImageToScope(ImPrimaryExecutable,
+                                            CurrentImage);
+
+                if (!KSUCCESS(Status)) {
+                    goto LoadAllImportsEnd;
+                }
+            }
+        }
+    }
+
     Status = STATUS_SUCCESS;
 
 LoadAllImportsEnd:
@@ -1564,11 +1640,17 @@ Return Value:
         goto RelocateImagesEnd;
     }
 
+    //
+    // Iterate backwards because a copy relocation in the executable might
+    // copy a portion of a shared library that has relocations inside it. So
+    // the relocations in that region need to be fixed up before the copy.
+    //
+
     CurrentEntry = ListHead->Previous;
     while (CurrentEntry != ListHead) {
         CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         if ((CurrentImage->Flags & IMAGE_FLAG_RELOCATED) == 0) {
-            Status = ImpElfRelocateImage(ListHead, CurrentImage);
+            Status = ImpElfRelocateImage(CurrentImage);
             if (!KSUCCESS(Status)) {
                 goto RelocateImagesEnd;
             }
@@ -1645,8 +1727,7 @@ Return Value:
     // doesn't try to allocate a static functions structure.
     //
 
-    Image->LoadFlags = IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE |
-                       IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS |
+    Image->LoadFlags = IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS |
                        IMAGE_LOAD_FLAG_IGNORE_INTERPRETER;
 
     Status = ImpElfGetImageSize(&FakeList, Image, Buffer, &InterpreterPath);
@@ -1665,7 +1746,7 @@ Return Value:
         goto ElfRelocateSelfEnd;
     }
 
-    Status = ImpElfRelocateImage(&FakeList, Image);
+    Status = ImpElfRelocateImage(Image);
 
 ElfRelocateSelfEnd:
     Image->ImageContext = NULL;
@@ -1708,46 +1789,36 @@ Return Value:
 {
 
     PELF_SYMBOL ElfSymbol;
-    ULONG Hash;
+    PLOADED_IMAGE FoundImage;
     ELF_SYMBOL_TYPE SymbolType;
     ELF_ADDR Value;
 
-    if ((Image->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
-        Hash = ImpElfGnuHash(SymbolName);
-
-    } else {
-        Hash = ImpElfOriginalHash(SymbolName);
-    }
-
-    ElfSymbol = ImpElfGetSymbol(Image, Hash, SymbolName);
-    if ((ElfSymbol == NULL) || (ElfSymbol->SectionIndex == 0)) {
+    ElfSymbol = ImpElfGetSymbolInScope(Image, NULL, SymbolName, &FoundImage);
+    if (ElfSymbol == NULL) {
         return STATUS_NOT_FOUND;
     }
+
+    ASSERT((ElfSymbol->SectionIndex != ELF_SECTION_UNDEFINED) &&
+           ((ElfSymbol->SectionIndex < ELF_SECTION_RESERVED_LOW) ||
+            (ElfSymbol->SectionIndex == ELF_SECTION_ABSOLUTE)));
 
     //
     // TLS symbols are relative to their section base and are not adjusted.
     //
 
+    Value = ElfSymbol->Value;
     Symbol->TlsAddress = FALSE;
     SymbolType = ELF_GET_SYMBOL_TYPE(ElfSymbol->Information);
     if (SymbolType == ElfSymbolTls) {
-        Value = ElfSymbol->Value;
         Symbol->TlsAddress = TRUE;
 
-    } else if (ElfSymbol->SectionIndex >= ELF_SECTION_RESERVED_LOW) {
-        if (ElfSymbol->SectionIndex != ELF_SECTION_ABSOLUTE) {
-            return STATUS_NOT_FOUND;
-        }
-
-        Value = ElfSymbol->Value;
-
-    } else {
-        Value = ElfSymbol->Value + Image->BaseDifference;
+    } else if (ElfSymbol->SectionIndex != ELF_SECTION_ABSOLUTE) {
+        Value += FoundImage->BaseDifference;
     }
 
     Symbol->Address = (PVOID)(UINTN)Value;
-    Symbol->Name = Image->ExportStringTable + ElfSymbol->NameOffset;
-    Symbol->Image = Image;
+    Symbol->Name = FoundImage->ExportStringTable + ElfSymbol->NameOffset;
+    Symbol->Image = FoundImage;
     return STATUS_SUCCESS;
 }
 
@@ -1820,7 +1891,7 @@ Return Value:
     //
 
     if (Image->ExportSymbolTable == NULL) {
-        goto GetAddressInformationEnd;
+        goto GetSymbolByAddressEnd;
     }
 
     //
@@ -1831,7 +1902,7 @@ Return Value:
     Value = (ELF_ADDR)(UINTN)Address - BaseDifference;
 
     //
-    // Handle GNU-style hashing to interate over the symbols.
+    // Handle GNU-style hashing to iterate over the symbols.
     //
 
     if ((Image->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
@@ -1868,7 +1939,7 @@ Return Value:
                                  ElfSymbol->NameOffset;
 
                     SymbolAddress = ElfSymbol->Value + BaseDifference;
-                    goto GetAddressInformationEnd;
+                    goto GetSymbolByAddressEnd;
                 }
 
                 SymbolIndex += 1;
@@ -1896,7 +1967,7 @@ Return Value:
                                  ElfSymbol->NameOffset;
 
                     SymbolAddress = ElfSymbol->Value + BaseDifference;
-                    goto GetAddressInformationEnd;
+                    goto GetSymbolByAddressEnd;
                 }
 
                 //
@@ -1908,7 +1979,7 @@ Return Value:
         }
     }
 
-GetAddressInformationEnd:
+GetSymbolByAddressEnd:
     Symbol->Image = Image;
     Symbol->Name = SymbolName;
     Symbol->Address = (PVOID)(UINTN)SymbolAddress;
@@ -1918,7 +1989,6 @@ GetAddressInformationEnd:
 
 PVOID
 ImpElfResolvePltEntry (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     ULONG RelocationOffset
     )
@@ -1934,9 +2004,6 @@ Routine Description:
     relocation and returns a pointer to the function to jump to.
 
 Arguments:
-
-    ListHead - Supplies a pointer to the head of the list of images to use for
-        symbol resolution.
 
     Image - Supplies a pointer to the loaded image whose PLT needs resolution.
         This is really whatever pointer is in GOT + 4.
@@ -1976,8 +2043,7 @@ Return Value:
     }
 
     RelocationEntry = Image->PltRelocations + RelocationOffset;
-    Result = ImpElfApplyRelocation(ListHead,
-                                   Image,
+    Result = ImpElfApplyRelocation(Image,
                                    RelocationEntry,
                                    Image->PltRelocationsAddends,
                                    &FunctionAddress);
@@ -2028,6 +2094,7 @@ Return Value:
     KSTATUS Status;
     ELF_OFF StringTableOffset;
 
+    ImportIndex = 0;
     LoadingImage = Image->ImageContext;
 
     ASSERT(LoadingImage != NULL);
@@ -2078,7 +2145,6 @@ Return Value:
 
     RtlZeroMemory(Image->Imports, ImportCount * sizeof(PLOADED_IMAGE));
     Image->ImportCount = ImportCount;
-    ImportIndex = 0;
     DynamicEntry = Image->DynamicSection;
     while (DynamicEntry->Tag != ELF_DYNAMIC_NULL) {
 
@@ -2552,7 +2618,6 @@ Return Value:
 
 KSTATUS
 ImpElfRelocateImage (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image
     )
 
@@ -2563,8 +2628,6 @@ Routine Description:
     This routine relocates a loaded image.
 
 Arguments:
-
-    ListHead - Supplies a pointer to the head of the list of loaded images.
 
     Image - Supplies a pointer to the loaded image.
 
@@ -2655,8 +2718,7 @@ Return Value:
     }
 
     if ((Relocations != NULL) && (RelocationsSize != 0)) {
-        Status = ImpElfProcessRelocateSection(ListHead,
-                                              Image,
+        Status = ImpElfProcessRelocateSection(Image,
                                               Relocations,
                                               RelocationsSize,
                                               FALSE);
@@ -2667,8 +2729,7 @@ Return Value:
     }
 
     if ((RelocationsAddends != NULL) && (RelocationsAddendsSize != 0)) {
-        Status = ImpElfProcessRelocateSection(ListHead,
-                                              Image,
+        Status = ImpElfProcessRelocateSection(Image,
                                               RelocationsAddends,
                                               RelocationsAddendsSize,
                                               TRUE);
@@ -2687,8 +2748,7 @@ Return Value:
 
     if ((PltRelocations != NULL) && (PltRelocationsSize != 0)) {
         if ((Image->LoadFlags & IMAGE_LOAD_FLAG_BIND_NOW) != 0) {
-            Status = ImpElfProcessRelocateSection(ListHead,
-                                                  Image,
+            Status = ImpElfProcessRelocateSection(Image,
                                                   PltRelocations,
                                                   PltRelocationsSize,
                                                   PltRelocationAddends);
@@ -2723,7 +2783,6 @@ RelocateImageEnd:
 
 KSTATUS
 ImpElfProcessRelocateSection (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     PVOID Relocations,
     ELF_XWORD RelocationsSize,
@@ -2737,8 +2796,6 @@ Routine Description:
     This routine processes the contents of a single relocation section.
 
 Arguments:
-
-    ListHead - Supplies a pointer to the head of the list of loaded images.
 
     Image - Supplies a pointer to the loaded image structure.
 
@@ -2781,8 +2838,7 @@ Return Value:
          RelocationIndex += 1) {
 
         if (Addends != FALSE) {
-            Result = ImpElfApplyRelocation(ListHead,
-                                           Image,
+            Result = ImpElfApplyRelocation(Image,
                                            RelocationAddend,
                                            TRUE,
                                            NULL);
@@ -2796,8 +2852,7 @@ Return Value:
             RelocationAddend += 1;
 
         } else {
-            Result = ImpElfApplyRelocation(ListHead,
-                                           Image,
+            Result = ImpElfApplyRelocation(Image,
                                            (PVOID)Relocation,
                                            FALSE,
                                            NULL);
@@ -2916,7 +2971,6 @@ Return Value:
 
 ELF_ADDR
 ImpElfGetSymbolValue (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     PELF_SYMBOL Symbol,
     PLOADED_IMAGE *FoundImage,
@@ -2931,14 +2985,12 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies a pointer to the head of the list of loaded images.
-
     Image - Supplies a pointer to the loaded image.
 
     Symbol - Supplies a pointer to the symbol whose value should be computed.
 
-    FoundImage - Supplies an optional pointer where the image where the symbol
-        is defined will be returned on success.
+    FoundImage - Supplies a pointer where the image where the symbol is defined
+        will be returned on success.
 
     SkipImage - Supplies an optional pointer to an image to ignore when
         searching for a symbol definition. This is used in copy relocations
@@ -2955,109 +3007,65 @@ Return Value:
 
 {
 
-    ELF_ADDR BaseDifference;
     ELF_SYMBOL_BIND_TYPE BindType;
-    PLIST_ENTRY CurrentEntry;
-    PLOADED_IMAGE CurrentImage;
     ULONG Hash;
-    ULONG OriginalHash;
     PELF_SYMBOL Potential;
-    CHAR PrintSymbolName[50];
     PSTR SymbolName;
-    ELF_SYMBOL_TYPE SymbolType;
     ELF_ADDR Value;
 
-    CurrentImage = NULL;
-    BaseDifference = Image->BaseDifference;
     BindType = ELF_GET_SYMBOL_BIND(Symbol->Information);
     if (Symbol->NameOffset != 0) {
         SymbolName = Image->ExportStringTable + Symbol->NameOffset;
-        if ((Image->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
-            Hash = ImpElfGnuHash(SymbolName);
-
-        } else {
-            Hash = ImpElfOriginalHash(SymbolName);
-        }
-
-        OriginalHash = Hash;
-        CurrentEntry = ListHead->Next;
         if (BindType == ElfBindLocal) {
 
             ASSERT(SkipImage == NULL);
 
-            CurrentEntry = &(Image->ListEntry);
-        }
+            if ((Image->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
+                Hash = ImpElfGnuHash(SymbolName);
 
-        while (CurrentEntry != ListHead) {
-            CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
-            if (CurrentImage == SkipImage) {
-                CurrentEntry = CurrentEntry->Next;
-                continue;
+            } else {
+                Hash = ImpElfOriginalHash(SymbolName);
             }
 
-            //
-            // If the two images disagree on hashing algorithms, then recompute
-            // the hash for the image.
-            //
+            Potential = ImpElfGetSymbol(Image, Hash, SymbolName);
+            if (Potential != NULL) {
+                if ((Potential->SectionIndex == 0) ||
+                    ((Potential->SectionIndex >= ELF_SECTION_RESERVED_LOW) &&
+                     (Potential->SectionIndex != ELF_SECTION_ABSOLUTE))) {
 
-            if (((CurrentImage->Flags ^ Image->Flags) &
-                IMAGE_FLAG_GNU_HASH) != 0) {
-
-                if ((CurrentImage->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
-                    Hash = ImpElfGnuHash(SymbolName);
+                    Potential = NULL;
 
                 } else {
-                    Hash = ImpElfOriginalHash(SymbolName);
+                    *FoundImage = Image;
                 }
             }
 
-            Potential = ImpElfGetSymbol(CurrentImage, Hash, SymbolName);
-            Hash = OriginalHash;
-
-            //
-            // Don't match against the same undefined symbol in another image.
-            //
-
-            if ((Potential != NULL) && (Potential->SectionIndex != 0)) {
-
-                //
-                // TLS symbols are relative to their section base, and are
-                // not adjusted.
-                //
-
-                SymbolType = ELF_GET_SYMBOL_TYPE(Symbol->Information);
-                if (SymbolType == ElfSymbolTls) {
-                    Value = Potential->Value;
-                    goto ElfGetSymbolValueEnd;
-
-                } else if (Potential->SectionIndex >=
-                           ELF_SECTION_RESERVED_LOW) {
-
-                    Value = ELF_INVALID_ADDRESS;
-                    if (Potential->SectionIndex == ELF_SECTION_ABSOLUTE) {
-                        Value = Potential->Value;
-                    }
-
-                    goto ElfGetSymbolValueEnd;
-                }
-
-                Value = Potential->Value + CurrentImage->BaseDifference;
-                goto ElfGetSymbolValueEnd;
-            }
-
-            //
-            // Don't look in other images if it's a local symbol.
-            //
-
-            if (BindType == ElfBindLocal) {
-                break;
-            }
-
-            CurrentEntry = CurrentEntry->Next;
+        } else {
+            Potential = ImpElfGetSymbolInScope(Image,
+                                               SkipImage,
+                                               SymbolName,
+                                               FoundImage);
         }
 
-        if (CurrentEntry == ListHead) {
-            CurrentImage = NULL;
+        if (Potential != NULL) {
+
+            ASSERT((Potential->SectionIndex != 0) &&
+                   ((Potential->SectionIndex < ELF_SECTION_RESERVED_LOW) ||
+                    (Potential->SectionIndex == ELF_SECTION_ABSOLUTE)));
+
+            //
+            // TLS symbols are relative to their section base, and are
+            // not adjusted.
+            //
+
+            Value = Potential->Value;
+            if ((ELF_GET_SYMBOL_TYPE(Symbol->Information) != ElfSymbolTls) &&
+                (Potential->SectionIndex != ELF_SECTION_ABSOLUTE)) {
+
+                Value += (*FoundImage)->BaseDifference;
+            }
+
+            goto ElfGetSymbolValueEnd;
         }
 
         //
@@ -3072,9 +3080,10 @@ Return Value:
             // debug print.
             //
 
-            RtlStringCopy(PrintSymbolName, SymbolName, sizeof(PrintSymbolName));
-            RtlDebugPrint("Warning: Unresolved reference to symbol %s.\n",
-                          PrintSymbolName);
+            RtlDebugPrint("Warning: Unresolved reference to symbol %s from "
+                          "%s.\n",
+                          SymbolName,
+                          Image->FileName);
 
             Value = ELF_INVALID_ADDRESS;
 
@@ -3102,21 +3111,140 @@ Return Value:
         goto ElfGetSymbolValueEnd;
     }
 
-    Value = Symbol->Value + BaseDifference;
+    Value = Symbol->Value + Image->BaseDifference;
 
 ElfGetSymbolValueEnd:
-    if (FoundImage != NULL) {
-        *FoundImage = CurrentImage;
+    return Value;
+}
+
+PELF_SYMBOL
+ImpElfGetSymbolInScope (
+    PLOADED_IMAGE ScopeImage,
+    PLOADED_IMAGE Skip,
+    PCSTR SymbolName,
+    PLOADED_IMAGE *FoundImage
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find an exported symbol with the given name in the
+    scope for the given binary.
+
+Arguments:
+
+    ScopeImage - Supplies a pointer to the image whose scope should be searched.
+
+    Skip - Supplies an optional pointer to an image to skip. This is used to
+        skip the primary executable when finding symbol values for copy
+        relocations, and for skipping the image when the "next" symbol is
+        desired.
+
+    Hash - Supplies the hashed symbol name.
+
+    SymbolName - Supplies a pointer to the string containing the name of the
+        symbol to search for.
+
+    FoundImage - Supplies a pointer where a pointer to the image the symbol
+        was found in will be returned on success.
+
+Return Value:
+
+    Returns a pointer to the symbol on success.
+
+    NULL if no such symbol was found.
+
+--*/
+
+{
+
+    ULONG CurrentFlags;
+    ULONG Hash;
+    PLOADED_IMAGE Image;
+    UINTN Index;
+    PELF_SYMBOL Result;
+    PLOADED_IMAGE *Scope;
+    UINTN ScopeSize;
+
+    //
+    // Check the global scope first. The conditional limits recursion to once.
+    //
+
+    if ((ScopeImage != ImPrimaryExecutable) &&
+        (ImPrimaryExecutable != NULL)) {
+
+        Result = ImpElfGetSymbolInScope(ImPrimaryExecutable,
+                                        Skip,
+                                        SymbolName,
+                                        FoundImage);
+
+        if (Result != NULL) {
+            return Result;
+        }
     }
 
-    return Value;
+    //
+    // Take a guess at what the hashing style is going to be based on the
+    // hashing style of the scope owner.
+    //
+
+    CurrentFlags = ScopeImage->Flags;
+    if ((CurrentFlags & IMAGE_FLAG_GNU_HASH) != 0) {
+        Hash = ImpElfGnuHash(SymbolName);
+
+    } else {
+        Hash = ImpElfOriginalHash(SymbolName);
+    }
+
+    Scope = ScopeImage->Scope;
+    ScopeSize = ScopeImage->ScopeSize;
+    for (Index = 0; Index < ScopeSize; Index += 1) {
+        Image = Scope[Index];
+        if (Image == Skip) {
+            continue;
+        }
+
+        //
+        // Potentially recompute the hash value if the style doesn't match
+        // the guess.
+        //
+
+        if (((CurrentFlags ^ Image->Flags) & IMAGE_FLAG_GNU_HASH) != 0) {
+            CurrentFlags = Image->Flags;
+            if ((CurrentFlags & IMAGE_FLAG_GNU_HASH) != 0) {
+                Hash = ImpElfGnuHash(SymbolName);
+
+            } else {
+                Hash = ImpElfOriginalHash(SymbolName);
+            }
+        }
+
+        Result = ImpElfGetSymbol(Image, Hash, SymbolName);
+
+        //
+        // Symbols from section 0 are undefined, so don't return those.
+        // Also ignore symbols above the reserved value, except for absolute
+        // symbols.
+        //
+
+        if ((Result != NULL) && (Result->SectionIndex != 0) &&
+            ((Result->SectionIndex < ELF_SECTION_RESERVED_LOW) ||
+             (Result->SectionIndex == ELF_SECTION_ABSOLUTE))) {
+
+            *FoundImage = Image;
+            return Result;
+        }
+    }
+
+    return NULL;
 }
 
 PELF_SYMBOL
 ImpElfGetSymbol (
     PLOADED_IMAGE Image,
     ULONG Hash,
-    PSTR SymbolName
+    PCSTR SymbolName
     )
 
 /*++
@@ -3295,7 +3423,6 @@ Return Value:
 
 BOOL
 ImpElfApplyRelocation (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     PELF_RELOCATION_ADDEND_ENTRY RelocationEntry,
     BOOL AddendEntry,
@@ -3309,8 +3436,6 @@ Routine Description:
     This routine applies a relocation entry to a loaded image.
 
 Arguments:
-
-    ListHead - Supplies a pointer to the head of the list of loaded images.
 
     Image - Supplies a pointer to the loaded image structure.
 
@@ -3383,8 +3508,7 @@ Return Value:
     // Compute the symbol value.
     //
 
-    SymbolValue = ImpElfGetSymbolValue(ListHead,
-                                       Image,
+    SymbolValue = ImpElfGetSymbolValue(Image,
                                        &(Symbols[SymbolIndex]),
                                        &SymbolImage,
                                        NULL);
@@ -3434,10 +3558,9 @@ Return Value:
             // Find the shared object version, not the executable version.
             //
 
-            SymbolValue = ImpElfGetSymbolValue(ListHead,
-                                               Image,
+            SymbolValue = ImpElfGetSymbolValue(Image,
                                                &(Symbols[SymbolIndex]),
-                                               NULL,
+                                               &SymbolImage,
                                                Image);
 
             if (SymbolValue == ELF_INVALID_ADDRESS) {
@@ -3589,10 +3712,9 @@ Return Value:
             // Find the shared object version, not the executable version.
             //
 
-            SymbolValue = ImpElfGetSymbolValue(ListHead,
-                                               Image,
+            SymbolValue = ImpElfGetSymbolValue(Image,
                                                &(Symbols[SymbolIndex]),
-                                               NULL,
+                                               &SymbolImage,
                                                Image);
 
             if (SymbolValue == ELF_INVALID_ADDRESS) {

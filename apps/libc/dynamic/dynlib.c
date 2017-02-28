@@ -95,7 +95,10 @@ Return Value:
     HANDLE Handle;
     KSTATUS Status;
 
-    Status = OsLoadLibrary((PSTR)Library, 0, &Handle);
+    ASSERT((RTLD_GLOBAL == IMAGE_LOAD_FLAG_GLOBAL) &&
+           (RTLD_NOW == IMAGE_LOAD_FLAG_BIND_NOW));
+
+    Status = OsLoadLibrary((PSTR)Library, Flags, &Handle);
     if (!KSUCCESS(Status)) {
         ClDynamicLibraryStatus = Status;
         return NULL;
@@ -230,10 +233,15 @@ Return Value:
     // The C Library handle definitions better line up with the OS base's.
     //
 
-    ASSERT((RTLD_DEFAULT == OS_LIBRARY_DEFAULT) &&
-           (RTLD_NEXT == OS_LIBRARY_NEXT));
+    ASSERT(RTLD_DEFAULT == NULL);
 
-    Status = OsGetLibrarySymbolAddress(Handle, (PSTR)SymbolName, &Address);
+    //
+    // TODO: Implement RTLD_NEXT by moving dlsym into libc_nonshared.
+    //
+
+    ASSERT(Handle != RTLD_NEXT);
+
+    Status = OsGetSymbolAddress(Handle, (PSTR)SymbolName, &Address);
     if (!KSUCCESS(Status)) {
         ClDynamicLibraryStatus = Status;
         return NULL;
@@ -274,17 +282,27 @@ Return Value:
 {
 
     KSTATUS Status;
-    OS_LIBRARY_SYMBOL Symbol;
 
-    Status = OsGetLibrarySymbolForAddress(OS_LIBRARY_DEFAULT, Address, &Symbol);
+    //
+    // The OS_IMAGE_SYMBOL structure should line up with the Dl_info structure.
+    //
+
+    ASSERT((FIELD_OFFSET(OS_IMAGE_SYMBOL, ImagePath) ==
+            FIELD_OFFSET(Dl_info, dli_fname)) &&
+           (FIELD_OFFSET(OS_IMAGE_SYMBOL, ImageBase) ==
+            FIELD_OFFSET(Dl_info, dli_fbase)) &&
+           (FIELD_OFFSET(OS_IMAGE_SYMBOL, SymbolName) ==
+            FIELD_OFFSET(Dl_info, dli_sname)) &&
+           (FIELD_OFFSET(OS_IMAGE_SYMBOL, SymbolAddress) ==
+            FIELD_OFFSET(Dl_info, dli_saddr)));
+
+    Status = OsGetImageSymbolForAddress(Address,
+                                        (POS_IMAGE_SYMBOL)Information);
+
     if (!KSUCCESS(Status)) {
         return 0;
     }
 
-    Information->dli_fname = Symbol.LibraryName;
-    Information->dli_fbase = Symbol.LibraryBaseAddress;
-    Information->dli_sname = Symbol.SymbolName;
-    Information->dli_saddr = Symbol.SymbolAddress;
     return 1;
 }
 

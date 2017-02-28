@@ -108,8 +108,6 @@ KSTATUS
 ImpGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
-    ULONG RecursionLevel,
-    ULONG VisitMarker,
     PIMAGE_SYMBOL Symbol
     );
 
@@ -117,8 +115,6 @@ KSTATUS
 ImpGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
-    ULONG RecursionLevel,
-    ULONG VisitMarker,
     PIMAGE_SYMBOL Symbol
     );
 
@@ -146,6 +142,12 @@ ImpAllocateImage (
     VOID
     );
 
+KSTATUS
+ImpAppendToScope (
+    PLOADED_IMAGE Image,
+    PLOADED_IMAGE Element
+    );
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -161,10 +163,10 @@ ImpAllocateImage (
 PIM_IMPORT_TABLE ImImportTable = NULL;
 
 //
-// Store the last visit marker.
+// Store a pointer to the primary executable, the root of the global scope.
 //
 
-UCHAR ImLastVisitMarker;
+PLOADED_IMAGE ImPrimaryExecutable = NULL;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -630,6 +632,10 @@ Return Value:
         ImFreeMemory(Image->FileName);
     }
 
+    if (Image->Scope != NULL) {
+        ImFreeMemory(Image->Scope);
+    }
+
     ImFreeMemory(Image);
     return;
 }
@@ -843,7 +849,6 @@ KSTATUS
 ImGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
-    BOOL Recursive,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -862,9 +867,6 @@ Arguments:
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
 
-    Recursive - Supplies a boolean indicating if the routine should recurse
-        into imports or just query this binary.
-
     Symbol - Supplies a pointer to a structure that receives the symbol's
         information on success.
 
@@ -876,36 +878,62 @@ Return Value:
 
 {
 
-    ULONG RecursionLevel;
     KSTATUS Status;
-    UCHAR VisitMarker;
 
-    //
-    // Get a new visitor generation number. This means only one thread can be
-    // in here at a time.
-    //
+    Status = ImpGetSymbolByName(Image, SymbolName, Symbol);
+    return Status;
+}
 
-    ImLastVisitMarker += 1;
-    VisitMarker = ImLastVisitMarker;
-    RecursionLevel = 0;
-    if (Recursive == FALSE) {
-        RecursionLevel = MAX_IMPORT_RECURSION_DEPTH;
+PLOADED_IMAGE
+ImGetImageByAddress (
+    PLIST_ENTRY ListHead,
+    PVOID Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the image that covers the given address.
+
+Arguments:
+
+    ListHead - Supplies the list of loaded images.
+
+    Address - Supplies the address to search for.
+
+Return Value:
+
+    Returns a pointer to an image covering the given address on success.
+
+    NULL if no loaded image covers the given address.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PLOADED_IMAGE Image;
+    PVOID Start;
+
+    CurrentEntry = ListHead->Next;
+    while (CurrentEntry != ListHead) {
+        Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+        Start = Image->PreferredLowestAddress + Image->BaseDifference;
+        if ((Address >= Start) && (Address < Start + Image->Size)) {
+            return Image;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
     }
 
-    Status = ImpGetSymbolByName(Image,
-                                SymbolName,
-                                RecursionLevel,
-                                VisitMarker,
-                                Symbol);
-
-    return Status;
+    return NULL;
 }
 
 KSTATUS
 ImGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
-    BOOL Recursive,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -913,18 +941,13 @@ ImGetSymbolByAddress (
 
 Routine Description:
 
-    This routine attempts to resolve the given address into a symbol. This
-    routine also looks through the image imports if the recursive flag is
-    specified.
+    This routine attempts to resolve the given address into a symbol.
 
 Arguments:
 
     Image - Supplies a pointer to the image to query.
 
     Address - Supplies the address to search for.
-
-    Recursive - Supplies a boolean indicating if the routine should recurse
-        into imports or just query this binary.
 
     Symbol - Supplies a pointer to a structure that receives the address's
         symbol information on success.
@@ -937,29 +960,7 @@ Return Value:
 
 {
 
-    ULONG RecursionLevel;
-    KSTATUS Status;
-    UCHAR VisitMarker;
-
-    //
-    // Toggle between two values that are not the default. This means only one
-    // thread can be in here at a time.
-    //
-
-    ImLastVisitMarker += 1;
-    VisitMarker = ImLastVisitMarker;
-    RecursionLevel = 0;
-    if (Recursive == FALSE) {
-        RecursionLevel = MAX_IMPORT_RECURSION_DEPTH;
-    }
-
-    Status = ImpGetSymbolByAddress(Image,
-                                   Address,
-                                   RecursionLevel,
-                                   VisitMarker,
-                                   Symbol);
-
-    return Status;
+    return ImpGetSymbolByAddress(Image, Address, Symbol);
 }
 
 VOID
@@ -1003,7 +1004,6 @@ Return Value:
 
 PVOID
 ImResolvePltEntry (
-    PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     UINTN RelocationOffset
     )
@@ -1019,9 +1019,6 @@ Routine Description:
     relocation and returns a pointer to the function to jump to.
 
 Arguments:
-
-    ListHead - Supplies a pointer to the head of the list of images to use for
-        symbol resolution.
 
     Image - Supplies a pointer to the loaded image whose PLT needs resolution.
         This is really whatever pointer is in GOT + 4.
@@ -1043,10 +1040,7 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        FunctionAddress = ImpElf32ResolvePltEntry(ListHead,
-                                                  Image,
-                                                  RelocationOffset);
-
+        FunctionAddress = ImpElf32ResolvePltEntry(Image, RelocationOffset);
         break;
 
     default:
@@ -1235,7 +1229,7 @@ Return Value:
 
         ASSERT((Flags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) == 0);
 
-        Image = ImpGetPrimaryExecutable(ListHead);
+        Image = ImPrimaryExecutable;
         if (Image == NULL) {
             Status = STATUS_NOT_READY;
             goto LoadEnd;
@@ -1490,50 +1484,70 @@ LoadEnd:
     return Status;
 }
 
-PLOADED_IMAGE
-ImpGetPrimaryExecutable (
-    PLIST_ENTRY ListHead
+KSTATUS
+ImpAddImageToScope (
+    PLOADED_IMAGE Parent,
+    PLOADED_IMAGE Child
     )
 
 /*++
 
 Routine Description:
 
-    This routine returns the primary executable in the list, if there is one.
+    This routine appends a breadth first traversal of the child's dependencies
+    to the image scope.
 
 Arguments:
 
-    ListHead - Supplies a pointer to the head of the list of loaded images.
+    Parent - Supplies a pointer to the innermost scope to add the child to.
+
+    Child - Supplies a pointer to the child to add to the scope. This is often
+        the parent itself.
 
 Return Value:
 
-    Returns a pointer to the primary executable if it exists. This routine does
-    not add a reference on the image.
+    STATUS_SUCCESS on success.
 
-    NULL if no primary executable is currently loaded in the list.
+    STATUS_INSUFFICIENT_RESOURCES if there was an allocation failure.
 
 --*/
 
 {
 
-    PLIST_ENTRY CurrentEntry;
-    PLOADED_IMAGE Image;
+    UINTN ImportCount;
+    UINTN ImportIndex;
+    UINTN Index;
+    KSTATUS Status;
 
-    if (ListHead == NULL) {
-        return NULL;
+    //
+    // Add the child itself.
+    //
+
+    Index = Parent->ScopeSize;
+    Status = ImpAppendToScope(Parent, Child);
+    if (!KSUCCESS(Status)) {
+        return Status;
     }
 
-    CurrentEntry = ListHead->Next;
-    while (CurrentEntry != ListHead) {
-        Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
-        if ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0) {
-            return Image;
+    //
+    // Now process all the newly added images adding their dependencies until
+    // there are none left.
+    //
+
+    while (Index < Parent->ScopeSize) {
+        Child = Parent->Scope[Index];
+        ImportCount = Child->ImportCount;
+        for (ImportIndex = 0; ImportIndex < ImportCount; ImportIndex += 1) {
+            Status = ImpAppendToScope(Parent, Child->Imports[ImportIndex]);
+            if (!KSUCCESS(Status)) {
+                return Status;
+            }
         }
 
-        CurrentEntry = CurrentEntry->Next;
+        Index += 1;
     }
 
-    return NULL;
+    return STATUS_SUCCESS;
 }
 
 //
@@ -1587,10 +1601,6 @@ Return Value:
 
     ULONG NameLength;
     KSTATUS Status;
-
-    if (Parent == NULL) {
-        Parent = ImpGetPrimaryExecutable(ListHead);
-    }
 
     //
     // If this is an executable being loaded for the first time, just try to
@@ -1893,8 +1903,6 @@ KSTATUS
 ImpGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
-    ULONG RecursionLevel,
-    ULONG VisitMarker,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -1914,11 +1922,6 @@ Arguments:
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
 
-    RecursionLevel - Supplies the current level of recursion.
-
-    VisitMarker - Supplies the value that images are marked with to indicate
-        they've been visited in this trip already.
-
     Symbol - Supplies a pointer to a structure that receives the symbol's
         information on success.
 
@@ -1930,8 +1933,6 @@ Return Value:
 
 {
 
-    PLOADED_IMAGE Import;
-    ULONG ImportIndex;
     KSTATUS Status;
 
     if (Image == NULL) {
@@ -1948,32 +1949,6 @@ Return Value:
         break;
     }
 
-    if ((Status != STATUS_NOT_FOUND) ||
-        (RecursionLevel >= MAX_IMPORT_RECURSION_DEPTH)) {
-
-        return Status;
-    }
-
-    Image->VisitMarker = VisitMarker;
-    for (ImportIndex = 0; ImportIndex < Image->ImportCount; ImportIndex += 1) {
-        Import = Image->Imports[ImportIndex];
-        if ((Import != NULL) && (Import->VisitMarker != VisitMarker)) {
-            Status = ImpGetSymbolByName(Import,
-                                        SymbolName,
-                                        RecursionLevel + 1,
-                                        VisitMarker,
-                                        Symbol);
-
-            if (Status != STATUS_NOT_FOUND) {
-                return Status;
-            }
-        }
-    }
-
-    //
-    // The image format is unknown or invalid.
-    //
-
     return Status;
 }
 
@@ -1981,8 +1956,6 @@ KSTATUS
 ImpGetSymbolByAddress (
     PLOADED_IMAGE Image,
     PVOID Address,
-    ULONG RecursionLevel,
-    ULONG VisitMarker,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -1990,20 +1963,13 @@ ImpGetSymbolByAddress (
 
 Routine Description:
 
-    This routine attempts to resolve the given address into a symbol. This
-    routine also looks through the image imports if the recursive level is not
-    greater than or equal to the maximum import recursion depth.
+    This routine attempts to resolve the given address into a symbol.
 
 Arguments:
 
     Image - Supplies a pointer to the image to query.
 
     Address - Supplies the address to search for.
-
-    RecursionLevel - Supplies the current level of recursion.
-
-    VisitMarker - Supplies the value that images are marked with to indicate
-        they've been visited in this trip already.
 
     Symbol - Supplies a pointer to a structure that receives the address's
         symbol information on success.
@@ -2016,8 +1982,6 @@ Return Value:
 
 {
 
-    PLOADED_IMAGE Import;
-    ULONG ImportIndex;
     KSTATUS Status;
 
     if (Image == NULL) {
@@ -2033,32 +1997,6 @@ Return Value:
         Status = STATUS_UNKNOWN_IMAGE_FORMAT;
         break;
     }
-
-    if ((Status != STATUS_NOT_FOUND) ||
-        (RecursionLevel >= MAX_IMPORT_RECURSION_DEPTH)) {
-
-        return Status;
-    }
-
-    Image->VisitMarker = VisitMarker;
-    for (ImportIndex = 0; ImportIndex < Image->ImportCount; ImportIndex += 1) {
-        Import = Image->Imports[ImportIndex];
-        if ((Import != NULL) && (Import->VisitMarker != VisitMarker)) {
-            Status = ImpGetSymbolByAddress(Import,
-                                           Address,
-                                           RecursionLevel + 1,
-                                           VisitMarker,
-                                           Symbol);
-
-            if (Status != STATUS_NOT_FOUND) {
-                return Status;
-            }
-        }
-    }
-
-    //
-    // The image format is unknown or invalid.
-    //
 
     return Status;
 }
@@ -2297,5 +2235,81 @@ Return Value:
 
     Image->Debug.ImageChangeFunction = ImNotifyImageLoad;
     return Image;
+}
+
+KSTATUS
+ImpAppendToScope (
+    PLOADED_IMAGE Image,
+    PLOADED_IMAGE Element
+    )
+
+/*++
+
+Routine Description:
+
+    This routine appends an image to the scope of the given image.
+
+Arguments:
+
+    Image - Supplies the image whose scope should be expanded.
+
+    Element - Supplies the element to add to the scope.
+
+Return Value:
+
+    STATUS_SUCCESS if the elements were successfully appended.
+
+    STATUS_INSUFFICIENT_RESORUCES on allocation failure.
+
+--*/
+
+{
+
+    UINTN Index;
+    UINTN NewCapacity;
+    PLOADED_IMAGE *NewScope;
+    UINTN Size;
+
+    Size = Image->ScopeSize;
+
+    //
+    // First see if it's already there and do nothing if it is.
+    //
+
+    for (Index = 0; Index < Size; Index += 1) {
+        if (Image->Scope[Index] == Element) {
+            return STATUS_SUCCESS;
+        }
+    }
+
+    if (Size >= IM_MAX_SCOPE_SIZE) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    if (Image->ScopeSize >= Image->ScopeCapacity) {
+        NewCapacity = Image->ScopeCapacity * 2;
+        if (Image->ScopeCapacity == 0) {
+            NewCapacity = IM_INITIAL_SCOPE_SIZE;
+        }
+
+        NewScope = ImAllocateMemory(NewCapacity * sizeof(PLOADED_IMAGE),
+                                    IM_ALLOCATION_TAG);
+
+        if (NewScope == NULL) {
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
+
+        if (Size != 0) {
+            RtlCopyMemory(NewScope, Image->Scope, Size * sizeof(PLOADED_IMAGE));
+            ImFreeMemory(Image->Scope);
+        }
+
+        Image->Scope = NewScope;
+        Image->ScopeCapacity = NewCapacity;
+    }
+
+    Image->Scope[Size] = Element;
+    Image->ScopeSize += 1;
+    return STATUS_SUCCESS;
 }
 

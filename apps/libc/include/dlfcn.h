@@ -54,21 +54,21 @@ extern "C" {
 // Set this flag to have relocations performed when an object is loaded.
 //
 
-#define RTLD_NOW 0x00000001
+#define RTLD_NOW 0x00000080
 
 //
 // Set this flag to have all symbols be available to other modules for
 // dynamic linking.
 //
 
-#define RTLD_GLOBAL 0x00000000
+#define RTLD_GLOBAL 0x00000100
 
 //
 // Set this flag to prevent symbols from being available to other modules for
 // dynamic linking.
 //
 
-#define RTLD_LOCAL 0x00000004
+#define RTLD_LOCAL 0x00000000
 
 //
 // Provide this handle to search for symbols in the executing program's global
