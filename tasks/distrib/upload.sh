@@ -92,7 +92,10 @@ mkdir_on_production() {
 upload_to_production() {
     for f in $@; do
         echo "Uploading $f to production in $UPLOAD_DATE"
-        $SCP -P $UPPORT $f $UPUSER@$UPDEST:$NIGHTLIES/$UPLOAD_DATE/$f
+        for try in 1 2 3 4 5; do
+            $SCP -o TCPKeepAlive=yes -P $UPPORT $f \
+                $UPUSER@$UPDEST:$NIGHTLIES/$UPLOAD_DATE/$f && break
+        done
     done
 }
 
