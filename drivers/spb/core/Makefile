@@ -29,7 +29,7 @@
 
 BINARY = spb.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

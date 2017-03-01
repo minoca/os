@@ -28,7 +28,7 @@
 
 BINARY = dma.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

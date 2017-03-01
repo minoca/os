@@ -28,7 +28,7 @@
 
 BINARY = atl1c.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

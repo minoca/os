@@ -28,7 +28,7 @@
 
 BINARY = bc27gpio.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

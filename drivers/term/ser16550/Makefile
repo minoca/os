@@ -27,7 +27,7 @@
 
 BINARY = ser16550.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

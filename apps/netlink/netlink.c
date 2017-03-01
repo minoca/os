@@ -139,6 +139,10 @@ CL_NETWORK_CONVERSION_INTERFACE NetlinkAddressConversionInterface = {
 // ------------------------------------------------------------------ Functions
 //
 
+//
+// TODO: Make this a constructor.
+//
+
 LIBNETLINK_API
 VOID
 NlInitialize (

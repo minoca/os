@@ -280,15 +280,6 @@ STRIP_FLAGS := -p
 endif
 
 ##
-## TODO: Either driver should be its own type, or all the driver makefiles
-## should have ENTRY := DriverEntry in them.
-##
-
-ifeq ($(BINARYTYPE)$(BUILD),so)
-ENTRY ?= DriverEntry
-endif
-
-##
 ## Build binaries on windows need a .exe suffix.
 ##
 
@@ -313,14 +304,16 @@ ifneq (,$(LINKER_SCRIPT))
 EXTRA_LDFLAGS += -T$(LINKER_SCRIPT)
 endif
 
+ifeq ($(BINARYTYPE),driver)
+EXTRA_LDFLAGS += -nostdlib
+ENTRY ?= DriverEntry
+BINARYTYPE := so
+endif
+
 ifneq ($(ENTRY),)
 EXTRA_LDFLAGS += -Wl,-e,$(ENTRY)                            \
                  -Wl,-u,$(ENTRY)                            \
 
-endif
-
-ifeq ($(BINARYTYPE),so)
-EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
 endif
 
 ##

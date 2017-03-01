@@ -27,7 +27,7 @@
 
 BINARY = ramdisk.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

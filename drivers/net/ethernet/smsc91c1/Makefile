@@ -27,7 +27,7 @@
 
 BINARY = smsc91c1.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

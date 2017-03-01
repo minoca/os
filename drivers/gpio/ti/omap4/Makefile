@@ -28,7 +28,7 @@
 
 BINARY = om4gpio.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

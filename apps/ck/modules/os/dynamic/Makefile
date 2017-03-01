@@ -35,8 +35,6 @@ include $(SRCDIR)/../sources
 
 OBJS += $(POSIX_OBJS)
 
-ENTRY := 0
-
 include $(SRCROOT)/os/minoca.mk
 
 postbuild:

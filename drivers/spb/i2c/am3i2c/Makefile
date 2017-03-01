@@ -27,7 +27,7 @@
 
 BINARY = am3i2c.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

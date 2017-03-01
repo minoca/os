@@ -13,7 +13,7 @@
 #
 #   Abstract:
 #
-#       This module implements the IEEE 802.11 networking core. It manages 
+#       This module implements the IEEE 802.11 networking core. It manages
 #       802.11 wireless network traffic.
 #
 #   Author:
@@ -28,7 +28,7 @@
 
 BINARY = net80211.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

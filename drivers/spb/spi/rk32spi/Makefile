@@ -28,7 +28,7 @@
 
 BINARY = rk32spi.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

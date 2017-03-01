@@ -28,7 +28,7 @@
 
 BINARY = usbcomp.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

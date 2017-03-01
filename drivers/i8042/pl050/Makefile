@@ -28,7 +28,7 @@
 
 BINARY = pl050.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

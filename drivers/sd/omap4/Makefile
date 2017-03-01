@@ -22,7 +22,7 @@
 
 BINARY = sdomap4.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

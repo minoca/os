@@ -28,7 +28,7 @@
 
 BINARY = i8042.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

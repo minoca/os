@@ -585,6 +585,7 @@ KSTATUS
 OsGetSymbolAddress (
     HANDLE Library,
     PSTR SymbolName,
+    HANDLE Skip,
     PVOID *Address
     )
 
@@ -602,6 +603,9 @@ Arguments:
 
     SymbolName - Supplies a pointer to a null terminated string containing the
         name of the symbol to look up.
+
+    Skip - Supplies an optional pointer to a library to skip. Supply NULL or
+        INVALID_HANDLE here to not skip any libraries.
 
     Address - Supplies a pointer that on success receives the address of the
         symbol, or NULL on failure.
@@ -637,7 +641,11 @@ Return Value:
         Library = ImPrimaryExecutable;
     }
 
-    Status = ImGetSymbolByName(Library, SymbolName, &Symbol);
+    if (Skip == INVALID_HANDLE) {
+        Skip = NULL;
+    }
+
+    Status = ImGetSymbolByName(Library, SymbolName, Skip, &Symbol);
     if (KSUCCESS(Status)) {
         if (Symbol.TlsAddress != FALSE) {
             Image = Symbol.Image;
@@ -737,6 +745,56 @@ Return Value:
 GetLibrarySymbolForAddressEnd:
     OspReleaseImageLock();
     return Status;
+}
+
+OS_API
+HANDLE
+OsGetImageForAddress (
+    PVOID Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a handle to the image that contains the given address.
+
+Arguments:
+
+    Address - Supplies the address to look up.
+
+Return Value:
+
+    INVALID_HANDLE if no image contains the given address.
+
+    On success, returns the dynamic image handle that contains the given
+    address.
+
+--*/
+
+{
+
+    PLOADED_IMAGE Image;
+    KSTATUS Status;
+
+    Image = NULL;
+    OspAcquireImageLock(FALSE);
+    if (OsLoadedImagesHead.Next == NULL) {
+        Status = OspLoadInitialImageList(FALSE);
+        if (!KSUCCESS(Status)) {
+            goto GetImageForAddressEnd;
+        }
+    }
+
+    Image = ImGetImageByAddress(&OsLoadedImagesHead, Address);
+
+GetImageForAddressEnd:
+    OspReleaseImageLock();
+    if (Image == NULL) {
+        return INVALID_HANDLE;
+    }
+
+    return (HANDLE)Image;
 }
 
 OS_API

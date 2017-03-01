@@ -27,7 +27,7 @@
 
 BINARY = am3soc.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

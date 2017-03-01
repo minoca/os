@@ -27,7 +27,7 @@
 
 BINARY = part.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

@@ -27,7 +27,7 @@
 
 BINARY = devrem.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

@@ -27,7 +27,7 @@
 
 BINARY = pcnet32.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

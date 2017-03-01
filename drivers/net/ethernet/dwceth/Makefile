@@ -27,7 +27,7 @@
 
 BINARY = dwceth.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

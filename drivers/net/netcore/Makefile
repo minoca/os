@@ -29,7 +29,7 @@
 
 BINARY = netcore.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

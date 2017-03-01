@@ -28,7 +28,7 @@
 
 BINARY = rtl81xx.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

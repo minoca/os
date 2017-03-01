@@ -28,7 +28,7 @@
 
 BINARY = tps65217.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

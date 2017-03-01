@@ -39,7 +39,7 @@ BINPLACE = bin
 ## Link in all object files of the included libraries as they are exported.
 ##
 
-EXTRA_LDFLAGS += -Wl,--whole-archive
+EXTRA_LDFLAGS += -Wl,--whole-archive -nostdlib
 
 ##
 ## Use the initial-exec TLS model, as it's faster for all those C library
@@ -48,8 +48,6 @@ EXTRA_LDFLAGS += -Wl,--whole-archive
 ##
 
 EXTRA_CFLAGS += -ftls-model=initial-exec
-
-ENTRY = ClInitialize
 
 INCLUDES += $(SRCROOT)/os/apps/libc/include;
 

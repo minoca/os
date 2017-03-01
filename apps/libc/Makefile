@@ -33,6 +33,8 @@ DIRS = crypt    \
        dynamic  \
        static   \
 
+LDFLAGS := -nostdlib
+
 include $(SRCROOT)/os/minoca.mk
 
 crypt: dynamic

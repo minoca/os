@@ -27,7 +27,7 @@
 
 BINARY = usbkbd.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

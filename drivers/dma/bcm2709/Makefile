@@ -27,7 +27,7 @@
 
 BINARY = dmab2709.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

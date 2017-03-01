@@ -33,8 +33,6 @@ BINARYTYPE = so
 
 BINPLACE = bin
 
-ENTRY = NlInitialize
-
 INCLUDES += $(SRCROOT)/os/apps/libc/include;
 
 OBJS = generic.o  \

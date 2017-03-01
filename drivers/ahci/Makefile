@@ -23,7 +23,7 @@
 
 BINARY = ahci.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

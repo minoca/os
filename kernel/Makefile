@@ -29,7 +29,7 @@ BINARY = kernel
 
 BINPLACE = bin
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 ##
 ## Link in all object files of the included libraries as they are exported.

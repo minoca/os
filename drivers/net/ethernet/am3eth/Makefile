@@ -28,7 +28,7 @@
 
 BINARY = am3eth.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 

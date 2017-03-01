@@ -65,7 +65,7 @@ X64_OBJS = x64/osbasea.o \
            x64/syscall.o \
 
 EXTRA_LDFLAGS += -Wl,-Bsymbolic
-EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib -Wl,--whole-archive
+EXTRA_LDFLAGS += -nostdlib -Wl,--whole-archive
 
 EXTRA_SRC_DIRS = x86 x64 armv7
 

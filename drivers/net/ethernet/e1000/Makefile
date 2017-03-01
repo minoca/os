@@ -27,7 +27,7 @@
 
 BINARY = e1000.drv
 
-BINARYTYPE = so
+BINARYTYPE = driver
 
 BINPLACE = bin
 
