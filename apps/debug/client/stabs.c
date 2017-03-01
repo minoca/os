@@ -42,6 +42,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -3986,14 +3987,13 @@ Return Value:
 
 {
 
-    INT CurrentPosition;
-    LONG FileSize;
+    struct stat Stat;
 
-    CurrentPosition = ftell(File);
-    fseek(File, 0, SEEK_END);
-    FileSize = ftell(File);
-    fseek(File, CurrentPosition, SEEK_SET);
-    return FileSize;
+    if (fstat(fileno(File), &Stat) != 0) {
+        return -1;
+    }
+
+    return Stat.st_size;
 }
 
 ULONG
