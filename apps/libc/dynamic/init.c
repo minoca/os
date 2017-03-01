@@ -78,7 +78,39 @@ Return Value:
 
 {
 
-    OsInitializeLibrary(Environment);
+    //
+    // TODO: Remove this after a build goes around.
+    //
+
+    return;
+}
+
+__CONSTRUCTOR
+void
+ClpInitialize (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes the C Runtime library. This routine is normally
+    called by statically linked assembly within a program, and unless developing
+    outside the usual paradigm should not need to call this routine directly.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
     ClpInitializeEnvironment();
     ClpInitializeTimeZoneSupport();
     ClpInitializeFileIo();

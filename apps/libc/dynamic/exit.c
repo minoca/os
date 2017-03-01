@@ -379,10 +379,6 @@ Return Value:
 
 {
 
-    if (SharedObject == NULL) {
-        return;
-    }
-
     ClpCallExitHandlers(SharedObject);
     return;
 }

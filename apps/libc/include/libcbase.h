@@ -129,31 +129,6 @@ extern "C" {
 // -------------------------------------------------------- Function Prototypes
 //
 
-LIBC_API
-void
-ClInitialize (
-    void *Environment
-    );
-
-/*++
-
-Routine Description:
-
-    This routine initializes the Minoca C library. This routine is normally
-    called by statically linked assembly within a program, and unless developing
-    outside the usual paradigm should not need to call this routine directly.
-
-Arguments:
-
-    Environment - Supplies a pointer to the environment information to be passed
-        on to the OS Base library.
-
-Return Value:
-
-    None.
-
---*/
-
 #ifdef __cplusplus
 
 }

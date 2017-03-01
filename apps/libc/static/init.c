@@ -148,7 +148,6 @@ Return Value:
     void **CurrentPointer;
     INT Result;
 
-    ClInitialize(Environment);
     atexit(ClpCallDestructors);
 
     //
