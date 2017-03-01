@@ -689,6 +689,21 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/cloud-init-0.7.6"
         },
         {
+            "name": "Make groff",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/groff-1.22.3"
+        },
+        {
+            "name": "Make directfb",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/DirectFB-DIRECTFB_1_7_7"
+        },
+        {
+            "name": "Make SDL",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/SDL2-2.0.5"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"

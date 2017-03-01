@@ -620,6 +620,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/libx264-20170102-2245"
         },
         {
+            "name": "Make groff",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/groff-1.22.3"
+        },
+        {
             "name": "Make OS",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os"
