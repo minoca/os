@@ -198,7 +198,7 @@ Return Value:
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
-        PsSignalThread(Thread, SIGNAL_TRAP, NULL, FALSE);
+        PsSignalThread(Thread, SIGNAL_TRAP, NULL, TRUE);
         PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
