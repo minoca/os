@@ -1846,7 +1846,7 @@ Return Value:
         // Call the .fini_array functions in reverse order.
         //
 
-        if (StaticFunctions->FiniArraySize > sizeof(PIMAGE_STATIC_FUNCTION)) {
+        if (StaticFunctions->FiniArraySize >= sizeof(PIMAGE_STATIC_FUNCTION)) {
             Begin = StaticFunctions->FiniArray;
             DestructorPointer = (PVOID)(Begin) + StaticFunctions->FiniArraySize;
             DestructorPointer -= 1;
