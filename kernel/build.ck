@@ -156,8 +156,8 @@ function build() {
     //
 
     versionMajor = "0";
-    versionMinor = "3";
-    versionRevision = "1";
+    versionMinor = "4";
+    versionRevision = "0";
     entries += createVersionHeader(versionMajor,
                                    versionMinor,
                                    versionRevision);
