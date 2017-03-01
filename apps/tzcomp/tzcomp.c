@@ -38,6 +38,7 @@ Environment:
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,20 +52,27 @@ Environment:
 //
 
 #define TIME_ZONE_COMPILER_VERSION_MAJOR 1
-#define TIME_ZONE_COMPILER_VERSION_MINOR 0
+#define TIME_ZONE_COMPILER_VERSION_MINOR 1
 
 #define TIME_ZONE_COMPILER_USAGE                                               \
     "Usage: tzcomp [-p] [-f <zone>] [-o <outputfile>] [files...]\n"            \
     "The tzcomp utility compiles standard time zone data files into a binary " \
     "format. Options are:\n\n"                                                 \
-    "  -p -- Print the parsed results coming from the input files.\n"          \
-    "  -f <zone> -- Produce output only for the time zone of the given name.\n"\
-    "  -o <outputfile> -- Write the output to the given file rather than the " \
-    "default file name \"" TIME_ZONE_DEFAULT_OUTPUT_FILE "\".\n\n"
+    "  -o, --output=<file> -- Write the output to the given file rather \n"    \
+    "      than the default file name \"" TIME_ZONE_DEFAULT_OUTPUT_FILE        \
+    "\".\n\n"                                                                  \
+    "  -v, --verbose -- Print the parsed results coming from the input files." \
+    "\n"                                                                       \
+    "  -y, --year=<year> -- Write only zone information newer than the \n"     \
+    "given year.\n"                                                            \
+    "  -z, --zone=<zone> -- Produce output only for the time zone of the \n"   \
+    "      given name.\n"                                                      \
 
 #define INITIAL_MALLOC_SIZE 32
 
 #define TIME_ZONE_DEFAULT_OUTPUT_FILE "tzdata"
+
+#define TZCOMP_OPTIONS_STRING "ho:vy:z:V"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -222,8 +230,9 @@ TranslateLinksToZones (
     );
 
 INT
-TimeZoneFilterByName (
-    PSTR Name
+TimeZoneFilter (
+    PSTR Name,
+    INT Year
     );
 
 INT
@@ -381,9 +390,26 @@ TimeZoneAddStringToList (
     PULONG Offset
     );
 
+VOID
+TimeZoneCompressEntries (
+    PLIST_ENTRY ZoneEntryList,
+    PULONG ZoneEntryCount,
+    PTZC_ZONE Zone
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+struct option TzcompLongOptions[] = {
+    {"output", required_argument, 0, 'o'},
+    {"verbose", no_argument, 0, 'v'},
+    {"year", required_argument, 0, 'y'},
+    {"zone", required_argument, 0, 'z'},
+    {"help", no_argument, 0, 'h'},
+    {"version", no_argument, 0, 'V'},
+    {NULL, 0, 0, 0},
+};
 
 LIST_ENTRY TimeZoneRuleList;
 LIST_ENTRY TimeZoneList;
@@ -508,11 +534,13 @@ Return Value:
     PSTR FilterZone;
     PTZC_LEAP Leap;
     PTZC_LINK Link;
+    INT Option;
     PSTR OutputName;
     BOOL PrintParsedEntries;
     INT Result;
     PTZC_RULE Rule;
     ULONG UnusedIndex;
+    INT YearFilter;
     PTZC_ZONE Zone;
     PTZC_ZONE_ENTRY ZoneEntry;
 
@@ -527,6 +555,7 @@ Return Value:
     OutputName = TIME_ZONE_DEFAULT_OUTPUT_FILE;
     PrintParsedEntries = FALSE;
     Result = 0;
+    YearFilter = 0;
     if (ArgumentCount <= 1) {
         fprintf(stderr, TIME_ZONE_COMPILER_USAGE);
         return 1;
@@ -543,49 +572,97 @@ Return Value:
     // Loop through the arguments.
     //
 
-    for (ArgumentIndex = 1; ArgumentIndex < ArgumentCount; ArgumentIndex += 1) {
-        Argument = Arguments[ArgumentIndex];
-        if (strcmp(Argument, "--version") == 0) {
+    while (TRUE) {
+        Option = getopt_long(ArgumentCount,
+                             Arguments,
+                             TZCOMP_OPTIONS_STRING,
+                             TzcompLongOptions,
+                             NULL);
+
+        if (Option == -1) {
+            break;
+        }
+
+        if ((Option == '?') || (Option == ':')) {
+            Result = 1;
+            goto MainEnd;
+        }
+
+        switch (Option) {
+        case 'o':
+            OutputName = optarg;
+            break;
+
+        case 'v':
+            PrintParsedEntries = TRUE;
+            break;
+
+        case 'y':
+            YearFilter = strtoul(optarg, NULL, 10);
+            if ((YearFilter <= 0) || (YearFilter > 9999)) {
+                fprintf(stderr, "Invalid year %s\n", optarg);
+                Result = 1;
+                goto MainEnd;
+            }
+
+            break;
+
+        case 'z':
+            FilterZone = optarg;
+            break;
+
+        case 'h':
+            printf(TIME_ZONE_COMPILER_USAGE);
+            return 1;
+
+        case 'V':
             printf("Tzcomp version %d.%d\n",
                    TIME_ZONE_COMPILER_VERSION_MAJOR,
                    TIME_ZONE_COMPILER_VERSION_MINOR);
 
             return 1;
 
-        } else if (strcmp(Argument, "--help") == 0) {
-            printf(TIME_ZONE_COMPILER_USAGE);
-            return 1;
+        default:
 
-        } else if (strcmp(Argument, "-p") == 0) {
-            PrintParsedEntries = TRUE;
+            assert(FALSE);
 
-        } else if (strcmp(Argument, "-f") == 0) {
-            if (ArgumentIndex == ArgumentCount - 1) {
-                fprintf(stderr, "Error: -f requires an argument.\n");
-                return 1;
-            }
+            Result = 1;
+            goto MainEnd;
+        }
+    }
 
-            FilterZone = Arguments[ArgumentIndex + 1];
-            ArgumentIndex += 1;
+    ArgumentIndex = optind;
+    while (ArgumentIndex < ArgumentCount) {
+        Argument = Arguments[ArgumentIndex];
+        Result = ReadTimeZoneFile(Argument);
+        if (Result != 0) {
+            fprintf(stderr,
+                    "tzcomp: Failed to process time zone data file %s.\n",
+                    Argument);
 
-        } else if (strcmp(Argument, "-o") == 0) {
-            if (ArgumentIndex == ArgumentCount - 1) {
-                fprintf(stderr, "Error: -o requires an argument.\n");
-                return 1;
-            }
+            goto MainEnd;
+        }
 
-            OutputName = Arguments[ArgumentIndex + 1];
-            ArgumentIndex += 1;
+        ArgumentIndex += 1;
+    }
 
-        } else {
-            Result = ReadTimeZoneFile(Argument);
-            if (Result != 0) {
-                fprintf(stderr,
-                        "tzcomp: Failed to process time zone data file %s.\n",
-                        Argument);
+    Result = TranslateLinksToZones();
+    if (Result != 0) {
+        goto MainEnd;
+    }
 
-                goto MainEnd;
-            }
+    //
+    // Filter for the requested name and/or years if requested.
+    //
+
+    if ((FilterZone != NULL) || (YearFilter != 0)) {
+        Result = TimeZoneFilter(FilterZone, YearFilter);
+        if (Result != 0) {
+            fprintf(stderr,
+                    "tzcomp: Error: Failed to filter time zone: %s.\n",
+                    strerror(errno));
+
+            goto MainEnd;
         }
     }
 
@@ -620,26 +697,6 @@ Return Value:
             Leap = LIST_VALUE(CurrentEntry, TZC_LEAP, ListEntry);
             CurrentEntry = CurrentEntry->Next;
             PrintTimeZoneLeap(Leap);
-        }
-    }
-
-    Result = TranslateLinksToZones();
-    if (Result != 0) {
-        goto MainEnd;
-    }
-
-    //
-    // Filter out all but the specified time zone if requested.
-    //
-
-    if (FilterZone != NULL) {
-        Result = TimeZoneFilterByName(FilterZone);
-        if (Result != 0) {
-            fprintf(stderr,
-                    "tzcomp: Error: Failed to filter time zone: %s.\n",
-                    strerror(errno));
-
-            goto MainEnd;
         }
     }
 
@@ -1337,6 +1394,17 @@ ProcessTimeZoneEnd:
 
         Zone->ZoneEntryCount += 1;
         INSERT_BEFORE(&(ZoneEntry->ListEntry), &TimeZoneEntryList);
+
+        //
+        // If this is the last zone entry, attempt to compress by finding the
+        // same zone entries elsewhere.
+        //
+
+        if (UntilValid == FALSE) {
+            TimeZoneCompressEntries(&TimeZoneEntryList,
+                                    &TimeZoneNextZoneEntryIndex,
+                                    Zone);
+        }
     }
 
     *Continuation = UntilValid;
@@ -1993,8 +2061,9 @@ Return Value:
 }
 
 INT
-TimeZoneFilterByName (
-    PSTR Name
+TimeZoneFilter (
+    PSTR Name,
+    INT Year
     )
 
 /*++
@@ -2002,12 +2071,16 @@ TimeZoneFilterByName (
 Routine Description:
 
     This routine removes all time zone data from the global list except for
-    that of the given time zone.
+    that that matches the given time zone name and/or starts after the given
+    year.
 
 Arguments:
 
-    Name - Supplies a pointer to a string containing the name of the time zone
-        to keep.
+    Name - Supplies an optional pointer to a string containing the name of the
+        time zone to keep.
+
+    Year - Supplies an optional year before which to exclude any time zone
+        entries.
 
 Return Value:
 
@@ -2020,6 +2093,8 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
+    PLIST_ENTRY CurrentZoneEntry;
+    ULONG CurrentZoneEntryCount;
     ULONG EntryIndex;
     PSTR FormatString;
     PSTR LettersString;
@@ -2027,26 +2102,31 @@ Return Value:
     LIST_ENTRY NewRuleList;
     LIST_ENTRY NewStringList;
     ULONG NewStringListSize;
+    PTZC_ZONE_ENTRY NewZoneEntry;
+    LIST_ENTRY NewZoneList;
     PTZC_ZONE RemoveZone;
     INT Result;
     PTZC_RULE Rule;
     ULONG RuleCount;
     PLIST_ENTRY RuleEntry;
-    PTZC_STRING String;
+    LONGLONG Until;
     ULONG UnusedOffset;
     PTZC_ZONE Zone;
     PTZC_ZONE_ENTRY ZoneEntry;
     ULONG ZoneEntryCount;
     PSTR ZoneName;
+    ULONG ZonesAdded;
 
     INITIALIZE_LIST_HEAD(&NewEntryList);
     INITIALIZE_LIST_HEAD(&NewRuleList);
     INITIALIZE_LIST_HEAD(&NewStringList);
+    INITIALIZE_LIST_HEAD(&NewZoneList);
     NewStringListSize = 0;
     RuleCount = 0;
     Zone = NULL;
     ZoneEntryCount = 0;
     ZoneName = NULL;
+    Until = (LONGLONG)ComputeDaysForYear(Year) * SECONDS_PER_DAY;
     TimeZoneAddStringToList("",
                             &NewStringList,
                             &NewStringListSize,
@@ -2054,114 +2134,165 @@ Return Value:
                             &UnusedOffset);
 
     //
-    // Loop looking for the given time zone.
+    // Loop looking for time zones that match the name and the year.
     //
 
-    CurrentEntry = TimeZoneList.Next;
-    while (CurrentEntry != &TimeZoneList) {
-        Zone = LIST_VALUE(CurrentEntry, TZC_ZONE, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
+    ZonesAdded = 0;
+    CurrentZoneEntry = TimeZoneList.Next;
+    while (CurrentZoneEntry != &TimeZoneList) {
+        Zone = LIST_VALUE(CurrentZoneEntry, TZC_ZONE, ListEntry);
+        CurrentZoneEntry = CurrentZoneEntry->Next;
         ZoneName = TimeZoneGetString(&TimeZoneStringList, Zone->NameOffset);
-        if (strcasecmp(Name, ZoneName) == 0) {
-            break;
+        if (Name != NULL) {
+            if (strcasecmp(Name, ZoneName) != 0) {
+                continue;
+            }
         }
 
-        Zone = NULL;
+        //
+        // Find the starting zone entry.
+        //
+
+        CurrentEntry = TimeZoneEntryList.Next;
+        for (EntryIndex = 0;
+             EntryIndex < Zone->ZoneEntryIndex;
+             EntryIndex += 1) {
+
+            assert(CurrentEntry != &TimeZoneEntryList);
+
+            CurrentEntry = CurrentEntry->Next;
+        }
+
+        //
+        // Pull the zone entries onto the new list.
+        //
+
+        CurrentZoneEntryCount = 0;
+        Zone->ZoneEntryIndex = ZoneEntryCount;
+        for (EntryIndex = 0;
+             EntryIndex < Zone->ZoneEntryCount;
+             EntryIndex += 1) {
+
+            ZoneEntry = LIST_VALUE(CurrentEntry, TZC_ZONE_ENTRY, ListEntry);
+
+            assert(CurrentEntry != &TimeZoneEntryList);
+
+            CurrentEntry = CurrentEntry->Next;
+
+            //
+            // Skip an entry that is too old.
+            //
+
+            if (ZoneEntry->Until <= Until) {
+                continue;
+            }
+
+            NewZoneEntry = malloc(sizeof(TZC_ZONE_ENTRY));
+            if (NewZoneEntry == NULL) {
+                Result = ENOMEM;
+                goto TimeZoneFilterByNameEnd;
+            }
+
+            memcpy(NewZoneEntry, ZoneEntry, sizeof(TZC_ZONE_ENTRY));
+            INSERT_BEFORE(&(NewZoneEntry->ListEntry), &NewEntryList);
+            NewZoneEntry->Index = ZoneEntryCount;
+            ZoneEntryCount += 1;
+            CurrentZoneEntryCount += 1;
+            FormatString = TimeZoneGetString(&TimeZoneStringList,
+                                             ZoneEntry->FormatOffset);
+
+            Result = TimeZoneAddStringToList(FormatString,
+                                             &NewStringList,
+                                             &NewStringListSize,
+                                             TRUE,
+                                             &(NewZoneEntry->FormatOffset));
+
+            if (Result != 0) {
+                goto TimeZoneFilterByNameEnd;
+            }
+
+            //
+            // Loop through and pull off any rules that apply to this zone
+            // entry.
+            //
+
+            if (NewZoneEntry->RulesNameIndex != -1) {
+                RuleEntry = TimeZoneRuleList.Next;
+                while (RuleEntry != &TimeZoneRuleList) {
+                    Rule = LIST_VALUE(RuleEntry, TZC_RULE, ListEntry);
+                    RuleEntry = RuleEntry->Next;
+                    if (Rule->NameIndex == NewZoneEntry->RulesNameIndex) {
+                        if (Rule->To <= Year) {
+                            continue;
+                        }
+
+                        LettersString = TimeZoneGetString(&TimeZoneStringList,
+                                                          Rule->LettersOffset);
+
+                        Result = TimeZoneAddStringToList(
+                                                       LettersString,
+                                                       &NewStringList,
+                                                       &NewStringListSize,
+                                                       TRUE,
+                                                       &(Rule->LettersOffset));
+
+                        if (Result != 0) {
+                            goto TimeZoneFilterByNameEnd;
+                        }
+
+                        LIST_REMOVE(&(Rule->ListEntry));
+                        INSERT_BEFORE(&(Rule->ListEntry), &NewRuleList);
+                        RuleCount += 1;
+                    }
+                }
+            }
+        }
+
+        if (CurrentZoneEntryCount != 0) {
+            Zone->ZoneEntryCount = CurrentZoneEntryCount;
+            LIST_REMOVE(&(Zone->ListEntry));
+            INSERT_BEFORE(&(Zone->ListEntry), &NewZoneList);
+            ZonesAdded += 1;
+
+            //
+            // Add the zone name to the string table.
+            //
+
+            Result = TimeZoneAddStringToList(ZoneName,
+                                             &NewStringList,
+                                             &NewStringListSize,
+                                             TRUE,
+                                             &(Zone->NameOffset));
+
+            if (Result != 0) {
+                goto TimeZoneFilterByNameEnd;
+            }
+
+            TimeZoneCompressEntries(&NewEntryList,
+                                    &ZoneEntryCount,
+                                    Zone);
+        }
     }
 
     //
     // Fail if the time zone was not found.
     //
 
-    if (Zone == NULL) {
+    if (ZonesAdded == 0) {
         Result = EINVAL;
-        fprintf(stderr, "Error: Could not find time zone \"%s\".", Name);
-        goto TimeZoneFilterByNameEnd;
-    }
+        if (Name != NULL) {
+            fprintf(stderr,
+                    "Error: Could not find time zone \"%s\" after year %d.\n",
+                    Name,
+                    Year);
 
-    LIST_REMOVE(&(Zone->ListEntry));
-
-    //
-    // Add the zone name to the string table.
-    //
-
-    Result = TimeZoneAddStringToList(ZoneName,
-                                     &NewStringList,
-                                     &NewStringListSize,
-                                     TRUE,
-                                     &(Zone->NameOffset));
-
-    if (Result != 0) {
-        goto TimeZoneFilterByNameEnd;
-    }
-
-    //
-    // Find the starting zone entry.
-    //
-
-    CurrentEntry = TimeZoneEntryList.Next;
-    for (EntryIndex = 0; EntryIndex < Zone->ZoneEntryIndex; EntryIndex += 1) {
-
-        assert(CurrentEntry != &TimeZoneEntryList);
-
-        CurrentEntry = CurrentEntry->Next;
-    }
-
-    //
-    // Pull the zone entries onto the new list.
-    //
-
-    for (EntryIndex = 0; EntryIndex < Zone->ZoneEntryCount; EntryIndex += 1) {
-        ZoneEntry = LIST_VALUE(CurrentEntry, TZC_ZONE_ENTRY, ListEntry);
-
-        assert(CurrentEntry != &TimeZoneEntryList);
-
-        CurrentEntry = CurrentEntry->Next;
-        LIST_REMOVE(&(ZoneEntry->ListEntry));
-        INSERT_BEFORE(&(ZoneEntry->ListEntry), &NewEntryList);
-        ZoneEntryCount += 1;
-        FormatString = TimeZoneGetString(&TimeZoneStringList,
-                                         ZoneEntry->FormatOffset);
-
-        Result = TimeZoneAddStringToList(FormatString,
-                                         &NewStringList,
-                                         &NewStringListSize,
-                                         TRUE,
-                                         &(ZoneEntry->FormatOffset));
-
-        if (Result != 0) {
-            goto TimeZoneFilterByNameEnd;
+        } else {
+            fprintf(stderr,
+                    "Error: No time zones after year %d.\n",
+                    Year);
         }
 
-        //
-        // Loop through and pull off any rules that apply to this zone entry.
-        //
-
-        if (ZoneEntry->RulesNameIndex != -1) {
-            RuleEntry = TimeZoneRuleList.Next;
-            while (RuleEntry != &TimeZoneRuleList) {
-                Rule = LIST_VALUE(RuleEntry, TZC_RULE, ListEntry);
-                RuleEntry = RuleEntry->Next;
-                if (Rule->NameIndex == ZoneEntry->RulesNameIndex) {
-                    LettersString = TimeZoneGetString(&TimeZoneStringList,
-                                                      Rule->LettersOffset);
-
-                    Result = TimeZoneAddStringToList(LettersString,
-                                                     &NewStringList,
-                                                     &NewStringListSize,
-                                                     TRUE,
-                                                     &(Rule->LettersOffset));
-
-                    if (Result != 0) {
-                        goto TimeZoneFilterByNameEnd;
-                    }
-
-                    LIST_REMOVE(&(Rule->ListEntry));
-                    INSERT_BEFORE(&(Rule->ListEntry), &NewRuleList);
-                    RuleCount += 1;
-                }
-            }
-        }
+        goto TimeZoneFilterByNameEnd;
     }
 
     //
@@ -2192,37 +2323,33 @@ Return Value:
     DestroyTimeZoneStringList(&TimeZoneStringList);
 
     //
-    // Now insert all entries from the local list onto the global list.
+    // Now insert all entries from the local lists onto the global lists.
     //
 
-    while (LIST_EMPTY(&NewRuleList) == FALSE) {
-        Rule = LIST_VALUE(NewRuleList.Next, TZC_RULE, ListEntry);
-        LIST_REMOVE(&(Rule->ListEntry));
-        INSERT_BEFORE(&(Rule->ListEntry), &TimeZoneRuleList);
+    if (!LIST_EMPTY(&NewRuleList)) {
+        MOVE_LIST(&NewRuleList, &TimeZoneRuleList);
+        INITIALIZE_LIST_HEAD(&NewRuleList);
     }
 
     TimeZoneRuleCount = RuleCount;
-    while (LIST_EMPTY(&NewEntryList) == FALSE) {
-        ZoneEntry = LIST_VALUE(NewEntryList.Next,
-                               TZC_ZONE_ENTRY,
-                               ListEntry);
-
-        LIST_REMOVE(&(ZoneEntry->ListEntry));
-        INSERT_BEFORE(&(ZoneEntry->ListEntry), &TimeZoneEntryList);
+    if (!LIST_EMPTY(&NewEntryList)) {
+        MOVE_LIST(&NewEntryList, &TimeZoneEntryList);
+        INITIALIZE_LIST_HEAD(&NewEntryList);
     }
 
     TimeZoneNextZoneEntryIndex = ZoneEntryCount;
-    while (LIST_EMPTY(&NewStringList) == FALSE) {
-        String = LIST_VALUE(NewStringList.Next, TZC_STRING, ListEntry);
-        LIST_REMOVE(&(String->ListEntry));
-        INSERT_BEFORE(&(String->ListEntry), &TimeZoneStringList);
+    if (!LIST_EMPTY(&NewStringList)) {
+        MOVE_LIST(&NewStringList, &TimeZoneStringList);
+        INITIALIZE_LIST_HEAD(&NewStringList);
     }
 
     TimeZoneNextStringOffset = NewStringListSize;
-    Zone->ZoneEntryIndex = 0;
-    INSERT_BEFORE(&(Zone->ListEntry), &TimeZoneList);
-    TimeZoneCount = 1;
-    Zone = NULL;
+    if (!LIST_EMPTY(&NewZoneList)) {
+        MOVE_LIST(&NewZoneList, &TimeZoneList);
+        INITIALIZE_LIST_HEAD(&NewZoneList);
+    }
+
+    TimeZoneCount = ZonesAdded;
     Result = 0;
 
 TimeZoneFilterByNameEnd:
@@ -2241,7 +2368,9 @@ TimeZoneFilterByNameEnd:
         DestroyTimeZoneEntry(ZoneEntry);
     }
 
-    if (Zone != NULL) {
+    while (LIST_EMPTY(&NewZoneList) == FALSE) {
+        Zone = LIST_VALUE(NewZoneList.Next, TZC_ZONE, ListEntry);
+        LIST_REMOVE(&(Zone->ListEntry));
         DestroyTimeZone(Zone);
     }
 
@@ -4038,5 +4167,138 @@ Return Value:
     INSERT_BEFORE(&(StringEntry->ListEntry), ListHead);
     *Offset = StringEntry->Offset;
     return 0;
+}
+
+VOID
+TimeZoneCompressEntries (
+    PLIST_ENTRY ZoneEntryList,
+    PULONG ZoneEntryCount,
+    PTZC_ZONE Zone
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to compress the zone entries by finding a repeat
+    earlier. This routine requires that the zone entries be at the end of the
+    list.
+
+Arguments:
+
+    ZoneEntryList - Supplies a pointer to the head of the list of zone entries.
+
+    ZoneEntryCount - Supplies a pointer to the count of entries on the list,
+        which may be updated.
+
+    Zone - Supplies a pointer to the zone owning the entries.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Count;
+    PLIST_ENTRY CurrentEntry;
+    PTZC_ZONE_ENTRY Entry;
+    PTZC_ZONE_ENTRY Potential;
+    ULONG SearchCount;
+    PTZC_ZONE_ENTRY SearchEntry;
+    PTZC_ZONE_ENTRY Start;
+
+    Count = Zone->ZoneEntryCount;
+    CurrentEntry = ZoneEntryList->Previous;
+    for (SearchCount = 0; SearchCount < Count - 1; SearchCount += 1) {
+        CurrentEntry = CurrentEntry->Previous;
+    }
+
+    Entry = LIST_VALUE(CurrentEntry, TZC_ZONE_ENTRY, ListEntry);
+
+    assert(Zone->ZoneEntryIndex == Entry->Index);
+
+    SearchEntry = Entry;
+    SearchCount = 0;
+    Start = NULL;
+    CurrentEntry = ZoneEntryList->Next;
+    while (CurrentEntry != ZoneEntryList) {
+        Potential = LIST_VALUE(CurrentEntry, TZC_ZONE_ENTRY, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+
+        //
+        // Stop if the element itself was found.
+        //
+
+        if (Potential == Entry) {
+            break;
+        }
+
+        //
+        // If this entry matches, then advance the search.
+        //
+
+        if ((Potential->RulesNameIndex == SearchEntry->RulesNameIndex) &&
+            (Potential->Save == SearchEntry->Save) &&
+            (Potential->FormatOffset == SearchEntry->FormatOffset) &&
+            (Potential->Until == SearchEntry->Until)) {
+
+            if (SearchCount == 0) {
+                Start = Potential;
+            }
+
+            SearchCount += 1;
+            if (SearchCount == Count) {
+                break;
+            }
+
+            //
+            // Move to the next one, and continue scanning.
+            //
+
+            SearchEntry = LIST_VALUE(SearchEntry->ListEntry.Next,
+                                     TZC_ZONE_ENTRY,
+                                     ListEntry);
+
+        //
+        // No match, reset.
+        //
+
+        } else {
+
+            //
+            // Redo this one against the first entry.
+            //
+
+            if (SearchCount != 0) {
+                CurrentEntry = CurrentEntry->Previous;
+            }
+
+            SearchEntry = Entry;
+            SearchCount = 0;
+        }
+    }
+
+    if (SearchCount != Count) {
+        return;
+    }
+
+    Zone->ZoneEntryIndex = Start->Index;
+
+    //
+    // Destroy the redundant elements.
+    //
+
+    CurrentEntry = &(Entry->ListEntry);
+    while (CurrentEntry != ZoneEntryList) {
+        CurrentEntry = CurrentEntry->Next;
+        LIST_REMOVE(&(Entry->ListEntry));
+        DestroyTimeZoneEntry(Entry);
+        *ZoneEntryCount -= 1;
+        Entry = LIST_VALUE(CurrentEntry, TZC_ZONE_ENTRY, ListEntry);
+    }
+
+    return;
 }
 

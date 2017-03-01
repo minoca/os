@@ -33,6 +33,7 @@ function build() {
     var entries;
     var sources;
     var tzcompTool;
+    var tzCutoffYear = "1980";
     var tzDataDir = "data/";
     var tzDataFiles;
     var tzDefault = "America/Los_Angeles";
@@ -98,7 +99,7 @@ function build() {
     };
 
     tzDefaultConfig = {
-        "TZCOMP_FLAGS": ["-f " + tzDefault]
+        "TZCOMP_FLAGS": ["-z " + tzDefault, "-y" + tzCutoffYear]
     };
 
     tzDefaultData = {

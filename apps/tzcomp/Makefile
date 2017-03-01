@@ -46,7 +46,17 @@ TZ_FILES = $(TZDATA_DIR)/africa         \
            $(TZDATA_DIR)/northamerica   \
            $(TZDATA_DIR)/southamerica
 
+##
+## Define the default time zone.
+##
+
 TZ_DEFAULT = America/Los_Angeles
+
+##
+## Define the cutoff year for time zone data.
+##
+
+TZ_CUTOFF_YEAR = 1980
 
 include $(SRCROOT)/os/minoca.mk
 
@@ -56,9 +66,9 @@ postbuild: tzdata tzdflt
 
 tzdata: $(TZ_FILES) | $(BINARY)
 	@echo Compiling time zone almanac
-	@./$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdata
+	@./$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdata -y $(TZ_CUTOFF_YEAR)
 
 tzdflt: $(TZ_FILES) | $(BINARY)
 	@echo Compiling default time zone: $(TZ_DEFAULT)
-	@.//$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdflt -f $(TZ_DEFAULT)
+	@.//$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdflt -z $(TZ_DEFAULT) -y $(TZ_CUTOFF_YEAR)
 
