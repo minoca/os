@@ -41,6 +41,7 @@ function build() {
         "buf.c",
         "dhcp.c",
         "ethernet.c",
+        "igmp.c",
         "ip4.c",
         "netcore.c",
         "netlink/netlink.c",

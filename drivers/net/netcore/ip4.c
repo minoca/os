@@ -1730,6 +1730,7 @@ Return Value:
     ULONG Flags;
     ULONG IntegerOption;
     SOCKET_IP4_OPTION Ip4Option;
+    PNET_PROTOCOL_ENTRY Protocol;
     UINTN RequiredSize;
     PIP4_SOCKET_INFORMATION SocketInformation;
     PVOID Source;
@@ -1845,8 +1846,27 @@ Return Value:
 
         break;
 
+    //
+    // Joining and leaving an IPv4 multicast group is hanlded by IGMP.
+    //
+
     case SocketIp4OptionJoinMulticastGroup:
     case SocketIp4OptionLeaveMulticastGroup:
+        Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
+        if (Protocol == NULL) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            break;
+        }
+
+        Status = Protocol->Interface.GetSetInformation(Socket,
+                                                       InformationType,
+                                                       Option,
+                                                       Data,
+                                                       DataSize,
+                                                       Set);
+
+        goto Ip4GetSetInformationEnd;
+
     case SocketIp4OptionMulticastInterface:
     case SocketIp4OptionMulticastTimeToLive:
     case SocketIp4OptionMulticastLoopback:

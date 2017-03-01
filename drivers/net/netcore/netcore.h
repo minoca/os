@@ -336,6 +336,27 @@ Return Value:
 --*/
 
 VOID
+NetpIgmpInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for the IGMP protocol.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
 NetpNetlinkGenericInitialize (
     ULONG Phase
     );

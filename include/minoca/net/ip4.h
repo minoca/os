@@ -26,6 +26,18 @@ Author:
 //
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro determines whether or not the given IPv4 address is a multicast
+// address. The address is treated as being in network byte order.
+//
+
+#define IP4_IS_MULTICAST_ADDRESS(_Ip4Address) \
+    (((_Ip4Address) & 0x000000F0) == 0x000000E0)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -38,6 +50,8 @@ Author:
 
 #define IP4_TYPE_ECN_MASK  0x03
 #define IP4_TYPE_DSCP_MASK 0xFC
+
+#define IP4_PRECEDENCE_NETWORK_CONTROL 0xC0
 
 #define IP4_FLAG_MORE_FRAGMENTS  0x1
 #define IP4_FLAG_DO_NOT_FRAGMENT 0x2

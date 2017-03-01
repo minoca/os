@@ -472,8 +472,8 @@ Members:
 
     imr_multiaddr - Stores the multicast address of the group to join or leave.
 
-    imr_interface - Stores the index of the interface that is to join or leave
-        the multicast group.
+    imr_interface - Stores the address of the interface that is to join or
+        leave the multicast group.
 
 --*/
 
