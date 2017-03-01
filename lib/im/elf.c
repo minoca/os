@@ -1760,6 +1760,7 @@ KSTATUS
 ImpElfGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
+    PLOADED_IMAGE Skip,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -1777,6 +1778,8 @@ Arguments:
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
 
+    Skip - Supplies an optional pointer to an image to skip when searching.
+
     Symbol - Supplies a pointer to a structure that receives the symbol's
         information on success.
 
@@ -1793,7 +1796,7 @@ Return Value:
     ELF_SYMBOL_TYPE SymbolType;
     ELF_ADDR Value;
 
-    ElfSymbol = ImpElfGetSymbolInScope(Image, NULL, SymbolName, &FoundImage);
+    ElfSymbol = ImpElfGetSymbolInScope(Image, Skip, SymbolName, &FoundImage);
     if (ElfSymbol == NULL) {
         return STATUS_NOT_FOUND;
     }

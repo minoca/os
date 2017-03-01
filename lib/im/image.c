@@ -108,6 +108,7 @@ KSTATUS
 ImpGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
+    PLOADED_IMAGE Skip,
     PIMAGE_SYMBOL Symbol
     );
 
@@ -849,6 +850,7 @@ KSTATUS
 ImGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
+    PLOADED_IMAGE Skip,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -867,6 +869,8 @@ Arguments:
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
 
+    Skip - Supplies an optional pointer to an image to skip when searching.
+
     Symbol - Supplies a pointer to a structure that receives the symbol's
         information on success.
 
@@ -880,7 +884,7 @@ Return Value:
 
     KSTATUS Status;
 
-    Status = ImpGetSymbolByName(Image, SymbolName, Symbol);
+    Status = ImpGetSymbolByName(Image, SymbolName, Skip, Symbol);
     return Status;
 }
 
@@ -1903,6 +1907,7 @@ KSTATUS
 ImpGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
+    PLOADED_IMAGE Skip,
     PIMAGE_SYMBOL Symbol
     )
 
@@ -1921,6 +1926,8 @@ Arguments:
 
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
+
+    Skip - Supplies an optional pointer to an image to skip when searching.
 
     Symbol - Supplies a pointer to a structure that receives the symbol's
         information on success.
@@ -1941,7 +1948,7 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        Status = ImpElf32GetSymbolByName(Image, SymbolName, Symbol);
+        Status = ImpElf32GetSymbolByName(Image, SymbolName, Skip, Symbol);
         break;
 
     default:

@@ -210,7 +210,7 @@ Return Value:
 
 --*/
 
-LIBC_API
+__HIDDEN
 void *
 dlsym (
     void *Handle,
@@ -228,10 +228,51 @@ Routine Description:
 Arguments:
 
     Handle - Supplies a pointer to the opaque handle returned by the dlopen
+        routine. Additionally, supply RTLD_DEFAULT to search through the
+        executable (global) scope. Supply RTLD_NEXT to search for the next
+        instance of the symbol after instance defined in the module that
+        called dlsym.
+
+    SymbolName - Supplies a pointer to a null-terminated string containing the
+        name of the symbol whose address should be retrieved.
+
+Return Value:
+
+    Returns the address of the symbol on success.
+
+    NULL if the handle was not valid or the symbol could not be found. More
+    information can be retrieved via the dlerror function.
+
+--*/
+
+LIBC_API
+void *
+__dlsym (
+    void *Handle,
+    const char *SymbolName,
+    void *CallerAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the address of a symbol defined within an object made
+    accessible through a call to dlopen. This is an internal routine that
+    should not be called directly by users.
+
+Arguments:
+
+    Handle - Supplies a pointer to the opaque handle returned by the dlopen
         routine.
 
     SymbolName - Supplies a pointer to a null-terminated string containing the
         name of the symbol whose address should be retrieved.
+
+    CallerAddress - Supplies an address within the dynamic object of the
+        calling executable. This routine will use this address to determine
+        which object to start from and skip if RTLD_NEXT is provided as the
+        handle.
 
 Return Value:
 

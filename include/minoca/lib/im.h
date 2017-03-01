@@ -1480,6 +1480,7 @@ KSTATUS
 ImGetSymbolByName (
     PLOADED_IMAGE Image,
     PSTR SymbolName,
+    PLOADED_IMAGE Skip,
     PIMAGE_SYMBOL Symbol
     );
 
@@ -1497,6 +1498,8 @@ Arguments:
 
     SymbolName - Supplies a pointer to the string containing the name of the
         symbol to search for.
+
+    Skip - Supplies an optional pointer to an image to skip when searching.
 
     Symbol - Supplies a pointer to a structure that receives the symbol's
         information on success.

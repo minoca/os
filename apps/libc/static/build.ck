@@ -39,7 +39,8 @@ function build() {
 
     sources = [
         "init.c",
-        "atexit.c"
+        "atexit.c",
+        "dlsym.c"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {

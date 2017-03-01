@@ -194,9 +194,10 @@ Return Value:
 
 LIBC_API
 void *
-dlsym (
+__dlsym (
     void *Handle,
-    const char *SymbolName
+    const char *SymbolName,
+    void *CallerAddress
     )
 
 /*++
@@ -204,8 +205,8 @@ dlsym (
 Routine Description:
 
     This routine returns the address of a symbol defined within an object made
-    accessible through a call to dlopen. This routine searches both this object
-    and any objects loaded as a result of this one.
+    accessible through a call to dlopen. This is an internal routine that
+    should not be called directly by users.
 
 Arguments:
 
@@ -214,6 +215,11 @@ Arguments:
 
     SymbolName - Supplies a pointer to a null-terminated string containing the
         name of the symbol whose address should be retrieved.
+
+    CallerAddress - Supplies an address within the dynamic object of the
+        calling executable. This routine will use this address to determine
+        which object to start from and skip if RTLD_NEXT is provided as the
+        handle.
 
 Return Value:
 
@@ -227,7 +233,10 @@ Return Value:
 {
 
     PVOID Address;
+    HANDLE Skip;
     KSTATUS Status;
+
+    Skip = NULL;
 
     //
     // The C Library handle definitions better line up with the OS base's.
@@ -235,13 +244,17 @@ Return Value:
 
     ASSERT(RTLD_DEFAULT == NULL);
 
-    //
-    // TODO: Implement RTLD_NEXT by moving dlsym into libc_nonshared.
-    //
+    if (Handle == RTLD_NEXT) {
+        Handle = OsGetImageForAddress(CallerAddress);
+        if (Handle == INVALID_HANDLE) {
+            ClDynamicLibraryStatus = STATUS_NOT_FOUND;
+            return NULL;
+        }
 
-    ASSERT(Handle != RTLD_NEXT);
+        Skip = Handle;
+    }
 
-    Status = OsGetSymbolAddress(Handle, (PSTR)SymbolName, &Address);
+    Status = OsGetSymbolAddress(Handle, (PSTR)SymbolName, Skip, &Address);
     if (!KSUCCESS(Status)) {
         ClDynamicLibraryStatus = Status;
         return NULL;

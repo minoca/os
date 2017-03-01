@@ -37,6 +37,7 @@ INCLUDES += $(SRCROOT)/os/apps/libc/include;
 
 OBJS = init.o   \
        atexit.o \
+       dlsym.o  \
 
 ARMV7_OBJS = armv7/aatexit.o \
              armv7/crt0.o    \
