@@ -198,7 +198,8 @@ Environment:
 // Define the set of multicast group flags.
 //
 
-#define IGMP_MULTICAST_GROUP_FLAG_LAST_REPORT 0x00000001
+#define IGMP_MULTICAST_GROUP_FLAG_LAST_REPORT  0x00000001
+#define IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -1203,10 +1204,6 @@ Return Value:
 
     IgmpLink = NetpIgmpLookupLink(ReceiveContext->Link);
     if (IgmpLink == NULL) {
-        RtlDebugPrint("IGMP packet received on link 0x%x, which is not "
-                      "registered with IGMP.\n",
-                      ReceiveContext->Link);
-
         goto IgmpProcessReceivedDataEnd;
     }
 
@@ -1702,6 +1699,7 @@ Return Value:
     // TODO: Notify hardware to start allowing multicast for this group.
     //
 
+    RtlAtomicOr32(&(Group->Flags), IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE);
     RtlAtomicExchange32(&(Group->SendCount), IgmpLink->RobustnessVariable);
     NetpIgmpSendGroupReport(Group);
 
@@ -1787,7 +1785,7 @@ Return Value:
 
     IgmpLink = NetpIgmpLookupLink(Result.Link);
     if (IgmpLink == NULL) {
-        Status = STATUS_NO_SUCH_DEVICE;
+        Status = STATUS_INVALID_ADDRESS;
         goto LeaveMulticastGroupEnd;
     }
 
@@ -1858,6 +1856,7 @@ Return Value:
     // initial reference will be released after the last leave message is sent.
     //
 
+    RtlAtomicOr32(&(Group->Flags), IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE);
     RtlAtomicExchange32(&(Group->SendCount), IgmpLink->RobustnessVariable);
     NetpIgmpSendGroupLeave(Group);
 
@@ -2168,6 +2167,9 @@ Return Value:
             if ((Query->GroupAddress == 0) ||
                 (Query->GroupAddress == Group->Address)) {
 
+                RtlAtomicAnd32(&(Group->Flags),
+                               ~IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE);
+
                 RtlAtomicCompareExchange(&(Group->SendCount), 1, 0);
                 NetpIgmpQueueReportTimer(&(Group->Timer),
                                          CurrentTime,
@@ -2460,9 +2462,19 @@ Return Value:
 
     PIGMP_MULTICAST_GROUP Group;
 
+    //
+    // If there are no more sockets joined to the group, then send leave
+    // messages. The group will be destroyed after the last leave message, so
+    // don't touch the group structure after the call to send a leave message.
+    //
+
     Group = (PIGMP_MULTICAST_GROUP)Parameter;
     if (Group->JoinCount == 0) {
         NetpIgmpSendGroupLeave(Group);
+
+    //
+    // Otherwise the timer has expired to send a simple group report.
+    //
 
     } else {
         NetpIgmpSendGroupReport(Group);
@@ -2755,11 +2767,18 @@ Return Value:
         Type = IGMP_MESSAGE_TYPE_REPORT_V3;
         DestinationAddress.Address = IGMP_ALL_ROUTERS_ADDRESS_V3;
         ReportV3 = (PIGMP_REPORT_V3)Header;
-        ReportV3->GroupRecordCount = 1;
+        ReportV3->Reserved = 0;
+        ReportV3->GroupRecordCount = CPU_TO_NETWORK16(1);
         GroupRecord = (PIGMP_GROUP_RECORD_V3)(ReportV3 + 1);
-        GroupRecord->Type = IGMP_GROUP_RECORD_TYPE_MODE_IS_EXCLUDE;
+        if ((Group->Flags & IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE) != 0) {
+            GroupRecord->Type = IGMP_GROUP_RECORD_TYPE_CHANGE_TO_EXCLUDE_MODE;
+
+        } else {
+            GroupRecord->Type = IGMP_GROUP_RECORD_TYPE_MODE_IS_EXCLUDE;
+        }
+
         GroupRecord->DataLength = 0;
-        GroupRecord->SourceAddressCount = 0;
+        GroupRecord->SourceAddressCount = CPU_TO_NETWORK16(0);
         GroupRecord->MulticastAddress = Group->Address;
         break;
 
@@ -2808,7 +2827,7 @@ Return Value:
 
     ASSERT((SendCount != 0) && (SendCount < 0x10000000));
 
-    if (SendCount >= 1) {
+    if (SendCount > 1) {
         NetpIgmpQueueReportTimer(&(Group->Timer),
                                  KeGetRecentTimeCounter(),
                                  IGMP_DEFAULT_UNSOLICITED_REPORT_INTERVAL);
@@ -2909,11 +2928,12 @@ Return Value:
         Type = IGMP_MESSAGE_TYPE_REPORT_V3;
         DestinationAddress.Address = IGMP_ALL_ROUTERS_ADDRESS_V3;
         ReportV3 = (PIGMP_REPORT_V3)Header;
-        ReportV3->GroupRecordCount = 1;
+        ReportV3->GroupRecordCount = CPU_TO_NETWORK16(1);
+        ReportV3->Reserved = 0;
         GroupRecord = (PIGMP_GROUP_RECORD_V3)(ReportV3 + 1);
         GroupRecord->Type = IGMP_GROUP_RECORD_TYPE_CHANGE_TO_INCLUDE_MODE;
         GroupRecord->DataLength = 0;
-        GroupRecord->SourceAddressCount = 0;
+        GroupRecord->SourceAddressCount = CPU_TO_NETWORK16(0);
         GroupRecord->MulticastAddress = Group->Address;
         break;
 
@@ -2950,7 +2970,7 @@ Return Value:
 
     ASSERT((SendCount != 0) && (SendCount < 0x10000000));
 
-    if (SendCount >= 1) {
+    if (SendCount > 1) {
         NetpIgmpQueueReportTimer(&(Group->Timer),
                                  KeGetRecentTimeCounter(),
                                  IGMP_DEFAULT_UNSOLICITED_REPORT_INTERVAL);
@@ -3002,6 +3022,7 @@ Return Value:
     PNET_PACKET_BUFFER Packet;
     ULONG RemainingGroupCount;
     PIGMP_REPORT_V3 ReportV3;
+    USHORT SourceAddressCount;
     KSTATUS Status;
 
     //
@@ -3053,7 +3074,8 @@ Return Value:
         Header->MaxResponseCode = 0;
         Header->Checksum = 0;
         ReportV3 = (PIGMP_REPORT_V3)Header;
-        ReportV3->GroupRecordCount = CurrentGroupCount;
+        ReportV3->Reserved = 0;
+        ReportV3->GroupRecordCount = CPU_TO_NETWORK16(CurrentGroupCount);
         GroupRecord = (PIGMP_GROUP_RECORD_V3)(ReportV3 + 1);
         while (CurrentGroupCount != 0) {
             CurrentGroupCount -= 1;
@@ -3068,10 +3090,13 @@ Return Value:
             Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
             GroupRecord->Type = IGMP_GROUP_RECORD_TYPE_MODE_IS_EXCLUDE;
             GroupRecord->DataLength = 0;
-            GroupRecord->SourceAddressCount = 0;
+            SourceAddressCount = 0;
+            GroupRecord->SourceAddressCount =
+                                          CPU_TO_NETWORK16(SourceAddressCount);
+
             GroupRecord->MulticastAddress = Group->Address;
             GroupSize = sizeof(IGMP_GROUP_RECORD_V3) +
-                        (GroupRecord->SourceAddressCount * sizeof(ULONG)) +
+                        (SourceAddressCount * sizeof(ULONG)) +
                         GroupRecord->DataLength;
 
             GroupRecord =
@@ -3537,9 +3562,11 @@ Return Value:
         KeReleaseSharedExclusiveLockExclusive(NetIgmpLinkLock);
         NetpIgmpLinkReleaseReference(IgmpLink);
 
-    } else if (OldReferenceCount == 1) {
+    } else {
         KeReleaseSharedExclusiveLockExclusive(NetIgmpLinkLock);
-        NetpIgmpDestroyLink(IgmpLink);
+        if (OldReferenceCount == 1) {
+            NetpIgmpDestroyLink(IgmpLink);
+        }
     }
 
     return;
@@ -3854,8 +3881,6 @@ Return Value:
     }
 
     if (Timer->WorkItem != NULL) {
-        KeCancelWorkItem(Timer->WorkItem);
-        KeFlushWorkItem(Timer->WorkItem);
         KeDestroyWorkItem(Timer->WorkItem);
     }
 

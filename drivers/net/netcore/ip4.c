@@ -1210,7 +1210,7 @@ Return Value:
                     Checksum = NetpIp4ChecksumData((PSHORT)Header,
                                                    sizeof(IP4_HEADER));
 
-                    Header->HeaderChecksum = CPU_TO_NETWORK16(Checksum);
+                    Header->HeaderChecksum = Checksum;
 
                 } else {
                     Fragment->Flags |= NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD;
