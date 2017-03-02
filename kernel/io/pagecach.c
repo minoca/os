@@ -4005,7 +4005,7 @@ Return Value:
     FileObject = CacheEntry->FileObject;
     FileOffset = CacheEntry->Offset;
     PageSize = MmPageSize();
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    FileSize = FileObject->Properties.Size;
 
     //
     // This routine assumes that the file object lock is held shared when it

@@ -1325,9 +1325,7 @@ Return Value:
             Properties->HardLinkCount = 1;
             Properties->BlockSize = ATA_SECTOR_SIZE;
             Properties->BlockCount = Device->TotalSectors;
-            WRITE_INT64_SYNC(&(Properties->FileSize),
-                             Device->TotalSectors * ATA_SECTOR_SIZE);
-
+            Properties->Size = Device->TotalSectors * ATA_SECTOR_SIZE;
             Status = STATUS_SUCCESS;
         }
 
@@ -1342,7 +1340,7 @@ Return Value:
     case IrpMinorSystemControlWriteFileProperties:
         FileOperation = (PSYSTEM_CONTROL_FILE_OPERATION)Context;
         Properties = FileOperation->FileProperties;
-        READ_INT64_SYNC(&(Properties->FileSize), &PropertiesFileSize);
+        PropertiesFileSize = Properties->Size;
         if ((Properties->FileId != 0) ||
             (Properties->Type != IoObjectBlockDevice) ||
             (Properties->HardLinkCount != 1) ||

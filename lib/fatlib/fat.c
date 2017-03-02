@@ -1669,7 +1669,7 @@ Return Value:
         Properties->GroupId = 0;
         Properties->Permissions = FAT_DEFAULT_FILE_PERMISSIONS;
         Properties->HardLinkCount = 1;
-        WRITE_INT64_SYNC(&(Properties->FileSize), 0);
+        Properties->Size = 0;
         Properties->BlockSize = FatVolume->ClusterSize;
         Properties->BlockCount = 0;
         FatGetCurrentSystemTime(&(Properties->StatusChangeTime));
@@ -1767,7 +1767,7 @@ Return Value:
     }
 
     Properties->HardLinkCount = 1;
-    WRITE_INT64_SYNC(&(Properties->FileSize), Entry.FileSizeInBytes);
+    Properties->Size = Entry.FileSizeInBytes;
     Properties->BlockSize = FatVolume->ClusterSize;
 
     ASSERT(POWER_OF_2(Properties->BlockSize) != FALSE);
@@ -3233,7 +3233,7 @@ Return Value:
            ((DirectoryEntry.FileAttributes & FAT_SUBDIRECTORY) != 0));
 
     if ((DirectoryEntry.FileAttributes & FAT_SUBDIRECTORY) == 0) {
-        READ_INT64_SYNC(&(NewProperties->FileSize), &FileSize);
+        FileSize = NewProperties->Size;
         if (FileSize > MAX_ULONG) {
             DirectoryEntry.FileSizeInBytes = MAX_ULONG;
 

@@ -770,7 +770,7 @@ Return Value:
             Properties->ModifiedTime = Properties->StatusChangeTime;
             Properties->AccessTime = Properties->StatusChangeTime;
             Properties->Permissions = FILE_PERMISSION_ALL;
-            WRITE_INT64_SYNC(&(Properties->FileSize), 0);
+            Properties->Size = 0;
             Status = STATUS_SUCCESS;
         }
 

@@ -1342,12 +1342,12 @@ Return Value:
 {
 
     FILE_CONTROL_PARAMETERS_UNION Parameters;
+    FILE_PROPERTIES Properties;
     KSTATUS Status;
 
+    Properties.Size = NewSize;
     Parameters.SetFileInformation.FieldsToSet = FILE_PROPERTY_FIELD_FILE_SIZE;
-    WRITE_INT64_SYNC(&(Parameters.SetFileInformation.FileProperties.FileSize),
-                     NewSize);
-
+    Parameters.SetFileInformation.FileProperties = &Properties;
     Status = OsFileControl((HANDLE)(UINTN)FileDescriptor,
                            FileControlCommandSetFileInformation,
                            &Parameters);
@@ -1393,11 +1393,13 @@ Return Value:
 
 {
 
+    FILE_PROPERTIES Properties;
     SET_FILE_INFORMATION Request;
     KSTATUS Status;
 
+    Properties.Size = NewSize;
     Request.FieldsToSet = FILE_PROPERTY_FIELD_FILE_SIZE;
-    WRITE_INT64_SYNC(&(Request.FileProperties.FileSize), NewSize);
+    Request.FileProperties = &Properties;
     Status = OsSetFileInformation(INVALID_HANDLE,
                                   (PSTR)Path,
                                   strlen(Path) + 1,

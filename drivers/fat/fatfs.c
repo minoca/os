@@ -1083,7 +1083,7 @@ Return Value:
     //
 
     if ((Irp->MinorCode == IrpMinorIoWrite) && (FileProperties != NULL)) {
-        READ_INT64_SYNC(&(FileProperties->FileSize), &FileSize);
+        FileSize = FileProperties->Size;
         if (FileSize < IoOffset) {
             Status = FatTruncate(FatVolume->VolumeToken,
                                  FatFile->FileToken,
@@ -1780,7 +1780,7 @@ Return Value:
     ULONGLONG OldSize;
     KSTATUS Status;
 
-    READ_INT64_SYNC(&(FileProperties->FileSize), &OldSize);
+    OldSize = FileProperties->Size;
     Status = FatTruncate(Volume->VolumeToken,
                          FileToken,
                          FileProperties->FileId,
@@ -1788,7 +1788,7 @@ Return Value:
                          NewSize);
 
     if (KSUCCESS(Status)) {
-        WRITE_INT64_SYNC(&(FileProperties->FileSize), NewSize);
+        FileProperties->Size = NewSize;
     }
 
     return Status;

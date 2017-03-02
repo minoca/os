@@ -484,6 +484,7 @@ Return Value:
     ULONG AccessPermissions;
     PKPROCESS CurrentProcess;
     IO_OFFSET FileOffset;
+    FILE_PROPERTIES FileProperties;
     PIO_HANDLE IoHandle;
     ULONG MapFlags;
     ULONG OpenFlags;
@@ -615,9 +616,8 @@ Return Value:
             //
 
             Request.FieldsToSet = FILE_PROPERTY_FIELD_FILE_SIZE;
-            WRITE_INT64_SYNC(&(Request.FileProperties.FileSize),
-                             Parameters->Size);
-
+            Request.FileProperties = &FileProperties;
+            FileProperties.Size = Parameters->Size;
             Status = IoSetFileInformation(FALSE, IoHandle, &Request);
             if (!KSUCCESS(Status)) {
                 goto SysMapOrUnmapMemoryEnd;

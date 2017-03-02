@@ -1506,7 +1506,7 @@ Return Value:
 
     Status = IopSendIoIrp(Device, IrpMinorIoRead, Request);
     FileProperties = Request->FileProperties;
-    READ_INT64_SYNC(&(FileProperties->FileSize), &FileSize);
+    FileSize = FileProperties->Size;
     if ((Request->IoOffset + Request->IoBytesCompleted) > FileSize) {
         if (Request->IoOffset > FileSize) {
             Request->IoBytesCompleted = 0;

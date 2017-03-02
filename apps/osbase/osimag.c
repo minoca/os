@@ -1135,8 +1135,7 @@ Return Value:
 
     ULONG BinaryNameSize;
     FILE_CONTROL_PARAMETERS_UNION FileControlParameters;
-    PFILE_PROPERTIES FileProperties;
-    ULONGLONG LocalFileSize;
+    FILE_PROPERTIES FileProperties;
     KSTATUS Status;
 
     File->Handle = INVALID_HANDLE;
@@ -1152,6 +1151,8 @@ Return Value:
         goto OpenFileEnd;
     }
 
+    FileControlParameters.SetFileInformation.FieldsToSet = 0;
+    FileControlParameters.SetFileInformation.FileProperties = &FileProperties;
     Status = OsFileControl(File->Handle,
                            FileControlCommandGetFileInformation,
                            &FileControlParameters);
@@ -1160,23 +1161,22 @@ Return Value:
         goto OpenFileEnd;
     }
 
-    FileProperties = &(FileControlParameters.SetFileInformation.FileProperties);
-    if (FileProperties->Type != IoObjectRegularFile) {
+    if (FileProperties.Type != IoObjectRegularFile) {
         Status = STATUS_UNEXPECTED_TYPE;
         goto OpenFileEnd;
     }
 
-    READ_INT64_SYNC(&(FileProperties->FileSize), &LocalFileSize);
-    File->Size = LocalFileSize;
-    File->ModificationDate = FileProperties->ModifiedTime.Seconds;
-    File->DeviceId = FileProperties->DeviceId;
-    File->FileId = FileProperties->FileId;
+    File->Size = FileProperties.Size;
+    File->ModificationDate = FileProperties.ModifiedTime.Seconds;
+    File->DeviceId = FileProperties.DeviceId;
+    File->FileId = FileProperties.FileId;
     Status = STATUS_SUCCESS;
 
 OpenFileEnd:
     if (!KSUCCESS(Status)) {
         if (File->Handle != INVALID_HANDLE) {
             OsClose(File->Handle);
+            File->Handle = INVALID_HANDLE;
         }
     }
 

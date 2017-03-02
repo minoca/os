@@ -433,7 +433,7 @@ Return Value:
         goto LoadFileEnd;
     }
 
-    READ_INT64_SYNC(&(FileProperties.FileSize), &LocalFileSize);
+    LocalFileSize = FileProperties.Size;
 
     ASSERT((UINTN)LocalFileSize == LocalFileSize);
 
@@ -570,7 +570,7 @@ Return Value:
     File = NULL;
     IoBuffer = NULL;
     RtlZeroMemory(&FileProperties, sizeof(FILE_PROPERTIES));
-    WRITE_INT64_SYNC(&(FileProperties.FileSize), 0);
+    FileProperties.Size = 0;
 
     ASSERT(Directory != 0);
 
@@ -634,13 +634,9 @@ Return Value:
                            &NewDirectorySize,
                            &FileProperties);
 
-        READ_INT64_SYNC(&(DirectoryProperties.FileSize),
-                        &DirectorySize);
-
+        DirectorySize = DirectoryProperties.Size;
         if (NewDirectorySize > DirectorySize) {
-            WRITE_INT64_SYNC(&(DirectoryProperties.FileSize),
-                             NewDirectorySize);
-
+            DirectoryProperties.Size = NewDirectorySize;
             Status = FatWriteFileProperties(Volume->FileSystemHandle,
                                             &DirectoryProperties,
                                             0);
@@ -704,7 +700,7 @@ Return Value:
     // Update the metadata.
     //
 
-    WRITE_INT64_SYNC(&(FileProperties.FileSize), FileSize);
+    FileProperties.Size = FileSize;
     FileProperties.ModifiedTime.Seconds = ModificationDate;
     FileProperties.AccessTime.Seconds = ModificationDate;
     Status = FatWriteFileProperties(Volume->FileSystemHandle,

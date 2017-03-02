@@ -458,7 +458,7 @@ Return Value:
         goto OpenFileEnd;
     }
 
-    READ_INT64_SYNC(&(Properties.FileSize), &LocalFileSize);
+    LocalFileSize = Properties.Size;
     if ((UINTN)LocalFileSize != LocalFileSize) {
         Status = STATUS_FILE_CORRUPT;
         goto OpenFileEnd;

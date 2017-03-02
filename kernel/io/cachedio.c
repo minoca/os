@@ -286,8 +286,7 @@ Return Value:
         //
 
         if ((Handle->OpenFlags & OPEN_FLAG_APPEND) != 0) {
-            READ_INT64_SYNC(&(FileObject->Properties.FileSize),
-                            &(IoContext->Offset));
+            IoContext->Offset = FileObject->Properties.Size;
         }
 
         if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
@@ -559,7 +558,7 @@ Return Value:
     // Do not read past the end of the file.
     //
 
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    FileSize = FileObject->Properties.Size;
     if (IoContext->Offset >= FileSize) {
         Status = STATUS_END_OF_FILE;
         goto PerformCachedReadEnd;
@@ -888,7 +887,7 @@ Return Value:
 
     if (FileObject->Properties.Type == IoObjectBlockDevice) {
         EndOffset = IoContext->Offset + SizeInBytes;
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+        FileSize = FileObject->Properties.Size;
         if (EndOffset > FileSize) {
             SizeInBytes = FileSize - IoContext->Offset;
             if (SizeInBytes == 0) {
@@ -961,7 +960,7 @@ Return Value:
         }
     }
 
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    FileSize = FileObject->Properties.Size;
 
     //
     // Iterate over each page, searching for page cache entries to copy into.
@@ -1098,7 +1097,7 @@ PerformCachedWriteEnd:
     //
 
     if (!KSUCCESS(Status)) {
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+        FileSize = FileObject->Properties.Size;
         IopEvictFileObject(FileObject, FileSize, EVICTION_FLAG_TRUNCATE);
     }
 
@@ -1607,7 +1606,7 @@ Return Value:
     //
 
     if (FileObject->Properties.Type == IoObjectBlockDevice) {
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+        FileSize = FileObject->Properties.Size;
         if (MmGetPhysicalMemoryWarningLevel() == MemoryWarningLevelNone) {
             BlockAlignedSize = ALIGN_RANGE_UP(BlockAlignedSize,
                                               IO_READ_AHEAD_SIZE);
@@ -2117,7 +2116,7 @@ Return Value:
     //
 
     if (BytesToWrite > AlignedIoBufferSize) {
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+        FileSize = FileObject->Properties.Size;
         IoBufferSize = MmGetIoBufferSize(IoContext->IoBuffer) -
                        IoContext->BytesCompleted;
 
@@ -2240,7 +2239,7 @@ Return Value:
 
     ASSERT(Offset > IoContext->Offset);
 
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    FileSize = FileObject->Properties.Size;
 
     ASSERT(FileSize > IoContext->Offset);
 

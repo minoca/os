@@ -1096,7 +1096,7 @@ Return Value:
 
         NewProperties.FileId = 0;
         FatGetCurrentSystemTime(&(NewProperties.StatusChangeTime));
-        WRITE_INT64_SYNC(&(NewProperties.FileSize), 0);
+        NewProperties.Size = 0;
         OpenedFileName = CurrentPath;
         OpenedFileNameLength = CurrentPathLength;
         FatStatus = FatCreate(File->Volume->FatVolume,
@@ -1116,7 +1116,7 @@ Return Value:
         // directory bigger.
         //
 
-        WRITE_INT64_SYNC(&(Properties.FileSize), NewDirectorySize);
+        Properties.Size = NewDirectorySize;
         FatStatus = FatWriteFileProperties(File->Volume->FatVolume,
                                            &Properties,
                                            0);
@@ -1625,7 +1625,7 @@ Return Value:
 
     BytesComplete = 0;
     OldTpl = EfiRaiseTPL(TPL_CALLBACK);
-    READ_INT64_SYNC(&(File->Properties.FileSize), &FileSize);
+    FileSize = File->Properties.Size;
     FatStatus = FatWriteFile(File->FatFile,
                              &(File->SeekInformation),
                              IoBuffer,
@@ -1642,7 +1642,7 @@ Return Value:
     File->CurrentOffset += BytesComplete;
     if (File->CurrentOffset > FileSize) {
         FileSize = File->CurrentOffset;
-        WRITE_INT64_SYNC(&(File->Properties.FileSize), FileSize);
+        File->Properties.Size = FileSize;
         File->IsDirty = TRUE;
     }
 
@@ -1718,7 +1718,7 @@ Return Value:
     //
 
     if (Position == (UINT64)-1) {
-        READ_INT64_SYNC(&(File->Properties.FileSize), &Position);
+        Position = File->Properties.Size;
     }
 
     FatStatus = FatFileSeek(File->FatFile,
@@ -2337,7 +2337,7 @@ Return Value:
         FileInformation->FileSize = EFI_FAT_DIRECTORY_ENTRY_SIZE;
 
     } else {
-        READ_INT64_SYNC(&(Properties->FileSize), &(FileInformation->FileSize));
+        FileInformation->FileSize = Properties->Size;
     }
 
     FileInformation->PhysicalSize =

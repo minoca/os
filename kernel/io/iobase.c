@@ -310,7 +310,7 @@ Return Value:
         //
 
         FileObject = IoHandle->FileObject;
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
+        LocalFileSize = FileObject->Properties.Size;
         if (IoOffsetAlignment != NULL) {
             *IoOffsetAlignment = FileObject->Properties.BlockSize;
         }
@@ -1030,7 +1030,7 @@ Return Value:
         //
 
         case SeekCommandFromEnd:
-            READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+            FileSize = FileObject->Properties.Size;
             LocalNewOffset = Offset + FileSize;
             break;
 
@@ -1108,7 +1108,7 @@ Return Value:
     }
 
     FileObject = Handle->FileObject;
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
+    LocalFileSize = FileObject->Properties.Size;
     *FileSize = LocalFileSize;
     Status = STATUS_SUCCESS;
     return Status;
@@ -1146,13 +1146,8 @@ Return Value:
     KSTATUS Status;
 
     Request.FieldsToSet = 0;
+    Request.FileProperties = FileProperties;
     Status = IoSetFileInformation(TRUE, Handle, &Request);
-    if (KSUCCESS(Status)) {
-        RtlCopyMemory(FileProperties,
-                      &(Request.FileProperties),
-                      sizeof(FILE_PROPERTIES));
-    }
-
     return Status;
 }
 
@@ -1193,12 +1188,12 @@ Return Value:
     PFILE_OBJECT FileObject;
     BOOL FileOwner;
     PFILE_PROPERTIES FileProperties;
-    ULONGLONG FileSize;
     BOOL HasChownPermission;
+    FILE_PROPERTIES LocalProperties;
     BOOL LockHeldExclusive;
     BOOL LockHeldShared;
     BOOL ModifyFileSize;
-    ULONGLONG NewFileSize;
+    IO_OFFSET NewFileSize;
     KSTATUS Status;
     BOOL StatusChanged;
     PKTHREAD Thread;
@@ -1208,7 +1203,13 @@ Return Value:
     LockHeldShared = FALSE;
     Thread = KeGetCurrentThread();
     FieldsToSet = Request->FieldsToSet;
-    FileProperties = &(Request->FileProperties);
+    if (FromKernelMode != FALSE) {
+        FileProperties = Request->FileProperties;
+
+    } else {
+        FileProperties = &LocalProperties;
+    }
+
     if (FieldsToSet == 0) {
         RtlZeroMemory(FileProperties, sizeof(FILE_PROPERTIES));
     }
@@ -1223,6 +1224,21 @@ Return Value:
 
     FileObject = Handle->PathPoint.PathEntry->FileObject;
     if (FromKernelMode == FALSE) {
+
+        //
+        // Copy the properties from the user mode buffer.
+        //
+
+        if (FieldsToSet != 0) {
+            Status = MmCopyFromUserMode(FileProperties,
+                                        Request->FileProperties,
+                                        sizeof(FILE_PROPERTIES));
+
+            if (!KSUCCESS(Status)) {
+                goto SetFileInformationEnd;
+            }
+        }
+
         FileOwner = FALSE;
         if ((FileObject->Properties.UserId ==
              Thread->Identity.EffectiveUserId) ||
@@ -1435,16 +1451,13 @@ Return Value:
             }
 
             ModifyFileSize = TRUE;
-            READ_INT64_SYNC(&(FileProperties->FileSize), &NewFileSize);
+            NewFileSize = FileProperties->Size;
         }
 
     } else {
         RtlCopyMemory(FileProperties,
                       &(FileObject->Properties),
                       sizeof(FILE_PROPERTIES));
-
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
-        WRITE_INT64_SYNC(&(FileProperties->FileSize), FileSize);
     }
 
     //
@@ -1495,6 +1508,16 @@ SetFileInformationEnd:
 
     } else if (LockHeldShared != FALSE) {
         KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+    }
+
+    //
+    // Copy the buffer back to user mode if this is a successful get request.
+    //
+
+    if ((KSUCCESS(Status)) && (FromKernelMode == FALSE) && (FieldsToSet == 0)) {
+        Status = MmCopyToUserMode(Request->FileProperties,
+                                  FileProperties,
+                                  sizeof(FILE_PROPERTIES));
     }
 
     return Status;
@@ -2564,7 +2587,7 @@ Return Value:
         goto ReadSymbolicLinkEnd;
     }
 
-    READ_INT64_SYNC(&(FileProperties.FileSize), &Size);
+    Size = FileProperties.Size;
     TargetBufferSize = Size;
     if (Size != TargetBufferSize) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2963,7 +2986,7 @@ Return Value:
 
     NewHandle->DeviceContext = IoHandle->DeviceContext;
     NewHandle->Device = Device;
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
+    LocalFileSize = FileObject->Properties.Size;
     NewHandle->Capacity = LocalFileSize;
     NewHandle->IoHandle = IoHandle;
     NewHandle->OffsetAlignment = FileObject->Properties.BlockSize;
@@ -5044,9 +5067,7 @@ Return Value:
     PagingHandle->IoHandle = IoHandle;
     PagingHandle->Device = FileObject->Device;
     PagingHandle->DeviceContext = IoHandle->DeviceContext;
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize),
-                    &(PagingHandle->Capacity));
-
+    PagingHandle->Capacity = FileObject->Properties.Size;
     PagingHandle->OffsetAlignment = FileObject->Properties.BlockSize;
     PagingHandle->SizeAlignment = PagingHandle->OffsetAlignment;
     *IoOffsetAlignment = PagingHandle->OffsetAlignment;

@@ -535,7 +535,7 @@ Return Value:
     // the end of the file size.
     //
 
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    FileSize = FileObject->Properties.Size;
     if (FileSize > NewSize) {
         KeAcquireSharedExclusiveLockExclusive(SharedMemoryObject->Lock);
         CurrentEntry = SharedMemoryObject->BackingRegionList.Next;
@@ -573,7 +573,7 @@ Return Value:
         KeReleaseSharedExclusiveLockExclusive(SharedMemoryObject->Lock);
     }
 
-    WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
+    FileObject->Properties.Size = NewSize;
     return STATUS_SUCCESS;
 }
 
@@ -739,7 +739,7 @@ Return Value:
     // size.
     //
 
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    FileSize = FileObject->Properties.Size;
 
     ASSERT(IS_ALIGNED(IoContext->Offset, PageSize) != FALSE);
     ASSERT((IoContext->Offset + IoContext->SizeInBytes) <=

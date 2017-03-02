@@ -269,9 +269,9 @@ Return Value:
         goto MainEnd;
     }
 
-    READ_INT64_SYNC(&(DirectoryProperties.FileSize), &DirectorySize);
+    DirectorySize = DirectoryProperties.Size;
     if (NewDirectorySize > DirectorySize) {
-        WRITE_INT64_SYNC(&(DirectoryProperties.FileSize), NewDirectorySize);
+        DirectoryProperties.Size = NewDirectorySize;
         FatWriteFileProperties(VolumeToken, &DirectoryProperties, 0);
     }
 

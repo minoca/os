@@ -2167,15 +2167,19 @@ Return Value:
         break;
 
     case FileControlCommandGetFileInformation:
-        RtlZeroMemory(&LocalParameters, sizeof(SET_FILE_INFORMATION));
+        Status = MmCopyFromUserMode(&LocalParameters,
+                                    FileControl->Parameters,
+                                    sizeof(SET_FILE_INFORMATION));
+
+        if (!KSUCCESS(Status)) {
+            goto SysFileControlEnd;
+        }
+
+        LocalParameters.SetFileInformation.FieldsToSet = 0;
         Status = IoSetFileInformation(
                                 FALSE,
                                 IoHandle,
                                 &(LocalParameters.SetFileInformation));
-
-        if (KSUCCESS(Status)) {
-            CopyOutSize = sizeof(SET_FILE_INFORMATION);
-        }
 
         break;
 

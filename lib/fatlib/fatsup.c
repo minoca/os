@@ -468,7 +468,7 @@ Return Value:
 
     FileProperties->FileId = FirstCluster;
     FileProperties->HardLinkCount = 1;
-    WRITE_INT64_SYNC(&(FileProperties->FileSize), 0);
+    FileProperties->Size = 0;
     FileProperties->BlockSize = Volume->ClusterSize;
     FileProperties->BlockCount = 1;
     Status = STATUS_SUCCESS;

@@ -1666,17 +1666,12 @@ Return Value:
     KSTATUS Status;
 
     Request.FieldsToSet = 0;
+    Request.FileProperties = Properties;
     Status = OspGetSetFileInformation(Directory,
                                       Path,
                                       PathLength,
                                       FollowLink,
                                       &Request);
-
-    if (KSUCCESS(Status)) {
-        RtlCopyMemory(Properties,
-                      &(Request.FileProperties),
-                      sizeof(FILE_PROPERTIES));
-    }
 
     return Status;
 }
@@ -3534,13 +3529,8 @@ Return Value:
     SYSTEM_CALL_GET_SET_FILE_INFORMATION Parameters;
     KSTATUS Status;
 
-    Parameters.Request.FieldsToSet = 0;
-    if (Request->FieldsToSet != 0) {
-        RtlCopyMemory(&(Parameters.Request),
-                      Request,
-                      sizeof(SET_FILE_INFORMATION));
-    }
-
+    Parameters.Request.FieldsToSet = Request->FieldsToSet;
+    Parameters.Request.FileProperties = Request->FileProperties;
     Parameters.Directory = Directory;
     Parameters.FilePath = Path;
     Parameters.FilePathSize = PathSize;

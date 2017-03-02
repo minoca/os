@@ -522,7 +522,7 @@ Return Value:
             Properties->HardLinkCount = 1;
             Properties->BlockSize = 1;
             Properties->BlockCount = 1;
-            WRITE_INT64_SYNC(&(Properties->FileSize), 0);
+            Properties->Size = 0;
             Status = STATUS_SUCCESS;
         }
 

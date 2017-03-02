@@ -60,6 +60,46 @@ Environment:
     }
 
 //
+// This macro asserts that the fields in FILE_PROPERTIES line up with the
+// fields in struct stat.
+//
+
+#define ASSERT_STAT_FILE_PROPERTIES_ALIGN()                     \
+    ASSERT((sizeof(FILE_PROPERTIES) == sizeof(struct stat)) &&  \
+           (FIELD_OFFSET(FILE_PROPERTIES, DeviceId) ==          \
+            FIELD_OFFSET(struct stat, st_dev)) &&               \
+           (FIELD_OFFSET(FILE_PROPERTIES, FileId) ==            \
+            FIELD_OFFSET(struct stat, st_ino)) &&               \
+           (FIELD_OFFSET(FILE_PROPERTIES, Permissions) ==       \
+            FIELD_OFFSET(struct stat, st_mode)) &&              \
+           (FIELD_OFFSET(FILE_PROPERTIES, HardLinkCount) ==     \
+            FIELD_OFFSET(struct stat, st_nlink)) &&             \
+           (FIELD_OFFSET(FILE_PROPERTIES, UserId) ==            \
+            FIELD_OFFSET(struct stat, st_uid)) &&               \
+           (FIELD_OFFSET(FILE_PROPERTIES, GroupId) ==           \
+            FIELD_OFFSET(struct stat, st_gid)) &&               \
+           (FIELD_OFFSET(FILE_PROPERTIES, RelatedDevice) ==     \
+            FIELD_OFFSET(struct stat, st_rdev)) &&              \
+           (FIELD_OFFSET(FILE_PROPERTIES, Size) ==              \
+            FIELD_OFFSET(struct stat, st_size)) &&              \
+           (FIELD_OFFSET(FILE_PROPERTIES, AccessTime) ==        \
+            FIELD_OFFSET(struct stat, st_atim)) &&              \
+           (FIELD_OFFSET(FILE_PROPERTIES, ModifiedTime) ==      \
+            FIELD_OFFSET(struct stat, st_mtim)) &&              \
+           (FIELD_OFFSET(FILE_PROPERTIES, StatusChangeTime) ==  \
+            FIELD_OFFSET(struct stat, st_ctim)) &&              \
+           (FIELD_OFFSET(FILE_PROPERTIES, CreationTime) ==      \
+            FIELD_OFFSET(struct stat, st_birthtim)) &&          \
+           (FIELD_OFFSET(FILE_PROPERTIES, BlockSize) ==         \
+            FIELD_OFFSET(struct stat, st_blksize)) &&           \
+           (FIELD_OFFSET(FILE_PROPERTIES, BlockCount) ==        \
+            FIELD_OFFSET(struct stat, st_blocks)) &&            \
+           (FIELD_OFFSET(FILE_PROPERTIES, Flags) ==             \
+            FIELD_OFFSET(struct stat, st_flags)) &&             \
+           (FIELD_OFFSET(FILE_PROPERTIES, Generation) ==        \
+            FIELD_OFFSET(struct stat, st_gen)));
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -435,10 +475,12 @@ Return Value:
 
 {
 
-    PFILE_PROPERTIES FileProperties;
     FILE_CONTROL_PARAMETERS_UNION Parameters;
     KSTATUS Status;
 
+    ASSERT(sizeof(FILE_PROPERTIES) == sizeof(struct stat));
+
+    Parameters.SetFileInformation.FileProperties = (PFILE_PROPERTIES)Stat;
     Status = OsFileControl((HANDLE)(UINTN)FileDescriptor,
                            FileControlCommandGetFileInformation,
                            &Parameters);
@@ -448,8 +490,7 @@ Return Value:
         return -1;
     }
 
-    FileProperties = &(Parameters.SetFileInformation.FileProperties);
-    ClpConvertFilePropertiesToStat(FileProperties, Stat);
+    ClpConvertFilePropertiesToStat((PFILE_PROPERTIES)Stat, Stat);
     return 0;
 }
 
@@ -485,15 +526,15 @@ Return Value:
 {
 
     FILE_CONTROL_PARAMETERS_UNION Parameters;
+    FILE_PROPERTIES Properties;
     KSTATUS Status;
 
     Parameters.SetFileInformation.FieldsToSet = FILE_PROPERTY_FIELD_PERMISSIONS;
+    Parameters.SetFileInformation.FileProperties = &Properties;
 
     ASSERT_FILE_PERMISSIONS_EQUIVALENT();
 
-    Parameters.SetFileInformation.FileProperties.Permissions =
-                                                   Mode & FILE_PERMISSION_MASK;
-
+    Properties.Permissions = Mode & FILE_PERMISSION_MASK;
     Status = OsFileControl((HANDLE)(UINTN)FileDescriptor,
                            FileControlCommandSetFileInformation,
                            &Parameters);
@@ -541,13 +582,15 @@ Return Value:
 {
 
     FILE_CONTROL_PARAMETERS_UNION Parameters;
+    FILE_PROPERTIES Properties;
     KSTATUS Status;
 
     Parameters.SetFileInformation.FieldsToSet = FILE_PROPERTY_FIELD_USER_ID |
                                                 FILE_PROPERTY_FIELD_GROUP_ID;
 
-    Parameters.SetFileInformation.FileProperties.UserId = Owner;
-    Parameters.SetFileInformation.FileProperties.GroupId = Group;
+    Parameters.SetFileInformation.FileProperties = &Properties;
+    Properties.UserId = Owner;
+    Properties.GroupId = Group;
     Status = OsFileControl((HANDLE)(UINTN)FileDescriptor,
                            FileControlCommandSetFileInformation,
                            &Parameters);
@@ -770,10 +813,9 @@ Return Value:
 {
 
     BOOL FollowLinks;
+    FILE_PROPERTIES Properties;
     SET_FILE_INFORMATION Request;
     KSTATUS Status;
-
-    RtlZeroMemory(&Request, sizeof(SET_FILE_INFORMATION));
 
     ASSERT_FILE_PERMISSIONS_EQUIVALENT();
 
@@ -782,8 +824,9 @@ Return Value:
         FollowLinks = FALSE;
     }
 
-    Request.FileProperties.Permissions = Permissions & FILE_PERMISSION_MASK;
+    Properties.Permissions = Permissions & FILE_PERMISSION_MASK;
     Request.FieldsToSet = FILE_PROPERTY_FIELD_PERMISSIONS;
+    Request.FileProperties = &Properties;
     Status = OsSetFileInformation((HANDLE)(UINTN)Directory,
                                   (PSTR)Path,
                                   strlen(Path) + 1,
@@ -916,18 +959,19 @@ Return Value:
 {
 
     BOOL FollowLinks;
+    FILE_PROPERTIES Properties;
     SET_FILE_INFORMATION Request;
     KSTATUS Status;
 
-    RtlZeroMemory(&Request, sizeof(SET_FILE_INFORMATION));
+    Request.FileProperties = &Properties;
     if (Owner != (uid_t)-1) {
         Request.FieldsToSet |= FILE_PROPERTY_FIELD_USER_ID;
-        Request.FileProperties.UserId = Owner;
+        Properties.UserId = Owner;
     }
 
     if (Group != (gid_t)-1) {
         Request.FieldsToSet |= FILE_PROPERTY_FIELD_GROUP_ID;
-        Request.FileProperties.GroupId = Group;
+        Properties.GroupId = Group;
     }
 
     FollowLinks = TRUE;
@@ -1310,13 +1354,14 @@ Return Value:
 
     SYSTEM_TIME CurrentTime;
     BOOL FollowLinks;
+    FILE_PROPERTIES Properties;
     SET_FILE_INFORMATION Request;
     KSTATUS Status;
 
-    RtlZeroMemory(&Request, sizeof(SET_FILE_INFORMATION));
     Request.FieldsToSet = FILE_PROPERTY_FIELD_ACCESS_TIME |
                           FILE_PROPERTY_FIELD_MODIFIED_TIME;
 
+    Request.FileProperties = &Properties;
     OsGetSystemTime(&CurrentTime);
 
     //
@@ -1324,18 +1369,16 @@ Return Value:
     //
 
     if ((Times == NULL) || (Times[0].tv_nsec == UTIME_NOW)) {
-        RtlCopyMemory(&(Request.FileProperties.AccessTime),
-                      &CurrentTime,
-                      sizeof(SYSTEM_TIME));
+        Properties.AccessTime = CurrentTime;
 
     } else if (Times[0].tv_nsec == UTIME_OMIT) {
         Request.FieldsToSet &= ~FILE_PROPERTY_FIELD_ACCESS_TIME;
 
     } else {
-        ClpConvertUnixTimeToSystemTime(&(Request.FileProperties.AccessTime),
+        ClpConvertUnixTimeToSystemTime(&(Properties.AccessTime),
                                        Times[0].tv_sec);
 
-        Request.FileProperties.AccessTime.Nanoseconds = Times[0].tv_nsec;
+        Properties.AccessTime.Nanoseconds = Times[0].tv_nsec;
     }
 
     //
@@ -1343,18 +1386,16 @@ Return Value:
     //
 
     if ((Times == NULL) || (Times[1].tv_nsec == UTIME_NOW)) {
-        RtlCopyMemory(&(Request.FileProperties.ModifiedTime),
-                      &CurrentTime,
-                      sizeof(SYSTEM_TIME));
+        Properties.ModifiedTime = CurrentTime;
 
     } else if (Times[1].tv_nsec == UTIME_OMIT) {
         Request.FieldsToSet &= ~FILE_PROPERTY_FIELD_MODIFIED_TIME;
 
     } else {
-        ClpConvertUnixTimeToSystemTime(&(Request.FileProperties.ModifiedTime),
+        ClpConvertUnixTimeToSystemTime(&(Properties.ModifiedTime),
                                        Times[1].tv_sec);
 
-        Request.FileProperties.ModifiedTime.Nanoseconds = Times[1].tv_nsec;
+        Properties.ModifiedTime.Nanoseconds = Times[1].tv_nsec;
     }
 
     FollowLinks = TRUE;
@@ -1520,28 +1561,10 @@ Return Value:
 
 {
 
-    ULONGLONG FileSize;
+    ASSERT_STAT_FILE_PROPERTIES_ALIGN();
 
-    memset(Stat, 0, sizeof(struct stat));
-    Stat->st_dev = Properties->DeviceId;
-    Stat->st_ino = Properties->FileId;
-    Stat->st_nlink = Properties->HardLinkCount;
-    Stat->st_uid = Properties->UserId;
-    Stat->st_gid = Properties->GroupId;
-    READ_INT64_SYNC(&(Properties->FileSize), &FileSize);
-    if ((ULONGLONG)(off_t)FileSize != FileSize) {
-        Stat->st_size = -1;
-
-    } else {
-        Stat->st_size = (off_t)FileSize;
-    }
-
-    Stat->st_blksize = Properties->BlockSize;
-    if ((blkcnt_t)Properties->BlockCount == Properties->BlockCount) {
-        Stat->st_blocks = (blkcnt_t)Properties->BlockCount;
-
-    } else {
-        Stat->st_blocks = -1;
+    if (Properties != (PFILE_PROPERTIES)Stat) {
+        memcpy(Stat, Properties, sizeof(struct stat));
     }
 
     Stat->st_ctime =
@@ -1556,6 +1579,8 @@ Return Value:
     // Convert the I/O object type into mode bits.
     //
 
+    ASSERT_FILE_PERMISSIONS_EQUIVALENT();
+    assert((Properties->Permissions & (~FILE_PERMISSION_MASK)) == 0);
     assert(Properties->Type < IoObjectTypeCount);
 
     //
@@ -1566,15 +1591,6 @@ Return Value:
     assert(IoObjectSymbolicLink + 1 == IoObjectTypeCount);
 
     Stat->st_mode |= ClStatFileTypeConversions[Properties->Type];
-
-    //
-    // Convert the permission bits.
-    //
-
-    ASSERT_FILE_PERMISSIONS_EQUIVALENT();
-    assert((Properties->Permissions & (~FILE_PERMISSION_MASK)) == 0);
-
-    Stat->st_mode |= (mode_t)(Properties->Permissions);
     return;
 }
 

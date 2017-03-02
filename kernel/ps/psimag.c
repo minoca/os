@@ -927,7 +927,7 @@ ImOpenFileEnd:
     if (KSUCCESS(Status)) {
         Status = IoGetFileInformation(OutputHandle, &FileProperties);
         if (KSUCCESS(Status)) {
-            READ_INT64_SYNC(&(FileProperties.FileSize), &LocalFileSize);
+            LocalFileSize = FileProperties.Size;
             File->Size = LocalFileSize;
             File->ModificationDate = FileProperties.ModifiedTime.Seconds;
             File->DeviceId = FileProperties.DeviceId;

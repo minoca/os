@@ -1990,12 +1990,12 @@ Return Value:
     ULONG BlockSize;
     ULONGLONG FileSize;
 
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    FileSize = FileObject->Properties.Size;
     if (FileSize < NewSize) {
 
         ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
 
-        WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
+        FileObject->Properties.Size = NewSize;
 
         //
         // TODO: Block count should be managed by the file system.
@@ -2057,7 +2057,7 @@ Return Value:
     // If the new size is the same as the old file size then just exit.
     //
 
-    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    FileSize = FileObject->Properties.Size;
     if (FileSize == NewFileSize) {
         Status = STATUS_SUCCESS;
         goto ModifyFileObjectSizeEnd;

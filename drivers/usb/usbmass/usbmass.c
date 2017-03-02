@@ -1551,7 +1551,7 @@ Return Value:
             FileSize = (ULONGLONG)Disk->BlockCount <<
                        (ULONGLONG)Disk->BlockShift;
 
-            WRITE_INT64_SYNC(&(Properties->FileSize), FileSize);
+            Properties->Size = FileSize;
             Status = STATUS_SUCCESS;
         }
 
@@ -1566,7 +1566,7 @@ Return Value:
     case IrpMinorSystemControlWriteFileProperties:
         FileOperation = (PSYSTEM_CONTROL_FILE_OPERATION)Context;
         Properties = FileOperation->FileProperties;
-        READ_INT64_SYNC(&(Properties->FileSize), &PropertiesFileSize);
+        PropertiesFileSize = Properties->Size;
         FileSize = (ULONGLONG)Disk->BlockCount << (ULONGLONG)Disk->BlockShift;
         if ((Properties->FileId != 0) ||
             (Properties->Type != IoObjectBlockDevice) ||

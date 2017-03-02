@@ -877,7 +877,7 @@ Return Value:
     }
 
     BytesComplete = 0;
-    READ_INT64_SYNC(&(File->Properties.FileSize), &FileSize);
+    FileSize = File->Properties.Size;
     Status = FatWriteFile(File->FatFile,
                           &(File->SeekInformation),
                           IoBuffer,
@@ -896,7 +896,7 @@ Return Value:
     File->CurrentOffset += BytesComplete;
     if (File->CurrentOffset > FileSize) {
         FileSize = File->CurrentOffset;
-        WRITE_INT64_SYNC(&(File->Properties.FileSize), FileSize);
+        File->Properties.Size = FileSize;
         File->IsDirty = TRUE;
     }
 
@@ -1028,8 +1028,8 @@ Return Value:
         return SetupFstat(File->Handle, FileSize, ModificationDate, Mode);
     }
 
-    if (FileSize != 0) {
-        READ_INT64_SYNC(&(File->Properties.FileSize), FileSize);
+    if (FileSize != NULL) {
+        *FileSize = File->Properties.Size;
     }
 
     if (ModificationDate != NULL) {
@@ -1092,7 +1092,7 @@ Return Value:
         return SetupFtruncate(File->Handle, NewSize);
     }
 
-    READ_INT64_SYNC(&(File->Properties.FileSize), &CurrentSize);
+    CurrentSize = File->Properties.Size;
     if (CurrentSize == NewSize) {
         return 0;
 
@@ -1114,7 +1114,7 @@ Return Value:
         return -1;
     }
 
-    WRITE_INT64_SYNC(&(File->Properties.FileSize), NewSize);
+    File->Properties.Size = NewSize;
     File->IsDirty = TRUE;
     return 0;
 }
@@ -1742,7 +1742,7 @@ Return Value:
 
         NewProperties.Permissions = CreatePermissions;
         NewProperties.FileId = 0;
-        WRITE_INT64_SYNC(&(NewProperties.FileSize), 0);
+        NewProperties.Size = 0;
         FatGetCurrentSystemTime(&(NewProperties.StatusChangeTime));
         OpenedFileName = CurrentPath;
         OpenedFileNameLength = CurrentPathLength;
@@ -1762,7 +1762,7 @@ Return Value:
         // directory bigger.
         //
 
-        WRITE_INT64_SYNC(&(Properties.FileSize), NewDirectorySize);
+        Properties.Size = NewDirectorySize;
         Status = FatWriteFileProperties(Volume->VolumeToken, &Properties, 0);
         if (!KSUCCESS(Status)) {
             goto FatOpenEnd;
@@ -1836,7 +1836,7 @@ Return Value:
             goto FatOpenEnd;
         }
 
-        WRITE_INT64_SYNC(&(NewFile->Properties.FileSize), 0);
+        NewFile->Properties.Size = 0;
     }
 
     FatOpenFlags = 0;

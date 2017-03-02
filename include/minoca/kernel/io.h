@@ -1544,19 +1544,18 @@ Members:
 
     Type - Stores the type of file (regular file, directory, etc).
 
-    UserId - Stores the user ID of the file owner.
-
-    GroupId - Stores the group ID of the file owner.
-
     Permissions - Stores the file permissions.
 
     HardLinkCount - Stores the number of hard links that exist for this file.
 
-    FileSize - Stores the total file size of this file.
+    UserId - Stores the user ID of the file owner.
 
-    BlockSize - Stores the size of a block on this file system.
+    GroupId - Stores the group ID of the file owner.
 
-    BlockCount - Stores the number of blocks allocated for this file.
+    RelatedDevice - Stores the device ID of the related device for certain
+        special device types.
+
+    Size - Stores the size of this file entity, in bytes.
 
     AccessTime - Stores the last time this file was accessed.
 
@@ -1568,22 +1567,36 @@ Members:
         This includes a change in the file's ownership, permissions, or
         hard link count.
 
+    CreationTime - Stores the file creation time.
+
+    BlockSize - Stores the size of a block on this file system.
+
+    BlockCount - Stores the number of blocks allocated for this file.
+
+    Flags - Stores user defined flags.
+
+    Generation - Stores the file generation number.
+
 --*/
 
 typedef struct _FILE_PROPERTIES {
     DEVICE_ID DeviceId;
     FILE_ID FileId;
     IO_OBJECT_TYPE Type;
+    FILE_PERMISSIONS Permissions;
+    LONG HardLinkCount;
     USER_ID UserId;
     GROUP_ID GroupId;
-    FILE_PERMISSIONS Permissions;
-    ULONG HardLinkCount;
-    INT64_SYNC FileSize;
-    ULONG BlockSize;
-    ULONGLONG BlockCount;
+    DEVICE_ID RelatedDevice;
+    IO_OFFSET Size;
     SYSTEM_TIME AccessTime;
     SYSTEM_TIME ModifiedTime;
     SYSTEM_TIME StatusChangeTime;
+    SYSTEM_TIME CreationTime;
+    IO_OFFSET BlockSize;
+    IO_OFFSET BlockCount;
+    ULONG Flags;
+    ULONG Generation;
 } FILE_PROPERTIES, *PFILE_PROPERTIES;
 
 /*++
@@ -1598,14 +1611,13 @@ Members:
         FILE_PROPERY_FIELD_* definitions. If this value is zero, then all the
         fields will be retrieved rather than any being set.
 
-    FileProperties - Stores the file properties returned by the kernel on
-        success.
+    FileProperties - Stores a pointer to the file properties to get or set.
 
 --*/
 
 typedef struct _SET_FILE_INFORMATION {
     ULONG FieldsToSet;
-    FILE_PROPERTIES FileProperties;
+    PFILE_PROPERTIES FileProperties;
 } SET_FILE_INFORMATION, *PSET_FILE_INFORMATION;
 
 /*++

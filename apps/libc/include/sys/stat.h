@@ -218,6 +218,16 @@ extern "C" {
 #define DEFFILEMODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
 
 //
+// These definitions create the proper POSIX structure members for struct
+// stat's access, modification, and status change time.
+//
+
+#define st_atime st_atim.tv_sec
+#define st_mtime st_mtim.tv_sec
+#define st_ctime st_ctim.tv_sec
+#define st_birthtime st_birthtim.tv_sec
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -232,6 +242,8 @@ Members:
     st_dev - Stores the device ID of the containing file.
 
     st_ino - Stores the file serial number.
+
+    __st_type - Stores the file type.
 
     st_mode - Stores the file mode bits. See S_I* definitions.
 
@@ -248,33 +260,43 @@ Members:
         links, stores the length in bytes of the pathname contained in the
         symbolic link.
 
-    st_atime - Stores the time of the last access.
+    st_atim - Stores the time of the last access.
 
-    st_mtime - Stores the time of the last data modification.
+    st_mtim - Stores the time of the last data modification.
 
-    st_ctime - Stores the time of the last status change.
+    st_ctim - Stores the time of the last status change.
+
+    st_birthtim - Stores the creation time of the file.
 
     st_blksize - Stores a file system specific preferred I/O block size for
         this object. This may vary from file to file.
 
     st_blocks - Stores the number of blocks allocated for this object.
 
+    st_flags - Stores user defined file flags.
+
+    st_gen - Stores the file generation number.
+
 --*/
 
 struct stat {
     dev_t st_dev;
     ino_t st_ino;
+    int __st_type;
     mode_t st_mode;
     nlink_t st_nlink;
     uid_t st_uid;
     gid_t st_gid;
     dev_t st_rdev;
     off_t st_size;
-    time_t st_atime;
-    time_t st_mtime;
-    time_t st_ctime;
+    struct timespec st_atim;
+    struct timespec st_mtim;
+    struct timespec st_ctim;
+    struct timespec st_birthtim;
     blksize_t st_blksize;
     blkcnt_t st_blocks;
+    unsigned int st_flags;
+    unsigned int st_gen;
 };
 
 //

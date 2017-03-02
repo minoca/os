@@ -656,7 +656,7 @@ Return Value:
             Properties->HardLinkCount = 1;
             Properties->BlockSize = RAM_DISK_SECTOR_SIZE;
             Properties->BlockCount = Disk->Size / RAM_DISK_SECTOR_SIZE;
-            WRITE_INT64_SYNC(&(Properties->FileSize), Disk->Size);
+            Properties->Size = Disk->Size;
             Lookup->Flags = LOOKUP_FLAG_NON_CACHED;
             Status = STATUS_SUCCESS;
         }
@@ -672,7 +672,7 @@ Return Value:
     case IrpMinorSystemControlWriteFileProperties:
         FileOperation = (PSYSTEM_CONTROL_FILE_OPERATION)Context;
         Properties = FileOperation->FileProperties;
-        READ_INT64_SYNC(&(Properties->FileSize), &PropertiesFileSize);
+        PropertiesFileSize = Properties->Size;
         if ((Properties->FileId != 0) ||
             (Properties->Type != IoObjectBlockDevice) ||
             (Properties->HardLinkCount != 1) ||

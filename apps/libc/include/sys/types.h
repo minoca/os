@@ -53,7 +53,7 @@ typedef long long blkcnt_t;
 // Define a type used for block sizes.
 //
 
-typedef unsigned long blksize_t;
+typedef unsigned long long blksize_t;
 
 //
 // Define a type for file system block counts.

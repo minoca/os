@@ -822,7 +822,7 @@ Return Value:
                 Properties->HardLinkCount = 1;
                 Properties->BlockSize = BlockSize;
                 Properties->BlockCount = BlockCount;
-                WRITE_INT64_SYNC(&(Properties->FileSize), FileSize);
+                Properties->Size = FileSize;
                 Status = STATUS_SUCCESS;
             }
 
@@ -841,7 +841,7 @@ Return Value:
 
             FileOperation = (PSYSTEM_CONTROL_FILE_OPERATION)Context;
             Properties = FileOperation->FileProperties;
-            READ_INT64_SYNC(&(Properties->FileSize), &PropertiesFileSize);
+            PropertiesFileSize = Properties->Size;
             if ((Properties->FileId != 0) ||
                 (Properties->Type != IoObjectBlockDevice) ||
                 (Properties->HardLinkCount != 1) ||
