@@ -4241,7 +4241,7 @@ Return Value:
     SYSTEM_CONTROL_LOOKUP Request;
     KSTATUS Status;
 
-    RtlZeroMemory(&Request, sizeof(SYSTEM_CONTROL_LOOKUP));
+    RtlZeroMemory(Properties, sizeof(FILE_PROPERTIES));
     Request.Root = FALSE;
     if (FileNameSize == 0) {
         Request.Root = TRUE;
@@ -4249,6 +4249,8 @@ Return Value:
         ASSERT(Directory == NULL);
     }
 
+    Request.Flags = 0;
+    Request.DirectoryProperties = NULL;
     if (Directory != NULL) {
 
         ASSERT(KeIsSharedExclusiveLockHeldExclusive(Directory->Lock) != FALSE);
