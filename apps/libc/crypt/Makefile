@@ -38,6 +38,8 @@ OBJS = crypt.o          \
 
 DYNLIBS = $(BINROOT)/libc.so.1           \
 
+EXTRA_LDFLAGS += -nostdlib
+
 include $(SRCROOT)/os/minoca.mk
 
 postbuild:
