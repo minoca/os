@@ -963,6 +963,7 @@ Return Value:
     SET_FILE_INFORMATION Request;
     KSTATUS Status;
 
+    Request.FieldsToSet = 0;
     Request.FileProperties = &Properties;
     if (Owner != (uid_t)-1) {
         Request.FieldsToSet |= FILE_PROPERTY_FIELD_USER_ID;
