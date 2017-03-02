@@ -285,7 +285,8 @@ typedef enum _NET_ADDRESS_TYPE {
     NetAddressUnknown,
     NetAddressAny,
     NetAddressUnicast,
-    NetAddressBroadcast
+    NetAddressBroadcast,
+    NetAddressMulticast
 } NET_ADDRESS_TYPE, *PNET_ADDRESS_TYPE;
 
 /*++
@@ -791,25 +792,33 @@ Return Value:
 --*/
 
 typedef
-VOID
-(*PNET_DATA_LINK_GET_BROADCAST_ADDRESS) (
-    PNETWORK_ADDRESS PhysicalNetworkAddress
+KSTATUS
+(*PNET_DATA_LINK_CONVERT_TO_PHYSICAL_ADDRESS) (
+    PNETWORK_ADDRESS NetworkAddress,
+    PNETWORK_ADDRESS PhysicalAddress,
+    NET_ADDRESS_TYPE NetworkAddressType
     );
 
 /*++
 
 Routine Description:
 
-    This routine gets the data link layer's broadcast address.
+    This routine converts the given network address to a physical layer address
+    based on the provided network address type.
 
 Arguments:
 
-    PhysicalNetworkAddress - Supplies a pointer where the physical network
-        broadcast address will be returned.
+    NetworkAddress - Supplies a pointer to the network layer address to convert.
+
+    PhysicalAddress - Supplies a pointer to an address that receives the
+        converted physical layer address.
+
+    NetworkAddressType - Supplies the classified type of the given network
+        address, which aids in conversion.
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -915,7 +924,7 @@ typedef struct _NET_DATA_LINK_INTERFACE {
     PNET_DATA_LINK_DESTROY_LINK DestroyLink;
     PNET_DATA_LINK_SEND Send;
     PNET_DATA_LINK_PROCESS_RECEIVED_PACKET ProcessReceivedPacket;
-    PNET_DATA_LINK_GET_BROADCAST_ADDRESS GetBroadcastAddress;
+    PNET_DATA_LINK_CONVERT_TO_PHYSICAL_ADDRESS ConvertToPhysicalAddress;
     PNET_DATA_LINK_PRINT_ADDRESS PrintAddress;
     PNET_DATA_LINK_GET_PACKET_SIZE_INFORMATION GetPacketSizeInformation;
 } NET_DATA_LINK_INTERFACE, *PNET_DATA_LINK_INTERFACE;

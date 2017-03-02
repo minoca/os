@@ -103,13 +103,6 @@ Environment:
 #define IGMP_MAX_GROUP_RECORD_COUNT MAX_USHORT
 
 //
-// Define the IPv4 address mask for the bits that get included in a multicast
-// MAC address.
-//
-
-#define IGMP_MULTICAST_TO_MAC_MASK CPU_TO_NETWORK32(0x007FFFFF)
-
-//
 // Define the source IPv4 address for all IGMP general query messages -
 // 224.0.0.1.
 //
@@ -751,12 +744,6 @@ NetpIgmpDestroyTimer (
     PIGMP_TIMER Timer
     );
 
-VOID
-NetpIgmpConvertMulticastToMacAddress (
-    PNETWORK_ADDRESS MulticastAddress,
-    PNETWORK_ADDRESS MacAddress
-    );
-
 USHORT
 NetpIgmpChecksumData (
     PVOID Data,
@@ -800,14 +787,6 @@ NET_PROTOCOL_ENTRY NetIgmpProtocol = {
 
 RED_BLACK_TREE NetIgmpLinkTree;
 PSHARED_EXCLUSIVE_LOCK NetIgmpLinkLock;
-
-//
-// Stores the base MAC address for all multicast addresses. The lower 23 bits
-// are taken from the lower 23-bits of the IP address.
-//
-
-UCHAR NetIgmpBaseMacAddress[ETHERNET_ADDRESS_SIZE] =
-    {0x01, 0x00, 0x5E, 0x00, 0x00, 0x00};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -3166,6 +3145,7 @@ Return Value:
     PNET_PACKET_BUFFER Packet;
     PULONG RouterAlert;
     PIP4_ADDRESS SourceAddress;
+    KSTATUS Status;
     ULONG TotalLength;
 
     Link = IgmpLink->Link;
@@ -3234,8 +3214,14 @@ Return Value:
     // Get the physical address for the IPv4 multicast destination address.
     //
 
-    DestinationPhysical.Domain = LinkAddress->PhysicalAddress.Domain;
-    NetpIgmpConvertMulticastToMacAddress(Destination, &DestinationPhysical);
+    Status = Link->DataLinkEntry->Interface.ConvertToPhysicalAddress(
+                                                          Destination,
+                                                          &DestinationPhysical,
+                                                          NetAddressMulticast);
+
+    if (!KSUCCESS(Status)) {
+        return;
+    }
 
     //
     // Send the packet list down the stack.
@@ -3884,71 +3870,6 @@ Return Value:
         KeDestroyWorkItem(Timer->WorkItem);
     }
 
-    return;
-}
-
-VOID
-NetpIgmpConvertMulticastToMacAddress (
-    PNETWORK_ADDRESS MulticastAddress,
-    PNETWORK_ADDRESS MacAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine converts a multicast address into a MAC address.
-
-Arguments:
-
-    MulticastAddress - Supplies a pointer to the multicast address to convert.
-
-    MacAddress - Supplies a pointer to the MAC address that receives the
-        converted multicast address.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PIP4_ADDRESS Ip4Multicast;
-    PUCHAR IpArray;
-    ULONG IpLowBytes;
-    PUCHAR MacArray;
-
-    ASSERT(MulticastAddress->Domain == NetDomainIp4);
-    ASSERT((MacAddress->Domain == NetDomainEthernet) ||
-           (MacAddress->Domain == NetDomain80211));
-
-    //
-    // The IPv4 address is in network byte order, but the CPU byte order low
-    // 23-bits need to be added to the MAC address. Get the low bytes, but keep
-    // them in network order to avoid doing a swap.
-    //
-
-    Ip4Multicast = (PIP4_ADDRESS)MulticastAddress;
-    IpLowBytes = Ip4Multicast->Address & IGMP_MULTICAST_TO_MAC_MASK;
-
-    //
-    // Copy the static base MAC address.
-    //
-
-    MacAddress->Port = 0;
-    MacArray = (PUCHAR)MacAddress->Address;
-    RtlCopyMemory(MacArray, NetIgmpBaseMacAddress, ETHERNET_ADDRESS_SIZE);
-
-    //
-    // Add the low 23-bits from the IP address to the MAC address, keeping in
-    // mind that the IP bytes are in network order.
-    //
-
-    IpArray = (PUCHAR)&IpLowBytes;
-    MacArray[3] |= IpArray[1];
-    MacArray[4] = IpArray[2];
-    MacArray[5] = IpArray[3];
     return;
 }
 

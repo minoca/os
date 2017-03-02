@@ -893,7 +893,7 @@ Return Value:
         (NewDataLinkEntry->Interface.DestroyLink == NULL) ||
         (NewDataLinkEntry->Interface.Send == NULL) ||
         (NewDataLinkEntry->Interface.ProcessReceivedPacket == NULL) ||
-        (NewDataLinkEntry->Interface.GetBroadcastAddress == NULL) ||
+        (NewDataLinkEntry->Interface.ConvertToPhysicalAddress == NULL) ||
         (NewDataLinkEntry->Interface.PrintAddress == NULL) ||
         (NewDataLinkEntry->Interface.GetPacketSizeInformation == NULL)) {
 

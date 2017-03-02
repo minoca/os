@@ -1713,12 +1713,13 @@ Return Value:
         }
 
         //
-        // The any and broadcast addresses only need the domain and port to
-        // match.
+        // The any, broadcast and multicast addresses only need the domain and
+        // port to match.
         //
 
         if ((AddressType == NetAddressAny) ||
-            (AddressType == NetAddressBroadcast)) {
+            (AddressType == NetAddressBroadcast) ||
+            (AddressType == NetAddressMulticast)) {
 
             *AddressEntry = CurrentAddress;
             Status = STATUS_SUCCESS;
@@ -2581,11 +2582,11 @@ Return Value:
         FindAll = TRUE;
 
     //
-    // If broadcast addresses are allowed for this protocol (the default), then
-    // test to see if the destination address is a broadcast address. This test
-    // is not necessary if a previous socket is supplied; assume that a
-    // previous invocation determined that all sockets needed to be found for
-    // this address tuple.
+    // If broadcast and multicast addresses are allowed for this protocol
+    // (the default), then test to see if the destination address is a
+    // broadcast or multicast address. This test is not necessary if a previous
+    // socket is supplied; assume that a previous invocation determined that
+    // all sockets needed to be found for this address tuple.
     //
 
     } else if ((Protocol->Flags & NET_PROTOCOL_FLAG_UNICAST_ONLY) == 0) {
@@ -2598,7 +2599,9 @@ Return Value:
                                                           NULL,
                                                           LocalAddress);
 
-            if (AddressType == NetAddressBroadcast) {
+            if ((AddressType == NetAddressBroadcast) ||
+                (AddressType == NetAddressMulticast)) {
+
                 FindAll = TRUE;
             }
         }

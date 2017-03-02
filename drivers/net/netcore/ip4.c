@@ -2020,6 +2020,10 @@ Return Value:
         return NetAddressBroadcast;
     }
 
+    if (IP4_IS_MULTICAST_ADDRESS(Ip4Address->Address) != FALSE) {
+        return NetAddressMulticast;
+    }
+
     //
     // Check to see if this is the local IP address. This requires getting the
     // link address entry for the current domain (if not supplied). Normally
@@ -2179,8 +2183,8 @@ Return Value:
 
 {
 
+    NET_ADDRESS_TYPE AddressType;
     ULONG BitsDifferentInSubnet;
-    BOOL Broadcast;
     NETWORK_ADDRESS DefaultGateway;
     PIP4_ADDRESS Ip4Address;
     PIP4_ADDRESS LocalIpAddress;
@@ -2191,7 +2195,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    Broadcast = FALSE;
+    AddressType = NetAddressUnknown;
     Ip4Address = (PIP4_ADDRESS)NetworkAddress;
     LockHeld = FALSE;
 
@@ -2210,8 +2214,14 @@ Return Value:
     // the broadcast link address.
     //
 
+    Status = STATUS_SUCCESS;
     if (Ip4Address->Address == IP4_BROADCAST_ADDRESS) {
-        Broadcast = TRUE;
+        AddressType = NetAddressBroadcast;
+        goto Ip4TranslateNetworkAddressEnd;
+    }
+
+    if (IP4_IS_MULTICAST_ADDRESS(Ip4Address->Address) != FALSE) {
+        AddressType = NetAddressMulticast;
         goto Ip4TranslateNetworkAddressEnd;
     }
 
@@ -2260,7 +2270,7 @@ Return Value:
                           ~SubnetMask->Address;
 
         if (Ip4Address->Address == SubnetBroadcast) {
-            Broadcast = TRUE;
+            AddressType = NetAddressBroadcast;
             goto Ip4TranslateNetworkAddressEnd;
         }
     }
@@ -2278,6 +2288,8 @@ Return Value:
                                         LinkAddress,
                                         PhysicalAddress);
 
+    AddressType = NetAddressUnicast;
+
 Ip4TranslateNetworkAddressEnd:
     if (LockHeld != FALSE) {
         KeReleaseQueuedLock(Link->QueuedLock);
@@ -2288,14 +2300,24 @@ Ip4TranslateNetworkAddressEnd:
     // socket options.
     //
 
-    if (Broadcast != FALSE) {
-        if ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_ENABLED) == 0) {
-            Status = STATUS_ACCESS_DENIED;
+    if ((AddressType == NetAddressBroadcast) &&
+        ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_ENABLED) == 0)) {
 
-        } else {
-            Link->DataLinkEntry->Interface.GetBroadcastAddress(PhysicalAddress);
-            Status = STATUS_SUCCESS;
-        }
+        return STATUS_ACCESS_DENIED;
+    }
+
+    //
+    // Broadcast and multicast addresses need to be translated by the data link
+    // layer.
+    //
+
+    if ((AddressType == NetAddressBroadcast) ||
+        (AddressType == NetAddressMulticast)) {
+
+        Status = Link->DataLinkEntry->Interface.ConvertToPhysicalAddress(
+                                                               NetworkAddress,
+                                                               PhysicalAddress,
+                                                               AddressType);
     }
 
     return Status;
