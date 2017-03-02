@@ -144,7 +144,7 @@ Return Value:
 
     Status = FwpRealModeCreateBiosCallContext(&RealModeContext, 0x15);
     if (!KSUCCESS(Status)) {
-        goto GetMemoryMapEnd;
+        return Status;
     }
 
     E820Descriptor = (PE820_DESCRIPTOR)RealModeContext.DataPage.Page;
@@ -296,7 +296,6 @@ Return Value:
         Status = FwpPcatReserveKnownRegions(MdlOut);
     }
 
-GetMemoryMapEnd:
     FwpRealModeDestroyBiosCallContext(&RealModeContext);
     return Status;
 }

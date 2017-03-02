@@ -93,6 +93,25 @@ Environment:
 #define VESA_FUNCTION_GET_VESA_INFORMATION 0x4F00
 #define VESA_FUNCTION_GET_MODE_INFORMATION 0x4F01
 #define VESA_FUNCTION_SET_MODE             0x4F02
+#define VESA_FUNCTION_SET_PALETTE_CONTROL  0x4F08
+#define VESA_FUNCTION_SET_PALETTE_ENTRIES  0x4F09
+
+//
+// Define the values for BL in the get/set palette control call.
+//
+
+#define VESA_PALETTE_CONTROL_SET 0x00
+#define VESA_PALETTE_CONTROL_GET 0x01
+
+//
+// Define the values for BL in the get/set palette entries call.
+//
+
+#define VESA_PALETTE_SET_PRIMARY 0x00
+#define VESA_PALETTE_GET_PRIMARY 0x01
+#define VESA_PALETTE_SET_SECONDARY 0x02
+#define VESA_PALETTE_GET_SECONDARY 0x03
+#define VESA_PALETTE_SET_DURING_VERTICAL_TRACE 0x80
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -459,11 +478,8 @@ const VIDEO_MODE_REQUEST FwModePreferences[] = {
     {800, 600, 32},
     {800, 600, 24},
     {800, 600, 16},
-    {800, 600, 8},
-    {800, 600, 4},
     {640, 480, 24},
     {640, 480, 16},
-    {640, 480, 8},
     {640, 480, 4},
     {0, 0, 0}
 };
@@ -542,7 +558,7 @@ Return Value:
         if (ModeCount != 0) {
             Status = FwpPcatSetBestVesaMode(FwVesaModeList);
             if (!KSUCCESS(Status)) {
-                goto InitializeVideoEnd;
+                ModeCount = 0;
             }
         }
     }
@@ -642,7 +658,7 @@ Return Value:
 
     Status = FwpRealModeCreateBiosCallContext(&RealModeContext, 0x10);
     if (!KSUCCESS(Status)) {
-        goto SetTextCursorEnd;
+        return;
     }
 
     //
@@ -658,8 +674,6 @@ Return Value:
     //
 
     FwpRealModeExecute(&RealModeContext);
-
-SetTextCursorEnd:
     FwpRealModeDestroyBiosCallContext(&RealModeContext);
     return;
 }
@@ -704,7 +718,7 @@ Return Value:
 
     Status = FwpRealModeCreateBiosCallContext(&RealModeContext, 0x10);
     if (!KSUCCESS(Status)) {
-        goto GetVesaInformationEnd;
+        return Status;
     }
 
     //
@@ -1110,7 +1124,7 @@ Return Value:
 
     Status = FwpRealModeCreateBiosCallContext(&RealModeContext, 0x10);
     if (!KSUCCESS(Status)) {
-        goto GetVesaModeInformationEnd;
+        return Status;
     }
 
     //
@@ -1188,7 +1202,7 @@ Return Value:
 
     Status = FwpRealModeCreateBiosCallContext(&RealModeContext, 0x10);
     if (!KSUCCESS(Status)) {
-        goto PcatSetVesaModeEnd;
+        return Status;
     }
 
     //

@@ -228,7 +228,7 @@ Return Value:
                                               BIOS_TIME_SERVICES);
 
     if (!KSUCCESS(Status)) {
-        goto PcatGetDateEnd;
+        return Status;
     }
 
     OriginalEip = RealModeContext.Eip;
@@ -264,8 +264,6 @@ Return Value:
     }
 
     Status = STATUS_SUCCESS;
-
-PcatGetDateEnd:
     FwpRealModeDestroyBiosCallContext(&RealModeContext);
     return Status;
 }
@@ -318,7 +316,7 @@ Return Value:
                                               BIOS_TIME_SERVICES);
 
     if (!KSUCCESS(Status)) {
-        goto PcatGetDateEnd;
+        return Status;
     }
 
     //
@@ -400,7 +398,7 @@ Return Value:
                                               BIOS_TIME_SERVICES);
 
     if (!KSUCCESS(Status)) {
-        goto PcatGetDateEnd;
+        return Status;
     }
 
     //

@@ -767,7 +767,7 @@ Return Value:
 
     Status = FwpRealModeCreateBiosCallContext(&RealModeContext, 0x13);
     if (!KSUCCESS(Status)) {
-        goto BlockOperationEnd;
+        return Status;
     }
 
     //
