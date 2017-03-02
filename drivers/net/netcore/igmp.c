@@ -208,27 +208,6 @@ typedef enum _IGMP_VERSION {
 
 Structure Description:
 
-    This structure defines an IGMP (IPv4) multicast request.
-
-Members:
-
-    MulticastAddress - Stores the multicast address of the group to join or
-        leave.
-
-    InterfaceAddress - Stores the address of the interface that is to join or
-        leave the multicast group.
-
---*/
-
-typedef struct _IGMP_MULTICAST_REQUEST {
-    ULONG MulticastAddress;
-    ULONG InterfaceAddress;
-} IGMP_MULTICAST_REQUEST, *PIGMP_MULTICAST_REQUEST;
-
-/*++
-
-Structure Description:
-
     This structure define the header common to all IGMP packets.
 
 Members:
@@ -581,20 +560,20 @@ NetpIgmpUserControl (
 KSTATUS
 NetpIgmpJoinMulticastGroup (
     PNET_SOCKET Socket,
-    PIGMP_MULTICAST_REQUEST Request
+    PSOCKET_IP4_MULTICAST_REQUEST Request
     );
 
 KSTATUS
 NetpIgmpLeaveMulticastGroup (
     PNET_SOCKET Socket,
-    PIGMP_MULTICAST_REQUEST Request
+    PSOCKET_IP4_MULTICAST_REQUEST Request
     );
 
 KSTATUS
 NetpIgmpFindLinkForRequest (
     PNET_NETWORK_ENTRY Network,
     PNET_LINK Link,
-    PIGMP_MULTICAST_REQUEST Request,
+    PSOCKET_IP4_MULTICAST_REQUEST Request,
     PNET_LINK_LOCAL_ADDRESS Result
     );
 
@@ -1395,7 +1374,7 @@ Return Value:
 {
 
     SOCKET_IP4_OPTION Ip4Option;
-    PIGMP_MULTICAST_REQUEST MulticastRequest;
+    PSOCKET_IP4_MULTICAST_REQUEST MulticastRequest;
     UINTN RequiredSize;
     PVOID Source;
     KSTATUS Status;
@@ -1417,15 +1396,15 @@ Return Value:
             break;
         }
 
-        RequiredSize = sizeof(IGMP_MULTICAST_REQUEST);
+        RequiredSize = sizeof(SOCKET_IP4_MULTICAST_REQUEST);
         if (*DataSize < RequiredSize) {
             *DataSize = RequiredSize;
             Status = STATUS_BUFFER_TOO_SMALL;
             break;
         }
 
-        MulticastRequest = (PIGMP_MULTICAST_REQUEST)Data;
-        if (!IP4_IS_MULTICAST_ADDRESS(MulticastRequest->MulticastAddress)) {
+        MulticastRequest = (PSOCKET_IP4_MULTICAST_REQUEST)Data;
+        if (!IP4_IS_MULTICAST_ADDRESS(MulticastRequest->Address)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -1533,7 +1512,7 @@ Return Value:
 KSTATUS
 NetpIgmpJoinMulticastGroup (
     PNET_SOCKET Socket,
-    PIGMP_MULTICAST_REQUEST Request
+    PSOCKET_IP4_MULTICAST_REQUEST Request
     )
 
 /*++
@@ -1615,7 +1594,7 @@ Return Value:
         CurrentEntry = IgmpLink->MulticastGroupList.Next;
         while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
             Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
-            if (Group->Address == Request->MulticastAddress) {
+            if (Group->Address == Request->Address) {
                 Status = STATUS_SUCCESS;
                 break;
             }
@@ -1627,9 +1606,7 @@ Return Value:
             if (NewGroup == NULL) {
                 KeReleaseQueuedLock(IgmpLink->Lock);
                 LinkLockHeld = FALSE;
-                NewGroup = NetpIgmpCreateGroup(IgmpLink,
-                                               Request->MulticastAddress);
-
+                NewGroup = NetpIgmpCreateGroup(IgmpLink, Request->Address);
                 if (NewGroup == NULL) {
                     Status = STATUS_INSUFFICIENT_RESOURCES;
                     goto JoinMulticastGroupEnd;
@@ -1705,7 +1682,7 @@ JoinMulticastGroupEnd:
 KSTATUS
 NetpIgmpLeaveMulticastGroup (
     PNET_SOCKET Socket,
-    PIGMP_MULTICAST_REQUEST Request
+    PSOCKET_IP4_MULTICAST_REQUEST Request
     )
 
 /*++
@@ -1779,7 +1756,7 @@ Return Value:
     CurrentEntry = IgmpLink->MulticastGroupList.Next;
     while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
         Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
-        if (Group->Address == Request->MulticastAddress) {
+        if (Group->Address == Request->Address) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -1863,7 +1840,7 @@ KSTATUS
 NetpIgmpFindLinkForRequest (
     PNET_NETWORK_ENTRY Network,
     PNET_LINK Link,
-    PIGMP_MULTICAST_REQUEST Request,
+    PSOCKET_IP4_MULTICAST_REQUEST Request,
     PNET_LINK_LOCAL_ADDRESS Result
     )
 
@@ -1910,15 +1887,10 @@ Return Value:
     // the given multicast address.
     //
 
-    if (Request->InterfaceAddress == 0) {
-
-        //
-        // TODO: Implement default multicast link support.
-        //
-
+    if (Request->Interface == 0) {
         RtlZeroMemory(&RemoteAddress, sizeof(IP4_ADDRESS));
         RemoteAddress.Domain = NetDomainIp4;
-        RemoteAddress.Address = Request->MulticastAddress;
+        RemoteAddress.Address = Request->Address;
         Status = NetFindLinkForRemoteAddress((PNETWORK_ADDRESS)&RemoteAddress,
                                              Result);
 
@@ -1933,7 +1905,7 @@ Return Value:
 
     RtlZeroMemory(&LocalAddress, sizeof(IP4_ADDRESS));
     LocalAddress.Domain = NetDomainIp4;
-    LocalAddress.Address = Request->InterfaceAddress;
+    LocalAddress.Address = Request->Interface;
     Status = NetFindLinkForLocalAddress(Network,
                                         (PNETWORK_ADDRESS)&LocalAddress,
                                         Link,

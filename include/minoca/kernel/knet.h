@@ -595,8 +595,8 @@ Members:
 
     Address - Stores the address of the multicast group to join or leave.
 
-    Interface - Stores the index of the network interfaces that is to join or
-        leave the multicast group.
+    Interface - Stores the IPv4 address of the network interface that is to
+        join or leave the multicast group.
 
 --*/
 

@@ -158,6 +158,27 @@ typedef struct _IP4_FRAGMENT_ENTRY {
 
 Structure Description:
 
+    This structure defines a multicast group for an IPv4 socket.
+
+Members:
+
+    ListEntry - Stores pointers to the previous and next multicast groups in
+        the socket's list.
+
+    Request - Stores the multicast group request that was supplied when joining
+        the group.
+
+--*/
+
+typedef struct _IP4_MULTICAST_GROUP {
+    LIST_ENTRY ListEntry;
+    SOCKET_IP4_MULTICAST_REQUEST Request;
+} IP4_MULTICAST_GROUP, *PIP4_MULTICAST_GROUP;
+
+/*++
+
+Structure Description:
+
     This structure defines the IP4 socket option information.
 
 Members:
@@ -169,11 +190,19 @@ Members:
         point that is to be set in the IPv4 header for every packet sent by
         this socket.
 
+    MulticastLock - Supplies a pointer to the queued lock that protects access
+        to the multicast information.
+
+    MulticastGroupList - Stores the head of the list of multicast groups to
+        which the socket belongs.
+
 --*/
 
 typedef struct _IP4_SOCKET_INFORMATION {
     UCHAR TimeToLive;
     UCHAR DifferentiatedServicesCodePoint;
+    volatile PQUEUED_LOCK MulticastLock;
+    LIST_ENTRY MulticastGroupList;
 } IP4_SOCKET_INFORMATION, *PIP4_SOCKET_INFORMATION;
 
 //
@@ -316,6 +345,23 @@ NetpIp4CreateFragmentedPacketNode (
 VOID
 NetpIp4DestroyFragmentedPacketNode (
     PIP4_FRAGMENTED_PACKET_NODE PacketNode
+    );
+
+KSTATUS
+NetpIp4JoinMulticastGroup (
+    PNET_SOCKET Socket,
+    PSOCKET_IP4_MULTICAST_REQUEST Request
+    );
+
+KSTATUS
+NetpIp4LeaveMulticastGroup (
+    PNET_SOCKET Socket,
+    PSOCKET_IP4_MULTICAST_REQUEST Request
+    );
+
+VOID
+NetpIp4DestroyMulticastGroups (
+    PNET_SOCKET Socket
     );
 
 //
@@ -590,6 +636,8 @@ Return Value:
 
     SocketInformation->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;
     SocketInformation->DifferentiatedServicesCodePoint = 0;
+    SocketInformation->MulticastLock = NULL;
+    INITIALIZE_LIST_HEAD(&(SocketInformation->MulticastGroupList));
     NewSocket->NetworkSocketInformation = SocketInformation;
     return STATUS_SUCCESS;
 }
@@ -619,6 +667,7 @@ Return Value:
 {
 
     if (Socket->NetworkSocketInformation != NULL) {
+        NetpIp4DestroyMulticastGroups(Socket);
         MmFreePagedPool(Socket->NetworkSocketInformation);
         Socket->NetworkSocketInformation = NULL;
     }
@@ -1730,7 +1779,7 @@ Return Value:
     ULONG Flags;
     ULONG IntegerOption;
     SOCKET_IP4_OPTION Ip4Option;
-    PNET_PROTOCOL_ENTRY Protocol;
+    PSOCKET_IP4_MULTICAST_REQUEST MulticastRequest;
     UINTN RequiredSize;
     PIP4_SOCKET_INFORMATION SocketInformation;
     PVOID Source;
@@ -1846,24 +1895,32 @@ Return Value:
 
         break;
 
-    //
-    // Joining and leaving an IPv4 multicast group is hanlded by IGMP.
-    //
-
     case SocketIp4OptionJoinMulticastGroup:
     case SocketIp4OptionLeaveMulticastGroup:
-        Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
-        if (Protocol == NULL) {
+        if (Set == FALSE) {
             Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
             break;
         }
 
-        Status = Protocol->Interface.GetSetInformation(Socket,
-                                                       InformationType,
-                                                       Option,
-                                                       Data,
-                                                       DataSize,
-                                                       Set);
+        RequiredSize = sizeof(SOCKET_IP4_MULTICAST_REQUEST);
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        MulticastRequest = (PSOCKET_IP4_MULTICAST_REQUEST)Data;
+        if (!IP4_IS_MULTICAST_ADDRESS(MulticastRequest->Address)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        if (Ip4Option == SocketIp4OptionJoinMulticastGroup) {
+            Status = NetpIp4JoinMulticastGroup(Socket, MulticastRequest);
+
+        } else {
+            Status = NetpIp4LeaveMulticastGroup(Socket, MulticastRequest);
+        }
 
         goto Ip4GetSetInformationEnd;
 
@@ -3005,6 +3062,365 @@ Return Value:
     }
 
     MmFreePagedPool(PacketNode);
+    return;
+}
+
+KSTATUS
+NetpIp4JoinMulticastGroup (
+    PNET_SOCKET Socket,
+    PSOCKET_IP4_MULTICAST_REQUEST Request
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds the given socket to a multicast group.
+
+Arguments:
+
+    Socket - Supplies a pointer to a socket.
+
+    Request - Supplies a pointer to the multicast join request. This stores
+        the multicast group address to join and the address of the interface on
+        which to join it.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PIP4_MULTICAST_GROUP Group;
+    BOOL LockHeld;
+    PIP4_MULTICAST_GROUP NewGroup;
+    PQUEUED_LOCK NewLock;
+    PQUEUED_LOCK OldLock;
+    PNET_PROTOCOL_ENTRY Protocol;
+    UINTN RequestSize;
+    PIP4_SOCKET_INFORMATION SocketInformation;
+    KSTATUS Status;
+
+    LockHeld = FALSE;
+    NewGroup = NULL;
+    SocketInformation = Socket->NetworkSocketInformation;
+
+    //
+    // This isn't going to get very far without IGMP. Fail immediately if it's
+    // not present.
+    //
+
+    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
+    if (Protocol == NULL) {
+        Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        goto JoinMulticastGroupEnd;
+    }
+
+    //
+    // If there is no multicast lock. Create one before going any further. This
+    // is done on the fly so that most sockets don't need to allocate the lock
+    // resource.
+    //
+
+    if (SocketInformation->MulticastLock == NULL) {
+        NewLock = KeCreateQueuedLock();
+        if (NewLock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto JoinMulticastGroupEnd;
+        }
+
+        //
+        // Try to exchange the lock into place.
+        //
+
+        OldLock = (PQUEUED_LOCK)RtlAtomicCompareExchange(
+                                   (PUINTN)&(SocketInformation->MulticastLock),
+                                   (UINTN)NewLock,
+                                   (UINTN)NULL);
+
+        if (OldLock != NULL) {
+            KeDestroyQueuedLock(NewLock);
+        }
+    }
+
+    //
+    // Check to see if this socket already joined the group.
+    //
+
+    KeAcquireQueuedLock(SocketInformation->MulticastLock);
+    LockHeld = TRUE;
+    CurrentEntry = SocketInformation->MulticastGroupList.Next;
+    while (CurrentEntry != &(SocketInformation->MulticastGroupList)) {
+        Group = LIST_VALUE(CurrentEntry, IP4_MULTICAST_GROUP, ListEntry);
+        if ((Group->Request.Address == Request->Address) &&
+            (Group->Request.Interface == Request->Interface)) {
+
+            Status = STATUS_ADDRESS_IN_USE;
+            goto JoinMulticastGroupEnd;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    //
+    // Prepare for success and allocate a new IPv4 multicast group.
+    //
+
+    NewGroup = MmAllocatePagedPool(sizeof(IP4_MULTICAST_GROUP),
+                                   IP4_ALLOCATION_TAG);
+
+    if (NewGroup == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto JoinMulticastGroupEnd;
+    }
+
+    //
+    // Ask IGMP to join the multicast group. A multithreaded request for this
+    // socket to join or leave a muliticast group is highly unlikely, so don't
+    // fret too much about holding the lock.
+    //
+
+    RequestSize = sizeof(SOCKET_IP4_MULTICAST_REQUEST);
+    Status = Protocol->Interface.GetSetInformation(
+                                             Socket,
+                                             SocketInformationIp4,
+                                             SocketIp4OptionJoinMulticastGroup,
+                                             Request,
+                                             &RequestSize,
+                                             TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto JoinMulticastGroupEnd;
+    }
+
+    RtlCopyMemory(&(NewGroup->Request),
+                  Request,
+                  sizeof(SOCKET_IP4_MULTICAST_REQUEST));
+
+    INSERT_BEFORE(&(NewGroup->ListEntry),
+                  &(SocketInformation->MulticastGroupList));
+
+JoinMulticastGroupEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseQueuedLock(SocketInformation->MulticastLock);
+    }
+
+    if (!KSUCCESS(Status)) {
+        if (NewGroup != NULL) {
+            MmFreePagedPool(NewGroup);
+        }
+    }
+
+    return Status;
+}
+
+KSTATUS
+NetpIp4LeaveMulticastGroup (
+    PNET_SOCKET Socket,
+    PSOCKET_IP4_MULTICAST_REQUEST Request
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes the given socket from a multicast group.
+
+Arguments:
+
+    Socket - Supplies a pointer to a socket.
+
+    Request - Supplies a pointer to the multicast leave request. This stores
+        the multicast group address to leave and the address of the interface
+        on which the socket joined the group.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PIP4_MULTICAST_GROUP Group;
+    BOOL LockHeld;
+    PNET_PROTOCOL_ENTRY Protocol;
+    UINTN RequestSize;
+    PIP4_SOCKET_INFORMATION SocketInformation;
+    KSTATUS Status;
+
+    //
+    // If the multicast lock is not allocated or the list is empty, then this
+    // socket never joined any multicast groups.
+    //
+
+    LockHeld = FALSE;
+    Status = STATUS_INVALID_ADDRESS;
+    SocketInformation = Socket->NetworkSocketInformation;
+    if ((SocketInformation->MulticastLock == NULL) ||
+        (LIST_EMPTY(&(SocketInformation->MulticastGroupList)) != FALSE)) {
+
+        goto LeaveMulticastGroupEnd;
+    }
+
+    //
+    // Search through the multicast groups for a matching entry.
+    //
+
+    KeAcquireQueuedLock(SocketInformation->MulticastLock);
+    LockHeld = TRUE;
+    CurrentEntry = SocketInformation->MulticastGroupList.Next;
+    while (CurrentEntry != &(SocketInformation->MulticastGroupList)) {
+        Group = LIST_VALUE(CurrentEntry, IP4_MULTICAST_GROUP, ListEntry);
+        if ((Group->Request.Address == Request->Address) &&
+            (Group->Request.Interface == Request->Interface)) {
+
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto LeaveMulticastGroupEnd;
+    }
+
+    //
+    // Remove the group from the list and destroy the group.
+    //
+
+    LIST_REMOVE(&(Group->ListEntry));
+    KeReleaseQueuedLock(SocketInformation->MulticastLock);
+    LockHeld = FALSE;
+    MmFreePagedPool(Group);
+
+    //
+    // Now notify IGMP that this socket has left the group. IGMP should only
+    // fail if the link disappeared.
+    //
+
+    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
+    if (Protocol == NULL) {
+        Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        goto LeaveMulticastGroupEnd;
+    }
+
+    RequestSize = sizeof(SOCKET_IP4_MULTICAST_REQUEST);
+    Status = Protocol->Interface.GetSetInformation(
+                                            Socket,
+                                            SocketInformationIp4,
+                                            SocketIp4OptionLeaveMulticastGroup,
+                                            Request,
+                                            &RequestSize,
+                                            TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto LeaveMulticastGroupEnd;
+    }
+
+LeaveMulticastGroupEnd:
+    if (LockHeld != FALSE) {
+        KeAcquireQueuedLock(SocketInformation->MulticastLock);
+    }
+
+    return Status;
+}
+
+VOID
+NetpIp4DestroyMulticastGroups (
+    PNET_SOCKET Socket
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys all multicast groups that the given socket joined. It
+    notifies IGMP that the socket is leaving the group and then destroys the
+    group structure.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket meant to destroy its multicast
+        groups.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PIP4_MULTICAST_GROUP Group;
+    LIST_ENTRY LeaveList;
+    PLIST_ENTRY MulticastGroupList;
+    PNET_PROTOCOL_ENTRY Protocol;
+    UINTN RequestSize;
+    PIP4_SOCKET_INFORMATION SocketInformation;
+
+    ASSERT(Socket->NetworkSocketInformation != NULL);
+
+    SocketInformation = Socket->NetworkSocketInformation;
+    MulticastGroupList = &(SocketInformation->MulticastGroupList);
+    if (LIST_EMPTY(MulticastGroupList) != FALSE) {
+        goto DestroyMulticastGroupsEnd;
+    }
+
+    ASSERT(SocketInformation->MulticastLock != NULL);
+
+    //
+    // Copy the list to a local list in order to not hold the lock while
+    // calling into IGMP.
+    //
+
+    INITIALIZE_LIST_HEAD(&LeaveList);
+    KeAcquireQueuedLock(SocketInformation->MulticastLock);
+    if (LIST_EMPTY(MulticastGroupList) == FALSE) {
+        MOVE_LIST(MulticastGroupList, &LeaveList);
+        INITIALIZE_LIST_HEAD(MulticastGroupList);
+    }
+
+    KeReleaseQueuedLock(SocketInformation->MulticastLock);
+    if (LIST_EMPTY(&LeaveList) != FALSE) {
+        goto DestroyMulticastGroupsEnd;
+    }
+
+    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
+    if (Protocol == NULL) {
+        goto DestroyMulticastGroupsEnd;
+    }
+
+    //
+    // Run through the local list, leave each multicast group and destroy the
+    // group structures.
+    //
+
+    while (LIST_EMPTY(&LeaveList) == FALSE) {
+        Group = LIST_VALUE(LeaveList.Next, IP4_MULTICAST_GROUP, ListEntry);
+        LIST_REMOVE(&(Group->ListEntry));
+        RequestSize = sizeof(Group->Request);
+        Protocol->Interface.GetSetInformation(
+                                            Socket,
+                                            SocketInformationIp4,
+                                            SocketIp4OptionLeaveMulticastGroup,
+                                            &(Group->Request),
+                                            &RequestSize,
+                                            TRUE);
+
+        MmFreePagedPool(Group);
+    }
+
+DestroyMulticastGroupsEnd:
+    if (SocketInformation->MulticastLock != NULL) {
+        KeDestroyQueuedLock(SocketInformation->MulticastLock);
+    }
+
     return;
 }
 
