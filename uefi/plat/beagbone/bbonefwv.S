@@ -40,6 +40,7 @@ Environment:
 #endif
 
 #define INCLUDE_BINARY(_Path, _Name) \
+    .align 4; \
     .global LABEL(_Name##_start); \
     LABEL(_Name##_start):; \
     .incbin _Path; \
