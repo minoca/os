@@ -168,7 +168,6 @@ Return Value:
     PFAT_CLUSTER_SIZE_ENTRY ClusterSizeEntry;
     ULONGLONG CurrentBlock;
     ULONG CurrentCluster;
-    PFAT_DIRECTORY_ENTRY DirectoryEntry;
     ULONGLONG DiskClusters;
     ULONGLONG DiskSize;
     ULONG EndCluster;
@@ -181,7 +180,6 @@ Return Value:
     ULONGLONG InformationSector;
     ULONG IoFlags;
     BYTE Media;
-    ULONG NameIndex;
     UCHAR NumberOfFats;
     ULONG ReservedBlockCount;
     ULONGLONG RootDirectoryBlock;
@@ -191,7 +189,6 @@ Return Value:
     PFAT_IO_BUFFER ScratchIoBuffer;
     ULONG ScratchSize;
     KSTATUS Status;
-    SYSTEM_TIME SystemTime;
     ULONG ThisCluster;
     ULONGLONG TotalClusters;
 
@@ -402,7 +399,11 @@ Return Value:
 
         ASSERT(TotalClusters * FAT32_CLUSTER_WIDTH < BlocksPerFat * BlockSize);
 
-        RootDirectorySize = 0;
+        RootDirectorySize = ClusterSize / BlockSize;
+        if (RootDirectorySize == 0) {
+            RootDirectorySize = 1;
+        }
+
         RootDirectoryCluster = FAT_CLUSTER_BEGIN;
     }
 
@@ -421,7 +422,7 @@ Return Value:
 
     RtlZeroMemory(Scratch, BlockSize);
     for (CurrentBlock = 1;
-         CurrentBlock < ReservedBlockCount + RootDirectorySize;
+         CurrentBlock < ReservedBlockCount;
          CurrentBlock += 1) {
 
         Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
@@ -580,52 +581,24 @@ Return Value:
     }
 
     //
-    // Create the root directory, with a dot entry.
+    // Clear out the root directory. This is either a fixed size or one cluster.
     //
 
     RtlZeroMemory(Scratch, BlockSize);
-    DirectoryEntry = (PFAT_DIRECTORY_ENTRY)Scratch;
-    for (NameIndex = 0; NameIndex < FAT_FILE_LENGTH; NameIndex += 1) {
-        DirectoryEntry->DosName[NameIndex] = ' ';
-    }
+    for (CurrentBlock = 0;
+         CurrentBlock < RootDirectorySize;
+         CurrentBlock += 1) {
 
-    for (NameIndex = 0; NameIndex < FAT_FILE_EXTENSION_LENGTH; NameIndex += 1) {
-        DirectoryEntry->DosExtension[NameIndex] = ' ';
-    }
+        Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
+                                RootDirectoryBlock + CurrentBlock,
+                                1,
+                                IoFlags,
+                                NULL,
+                                ScratchIoBuffer);
 
-    DirectoryEntry->DosName[0] = '.';
-    DirectoryEntry->FileAttributes = FAT_SUBDIRECTORY;
-    DirectoryEntry->ClusterHigh =
-                               (USHORT)((RootDirectoryCluster >> 16) & 0xFFFF);
-
-    DirectoryEntry->ClusterLow = (USHORT)(RootDirectoryCluster & 0xFFFF);
-    DirectoryEntry->CreationTime10ms = 0;
-    FatGetCurrentSystemTime(&SystemTime);
-    FatpConvertSystemTimeToFatTime(&SystemTime,
-                                   &(DirectoryEntry->CreationDate),
-                                   &(DirectoryEntry->CreationTime),
-                                   &(DirectoryEntry->CreationTime10ms));
-
-    DirectoryEntry->LastAccessDate = DirectoryEntry->CreationDate;
-    DirectoryEntry->LastModifiedDate = DirectoryEntry->CreationDate;
-    DirectoryEntry->LastModifiedTime = DirectoryEntry->CreationTime;
-    DirectoryEntry += 1;
-    RtlZeroMemory(DirectoryEntry, sizeof(FAT_DIRECTORY_ENTRY));
-    DirectoryEntry->DosName[0] = FAT_DIRECTORY_ENTRY_END;
-
-    //
-    // Write out the root directory block.
-    //
-
-    Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
-                            RootDirectoryBlock,
-                            1,
-                            IoFlags,
-                            NULL,
-                            ScratchIoBuffer);
-
-    if (!KSUCCESS(Status)) {
-        goto FormatEnd;
+        if (!KSUCCESS(Status)) {
+            goto FormatEnd;
+        }
     }
 
     //
@@ -667,8 +640,10 @@ Return Value:
     BootSector->SectorsPerCluster = ClusterSize / BlockSize;
     BootSector->ReservedSectorCount = ReservedBlockCount;
     BootSector->AllocationTableCount = NumberOfFats;
-    BootSector->RootDirectoryCount = (RootDirectorySize * BlockSize) /
-                                     sizeof(FAT_DIRECTORY_ENTRY);
+    if (Format != Fat32Format) {
+        BootSector->RootDirectoryCount = (RootDirectorySize * BlockSize) /
+                                         sizeof(FAT_DIRECTORY_ENTRY);
+    }
 
     //
     // There are two fields for the total number of sectors. Use the "small"
@@ -696,7 +671,7 @@ Return Value:
     BootSector->MediaDescriptor = Media;
     BootSector->SectorsPerFileAllocationTable = 0;
     BootSector->SectorsPerTrack = 0x3F;
-    BootSector->HeadCount = 0x80;
+    BootSector->HeadCount = 0xFF;
     BootSector->HiddenSectors = 0;
 
     //
@@ -720,9 +695,9 @@ Return Value:
                                                    FAT_EXTENDED_BOOT_SIGNATURE;
 
         BootSector->Fat32Parameters.SerialNumber = FatpGetRandomNumber();
-        RtlStringCopy((PSTR)BootSector->Fat32Parameters.VolumeLabel,
+        RtlCopyMemory(BootSector->Fat32Parameters.VolumeLabel,
                       "MinocaOS   ",
-                      12);
+                      11);
 
         Identifier = FAT32_IDENTIFIER;
         RtlCopyMemory(BootSector->Fat32Parameters.FatType,
@@ -741,9 +716,9 @@ Return Value:
                                                    FAT_EXTENDED_BOOT_SIGNATURE;
 
         BootSector->FatParameters.SerialNumber = FatpGetRandomNumber();
-        RtlStringCopy((PSTR)BootSector->FatParameters.VolumeLabel,
+        RtlCopyMemory(BootSector->FatParameters.VolumeLabel,
                       "MinocaOS   ",
-                      12);
+                      11);
 
         if (Format == Fat12Format) {
             Identifier = FAT12_IDENTIFIER;
