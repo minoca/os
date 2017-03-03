@@ -1898,6 +1898,7 @@ Return Value:
 
     StaticFunctions = Image->StaticFunctions;
     if ((StaticFunctions != NULL) &&
+        ((Image->Flags & IMAGE_FLAG_INITIALIZED) != 0) &&
         ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) == 0)) {
 
         //
