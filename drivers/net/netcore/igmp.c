@@ -42,6 +42,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip4.h>
+#include <minoca/net/igmp.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -559,22 +560,12 @@ NetpIgmpUserControl (
 
 KSTATUS
 NetpIgmpJoinMulticastGroup (
-    PNET_SOCKET Socket,
-    PSOCKET_IP4_MULTICAST_REQUEST Request
+    PSOCKET_IGMP_MULTICAST_REQUEST Request
     );
 
 KSTATUS
 NetpIgmpLeaveMulticastGroup (
-    PNET_SOCKET Socket,
-    PSOCKET_IP4_MULTICAST_REQUEST Request
-    );
-
-KSTATUS
-NetpIgmpFindLinkForRequest (
-    PNET_NETWORK_ENTRY Network,
-    PNET_LINK Link,
-    PSOCKET_IP4_MULTICAST_REQUEST Request,
-    PNET_LINK_LOCAL_ADDRESS Result
+    PSOCKET_IGMP_MULTICAST_REQUEST Request
     );
 
 VOID
@@ -660,7 +651,8 @@ NetpIgmpSendPackets (
 
 PIGMP_LINK
 NetpIgmpCreateOrLookupLink (
-    PNET_LINK_LOCAL_ADDRESS LocalAddress
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress
     );
 
 VOID
@@ -1373,13 +1365,13 @@ Return Value:
 
 {
 
-    SOCKET_IP4_OPTION Ip4Option;
-    PSOCKET_IP4_MULTICAST_REQUEST MulticastRequest;
+    SOCKET_IGMP_OPTION IgmpOption;
+    PSOCKET_IGMP_MULTICAST_REQUEST MulticastRequest;
     UINTN RequiredSize;
     PVOID Source;
     KSTATUS Status;
 
-    if (InformationType != SocketInformationIp4) {
+    if (InformationType != SocketInformationIgmp) {
         Status = STATUS_INVALID_PARAMETER;
         goto IgmpGetSetInformationEnd;
     }
@@ -1387,33 +1379,33 @@ Return Value:
     RequiredSize = 0;
     Source = NULL;
     Status = STATUS_SUCCESS;
-    Ip4Option = (SOCKET_IP4_OPTION)Option;
-    switch (Ip4Option) {
-    case SocketIp4OptionJoinMulticastGroup:
-    case SocketIp4OptionLeaveMulticastGroup:
+    IgmpOption = (SOCKET_IGMP_OPTION)Option;
+    switch (IgmpOption) {
+    case SocketIgmpOptionJoinMulticastGroup:
+    case SocketIgmpOptionLeaveMulticastGroup:
         if (Set == FALSE) {
             Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
             break;
         }
 
-        RequiredSize = sizeof(SOCKET_IP4_MULTICAST_REQUEST);
+        RequiredSize = sizeof(SOCKET_IGMP_MULTICAST_REQUEST);
         if (*DataSize < RequiredSize) {
             *DataSize = RequiredSize;
             Status = STATUS_BUFFER_TOO_SMALL;
             break;
         }
 
-        MulticastRequest = (PSOCKET_IP4_MULTICAST_REQUEST)Data;
-        if (!IP4_IS_MULTICAST_ADDRESS(MulticastRequest->Address)) {
+        MulticastRequest = (PSOCKET_IGMP_MULTICAST_REQUEST)Data;
+        if (!IP4_IS_MULTICAST_ADDRESS(MulticastRequest->MulticastAddress)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
-        if (Ip4Option == SocketIp4OptionJoinMulticastGroup) {
-            Status = NetpIgmpJoinMulticastGroup(Socket, MulticastRequest);
+        if (IgmpOption == SocketIgmpOptionJoinMulticastGroup) {
+            Status = NetpIgmpJoinMulticastGroup(MulticastRequest);
 
         } else {
-            Status = NetpIgmpLeaveMulticastGroup(Socket, MulticastRequest);
+            Status = NetpIgmpLeaveMulticastGroup(MulticastRequest);
         }
 
         break;
@@ -1511,27 +1503,24 @@ Return Value:
 
 KSTATUS
 NetpIgmpJoinMulticastGroup (
-    PNET_SOCKET Socket,
-    PSOCKET_IP4_MULTICAST_REQUEST Request
+    PSOCKET_IGMP_MULTICAST_REQUEST Request
     )
 
 /*++
 
 Routine Description:
 
-    This routine joins the given socket to the multicast group provided in the
-    request. If no other sockets are joined to the supplied multicast group on
-    the specified interface, then an IGMP report is sent out over the network
+    This routine joins the multicast group on the network link provided in the
+    request. If this is the first request to join the supplied multicast group
+    on the specified link, then an IGMP report is sent out over the network
     and the hardware is reprogrammed to include messages to the multicast
     group's address.
 
 Arguments:
 
-    Socket - Supplies a pointer to the socket asking to join a multicast group.
-
     Request - Supplies a pointer to a multicast request, which includes the
-        address of the group to join and the address of the interface on which
-        to join the group.
+        address of the group to join and the network link on which to join the
+        group.
 
 Return Value:
 
@@ -1546,34 +1535,21 @@ Return Value:
     PIGMP_LINK IgmpLink;
     BOOL LinkLockHeld;
     PIGMP_MULTICAST_GROUP NewGroup;
-    NET_LINK_LOCAL_ADDRESS Result;
     KSTATUS Status;
 
     LinkLockHeld = FALSE;
     NewGroup = NULL;
-    Result.Link = NULL;
-
-    //
-    // Get the link that should be joined to the given multicast group.
-    //
-
-    Status = NetpIgmpFindLinkForRequest(Socket->Network,
-                                        Socket->Link,
-                                        Request,
-                                        &Result);
-
-    if (!KSUCCESS(Status)) {
-        return STATUS_NO_SUCH_DEVICE;
-    }
 
     //
     // Test to see if there is an IGMP link for the given network link,
     // creating one if the lookup fails.
     //
 
-    IgmpLink = NetpIgmpLookupLink(Result.Link);
+    IgmpLink = NetpIgmpLookupLink(Request->Link);
     if (IgmpLink == NULL) {
-        IgmpLink = NetpIgmpCreateOrLookupLink(&Result);
+        IgmpLink = NetpIgmpCreateOrLookupLink(Request->Link,
+                                              Request->LinkAddress);
+
         if (IgmpLink == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto JoinMulticastGroupEnd;
@@ -1594,7 +1570,7 @@ Return Value:
         CurrentEntry = IgmpLink->MulticastGroupList.Next;
         while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
             Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
-            if (Group->Address == Request->Address) {
+            if (Group->Address == Request->MulticastAddress) {
                 Status = STATUS_SUCCESS;
                 break;
             }
@@ -1606,7 +1582,9 @@ Return Value:
             if (NewGroup == NULL) {
                 KeReleaseQueuedLock(IgmpLink->Lock);
                 LinkLockHeld = FALSE;
-                NewGroup = NetpIgmpCreateGroup(IgmpLink, Request->Address);
+                NewGroup = NetpIgmpCreateGroup(IgmpLink,
+                                               Request->MulticastAddress);
+
                 if (NewGroup == NULL) {
                     Status = STATUS_INSUFFICIENT_RESOURCES;
                     goto JoinMulticastGroupEnd;
@@ -1672,35 +1650,28 @@ JoinMulticastGroupEnd:
         NetpIgmpDestroyGroup(NewGroup);
     }
 
-    if (Result.Link != NULL) {
-        NetLinkReleaseReference(Result.Link);
-    }
-
     return Status;
 }
 
 KSTATUS
 NetpIgmpLeaveMulticastGroup (
-    PNET_SOCKET Socket,
-    PSOCKET_IP4_MULTICAST_REQUEST Request
+    PSOCKET_IGMP_MULTICAST_REQUEST Request
     )
 
 /*++
 
 Routine Description:
 
-    This routine removes the local system from a multicast group. If no other
-    sockets are joined to the supplied multicast group on the specified
-    interface, then a IGMP leave message is sent out over the network and the
-    hardware is reprogrammed to filter out messages to the multicast group.
+    This routine removes the local system from a multicast group. If this is
+    the last request to leave a multicast group on the link, then a IGMP leave
+    message is sent out over the network and the hardware is reprogrammed to
+    filter out messages to the multicast group.
 
 Arguments:
 
-    Socket - Supplies a pointer to the socket leaving the multicast group.
-
     Request - Supplies a pointer to a multicast request, which includes the
-        address of the group to leave and the address of the interface that is
-        to leave the group.
+        address of the group to leave and the network link that has previously
+        joined the group.
 
 Return Value:
 
@@ -1714,32 +1685,17 @@ Return Value:
     PIGMP_MULTICAST_GROUP Group;
     PIGMP_LINK IgmpLink;
     BOOL LinkLockHeld;
-    NET_LINK_LOCAL_ADDRESS Result;
+    BOOL LinkUp;
     KSTATUS Status;
 
     LinkLockHeld = FALSE;
     IgmpLink = NULL;
-    Result.Link = NULL;
-
-    //
-    // Get the link that should leave the given multicast group.
-    //
-
-    Status = NetpIgmpFindLinkForRequest(Socket->Network,
-                                        Socket->Link,
-                                        Request,
-                                        &Result);
-
-    if (!KSUCCESS(Status)) {
-        Status = STATUS_NO_SUCH_DEVICE;
-        goto LeaveMulticastGroupEnd;
-    }
 
     //
     // Now see if there is an IGMP link for the given network link.
     //
 
-    IgmpLink = NetpIgmpLookupLink(Result.Link);
+    IgmpLink = NetpIgmpLookupLink(Request->Link);
     if (IgmpLink == NULL) {
         Status = STATUS_INVALID_ADDRESS;
         goto LeaveMulticastGroupEnd;
@@ -1756,7 +1712,7 @@ Return Value:
     CurrentEntry = IgmpLink->MulticastGroupList.Next;
     while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
         Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
-        if (Group->Address == Request->Address) {
+        if (Group->Address == Request->MulticastAddress) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -1808,13 +1764,25 @@ Return Value:
     Group->JoinCount = 0;
 
     //
-    // Start sending leave messages, up to the robustness count. The group's
-    // initial reference will be released after the last leave message is sent.
+    // If the link is up, start sending leave messages, up to the robustness
+    // count. The group's initial reference will be released after the last
+    // leave message is sent.
     //
 
-    RtlAtomicOr32(&(Group->Flags), IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE);
-    RtlAtomicExchange32(&(Group->SendCount), IgmpLink->RobustnessVariable);
-    NetpIgmpSendGroupLeave(Group);
+    NetGetLinkState(IgmpLink->Link, &LinkUp, NULL);
+    if (LinkUp != FALSE) {
+        RtlAtomicOr32(&(Group->Flags), IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE);
+        RtlAtomicExchange32(&(Group->SendCount), IgmpLink->RobustnessVariable);
+        NetpIgmpSendGroupLeave(Group);
+
+    //
+    // Otherwise don't bother with the leave messages and just destroy the
+    // group immediately.
+    //
+
+    } else {
+        NetpIgmpGroupReleaseReference(Group);
+    }
 
     //
     // TODO: Notify the hardware that this multicast group is defunct.
@@ -1829,108 +1797,6 @@ LeaveMulticastGroupEnd:
         NetpIgmpLinkReleaseReference(IgmpLink);
     }
 
-    if (Result.Link != NULL) {
-        NetLinkReleaseReference(Result.Link);
-    }
-
-    return Status;
-}
-
-KSTATUS
-NetpIgmpFindLinkForRequest (
-    PNET_NETWORK_ENTRY Network,
-    PNET_LINK Link,
-    PSOCKET_IP4_MULTICAST_REQUEST Request,
-    PNET_LINK_LOCAL_ADDRESS Result
-    )
-
-/*++
-
-Routine Description:
-
-    This routine searches for a network link that matches the given multicast
-    request. If the any address is supplied, then a default multicast link will
-    be returned. If no default address is set, then the remote multicast
-    address will be used to find a link that can reach it. If the address does
-    not match the suggested link, all links will be searched for a match. A
-    reference is taken on the returned network link. The caller is responsible
-    for releasing the reference.
-
-Arguments:
-
-    Network - Supplies a pointer to the network to which the address belongs.
-        This should be a pointer to the IPv4 network entry.
-
-    Link - Supplies a pointer to a suggested link to search on.
-
-    Request - Supplies the multicast request for which a link needs to be
-        found.
-
-    Result - Supplies a pointer that receives the link information, including
-        the link, link address entry, and associated local address.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    IP4_ADDRESS LocalAddress;
-    IP4_ADDRESS RemoteAddress;
-    KSTATUS Status;
-
-    //
-    // The any address resolves to the default multicast interface if it is
-    // set. If there is no default, then look for a local link that can reach
-    // the given multicast address.
-    //
-
-    if (Request->Interface == 0) {
-        RtlZeroMemory(&RemoteAddress, sizeof(IP4_ADDRESS));
-        RemoteAddress.Domain = NetDomainIp4;
-        RemoteAddress.Address = Request->Address;
-        Status = NetFindLinkForRemoteAddress((PNETWORK_ADDRESS)&RemoteAddress,
-                                             Result);
-
-        if (KSUCCESS(Status)) {
-            goto IgmpFindLinkForRequestEnd;
-        }
-    }
-
-    //
-    // Otherwise a link that matches the given IPv4 address must be found.
-    //
-
-    RtlZeroMemory(&LocalAddress, sizeof(IP4_ADDRESS));
-    LocalAddress.Domain = NetDomainIp4;
-    LocalAddress.Address = Request->Interface;
-    Status = NetFindLinkForLocalAddress(Network,
-                                        (PNETWORK_ADDRESS)&LocalAddress,
-                                        Link,
-                                        Result);
-
-    if (!KSUCCESS(Status)) {
-        if (Link == NULL) {
-            goto IgmpFindLinkForRequestEnd;
-        }
-
-        //
-        // If the suggested link failed, fall back and try all links.
-        //
-
-        Status = NetFindLinkForLocalAddress(Network,
-                                            (PNETWORK_ADDRESS)&LocalAddress,
-                                            NULL,
-                                            Result);
-
-        if (!KSUCCESS(Status)) {
-            goto IgmpFindLinkForRequestEnd;
-        }
-    }
-
-IgmpFindLinkForRequestEnd:
     return Status;
 }
 
@@ -3195,10 +3061,6 @@ Return Value:
         return;
     }
 
-    //
-    // Send the packet list down the stack.
-    //
-
     Link->DataLinkEntry->Interface.Send(Link->DataLinkContext,
                                         PacketList,
                                         &(LinkAddress->PhysicalAddress),
@@ -3210,7 +3072,8 @@ Return Value:
 
 PIGMP_LINK
 NetpIgmpCreateOrLookupLink (
-    PNET_LINK_LOCAL_ADDRESS LocalAddress
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress
     )
 
 /*++
@@ -3223,9 +3086,11 @@ Routine Description:
 
 Arguments:
 
-    LocalAddress - Supplies the local address information with which to
-        initialize the IGMP link. This includes the link, link address entry
-        and copies of the local network addresses.
+    Link - Supplies a pointer to the network link for which the IGMP link is
+        to be created.
+
+    LinkAddress - Supplies a pointer to the link address entry on the given
+        network link with which the IGMP link shall be associated.
 
 Return Value:
 
@@ -3241,7 +3106,6 @@ Return Value:
     PRED_BLACK_TREE_NODE FoundNode;
     PIGMP_LINK IgmpLink;
     ULONG Index;
-    PNET_LINK Link;
     PNET_PACKET_SIZE_INFORMATION LinkSizeInformation;
     ULONG MaxPacketSize;
     PIGMP_LINK NewIgmpLink;
@@ -3259,10 +3123,9 @@ Return Value:
 
     RtlZeroMemory(NewIgmpLink, sizeof(IGMP_LINK));
     NewIgmpLink->ReferenceCount = 1;
-    Link = LocalAddress->Link;
     NetLinkAddReference(Link);
     NewIgmpLink->Link = Link;
-    NewIgmpLink->LinkAddress = LocalAddress->LinkAddress;
+    NewIgmpLink->LinkAddress = LinkAddress;
     NewIgmpLink->RobustnessVariable = IGMP_DEFAULT_ROBUSTNESS_VARIABLE;
     NewIgmpLink->QueryInterval = IGMP_DEFAULT_QUERY_INTERVAL;
     NewIgmpLink->MaxResponseTime = IGMP_DEFAULT_MAX_RESPONSE_TIME;
@@ -3280,11 +3143,10 @@ Return Value:
 
     LinkSizeInformation = &(Link->Properties.PacketSizeInformation);
     MaxPacketSize = LinkSizeInformation->MaxPacketSize;
-    DataLinkEntry = LocalAddress->Link->DataLinkEntry;
-    DataLinkEntry->Interface.GetPacketSizeInformation(
-                                           LocalAddress->Link->DataLinkContext,
-                                           &DataSizeInformation,
-                                           0);
+    DataLinkEntry = Link->DataLinkEntry;
+    DataLinkEntry->Interface.GetPacketSizeInformation(Link->DataLinkContext,
+                                                      &DataSizeInformation,
+                                                      0);
 
     if (MaxPacketSize > DataSizeInformation.MaxPacketSize) {
         MaxPacketSize = DataSizeInformation.MaxPacketSize;
@@ -3325,7 +3187,7 @@ Return Value:
     // is found, use that one and destroy the new one.
     //
 
-    SearchLink.Link = LocalAddress->Link;
+    SearchLink.Link = Link;
     KeAcquireSharedExclusiveLockExclusive(NetIgmpLinkLock);
     FoundNode = RtlRedBlackTreeSearch(&NetIgmpLinkTree, &(SearchLink.Node));
     if (FoundNode == NULL) {
@@ -3386,6 +3248,7 @@ Return Value:
         KeDestroyQueuedLock(IgmpLink->Lock);
     }
 
+    NetLinkReleaseReference(IgmpLink->Link);
     MmFreePagedPool(IgmpLink);
     return;
 }
@@ -3666,6 +3529,7 @@ Return Value:
     ASSERT(Group->JoinCount == 0);
 
     NetpIgmpDestroyTimer(&(Group->Timer));
+    NetpIgmpLinkReleaseReference(Group->IgmpLink);
     MmFreePagedPool(Group);
     return;
 }

@@ -333,6 +333,7 @@ typedef struct _NETWORK_ADDRESS {
 
 typedef enum _SOCKET_INFORMATION_TYPE {
     SocketInformationBasic = 0xFFFF,
+    SocketInformationIgmp = SOCKET_INTERNET_PROTOCOL_IGMP,
     SocketInformationIp4 = SOCKET_INTERNET_PROTOCOL_IPV4,
     SocketInformationIp6 = SOCKET_INTERNET_PROTOCOL_IPV6,
     SocketInformationTcp = SOCKET_INTERNET_PROTOCOL_TCP,
@@ -550,7 +551,8 @@ Values:
         group. This option takes a SOCKET_IP4_MULTICAST_REQUEST structure.
 
     SocketIp4OptionLeaveMulticastGroup - Indicates a request to leave a
-        multicast group. This option takes a SOCKET_MULTICAST_REQUEST structure.
+        multicast group. This option takes a SOCKET_IP4_MULTICAST_REQUEST
+        structure.
 
     SocketIp4OptionMulticastInterface - Indicates the network interface to use
         for multicast messages. This option takes a ULONG.

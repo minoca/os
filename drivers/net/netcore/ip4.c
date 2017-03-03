@@ -41,6 +41,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip4.h>
+#include <minoca/net/igmp.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -165,14 +166,21 @@ Members:
     ListEntry - Stores pointers to the previous and next multicast groups in
         the socket's list.
 
-    Request - Stores the multicast group request that was supplied when joining
-        the group.
+    Link - Supplies a pointer to the network link to which the multicast group
+        is attached.
+
+    LinkAddress - Supplies a pointer to the link address entry with which the
+        multicast group is associated.
+
+    Address - Stores the IPv4 multicast address of the group.
 
 --*/
 
 typedef struct _IP4_MULTICAST_GROUP {
     LIST_ENTRY ListEntry;
-    SOCKET_IP4_MULTICAST_REQUEST Request;
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    ULONG MulticastAddress;
 } IP4_MULTICAST_GROUP, *PIP4_MULTICAST_GROUP;
 
 /*++
@@ -362,6 +370,13 @@ NetpIp4LeaveMulticastGroup (
 VOID
 NetpIp4DestroyMulticastGroups (
     PNET_SOCKET Socket
+    );
+
+KSTATUS
+NetpIp4FindLinkForMulticastRequest (
+    PNET_NETWORK_ENTRY Network,
+    PSOCKET_IP4_MULTICAST_REQUEST Request,
+    PNET_LINK_LOCAL_ADDRESS LinkResult
     );
 
 //
@@ -3095,6 +3110,8 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PIP4_MULTICAST_GROUP Group;
+    SOCKET_IGMP_MULTICAST_REQUEST IgmpRequest;
+    NET_LINK_LOCAL_ADDRESS LinkResult;
     BOOL LockHeld;
     PIP4_MULTICAST_GROUP NewGroup;
     PQUEUED_LOCK NewLock;
@@ -3104,6 +3121,7 @@ Return Value:
     PIP4_SOCKET_INFORMATION SocketInformation;
     KSTATUS Status;
 
+    LinkResult.Link = NULL;
     LockHeld = FALSE;
     NewGroup = NULL;
     SocketInformation = Socket->NetworkSocketInformation;
@@ -3116,6 +3134,20 @@ Return Value:
     Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
     if (Protocol == NULL) {
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        goto JoinMulticastGroupEnd;
+    }
+
+    //
+    // Attempt to find a network link that can reach the multicast address, or
+    // find the one specified by the request.
+    //
+
+    Status = NetpIp4FindLinkForMulticastRequest(Socket->Network,
+                                                Request,
+                                                &LinkResult);
+
+    if (!KSUCCESS(Status)) {
+        Status = STATUS_NO_SUCH_DEVICE;
         goto JoinMulticastGroupEnd;
     }
 
@@ -3155,8 +3187,9 @@ Return Value:
     CurrentEntry = SocketInformation->MulticastGroupList.Next;
     while (CurrentEntry != &(SocketInformation->MulticastGroupList)) {
         Group = LIST_VALUE(CurrentEntry, IP4_MULTICAST_GROUP, ListEntry);
-        if ((Group->Request.Address == Request->Address) &&
-            (Group->Request.Interface == Request->Interface)) {
+        if ((Group->MulticastAddress == Request->Address) &&
+            (Group->Link == LinkResult.Link) &&
+            (Group->LinkAddress == LinkResult.LinkAddress)) {
 
             Status = STATUS_ADDRESS_IN_USE;
             goto JoinMulticastGroupEnd;
@@ -3183,29 +3216,41 @@ Return Value:
     // fret too much about holding the lock.
     //
 
-    RequestSize = sizeof(SOCKET_IP4_MULTICAST_REQUEST);
+    IgmpRequest.Link = LinkResult.Link;
+    IgmpRequest.LinkAddress = LinkResult.LinkAddress;
+    IgmpRequest.MulticastAddress = Request->Address;
+    RequestSize = sizeof(SOCKET_IGMP_MULTICAST_REQUEST);
     Status = Protocol->Interface.GetSetInformation(
-                                             Socket,
-                                             SocketInformationIp4,
-                                             SocketIp4OptionJoinMulticastGroup,
-                                             Request,
-                                             &RequestSize,
-                                             TRUE);
+                                            Socket,
+                                            SocketInformationIgmp,
+                                            SocketIgmpOptionJoinMulticastGroup,
+                                            &IgmpRequest,
+                                            &RequestSize,
+                                            TRUE);
 
     if (!KSUCCESS(Status)) {
         goto JoinMulticastGroupEnd;
     }
 
-    RtlCopyMemory(&(NewGroup->Request),
-                  Request,
-                  sizeof(SOCKET_IP4_MULTICAST_REQUEST));
-
+    NewGroup->MulticastAddress = Request->Address;
+    NewGroup->Link = LinkResult.Link;
+    NewGroup->LinkAddress = LinkResult.LinkAddress;
     INSERT_BEFORE(&(NewGroup->ListEntry),
                   &(SocketInformation->MulticastGroupList));
+
+    //
+    // Make sure to take the link's reference from the link result.
+    //
+
+    LinkResult.Link = NULL;
 
 JoinMulticastGroupEnd:
     if (LockHeld != FALSE) {
         KeReleaseQueuedLock(SocketInformation->MulticastLock);
+    }
+
+    if (LinkResult.Link != NULL) {
+        NetLinkReleaseReference(LinkResult.Link);
     }
 
     if (!KSUCCESS(Status)) {
@@ -3246,24 +3291,44 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
+    PIP4_MULTICAST_GROUP DestroyGroup;
     PIP4_MULTICAST_GROUP Group;
+    SOCKET_IGMP_MULTICAST_REQUEST IgmpRequest;
+    NET_LINK_LOCAL_ADDRESS LinkResult;
     BOOL LockHeld;
     PNET_PROTOCOL_ENTRY Protocol;
     UINTN RequestSize;
     PIP4_SOCKET_INFORMATION SocketInformation;
     KSTATUS Status;
 
+    DestroyGroup = NULL;
+    LinkResult.Link = NULL;
+    LockHeld = FALSE;
+
     //
     // If the multicast lock is not allocated or the list is empty, then this
     // socket never joined any multicast groups.
     //
 
-    LockHeld = FALSE;
-    Status = STATUS_INVALID_ADDRESS;
     SocketInformation = Socket->NetworkSocketInformation;
     if ((SocketInformation->MulticastLock == NULL) ||
         (LIST_EMPTY(&(SocketInformation->MulticastGroupList)) != FALSE)) {
 
+        Status = STATUS_INVALID_ADDRESS;
+        goto LeaveMulticastGroupEnd;
+    }
+
+    //
+    // Attempt to find a network link that can reach the multicast address, or
+    // find the one specified by the request.
+    //
+
+    Status = NetpIp4FindLinkForMulticastRequest(Socket->Network,
+                                                Request,
+                                                &LinkResult);
+
+    if (!KSUCCESS(Status)) {
+        Status = STATUS_NO_SUCH_DEVICE;
         goto LeaveMulticastGroupEnd;
     }
 
@@ -3271,13 +3336,15 @@ Return Value:
     // Search through the multicast groups for a matching entry.
     //
 
+    Status = STATUS_INVALID_ADDRESS;
     KeAcquireQueuedLock(SocketInformation->MulticastLock);
     LockHeld = TRUE;
     CurrentEntry = SocketInformation->MulticastGroupList.Next;
     while (CurrentEntry != &(SocketInformation->MulticastGroupList)) {
         Group = LIST_VALUE(CurrentEntry, IP4_MULTICAST_GROUP, ListEntry);
-        if ((Group->Request.Address == Request->Address) &&
-            (Group->Request.Interface == Request->Interface)) {
+        if ((Group->MulticastAddress == Request->Address) &&
+            (Group->Link == LinkResult.Link) &&
+            (Group->LinkAddress == LinkResult.LinkAddress)) {
 
             Status = STATUS_SUCCESS;
             break;
@@ -3291,17 +3358,17 @@ Return Value:
     }
 
     //
-    // Remove the group from the list and destroy the group.
+    // Remove the group from the list and mark the group for destruction.
     //
 
     LIST_REMOVE(&(Group->ListEntry));
     KeReleaseQueuedLock(SocketInformation->MulticastLock);
     LockHeld = FALSE;
-    MmFreePagedPool(Group);
+    DestroyGroup = Group;
 
     //
-    // Now notify IGMP that this socket has left the group. IGMP should only
-    // fail if the link disappeared.
+    // Now notify IGMP that this socket has left the group. IGMP should not be
+    // failing at this point.
     //
 
     Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
@@ -3310,14 +3377,17 @@ Return Value:
         goto LeaveMulticastGroupEnd;
     }
 
-    RequestSize = sizeof(SOCKET_IP4_MULTICAST_REQUEST);
+    IgmpRequest.Link = Group->Link;
+    IgmpRequest.LinkAddress = Group->LinkAddress;
+    IgmpRequest.MulticastAddress = Group->MulticastAddress;
+    RequestSize = sizeof(SOCKET_IGMP_MULTICAST_REQUEST);
     Status = Protocol->Interface.GetSetInformation(
-                                            Socket,
-                                            SocketInformationIp4,
-                                            SocketIp4OptionLeaveMulticastGroup,
-                                            Request,
-                                            &RequestSize,
-                                            TRUE);
+                                           Socket,
+                                           SocketInformationIgmp,
+                                           SocketIgmpOptionLeaveMulticastGroup,
+                                           &IgmpRequest,
+                                           &RequestSize,
+                                           TRUE);
 
     if (!KSUCCESS(Status)) {
         goto LeaveMulticastGroupEnd;
@@ -3325,7 +3395,16 @@ Return Value:
 
 LeaveMulticastGroupEnd:
     if (LockHeld != FALSE) {
-        KeAcquireQueuedLock(SocketInformation->MulticastLock);
+        KeReleaseQueuedLock(SocketInformation->MulticastLock);
+    }
+
+    if (LinkResult.Link != NULL) {
+        NetLinkReleaseReference(LinkResult.Link);
+    }
+
+    if (DestroyGroup != NULL) {
+        NetLinkReleaseReference(Group->Link);
+        MmFreePagedPool(Group);
     }
 
     return Status;
@@ -3361,6 +3440,7 @@ Return Value:
     LIST_ENTRY LeaveList;
     PLIST_ENTRY MulticastGroupList;
     PNET_PROTOCOL_ENTRY Protocol;
+    SOCKET_IGMP_MULTICAST_REQUEST Request;
     UINTN RequestSize;
     PIP4_SOCKET_INFORMATION SocketInformation;
 
@@ -3404,15 +3484,19 @@ Return Value:
     while (LIST_EMPTY(&LeaveList) == FALSE) {
         Group = LIST_VALUE(LeaveList.Next, IP4_MULTICAST_GROUP, ListEntry);
         LIST_REMOVE(&(Group->ListEntry));
-        RequestSize = sizeof(Group->Request);
+        Request.Link = Group->Link;
+        Request.LinkAddress = Group->LinkAddress;
+        Request.MulticastAddress = Group->MulticastAddress;
+        RequestSize = sizeof(SOCKET_IGMP_MULTICAST_REQUEST);
         Protocol->Interface.GetSetInformation(
-                                            Socket,
-                                            SocketInformationIp4,
-                                            SocketIp4OptionLeaveMulticastGroup,
-                                            &(Group->Request),
-                                            &RequestSize,
-                                            TRUE);
+                                           Socket,
+                                           SocketInformationIgmp,
+                                           SocketIgmpOptionLeaveMulticastGroup,
+                                           &Request,
+                                           &RequestSize,
+                                           TRUE);
 
+        NetLinkReleaseReference(Group->Link);
         MmFreePagedPool(Group);
     }
 
@@ -3422,5 +3506,81 @@ DestroyMulticastGroupsEnd:
     }
 
     return;
+}
+
+KSTATUS
+NetpIp4FindLinkForMulticastRequest (
+    PNET_NETWORK_ENTRY Network,
+    PSOCKET_IP4_MULTICAST_REQUEST Request,
+    PNET_LINK_LOCAL_ADDRESS LinkResult
+    )
+
+/*++
+
+Routine Description:
+
+    This routine searches for a network link that matches the given multicast
+    request. If the any address is supplied, then the multicast address will be
+    used to find a link that can reach it. A reference is taken on the returned
+    network link. The caller is responsible for releasing the reference.
+
+Arguments:
+
+    Network - Supplies a pointer to the network to which the address belongs.
+        This should be a pointer to the IPv4 network entry.
+
+    Request - Supplies the multicast request for which a link needs to be
+        found.
+
+    LinkResult - Supplies a pointer that receives the link information,
+        including the link, link address entry, and associated local address.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    IP4_ADDRESS LocalAddress;
+    IP4_ADDRESS RemoteAddress;
+    KSTATUS Status;
+
+    //
+    // If the any address is supplied, find a link that can reach the multicast
+    // address.
+    //
+
+    if (Request->Interface == 0) {
+        RtlZeroMemory(&RemoteAddress, sizeof(IP4_ADDRESS));
+        RemoteAddress.Domain = NetDomainIp4;
+        RemoteAddress.Address = Request->Address;
+        Status = NetFindLinkForRemoteAddress((PNETWORK_ADDRESS)&RemoteAddress,
+                                             LinkResult);
+
+        if (KSUCCESS(Status)) {
+            goto IgmpFindLinkForRequestEnd;
+        }
+    }
+
+    //
+    // Otherwise a link that matches the given IPv4 address must be found.
+    //
+
+    RtlZeroMemory(&LocalAddress, sizeof(IP4_ADDRESS));
+    LocalAddress.Domain = NetDomainIp4;
+    LocalAddress.Address = Request->Interface;
+    Status = NetFindLinkForLocalAddress(Network,
+                                        (PNETWORK_ADDRESS)&LocalAddress,
+                                        NULL,
+                                        LinkResult);
+
+    if (!KSUCCESS(Status)) {
+        goto IgmpFindLinkForRequestEnd;
+    }
+
+IgmpFindLinkForRequestEnd:
+    return Status;
 }
 
