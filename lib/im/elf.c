@@ -3016,6 +3016,7 @@ Return Value:
     PSTR SymbolName;
     ELF_ADDR Value;
 
+    *FoundImage = NULL;
     BindType = ELF_GET_SYMBOL_BIND(Symbol->Information);
     if (Symbol->NameOffset != 0) {
         SymbolName = Image->ExportStringTable + Symbol->NameOffset;
