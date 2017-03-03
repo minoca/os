@@ -177,6 +177,7 @@ Return Value:
     time_t NewAccessTime;
     time_t NewModificationTime;
     struct utimbuf NewTimes;
+    struct utimbuf *NewTimesPointer;
     int OpenDescriptor;
     INT Option;
     ULONG Options;
@@ -187,6 +188,7 @@ Return Value:
     int TotalStatus;
 
     FirstSource = NULL;
+    NewTimesPointer = &NewTimes;
     Options = 0;
     ReferenceFile = NULL;
     Status = 0;
@@ -317,12 +319,21 @@ Return Value:
         NewModificationTime = NewAccessTime;
 
     //
-    // If nothing was specified, use the current time.
+    // If nothing was specified, use the current time. Set the pointer to
+    // NULL to allow the system to potentially use a granularity better than
+    // seconds. Otherwise the nanoseconds get truncated to zero, which can
+    // create strange ordering issues.
     //
 
     } else {
         NewAccessTime = time(NULL);
         NewModificationTime = NewAccessTime;
+        if ((Options &
+             (TOUCH_OPTION_ACCESS_TIME | TOUCH_OPTION_MODIFICATION_TIME)) ==
+            (TOUCH_OPTION_ACCESS_TIME | TOUCH_OPTION_MODIFICATION_TIME)) {
+
+            NewTimesPointer = NULL;
+        }
     }
 
     //
@@ -383,7 +394,7 @@ Return Value:
             NewTimes.modtime = NewModificationTime;
         }
 
-        Status = utime(Argument, &NewTimes);
+        Status = utime(Argument, NewTimesPointer);
         if (Status != 0) {
             Status = errno;
             if (TotalStatus == 0) {
