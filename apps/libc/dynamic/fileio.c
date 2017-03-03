@@ -2901,6 +2901,7 @@ Return Value:
 {
 
     ULONG ArrayIndex;
+    INT BitCount;
     PPOLL_DESCRIPTOR Descriptor;
     ULONG DescriptorIndex;
     PPOLL_DESCRIPTOR Descriptors;
@@ -3008,6 +3009,7 @@ Return Value:
     // over the poll events this time to skip the empty regions of the bitmasks.
     //
 
+    BitCount = 0;
     Descriptor = &(Descriptors[0]);
     for (PollIndex = 0; PollIndex < ArrayIndex; PollIndex += 1) {
         Events = Descriptor->ReturnedEvents;
@@ -3029,6 +3031,9 @@ Return Value:
 
             if ((Events & POLL_EVENT_IN) == 0) {
                 FD_CLR(DescriptorIndex, ReadDescriptors);
+
+            } else {
+                BitCount += 1;
             }
         }
 
@@ -3037,6 +3042,9 @@ Return Value:
 
             if ((Events & POLL_EVENT_OUT) == 0) {
                 FD_CLR(DescriptorIndex, WriteDescriptors);
+
+            } else {
+                BitCount += 1;
             }
         }
 
@@ -3048,6 +3056,7 @@ Return Value:
         if (ErrorDescriptors != NULL) {
             if ((Events & POLL_NONMASKABLE_EVENTS) != 0) {
                 FD_SET(DescriptorIndex, ErrorDescriptors);
+                BitCount += 1;
 
             } else {
                 FD_CLR(DescriptorIndex, ErrorDescriptors);
@@ -3065,7 +3074,7 @@ pselectEnd:
         }
     }
 
-    return (int)DescriptorsSelected;
+    return BitCount;
 }
 
 LIBC_API
