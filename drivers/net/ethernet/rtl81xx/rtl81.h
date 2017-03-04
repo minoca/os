@@ -1005,10 +1005,8 @@ Members:
     MaxTransmitPacketListCount - Stores the maximum number of packets to remain
         on the list of packets waiting to be sent.
 
-    ChecksumFlags - Stores a bitmask of checksum feature flags. See
-        NET_LINK_CHECKSUM_FLAG_* for definitions. Updates to this flag are
-        protected by the receive lock. There is nothing for the RTL81xx devices
-        to do when the transmit bits change.
+    Capabilities - Stores the currently enabled capabilities on the devices.
+        See NET_LINK_CAPABILITY_* for definitions.
 
     LegacyData - Stores the extra data required to transmit and receive packets
         on a legacy device.
@@ -1037,7 +1035,7 @@ typedef struct _RTL81_DEVICE {
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     NET_PACKET_LIST TransmitPacketList;
     ULONG MaxTransmitPacketListCount;
-    ULONG ChecksumFlags;
+    ULONG Capabilities;
     union {
         RTL81_LEGACY_DATA LegacyData;
         RTL81_DEFAULT_DATA DefaultData;

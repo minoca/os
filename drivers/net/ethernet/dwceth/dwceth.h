@@ -653,7 +653,8 @@ Members:
         being transmitted because there were no descriptors available. This is
         a sign that more descriptors should be allocated.
 
-    ChecksumFlags - Stores the current checksum offloading options.
+    Capabilities - Stores the currently enabled capabilities on the devices.
+        See NET_LINK_CAPABILITY_* for definitions.
 
 --*/
 
@@ -690,7 +691,7 @@ typedef struct _DWE_DEVICE {
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     ULONG PhyId;
     UINTN DroppedTxPackets;
-    ULONG ChecksumFlags;
+    ULONG Capabilities;
 } DWE_DEVICE, *PDWE_DEVICE;
 
 //

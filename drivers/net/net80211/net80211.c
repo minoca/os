@@ -331,7 +331,7 @@ Return Value:
     NetProperties.Device = Properties->Device;
     NetProperties.DeviceContext = Properties->DeviceContext;
     NetProperties.PacketSizeInformation = Properties->PacketSizeInformation;
-    NetProperties.ChecksumFlags = Properties->ChecksumFlags;
+    NetProperties.Capabilities = Properties->LinkCapabilities;
     NetProperties.DataLinkType = NetDomain80211;
     NetProperties.MaxPhysicalAddress = Properties->MaxPhysicalAddress;
     NetProperties.PhysicalAddress = Properties->PhysicalAddress;
@@ -363,7 +363,7 @@ Return Value:
     // All supported station modes currently set the ESS capability.
     //
 
-    Link->Properties.Capabilities |= NET80211_CAPABILITY_FLAG_ESS;
+    Link->Properties.Net80211Capabilities |= NET80211_CAPABILITY_ESS;
 
     //
     // The rate information has a dynamic length, so it needs to be reallocated

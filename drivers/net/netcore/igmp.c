@@ -3035,8 +3035,8 @@ Return Value:
         Header->DestinationAddress = DestinationAddress->Address;
         RouterAlert = (PULONG)(Header + 1);
         *RouterAlert = IGMP_IP4_ROUTER_ALERT_OPTION;
-        if ((Link->Properties.ChecksumFlags &
-             NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD) == 0) {
+        if ((Link->Properties.Capabilities &
+             NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD) == 0) {
 
              Checksum = NetpIgmpChecksumData((PVOID)Header,
                                              IGMP_IP4_HEADER_SIZE);

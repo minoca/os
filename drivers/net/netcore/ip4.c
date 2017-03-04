@@ -1268,8 +1268,8 @@ Return Value:
                 Header->SourceAddress = LocalAddress->Address;
                 Header->DestinationAddress = RemoteAddress->Address;
                 Header->HeaderChecksum = 0;
-                if ((Link->Properties.ChecksumFlags &
-                     NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD) == 0) {
+                if ((Link->Properties.Capabilities &
+                     NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD) == 0) {
 
                     Checksum = NetpIp4ChecksumData((PSHORT)Header,
                                                    sizeof(IP4_HEADER));
@@ -1340,8 +1340,8 @@ Return Value:
             Header->SourceAddress = LocalAddress->Address;
             Header->DestinationAddress = RemoteAddress->Address;
             Header->HeaderChecksum = 0;
-            if ((Link->Properties.ChecksumFlags &
-                 NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD) == 0) {
+            if ((Link->Properties.Capabilities &
+                 NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD) == 0) {
 
                 Checksum = NetpIp4ChecksumData((PVOID)Header,
                                                sizeof(IP4_HEADER));

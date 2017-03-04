@@ -216,25 +216,29 @@ Author:
 #define NET_PACKET_FLAG_MULTICAST            0x00000100
 
 //
-// Define the network link feature flags.
+// Define the network link capabilities.
 //
 
-#define NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD  0x00000001
-#define NET_LINK_CHECKSUM_FLAG_TRANSMIT_UDP_OFFLOAD 0x00000002
-#define NET_LINK_CHECKSUM_FLAG_TRANSMIT_TCP_OFFLOAD 0x00000004
-#define NET_LINK_CHECKSUM_FLAG_RECEIVE_IP_OFFLOAD   0x00000008
-#define NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD  0x00000010
-#define NET_LINK_CHECKSUM_FLAG_RECEIVE_TCP_OFFLOAD  0x00000020
+#define NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD  0x00000001
+#define NET_LINK_CAPABILITY_TRANSMIT_UDP_CHECKSUM_OFFLOAD 0x00000002
+#define NET_LINK_CAPABILITY_TRANSMIT_TCP_CHECKSUM_OFFLOAD 0x00000004
+#define NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD   0x00000008
+#define NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD  0x00000010
+#define NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD  0x00000020
 
-#define NET_LINK_CHECKSUM_FLAG_TRANSMIT_MASK        \
-    (NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD |   \
-     NET_LINK_CHECKSUM_FLAG_TRANSMIT_UDP_OFFLOAD |  \
-     NET_LINK_CHECKSUM_FLAG_TRANSMIT_TCP_OFFLOAD)
+#define NET_LINK_CAPABILITY_CHECKSUM_TRANSMIT_MASK       \
+    (NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD |  \
+     NET_LINK_CAPABILITY_TRANSMIT_UDP_CHECKSUM_OFFLOAD | \
+     NET_LINK_CAPABILITY_TRANSMIT_TCP_CHECKSUM_OFFLOAD)
 
-#define NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK         \
-    (NET_LINK_CHECKSUM_FLAG_RECEIVE_IP_OFFLOAD |    \
-     NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD |   \
-     NET_LINK_CHECKSUM_FLAG_RECEIVE_TCP_OFFLOAD)
+#define NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK       \
+    (NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD |  \
+     NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD | \
+     NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD)
+
+#define NET_LINK_CAPABILITY_CHECKSUM_MASK         \
+    (NET_LINK_CAPABILITY_CHECKSUM_TRANSMIT_MASK | \
+     NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK)
 
 //
 // Define the network packet size information flags.
@@ -584,9 +588,10 @@ Members:
         the maximum number of bytes that can be sent over the physical link and
         the header and footer sizes.
 
-    ChecksumFlags - Stores a bitmask of flags indicating whether certain
-        checksum features are enabled. See NET_LINK_CHECKSUM_FLAG_* for
-        definitions.
+    Capabilities - Stores a bitmask of capabilities indicating whether or not
+        certain features are supported by the link. See NET_LINK_CAPABILITY_*
+        for definitions. This is a static field and does not describe which
+        features are currently enabled.
 
     DataLinkType - Stores the type of the data link layer used by the network
         link.
@@ -607,7 +612,7 @@ typedef struct _NET_LINK_PROPERTIES {
     PDEVICE Device;
     PVOID DeviceContext;
     NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
-    ULONG ChecksumFlags;
+    ULONG Capabilities;
     NET_DOMAIN_TYPE DataLinkType;
     PHYSICAL_ADDRESS MaxPhysicalAddress;
     NETWORK_ADDRESS PhysicalAddress;

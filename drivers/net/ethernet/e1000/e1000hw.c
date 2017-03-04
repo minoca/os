@@ -336,9 +336,11 @@ Return Value:
 
 {
 
+    PE1000_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
 
+    Device = (PE1000_DEVICE)DeviceContext;
     switch (InformationType) {
     case NetLinkInformationChecksumOffload:
         if (*DataSize != sizeof(ULONG)) {
@@ -350,7 +352,7 @@ Return Value:
         }
 
         Flags = (PULONG)Data;
-        *Flags = 0;
+        *Flags = Device->Capabilities & NET_LINK_CAPABILITY_CHECKSUM_MASK;
         break;
 
     default:
@@ -390,9 +392,9 @@ Return Value:
     KSTATUS Status;
     ULONG TxDescriptorSize;
 
-    Device->ChecksumFlags = NET_LINK_CHECKSUM_FLAG_RECEIVE_IP_OFFLOAD |
-                            NET_LINK_CHECKSUM_FLAG_RECEIVE_TCP_OFFLOAD |
-                            NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD;
+    Device->Capabilities |= NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD |
+                            NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD |
+                            NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD;
 
     //
     // Initialize the transmit and receive list locks.

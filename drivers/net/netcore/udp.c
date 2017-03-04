@@ -1172,8 +1172,8 @@ Return Value:
     UdpHeader->DestinationPort = NetworkRemotePort;
     UdpHeader->Length = CPU_TO_NETWORK16(Size + sizeof(UDP_HEADER));
     UdpHeader->Checksum = 0;
-    if ((Link->Properties.ChecksumFlags &
-        NET_LINK_CHECKSUM_FLAG_TRANSMIT_UDP_OFFLOAD) != 0) {
+    if ((Link->Properties.Capabilities &
+        NET_LINK_CAPABILITY_TRANSMIT_UDP_CHECKSUM_OFFLOAD) != 0) {
 
         Packet->Flags |= NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD;
     }

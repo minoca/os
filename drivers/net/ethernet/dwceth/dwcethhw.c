@@ -266,7 +266,7 @@ Return Value:
         Status = STATUS_SUCCESS;
         Flags = (PULONG)Data;
         if (Set == FALSE) {
-            *Flags = Device->ChecksumFlags;
+            *Flags = Device->Capabilities & NET_LINK_CAPABILITY_CHECKSUM_MASK;
             break;
         }
 
@@ -284,8 +284,10 @@ Return Value:
         // receive checksum change the MAC configuration.
         //
 
-        ChangedFlags = *Flags ^ Device->ChecksumFlags;
-        if ((ChangedFlags & NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) != 0) {
+        ChangedFlags = (*Flags ^ Device->Capabilities) &
+                       NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        if ((ChangedFlags & NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
             //
             // If any of the receive checksum flags are set, then
@@ -294,7 +296,7 @@ Return Value:
             //
 
             Value = DWE_READ(Device, DweRegisterMacConfiguration);
-            if ((*Flags & NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) != 0) {
+            if ((*Flags & NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
                 Value |= DWE_MAC_CONFIGURATION_CHECKSUM_OFFLOAD;
 
             //
@@ -302,7 +304,9 @@ Return Value:
             // set, turn receive checksum offloadng off.
             //
 
-            } else if ((*Flags & NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) == 0) {
+            } else if ((*Flags &
+                        NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) == 0) {
+
                 Value &= ~DWE_MAC_CONFIGURATION_CHECKSUM_OFFLOAD;
             }
 
@@ -313,7 +317,8 @@ Return Value:
         // Update the checksum flags.
         //
 
-        Device->ChecksumFlags = *Flags;
+        Device->Capabilities &= ~NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        Device->Capabilities |= (*Flags & NET_LINK_CAPABILITY_CHECKSUM_MASK);
         KeReleaseQueuedLock(Device->ReceiveLock);
         break;
 
@@ -376,6 +381,17 @@ Return Value:
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
+
+    //
+    // By default, IP, UDP, and TCP checksum features are enabled.
+    //
+
+    Device->Capabilities |= NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD |
+                            NET_LINK_CAPABILITY_TRANSMIT_UDP_CHECKSUM_OFFLOAD |
+                            NET_LINK_CAPABILITY_TRANSMIT_TCP_CHECKSUM_OFFLOAD |
+                            NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD |
+                            NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD |
+                            NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD;
 
     //
     // Allocate the receive buffers. This is allocated as non-write though and
@@ -756,7 +772,9 @@ Return Value:
              DWE_MAC_CONFIGURATION_TRANSMITTER_ENABLE |
              DWE_MAC_CONFIGURATION_RECEIVER_ENABLE;
 
-    if ((Device->ChecksumFlags & NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) != 0) {
+    if ((Device->Capabilities &
+         NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
+
         Value |= DWE_MAC_CONFIGURATION_CHECKSUM_OFFLOAD;
 
     } else {
@@ -1394,8 +1412,8 @@ Return Value:
             // the packet checksum offload flags.
             //
 
-            if ((Device->ChecksumFlags &
-                 NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) != 0) {
+            if ((Device->Capabilities &
+                 NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
                 if ((Descriptor->Control &
                      DWE_RX_STATUS_EXTENDED_STATUS) != 0) {

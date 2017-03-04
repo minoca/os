@@ -623,8 +623,8 @@ Return Value:
     Properties.Device = Device->OsDevice;
     Properties.DeviceContext = Device;
     Properties.MaxChannel = RTLW81_MAX_CHANNEL;
-    Properties.Capabilities = NET80211_CAPABILITY_FLAG_SHORT_PREAMBLE |
-                              NET80211_CAPABILITY_FLAG_SHORT_SLOT_TIME;
+    Properties.Net80211Capabilities = NET80211_CAPABILITY_SHORT_PREAMBLE |
+                                      NET80211_CAPABILITY_SHORT_SLOT_TIME;
 
     Properties.PacketSizeInformation.MaxPacketSize = RTLW81_MAX_PACKET_SIZE;
     Properties.PacketSizeInformation.HeaderSize = RTLW81_TRANSMIT_HEADER_SIZE;

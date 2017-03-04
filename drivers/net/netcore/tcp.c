@@ -4904,8 +4904,8 @@ Return Value:
     Header->NonUrgentOffset = NonUrgentOffset;
     Header->Checksum = 0;
     PacketSize = sizeof(TCP_HEADER) + OptionsLength + DataLength;
-    if ((Socket->NetSocket.Link->Properties.ChecksumFlags &
-         NET_LINK_CHECKSUM_FLAG_TRANSMIT_TCP_OFFLOAD) == 0) {
+    if ((Socket->NetSocket.Link->Properties.Capabilities &
+         NET_LINK_CAPABILITY_TRANSMIT_TCP_CHECKSUM_OFFLOAD) == 0) {
 
         Header->Checksum = NetpTcpChecksumData(Header,
                                                PacketSize,

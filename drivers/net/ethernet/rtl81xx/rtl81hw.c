@@ -276,7 +276,7 @@ Return Value:
         Status = STATUS_SUCCESS;
         Flags = (PULONG)Data;
         if (Set == FALSE) {
-            *Flags = Device->ChecksumFlags;
+            *Flags = Device->Capabilities & NET_LINK_CAPABILITY_CHECKSUM_MASK;
             break;
         }
 
@@ -295,8 +295,10 @@ Return Value:
         // offloading, however, need to modify the command 2 register.
         //
 
-        ChangedFlags = *Flags ^ Device->ChecksumFlags;
-        if ((ChangedFlags & NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) != 0) {
+        ChangedFlags = (*Flags ^ Device->Capabilities) &
+                       NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        if ((ChangedFlags & NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
             //
             // If any of the receive checksum flags are set, then
@@ -305,23 +307,24 @@ Return Value:
             // previously set.
             //
 
-            if (((*Flags & NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) != 0) &&
-                ((Device->ChecksumFlags &
-                  NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) == 0)) {
+            if (((*Flags & NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) &&
+                ((Device->Capabilities &
+                  NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) == 0)) {
 
                 Value = RTL81_READ_REGISTER16(Device, Rtl81RegisterCommand2);
                 Value |= RTL81_COMMAND_2_REGISTER_DEFAULT;
                 RTL81_WRITE_REGISTER16(Device, Rtl81RegisterCommand2, Value);
-                *Flags |= NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK;
+                *Flags |= NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK;
 
             //
             // Otherwise, if all flags are off and something was previously
             // set, turn receive checksum offloadng off.
             //
 
-            } else if (((*Flags & NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) == 0) &&
-                       ((Device->ChecksumFlags &
-                         NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) != 0)) {
+            } else if (((*Flags &
+                         NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) == 0) &&
+                       ((Device->Capabilities &
+                         NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0)) {
 
                 Value = RTL81_READ_REGISTER16(Device, Rtl81RegisterCommand2);
                 Value &= ~RTL81_COMMAND_2_REGISTER_DEFAULT;
@@ -333,7 +336,8 @@ Return Value:
         // Update the checksum flags.
         //
 
-        Device->ChecksumFlags = *Flags;
+        Device->Capabilities &= ~NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        Device->Capabilities |= (*Flags & NET_LINK_CAPABILITY_CHECKSUM_MASK);
         KeReleaseQueuedLock(Device->ReceiveLock);
         break;
 
@@ -370,6 +374,7 @@ Return Value:
 {
 
     UINTN AllocationSize;
+    ULONG Capabilities;
     PRTL81_DEFAULT_DATA DefaultData;
     PRTL81_RECEIVE_DESCRIPTOR Descriptor;
     ULONG Flags;
@@ -448,12 +453,14 @@ Return Value:
     //
 
     if ((Device->Flags & RTL81_FLAG_CHECKSUM_OFFLOAD_MASK) != 0) {
-        Device->ChecksumFlags = NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD |
-                                NET_LINK_CHECKSUM_FLAG_RECEIVE_IP_OFFLOAD |
-                                NET_LINK_CHECKSUM_FLAG_TRANSMIT_UDP_OFFLOAD |
-                                NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD |
-                                NET_LINK_CHECKSUM_FLAG_TRANSMIT_TCP_OFFLOAD |
-                                NET_LINK_CHECKSUM_FLAG_RECEIVE_TCP_OFFLOAD;
+        Capabilities = NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD |
+                       NET_LINK_CAPABILITY_TRANSMIT_UDP_CHECKSUM_OFFLOAD |
+                       NET_LINK_CAPABILITY_TRANSMIT_TCP_CHECKSUM_OFFLOAD |
+                       NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD |
+                       NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD |
+                       NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD;
+
+        Device->Capabilities |= Capabilities;
     }
 
     //
@@ -785,8 +792,8 @@ Return Value:
         //
 
         Command2 = RTL81_COMMAND_2_REGISTER_DEFAULT;
-        if ((Device->ChecksumFlags &
-            NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK) != 0) {
+        if ((Device->Capabilities &
+            NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
             Command2 |= RTL81_COMMAND_2_REGISTER_RECEIVE_CHECKSUM_OFFLOAD;
         }

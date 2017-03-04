@@ -305,22 +305,22 @@ Author:
 // Define the bits for the 802.11 capability information field.
 //
 
-#define NET80211_CAPABILITY_FLAG_IMMEDIATE_BLOCK_ACK 0x8000
-#define NET80211_CAPABILITY_FLAG_DELAYED_BLOCK_ACK   0x4000
-#define NET80211_CAPABILITY_FLAG_DSSS_OFDM           0x2000
-#define NET80211_CAPABILITY_FLAG_RADIO_MEASUREMENT   0x1000
-#define NET80211_CAPABILITY_FLAG_APSD                0x0800
-#define NET80211_CAPABILITY_FLAG_SHORT_SLOT_TIME     0x0400
-#define NET80211_CAPABILITY_FLAG_QOS                 0x0200
-#define NET80211_CAPABILITY_FLAG_SPECTRUM_MGMT       0x0100
-#define NET80211_CAPABILITY_FLAG_CHANNEL_AGILITY     0x0080
-#define NET80211_CAPABILITY_FLAG_PBCC                0x0040
-#define NET80211_CAPABILITY_FLAG_SHORT_PREAMBLE      0x0020
-#define NET80211_CAPABILITY_FLAG_PRIVACY             0x0010
-#define NET80211_CAPABILITY_FLAG_CF_POLL_REQUEST     0x0008
-#define NET80211_CAPABILITY_FLAG_CF_POLLABLE         0x0004
-#define NET80211_CAPABILITY_FLAG_IBSS                0x0002
-#define NET80211_CAPABILITY_FLAG_ESS                 0x0001
+#define NET80211_CAPABILITY_IMMEDIATE_BLOCK_ACK 0x8000
+#define NET80211_CAPABILITY_DELAYED_BLOCK_ACK   0x4000
+#define NET80211_CAPABILITY_DSSS_OFDM           0x2000
+#define NET80211_CAPABILITY_RADIO_MEASUREMENT   0x1000
+#define NET80211_CAPABILITY_APSD                0x0800
+#define NET80211_CAPABILITY_SHORT_SLOT_TIME     0x0400
+#define NET80211_CAPABILITY_QOS                 0x0200
+#define NET80211_CAPABILITY_SPECTRUM_MGMT       0x0100
+#define NET80211_CAPABILITY_CHANNEL_AGILITY     0x0080
+#define NET80211_CAPABILITY_PBCC                0x0040
+#define NET80211_CAPABILITY_SHORT_PREAMBLE      0x0020
+#define NET80211_CAPABILITY_PRIVACY             0x0010
+#define NET80211_CAPABILITY_CF_POLL_REQUEST     0x0008
+#define NET80211_CAPABILITY_CF_POLLABLE         0x0004
+#define NET80211_CAPABILITY_IBSS                0x0002
+#define NET80211_CAPABILITY_ESS                 0x0001
 
 //
 // Define the mask for the association ID. The upper 2 bits are always set.
@@ -1149,15 +1149,17 @@ Members:
 
     DeviceContext - Stores a pointer to device-specific context on this link.
 
-    ChecksumFlags - Stores a bitmask of flags indicating whether certain
-        checksum features are enabled. See NET_LINK_CHECKSUM_FLAG_* for
-        definitions.
+    LinkCapabilities - Stores a bitmask of capabilities indicating whether or
+        not certain features are supported by the link. See
+        NET_LINK_CAPABILITY_* for definitions. This is a static field and does
+        not describe which features are currently enabled.
 
     MaxChannel - Stores the maximum supported channel the 802.11 device
         supports.
 
-    Capabilities - Stores a bitmask of 802.11 capabilities for the link. See
-        NET80211_CAPABILITY_FLAG_* for definitions.
+    Net80211Capabilities - Stores a bitmask of 802.11 capabilities for the
+        link. See NET80211_CAPABILITY_* for definitions. These get sent with
+        all association request packets.
 
     PacketSizeInformation - Stores the packet size information that includes
         the maximum number of bytes that can be sent over the physical link and
@@ -1181,9 +1183,9 @@ typedef struct _NET80211_LINK_PROPERTIES {
     ULONG TransmitAlignment;
     PDEVICE Device;
     PVOID DeviceContext;
-    ULONG ChecksumFlags;
+    ULONG LinkCapabilities;
     ULONG MaxChannel;
-    USHORT Capabilities;
+    USHORT Net80211Capabilities;
     NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     PHYSICAL_ADDRESS MaxPhysicalAddress;
     NETWORK_ADDRESS PhysicalAddress;

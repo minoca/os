@@ -2182,7 +2182,7 @@ Return Value:
     //
 
     if (Response.Rsn != NULL) {
-        if ((Response.Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) == 0) {
+        if ((Response.Capabilities & NET80211_CAPABILITY_PRIVACY) == 0) {
             RtlDebugPrint("802.11: Found RSN element in probe/beacon that does "
                           "not require privacy.\n");
 
@@ -2190,7 +2190,7 @@ Return Value:
         }
 
     } else {
-        if ((Response.Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) {
+        if ((Response.Capabilities & NET80211_CAPABILITY_PRIVACY) != 0) {
             RtlDebugPrint("802.11: Did not find RSN element in probe/beacon "
                           "that requires privacy.\n");
 
@@ -2495,8 +2495,8 @@ Return Value:
     //
 
     InformationByte = FrameBody;
-    *((PUSHORT)InformationByte) = Link->Properties.Capabilities |
-                                  NET80211_CAPABILITY_FLAG_ESS;
+    *((PUSHORT)InformationByte) = Link->Properties.Net80211Capabilities |
+                                  NET80211_CAPABILITY_ESS;
 
     InformationByte += NET80211_CAPABILITY_SIZE;
 
