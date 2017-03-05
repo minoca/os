@@ -442,7 +442,7 @@ Return Value:
 
     LeftRecursive = FALSE;
     if ((Parser->Flags & YY_PARSE_FLAG_DEBUG) != 0) {
-        printf("%*s %s %x\n",
+        printf("%*s %s %p\n",
                Parser->RecursionDepth,
                "",
                GrammarElement->Name,
@@ -638,7 +638,7 @@ Return Value:
 
 ParseNodeEnd:
     if ((Parser->Flags & YY_PARSE_FLAG_DEBUG) != 0) {
-        printf("%*s %s %x Done: %d\n",
+        printf("%*s %s %p Done: %d\n",
                Parser->RecursionDepth,
                "",
                GrammarElement->Name,
