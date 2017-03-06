@@ -989,6 +989,9 @@ Members:
     ReceiveLock - Stores a queued lock that protects access to the receive
         descriptors.
 
+    CapabilitiesLock - Stores a queued lock that synchronizes changes to the
+        enabled capabilities field and their supporting hardware registers.
+
     TransmitInterruptMask - Stores a mask of interrupt status bits that trigger
         the processing of the transmit descriptors.
 
@@ -1005,8 +1008,11 @@ Members:
     MaxTransmitPacketListCount - Stores the maximum number of packets to remain
         on the list of packets waiting to be sent.
 
-    Capabilities - Stores the currently enabled capabilities on the devices.
-        See NET_LINK_CAPABILITY_* for definitions.
+    CapabilitiesSupported - Stores the set of capabilities that this device
+        supports. See NET_LINK_CAPABILITY_* for definitions.
+
+    CapabilitiesEnabled - Stores the currently enabled capabilities on the
+        devices. See NET_LINK_CAPABILITY_* for definitions.
 
     LegacyData - Stores the extra data required to transmit and receive packets
         on a legacy device.
@@ -1027,6 +1033,7 @@ typedef struct _RTL81_DEVICE {
     HANDLE InterruptHandle;
     PQUEUED_LOCK TransmitLock;
     PQUEUED_LOCK ReceiveLock;
+    PQUEUED_LOCK CapabilitiesLock;
     USHORT TransmitInterruptMask;
     USHORT ReceiveInterruptMask;
     ULONG PciMsiFlags;
@@ -1035,7 +1042,8 @@ typedef struct _RTL81_DEVICE {
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     NET_PACKET_LIST TransmitPacketList;
     ULONG MaxTransmitPacketListCount;
-    ULONG Capabilities;
+    ULONG CapabilitiesSupported;
+    ULONG CapabilitiesEnabled;
     union {
         RTL81_LEGACY_DATA LegacyData;
         RTL81_DEFAULT_DATA DefaultData;

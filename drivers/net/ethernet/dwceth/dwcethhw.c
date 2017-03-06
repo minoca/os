@@ -244,9 +244,10 @@ Return Value:
 
 {
 
-    ULONG ChangedFlags;
+    PULONG Capabilities;
+    ULONG CapabilitiesChanged;
+    ULONG CapabilitiesSupported;
     PDWE_DEVICE Device;
-    PULONG Flags;
     KSTATUS Status;
     ULONG Value;
 
@@ -260,51 +261,73 @@ Return Value:
 
         //
         // If the request is a get, just return the device's current checksum
-        // flags.
+        // capabilities.
         //
 
         Status = STATUS_SUCCESS;
-        Flags = (PULONG)Data;
+        Capabilities = (PULONG)Data;
         if (Set == FALSE) {
-            *Flags = Device->Capabilities & NET_LINK_CAPABILITY_CHECKSUM_MASK;
+            *Capabilities = Device->CapabilitiesEnabled &
+                            NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
             break;
         }
 
         //
-        // Synchronize on the receive lock. There is nothing to do for transmit
-        // changes, so leave that lock out of it.
+        // Scrub the capabilities in case the caller supplied more than the
+        // checksum bits and make sure all of the supplied capabilities are
+        // supported.
         //
 
-        KeAcquireQueuedLock(Device->ReceiveLock);
+        *Capabilities &= NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        CapabilitiesSupported = Device->CapabilitiesSupported &
+                                NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        if ((*Capabilities & ~CapabilitiesSupported) != 0) {
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        //
+        // Synchronize updates to the enabled capabilities field and the
+        // reprogramming of the hardware register.
+        //
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
 
         //
         // If it is a set, figure out what is changing. There is nothing to do
         // if the change is in the transmit flags. Netcore requests transmit
-        // offloads on a per-packet basis. Requests to enable or disable
-        // receive checksum change the MAC configuration.
+        // offloads on a per-packet basis and there is not a global shut off on
+        // DesignWare Ethernet devices. Requests to enable or disable receive
+        // checksum change the MAC configuration.
         //
 
-        ChangedFlags = (*Flags ^ Device->Capabilities) &
-                       NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        CapabilitiesChanged = (*Capabilities ^ Device->CapabilitiesEnabled) &
+                              NET_LINK_CAPABILITY_CHECKSUM_MASK;
 
-        if ((ChangedFlags & NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
+        if ((CapabilitiesChanged &
+             NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
             //
-            // If any of the receive checksum flags are set, then
+            // If any of the receive checksum capapbilities are set, then
             // offloading must remain on for all protocols. There is no
             // granularity.
             //
 
             Value = DWE_READ(Device, DweRegisterMacConfiguration);
-            if ((*Flags & NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
+            if ((*Capabilities &
+                 NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
+
                 Value |= DWE_MAC_CONFIGURATION_CHECKSUM_OFFLOAD;
+                *Capabilities |= NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK;
 
             //
-            // Otherwise, if all flags are off and something was previously
-            // set, turn receive checksum offloadng off.
+            // If all receive capabilities are off, turn receive checksum
+            // offloadng off.
             //
 
-            } else if ((*Flags &
+            } else if ((*Capabilities &
                         NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) == 0) {
 
                 Value &= ~DWE_MAC_CONFIGURATION_CHECKSUM_OFFLOAD;
@@ -317,9 +340,9 @@ Return Value:
         // Update the checksum flags.
         //
 
-        Device->Capabilities &= ~NET_LINK_CAPABILITY_CHECKSUM_MASK;
-        Device->Capabilities |= (*Flags & NET_LINK_CAPABILITY_CHECKSUM_MASK);
-        KeReleaseQueuedLock(Device->ReceiveLock);
+        Device->CapabilitiesEnabled &= ~NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        Device->CapabilitiesEnabled |= *Capabilities;
+        KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
     default:
@@ -355,6 +378,7 @@ Return Value:
 {
 
     ULONG AllocationSize;
+    ULONG Capabilities;
     ULONG CommandIndex;
     PDWE_DESCRIPTOR Descriptor;
     ULONG DescriptorPhysical;
@@ -382,16 +406,25 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
+    Device->ConfigurationLock = KeCreateQueuedLock();
+    if (Device->ConfigurationLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
     //
     // By default, IP, UDP, and TCP checksum features are enabled.
     //
 
-    Device->Capabilities |= NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD |
-                            NET_LINK_CAPABILITY_TRANSMIT_UDP_CHECKSUM_OFFLOAD |
-                            NET_LINK_CAPABILITY_TRANSMIT_TCP_CHECKSUM_OFFLOAD |
-                            NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD |
-                            NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD |
-                            NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD;
+    Capabilities = NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD |
+                   NET_LINK_CAPABILITY_TRANSMIT_UDP_CHECKSUM_OFFLOAD |
+                   NET_LINK_CAPABILITY_TRANSMIT_TCP_CHECKSUM_OFFLOAD |
+                   NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD |
+                   NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD |
+                   NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD;
+
+    Device->CapabilitiesSupported |= Capabilities;
+    Device->CapabilitiesEnabled |= Capabilities;
 
     //
     // Allocate the receive buffers. This is allocated as non-write though and
@@ -588,6 +621,11 @@ InitializeDeviceStructuresEnd:
             Device->ReceiveLock = NULL;
         }
 
+        if (Device->ConfigurationLock != NULL) {
+            KeDestroyQueuedLock(Device->ConfigurationLock);
+            Device->ConfigurationLock = NULL;
+        }
+
         if (Device->ReceiveDataIoBuffer != NULL) {
             MmFreeIoBuffer(Device->ReceiveDataIoBuffer);
             Device->ReceiveDataIoBuffer = NULL;
@@ -772,7 +810,7 @@ Return Value:
              DWE_MAC_CONFIGURATION_TRANSMITTER_ENABLE |
              DWE_MAC_CONFIGURATION_RECEIVER_ENABLE;
 
-    if ((Device->Capabilities &
+    if ((Device->CapabilitiesEnabled &
          NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
         Value |= DWE_MAC_CONFIGURATION_CHECKSUM_OFFLOAD;
@@ -1408,71 +1446,57 @@ Return Value:
             Packet.Flags = 0;
 
             //
-            // If receive checksum offloading is enabled, figure out how to set
-            // the packet checksum offload flags.
+            // If the extended status bits are set, figure out if checksum
+            // offloading occurred.
             //
 
-            if ((Device->Capabilities &
-                 NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
+            if ((Descriptor->Control & DWE_RX_STATUS_EXTENDED_STATUS) != 0) {
+                ExtendedStatus = Descriptor->ExtendedStatus;
 
-                if ((Descriptor->Control &
-                     DWE_RX_STATUS_EXTENDED_STATUS) != 0) {
+                //
+                // If an IP header error occurred, leave it at that.
+                //
 
-                    ExtendedStatus = Descriptor->ExtendedStatus;
+                if ((ExtendedStatus &
+                     DWE_RX_STATUS2_IP_HEADER_ERROR) != 0) {
+
+                     Packet.Flags |= NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD |
+                                     NET_PACKET_FLAG_IP_CHECKSUM_FAILED;
+
+                //
+                // If the checksum was not bypassed, then the IP header
+                // checksum was valid.
+                //
+
+                } else if ((ExtendedStatus &
+                            DWE_RX_STATUS2_IP_CHECKSUM_BYPASSED) == 0) {
+
+                    Packet.Flags |= NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD;
+                    PayloadType = ExtendedStatus &
+                                  DWE_RX_STATUS2_IP_PAYLOAD_TYPE_MASK;
 
                     //
-                    // If an IP header error occurred, leave it at that.
+                    // Handle a TCP packet.
                     //
 
-                    if ((ExtendedStatus &
-                         DWE_RX_STATUS2_IP_HEADER_ERROR) != 0) {
+                    if (PayloadType == DWE_RX_STATUS2_IP_PAYLOAD_TCP) {
+                        Packet.Flags |= NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD;
+                        if ((ExtendedStatus &
+                             DWE_RX_STATUS2_IP_PAYLOAD_ERROR) != 0) {
 
-                         Packet.Flags |= NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD |
-                                         NET_PACKET_FLAG_IP_CHECKSUM_FAILED;
+                            Packet.Flags |= NET_PACKET_FLAG_TCP_CHECKSUM_FAILED;
+                        }
 
                     //
-                    // If the checksum was not bypassed, then the IP header
-                    // checksum was valid.
+                    // Handle a UDP packet.
                     //
 
-                    } else if ((ExtendedStatus &
-                                DWE_RX_STATUS2_IP_CHECKSUM_BYPASSED) == 0) {
+                    } else if (PayloadType == DWE_RX_STATUS2_IP_PAYLOAD_UDP) {
+                        Packet.Flags |= NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD;
+                        if ((ExtendedStatus &
+                             DWE_RX_STATUS2_IP_PAYLOAD_ERROR) != 0) {
 
-                        Packet.Flags |= NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD;
-                        PayloadType = ExtendedStatus &
-                                      DWE_RX_STATUS2_IP_PAYLOAD_TYPE_MASK;
-
-                        //
-                        // Handle a TCP packet.
-                        //
-
-                        if (PayloadType == DWE_RX_STATUS2_IP_PAYLOAD_TCP) {
-                            Packet.Flags |=
-                                          NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD;
-
-                            if ((ExtendedStatus &
-                                 DWE_RX_STATUS2_IP_PAYLOAD_ERROR) != 0) {
-
-                                Packet.Flags |=
-                                           NET_PACKET_FLAG_TCP_CHECKSUM_FAILED;
-                            }
-
-                        //
-                        // Handle a UDP packet.
-                        //
-
-                        } else if (PayloadType ==
-                                   DWE_RX_STATUS2_IP_PAYLOAD_UDP) {
-
-                            Packet.Flags |=
-                                          NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD;
-
-                            if ((ExtendedStatus &
-                                 DWE_RX_STATUS2_IP_PAYLOAD_ERROR) != 0) {
-
-                                Packet.Flags |=
-                                           NET_PACKET_FLAG_UDP_CHECKSUM_FAILED;
-                            }
+                            Packet.Flags |= NET_PACKET_FLAG_UDP_CHECKSUM_FAILED;
                         }
                     }
                 }
@@ -1544,6 +1568,12 @@ Return Value:
         (Device->LinkSpeed != Speed) ||
         (Device->FullDuplex != FullDuplex)) {
 
+        //
+        // Synchronize access to the MAC configuration register. It is also
+        // accessed when setting device information.
+        //
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
         Value = DWE_READ(Device, DweRegisterMacConfiguration);
         if (Speed == NET_SPEED_1000_MBPS) {
             Value &= ~(DWE_MAC_CONFIGURATION_RMII_SPEED_100 |
@@ -1564,6 +1594,7 @@ Return Value:
         }
 
         DWE_WRITE(Device, DweRegisterMacConfiguration, Value);
+        KeReleaseQueuedLock(Device->ConfigurationLock);
         Device->LinkActive = LinkUp;
         Device->LinkSpeed = Speed;
         Device->FullDuplex = FullDuplex;

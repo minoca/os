@@ -517,7 +517,7 @@ Return Value:
     Properties.DataLinkType = NetDomainEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Domain = NetDomainEthernet;
-    Properties.Capabilities = Device->Capabilities;
+    Properties.Capabilities = Device->CapabilitiesSupported;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),
                   sizeof(Device->MacAddress));

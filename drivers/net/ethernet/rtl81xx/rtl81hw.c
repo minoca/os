@@ -254,9 +254,10 @@ Return Value:
 
 {
 
-    ULONG ChangedFlags;
+    PULONG Capabilities;
+    ULONG CapabilitiesChanged;
+    ULONG CapabilitiesSupported;
     PRTL81_DEVICE Device;
-    PULONG Flags;
     KSTATUS Status;
     USHORT Value;
 
@@ -270,22 +271,46 @@ Return Value:
 
         //
         // If the request is a get, just return the device's current checksum
-        // flags.
+        // capabilities.
         //
 
         Status = STATUS_SUCCESS;
-        Flags = (PULONG)Data;
+        Capabilities = (PULONG)Data;
         if (Set == FALSE) {
-            *Flags = Device->Capabilities & NET_LINK_CAPABILITY_CHECKSUM_MASK;
+            *Capabilities = Device->CapabilitiesEnabled &
+                            NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
             break;
         }
 
         //
-        // Synchronize on the receive lock. There is nothing to do for transmit
-        // changes, so leave that lock out of it.
+        // Scrub the capabilities in case the caller supplied more than the
+        // checksum bits.
         //
 
-        KeAcquireQueuedLock(Device->ReceiveLock);
+        *Capabilities &= NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        //
+        // Not all RTL81xx devices support checksum offloading. Make sure the
+        // supplied capabilities are supported.
+        //
+
+        CapabilitiesSupported = Device->CapabilitiesSupported &
+                                NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        if ((*Capabilities & ~CapabilitiesSupported) != 0) {
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        //
+        // Synchronize updates to the enabled capabilities field and the
+        // reprogramming of the hardware register. It would be bad if the field
+        // said checksum offloading was enabled, but the hardware had it
+        // disabled. Future calls to enable it would fail.
+        //
+
+        KeAcquireQueuedLock(Device->CapabilitiesLock);
 
         //
         // If it is a set, figure out what is changing. There is nothing to do
@@ -295,50 +320,46 @@ Return Value:
         // offloading, however, need to modify the command 2 register.
         //
 
-        ChangedFlags = (*Flags ^ Device->Capabilities) &
-                       NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        CapabilitiesChanged = (*Capabilities ^ Device->CapabilitiesEnabled) &
+                              NET_LINK_CAPABILITY_CHECKSUM_MASK;
 
-        if ((ChangedFlags & NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
+        if ((CapabilitiesChanged &
+             NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
             //
-            // If any of the receive checksum flags are set, then
+            // If any of the receive checksum capapbilities are set, then
             // offloading must remain on for all protocols. There is no
-            // granularity. Turn it on if a flag is set and no flags were
-            // previously set.
+            // granularity.
             //
 
-            if (((*Flags & NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) &&
-                ((Device->Capabilities &
-                  NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) == 0)) {
+            Value = RTL81_READ_REGISTER16(Device, Rtl81RegisterCommand2);
+            if ((*Capabilities &
+                 NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
-                Value = RTL81_READ_REGISTER16(Device, Rtl81RegisterCommand2);
-                Value |= RTL81_COMMAND_2_REGISTER_DEFAULT;
-                RTL81_WRITE_REGISTER16(Device, Rtl81RegisterCommand2, Value);
-                *Flags |= NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK;
+                Value |= RTL81_COMMAND_2_REGISTER_RECEIVE_CHECKSUM_OFFLOAD;
+                *Capabilities |= NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK;
 
             //
-            // Otherwise, if all flags are off and something was previously
-            // set, turn receive checksum offloadng off.
+            // If all receive capabilities are off, turn receive checksum
+            // offloadng off.
             //
 
-            } else if (((*Flags &
-                         NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) == 0) &&
-                       ((Device->Capabilities &
-                         NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0)) {
+            } else if ((*Capabilities &
+                         NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) == 0) {
 
-                Value = RTL81_READ_REGISTER16(Device, Rtl81RegisterCommand2);
-                Value &= ~RTL81_COMMAND_2_REGISTER_DEFAULT;
-                RTL81_WRITE_REGISTER16(Device, Rtl81RegisterCommand2, Value);
+                Value &= ~RTL81_COMMAND_2_REGISTER_RECEIVE_CHECKSUM_OFFLOAD;
             }
+
+            RTL81_WRITE_REGISTER16(Device, Rtl81RegisterCommand2, Value);
         }
 
         //
         // Update the checksum flags.
         //
 
-        Device->Capabilities &= ~NET_LINK_CAPABILITY_CHECKSUM_MASK;
-        Device->Capabilities |= (*Flags & NET_LINK_CAPABILITY_CHECKSUM_MASK);
-        KeReleaseQueuedLock(Device->ReceiveLock);
+        Device->CapabilitiesEnabled &= ~NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        Device->CapabilitiesEnabled |= *Capabilities;
+        KeReleaseQueuedLock(Device->CapabilitiesLock);
         break;
 
     default:
@@ -402,6 +423,14 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
+    ASSERT(Device->CapabilitiesLock == NULL);
+
+    Device->CapabilitiesLock = KeCreateQueuedLock();
+    if (Device->CapabilitiesLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
     NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
 
     //
@@ -460,7 +489,8 @@ Return Value:
                        NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD |
                        NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD;
 
-        Device->Capabilities |= Capabilities;
+        Device->CapabilitiesSupported |= Capabilities;
+        Device->CapabilitiesEnabled |= Capabilities;
     }
 
     //
@@ -670,6 +700,10 @@ Return Value:
         KeDestroyQueuedLock(Device->ReceiveLock);
     }
 
+    if (Device->CapabilitiesLock != NULL) {
+        KeDestroyQueuedLock(Device->CapabilitiesLock);
+    }
+
     if ((Device->Flags & RTL81_FLAG_TRANSMIT_MODE_LEGACY) != 0) {
         if (Device->U.LegacyData.ReceiveIoBuffer != NULL) {
             MmFreeIoBuffer(Device->U.LegacyData.ReceiveIoBuffer);
@@ -792,7 +826,7 @@ Return Value:
         //
 
         Command2 = RTL81_COMMAND_2_REGISTER_DEFAULT;
-        if ((Device->Capabilities &
+        if ((Device->CapabilitiesEnabled &
             NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
             Command2 |= RTL81_COMMAND_2_REGISTER_RECEIVE_CHECKSUM_OFFLOAD;

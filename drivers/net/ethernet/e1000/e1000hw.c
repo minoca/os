@@ -353,6 +353,7 @@ Return Value:
 
         Flags = (PULONG)Data;
         *Flags = Device->Capabilities & NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        Status = STATUS_SUCCESS;
         break;
 
     default:
