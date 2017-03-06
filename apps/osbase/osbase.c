@@ -987,6 +987,7 @@ Return Value:
 
         CurrentDirectorySize = Parameters.BufferSize * 2;
         OsHeapFree(CurrentDirectory);
+        CurrentDirectory = NULL;
     }
 
 GetCurrentDirectoryEnd:
@@ -995,7 +996,9 @@ GetCurrentDirectoryEnd:
         *BufferSize = Parameters.BufferSize;
 
     } else {
-        OsHeapFree(CurrentDirectory);
+        if (CurrentDirectory != NULL) {
+            OsHeapFree(CurrentDirectory);
+        }
     }
 
     return Status;
