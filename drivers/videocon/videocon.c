@@ -34,6 +34,7 @@ Environment:
 #include <minoca/kernel/sysres.h>
 #include <minoca/lib/basevid.h>
 #include <minoca/lib/termlib.h>
+#include <minoca/video/fb.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -360,6 +361,17 @@ Members:
 
     Size - Stores the size of the frame buffer in bytes.
 
+    BaseVideoMode - Stores the base video mode.
+
+    RedMask - Stores the maxk of red bits in each pixel.
+
+    GreenMask - Stores the mask of green bits in each pixel.
+
+    BlueMask - Stores the mask of blue bits in each pixel.
+
+    PixelsPerScanLine - Stores the number of pixels in a line, including
+        any extra non-visual pixels.
+
 --*/
 
 typedef struct _VIDEO_CONSOLE_DEVICE {
@@ -393,6 +405,11 @@ typedef struct _VIDEO_CONSOLE_DEVICE {
     SYSTEM_TIME CreationTime;
     ULONG OpenHandles;
     UINTN Size;
+    ULONG BaseVideoMode;
+    ULONG RedMask;
+    ULONG GreenMask;
+    ULONG BlueMask;
+    ULONG PixelsPerScanLine;
 } VIDEO_CONSOLE_DEVICE, *PVIDEO_CONSOLE_DEVICE;
 
 //
@@ -438,6 +455,13 @@ VcDispatchIo (
 
 VOID
 VcDispatchSystemControl (
+    PIRP Irp,
+    PVOID DeviceContext,
+    PVOID IrpContext
+    );
+
+VOID
+VcDispatchUserControl (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
@@ -617,6 +641,7 @@ Return Value:
     FunctionTable.DispatchClose = VcDispatchClose;
     FunctionTable.DispatchIo = VcDispatchIo;
     FunctionTable.DispatchSystemControl = VcDispatchSystemControl;
+    FunctionTable.DispatchUserControl = VcDispatchUserControl;
     Status = IoRegisterDriverFunctions(Driver, &FunctionTable);
     if (!KSUCCESS(Status)) {
         goto DriverEntryEnd;
@@ -752,7 +777,7 @@ Return Value:
                (IS_POINTER_ALIGNED(ConsoleDevice->FrameBuffer, MmPageSize())));
 
         ConsoleDevice->Width = Width;
-        ConsoleDevice->Height = Height;
+        ConsoleDevice->Height = FrameBufferResource->Height;
         ConsoleDevice->BitsPerPixel = FrameBufferResource->BitsPerPixel;
         ConsoleDevice->Columns = Columns;
         ConsoleDevice->ScreenRows = Rows;
@@ -760,6 +785,13 @@ Return Value:
         ConsoleDevice->MaxRows = VIDEO_CONSOLE_MAX_LINES;
         ConsoleDevice->Mode = VIDEO_CONSOLE_MODE_DEFAULTS;
         ConsoleDevice->Size = RowSize * FrameBufferResource->Height;
+        ConsoleDevice->BaseVideoMode = FrameBufferResource->Mode;
+        ConsoleDevice->RedMask = FrameBufferResource->RedMask;
+        ConsoleDevice->GreenMask = FrameBufferResource->GreenMask;
+        ConsoleDevice->BlueMask = FrameBufferResource->BlueMask;
+        ConsoleDevice->PixelsPerScanLine =
+                                        FrameBufferResource->PixelsPerScanLine;
+
         KeGetSystemTime(&(ConsoleDevice->CreationTime));
 
         //
@@ -1308,6 +1340,119 @@ Return Value:
         break;
     }
 
+    return;
+}
+
+VOID
+VcDispatchUserControl (
+    PIRP Irp,
+    PVOID DeviceContext,
+    PVOID IrpContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine handles User Control IRPs.
+
+Arguments:
+
+    Irp - Supplies a pointer to the I/O request packet.
+
+    DeviceContext - Supplies the context pointer supplied by the driver when it
+        attached itself to the driver stack. Presumably this pointer contains
+        driver-specific device context.
+
+    IrpContext - Supplies the context pointer supplied by the driver when
+        the IRP was created.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PVIDEO_CONSOLE_DEVICE Console;
+    PVOID CopyAddress;
+    ULONG CopySize;
+    FRAME_BUFFER_INFO Info;
+    FRAME_BUFFER_MODE Mode;
+    KSTATUS Status;
+    PIRP_USER_CONTROL UserControl;
+
+    CopyAddress = NULL;
+    CopySize = 0;
+    Console = (PVIDEO_CONSOLE_DEVICE)DeviceContext;
+    Status = STATUS_SUCCESS;
+    UserControl = &(Irp->U.UserControl);
+    switch ((ULONG)(Irp->MinorCode)) {
+    case FrameBufferGetInfo:
+        if (UserControl->UserBufferSize < sizeof(FRAME_BUFFER_INFO)) {
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        RtlZeroMemory(&Info, sizeof(Info));
+        Info.Magic = FRAME_BUFFER_MAGIC;
+        RtlStringCopy(Info.Identifier, "VideoCon", sizeof(Info.Identifier));
+        Info.Type = FrameBufferTypeLinear;
+
+        ASSERT((Console->BaseVideoMode == BaseVideoModeFrameBuffer) ||
+               (Console->BaseVideoMode == BaseVideoModeBiosText));
+
+        if (Console->BaseVideoMode == BaseVideoModeBiosText) {
+            Info.Type = FrameBufferTypeText;
+        }
+
+        Info.Address = Console->PhysicalAddress;
+        Info.Length = Console->Size;
+        Info.LineLength = Console->PixelsPerScanLine * Console->BitsPerPixel /
+                          BITS_PER_BYTE;
+
+        CopySize = sizeof(Info);
+        CopyAddress = &Info;
+        break;
+
+    case FrameBufferGetMode:
+        if (UserControl->UserBufferSize < sizeof(FRAME_BUFFER_MODE)) {
+            Status = STATUS_BUFFER_TOO_SMALL;
+        }
+
+        RtlZeroMemory(&Mode, sizeof(Mode));
+        Mode.Magic = FRAME_BUFFER_MAGIC;
+        Mode.ResolutionX = Console->Width;
+        Mode.ResolutionY = Console->Height;
+        Mode.VirtualResolutionX = Mode.ResolutionX;
+        Mode.VirtualResolutionY = Mode.ResolutionY;
+        Mode.BitsPerPixel = Console->BitsPerPixel;
+        Mode.RedMask = Console->RedMask;
+        Mode.GreenMask = Console->GreenMask;
+        Mode.BlueMask = Console->BlueMask;
+        CopySize = sizeof(Mode);
+        CopyAddress = &Mode;
+        break;
+
+    case FrameBufferSetMode:
+    default:
+        Status = STATUS_NOT_HANDLED;
+        break;
+    }
+
+    if ((KSUCCESS(Status)) && (CopySize != 0)) {
+        if (UserControl->FromKernelMode != FALSE) {
+            RtlCopyMemory(UserControl->UserBuffer, CopyAddress, CopySize);
+
+        } else {
+            Status = MmCopyToUserMode(UserControl->UserBuffer,
+                                      CopyAddress,
+                                      CopySize);
+        }
+    }
+
+    IoCompleteIrp(VcDriver, Irp, Status);
     return;
 }
 
