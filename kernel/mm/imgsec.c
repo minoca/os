@@ -2331,7 +2331,9 @@ Return Value:
     //
 
     MapFlags = MAP_FLAG_PAGABLE;
-    if ((Section->Flags & IMAGE_SECTION_READABLE) != 0) {
+    if ((Section->Flags &
+        (IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE)) != 0) {
+
         MapFlags |= MAP_FLAG_PRESENT;
     }
 
@@ -4219,8 +4221,7 @@ Return Value:
     //
 
     if ((OtherProcess == FALSE) && (MultipleIpisRequired != FALSE)) {
-        CurrentAddress = ALIGN_POINTER_DOWN(Section->VirtualAddress, PageSize);
-        MmpUnmapPages(CurrentAddress, PageCount, 0, NULL);
+        MmpUnmapPages(Section->MinTouched, PageCount, 0, NULL);
     }
 
 DestroyImageSectionMappingsEnd:
