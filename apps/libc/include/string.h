@@ -799,6 +799,36 @@ Return Value:
 
 LIBC_API
 char *
+strndup (
+    const char *String,
+    size_t Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a pointer to a newly allocated string which is a
+    duplicate of the given input string. This returned pointer must be passed
+    to the free function when the caller is done with it.
+
+Arguments:
+
+    String - Supplies a pointer to the string to duplicate.
+
+    Size - Supplies the maximum number of bytes to copy before terminating the
+        string.
+
+Return Value:
+
+    Returns a pointer to the newly allocated duplicate string on success.
+
+    NULL on failure.
+
+--*/
+
+LIBC_API
+char *
 strpbrk (
     const char *String,
     const char *Characters
