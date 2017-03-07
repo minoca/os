@@ -429,6 +429,10 @@ freopenEnd:
     Stream->BufferNextIndex = 0;
     Stream->BufferValidSize = 0;
     Stream->Flags &= (FILE_FLAG_BUFFER_ALLOCATED | FILE_FLAG_STANDARD_IO);
+    if ((OpenFlags & O_ACCMODE) != O_WRONLY) {
+        Stream->Flags |= FILE_FLAG_CAN_READ;
+    }
+
     ClpUnlockStream(Stream);
     return Stream;
 }
