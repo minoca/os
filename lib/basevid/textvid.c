@@ -228,7 +228,22 @@ Return Value:
                   &VidDefaultPalette,
                   sizeof(BASE_VIDEO_PALETTE));
 
-    VidpConvertPalette(Context, &VidDefaultPalette, &Context->PhysicalPalette);
+    //
+    // The default palette is pretty unreadable when reduced down to 8 bits.
+    // Set the background to black as a compromise, giving things kind of an
+    // old school CRT look.
+    //
+
+    if (Context->BitsPerPixel <= 8) {
+        Context->Palette.DefaultBackground = BASE_VIDEO_COLOR_RGB(0, 0, 0);
+        Context->Palette.DefaultBoldBackground =
+                                            Context->Palette.DefaultBackground;
+    }
+
+    VidpConvertPalette(Context,
+                       &(Context->Palette),
+                       &Context->PhysicalPalette);
+
     Context->Font = VidDefaultFont;
 
     ASSERT(Context->Font != NULL);

@@ -50,8 +50,25 @@ Environment:
             ((_Address) & 0x0000FFFF))
 
 //
+// These macros convert a TrueColor 8-bit RGB 3:3:2 value into its VGA DAC
+// register value. This is breaking the color up into its components, and then
+// shifting it out to a max value of 0x3F.
+//
+
+#define TRUECOLOR_TO_PALETTE_RED(_Color) ((((_Color) >> 5) & 0x7) << 3)
+#define TRUECOLOR_TO_PALETTE_GREEN(_Color) ((((_Color) >> 2) & 0x7) << 3)
+#define TRUECOLOR_TO_PALETTE_BLUE(_Color) (((_Color) & 0x3) << 3)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// Define the INT 10 function for setting several DAC registers at once (the
+// color palette).
+//
+
+#define VIDEO_FUNCTION_SET_DAC_REGISTER_BLOCK 0x1012
 
 //
 // Define the maximum number of supported modes.
@@ -428,6 +445,11 @@ ULONG
 FwpPcatCreatePixelMask (
     ULONG Position,
     ULONG Size
+    );
+
+VOID
+FwpPcatSetPalette (
+    VOID
     );
 
 //
@@ -864,6 +886,9 @@ SetBestVideoModeEnd:
         FwFrameBufferRedMask = RedMask;
         FwFrameBufferGreenMask = GreenMask;
         FwFrameBufferBlueMask = BlueMask;
+        if (Depth == 8) {
+            FwpPcatSetPalette();
+        }
     }
 
     return Status;
@@ -1356,5 +1381,83 @@ Return Value:
     }
 
     return Mask;
+}
+
+VOID
+FwpPcatSetPalette (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets an 8-bit color palette equivalent to TrueColor. Note that
+    doing this will change the colors for Text mode too.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None, as failure is not fatal.
+
+--*/
+
+{
+
+    ULONG Color;
+    PUCHAR Palette;
+    REAL_MODE_CONTEXT RealModeContext;
+    KSTATUS Status;
+
+    //
+    // Create a standard BIOS call context.
+    //
+
+    Status = FwpRealModeCreateBiosCallContext(&RealModeContext, 0x10);
+    if (!KSUCCESS(Status)) {
+        return;
+    }
+
+    //
+    // Set up a BIOS call to set a block of DAC registers. BX contains the
+    // first DAC register to set (0 - 0xFF) and CX contains the number of
+    // registers to set (0 - 0xFF). ES:DX points to the table to set, which
+    // should be 3 * (CX + 1).
+    //
+
+    RealModeContext.Eax = VIDEO_FUNCTION_SET_DAC_REGISTER_BLOCK;
+    RealModeContext.Ebx = 0;
+    RealModeContext.Ecx = 0x00FF;
+    RealModeContext.Es =
+                  ADDRESS_TO_SEGMENT(RealModeContext.DataPage.RealModeAddress);
+
+    RealModeContext.Edx = RealModeContext.DataPage.RealModeAddress & 0x0F;
+
+    //
+    // Set up a TrueColor palette, in which the 8 bits of color are broken up
+    // into 3 bits of red, 3 bits of green, and 2 bits of blue. The palette
+    // registers are 6 bits wide each.
+    //
+
+    Palette = RealModeContext.DataPage.Page;
+    for (Color = 0; Color < 256; Color += 1) {
+        *Palette = TRUECOLOR_TO_PALETTE_RED(Color);
+        Palette += 1;
+        *Palette = TRUECOLOR_TO_PALETTE_GREEN(Color);
+        Palette += 1;
+        *Palette = TRUECOLOR_TO_PALETTE_BLUE(Color);
+        Palette += 1;
+    }
+
+    //
+    // Execute the firmware call.
+    //
+
+    FwpRealModeExecute(&RealModeContext);
+    FwpRealModeDestroyBiosCallContext(&RealModeContext);
+    return;
 }
 
