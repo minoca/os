@@ -283,6 +283,7 @@ Return Value:
 {
 
     PULONG BooleanOption;
+    ULONG Capabilities;
     PA3E_DEVICE Device;
     KSTATUS Status;
 
@@ -321,15 +322,19 @@ Return Value:
         }
 
         KeAcquireQueuedLock(Device->ConfigurationLock);
+        Capabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
 
         } else {
-            Device->EnabledCapabilities &=
-                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
         }
 
-        A3epUpdateFilterMode(Device);
+        if ((Capabilities ^ Device->EnabledCapabilities) != 0) {
+            Device->EnabledCapabilities = Capabilities;
+            A3epUpdateFilterMode(Device);
+        }
+
         KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 

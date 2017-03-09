@@ -253,6 +253,7 @@ Return Value:
     PULONG Capabilities;
     ULONG ChangedCapabilities;
     PDWE_DEVICE Device;
+    ULONG EnabledCapabilities;
     KSTATUS Status;
     ULONG SupportedCapabilities;
     ULONG Value;
@@ -384,15 +385,19 @@ Return Value:
         }
 
         KeAcquireQueuedLock(Device->ConfigurationLock);
+        EnabledCapabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
 
         } else {
-            Device->EnabledCapabilities &=
-                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            EnabledCapabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
         }
 
-        DwepUpdateFilterMode(Device);
+        if ((EnabledCapabilities ^ Device->EnabledCapabilities) != 0) {
+            Device->EnabledCapabilities = EnabledCapabilities;
+            DwepUpdateFilterMode(Device);
+        }
+
         KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 

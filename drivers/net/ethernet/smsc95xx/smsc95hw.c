@@ -377,6 +377,7 @@ Return Value:
     PULONG BooleanOption;
     PSM95_DEVICE Device;
     PULONG Flags;
+    ULONG NewCapabilities;
     ULONG OriginalCapabilities;
     KSTATUS Status;
 
@@ -432,18 +433,21 @@ Return Value:
         }
 
         KeAcquireQueuedLock(Device->ConfigurationLock);
-        OriginalCapabilities = Device->EnabledCapabilities;
+        NewCapabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            NewCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
 
         } else {
-            Device->EnabledCapabilities &=
-                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            NewCapabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
         }
 
-        Status = Sm95pUpdateFilterMode(Device);
-        if (!KSUCCESS(Status)) {
-            Device->EnabledCapabilities = OriginalCapabilities;
+        if ((NewCapabilities ^ Device->EnabledCapabilities) != 0) {
+            OriginalCapabilities = Device->EnabledCapabilities;
+            Device->EnabledCapabilities = NewCapabilities;
+            Status = Sm95pUpdateFilterMode(Device);
+            if (!KSUCCESS(Status)) {
+                Device->EnabledCapabilities = OriginalCapabilities;
+            }
         }
 
         KeReleaseQueuedLock(Device->ConfigurationLock);

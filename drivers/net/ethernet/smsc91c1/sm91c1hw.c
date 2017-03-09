@@ -278,6 +278,7 @@ Return Value:
 {
 
     PULONG BooleanOption;
+    ULONG Capabilities;
     PSM91C1_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
@@ -334,15 +335,19 @@ Return Value:
         }
 
         KeAcquireQueuedLock(Device->Lock);
+        Capabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
 
         } else {
-            Device->EnabledCapabilities &=
-                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
         }
 
-        Sm91c1pUpdateFilterMode(Device);
+        if ((Capabilities ^ Device->EnabledCapabilities) != 0) {
+            Device->EnabledCapabilities = Capabilities;
+            Sm91c1pUpdateFilterMode(Device);
+        }
+
         KeReleaseQueuedLock(Device->Lock);
         break;
 

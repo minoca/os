@@ -1532,6 +1532,7 @@ Return Value:
 {
 
     PULONG BooleanOption;
+    ULONG Capabilities;
     PRTLW81_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
@@ -1588,15 +1589,19 @@ Return Value:
         }
 
         KeAcquireQueuedLock(Device->ConfigurationLock);
+        Capabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
 
         } else {
-            Device->EnabledCapabilities &=
-                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
         }
 
-        Rtlw81pUpdateFilterMode(Device);
+        if ((Capabilities ^ Device->EnabledCapabilities) != 0) {
+            Device->EnabledCapabilities = Capabilities;
+            Rtlw81pUpdateFilterMode(Device);
+        }
+
         KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
