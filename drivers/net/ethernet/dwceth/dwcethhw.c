@@ -103,6 +103,11 @@ DwepDetermineLinkParameters (
     PBOOL FullDuplex
     );
 
+VOID
+DwepUpdateFilterMode (
+    PDWE_DEVICE Device
+    );
+
 KSTATUS
 DwepReadMii (
     PDWE_DEVICE Device,
@@ -244,11 +249,12 @@ Return Value:
 
 {
 
+    PULONG BooleanOption;
     PULONG Capabilities;
-    ULONG CapabilitiesChanged;
-    ULONG CapabilitiesSupported;
+    ULONG ChangedCapabilities;
     PDWE_DEVICE Device;
     KSTATUS Status;
+    ULONG SupportedCapabilities;
     ULONG Value;
 
     Device = DeviceContext;
@@ -267,7 +273,7 @@ Return Value:
         Status = STATUS_SUCCESS;
         Capabilities = (PULONG)Data;
         if (Set == FALSE) {
-            *Capabilities = Device->CapabilitiesEnabled &
+            *Capabilities = Device->EnabledCapabilities &
                             NET_LINK_CAPABILITY_CHECKSUM_MASK;
 
             break;
@@ -280,10 +286,10 @@ Return Value:
         //
 
         *Capabilities &= NET_LINK_CAPABILITY_CHECKSUM_MASK;
-        CapabilitiesSupported = Device->CapabilitiesSupported &
+        SupportedCapabilities = Device->SupportedCapabilities &
                                 NET_LINK_CAPABILITY_CHECKSUM_MASK;
 
-        if ((*Capabilities & ~CapabilitiesSupported) != 0) {
+        if ((*Capabilities & ~SupportedCapabilities) != 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -303,10 +309,10 @@ Return Value:
         // checksum change the MAC configuration.
         //
 
-        CapabilitiesChanged = (*Capabilities ^ Device->CapabilitiesEnabled) &
+        ChangedCapabilities = (*Capabilities ^ Device->EnabledCapabilities) &
                               NET_LINK_CAPABILITY_CHECKSUM_MASK;
 
-        if ((CapabilitiesChanged &
+        if ((ChangedCapabilities &
              NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
             //
@@ -340,8 +346,53 @@ Return Value:
         // Update the checksum flags.
         //
 
-        Device->CapabilitiesEnabled &= ~NET_LINK_CAPABILITY_CHECKSUM_MASK;
-        Device->CapabilitiesEnabled |= *Capabilities;
+        Device->EnabledCapabilities &= ~NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        Device->EnabledCapabilities |= *Capabilities;
+        KeReleaseQueuedLock(Device->ConfigurationLock);
+        break;
+
+    case NetLinkInformationPromiscuousMode:
+        if (*DataSize != sizeof(ULONG)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        Status = STATUS_SUCCESS;
+        BooleanOption = (PULONG)Data;
+        if (Set == FALSE) {
+            if ((Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+                *BooleanOption = TRUE;
+
+            } else {
+                *BooleanOption = FALSE;
+            }
+
+            break;
+        }
+
+        //
+        // Fail if promiscuous mode is not supported.
+        //
+
+        if ((Device->SupportedCapabilities &
+             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
+        if (*BooleanOption != FALSE) {
+            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        } else {
+            Device->EnabledCapabilities &=
+                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        }
+
+        DwepUpdateFilterMode(Device);
         KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
@@ -423,8 +474,14 @@ Return Value:
                    NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD |
                    NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD;
 
-    Device->CapabilitiesSupported |= Capabilities;
-    Device->CapabilitiesEnabled |= Capabilities;
+    Device->SupportedCapabilities |= Capabilities;
+    Device->EnabledCapabilities |= Capabilities;
+
+    //
+    // Promiscuous mode is supported, but not enabled.
+    //
+
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
 
     //
     // Allocate the receive buffers. This is allocated as non-write though and
@@ -760,8 +817,12 @@ Return Value:
     Value = 0;
     RtlCopyMemory(&Value, &(Device->MacAddress[sizeof(ULONG)]), sizeof(USHORT));
     DWE_WRITE(Device, DWE_MAC_ADDRESS_HIGH(0), Value);
-    Value = DWE_MAC_FRAME_FILTER_HASH_MULTICAST;
-    DWE_WRITE(Device, DweRegisterMacFrameFilter, Value);
+
+    //
+    // Set the initial filter mode.
+    //
+
+    DwepUpdateFilterMode(Device);
 
     //
     // Set up DMA.
@@ -810,7 +871,7 @@ Return Value:
              DWE_MAC_CONFIGURATION_TRANSMITTER_ENABLE |
              DWE_MAC_CONFIGURATION_RECEIVER_ENABLE;
 
-    if ((Device->CapabilitiesEnabled &
+    if ((Device->EnabledCapabilities &
          NET_LINK_CAPABILITY_CHECKSUM_RECEIVE_MASK) != 0) {
 
         Value |= DWE_MAC_CONFIGURATION_CHECKSUM_OFFLOAD;
@@ -1791,6 +1852,43 @@ Return Value:
 
 DetermineLinkParametersEnd:
     return Status;
+}
+
+VOID
+DwepUpdateFilterMode (
+    PDWE_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates a DesignWare Ethernet device's filter mode based on
+    the currently enabled capabilities.
+
+Arguments:
+
+    Device - Supplies a pointer to the DWE device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Value;
+
+    Value = DWE_MAC_FRAME_FILTER_HASH_MULTICAST;
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        Value |= DWE_MAC_FRAME_FILTER_PROMISCUOUS;
+    }
+
+    DWE_WRITE(Device, DweRegisterMacFrameFilter, Value);
+    return;
 }
 
 KSTATUS

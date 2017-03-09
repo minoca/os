@@ -549,6 +549,12 @@ Members:
     PendingPhyInterrupts - Stores the bitmask of pending MII interrupts. See
         SM91C1_MII_INTERRUPT_STATUS_* for definitions.
 
+    SupportedCapabilities - Stores the set of capabilities that this device
+        supports. See NET_LINK_CAPABILITY_* for definitions.
+
+    EnabledCapabilities - Stores the currently enabled capabilities on the
+        devices. See NET_LINK_CAPABILITY_* for definitions.
+
     AllocateInProgress - Stores a boolean indicating whether or not packet
         allocation is in progress. This is protected by the Lock member.
 
@@ -577,6 +583,8 @@ typedef struct _SM91C1_DEVICE {
     USHORT PendingTransmitPacket;
     volatile ULONG PendingInterrupts;
     volatile ULONG PendingPhyInterrupts;
+    ULONG SupportedCapabilities;
+    ULONG EnabledCapabilities;
     BOOL AllocateInProgress;
     KSPIN_LOCK BankLock;
     BYTE SelectedBank;

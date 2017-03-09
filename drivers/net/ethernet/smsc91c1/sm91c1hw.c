@@ -86,6 +86,11 @@ Sm91c1pInitializePhy (
     PSM91C1_DEVICE Device
     );
 
+VOID
+Sm91c1pUpdateFilterMode (
+    PSM91C1_DEVICE Device
+    );
+
 KSTATUS
 Sm91c1pReadMacAddress (
     PSM91C1_DEVICE Device
@@ -272,21 +277,73 @@ Return Value:
 
 {
 
+    PULONG BooleanOption;
+    PSM91C1_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
 
+    Status = STATUS_SUCCESS;
+    Device = (PSM91C1_DEVICE)DeviceContext;
     switch (InformationType) {
     case NetLinkInformationChecksumOffload:
         if (*DataSize != sizeof(ULONG)) {
-            return STATUS_INVALID_PARAMETER;
+            Status = STATUS_INVALID_PARAMETER;
+            break;
         }
 
         if (Set != FALSE) {
-            return STATUS_NOT_SUPPORTED;
+            Status = STATUS_NOT_SUPPORTED;
+            break;
         }
 
         Flags = (PULONG)Data;
-        *Flags = 0;
+        *Flags = Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        break;
+
+    case NetLinkInformationPromiscuousMode:
+        if (*DataSize != sizeof(ULONG)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        BooleanOption = (PULONG)Data;
+        if (Set == FALSE) {
+            if ((Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+                *BooleanOption = TRUE;
+
+            } else {
+                *BooleanOption = FALSE;
+            }
+
+            break;
+        }
+
+        //
+        // Fail if promiscuous mode is not supported.
+        //
+
+        if ((Device->SupportedCapabilities &
+             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        KeAcquireQueuedLock(Device->Lock);
+        if (*BooleanOption != FALSE) {
+            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        } else {
+            Device->EnabledCapabilities &=
+                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        }
+
+        Sm91c1pUpdateFilterMode(Device);
+        KeReleaseQueuedLock(Device->Lock);
         break;
 
     default:
@@ -327,6 +384,7 @@ Return Value:
     KeInitializeSpinLock(&(Device->InterruptLock));
     KeInitializeSpinLock(&(Device->BankLock));
     NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
     Device->SelectedBank = -1;
 
     ASSERT(Device->Lock == NULL);
@@ -503,6 +561,12 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto InitializeEnd;
     }
+
+    //
+    // Set the initial filter mode. This acts based on the enabled capabilities.
+    //
+
+    Sm91c1pUpdateFilterMode(Device);
 
     //
     // Notify the networking core of this new link now that the device is ready
@@ -1276,6 +1340,46 @@ Return Value:
             SM91C1_MII_INTERRUPT_STATUS_INTERRUPT;
 
     Sm91c1pWriteMdio(Device, Sm91c1MiiRegisterInterruptMask, ~Value);
+    return;
+}
+
+VOID
+Sm91c1pUpdateFilterMode (
+    PSM91C1_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates an SMSC91C1 device's filter mode based on the
+    currently enabled capabilities.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    USHORT Value;
+
+    Value = Sm91c1pReadRegister(Device, Sm91c1RegisterReceiveControl);
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        Value |= SM91C1_RECEIVE_CONTROL_PROMISCUOUS;
+
+    } else {
+        Value &= ~SM91C1_RECEIVE_CONTROL_PROMISCUOUS;
+    }
+
+    Sm91c1pWriteRegister(Device, Sm91c1RegisterReceiveControl, Value);
     return;
 }
 

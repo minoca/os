@@ -83,6 +83,12 @@ Author:
 #define PCNET_INITIALIZATION_TIMEOUT MICROSECONDS_PER_SECOND
 
 //
+// Define the amount of time to wait for a suspend or stop to complete.
+//
+
+#define PCNET_SUSPEND_TIMEOUT MICROSECONDS_PER_SECOND
+
+//
 // Define the length of the receive descriptor ring.
 //
 
@@ -176,6 +182,23 @@ Author:
 #define PCNET_CSR4_TRANSMIT_START_MASK                (1 << 2)
 #define PCNET_CSR4_JABBER                             (1 << 1)
 #define PCNET_CSR4_JABBER_MASK                        (1 << 0)
+
+//
+// Define the bits for the extended control register - CSR5.
+//
+
+#define PCNET_CSR5_TRANSMIT_OK_INTERRUPT_DISABLE       (1 << 15)
+#define PCNET_CSR5_LAST_TRANSMIT_INTERRUPT_ENABLE      (1 << 14)
+#define PCNET_CSR5_SYSTEM_INTERRUPT                    (1 << 11)
+#define PCNET_CSR5_SYSTEM_INTERRUPT_ENABLE             (1 << 10)
+#define PCNET_CSR5_EXCESSIVE_DEFERRAL_INTERRUPT        (1 << 7)
+#define PCNET_CSR5_EXCESSIVE_DEFERRAL_INTERRUPT_ENABLE (1 << 6)
+#define PCNET_CSR5_MAGIC_PACKET_ACCEPT                 (1 << 5)
+#define PCNET_CSR5_MAGIC_PACKET_INTERRUPT              (1 << 4)
+#define PCNET_CSR5_MAGIC_PACKET_INTERRUPT_ENABLE       (1 << 3)
+#define PCNET_CSR5_MAGIC_PACKET_ENABLE                 (1 << 2)
+#define PCNET_CSR5_MAGIC_PACKET_MODE                   (1 << 1)
+#define PCNET_CSR5_SUSPEND                             (1 << 0)
 
 //
 // Device the bits for the chip ID registers - CSR88 and CSR89.
@@ -457,6 +480,7 @@ Author:
 #define PCNET_DEVICE_FLAG_100_MBPS       0x00000008
 #define PCNET_DEVICE_FLAG_AUI            0x00000010
 #define PCNET_DEVICE_FLAG_NO_LINK_STATUS 0x00000020
+#define PCNET_DEVICE_FLAG_SUSPEND        0x00000040
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -467,6 +491,8 @@ typedef enum _PCNET_CSR {
     PcnetCsr1InitBlockAddress0 = 1,
     PcnetCsr2InitBlockAddress1 = 2,
     PcnetCsr4FeatureControl = 4,
+    PcnetCsr5ExtendedControl = 5,
+    PcnetCsr15Mode = 15,
     PcnetCsr88ChipIdLower = 88,
     PcnetCsr89ChipIdUpper = 89
 } PCNET_CSR, *PPCNET_CSR;
@@ -785,6 +811,16 @@ Members:
 
     WorkItem - Stores a pointer to the work item queued from the DPC.
 
+    ConfigurationLock - Stores a pointer to a queued lock that synchronizes
+        updates to the devices configuration. Most notably, its current
+        capabilities.
+
+    SupportedCapabilities - Stores the set of capabilities that this device
+        supports. See NET_LINK_CAPABILITY_* for definitions.
+
+    EnabledCapabilities - Stores the currently enabled capabilities on the
+        devices. See NET_LINK_CAPABILITY_* for definitions.
+
 --*/
 
 typedef struct _PCNET_DEVICE {
@@ -821,6 +857,9 @@ typedef struct _PCNET_DEVICE {
     PKTIMER LinkCheckTimer;
     PDPC LinkCheckDpc;
     PWORK_ITEM WorkItem;
+    PQUEUED_LOCK ConfigurationLock;
+    ULONG SupportedCapabilities;
+    ULONG EnabledCapabilities;
 } PCNET_DEVICE, *PPCNET_DEVICE;
 
 //

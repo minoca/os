@@ -88,6 +88,14 @@ Author:
     (_PacketList)->Count += 1;
 
 //
+// This macro adds a network packet to beginning of a network packet list.
+//
+
+#define NET_ADD_PACKET_TO_LIST_HEAD(_Packet, _PacketList)          \
+    INSERT_AFTER(&((_Packet)->ListEntry), &((_PacketList)->Head)); \
+    (_PacketList)->Count += 1;
+
+//
 // This macro removes a network packet from a network packet list.
 //
 
@@ -225,6 +233,7 @@ Author:
 #define NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD   0x00000008
 #define NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD  0x00000010
 #define NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD  0x00000020
+#define NET_LINK_CAPABILITY_PROMISCUOUS_MODE              0x00000040
 
 #define NET_LINK_CAPABILITY_CHECKSUM_TRANSMIT_MASK       \
     (NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD |  \
@@ -282,7 +291,8 @@ typedef enum _NET_SOCKET_BINDING_TYPE {
 
 typedef enum _NET_LINK_INFORMATION_TYPE {
     NetLinkInformationInvalid,
-    NetLinkInformationChecksumOffload
+    NetLinkInformationChecksumOffload,
+    NetLinkInformationPromiscuousMode
 } NET_LINK_INFORMATION_TYPE, *PNET_LINK_INFORMATION_TYPE;
 
 typedef enum _NET_ADDRESS_TYPE {

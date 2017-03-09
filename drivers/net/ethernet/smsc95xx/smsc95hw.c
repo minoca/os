@@ -94,6 +94,11 @@ Sm95pEnableMac (
     );
 
 KSTATUS
+Sm95pUpdateFilterMode (
+    PSM95_DEVICE Device
+    );
+
+KSTATUS
 Sm95pSetupChecksumOffloading (
     PSM95_DEVICE Device,
     BOOL EnableTransmitChecksumOffload,
@@ -369,21 +374,79 @@ Return Value:
 
 {
 
+    PULONG BooleanOption;
+    PSM95_DEVICE Device;
     PULONG Flags;
+    ULONG OriginalCapabilities;
     KSTATUS Status;
 
+    Status = STATUS_SUCCESS;
+    Device = (PSM95_DEVICE)DeviceContext;
     switch (InformationType) {
     case NetLinkInformationChecksumOffload:
         if (*DataSize != sizeof(ULONG)) {
-            return STATUS_INVALID_PARAMETER;
+            Status = STATUS_INVALID_PARAMETER;
+            break;
         }
 
         if (Set != FALSE) {
-            return STATUS_NOT_SUPPORTED;
+            Status = STATUS_NOT_SUPPORTED;
+            break;
         }
 
         Flags = (PULONG)Data;
-        *Flags = 0;
+        *Flags = Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        break;
+
+    case NetLinkInformationPromiscuousMode:
+        if (*DataSize != sizeof(ULONG)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        BooleanOption = (PULONG)Data;
+        if (Set == FALSE) {
+            if ((Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+                *BooleanOption = TRUE;
+
+            } else {
+                *BooleanOption = FALSE;
+            }
+
+            break;
+        }
+
+        //
+        // Fail if promiscuous mode is not supported.
+        //
+
+        if ((Device->SupportedCapabilities &
+             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
+        OriginalCapabilities = Device->EnabledCapabilities;
+        if (*BooleanOption != FALSE) {
+            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        } else {
+            Device->EnabledCapabilities &=
+                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        }
+
+        Status = Sm95pUpdateFilterMode(Device);
+        if (!KSUCCESS(Status)) {
+            Device->EnabledCapabilities = OriginalCapabilities;
+        }
+
+        KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
     default:
@@ -980,6 +1043,11 @@ Return Value:
         goto InitializeEnd;
     }
 
+    Status = Sm95pUpdateFilterMode(Device);
+    if (!KSUCCESS(Status)) {
+        goto InitializeEnd;
+    }
+
     //
     // Do an initial read of the MII status and report the link as up if it
     // started connected. Read the register twice as the link status bit is
@@ -1153,9 +1221,10 @@ Return Value:
     // Disable multicast for now.
     //
 
-    Device->MacControl &= ~(SM95_MAC_CONTROL_PRMS |
+    Device->MacControl &= ~(SM95_MAC_CONTROL_PROMISCUOUS |
                             SM95_MAC_CONTROL_MULTICAST_PAS |
                             SM95_MAC_CONTROL_HP_FILTER |
+                            SM95_MAC_CONTROL_RECEIVE_ALL |
                             SM95_MAC_CONTROL_RECEIVE_OWN);
 
     //
@@ -1181,6 +1250,48 @@ Return Value:
     Status = Sm95pWriteRegister(Device,
                                 Sm95RegisterTransmitControl,
                                 SM95_TRANSMIT_CONTROL_ENABLE);
+
+    return Status;
+}
+
+KSTATUS
+Sm95pUpdateFilterMode (
+    PSM95_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates an SMSC95xx device's filter mode based on the
+    currently enabled capabilities.
+
+Arguments:
+
+    Device - Supplies a pointer to the SMSC95xx device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        Device->MacControl |= SM95_MAC_CONTROL_PROMISCUOUS;
+
+    } else {
+        Device->MacControl &= ~SM95_MAC_CONTROL_PROMISCUOUS;
+    }
+
+    Status = Sm95pWriteRegister(Device,
+                                Sm95RegisterMacControl,
+                                Device->MacControl);
 
     return Status;
 }

@@ -91,6 +91,38 @@ PcnetpSendPendingPackets (
     PPCNET_DEVICE Device
     );
 
+KSTATUS
+PcnetpUpdateFilterMode (
+    PPCNET_DEVICE Device
+    );
+
+KSTATUS
+PcnetpSuspendDevice (
+    PPCNET_DEVICE Device,
+    PBOOL Stopped
+    );
+
+VOID
+PcnetpResumeDevice (
+    PPCNET_DEVICE Device,
+    BOOL Stopped
+    );
+
+KSTATUS
+PcnetpStopDevice (
+    PPCNET_DEVICE Device
+    );
+
+VOID
+PcnetpRestartDevice (
+    PPCNET_DEVICE Device
+    );
+
+VOID
+PcnetpInitializeReceiveDescriptors (
+    PPCNET_DEVICE Device
+    );
+
 USHORT
 PcnetpReadCsr (
     PPCNET_DEVICE Device,
@@ -163,19 +195,22 @@ PCNET_DEVICE_INFORMATION PcnetDevices[] = {
      0x2621,
      (PCNET_DEVICE_FLAG_AUTO_SELECT |
       PCNET_DEVICE_FLAG_AUI |
-      PCNET_DEVICE_FLAG_FULL_DUPLEX)},
+      PCNET_DEVICE_FLAG_FULL_DUPLEX |
+      PCNET_DEVICE_FLAG_SUSPEND)},
 
     {PcnetAm79C973,
      0x2625,
      (PCNET_DEVICE_FLAG_FULL_DUPLEX |
       PCNET_DEVICE_FLAG_PHY |
-      PCNET_DEVICE_FLAG_100_MBPS)},
+      PCNET_DEVICE_FLAG_100_MBPS |
+      PCNET_DEVICE_FLAG_SUSPEND)},
 
     {PcnetAm79C975,
      0x2627,
      (PCNET_DEVICE_FLAG_FULL_DUPLEX |
       PCNET_DEVICE_FLAG_PHY |
-      PCNET_DEVICE_FLAG_100_MBPS)},
+      PCNET_DEVICE_FLAG_100_MBPS |
+      PCNET_DEVICE_FLAG_SUSPEND)},
 
     {PcnetAmInvalid, 0x0, }
 };
@@ -297,21 +332,79 @@ Return Value:
 
 {
 
+    PULONG BooleanOption;
+    PPCNET_DEVICE Device;
     PULONG Flags;
+    ULONG OriginalCapabilities;
     KSTATUS Status;
 
+    Status = STATUS_SUCCESS;
+    Device = (PPCNET_DEVICE)DeviceContext;
     switch (InformationType) {
     case NetLinkInformationChecksumOffload:
         if (*DataSize != sizeof(ULONG)) {
-            return STATUS_INVALID_PARAMETER;
+            Status = STATUS_INVALID_PARAMETER;
+            break;
         }
 
         if (Set != FALSE) {
-            return STATUS_NOT_SUPPORTED;
+            Status = STATUS_NOT_SUPPORTED;
+            break;
         }
 
         Flags = (PULONG)Data;
-        *Flags = 0;
+        *Flags = Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        break;
+
+    case NetLinkInformationPromiscuousMode:
+        if (*DataSize != sizeof(ULONG)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        BooleanOption = (PULONG)Data;
+        if (Set == FALSE) {
+            if ((Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+                *BooleanOption = TRUE;
+
+            } else {
+                *BooleanOption = FALSE;
+            }
+
+            break;
+        }
+
+        //
+        // Fail if promiscuous mode is not supported.
+        //
+
+        if ((Device->SupportedCapabilities &
+             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
+        OriginalCapabilities = Device->EnabledCapabilities;
+        if (*BooleanOption != FALSE) {
+            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        } else {
+            Device->EnabledCapabilities &=
+                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        }
+
+        Status = PcnetpUpdateFilterMode(Device);
+        if (!KSUCCESS(Status)) {
+            Device->EnabledCapabilities = OriginalCapabilities;
+        }
+
+        KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
     default:
@@ -430,6 +523,12 @@ Return Value:
             PCNET_BCR20_SOFTWARE_STYLE_MASK;
 
     PcnetpWriteBcr(Device, PcnetBcr20SoftwareStyle, Style);
+
+    //
+    // All PCNET devices support promiscuous mode.
+    //
+
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
     return STATUS_SUCCESS;
 }
 
@@ -457,19 +556,9 @@ Return Value:
 
 {
 
-    ULONG Address;
     ULONG AllocationSize;
-    PULONG BufferAddress;
-    PULONG BufferFlags;
-    PUSHORT BufferLength;
-    PVOID Descriptor;
-    PPCNET_RECEIVE_DESCRIPTOR_16 Descriptor16;
-    PPCNET_RECEIVE_DESCRIPTOR_32 Descriptor32;
     ULONG DeviceFlags;
-    PIO_BUFFER_FRAGMENT Fragment;
-    UINTN FragmentOffset;
     ULONG FrameSize;
-    ULONG Index;
     PPCNET_INITIALIZATION_BLOCK_16 InitBlock16;
     PPCNET_INITIALIZATION_BLOCK_32 InitBlock32;
     ULONG InitBlockSize;
@@ -578,6 +667,12 @@ Return Value:
                PCNET_MODE_PORT_SELECT_MASK;
     }
 
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        Mode |= PCNET_MODE_PROMISCUOUS;
+    }
+
     PhysicalAddress += InitBlockSize;
     if (Device->Software32 == FALSE) {
         InitBlock16 = Device->InitializationBlock;
@@ -663,40 +758,9 @@ Return Value:
     ASSERT((FrameSize & PCNET_RECEIVE_DESCRIPTOR_LENGTH_MASK) == FrameSize);
 
     //
-    // Initialize the receive frame list.
-    //
-
-    Descriptor = Device->ReceiveDescriptor;
-    Fragment = &(Device->ReceiveIoBuffer->Fragment[0]);
-    FragmentOffset = 0;
-    for (Index = 0; Index < PCNET_RECEIVE_RING_LENGTH; Index += 1) {
-        Address = (ULONG)(Fragment->PhysicalAddress + FragmentOffset);
-        if (Device->Software32 == FALSE) {
-            Descriptor16 = Descriptor;
-            BufferAddress = &(Descriptor16->BufferAddress);
-            BufferLength = &(Descriptor16->BufferLength);
-            BufferFlags = &(Descriptor16->BufferAddress);
-
-        } else {
-            Descriptor32 = Descriptor;
-            BufferAddress = &(Descriptor32->BufferAddress);
-            BufferLength = (PUSHORT)&(Descriptor32->BufferLength);
-            BufferFlags = &(Descriptor32->BufferLength);
-        }
-
-        *BufferAddress = Address;
-        *BufferLength = -FrameSize;
-        RtlMemoryBarrier();
-        *BufferFlags |= PCNET_RECEIVE_DESCRIPTOR_OWN;
-        Descriptor += ReceiveDescriptorSize;
-        FragmentOffset += FrameSize;
-        if (FragmentOffset >= Fragment->Size) {
-            Fragment += 1;
-        }
-    }
-
-    //
-    // Initialize the command and receive list locks.
+    // Initialize the device's locks. The configuration lock is separate from
+    // the list locks so that capability changing operations don't impede send
+    // or receive operations.
     //
 
     Device->TransmitListLock = KeCreateQueuedLock();
@@ -710,6 +774,18 @@ Return Value:
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
+
+    Device->ConfigurationLock = KeCreateQueuedLock();
+    if (Device->ConfigurationLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    //
+    // Initialize the receive frame list.
+    //
+
+    PcnetpInitializeReceiveDescriptors(Device);
 
     //
     // Don't create a timer if there is no way to check the link status.
@@ -753,6 +829,11 @@ InitializeDeviceStructuresEnd:
         if (Device->ReceiveListLock != NULL) {
             KeDestroyQueuedLock(Device->ReceiveListLock);
             Device->ReceiveListLock = NULL;
+        }
+
+        if (Device->ConfigurationLock != NULL) {
+            KeDestroyQueuedLock(Device->ConfigurationLock);
+            Device->ConfigurationLock = NULL;
         }
 
         if (Device->IoBuffer != NULL) {
@@ -1822,6 +1903,405 @@ Return Value:
         PcnetpReleaseRegisterLock(Device, OldRunLevel);
     }
 
+    return;
+}
+
+KSTATUS
+PcnetpUpdateFilterMode (
+    PPCNET_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the device's filter mode based on the currently
+    enabled capabilities.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+    KSTATUS Status;
+    BOOL Stopped;
+    USHORT Value;
+
+    //
+    // The promiscuous mode bit is in CSR15 and can only be modified from the
+    // stop or suspend state.
+    //
+
+    Status = PcnetpSuspendDevice(Device, &Stopped);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    OldRunLevel = PcnetpAcquireRegisterLock(Device);
+    Value = PcnetpReadCsr(Device, PcnetCsr15Mode);
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        Value |= PCNET_MODE_PROMISCUOUS;
+
+    } else {
+        Value &= ~PCNET_MODE_PROMISCUOUS;
+    }
+
+    PcnetpWriteCsr(Device, PcnetCsr15Mode, Value);
+    PcnetpReleaseRegisterLock(Device, OldRunLevel);
+    PcnetpResumeDevice(Device, Stopped);
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+PcnetpSuspendDevice (
+    PPCNET_DEVICE Device,
+    PBOOL Stopped
+    )
+
+/*++
+
+Routine Description:
+
+    This routine suspends the device. For older versions of the device that do
+    not support suspend, the device is just stopped.
+
+Arguments:
+
+    Device - Supplies a pointer to the device to suspend.
+
+    Stopped - Supplies a pointer that receives a boolean indicating that the
+        suspend reverted to a stop.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+    KSTATUS Status;
+    ULONGLONG Timeout;
+    USHORT Value;
+
+    //
+    // If suspend is not supported, then just stop the device.
+    //
+
+    if ((Device->DeviceInformation->Flags & PCNET_DEVICE_FLAG_SUSPEND) == 0) {
+        *Stopped = TRUE;
+        return PcnetpStopDevice(Device);
+    }
+
+    //
+    // Otherwise set the suspend bit and wait for it to read back as 1.
+    //
+
+    *Stopped = FALSE;
+    OldRunLevel = PcnetpAcquireRegisterLock(Device);
+    Value = PcnetpReadCsr(Device, PcnetCsr5ExtendedControl);
+    Value |= PCNET_CSR5_SUSPEND;
+    PcnetpWriteCsr(Device, PcnetCsr5ExtendedControl, Value);
+    Timeout = KeGetRecentTimeCounter() +
+              KeConvertMicrosecondsToTimeTicks(PCNET_SUSPEND_TIMEOUT);
+
+    Status = STATUS_TIMEOUT;
+    do {
+        Value = PcnetpReadCsr(Device, PcnetCsr5ExtendedControl);
+        if ((Value & PCNET_CSR5_SUSPEND) != 0) {
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+    } while (KeGetRecentTimeCounter() <= Timeout);
+
+    PcnetpReleaseRegisterLock(Device, OldRunLevel);
+
+    //
+    // If the suspend timed out. Try to stop the device.
+    //
+
+    if (!KSUCCESS(Status)) {
+        *Stopped = TRUE;
+        Status = PcnetpStopDevice(Device);
+    }
+
+    return Status;
+}
+
+VOID
+PcnetpResumeDevice (
+    PPCNET_DEVICE Device,
+    BOOL Stopped
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resumes a suspended device. For older versions of the device
+    that do not support suspend, this routine effectively restarts the device.
+
+Arguments:
+
+    Device - Supplies a pointer to the device to resume.
+
+    Stopped - Supplies a boolean indicating whether or not the suspend was
+        converted to a stop.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+    USHORT Value;
+
+    //
+    // If suspend is not supported, then neither is resume. A restart must be
+    // executed.
+    //
+
+    if ((Stopped != FALSE) ||
+        ((Device->DeviceInformation->Flags & PCNET_DEVICE_FLAG_SUSPEND) == 0)) {
+
+        PcnetpRestartDevice(Device);
+        return;
+    }
+
+    OldRunLevel = PcnetpAcquireRegisterLock(Device);
+    Value = PcnetpReadCsr(Device, PcnetCsr5ExtendedControl);
+    Value &= ~PCNET_CSR5_SUSPEND;
+    PcnetpWriteCsr(Device, PcnetCsr5ExtendedControl, Value);
+    PcnetpReleaseRegisterLock(Device, OldRunLevel);
+    return;
+}
+
+KSTATUS
+PcnetpStopDevice (
+    PPCNET_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine stops the given device.
+
+Arguments:
+
+    Device - Supplies a pointer to the device to stop.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+    KSTATUS Status;
+    ULONGLONG Timeout;
+    USHORT Value;
+
+    OldRunLevel = PcnetpAcquireRegisterLock(Device);
+    Value = PcnetpReadCsr(Device, PcnetCsr0Status);
+    Value |= PCNET_CSR0_STOP;
+    PcnetpWriteCsr(Device, PcnetCsr0Status, Value);
+    Timeout = KeGetRecentTimeCounter() +
+              KeConvertMicrosecondsToTimeTicks(PCNET_SUSPEND_TIMEOUT);
+
+    Status = STATUS_TIMEOUT;
+    do {
+        Value = PcnetpReadCsr(Device, PcnetCsr0Status);
+        if ((Value & PCNET_CSR0_STOP) != 0) {
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+    } while (KeGetRecentTimeCounter() <= Timeout);
+
+    PcnetpReleaseRegisterLock(Device, OldRunLevel);
+    return Status;
+}
+
+VOID
+PcnetpRestartDevice (
+    PPCNET_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine restarts the given device after a stop.
+
+Arguments:
+
+    Device - Supplies a pointer to the device to restart.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PVOID Descriptor;
+    ULONG DescriptorSize;
+    ULONG Index;
+    RUNLEVEL OldRunLevel;
+    PNET_PACKET_BUFFER Packet;
+    USHORT Value;
+
+    //
+    // Setting the start bit in CSR0 will cause the PCNET controller to reload
+    // the transmit and receive rings with their base addresses. Clean out any
+    // pending transmit packets and reset to start submitting at the beginning
+    // of the ring.
+    //
+
+    KeAcquireQueuedLock(Device->TransmitListLock);
+    if (Device->Software32 == FALSE) {
+        DescriptorSize = sizeof(PCNET_TRANSMIT_DESCRIPTOR_16);
+
+    } else {
+        DescriptorSize = sizeof(PCNET_TRANSMIT_DESCRIPTOR_32);
+    }
+
+    //
+    // Zero the descriptors and put the packets back in the list to be resent.
+    //
+
+    for (Index = 0; Index < PCNET_TRANSMIT_RING_LENGTH; Index += 1) {
+        Descriptor = Device->TransmitDescriptor + (Index * DescriptorSize);
+        RtlZeroMemory(Descriptor, DescriptorSize);
+        Packet = Device->TransmitPacket[Index];
+        Device->TransmitPacket[Index] = NULL;
+        if (Packet != NULL) {
+            NET_ADD_PACKET_TO_LIST_HEAD(Packet, &(Device->TransmitPacketList));
+        }
+    }
+
+    Device->TransmitLastReaped = PCNET_TRANSMIT_RING_LENGTH - 1;
+    Device->TransmitNextToUse = 0;
+    KeReleaseQueuedLock(Device->TransmitListLock);
+
+    //
+    // Reset the receive ring by marking every descriptor as ready to receive
+    // (i.e. "owned" by the hardware).
+    //
+
+    PcnetpInitializeReceiveDescriptors(Device);
+
+    //
+    // With the rings read to go, set the start bit.
+    //
+
+    OldRunLevel = PcnetpAcquireRegisterLock(Device);
+    Value = PcnetpReadCsr(Device, PcnetCsr0Status);
+    Value &= ~PCNET_CSR0_STOP;
+    Value |= PCNET_CSR0_START | PCNET_CSR0_INTERRUPT_ENABLED;
+    PcnetpWriteCsr(Device, PcnetCsr0Status, Value);
+    PcnetpReleaseRegisterLock(Device, OldRunLevel);
+    return;
+}
+
+VOID
+PcnetpInitializeReceiveDescriptors (
+    PPCNET_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes the device receive descriptors ring.
+
+Arguments:
+
+    Device - Supplies a pointer to a PCNET device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Address;
+    PULONG BufferAddress;
+    PULONG BufferFlags;
+    PUSHORT BufferLength;
+    PVOID Descriptor;
+    PPCNET_RECEIVE_DESCRIPTOR_16 Descriptor16;
+    PPCNET_RECEIVE_DESCRIPTOR_32 Descriptor32;
+    ULONG DescriptorSize;
+    PIO_BUFFER_FRAGMENT Fragment;
+    UINTN FragmentOffset;
+    ULONG FrameSize;
+    ULONG Index;
+
+    FrameSize = ALIGN_RANGE_UP(PCNET_RECEIVE_FRAME_SIZE,
+                               PCNET_RECEIVE_FRAME_ALIGNMENT);
+
+    if (Device->Software32 == FALSE) {
+        DescriptorSize = sizeof(PCNET_RECEIVE_DESCRIPTOR_16);
+
+    } else {
+        DescriptorSize = sizeof(PCNET_RECEIVE_DESCRIPTOR_32);
+    }
+
+    Descriptor = Device->ReceiveDescriptor;
+    Fragment = &(Device->ReceiveIoBuffer->Fragment[0]);
+    FragmentOffset = 0;
+    KeAcquireQueuedLock(Device->ReceiveListLock);
+    for (Index = 0; Index < PCNET_RECEIVE_RING_LENGTH; Index += 1) {
+        Address = (ULONG)(Fragment->PhysicalAddress + FragmentOffset);
+        if (Device->Software32 == FALSE) {
+            Descriptor16 = Descriptor;
+            BufferAddress = &(Descriptor16->BufferAddress);
+            BufferLength = &(Descriptor16->BufferLength);
+            BufferFlags = &(Descriptor16->BufferAddress);
+
+        } else {
+            Descriptor32 = Descriptor;
+            BufferAddress = &(Descriptor32->BufferAddress);
+            BufferLength = (PUSHORT)&(Descriptor32->BufferLength);
+            BufferFlags = &(Descriptor32->BufferLength);
+        }
+
+        RtlZeroMemory(Descriptor, DescriptorSize);
+        *BufferAddress = Address;
+        *BufferLength = -FrameSize;
+        RtlMemoryBarrier();
+        *BufferFlags |= PCNET_RECEIVE_DESCRIPTOR_OWN;
+        Descriptor += DescriptorSize;
+        FragmentOffset += FrameSize;
+        if (FragmentOffset >= Fragment->Size) {
+            Fragment += 1;
+        }
+    }
+
+    Device->ReceiveListBegin = 0;
+    KeReleaseQueuedLock(Device->ReceiveListLock);
     return;
 }
 

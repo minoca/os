@@ -98,6 +98,11 @@ A3epDetermineLinkParameters (
     PBOOL FullDuplex
     );
 
+VOID
+A3epUpdateFilterMode (
+    PA3E_DEVICE Device
+    );
+
 KSTATUS
 A3epReadPhy (
     PA3E_DEVICE Device,
@@ -277,9 +282,57 @@ Return Value:
 
 {
 
+    PULONG BooleanOption;
+    PA3E_DEVICE Device;
     KSTATUS Status;
 
+    Device = (PA3E_DEVICE)DeviceContext;
     switch (InformationType) {
+    case NetLinkInformationPromiscuousMode:
+        if (*DataSize != sizeof(ULONG)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        Status = STATUS_SUCCESS;
+        BooleanOption = (PULONG)Data;
+        if (Set == FALSE) {
+            if ((Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+                *BooleanOption = TRUE;
+
+            } else {
+                *BooleanOption = FALSE;
+            }
+
+            break;
+        }
+
+        //
+        // Fail if promiscuous mode is not supported.
+        //
+
+        if ((Device->SupportedCapabilities &
+             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
+        if (*BooleanOption != FALSE) {
+            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        } else {
+            Device->EnabledCapabilities &=
+                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        }
+
+        A3epUpdateFilterMode(Device);
+        KeReleaseQueuedLock(Device->ConfigurationLock);
+        break;
+
     default:
         Status = STATUS_NOT_SUPPORTED;
         break;
@@ -337,6 +390,12 @@ Return Value:
 
     Device->ReceiveLock = KeCreateQueuedLock();
     if (Device->ReceiveLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->ConfigurationLock = KeCreateQueuedLock();
+    if (Device->ConfigurationLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
@@ -471,6 +530,11 @@ Return Value:
         NextDescriptorPhysical += sizeof(A3E_DESCRIPTOR);
     }
 
+    //
+    // Promiscuous mode is supported by not enabled by default.
+    //
+
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
     Status = STATUS_SUCCESS;
 
 InitializeDeviceStructuresEnd:
@@ -483,6 +547,11 @@ InitializeDeviceStructuresEnd:
         if (Device->ReceiveLock != NULL) {
             KeDestroyQueuedLock(Device->ReceiveLock);
             Device->ReceiveLock = NULL;
+        }
+
+        if (Device->ConfigurationLock != NULL) {
+            KeDestroyQueuedLock(Device->ConfigurationLock);
+            Device->ConfigurationLock = NULL;
         }
 
         if (Device->ReceiveDataIoBuffer != NULL) {
@@ -642,6 +711,12 @@ Return Value:
     A3epAleSetPortState(Device, 0, A3E_ALE_PORT_STATE_FORWARD);
     A3epAleSetPortState(Device, 1, A3E_ALE_PORT_STATE_FORWARD);
     A3epAleSetPortState(Device, 2, A3E_ALE_PORT_STATE_FORWARD);
+
+    //
+    // Make sure the filter is mode correct, based on the current capabilities.
+    //
+
+    A3epUpdateFilterMode(Device);
 
     //
     // Enter dual MAC mode. To drop any packets that are not VLAN-tagged, set
@@ -1946,6 +2021,46 @@ Return Value:
 
 DetermineLinkParametersEnd:
     return Status;
+}
+
+VOID
+A3epUpdateFilterMode (
+    PA3E_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates an device's filter mode based on the currently enabled
+    capabilities.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Value;
+
+    Value = A3E_ALE_READ(Device, A3eAleControl);
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        Value |= A3E_ALE_CONTROL_BYPASS;
+
+    } else {
+        Value &= ~A3E_ALE_CONTROL_BYPASS;
+    }
+
+    A3E_ALE_WRITE(Device, A3eAleControl, Value);
+    return;
 }
 
 KSTATUS

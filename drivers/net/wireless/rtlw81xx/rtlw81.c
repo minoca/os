@@ -630,6 +630,7 @@ Return Value:
     Properties.PacketSizeInformation.HeaderSize = RTLW81_TRANSMIT_HEADER_SIZE;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Domain = NetDomain80211;
+    Properties.LinkCapabilities = Device->SupportedCapabilities;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),
                   sizeof(Device->MacAddress));
@@ -753,6 +754,12 @@ Return Value:
 
     Device->BulkOutListLock = KeCreateQueuedLock();
     if (Device->BulkOutListLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->ConfigurationLock = KeCreateQueuedLock();
+    if (Device->ConfigurationLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
@@ -918,6 +925,10 @@ Return Value:
     Rtlw81pDestroyBulkOutTransfers(Device);
     if (Device->BulkOutListLock != NULL) {
         KeDestroyQueuedLock(Device->BulkOutListLock);
+    }
+
+    if (Device->ConfigurationLock != NULL) {
+        KeDestroyQueuedLock(Device->ConfigurationLock);
     }
 
     MmFreePagedPool(Device);

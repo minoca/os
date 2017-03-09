@@ -32,6 +32,7 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
+#include <minoca/intrface/pci.h>
 #include "e100.h"
 
 //
@@ -51,6 +52,12 @@ Environment:
 //
 
 #define E100_STATUS_SOFTWARE_INTERRUPT_LINK_STATUS (1 << 31)
+
+//
+// Define the default configuration command length, in bytes.
+//
+
+#define E100_DEFAULT_CONFIGURATION_COMMAND_LENGTH 0x16
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -103,11 +110,64 @@ E100pSendPendingPackets (
     PE100_DEVICE Device
     );
 
+VOID
+E100pUpdateFilterMode (
+    PE100_DEVICE Device
+    );
+
+VOID
+E100pConfigureDevice (
+    PE100_DEVICE Device
+    );
+
+VOID
+E100pSubmitCommand (
+    PE100_DEVICE Device,
+    ULONG CommandIndex
+    );
+
+VOID
+E100pReapCommand (
+    PE100_DEVICE Device,
+    ULONG CommandIndex
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 BOOL E100DisablePacketDropping = FALSE;
+
+//
+// Store the default configuration command. All bits are hardcoded to the
+// recommended values. Some will be changed dynamically based on the current
+// device settings.
+//
+
+UCHAR E100DefaultConfiguration[E100_DEFAULT_CONFIGURATION_COMMAND_LENGTH] = {
+    E100_DEFAULT_CONFIGURATION_COMMAND_LENGTH,
+    0x08,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x32,
+    0x07,
+    0x01,
+    0x00,
+    0x2E,
+    0x00,
+    0x60,
+    0x00,
+    0xF2,
+    0x48,
+    0x00,
+    0x00,
+    0xF2,
+    0x00,
+    0x3F,
+    0x05,
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -226,21 +286,71 @@ Return Value:
 
 {
 
+    PULONG BooleanOption;
+    PE100_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
 
+    Status = STATUS_SUCCESS;
+    Device = (PE100_DEVICE)DeviceContext;
     switch (InformationType) {
     case NetLinkInformationChecksumOffload:
         if (*DataSize != sizeof(ULONG)) {
-            return STATUS_INVALID_PARAMETER;
+            Status =STATUS_INVALID_PARAMETER;
+            break;
         }
 
         if (Set != FALSE) {
-            return STATUS_NOT_SUPPORTED;
+            Status = STATUS_NOT_SUPPORTED;
+            break;
         }
 
         Flags = (PULONG)Data;
         *Flags = 0;
+        break;
+
+    case NetLinkInformationPromiscuousMode:
+        if (*DataSize != sizeof(ULONG)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        BooleanOption = (PULONG)Data;
+        if (Set == FALSE) {
+            if ((Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+                *BooleanOption = TRUE;
+
+            } else {
+                *BooleanOption = FALSE;
+            }
+
+            break;
+        }
+
+        //
+        // Fail if promiscuous mode is not supported.
+        //
+
+        if ((Device->SupportedCapabilities &
+             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
+        if (*BooleanOption != FALSE) {
+            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        } else {
+            Device->EnabledCapabilities &=
+                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        }
+
+        E100pUpdateFilterMode(Device);
+        KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
     default:
@@ -302,6 +412,18 @@ Return Value:
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
+
+    Device->ConfigurationLock = KeCreateQueuedLock();
+    if (Device->ConfigurationLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    //
+    // Promiscuous mode is supported but not enabled by default.
+    //
+
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
 
     //
     // Allocate the receive buffers. This is allocated as non-write though and
@@ -486,6 +608,11 @@ InitializeDeviceStructuresEnd:
         if (Device->ReceiveListLock != NULL) {
             KeDestroyQueuedLock(Device->ReceiveListLock);
             Device->ReceiveListLock = NULL;
+        }
+
+        if (Device->ConfigurationLock != NULL) {
+            KeDestroyQueuedLock(Device->ConfigurationLock);
+            Device->ConfigurationLock = NULL;
         }
 
         if (Device->ReceiveFrameIoBuffer != NULL) {
@@ -677,6 +804,12 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto ResetDeviceEnd;
     }
+
+    //
+    // Now that the device is ready, send the configuration command.
+    //
+
+    E100pConfigureDevice(Device);
 
     //
     // Notify the networking core of this new link now that the device is ready
@@ -1367,30 +1500,10 @@ Return Value:
         }
 
         //
-        // If it's a transmit command and it's complete, go free the transmit
-        // buffer.
+        // Reclaim the command.
         //
 
-        if ((Command->Command & E100_COMMAND_BLOCK_COMMAND_MASK) ==
-            (E100CommandTransmit << E100_COMMAND_BLOCK_COMMAND_SHIFT)) {
-
-            NetFreeBuffer(Device->CommandPacket[CommandIndex]);
-            Device->CommandPacket[CommandIndex] = NULL;
-        }
-
-        //
-        // Zero out the command, this one's finished.
-        //
-
-        Command->Command = 0;
-
-        //
-        // Update the last reaped index to reflex that the command at the
-        // current index has been reaped.
-        //
-
-        Device->CommandLastReaped = CommandIndex;
-        Device->CommandFreeCount += 1;
+        E100pReapCommand(Device, CommandIndex);
         CommandReaped = TRUE;
     }
 
@@ -1554,7 +1667,6 @@ Return Value:
     PE100_COMMAND Command;
     ULONG CommandIndex;
     PNET_PACKET_BUFFER Packet;
-    ULONG PreviousCommandIndex;
     BOOL WakeDevice;
 
     //
@@ -1592,23 +1704,7 @@ Return Value:
 
         Command->Command = (E100CommandTransmit <<
                             E100_COMMAND_BLOCK_COMMAND_SHIFT) |
-                           E100_COMMAND_SUSPEND |
                            E100_COMMAND_TRANSMIT_FLEXIBLE_MODE;
-
-        //
-        // If one less than half (15) commands are now free, this command is
-        // the 16th command submitted to the hardware. Force an interrupt. This
-        // will give better throughput in cases where the ring fills up as more
-        // commands can be added after half of the ring is processed. It is
-        // also necessary on QEMU, because QEMU stops processing commands after
-        // completing 16 commands in a row (and it doesn't signal inactivity!).
-        // This command may become the 16th command in a row and would need an
-        // interrupt in order to be reaped.
-        //
-
-        if (Device->CommandFreeCount == ((E100_COMMAND_RING_COUNT >> 1) - 1)) {
-            Command->Command |= E100_COMMAND_INTERRUPT;
-        }
 
         //
         // Calculate the physical address of the transmit buffer descriptor
@@ -1649,27 +1745,10 @@ Return Value:
         Device->CommandPacket[CommandIndex] = Packet;
 
         //
-        // Now that this command is set up, clear the suspend bit on the
-        // previous command so the hardware access this new packet. This
-        // atomic access also acts as a memory barrier, ensuring this packet
-        // is all set up in memory.
+        // Make the command live in the ring.
         //
 
-        PreviousCommandIndex = E100_DECREMENT_RING_INDEX(
-                                                      CommandIndex,
-                                                      E100_COMMAND_RING_COUNT);
-
-        RtlAtomicAnd32(&(Device->Command[PreviousCommandIndex].Command),
-                       ~E100_COMMAND_SUSPEND);
-
-        //
-        // Move the pointer past this entry.
-        //
-
-        Device->CommandNextToUse = E100_INCREMENT_RING_INDEX(
-                                                      CommandIndex,
-                                                      E100_COMMAND_RING_COUNT);
-
+        E100pSubmitCommand(Device, CommandIndex);
         WakeDevice = TRUE;
     }
 
@@ -1685,6 +1764,290 @@ Return Value:
         E100_WRITE_COMMAND_REGISTER(Device, E100_COMMAND_UNIT_RESUME);
     }
 
+    return;
+}
+
+VOID
+E100pUpdateFilterMode (
+    PE100_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the devices' receive filter mode based on the current
+    capabilities.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Send a configure command. This will pick up the current capabilities and
+    // set the appropriate values in the configuration space.
+    //
+
+    E100pConfigureDevice(Device);
+    return;
+}
+
+VOID
+E100pConfigureDevice (
+    PE100_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends the configure command to the given device.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PE100_COMMAND Command;
+    ULONG CommandIndex;
+    PUCHAR Configuration;
+
+    //
+    // Get the next command if there is one available.
+    //
+
+    KeAcquireQueuedLock(Device->CommandListLock);
+    if (Device->CommandNextToUse != Device->CommandLastReaped) {
+        CommandIndex = Device->CommandNextToUse;
+
+    //
+    // Otherwise wait to reap the next command. This should never have to wait
+    // that long.
+    //
+
+    } else {
+        CommandIndex = E100_INCREMENT_RING_INDEX(Device->CommandLastReaped,
+                                                 E100_COMMAND_RING_COUNT);
+
+        Command = &(Device->Command[CommandIndex]);
+
+        ASSERT(Command->Command != 0);
+
+        while ((Command->Command & E100_COMMAND_MASK_COMMAND_COMPLETE) == 0) {
+            HlBusySpin(1000);
+        }
+
+        E100pReapCommand(Device, CommandIndex);
+    }
+
+    Command = &(Device->Command[CommandIndex]);
+    Device->CommandFreeCount -= 1;
+
+    //
+    // Fill out the command.
+    //
+
+    Command->Command = (E100CommandConfigure <<
+                        E100_COMMAND_BLOCK_COMMAND_SHIFT);
+
+    Configuration = Command->U.Configure.Configuration;
+    RtlCopyMemory(Configuration,
+                  E100DefaultConfiguration,
+                  E100_DEFAULT_CONFIGURATION_COMMAND_LENGTH);
+
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        Configuration[6] |= E100_CONFIG_BYTE6_SAVE_BAD_FRAMES;
+        Configuration[7] &= ~E100_CONFIG_BYTE7_DISCARD_SHORT_RECEIVE;
+        Configuration[15] |= E100_CONFIG_BYTE15_PROMISCUOUS;
+    }
+
+    //
+    // There are different recommended settings for the newer devices. The
+    // saved global has the base settings for the oldest device.
+    //
+
+    if (Device->Revision >= E100_REVISION_82558_A) {
+        Configuration[3] |= E100_CONFIG_BYTE3_MWI_ENABLE;
+        Configuration[6] &= ~E100_CONFIG_BYTE6_STANDARD_TRANSMIT_COMMAND_BLOCK;
+    }
+
+    //
+    // Make it live in the command ring and make sure the transmit engine is
+    // awake.
+    //
+
+    E100pSubmitCommand(Device, CommandIndex);
+    E100_WRITE_COMMAND_REGISTER(Device, E100_COMMAND_UNIT_RESUME);
+
+    //
+    // Wait for the command to complete. Again, it should not take long. If
+    // this were done outside the lock, the command may be reaped and
+    // resubmitted before this routine could observe the completion. Once
+    // complete, don't reap the command. Let the normal harvesting take over.
+    //
+
+    while ((Command->Command & E100_COMMAND_MASK_COMMAND_COMPLETE) == 0) {
+        HlBusySpin(1000);
+    }
+
+    KeReleaseQueuedLock(Device->CommandListLock);
+    return;
+}
+
+VOID
+E100pSubmitCommand (
+    PE100_DEVICE Device,
+    ULONG CommandIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine makes the command indicated by the given index live in the
+    command ring. It assumes the command is already filled out and ready to
+    go.
+
+Arguments:
+
+    Device - Supplies a pointer to the E100 device.
+
+    CommandIndex - Supplies the index of the command to submit.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PE100_COMMAND Command;
+    ULONG PreviousCommandIndex;
+
+    Command = &(Device->Command[CommandIndex]);
+
+    //
+    // Set the suspend bit. This must be done before the previous commands
+    // suspend bit is removed. The atomic AND serializes the writes.
+    //
+
+    Command->Command |= E100_COMMAND_SUSPEND;
+
+    //
+    // If one less than half (15) commands are now free, this command is the
+    // 16th command submitted to the hardware. Force an interrupt. This will
+    // give better throughput in cases where the ring fills up as more commands
+    // can be added after half of the ring is processed. It is also necessary
+    // on QEMU, because QEMU stops processing commands after completing 16
+    // commands in a row (and it doesn't signal inactivity!). This command may
+    // become the 16th command in a row and would need an interrupt in order to
+    // be reaped.
+    //
+
+    if (Device->CommandFreeCount == ((E100_COMMAND_RING_COUNT >> 1) - 1)) {
+        Command->Command |= E100_COMMAND_INTERRUPT;
+    }
+
+    //
+    // Now that this command is set up, clear the suspend bit on the
+    // previous command so the hardware access this new packet. This
+    // atomic access also acts as a memory barrier, ensuring this packet
+    // is all set up in memory.
+    //
+
+    PreviousCommandIndex = E100_DECREMENT_RING_INDEX(CommandIndex,
+                                                     E100_COMMAND_RING_COUNT);
+
+    RtlAtomicAnd32(&(Device->Command[PreviousCommandIndex].Command),
+                   ~E100_COMMAND_SUSPEND);
+
+    //
+    // Move the pointer past this entry.
+    //
+
+    Device->CommandNextToUse = E100_INCREMENT_RING_INDEX(
+                                                      CommandIndex,
+                                                      E100_COMMAND_RING_COUNT);
+
+    return;
+}
+
+VOID
+E100pReapCommand (
+    PE100_DEVICE Device,
+    ULONG CommandIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reaps an E100 command. Releasing any associated buffers and
+    updating the appropriate tracking variables.
+
+Arguments:
+
+    Device - Supplies a pointer to the E100 device.
+
+    CommandIndex - Supplies the index of the command that needs to be reaped.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PE100_COMMAND Command;
+    ULONG CommandType;
+
+    Command = &(Device->Command[CommandIndex]);
+
+    //
+    // If it's a transmit command and it's complete, go free the transmit
+    // buffer.
+    //
+
+    CommandType = Command->Command & E100_COMMAND_BLOCK_COMMAND_MASK >>
+                  E100_COMMAND_BLOCK_COMMAND_SHIFT;
+
+    if (CommandType == E100CommandTransmit) {
+        NetFreeBuffer(Device->CommandPacket[CommandIndex]);
+        Device->CommandPacket[CommandIndex] = NULL;
+    }
+
+    //
+    // Zero out the command, this one's finished.
+    //
+
+    Command->Command = 0;
+
+    //
+    // Update the last reaped index to reflex that the command at the
+    // current index has been reaped.
+    //
+
+    Device->CommandLastReaped = CommandIndex;
+    Device->CommandFreeCount += 1;
     return;
 }
 

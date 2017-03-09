@@ -193,6 +193,11 @@ E1000pSendPendingPackets (
     PE1000_DEVICE Device
     );
 
+VOID
+E1000pUpdateFilterMode (
+    PE1000_DEVICE Device
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -336,6 +341,7 @@ Return Value:
 
 {
 
+    PULONG BooleanOption;
     PE1000_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
@@ -352,8 +358,55 @@ Return Value:
         }
 
         Flags = (PULONG)Data;
-        *Flags = Device->Capabilities & NET_LINK_CAPABILITY_CHECKSUM_MASK;
+        *Flags = Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
         Status = STATUS_SUCCESS;
+        break;
+
+    case NetLinkInformationPromiscuousMode:
+        if (*DataSize != sizeof(ULONG)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        Status = STATUS_SUCCESS;
+        BooleanOption = (PULONG)Data;
+        if (Set == FALSE) {
+            if ((Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+                *BooleanOption = TRUE;
+
+            } else {
+                *BooleanOption = FALSE;
+            }
+
+            break;
+        }
+
+        //
+        // Fail if promiscuous mode is not supported.
+        //
+
+        if ((Device->SupportedCapabilities &
+             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
+        if (*BooleanOption != FALSE) {
+            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        } else {
+            Device->EnabledCapabilities &=
+                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        }
+
+        E1000pUpdateFilterMode(Device);
+        KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
     default:
@@ -389,13 +442,27 @@ Return Value:
 {
 
     ULONG AllocationSize;
+    ULONG Capabilities;
     ULONG ReceiveSize;
     KSTATUS Status;
     ULONG TxDescriptorSize;
 
-    Device->Capabilities |= NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD |
-                            NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD |
-                            NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD;
+    //
+    // IP, UDP, and TCP checksum offloading are enabled by default.
+    //
+
+    Capabilities = NET_LINK_CAPABILITY_RECEIVE_IP_CHECKSUM_OFFLOAD |
+                   NET_LINK_CAPABILITY_RECEIVE_TCP_CHECKSUM_OFFLOAD |
+                   NET_LINK_CAPABILITY_RECEIVE_UDP_CHECKSUM_OFFLOAD;
+
+    Device->SupportedCapabilities |= Capabilities;
+    Device->EnabledCapabilities |= Capabilities;
+
+    //
+    // Promiscuous filtering mode is supported, but not enabled by default.
+    //
+
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
 
     //
     // Initialize the transmit and receive list locks.
@@ -409,6 +476,12 @@ Return Value:
 
     Device->RxListLock = KeCreateQueuedLock();
     if (Device->RxListLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->ConfigurationLock = KeCreateQueuedLock();
+    if (Device->ConfigurationLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
@@ -513,6 +586,11 @@ InitializeDeviceStructuresEnd:
         if (Device->RxListLock != NULL) {
             KeDestroyQueuedLock(Device->RxListLock);
             Device->RxListLock = NULL;
+        }
+
+        if (Device->ConfigurationLock != NULL) {
+            KeDestroyQueuedLock(Device->ConfigurationLock);
+            Device->ConfigurationLock = NULL;
         }
 
         if (Device->RxIoBuffer != NULL) {
@@ -749,20 +827,25 @@ Return Value:
     }
 
     //
-    // Initialize receive.
+    // Initialize receive. On a reset this could compete with capability change
+    // requests. Synchronize it.
     //
 
+    KeAcquireQueuedLock(Device->ConfigurationLock);
     RxControl = E1000_READ(Device, E1000RxControl);
     RxControl &= ~(E1000_RX_CONTROL_MULTICAST_OFFSET_MASK |
                    E1000_RX_CONTROL_BUFFER_SIZE_MASK |
                    E1000_RX_CONTROL_LONG_PACKET_ENABLE |
                    E1000_RX_CONTROL_BUFFER_SIZE_EXTENSION |
+                   E1000_RX_CONTROL_MULTICAST_PROMISCUOUS |
+                   E1000_RX_CONTROL_UNICAST_PROMISCUOUS |
                    E1000_RX_CONTROL_ENABLE);
 
     RxControl |= E1000_RX_CONTROL_BROADCAST_ACCEPT |
                  E1000_RX_CONTROL_BUFFER_SIZE_2K;
 
     E1000_WRITE(Device, E1000RxControl, RxControl);
+    E1000pUpdateFilterMode(Device);
     E1000_WRITE(Device, E1000RxInterruptDelayTimer, E1000_RX_INTERRUPT_DELAY);
     E1000_WRITE(Device,
                 E1000RxInterruptAbsoluteDelayTimer,
@@ -810,6 +893,7 @@ Return Value:
 
     RxControl |= E1000_RX_CONTROL_ENABLE;
     E1000_WRITE(Device, E1000RxControl, RxControl);
+    KeReleaseQueuedLock(Device->ConfigurationLock);
     Status = STATUS_SUCCESS;
 
 ResetDeviceEnd:
@@ -2789,6 +2873,50 @@ Return Value:
     }
 
     E1000_WRITE(Device, E1000TxDescriptorTail0, Device->TxNextToUse);
+    return;
+}
+
+VOID
+E1000pUpdateFilterMode (
+    PE1000_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the device's receive filter mode based on the
+    currently enabled capabilities.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG RxControl;
+
+    ASSERT(KeIsQueuedLockHeld(Device->ConfigurationLock) != FALSE);
+
+    RxControl = E1000_READ(Device, E1000RxControl);
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        RxControl |= E1000_RX_CONTROL_MULTICAST_PROMISCUOUS |
+                     E1000_RX_CONTROL_UNICAST_PROMISCUOUS;
+
+    } else {
+        RxControl &= ~(E1000_RX_CONTROL_MULTICAST_PROMISCUOUS |
+                       E1000_RX_CONTROL_UNICAST_PROMISCUOUS);
+    }
+
+    E1000_WRITE(Device, E1000RxControl, RxControl);
     return;
 }
 

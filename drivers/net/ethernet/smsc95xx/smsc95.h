@@ -166,12 +166,12 @@ Author:
 // Define MAC control register bits.
 //
 
-#define SM95_MAC_CONTROL_PROMISCUOUS     0x80000000
+#define SM95_MAC_CONTROL_RECEIVE_ALL     0x80000000
 #define SM95_MAC_CONTROL_RECEIVE_OWN     0x00800000
 #define SM95_MAC_CONTROL_LOOPBACK        0x00200000
 #define SM95_MAC_CONTROL_FULL_DUPLEX     0x00100000
 #define SM95_MAC_CONTROL_MULTICAST_PAS   0x00080000
-#define SM95_MAC_CONTROL_PRMS            0x00040000
+#define SM95_MAC_CONTROL_PROMISCUOUS     0x00040000
 #define SM95_MAC_CONTROL_PASS_BAD        0x00010000
 #define SM95_MAC_CONTROL_HP_FILTER       0x00002000
 #define SM95_MAC_CONTROL_ENABLE_TRANSMIT 0x00000008
@@ -320,11 +320,20 @@ Members:
     BulkOutListLock - Stores a pointer to a lock that protects the list of free
         bulk OUT transfers.
 
+    ConfigurationLock - Stores a queued lock that synchronizes changes to the
+        enabled capabilities field and their supporting hardware registers.
+
     PhyId - Stores the device ID of the PHY on the controller's internal
         interconnect bus.
 
     MacControl - Stores a shadow copy of the MAC control register so that it
         does not have to be read constantly.
+
+    SupportedCapabilities - Stores the set of capabilities that this device
+        supports. See NET_LINK_CAPABILITY_* for definitions.
+
+    EnabledCapabilities - Stores the currently enabled capabilities on the
+        devices. See NET_LINK_CAPABILITY_* for definitions.
 
     InterfaceClaimed - Stores a boolean indicating if the interface has
         already been claimed.
@@ -355,8 +364,11 @@ typedef struct _SM95_DEVICE {
     LIST_ENTRY BulkOutFreeTransferList;
     volatile ULONG BulkOutTransferCount;
     PQUEUED_LOCK BulkOutListLock;
+    PQUEUED_LOCK ConfigurationLock;
     ULONG PhyId;
     ULONG MacControl;
+    ULONG SupportedCapabilities;
+    ULONG EnabledCapabilities;
     BOOL InterfaceClaimed;
     UCHAR InterfaceNumber;
     UCHAR BulkInEndpoint;

@@ -657,10 +657,10 @@ Members:
         being transmitted because there were no descriptors available. This is
         a sign that more descriptors should be allocated.
 
-    CapabilitiesSupported - Stores the set of capabilities that this device
+    SupportedCapabilities - Stores the set of capabilities that this device
         supports. See NET_LINK_CAPABILITY_* for definitions.
 
-    CapabilitiesEnabled - Stores the currently enabled capabilities on the
+    EnabledCapabilities - Stores the currently enabled capabilities on the
         devices. See NET_LINK_CAPABILITY_* for definitions.
 
 --*/
@@ -699,8 +699,8 @@ typedef struct _DWE_DEVICE {
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     ULONG PhyId;
     UINTN DroppedTxPackets;
-    ULONG CapabilitiesSupported;
-    ULONG CapabilitiesEnabled;
+    ULONG SupportedCapabilities;
+    ULONG EnabledCapabilities;
 } DWE_DEVICE, *PDWE_DEVICE;
 
 //

@@ -334,6 +334,11 @@ Rtlw81pSetLed (
     BOOL Enable
     );
 
+VOID
+Rtlw81pUpdateFilterMode (
+    PRTLW81_DEVICE Device
+    );
+
 KSTATUS
 Rtlw81pGetRssi (
     PRTLW81_DEVICE Device,
@@ -1526,21 +1531,73 @@ Return Value:
 
 {
 
+    PULONG BooleanOption;
+    PRTLW81_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
 
+    Status = STATUS_SUCCESS;
+    Device = (PRTLW81_DEVICE)DeviceContext;
     switch (InformationType) {
     case NetLinkInformationChecksumOffload:
         if (*DataSize != sizeof(ULONG)) {
-            return STATUS_INVALID_PARAMETER;
+            Status = STATUS_INVALID_PARAMETER;
+            break;
         }
 
         if (Set != FALSE) {
-            return STATUS_NOT_SUPPORTED;
+            Status = STATUS_NOT_SUPPORTED;
+            break;
         }
 
         Flags = (PULONG)Data;
-        *Flags = 0;
+        *Flags = Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_CHECKSUM_MASK;
+
+        break;
+
+    case NetLinkInformationPromiscuousMode:
+        if (*DataSize != sizeof(ULONG)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        BooleanOption = (PULONG)Data;
+        if (Set == FALSE) {
+            if ((Device->EnabledCapabilities &
+                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+                *BooleanOption = TRUE;
+
+            } else {
+                *BooleanOption = FALSE;
+            }
+
+            break;
+        }
+
+        //
+        // Fail if promiscuous mode is not supported.
+        //
+
+        if ((Device->SupportedCapabilities &
+             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        KeAcquireQueuedLock(Device->ConfigurationLock);
+        if (*BooleanOption != FALSE) {
+            Device->EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        } else {
+            Device->EnabledCapabilities &=
+                                         ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        }
+
+        Rtlw81pUpdateFilterMode(Device);
+        KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
     default:
@@ -1635,6 +1692,13 @@ Return Value:
     ULONG Value;
 
     Device = DeviceContext;
+
+    //
+    // Synchronize with other device configurations, such as updating the
+    // filtering mode.
+    //
+
+    KeAcquireQueuedLock(Device->ConfigurationLock);
     Status = STATUS_SUCCESS;
     switch (State) {
     case Net80211StateProbing:
@@ -1647,7 +1711,7 @@ Return Value:
                                        Rtlw81RegisterReceiveConfiguration);
 
         Value &= ~(RTLW81_RECEIVE_CONFIGURATION_CBSSID_DATA |
-                   RTLW81_RECEIVE_CONFIGURATION_CBSSID_BCN);
+                   RTLW81_RECEIVE_CONFIGURATION_CBSSID_BEACON);
 
         RTLW81_WRITE_REGISTER32(Device,
                                 Rtlw81RegisterReceiveConfiguration,
@@ -1754,7 +1818,7 @@ Return Value:
         Value = RTLW81_READ_REGISTER32(Device,
                                        Rtlw81RegisterReceiveConfiguration);
 
-        Value |= RTLW81_RECEIVE_CONFIGURATION_CBSSID_BCN |
+        Value |= RTLW81_RECEIVE_CONFIGURATION_CBSSID_BEACON |
                  RTLW81_RECEIVE_CONFIGURATION_CBSSID_DATA;
 
         RTLW81_WRITE_REGISTER32(Device,
@@ -1937,6 +2001,7 @@ Return Value:
         break;
     }
 
+    KeReleaseQueuedLock(Device->ConfigurationLock);
     return Status;
 }
 
@@ -2215,6 +2280,12 @@ Return Value:
         }
 
         //
+        // All version of the chip support promiscuous mode.
+        //
+
+        Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+
+        //
         // Read the device ROM. This caches information needed later, like the
         // MAC address, in the device structure.
         //
@@ -2329,12 +2400,10 @@ Return Value:
         // Initialize the receive filters.
         //
 
-        Value = RTLW81_RECEIVE_CONFIGURATION_AAP |
-                RTLW81_RECEIVE_CONFIGURATION_APM |
-                RTLW81_RECEIVE_CONFIGURATION_AM |
-                RTLW81_RECEIVE_CONFIGURATION_AB |
+        Value = RTLW81_RECEIVE_CONFIGURATION_ACCEPT_PHYSICAL_MATCH |
+                RTLW81_RECEIVE_CONFIGURATION_ACCEPT_BROADCAST |
                 RTLW81_RECEIVE_CONFIGURATION_APP_ICV |
-                RTLW81_RECEIVE_CONFIGURATION_AMF |
+                RTLW81_RECEIVE_CONFIGURATION_ACCEPT_MGMT_FRAME |
                 RTLW81_RECEIVE_CONFIGURATION_HTC_LOC_CTRL |
                 RTLW81_RECEIVE_CONFIGURATION_APP_MIC |
                 RTLW81_RECEIVE_CONFIGURATION_APP_PHYSTS;
@@ -2344,11 +2413,11 @@ Return Value:
                                 Value);
 
         //
-        // Accept all multicast frames.
+        // Set the multicast and promiscuous filters based on the current
+        // capabilities.
         //
 
-        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterMulticast1, 0xFFFFFFFF);
-        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterMulticast2, 0xFFFFFFFF);
+        Rtlw81pUpdateFilterMode(Device);
 
         //
         // Accept all management frames.
@@ -5749,6 +5818,60 @@ Return Value:
     }
 
     RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterLedConfig0, Value);
+    return;
+}
+
+VOID
+Rtlw81pUpdateFilterMode (
+    PRTLW81_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the given device's filter mode based on its currently
+    enabled capabilities.
+
+Arguments:
+
+    Device - Supplies a pointer to the RTL81xx device whose filter mode needs
+        updating.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Multicast[2];
+    ULONG Value;
+
+    ASSERT(KeIsQueuedLockHeld(Device->ConfigurationLock) != FALSE);
+
+    Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterReceiveConfiguration);
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
+
+        Value |= RTLW81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL |
+                 RTLW81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST;
+
+        Multicast[0] = 0xFFFFFFFF;
+        Multicast[1] = 0xFFFFFFFF;
+
+    } else {
+        Value &= ~(RTLW81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL |
+                   RTLW81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST);
+
+        Multicast[0] = 0x0;
+        Multicast[1] = 0x0;
+    }
+
+    RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterReceiveConfiguration, Value);
+    RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterMulticast1, Multicast[0]);
+    RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterMulticast2, Multicast[1]);
     return;
 }
 

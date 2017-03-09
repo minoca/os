@@ -31,11 +31,19 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
+#include <minoca/intrface/pci.h>
 #include "e100.h"
 
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// PCI Configuration Space definitions.
+//
+
+#define PCI_REVISION_ID_OFFSET 0x8
+#define PCI_REVISION_ID_MASK 0x000000FF
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -96,7 +104,8 @@ E100DestroyLink (
 
 KSTATUS
 E100pProcessResourceRequirements (
-    PIRP Irp
+    PIRP Irp,
+    PE100_DEVICE Device
     );
 
 KSTATUS
@@ -105,11 +114,21 @@ E100pStartDevice (
     PE100_DEVICE Device
     );
 
+VOID
+E100pProcessPciConfigInterfaceChangeNotification (
+    PVOID Context,
+    PDEVICE Device,
+    PVOID InterfaceBuffer,
+    ULONG InterfaceBufferSize,
+    BOOL Arrival
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 PDRIVER E100Driver = NULL;
+UUID E100PciConfigurationInterfaceUuid = UUID_PCI_CONFIG_ACCESS;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -265,7 +284,7 @@ Return Value:
     if (Irp->Direction == IrpUp) {
         switch (Irp->MinorCode) {
         case IrpMinorQueryResources:
-            Status = E100pProcessResourceRequirements(Irp);
+            Status = E100pProcessResourceRequirements(Irp, DeviceContext);
             if (!KSUCCESS(Status)) {
                 IoCompleteIrp(E100Driver, Irp, Status);
             }
@@ -498,6 +517,7 @@ Return Value:
     Properties.DataLinkType = NetDomainEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Domain = NetDomainEthernet;
+    Properties.Capabilities = Device->SupportedCapabilities;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->EepromMacAddress),
                   sizeof(Device->EepromMacAddress));
@@ -557,7 +577,8 @@ Return Value:
 
 KSTATUS
 E100pProcessResourceRequirements (
-    PIRP Irp
+    PIRP Irp,
+    PE100_DEVICE Device
     )
 
 /*++
@@ -571,6 +592,8 @@ Routine Description:
 Arguments:
 
     Irp - Supplies a pointer to the I/O request packet.
+
+    Device - Supplies a pointer to the device information.
 
 Return Value:
 
@@ -586,6 +609,34 @@ Return Value:
 
     ASSERT((Irp->MajorCode == IrpMajorStateChange) &&
            (Irp->MinorCode == IrpMinorQueryResources));
+
+    //
+    // Start listening for a PCI config interface.
+    //
+
+    if (Device->RegisteredForPciConfigInterfaces == FALSE) {
+        Status = IoRegisterForInterfaceNotifications(
+                              &E100PciConfigurationInterfaceUuid,
+                              E100pProcessPciConfigInterfaceChangeNotification,
+                              Irp->Device,
+                              Device,
+                              TRUE);
+
+        if (!KSUCCESS(Status)) {
+            goto ProcessResourceRequirementsEnd;
+        }
+
+        Device->RegisteredForPciConfigInterfaces = TRUE;
+    }
+
+    //
+    // A PCI interface should have been found.
+    //
+
+    if (Device->PciConfigInterfaceAvailable == FALSE) {
+        Status = STATUS_NOT_CONFIGURED;
+        goto ProcessResourceRequirementsEnd;
+    }
 
     //
     // Initialize a nice interrupt vector requirement in preparation.
@@ -648,6 +699,7 @@ Return Value:
     PRESOURCE_ALLOCATION LineAllocation;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
+    ULONGLONG Revision;
     ULONG Size;
     KSTATUS Status;
 
@@ -745,6 +797,22 @@ Return Value:
     ASSERT(Device->ControllerBase != NULL);
 
     //
+    // Read the revision from PCI config space.
+    //
+
+    Status = Device->PciConfigInterface.ReadPciConfig(
+                                        Device->PciConfigInterface.DeviceToken,
+                                        PCI_REVISION_ID_OFFSET,
+                                        sizeof(ULONG),
+                                        &Revision);
+
+    if (!KSUCCESS(Status)) {
+        goto StartDeviceEnd;
+    }
+
+    Device->Revision = (ULONG)Revision & PCI_REVISION_ID_MASK;
+
+    //
     // Allocate the controller structures.
     //
 
@@ -786,5 +854,67 @@ Return Value:
 
 StartDeviceEnd:
     return Status;
+}
+
+VOID
+E100pProcessPciConfigInterfaceChangeNotification (
+    PVOID Context,
+    PDEVICE Device,
+    PVOID InterfaceBuffer,
+    ULONG InterfaceBufferSize,
+    BOOL Arrival
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when a PCI configuration space access interface
+    changes in availability.
+
+Arguments:
+
+    Context - Supplies the caller's context pointer, supplied when the caller
+        requested interface notifications.
+
+    Device - Supplies a pointer to the device exposing or deleting the
+        interface.
+
+    InterfaceBuffer - Supplies a pointer to the interface buffer of the
+        interface.
+
+    InterfaceBufferSize - Supplies the buffer size.
+
+    Arrival - Supplies TRUE if a new interface is arriving, or FALSE if an
+        interface is departing.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PE100_DEVICE DeviceContext;
+
+    DeviceContext = (PE100_DEVICE)Context;
+    if (Arrival != FALSE) {
+        if (InterfaceBufferSize >= sizeof(INTERFACE_PCI_CONFIG_ACCESS)) {
+
+            ASSERT(DeviceContext->PciConfigInterfaceAvailable == FALSE);
+
+            RtlCopyMemory(&(DeviceContext->PciConfigInterface),
+                          InterfaceBuffer,
+                          sizeof(INTERFACE_PCI_CONFIG_ACCESS));
+
+            DeviceContext->PciConfigInterfaceAvailable = TRUE;
+        }
+
+    } else {
+        DeviceContext->PciConfigInterfaceAvailable = FALSE;
+    }
+
+    return;
 }
 

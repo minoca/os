@@ -530,6 +530,7 @@ Return Value:
     Properties.DataLinkType = NetDomainEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Domain = NetDomainEthernet;
+    Properties.Capabilities = Device->SupportedCapabilities;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),
                   sizeof(Device->MacAddress));
@@ -648,6 +649,12 @@ Return Value:
     INITIALIZE_LIST_HEAD(&(Device->BulkOutFreeTransferList));
     Device->BulkOutListLock = KeCreateQueuedLock();
     if (Device->BulkOutListLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceStructuresEnd;
+    }
+
+    Device->ConfigurationLock = KeCreateQueuedLock();
+    if (Device->ConfigurationLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
@@ -773,6 +780,12 @@ Return Value:
     Device->InterruptTransfer->CallbackRoutine =
                                                Sm95InterruptTransferCompletion;
 
+    //
+    // Advertise the supported capabilties and set the capabilities enabled by
+    // default.
+    //
+
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
     Status = STATUS_SUCCESS;
 
 InitializeDeviceStructuresEnd:
@@ -846,6 +859,10 @@ Return Value:
     Sm95pDestroyBulkOutTransfers(Device);
     if (Device->BulkOutListLock != NULL) {
         KeDestroyQueuedLock(Device->BulkOutListLock);
+    }
+
+    if (Device->ConfigurationLock != NULL) {
+        KeDestroyQueuedLock(Device->ConfigurationLock);
     }
 
     MmFreePagedPool(Device);

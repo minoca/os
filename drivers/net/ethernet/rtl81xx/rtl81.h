@@ -351,16 +351,14 @@ Author:
 #define RTL81_RECEIVE_CONFIGURATION_ACCEPT_BROADCAST_PACKETS        (1 << 3)
 #define RTL81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST_PACKETS        (1 << 2)
 #define RTL81_RECEIVE_CONFIGURATION_ACCEPT_PHYSICAL_MATCH_PACKETS   (1 << 1)
-#define RTL81_RECEIVE_CONFIGURATION_ACCEPT_PHYSICAL_ADDRESS_PACKETS (0 << 1)
+#define RTL81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL_PACKETS     (1 << 0)
 
-#define RTL81_RECEIVE_CONFIGURATION_DEFAULT_OPTIONS             \
-    (RTL81_RECEIVE_CONFIGURATION_ACCEPT_PHYSICAL_MATCH_PACKETS | \
-     RTL81_RECEIVE_CONFIGURATION_ACCEPT_BROADCAST_PACKETS |      \
-     (RTL81_RECEIVE_CONFIGURATION_MAX_DMA_BURST_UNLIMITED <<     \
-      RTL81_RECEIVE_CONFIGURATION_MAX_DMA_BURST_SHIFT) |         \
-     (RTL81_RECEIVE_CONFIGURATION_BUFFER_LENGTH_64K <<           \
-      RTL81_RECEIVE_CONFIGURATION_BUFFER_LENGTH_SHIFT) |         \
-     (RTL81_RECEIVE_CONFIGURATION_FIFO_NO_THRESHOLD <<           \
+#define RTL81_RECEIVE_CONFIGURATION_DEFAULT_OPTIONS          \
+    ((RTL81_RECEIVE_CONFIGURATION_MAX_DMA_BURST_UNLIMITED << \
+      RTL81_RECEIVE_CONFIGURATION_MAX_DMA_BURST_SHIFT) |     \
+     (RTL81_RECEIVE_CONFIGURATION_BUFFER_LENGTH_64K <<       \
+      RTL81_RECEIVE_CONFIGURATION_BUFFER_LENGTH_SHIFT) |     \
+     (RTL81_RECEIVE_CONFIGURATION_FIFO_NO_THRESHOLD <<       \
       RTL81_RECEIVE_CONFIGURATION_FIFO_THRESHOLD_SHIFT))
 
 //
@@ -989,7 +987,7 @@ Members:
     ReceiveLock - Stores a queued lock that protects access to the receive
         descriptors.
 
-    CapabilitiesLock - Stores a queued lock that synchronizes changes to the
+    ConfigurationLock - Stores a queued lock that synchronizes changes to the
         enabled capabilities field and their supporting hardware registers.
 
     TransmitInterruptMask - Stores a mask of interrupt status bits that trigger
@@ -1008,11 +1006,14 @@ Members:
     MaxTransmitPacketListCount - Stores the maximum number of packets to remain
         on the list of packets waiting to be sent.
 
-    CapabilitiesSupported - Stores the set of capabilities that this device
+    SupportedCapabilities - Stores the set of capabilities that this device
         supports. See NET_LINK_CAPABILITY_* for definitions.
 
-    CapabilitiesEnabled - Stores the currently enabled capabilities on the
+    EnabledCapabilities - Stores the currently enabled capabilities on the
         devices. See NET_LINK_CAPABILITY_* for definitions.
+
+    ReceiveConfiguration - Stores the receive configuration register state to
+        use during a reset. See RTL81_RECEIVE_CONFIGURATION_* for definitions.
 
     LegacyData - Stores the extra data required to transmit and receive packets
         on a legacy device.
@@ -1033,7 +1034,7 @@ typedef struct _RTL81_DEVICE {
     HANDLE InterruptHandle;
     PQUEUED_LOCK TransmitLock;
     PQUEUED_LOCK ReceiveLock;
-    PQUEUED_LOCK CapabilitiesLock;
+    PQUEUED_LOCK ConfigurationLock;
     USHORT TransmitInterruptMask;
     USHORT ReceiveInterruptMask;
     ULONG PciMsiFlags;
@@ -1042,8 +1043,9 @@ typedef struct _RTL81_DEVICE {
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     NET_PACKET_LIST TransmitPacketList;
     ULONG MaxTransmitPacketListCount;
-    ULONG CapabilitiesSupported;
-    ULONG CapabilitiesEnabled;
+    ULONG SupportedCapabilities;
+    ULONG EnabledCapabilities;
+    ULONG ReceiveConfiguration;
     union {
         RTL81_LEGACY_DATA LegacyData;
         RTL81_DEFAULT_DATA DefaultData;

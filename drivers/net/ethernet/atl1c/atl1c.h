@@ -1000,6 +1000,15 @@ Members:
 
     EepromMacAddress - Stores the default MAC address of the device.
 
+    SupportedCapabilities - Stores the set of capabilities that this device
+        supports. See NET_LINK_CAPABILITY_* for definitions.
+
+    EnabledCapabilities - Stores the currently enabled capabilities on the
+        devices. See NET_LINK_CAPABILITY_* for definitions.
+
+    ConfigurationLock - Stores a queued lock that synchronizes changes to the
+        enabled capabilities field and their supporting hardware registers.
+
 --*/
 
 typedef struct _ATL1C_DEVICE {
@@ -1029,6 +1038,9 @@ typedef struct _ATL1C_DEVICE {
     ATL_SPEED Speed;
     ATL_DUPLEX_MODE Duplex;
     BYTE EepromMacAddress[ETHERNET_ADDRESS_SIZE];
+    ULONG SupportedCapabilities;
+    ULONG EnabledCapabilities;
+    PQUEUED_LOCK ConfigurationLock;
 } ATL1C_DEVICE, *PATL1C_DEVICE;
 
 //

@@ -502,6 +502,7 @@ Return Value:
     Properties.DataLinkType = NetDomainEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Domain = NetDomainEthernet;
+    Properties.Capabilities = Device->SupportedCapabilities;
 
     ASSERT(Device->MacAddressAssigned != FALSE);
 

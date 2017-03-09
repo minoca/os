@@ -510,7 +510,7 @@ Return Value:
     Properties.Interface.Send = DweSend;
     Properties.Interface.GetSetInformation = DweGetSetInformation;
     Properties.Interface.DestroyLink = DweDestroyLink;
-    Properties.Capabilities = Device->CapabilitiesSupported;
+    Properties.Capabilities = Device->SupportedCapabilities;
     Status = NetAddLink(&Properties, &(Device->NetworkLink));
     if (!KSUCCESS(Status)) {
         goto AddNetworkDeviceEnd;
