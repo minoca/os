@@ -198,6 +198,9 @@ Members:
         point that is to be set in the IPv4 header for every packet sent by
         this socket.
 
+    MulticastTimeToLive - Stores the time-to-live that is to be set in the IPv4
+        header for every multicast packet sent by this socket.
+
     MulticastLock - Supplies a pointer to the queued lock that protects access
         to the multicast information.
 
@@ -209,6 +212,7 @@ Members:
 typedef struct _IP4_SOCKET_INFORMATION {
     UCHAR TimeToLive;
     UCHAR DifferentiatedServicesCodePoint;
+    UCHAR MulticastTimeToLive;
     volatile PQUEUED_LOCK MulticastLock;
     LIST_ENTRY MulticastGroupList;
 } IP4_SOCKET_INFORMATION, *PIP4_SOCKET_INFORMATION;
@@ -650,6 +654,7 @@ Return Value:
     }
 
     SocketInformation->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;
+    SocketInformation->MulticastTimeToLive = IP4_INITIAL_MULTICAST_TIME_TO_LIVE;
     SocketInformation->DifferentiatedServicesCodePoint = 0;
     SocketInformation->MulticastLock = NULL;
     INITIALIZE_LIST_HEAD(&(SocketInformation->MulticastGroupList));
@@ -1075,6 +1080,7 @@ Return Value:
     PIP4_SOCKET_INFORMATION SocketInformation;
     PNETWORK_ADDRESS Source;
     KSTATUS Status;
+    ULONG TimeToLive;
     ULONG TotalLength;
 
     ASSERT((Socket->KernelSocket.Type == NetSocketRaw) ||
@@ -1108,6 +1114,17 @@ Return Value:
 
     LocalAddress = (PIP4_ADDRESS)Source;
     RemoteAddress = (PIP4_ADDRESS)Destination;
+
+    //
+    // Multicast packets must use the multicast time-to-live, which defaults to
+    // 1 (rather than 63) as multicast packets aren't typically meant to go
+    // beyond the local network.
+    //
+
+    TimeToLive = SocketInformation->TimeToLive;
+    if (IP4_IS_MULTICAST_ADDRESS(RemoteAddress->Address) != FALSE) {
+        TimeToLive = SocketInformation->MulticastTimeToLive;
+    }
 
     //
     // There better be a link and link address.
@@ -1259,7 +1276,7 @@ Return Value:
                 }
 
                 Header->FragmentOffset = CPU_TO_NETWORK16(FragmentOffset);
-                Header->TimeToLive = SocketInformation->TimeToLive;
+                Header->TimeToLive = TimeToLive;
 
                 ASSERT(Socket->KernelSocket.Protocol !=
                        SOCKET_INTERNET_PROTOCOL_RAW);
@@ -1331,7 +1348,7 @@ Return Value:
             Header->Identification = CPU_TO_NETWORK16(Socket->SendPacketCount);
             Socket->SendPacketCount += 1;
             Header->FragmentOffset = 0;
-            Header->TimeToLive = SocketInformation->TimeToLive;
+            Header->TimeToLive = TimeToLive;
 
             ASSERT(Socket->KernelSocket.Protocol !=
                    SOCKET_INTERNET_PROTOCOL_RAW);
@@ -1791,6 +1808,7 @@ Return Value:
 {
 
     ULONG BooleanOption;
+    UCHAR ByteOption;
     ULONG Flags;
     ULONG IntegerOption;
     SOCKET_IP4_OPTION Ip4Option;
@@ -1939,8 +1957,26 @@ Return Value:
 
         goto Ip4GetSetInformationEnd;
 
-    case SocketIp4OptionMulticastInterface:
     case SocketIp4OptionMulticastTimeToLive:
+        RequiredSize = sizeof(UCHAR);
+        if (Set != FALSE) {
+            if (*DataSize < RequiredSize) {
+                *DataSize = RequiredSize;
+                Status = STATUS_BUFFER_TOO_SMALL;
+                break;
+            }
+
+            ByteOption = *((PUCHAR)Data);
+            SocketInformation->MulticastTimeToLive = ByteOption;
+
+        } else {
+            Source = &ByteOption;
+            ByteOption = SocketInformation->MulticastTimeToLive;
+        }
+
+        break;
+
+    case SocketIp4OptionMulticastInterface:
     case SocketIp4OptionMulticastLoopback:
 
         //
