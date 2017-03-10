@@ -151,7 +151,7 @@
         {
             "name": "Make zlib",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/zlib-1.2.8"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/zlib-1.2.11"
         },
         {
             "name": "Make libiconv",
@@ -694,6 +694,21 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/groff-1.22.3"
         },
         {
+            "name": "Make libpng",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libpng-1.6.28"
+        },
+        {
+            "name": "Make libjpeg-turbo",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libjpeg-turbo-1.5.1"
+        },
+        {
+            "name": "Make freetype",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-2.7.1"
+        },
+        {
             "name": "Make directfb",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/DirectFB-DIRECTFB_1_7_7"
@@ -702,6 +717,11 @@
             "name": "Make SDL",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/SDL2-2.0.5"
+        },
+        {
+            "name": "Make qingy",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/qingy-1.0.0"
         },
         {
             "name": "Setup Distribution",

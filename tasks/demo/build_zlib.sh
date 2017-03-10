@@ -18,7 +18,7 @@ trees.c \
 uncompr.c \
 zutil.c"
 
-cd ./zlib-1.2.8
+cd ./zlib-1.2.11
 rm -f *.o libz.a
 ofiles=
 a=0
