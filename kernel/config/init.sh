@@ -75,6 +75,8 @@ if ! test -c "$WORLD/dev/null"; then
     mount --bind "/Volume" "$WORLD/dev/Volume"
     mount --bind "/Terminal" "$WORLD/dev/Terminal"
     mount --bind "/Device" "$WORLD/dev/Devices"
+    mkdir -p "$WORLD/dev/Pipe"
+    mount --bind "/Pipe" "$WORLD/dev/Pipe"
 fi
 
 ##
