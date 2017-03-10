@@ -3347,7 +3347,9 @@ Return Value:
             if (KeIsSpinLockHeld(&(ChildDebugData->TracerLock)) != FALSE) {
                 RtlZeroMemory(&TerminateCommand, sizeof(PROCESS_DEBUG_COMMAND));
                 TerminateCommand.Command = DebugCommandContinue;
-                TerminateCommand.SignalToDeliver = SIGNAL_KILL;
+                TerminateCommand.SignalToDeliver =
+                          ChildDebugData->TracerSignalInformation.SignalNumber;
+
                 PspDebugIssueCommand(Process, Child, &TerminateCommand);
             }
         }
@@ -3933,14 +3935,6 @@ Return Value:
     KeSignalEvent(TargetProcess->StopEvent, SignalOptionSignalAll);
 
     //
-    // Wait for the command to complete.
-    //
-
-    KeWaitForEvent(TargetProcess->DebugData->DebugCommandCompleteEvent,
-                   FALSE,
-                   WAIT_TIME_INDEFINITE);
-
-    //
     // For commands that let 'er rip, the process debug command structure is
     // no longer safe to read. Plus there's nothing to read out of there anyway.
     //
@@ -3954,6 +3948,14 @@ Return Value:
         Command->Status = STATUS_SUCCESS;
         goto DebugIssueCommandEnd;
     }
+
+    //
+    // Wait for the command to complete.
+    //
+
+    KeWaitForEvent(TargetProcess->DebugData->DebugCommandCompleteEvent,
+                   FALSE,
+                   WAIT_TIME_INDEFINITE);
 
     ASSERT(ProcessCommand->Size <= LocalCommand.Size);
     ASSERT(ProcessCommand->Command == DebugCommandInvalid);
