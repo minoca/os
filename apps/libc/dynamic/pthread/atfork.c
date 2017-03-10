@@ -200,7 +200,7 @@ Return Value:
 
     pthread_mutex_lock(&ClAtforkMutex);
     if (ClAtforkList.Next == NULL) {
-        return;
+        goto UnregisterAtforkEnd;
     }
 
     CurrentEntry = ClAtforkList.Next;
@@ -213,6 +213,7 @@ Return Value:
         }
     }
 
+UnregisterAtforkEnd:
     pthread_mutex_unlock(&ClAtforkMutex);
     return;
 }
