@@ -2292,6 +2292,26 @@ Return Value:
 
 {
 
+    unsigned long long Seconds;
+
+    //
+    // The usleep function probably only takes a 32-bit value. Use the
+    // second-based sleep function to get within range of usleep.
+    //
+
+    while (Microseconds != (useconds_t)Microseconds) {
+        Seconds = Microseconds / 1000000ULL;
+        if (Seconds > UINT32_MAX) {
+            Seconds = UINT32_MAX;
+        }
+
+        if (sleep((unsigned)Seconds) != 0) {
+            return;
+        }
+
+        Microseconds -= Seconds * 1000000ULL;
+    }
+
     usleep(Microseconds);
     return;
 }
