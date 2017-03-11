@@ -3153,7 +3153,7 @@ Return Value:
 --*/
 
 NET_API
-KSTATUS
+VOID
 NetInitializeSocketLinkOverride (
     PNET_SOCKET Socket,
     PNET_LINK_LOCAL_ADDRESS LinkInformation,
@@ -3165,8 +3165,7 @@ NetInitializeSocketLinkOverride (
 Routine Description:
 
     This routine initializes the given socket link override structure with the
-    appropriate mix of socket and link information. The routine will fail if it
-    determines that the socket is already bound to a link.
+    appropriate mix of socket and link information.
 
 Arguments:
 
@@ -3179,9 +3178,7 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS if the link override was successfully filled in.
-
-    STATUS_CONNECTION_EXISTS if the socket is already bound to a link.
+    None.
 
 --*/
 

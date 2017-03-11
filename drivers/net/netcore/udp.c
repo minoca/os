@@ -1075,31 +1075,22 @@ Return Value:
 
     if (Socket->Link == NULL) {
         Status = NetFindLinkForRemoteAddress(Destination, &LinkInformation);
-        if (KSUCCESS(Status)) {
-
-            //
-            // The link override should use the socket's port.
-            //
-
-            LinkInformation.SendAddress.Port = Socket->LocalSendAddress.Port;
-
-            //
-            // Synchronously get the correct header, footer, and max packet
-            // sizes.
-            //
-
-            Status = NetInitializeSocketLinkOverride(Socket,
-                                                     &LinkInformation,
-                                                     &LinkOverrideBuffer);
-
-            if (KSUCCESS(Status)) {
-                LinkOverride = &LinkOverrideBuffer;
-            }
-        }
-
-        if (!KSUCCESS(Status) && (Status != STATUS_CONNECTION_EXISTS)) {
+        if (!KSUCCESS(Status)) {
             goto UdpSendEnd;
         }
+
+        //
+        // The link override should use the socket's port.
+        //
+
+        LinkInformation.SendAddress.Port = Socket->LocalSendAddress.Port;
+
+        //
+        // Synchronously get the correct header, footer, and max packet ssizes.
+        //
+
+        LinkOverride = &LinkOverrideBuffer;
+        NetInitializeSocketLinkOverride(Socket, &LinkInformation, LinkOverride);
     }
 
     //

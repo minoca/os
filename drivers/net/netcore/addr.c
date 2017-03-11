@@ -2446,7 +2446,7 @@ DisconnectSocketEnd:
 }
 
 NET_API
-KSTATUS
+VOID
 NetInitializeSocketLinkOverride (
     PNET_SOCKET Socket,
     PNET_LINK_LOCAL_ADDRESS LinkInformation,
@@ -2458,8 +2458,7 @@ NetInitializeSocketLinkOverride (
 Routine Description:
 
     This routine initializes the given socket link override structure with the
-    appropriate mix of socket and link information. The routine will fail if it
-    determines that the socket is already bound to a link.
+    appropriate mix of socket and link information.
 
 Arguments:
 
@@ -2472,22 +2471,16 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS if the link override was successfully filled in.
-
-    STATUS_CONNECTION_EXISTS if the socket is already bound to a link.
+    None.
 
 --*/
 
 {
 
-    if (Socket->Link != NULL) {
-        return STATUS_CONNECTION_EXISTS;
-    }
-
     //
-    // The socket is not yet associated with a link. Since the unbound header
-    // size, footer size, and max packet size are saved in the socket, there is
-    // no need to protect this under a socket lock.
+    // Since the unbound header size, footer size, and max packet size are
+    // saved in the socket, there is no need to protect this under a socket
+    // lock.
     //
 
     NetpGetPacketSizeInformation(LinkInformation->Link,
@@ -2499,7 +2492,7 @@ Return Value:
                   sizeof(NET_LINK_LOCAL_ADDRESS));
 
     NetLinkAddReference(LinkOverride->LinkInformation.Link);
-    return STATUS_SUCCESS;
+    return;
 }
 
 NET_API

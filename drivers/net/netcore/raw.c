@@ -1106,25 +1106,16 @@ Return Value:
 
     if (Socket->Link == NULL) {
         Status = NetFindLinkForRemoteAddress(Destination, &LinkInformation);
-        if (KSUCCESS(Status)) {
-
-            //
-            // Synchronously get the correct header, footer, and max packet
-            // sizes.
-            //
-
-            Status = NetInitializeSocketLinkOverride(Socket,
-                                                     &LinkInformation,
-                                                     &LinkOverrideBuffer);
-
-            if (KSUCCESS(Status)) {
-                LinkOverride = &LinkOverrideBuffer;
-            }
-        }
-
-        if (!KSUCCESS(Status) && (Status != STATUS_CONNECTION_EXISTS)) {
+        if (!KSUCCESS(Status)) {
             goto RawSendEnd;
         }
+
+        //
+        // Synchronously get the correct header, footer, and max packet sizes.
+        //
+
+        LinkOverride = &LinkOverrideBuffer;
+        NetInitializeSocketLinkOverride(Socket, &LinkInformation, LinkOverride);
     }
 
     //
