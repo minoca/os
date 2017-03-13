@@ -31,6 +31,7 @@ Environment:
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +44,16 @@ Environment:
 //
 // --------------------------------------------------------------------- Macros
 //
+
+#if defined(O_BINARY) && (O_BINARY != O_TEXT)
+
+#define SET_BINARY_MODE(_Descriptor) _setmode(_Descriptor, O_BINARY)
+
+#else
+
+#define SET_BINARY_MODE(_Descriptor)
+
+#endif
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -65,7 +76,7 @@ Environment:
     "(default 0).\n" \
     "  --pb=<count> - Set number of position bits [0, 4] (default 2).\n" \
     "  --mf=<type> - Set match finder [hc4, bt2, bt3, bt4] (default bt4).\n" \
-    "  --eos - Write end of stream marker.\n" \
+    "  --no-eos - Do not write end of stream marker.\n" \
     "  --help - Display this help message.\n" \
     "  --version -- Display the version information and exit.\n"
 
@@ -91,7 +102,7 @@ typedef enum _LZMA_UTIL_ARGUMENT {
     LzmaUtilLp,
     LzmaUtilPb,
     LzmaUtilMf,
-    LzmaUtilEos
+    LzmaUtilNoEos
 } LZMA_UTIL_ARGUMENT, *PLZMA_UTIL_ARGUMENT;
 
 typedef enum _LZMA_UTIL_ACTION {
@@ -162,7 +173,7 @@ struct option LzmaLongOptions[] = {
     {"lp", required_argument, 0, LzmaUtilLp},
     {"pb", required_argument, 0, LzmaUtilPb},
     {"mf", required_argument, 0, LzmaUtilMf},
-    {"eos", no_argument, 0, LzmaUtilEos},
+    {"no-eos", no_argument, 0, LzmaUtilNoEos},
     {"help", no_argument, 0, 'h'},
     {"version", no_argument, 0, 'V'},
     {"verbose", no_argument, 0, 'v'},
@@ -375,8 +386,8 @@ Return Value:
 
             break;
 
-        case LzmaUtilEos:
-            Context.EncoderProperties.WriteEndMark = TRUE;
+        case LzmaUtilNoEos:
+            Context.EncoderProperties.WriteEndMark = FALSE;
             break;
 
         case 'v':
@@ -416,6 +427,7 @@ Return Value:
     if (InputPath != NULL) {
         if (strcmp(InputPath, "-") == 0) {
             Context.Lz.ReadContext = stdin;
+            SET_BINARY_MODE(fileno(stdin));
 
         } else {
             Context.Lz.ReadContext = fopen(InputPath, "rb");
@@ -439,11 +451,13 @@ Return Value:
         }
 
         Context.Lz.ReadContext = stdin;
+        SET_BINARY_MODE(fileno(stdin));
     }
 
     if (OutputPath != NULL) {
         if (strcmp(OutputPath, "-") == 0) {
             Context.Lz.WriteContext = stdout;
+            SET_BINARY_MODE(fileno(stdout));
 
         } else {
             Context.Lz.WriteContext = fopen(OutputPath, "wb");
@@ -467,6 +481,7 @@ Return Value:
         }
 
         Context.Lz.WriteContext = stdout;
+        SET_BINARY_MODE(fileno(stdout));
     }
 
     if (Action == LzmaActionCompress) {
@@ -482,8 +497,14 @@ Return Value:
         }
 
     } else {
-        fprintf(stderr, "TODO: Not yet implemented");
-        goto MainEnd;
+        LzStatus = LzLzmaDecodeStream(&(Context.Lz), NULL, 0, NULL, 0);
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to decode: %d.\n",
+                    LzStatus);
+
+            goto MainEnd;
+        }
     }
 
     Status = 0;

@@ -68,8 +68,6 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define LZMA_REP_COUNT 4
-
 #define LZMA_OPTIMAL_COUNT (1 << 12)
 
 #define LZMA_PB_MAX 4
@@ -82,19 +80,6 @@ Author:
 
 #define LZMA_INITIAL_PROBABILITY (LZMA_BIT_MODEL_TOTAL >> 1)
 
-#define LZMA_LENGTH_LOW_BITS 3
-#define LZMA_LENGTH_LOW_SYMBOLS (1 << LZMA_LENGTH_LOW_BITS)
-
-#define LZMA_LENGTH_MID_BITS 3
-#define LZMA_LENGTH_MID_SYMBOLS (1 << LZMA_LENGTH_MID_BITS)
-
-#define LZMA_LENGTH_HIGH_BITS 8
-#define LZMA_LENGTH_HIGH_SYMBOLS (1 << LZMA_LENGTH_HIGH_BITS)
-
-#define LZMA_LENGTH_TOTAL_SYMBOL_COUNT \
-    (LZMA_LENGTH_LOW_SYMBOLS + LZMA_LENGTH_MID_SYMBOLS + \
-     LZMA_LENGTH_HIGH_SYMBOLS)
-
 #define LZMA_MIN_DICT_LOG 6
 #define LZMA_MAX_DICT_LOG 32
 #define LZMA_DISTANCE_TABLE_MAX (LZMA_MAX_DICT_LOG * 2)
@@ -104,12 +89,9 @@ Author:
 
 #define LZMA_RANGE_ENCODER_BUFFER_SIZE (1 << 16)
 
-#define LZMA_MIN_MATCH_LENGTH 2
 #define LZMA_MAX_MATCH_LENGTH \
     (LZMA_MIN_MATCH_LENGTH + LZMA_LENGTH_TOTAL_SYMBOL_COUNT - 1)
 
-#define LZMA_ALIGN_TABLE_BITS 4
-#define LZMA_ALIGN_TABLE_SIZE (1 << LZMA_ALIGN_TABLE_BITS)
 #define LZMA_ALIGN_MASK (LZMA_ALIGN_TABLE_SIZE - 1)
 
 #define LZMA_INFINITY_PRICE (1 << 30)
@@ -118,7 +100,6 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef USHORT LZ_PROB, *PLZ_PROB;
 typedef ULONG LZMA_STATE;
 
 /*++

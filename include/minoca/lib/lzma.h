@@ -35,11 +35,18 @@ Author:
 //
 
 //
+// Define the smallest supported dictionary size.
+//
+
+#define LZMA_MINIMUM_DICT_SIZE (1 << 12)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
 typedef enum _LZ_STATUS {
     LzSuccess,
+    LzErrorCorruptData,
     LzErrorMemory,
     LzErrorCrc,
     LzErrorUnsupported,
@@ -48,12 +55,21 @@ typedef enum _LZ_STATUS {
     LzErrorOutputEof,
     LzErrorRead,
     LzErrorWrite,
-    LzErrorProgress,
-    LzErrorFailure,
-    LzErrorThread,
-    LzErrorArchive,
-    LzErrorNoArchive
+    LzErrorProgress
 } LZ_STATUS, *PLZ_STATUS;
+
+//
+// LZMA decoder completion status, indicating whether the stream has ended or
+// whether more data is expected.
+//
+
+typedef enum _LZ_COMPLETION_STATUS {
+    LzCompletionNotSpecified,
+    LzCompletionFinishedWithMark,
+    LzCompletionNotFinished,
+    LzCompletionMoreInputRequired,
+    LzCompletionMaybeFinishedWithoutMark
+} LZ_COMPLETION_STATUS, *PLZ_COMPLETION_STATUS;
 
 typedef struct _LZ_CONTEXT LZ_CONTEXT, *PLZ_CONTEXT;
 
@@ -364,6 +380,104 @@ Arguments:
 Return Value:
 
     LZ status.
+
+--*/
+
+LZ_STATUS
+LzLzmaDecode (
+    PLZ_CONTEXT Context,
+    PUCHAR Destination,
+    PUINTN DestinationSize,
+    PCUCHAR Source,
+    PUINTN SourceSize,
+    PCUCHAR Properties,
+    ULONG PropertiesSize,
+    BOOL HasEndMark,
+    PLZ_COMPLETION_STATUS CompletionStatus
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decompresses a block of LZMA encoded data in a single shot.
+    It is an error if the destination buffer is not big enough to hold the
+    decompressed data.
+
+Arguments:
+
+    Context - Supplies a pointer to the system context, which should be filled
+        out by the caller.
+
+    Destination - Supplies a pointer where the uncompressed data should be
+        written.
+
+    DestinationSize - Supplies a pointer that on input contains the size of the
+        uncompressed data buffer. On output this will be updated to contain
+        the number of valid bytes in the destination buffer.
+
+    Source - Supplies a pointer to the compressed data.
+
+    SourceSize - Supplies a pointer that on input contains the size of the
+        source buffer. On output this will be updated to contain the number of
+        source bytes consumed.
+
+    Properties - Supplies a pointer to the properties bytes.
+
+    PropertiesSize - Supplies the number of properties bytes in byte given
+        buffer.
+
+    HasEndMark - Supplies a boolean indicating whether an end mark is expected
+        within this block of data. Supply TRUE if the compressed stream was
+        finished with an end mark. Supply FALSE if the given data ends when the
+        source buffer ends.
+
+    CompletionStatus - Supplies a pointer where the completion status will be
+        returned indicating whether an end mark was found or more data is
+        expected. This field only has meaning if the decoding chews through
+        the entire source buffer.
+
+Return Value:
+
+    Returns an LZ status code indicating overall success or failure.
+
+--*/
+
+LZ_STATUS
+LzLzmaDecodeStream (
+    PLZ_CONTEXT Context,
+    PVOID InBuffer,
+    UINTN InBufferSize,
+    PVOID OutBuffer,
+    UINTN OutBufferSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decompresses a stream of LZMA encoded data.
+
+Arguments:
+
+    Context - Supplies a pointer to the system context, which should be filled
+        out by the caller.
+
+    InBuffer - Supplies an optional pointer to the working buffer to use for
+        input. If not supplied, a working buffer will be allocated.
+
+    InBufferSize - Supplies the size of the optional working input buffer.
+        Supply zero if none was provided.
+
+    OutBuffer - Supplies an optional pointer to the working buffer to use for
+        output. If not supplied, a working buffer will be allocated.
+
+    OutBufferSize - Supplies the size of the optional working input buffer.
+        Supply zero if none was provided.
+
+Return Value:
+
+    Returns an LZ status code indicating overall success or failure.
 
 --*/
 

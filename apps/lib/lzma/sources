@@ -27,5 +27,6 @@
 
 OBJS = encopt.o   \
        lzfind.o   \
+       lzmadec.o  \
        lzmaenc.o  \
 

@@ -1284,7 +1284,7 @@ Return Value:
 
     Result = LzpLzmaEncode(Encoder);
     if ((Result == LzSuccess) && (Encoder->Position64 != SourceSize)) {
-        Result = LzErrorFailure;
+        Result = LzErrorCorruptData;
     }
 
     *DestinationSize -= Out.Remaining;
