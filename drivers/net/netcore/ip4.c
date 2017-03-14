@@ -2287,6 +2287,8 @@ Return Value:
 
 {
 
+    PIP4_SOCKET_INFORMATION DestinationInformation;
+
     if ((DestinationSocket->NetworkSocketInformation == NULL) ||
         (SourceSocket->NetworkSocketInformation == NULL)) {
 
@@ -2295,14 +2297,24 @@ Return Value:
 
     //
     // Copy all of the socket information. This routine is invoked when a
-    // connection is accepted and the listening socket is forked. As it stands,
-    // all of the IPv4 socket options get inherited by the forked socket.
+    // connection is accepted and the listening socket is forked.
     //
 
     RtlCopyMemory(DestinationSocket->NetworkSocketInformation,
                   SourceSocket->NetworkSocketInformation,
                   sizeof(IP4_SOCKET_INFORMATION));
 
+    //
+    // Reset the multicast information. The new socket should not inherit that
+    // information.
+    //
+
+    DestinationInformation = DestinationSocket->NetworkSocketInformation;
+    DestinationInformation->MulticastLock = NULL;
+    RtlZeroMemory(&(DestinationInformation->MulticastInterface),
+                  sizeof(NET_SOCKET_LINK_OVERRIDE));
+
+    INITIALIZE_LIST_HEAD(&(DestinationInformation->MulticastGroupList));
     return STATUS_SUCCESS;
 }
 
