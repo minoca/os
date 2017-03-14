@@ -1747,6 +1747,8 @@ Return Value:
         Command->U.Transmit.BufferVirtual = Packet->Buffer +
                                             Packet->DataOffset;
 
+        ASSERT(Device->CommandPacket[CommandIndex] == NULL);
+
         Device->CommandPacket[CommandIndex] = Packet;
 
         //
@@ -2032,7 +2034,7 @@ Return Value:
     // buffer.
     //
 
-    CommandType = Command->Command & E100_COMMAND_BLOCK_COMMAND_MASK >>
+    CommandType = (Command->Command & E100_COMMAND_BLOCK_COMMAND_MASK) >>
                   E100_COMMAND_BLOCK_COMMAND_SHIFT;
 
     if (CommandType == E100CommandTransmit) {
