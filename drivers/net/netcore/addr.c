@@ -1865,6 +1865,7 @@ Return Value:
 
 {
 
+    NET_ADDRESS_TYPE AddressType;
     ULONG AttemptIndex;
     BOOL Available;
     ULONG CurrentPort;
@@ -1873,6 +1874,7 @@ Return Value:
     PNET_LINK Link;
     NET_LINK_LOCAL_ADDRESS LocalInformationBuffer;
     BOOL LockHeld;
+    PNET_NETWORK_ENTRY Network;
     ULONG OldFlags;
     ULONG OriginalPort;
     PNET_PROTOCOL_ENTRY Protocol;
@@ -1884,6 +1886,7 @@ Return Value:
     BOOL SkipRemoteValidation;
     KSTATUS Status;
     PRED_BLACK_TREE Tree;
+    PNETWORK_ADDRESS ValidateAddress;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
     ASSERT((LocalInformation != NULL) || (RemoteAddress != NULL));
@@ -1892,6 +1895,7 @@ Return Value:
 
     LockHeld = FALSE;
     Protocol = Socket->Protocol;
+    Network = Socket->Network;
     Reinsert = FALSE;
 
     //
@@ -1912,6 +1916,36 @@ Return Value:
         }
 
         LocalInformation = &LocalInformationBuffer;
+    }
+
+    //
+    // If the socket belongs to a connection based protocol, don't allow it to
+    // be bound or connected to a multicast or broadcast address.
+    //
+
+    if ((Protocol->Flags & NET_PROTOCOL_FLAG_CONNECTION_BASED) != 0) {
+        ValidateAddress = NULL;
+        if (BindingType == SocketFullyBound) {
+            ValidateAddress = RemoteAddress;
+            Status = STATUS_DESTINATION_UNREACHABLE;
+
+        } else if (BindingType == SocketLocallyBound) {
+            ValidateAddress = &(LocalInformation->ReceiveAddress);
+            Status = STATUS_INVALID_ADDRESS;
+        }
+
+        if (ValidateAddress != NULL) {
+            AddressType = Network->Interface.GetAddressType(
+                                                 LocalInformation->Link,
+                                                 LocalInformation->LinkAddress,
+                                                 ValidateAddress);
+
+            if ((AddressType == NetAddressMulticast) ||
+                (AddressType == NetAddressBroadcast)) {
+
+                goto BindSocketEnd;
+            }
+        }
     }
 
     KeAcquireSharedExclusiveLockExclusive(Protocol->SocketLock);

@@ -1902,6 +1902,7 @@ Return Value:
     PSOCKET_IP4_MULTICAST_REQUEST MulticastRequest;
     NET_SOCKET_LINK_OVERRIDE NewInterface;
     PNET_LINK OldInterfaceLink;
+    PNET_PROTOCOL_ENTRY Protocol;
     UINTN RequiredSize;
     PIP4_SOCKET_INFORMATION SocketInformation;
     PVOID Source;
@@ -1921,6 +1922,7 @@ Return Value:
     RequiredSize = 0;
     Source = NULL;
     Status = STATUS_SUCCESS;
+    Protocol = Socket->Protocol;
     Ip4Option = (SOCKET_IP4_OPTION)Option;
     switch (Ip4Option) {
     case SocketIp4OptionHeaderIncluded:
@@ -2020,6 +2022,15 @@ Return Value:
     case SocketIp4OptionJoinMulticastGroup:
     case SocketIp4OptionLeaveMulticastGroup:
         if (Set == FALSE) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            break;
+        }
+
+        //
+        // This is not allowed on connection based protocols.
+        //
+
+        if ((Protocol->Flags & NET_PROTOCOL_FLAG_CONNECTION_BASED) != 0) {
             Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
             break;
         }

@@ -281,6 +281,7 @@ Author:
 #define NET_PROTOCOL_FLAG_NO_DEFAULT_PROTOCOL 0x00000008
 #define NET_PROTOCOL_FLAG_PORTLESS            0x00000010
 #define NET_PROTOCOL_FLAG_NO_BIND_PERMISSIONS 0x00000020
+#define NET_PROTOCOL_FLAG_CONNECTION_BASED    0x00000040
 
 //
 // ------------------------------------------------------ Data Type Definitions
