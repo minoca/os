@@ -223,6 +223,11 @@ Author:
 #define NET_PACKET_FLAG_UNENCRYPTED          0x00000080
 #define NET_PACKET_FLAG_MULTICAST            0x00000100
 
+#define NET_PACKET_FLAG_CHECKSUM_OFFLOAD_MASK \
+    (NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD |    \
+     NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD |   \
+     NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD)
+
 //
 // Define the network link capabilities.
 //
@@ -2222,9 +2227,9 @@ Structure Description:
 Members:
 
     Packet - Supplies a pointer to the packet that came in over the network.
-        This structure may be used as a scratch space while the packet travels
-        up the stack, but will not be accessed after the network layers are
-        done receiving the packet.
+        This structure may not be used as a scratch space while the packet
+        travels up the stack as it may be sent out to multiple sockets (e.g.
+        multicast or broadcast packets).
 
     Link - Supplies a pointer to the network link that received the packet.
 

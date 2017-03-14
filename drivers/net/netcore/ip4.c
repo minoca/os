@@ -74,6 +74,12 @@ Environment:
 #define IP4_MAX_FRAGMENT_COUNT 1000
 
 //
+// Define IPv4 the socket information flags.
+//
+
+#define IP4_SOCKET_FLAG_MULTICAST_LOOPBACK 0x00000001
+
+//
 // --------------------------------------------------------------------- Macros
 //
 
@@ -191,6 +197,9 @@ Structure Description:
 
 Members:
 
+    Flags - Stores a bitmask of IPv4 socket information flags. See
+        IP4_SOCKET_FLAG_* for definitions.
+
     TimeToLive - Stores the time-to-live that is to be set in the IPv4 header
         for every packet sent by this socket.
 
@@ -214,6 +223,7 @@ Members:
 --*/
 
 typedef struct _IP4_SOCKET_INFORMATION {
+    volatile ULONG Flags;
     UCHAR TimeToLive;
     UCHAR DifferentiatedServicesCodePoint;
     UCHAR MulticastTimeToLive;
@@ -669,6 +679,7 @@ Return Value:
     }
 
     RtlZeroMemory(SocketInformation, sizeof(IP4_SOCKET_INFORMATION));
+    SocketInformation->Flags = IP4_SOCKET_FLAG_MULTICAST_LOOPBACK;
     SocketInformation->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;
     SocketInformation->MulticastTimeToLive = IP4_INITIAL_MULTICAST_TIME_TO_LIVE;
     SocketInformation->DifferentiatedServicesCodePoint = 0;
@@ -1076,6 +1087,8 @@ Return Value:
     ULONG BytesRemaining;
     USHORT Checksum;
     PLIST_ENTRY CurrentEntry;
+    ULONG DataOffset;
+    ULONG FooterOffset;
     ULONG FooterSize;
     PNET_PACKET_BUFFER Fragment;
     ULONG FragmentLength;
@@ -1090,8 +1103,10 @@ Return Value:
     PNET_SOCKET_LINK_OVERRIDE MulticastInterface;
     PNET_PACKET_BUFFER Packet;
     PVOID PacketBuffer;
+    ULONG PacketFlags;
     PNETWORK_ADDRESS PhysicalNetworkAddress;
     NETWORK_ADDRESS PhysicalNetworkAddressBuffer;
+    NET_RECEIVE_CONTEXT ReceiveContext;
     PIP4_ADDRESS RemoteAddress;
     PNET_DATA_LINK_SEND Send;
     PIP4_SOCKET_INFORMATION SocketInformation;
@@ -1431,6 +1446,47 @@ Return Value:
                 Packet->FooterOffset -= sizeof(IP4_HEADER);
                 Packet->DataSize -= sizeof(IP4_HEADER);
             }
+        }
+    }
+
+    //
+    // If this is a multicast address and the loopback bit is set, send the
+    // packets back up the stack before sending them down. This needs to be
+    // done first because the physical layer releases the packet structures
+    // when it's finished with them.
+    //
+
+    if ((IP4_IS_MULTICAST_ADDRESS(RemoteAddress->Address) != FALSE) &&
+        ((SocketInformation->Flags &
+          IP4_SOCKET_FLAG_MULTICAST_LOOPBACK) != 0)) {
+
+        RtlZeroMemory(&ReceiveContext, sizeof(NET_RECEIVE_CONTEXT));
+        ReceiveContext.Link = Link;
+        ReceiveContext.Network = Socket->Network;
+        CurrentEntry = PacketList->Head.Next;
+        while (CurrentEntry != &(PacketList->Head)) {
+            Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
+            CurrentEntry = CurrentEntry->Next;
+
+            //
+            // Save and restore the data and footer offsets as the higher
+            // level protocols modify them as the packet moves up the stack.
+            // Also save and restore the flags and set the checksum offload
+            // flags, as if the hardware already checked the packet. It would
+            // be silly for the receive path to validate checksums that were
+            // just calculated or to validate checksums that were not yet
+            // calculated due to offloading.
+            //
+
+            DataOffset = Packet->DataOffset;
+            FooterOffset = Packet->FooterOffset;
+            ReceiveContext.Packet = Packet;
+            PacketFlags = Packet->Flags;
+            Packet->Flags |= NET_PACKET_FLAG_CHECKSUM_OFFLOAD_MASK;
+            NetpIp4ProcessReceivedData(&ReceiveContext);
+            Packet->DataOffset = DataOffset;
+            Packet->FooterOffset = FooterOffset;
+            Packet->Flags = PacketFlags;
         }
     }
 
@@ -2116,10 +2172,34 @@ Return Value:
         break;
 
     case SocketIp4OptionMulticastLoopback:
+        RequiredSize = sizeof(UCHAR);
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
 
-        //
-        // TODO: Implement IPv4 multicast.
-        //
+        if (Set != FALSE) {
+            ByteOption = *((PUCHAR)Data);
+            if (ByteOption != FALSE) {
+                RtlAtomicOr32(&(SocketInformation->Flags),
+                              IP4_SOCKET_FLAG_MULTICAST_LOOPBACK);
+
+            } else {
+                RtlAtomicAnd32(&(SocketInformation->Flags),
+                               ~IP4_SOCKET_FLAG_MULTICAST_LOOPBACK);
+            }
+
+        } else {
+            Source = &ByteOption;
+            ByteOption = FALSE;
+            Flags = SocketInformation->Flags;
+            if ((Flags & IP4_SOCKET_FLAG_MULTICAST_LOOPBACK) != 0) {
+                ByteOption = TRUE;
+            }
+        }
+
+        break;
 
     default:
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
