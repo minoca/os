@@ -58,12 +58,21 @@ Author:
 #define USER_INPUT_KEYBOARD_LED_KANA        0x00000010
 
 //
+// Define the mouse event standard button flags.
+//
+
+#define MOUSE_BUTTON_LEFT                   0x00000001
+#define MOUSE_BUTTON_RIGHT                  0x00000002
+#define MOUSE_BUTTON_MIDDLE                 0x00000004
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
 typedef enum _USER_INPUT_DEVICE_TYPE {
     UserInputDeviceInvalid,
     UserInputDeviceKeyboard,
+    UserInputDeviceMouse,
     UserInputDeviceTypeCount
 } USER_INPUT_DEVICE_TYPE, *PUSER_INPUT_DEVICE_TYPE;
 
@@ -71,6 +80,7 @@ typedef enum _USER_INPUT_EVENT_TYPE {
     UserInputEventInvalid,
     UserInputEventKeyDown,
     UserInputEventKeyUp,
+    UserInputEventMouse,
     UserInputEventCount
 } USER_INPUT_EVENT_TYPE, *PUSER_INPUT_EVENT_TYPE;
 
@@ -307,6 +317,37 @@ typedef struct _USER_INPUT_DEVICE USER_INPUT_DEVICE, *PUSER_INPUT_DEVICE;
 
 Structure Description:
 
+    This structure describes a mouse movement event.
+
+Members:
+
+    MovementX - Stores the movement in the X direction.
+
+    MovementY - Stores the movement in the Y direction.
+
+    ScrollX - Stores the scroll wheel movement in the X direction.
+
+    ScrollY - Stores the scroll whell movement in the Y direction.
+
+    Flags - Stores additional flags.
+
+    Buttons - Stores the button state.
+
+--*/
+
+typedef struct _MOUSE_EVENT {
+    LONG MovementX;
+    LONG MovementY;
+    LONG ScrollX;
+    LONG ScrollY;
+    USHORT Flags;
+    USHORT Buttons;
+} MOUSE_EVENT, *PMOUSE_EVENT;
+
+/*++
+
+Structure Description:
+
     This structure describes a user input device event.
 
 Members:
@@ -320,9 +361,13 @@ Members:
 
     EventType - Stores the type of event occurring.
 
+    Timestamp - Stores the time counter value when the event occurred.
+
     U - Stores the union of possible event data.
 
         Key - Stores the keyboard key being affected.
+
+        Mouse - Stores the mouse event.
 
 --*/
 
@@ -331,8 +376,10 @@ typedef struct _USER_INPUT_EVENT {
     ULONG DeviceIdentifier;
     USER_INPUT_DEVICE_TYPE DeviceType;
     USER_INPUT_EVENT_TYPE EventType;
+    ULONGLONG Timestamp;
     union {
         KEYBOARD_KEY Key;
+        MOUSE_EVENT Mouse;
     } U;
 
 } USER_INPUT_EVENT, *PUSER_INPUT_EVENT;

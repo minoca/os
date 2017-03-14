@@ -833,6 +833,8 @@ Return Value:
     PIO_BUFFER IoBuffer;
     KSTATUS Status;
 
+    Event->Timestamp = HlQueryTimeCounter();
+
     //
     // Potentially convert this event into some terminal characters.
     //

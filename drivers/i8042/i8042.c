@@ -61,6 +61,17 @@ Environment:
     }
 
 //
+// This macro spins waiting for data to show up on the data register.
+//
+
+#define WAIT_FOR_OUTPUT_BUFFER(_Device)              \
+    while ((READ_STATUS_REGISTER(_Device) &          \
+            I8042_STATUS_OUTPUT_BUFFER_FULL) == 0) { \
+                                                     \
+        NOTHING;                                     \
+    }
+
+//
 // This macro determines if data is available to be received from the device.
 //
 
@@ -75,7 +86,8 @@ Environment:
 // Define the size of the device keyboard buffer size.
 //
 
-#define I8042_BUFFER_SIZE 256
+#define I8042_BUFFER_SIZE 128
+#define I8042_BUFFER_MASK 0x7F
 
 //
 // Define the bits in the 8042 status register.
@@ -103,13 +115,6 @@ Environment:
 #define I8042_COMMAND_BYTE_TRANSLATION_ENABLED        0x40
 
 //
-// Define the known device identifiers that this driver responds to.
-//
-
-#define KEYBOARD_HARDWARE_IDENTIFIER "PNP0303"
-#define MOUSE_HARDWARE_IDENTIFIER "PNP0F13"
-
-//
 // Define the allocation tag used by this driver.
 //
 
@@ -133,32 +138,6 @@ Structure Description:
 
 Members:
 
-    IsMouse - Stores a boolean indicating whether the device is a mouse (TRUE)
-        or a keyboard (FALSE).
-
-    ControlPort - Stores the I/O port number of the 8042 control port.
-
-    DataPort - Stores the I/O port number of the 8042 data port.
-
-    InterruptVector - Stores the interrupt vector that this interrupt comes in
-        on.
-
-    InterruptLine - Stores the interrupt line that the interrupt comes in on.
-
-    InterruptResourcesFound - Stores a boolean indicating whether or not the
-        interrupt vector and interrupt line fields are valid.
-
-    InterruptHandle - Stores the handle for the connected interrupt.
-
-    UserInputDeviceHandle - Stores the handle returned by the User Input
-        library.
-
-    InterruptLock - Stores a spinlock synchronizing access to the device with
-        the interrupt service routine.
-
-    ReadLock - Stores a pointer to a queued lock that serializes read access
-        to the data buffer.
-
     ReadIndex - Stores the index of the next byte to read out of the data
         buffer.
 
@@ -168,20 +147,103 @@ Members:
 
 --*/
 
-typedef struct _I8042_DEVICE {
-    BOOL IsMouse;
-    USHORT ControlPort;
-    USHORT DataPort;
-    ULONGLONG InterruptVector;
-    ULONGLONG InterruptLine;
-    BOOL InterruptResourcesFound;
-    HANDLE InterruptHandle;
-    HANDLE UserInputDeviceHandle;
-    KSPIN_LOCK InterruptLock;
-    PQUEUED_LOCK ReadLock;
+typedef struct _I8042_BUFFER {
     volatile ULONG ReadIndex;
     volatile ULONG WriteIndex;
     volatile UCHAR DataBuffer[I8042_BUFFER_SIZE];
+} I8042_BUFFER, *PI8042_BUFFER;
+
+/*++
+
+Structure Description:
+
+    This structure stores context about a device driven by the i8042 driver.
+
+Members:
+
+    KeyboardDevice - Stores a pointer to the keyboard OS device.
+
+    MouseDevice - Stores a pointer to the mouse OS device.
+
+    IsInitialized - Stores a boolean indicating whether or not the device has
+        been initialized.
+
+    IsMouse - Stores a boolean indicating whether the device is a mouse (TRUE)
+        or a keyboard (FALSE).
+
+    ControlPort - Stores the I/O port number of the 8042 control port.
+
+    DataPort - Stores the I/O port number of the 8042 data port.
+
+    MouseReportSize - Stores the number of bytes in the mouse report. Valid
+        values are 3 and 4.
+
+    KeyboardInterruptVector - Stores the interrupt vector that the keyboard
+        interrupt comes in on.
+
+    MouseInterruptVector - Stores the interrupt vector that the mouse
+        interrupt comes in on.
+
+    KeyboardInterruptLine - Stores the interrupt line that the keyboard
+        interrupt comes in on.
+
+    MouseInterruptLine - Stores the interrupt line that the mouse interrupt
+        comes in on.
+
+    KeyboardInterruptFound - Stores a boolean indicating whether or not the
+        keyboard interrupt vector and interrupt line fields are valid.
+
+    MouseInterruptFound - Stores a boolean indicating whether or not the
+        mouse interrupt vector and interrupt line fields are valid.
+
+    InterruptHandles - Stores the connected interrupt handles, one for the
+        keyboard and one for the mouse.
+
+    InterruptRunLevel - Stores the maximum runlevel between the two interrupt
+        handles, used to synchronize them.
+
+    KeyboardInputHandle - Stores the handle returned by the User Input library
+        for the keyboard.
+
+    MouseInputHandle - Stores the handle returned by the User Input library for
+        the mouse.
+
+    InterruptLock - Stores a spinlock synchronizing access to the device with
+        the interrupt service routine.
+
+    ReadLock - Stores a pointer to a queued lock that serializes read access
+        to the data buffer.
+
+    KeyboardData - Stores the keyboard data buffer.
+
+    MouseData - Stores the mouse data buffer.
+
+    LastMouseEvent - Stores the timestamp of the last incoming mouse data.
+        This can be used to resynchronize an out-of-sync stream.
+
+--*/
+
+typedef struct _I8042_DEVICE {
+    PDEVICE KeyboardDevice;
+    PDEVICE MouseDevice;
+    USHORT ControlPort;
+    USHORT DataPort;
+    USHORT MouseReportSize;
+    ULONGLONG KeyboardInterruptVector;
+    ULONGLONG MouseInterruptVector;
+    ULONGLONG KeyboardInterruptLine;
+    ULONGLONG MouseInterruptLine;
+    BOOL KeyboardInterruptFound;
+    BOOL MouseInterruptFound;
+    HANDLE InterruptHandles[2];
+    RUNLEVEL InterruptRunLevel;
+    HANDLE KeyboardInputHandle;
+    HANDLE MouseInputHandle;
+    KSPIN_LOCK InterruptLock;
+    PQUEUED_LOCK ReadLock;
+    I8042_BUFFER KeyboardData;
+    I8042_BUFFER MouseData;
+    ULONGLONG LastMouseEvent;
 } I8042_DEVICE, *PI8042_DEVICE;
 
 //
@@ -256,7 +318,11 @@ I8042pStartDevice (
 
 KSTATUS
 I8042pEnableDevice (
-    PVOID OsDevice,
+    PI8042_DEVICE Device
+    );
+
+KSTATUS
+I8042pEnableMouse (
     PI8042_DEVICE Device
     );
 
@@ -286,6 +352,13 @@ I8042pSendKeyboardCommand (
     );
 
 KSTATUS
+I8042pSendMouseCommand (
+    PI8042_DEVICE Device,
+    UCHAR Command,
+    UCHAR Parameter
+    );
+
+KSTATUS
 I8042pSendCommand (
     PI8042_DEVICE Device,
     UCHAR Command
@@ -297,11 +370,43 @@ I8042pReceiveResponse (
     PUCHAR Data
     );
 
+KSTATUS
+I8042pReceiveMouseResponse (
+    PI8042_DEVICE Device,
+    PUCHAR Data
+    );
+
+VOID
+I8042pProcessMouseReport (
+    PI8042_DEVICE Device,
+    UCHAR Report[4]
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 PDRIVER I8042Driver = NULL;
+
+//
+// Define a global so that the PS2 keyboard and mouse can share a device. This
+// does put the restriction that there cannot be several distinct PS/2 ports
+// floating around (only one pair).
+//
+
+I8042_DEVICE I8042Device;
+
+PCSTR I8042KeyboardDeviceIds[] = {
+    "PNP0303",
+    NULL
+};
+
+PCSTR I8042MouseDeviceIds[] = {
+    "PNP0F03",
+    "PNP0F13",
+    "VMW0003",
+    NULL
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -394,6 +499,7 @@ Return Value:
 
 {
 
+    PCSTR *CurrentId;
     BOOL DeviceIdsAreEqual;
     BOOL DeviceIsMouse;
     BOOL MatchesCompatibleId;
@@ -403,32 +509,36 @@ Return Value:
 
     DeviceIsMouse = FALSE;
     MatchFound = FALSE;
-    DeviceIdsAreEqual = IoAreDeviceIdsEqual(DeviceId,
-                                            KEYBOARD_HARDWARE_IDENTIFIER);
-
-    MatchesCompatibleId =
-                   IoIsDeviceIdInCompatibleIdList(KEYBOARD_HARDWARE_IDENTIFIER,
-                                                  DeviceToken);
-
-    if ((DeviceIdsAreEqual != FALSE) || (MatchesCompatibleId != FALSE)) {
-        MatchFound = TRUE;
-
-    } else {
-
-        //
-        // Attempt to match against the mouse ID.
-        //
-
-        DeviceIdsAreEqual = IoAreDeviceIdsEqual(DeviceId,
-                                                MOUSE_HARDWARE_IDENTIFIER);
-
+    CurrentId = &(I8042KeyboardDeviceIds[0]);
+    while (*CurrentId != NULL) {
+        DeviceIdsAreEqual = IoAreDeviceIdsEqual(DeviceId, *CurrentId);
         MatchesCompatibleId =
-                      IoIsDeviceIdInCompatibleIdList(MOUSE_HARDWARE_IDENTIFIER,
-                                                     DeviceToken);
+                       IoIsDeviceIdInCompatibleIdList(*CurrentId, DeviceToken);
 
         if ((DeviceIdsAreEqual != FALSE) || (MatchesCompatibleId != FALSE)) {
             MatchFound = TRUE;
-            DeviceIsMouse = TRUE;
+            break;
+        }
+
+        CurrentId += 1;
+    }
+
+    if (MatchFound == FALSE) {
+        CurrentId = &(I8042MouseDeviceIds[0]);
+        while (*CurrentId != NULL) {
+            DeviceIdsAreEqual = IoAreDeviceIdsEqual(DeviceId, *CurrentId);
+            MatchesCompatibleId =
+                       IoIsDeviceIdInCompatibleIdList(*CurrentId, DeviceToken);
+
+            if ((DeviceIdsAreEqual != FALSE) ||
+                (MatchesCompatibleId != FALSE)) {
+
+                MatchFound = TRUE;
+                DeviceIsMouse = TRUE;
+                break;
+            }
+
+            CurrentId += 1;
         }
     }
 
@@ -441,25 +551,45 @@ Return Value:
     }
 
     //
-    // there is a match, create the device context and attach to the device.
+    // There is a match, initialize the device context.
     //
 
-    NewDevice = MmAllocateNonPagedPool(sizeof(I8042_DEVICE),
-                                       I8042_ALLOCATION_TAG);
+    NewDevice = &I8042Device;
+    if ((NewDevice->KeyboardDevice == NULL) &&
+        (NewDevice->MouseDevice == NULL)) {
 
-    if (NewDevice == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        KeInitializeSpinLock(&(NewDevice->InterruptLock));
+        NewDevice->InterruptHandles[0] = INVALID_HANDLE;
+        NewDevice->InterruptHandles[1] = INVALID_HANDLE;
+        NewDevice->KeyboardInputHandle = INVALID_HANDLE;
+        NewDevice->MouseInputHandle = INVALID_HANDLE;
+        NewDevice->InterruptRunLevel = RunLevelHigh;
+        NewDevice->ReadLock = KeCreateQueuedLock();
+        if (NewDevice->ReadLock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto AddDeviceEnd;
+        }
+
+        NewDevice->MouseReportSize = 3;
     }
 
-    RtlZeroMemory(NewDevice, sizeof(I8042_DEVICE));
-    KeInitializeSpinLock(&(NewDevice->InterruptLock));
-    NewDevice->InterruptHandle = INVALID_HANDLE;
-    NewDevice->UserInputDeviceHandle = INVALID_HANDLE;
-    NewDevice->IsMouse = DeviceIsMouse;
-    NewDevice->ReadLock = KeCreateQueuedLock();
-    if (NewDevice->ReadLock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
+    if (DeviceIsMouse != FALSE) {
+        if (NewDevice->MouseDevice != NULL) {
+            RtlDebugPrint("i8042: Second PS/2 mouse unsupported.\n");
+            Status = STATUS_NOT_SUPPORTED;
+            goto AddDeviceEnd;
+        }
+
+        NewDevice->MouseDevice = DeviceToken;
+
+    } else {
+        if (NewDevice->KeyboardDevice != NULL) {
+            RtlDebugPrint("i8042: Second PS/2 keyboard unsupported.\n");
+            Status = STATUS_NOT_SUPPORTED;
+            goto AddDeviceEnd;
+        }
+
+        NewDevice->KeyboardDevice = DeviceToken;
     }
 
     Status = IoAttachDriverToDevice(Driver, DeviceToken, NewDevice);
@@ -468,16 +598,6 @@ Return Value:
     }
 
 AddDeviceEnd:
-    if (!KSUCCESS(Status)) {
-        if (NewDevice != NULL) {
-            if (NewDevice->ReadLock != NULL) {
-                KeDestroyQueuedLock(NewDevice->ReadLock);
-            }
-
-            MmFreeNonPagedPool(NewDevice);
-        }
-    }
-
     return Status;
 }
 
@@ -734,9 +854,11 @@ Return Value:
 
 {
 
+    PI8042_BUFFER Buffer;
     UCHAR Byte;
     PI8042_DEVICE Device;
     INTERRUPT_STATUS InterruptStatus;
+    RUNLEVEL OldRunLevel;
     UCHAR Status;
     ULONG WriteIndex;
 
@@ -747,7 +869,8 @@ Return Value:
     // Check to see if there is data waiting.
     //
 
-    if ((READ_STATUS_REGISTER(Device) & I8042_STATUS_OUTPUT_BUFFER_FULL) != 0) {
+    Status = READ_STATUS_REGISTER(Device);
+    if ((Status & I8042_STATUS_OUTPUT_BUFFER_FULL) != 0) {
 
         //
         // There was data here, so most likely it was this device interrupting.
@@ -756,11 +879,17 @@ Return Value:
         InterruptStatus = InterruptStatusClaimed;
 
         //
+        // Raise to the runlevel that is the maximum between the keyboard and
+        // the mouse interrupts.
+        //
+
+        OldRunLevel = KeRaiseRunLevel(Device->InterruptRunLevel);
+
+        //
         // Read the bytes out of the controller.
         //
 
         KeAcquireSpinLock(&(Device->InterruptLock));
-        WriteIndex = Device->WriteIndex;
         while (TRUE) {
             Status = READ_STATUS_REGISTER(Device);
             if ((Status & I8042_STATUS_OUTPUT_BUFFER_FULL) == 0) {
@@ -768,44 +897,30 @@ Return Value:
             }
 
             Byte = READ_DATA_REGISTER(Device);
-
-            //
-            // Toss out all mouse data. Mice are not yet supported.
-            //
-
+            Buffer = &(Device->KeyboardData);
             if ((Status & I8042_STATUS_DATA_FROM_MOUSE) != 0) {
-
-                ASSERT(Device->IsMouse == FALSE);
-
-                continue;
+                Buffer = &(Device->MouseData);
             }
 
-            if (((WriteIndex + 1) % I8042_BUFFER_SIZE) != Device->ReadIndex) {
-                Device->DataBuffer[WriteIndex] = Byte;
-
-                //
-                // Advance the write index.
-                //
-
-                if ((WriteIndex + 1) == I8042_BUFFER_SIZE) {
-                    WriteIndex = 0;
-
-                } else {
-                    WriteIndex += 1;
-                }
+            WriteIndex = Buffer->WriteIndex;
+            if (((WriteIndex + 1) % I8042_BUFFER_SIZE) != Buffer->ReadIndex) {
+                Buffer->DataBuffer[WriteIndex] = Byte;
+                WriteIndex = (WriteIndex + 1) & I8042_BUFFER_MASK;
 
             } else {
                 RtlDebugPrint("I8042: Buffer overflow, losing byte %02X\n",
                               Byte);
             }
+
+            Buffer->WriteIndex = WriteIndex;
         }
 
         //
         // Save the new write index now that everything's out.
         //
 
-        Device->WriteIndex = WriteIndex;
         KeReleaseSpinLock(&(Device->InterruptLock));
+        KeLowerRunLevel(OldRunLevel);
     }
 
     return InterruptStatus;
@@ -835,18 +950,20 @@ Return Value:
 
 {
 
+    PI8042_BUFFER Buffer;
     UCHAR Byte;
-    UCHAR Code1;
-    UCHAR Code2;
-    UCHAR Code3;
     PI8042_DEVICE Device;
     USER_INPUT_EVENT Event;
     BOOL KeyUp;
     ULONG ReadIndex;
+    UCHAR Report[4];
+    ULONG Size;
+    ULONGLONG Timeout;
 
-    Code1 = 0;
-    Code2 = 0;
-    Code3 = 0;
+    Report[0] = 0;
+    Report[1] = 0;
+    Report[2] = 0;
+    Report[3] = 0;
     Device = (PI8042_DEVICE)Parameter;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -858,39 +975,37 @@ Return Value:
     //
 
     KeAcquireQueuedLock(Device->ReadLock);
-    ReadIndex = Device->ReadIndex;
-    while (ReadIndex != Device->WriteIndex) {
-        Byte = Device->DataBuffer[ReadIndex];
-        ReadIndex += 1;
-        if (ReadIndex == I8042_BUFFER_SIZE) {
-            ReadIndex = 0;
-        }
+    Buffer = &(Device->KeyboardData);
+    ReadIndex = Buffer->ReadIndex;
+    while (ReadIndex != Buffer->WriteIndex) {
+        Byte = Buffer->DataBuffer[ReadIndex];
+        ReadIndex = (ReadIndex + 1) & I8042_BUFFER_MASK;
 
         //
         // If the first byte read was the extended 2 code, then another 2 bytes
         // should be coming in. Get those bytes.
         //
 
-        if (Code1 == SCAN_CODE_1_EXTENDED_2_CODE) {
-            if (Code2 == 0) {
-                Code2 = Byte;
+        if (Report[0] == SCAN_CODE_1_EXTENDED_2_CODE) {
+            if (Report[1] == 0) {
+                Report[1] = Byte;
                 continue;
             }
 
-            Code3 = Byte;
+            Report[2] = Byte;
 
         //
         // If the first byte read was the extended (1) code, then another byte
         // should be coming in. Get that byte.
         //
 
-        } else if (Code1 == SCAN_CODE_1_EXTENDED_CODE) {
-            Code2 = Byte;
+        } else if (Report[0] == SCAN_CODE_1_EXTENDED_CODE) {
+            Report[1] = Byte;
 
         } else {
-            Code1 = Byte;
-            if ((Code1 == SCAN_CODE_1_EXTENDED_CODE) ||
-                (Code1 == SCAN_CODE_1_EXTENDED_2_CODE)) {
+            Report[0] = Byte;
+            if ((Report[0] == SCAN_CODE_1_EXTENDED_CODE) ||
+                (Report[0] == SCAN_CODE_1_EXTENDED_2_CODE)) {
 
                 continue;
             }
@@ -900,7 +1015,11 @@ Return Value:
         // Get the specifics of the event.
         //
 
-        Event.U.Key = I8042ConvertScanCodeToKey(Code1, Code2, Code3, &KeyUp);
+        Event.U.Key = I8042ConvertScanCodeToKey(Report[0],
+                                                Report[1],
+                                                Report[2],
+                                                &KeyUp);
+
         if (Event.U.Key != KeyboardKeyInvalid) {
             if (KeyUp != FALSE) {
                 Event.EventType = UserInputEventKeyUp;
@@ -913,16 +1032,81 @@ Return Value:
             // Log the event.
             //
 
-            InReportInputEvent(Device->UserInputDeviceHandle, &Event);
+            InReportInputEvent(Device->KeyboardInputHandle, &Event);
         }
 
         //
         // A full key combination was read, move the read index forward.
         //
 
-        Device->ReadIndex = ReadIndex;
-        Code1 = 0;
-        Code2 = 0;
+        Buffer->ReadIndex = ReadIndex;
+        Report[0] = 0;
+        Report[1] = 0;
+    }
+
+    //
+    // Process the mouse reports as well.
+    //
+
+    Buffer = &(Device->MouseData);
+    ReadIndex = Buffer->ReadIndex;
+    while (ReadIndex != Buffer->WriteIndex) {
+
+        //
+        // Grab a whole report, or as much of one as possible.
+        //
+
+        Size = 0;
+        for (Size = 0;
+             (Size < Device->MouseReportSize) &&
+             (ReadIndex != Buffer->WriteIndex);
+             Size += 1) {
+
+            Report[Size] = Buffer->DataBuffer[ReadIndex];
+            ReadIndex = (ReadIndex + 1) & I8042_BUFFER_MASK;
+        }
+
+        Buffer->ReadIndex = ReadIndex;
+
+        //
+        // If the whole report did not come in, look to see when it was.
+        //
+
+        if (Size != Device->MouseReportSize) {
+
+            //
+            // If this is the first time a strange size has come in, timestamp
+            // it.
+            //
+
+            if (Device->LastMouseEvent == 0) {
+                Device->LastMouseEvent = HlQueryTimeCounter();
+                break;
+            }
+
+            //
+            // See if the time since the last data came in is too long,
+            // indicating the mouse is out of sync.
+            //
+
+            Timeout = (HlQueryTimeCounterFrequency() * 100) /
+                      MILLISECONDS_PER_SECOND;
+
+            if (HlQueryTimeCounter() > Device->LastMouseEvent + Timeout) {
+
+                //
+                // Throw all the data away in an attempt to get back in sync.
+                //
+
+                RtlDebugPrint("PS/2 Mouse resync\n");
+                Device->LastMouseEvent = 0;
+                Buffer->ReadIndex = Buffer->WriteIndex;
+            }
+
+            break;
+        }
+
+        I8042pProcessMouseReport(Device, Report);
     }
 
     KeReleaseQueuedLock(Device->ReadLock);
@@ -1022,6 +1206,7 @@ Return Value:
     BOOL ControlFound;
     BOOL DataFound;
     PRESOURCE_ALLOCATION LineAllocation;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     ControlFound = FALSE;
@@ -1054,6 +1239,10 @@ Return Value:
             //
 
             if (DataFound == FALSE) {
+
+                ASSERT((Device->DataPort == 0) ||
+                       (Device->DataPort == (USHORT)Allocation->Allocation));
+
                 Device->DataPort = (USHORT)Allocation->Allocation;
                 DataFound = TRUE;
 
@@ -1062,6 +1251,10 @@ Return Value:
             //
 
             } else if (ControlFound == FALSE) {
+
+                ASSERT((Device->ControlPort == 0) ||
+                       (Device->ControlPort == (USHORT)Allocation->Allocation));
+
                 Device->ControlPort = (USHORT)Allocation->Allocation;
                 ControlFound = TRUE;
             }
@@ -1073,21 +1266,25 @@ Return Value:
 
         } else if (Allocation->Type == ResourceTypeInterruptVector) {
 
-            //
-            // Currently only one interrupt resource is expected.
-            //
-
-            ASSERT(Device->InterruptResourcesFound == FALSE);
             ASSERT(Allocation->OwningAllocation != NULL);
 
-            //
-            // Save the line and vector number.
-            //
-
             LineAllocation = Allocation->OwningAllocation;
-            Device->InterruptLine = LineAllocation->Allocation;
-            Device->InterruptVector = Allocation->Allocation;
-            Device->InterruptResourcesFound = TRUE;
+            if (Irp->Device == Device->KeyboardDevice) {
+
+                ASSERT(Device->KeyboardInterruptFound == FALSE);
+
+                Device->KeyboardInterruptLine = LineAllocation->Allocation;
+                Device->KeyboardInterruptVector = Allocation->Allocation;
+                Device->KeyboardInterruptFound = TRUE;
+
+            } else {
+
+                ASSERT(Irp->Device == Device->MouseDevice);
+
+                Device->MouseInterruptLine = LineAllocation->Allocation;
+                Device->MouseInterruptVector = Allocation->Allocation;
+                Device->MouseInterruptFound = TRUE;
+            }
         }
 
         //
@@ -1098,69 +1295,141 @@ Return Value:
     }
 
     //
-    // Fail if both ports were not found.
+    // If this is the keyboard, fire everything up.
     //
 
-    if ((DataFound == FALSE) || (ControlFound == FALSE)) {
-        Status = STATUS_INVALID_CONFIGURATION;
-        goto StartDeviceEnd;
-    }
+    if (Irp->Device == Device->KeyboardDevice) {
 
-    //
-    // Fire up the device.
-    //
+        //
+        // Fail if both ports were not found.
+        //
 
-    Status = I8042pEnableDevice(Irp->Device, Device);
-    if (!KSUCCESS(Status)) {
-        goto StartDeviceEnd;
-    }
-
-    //
-    // Attempt to connect the interrupt.
-    //
-
-    ASSERT(Device->InterruptHandle == INVALID_HANDLE);
-
-    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
-    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
-    Connect.Device = Irp->Device;
-    Connect.LineNumber = Device->InterruptLine;
-    Connect.Vector = Device->InterruptVector;
-    Connect.InterruptServiceRoutine = I8042InterruptService;
-    Connect.LowLevelServiceRoutine = I8042InterruptServiceWorker;
-    Connect.Context = Device;
-    Connect.Interrupt = &(Device->InterruptHandle);
-    Status = IoConnectInterrupt(&Connect);
-    if (!KSUCCESS(Status)) {
-        goto StartDeviceEnd;
-    }
-
-    //
-    // Clear out any queued up bytes, as they might prevent future interrupts
-    // from firing.
-    //
-
-    while (TRUE) {
-        if ((READ_STATUS_REGISTER(Device) &
-             I8042_STATUS_OUTPUT_BUFFER_FULL) == 0) {
-
-            break;
+        if ((Device->ControlPort == 0) || (Device->DataPort == 0)) {
+            Status = STATUS_INVALID_CONFIGURATION;
+            goto StartDeviceEnd;
         }
 
-        READ_DATA_REGISTER(Device);
+        //
+        // Fire up the device.
+        //
+
+        Status = I8042pEnableDevice(Device);
+        if (!KSUCCESS(Status)) {
+            goto StartDeviceEnd;
+        }
+
+        //
+        // Attempt to connect the interrupt.
+        //
+
+        ASSERT(Device->InterruptHandles[0] == INVALID_HANDLE);
+
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Irp->Device;
+        Connect.LineNumber = Device->KeyboardInterruptLine;
+        Connect.Vector = Device->KeyboardInterruptVector;
+        Connect.InterruptServiceRoutine = I8042InterruptService;
+        Connect.LowLevelServiceRoutine = I8042InterruptServiceWorker;
+        Connect.Context = Device;
+        Connect.Interrupt = &(Device->InterruptHandles[0]);
+        Status = IoConnectInterrupt(&Connect);
+        if (!KSUCCESS(Status)) {
+            goto StartDeviceEnd;
+        }
+
+        Device->InterruptRunLevel =
+                           IoGetInterruptRunLevel(Device->InterruptHandles, 2);
+
+        //
+        // Clear out any queued up bytes, as they might prevent future
+        // interrupts from firing.
+        //
+
+        while ((READ_STATUS_REGISTER(Device) &
+                I8042_STATUS_OUTPUT_BUFFER_FULL) != 0) {
+
+            READ_DATA_REGISTER(Device);
+        }
     }
+
+    //
+    // If this is the mouse, or this is the keyboard and the mouse initialized
+    // first, then connect the mouse interrupt.
+    //
+
+    if ((Device->InterruptHandles[0] != INVALID_HANDLE) &&
+        (Device->InterruptHandles[1] == INVALID_HANDLE) &&
+        (Device->MouseInterruptFound != FALSE)) {
+
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Device->MouseDevice;
+        Connect.LineNumber = Device->MouseInterruptLine;
+        Connect.Vector = Device->MouseInterruptVector;
+        Connect.InterruptServiceRoutine = I8042InterruptService;
+        Connect.LowLevelServiceRoutine = I8042InterruptServiceWorker;
+        Connect.Context = Device;
+        Connect.Interrupt = &(Device->InterruptHandles[1]);
+        Status = IoConnectInterrupt(&Connect);
+        if (!KSUCCESS(Status)) {
+            goto StartDeviceEnd;
+        }
+
+        //
+        // Both interrupts are online, though the mouse interrupt should not be
+        // firing yet. Figure out the maximum runlevel between the two.
+        //
+
+        OldRunLevel = KeRaiseRunLevel(Device->InterruptRunLevel);
+        KeAcquireSpinLock(&(Device->InterruptLock));
+        Device->InterruptRunLevel =
+                           IoGetInterruptRunLevel(Device->InterruptHandles, 2);
+
+        KeReleaseSpinLock(&(Device->InterruptLock));
+        KeLowerRunLevel(OldRunLevel);
+
+        //
+        // Fire up the mouse.
+        //
+
+        Status = I8042pEnableMouse(Device);
+        if (!KSUCCESS(Status)) {
+            goto StartDeviceEnd;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
 
 StartDeviceEnd:
     if (!KSUCCESS(Status)) {
-        Device->InterruptResourcesFound = FALSE;
-        if (Device->InterruptHandle != INVALID_HANDLE) {
-            IoDisconnectInterrupt(Device->InterruptHandle);
-            Device->InterruptHandle = INVALID_HANDLE;
+        if (Irp->Device == Device->KeyboardDevice) {
+            Device->KeyboardInterruptFound = FALSE;
+            if (Device->InterruptHandles[0] != INVALID_HANDLE) {
+                IoDisconnectInterrupt(Device->InterruptHandles[0]);
+                Device->InterruptHandles[0] = INVALID_HANDLE;
+            }
+
+            if (Device->KeyboardInputHandle != INVALID_HANDLE) {
+                InDestroyInputDevice(Device->KeyboardInputHandle);
+                Device->KeyboardInputHandle = INVALID_HANDLE;
+            }
         }
 
-        if (Device->UserInputDeviceHandle != INVALID_HANDLE) {
-            InDestroyInputDevice(Device->UserInputDeviceHandle);
-            Device->UserInputDeviceHandle = INVALID_HANDLE;
+        //
+        // If either the keyboard or the mouse fails, disconnect the mouse
+        // interrupt.
+        //
+
+        Device->MouseInterruptFound = FALSE;
+        if (Device->InterruptHandles[1] != INVALID_HANDLE) {
+            IoDisconnectInterrupt(Device->InterruptHandles[1]);
+            Device->InterruptHandles[1] = INVALID_HANDLE;
+        }
+
+        if (Device->MouseInputHandle != INVALID_HANDLE) {
+            InDestroyInputDevice(Device->MouseInputHandle);
+            Device->MouseInputHandle = INVALID_HANDLE;
         }
     }
 
@@ -1169,7 +1438,6 @@ StartDeviceEnd:
 
 KSTATUS
 I8042pEnableDevice (
-    PVOID OsDevice,
     PI8042_DEVICE Device
     )
 
@@ -1180,8 +1448,6 @@ Routine Description:
     This routine enables the given 8042 device.
 
 Arguments:
-
-    OsDevice - Supplies a pointer to the OS device token.
 
     Device - Supplies a pointer to this 8042 controller device.
 
@@ -1199,89 +1465,93 @@ Return Value:
     KSTATUS Status;
     BOOL TwoPorts;
 
-    if (Device->IsMouse != FALSE) {
+    //
+    // Disable both ports.
+    //
 
-        //
-        // Mice are not currently supported.
-        //
+    I8042pSendCommand(Device, I8042_COMMAND_DISABLE_KEYBOARD);
+    I8042pSendCommand(Device, I8042_COMMAND_DISABLE_MOUSE_PORT);
 
-        return STATUS_NOT_IMPLEMENTED;
+    //
+    // Flush any leftover data out.
+    //
 
-    } else {
+    while ((READ_STATUS_REGISTER(Device) &
+            I8042_STATUS_OUTPUT_BUFFER_FULL) != 0) {
 
-        //
-        // Disable both ports.
-        //
+        READ_DATA_REGISTER(Device);
+    }
 
-        I8042pSendCommand(Device, I8042_COMMAND_DISABLE_KEYBOARD);
-        I8042pSendCommand(Device, I8042_COMMAND_DISABLE_MOUSE_PORT);
+    //
+    // Enable the keyboard in the command byte. Disable the interrupt
+    // for now during setup.
+    //
 
-        //
-        // Flush any leftover data out.
-        //
+    CommandByte = I8042pReadCommandByte(Device);
+    CommandByte &= ~(I8042_COMMAND_BYTE_KEYBOARD_DISABLED |
+                     I8042_COMMAND_BYTE_PCAT_INHIBIT |
+                     I8042_COMMAND_BYTE_KEYBOARD_INTERRUPT_ENABLED |
+                     I8042_COMMAND_BYTE_MOUSE_INTERRUPT_ENABLED);
 
-        while ((READ_STATUS_REGISTER(Device) &
-                I8042_STATUS_OUTPUT_BUFFER_FULL) != 0) {
+    CommandByte |= I8042_COMMAND_BYTE_TRANSLATION_ENABLED |
+                   I8042_COMMAND_BYTE_MOUSE_DISABLED;
 
-            READ_DATA_REGISTER(Device);
-        }
+    I8042pWriteCommandByte(Device, CommandByte);
 
-        //
-        // Enable the keyboard in the command byte. Disable the interrupt
-        // for now during setup.
-        //
+    //
+    // Send a self test to the controller itself, and verify that it
+    // passes.
+    //
 
-        CommandByte = I8042pReadCommandByte(Device);
-        CommandByte &= ~(I8042_COMMAND_BYTE_KEYBOARD_DISABLED |
-                         I8042_COMMAND_BYTE_PCAT_INHIBIT |
-                         I8042_COMMAND_BYTE_KEYBOARD_INTERRUPT_ENABLED |
-                         I8042_COMMAND_BYTE_MOUSE_INTERRUPT_ENABLED);
+    I8042pSendCommand(Device, I8042_COMMAND_SELF_TEST);
+    HlBusySpin(I8042_RESET_DELAY);
+    Status = I8042pReceiveResponse(Device, &Response);
+    if (!KSUCCESS(Status)) {
+        goto EnableDeviceEnd;
+    }
 
-        CommandByte |= I8042_COMMAND_BYTE_TRANSLATION_ENABLED;
-        I8042pWriteCommandByte(Device, CommandByte);
+    if (Response != I8042_SELF_TEST_SUCCESS) {
+        RtlDebugPrint("i8042: Received %x to keyboard reset instead of "
+                      "expected %x.\n",
+                      Response,
+                      I8042_SELF_TEST_SUCCESS);
 
-        //
-        // Send a self test to the controller itself, and verify that it
-        // passes.
-        //
+        Status = STATUS_DEVICE_IO_ERROR;
+        goto EnableDeviceEnd;
+    }
 
-        I8042pSendCommand(Device, I8042_COMMAND_SELF_TEST);
-        HlBusySpin(I8042_RESET_DELAY);
-        Status = I8042pReceiveResponse(Device, &Response);
-        if (!KSUCCESS(Status)) {
-            goto EnableDeviceEnd;
-        }
+    //
+    // Determine if there are two ports. Enable the mouse port, and the
+    // "data from mouse" bit in the status should clear.
+    //
 
-        if (Response != I8042_SELF_TEST_SUCCESS) {
-            RtlDebugPrint("i8042: Received %x to keyboard reset instead of "
-                          "expected %x.\n",
-                          Response,
-                          I8042_SELF_TEST_SUCCESS);
+    TwoPorts = FALSE;
+    I8042pSendCommand(Device, I8042_COMMAND_ENABLE_MOUSE_PORT);
+    if ((READ_STATUS_REGISTER(Device) &
+         I8042_STATUS_DATA_FROM_MOUSE) == 0) {
 
-            Status = STATUS_DEVICE_IO_ERROR;
-            goto EnableDeviceEnd;
-        }
+        TwoPorts = TRUE;
+    }
 
-        //
-        // Determine if there are two ports. Enable the mouse port, and the
-        // "data from mouse" bit in the status should clear.
-        //
+    I8042pSendCommand(Device, I8042_COMMAND_DISABLE_MOUSE_PORT);
 
-        TwoPorts = FALSE;
-        I8042pSendCommand(Device, I8042_COMMAND_ENABLE_MOUSE_PORT);
-        if ((READ_STATUS_REGISTER(Device) &
-             I8042_STATUS_DATA_FROM_MOUSE) == 0) {
+    //
+    // Test the ports.
+    //
 
-            TwoPorts = TRUE;
-        }
+    I8042pSendCommand(Device, I8042_COMMAND_INTERFACE_TEST);
+    Status = I8042pReceiveResponse(Device, &Response);
+    if (!KSUCCESS(Status)) {
+        goto EnableDeviceEnd;
+    }
 
-        I8042pSendCommand(Device, I8042_COMMAND_DISABLE_MOUSE_PORT);
+    if (Response != I8042_PORT_TEST_SUCCESS) {
+        Status = STATUS_DEVICE_IO_ERROR;
+        goto EnableDeviceEnd;
+    }
 
-        //
-        // Test the ports.
-        //
-
-        I8042pSendCommand(Device, I8042_COMMAND_INTERFACE_TEST);
+    if (TwoPorts != FALSE) {
+        I8042pSendCommand(Device, I8042_COMMAND_TEST_MOUSE_PORT);
         Status = I8042pReceiveResponse(Device, &Response);
         if (!KSUCCESS(Status)) {
             goto EnableDeviceEnd;
@@ -1291,108 +1561,302 @@ Return Value:
             Status = STATUS_DEVICE_IO_ERROR;
             goto EnableDeviceEnd;
         }
-
-        if (TwoPorts != FALSE) {
-            I8042pSendCommand(Device, I8042_COMMAND_TEST_MOUSE_PORT);
-            Status = I8042pReceiveResponse(Device, &Response);
-            if (!KSUCCESS(Status)) {
-                goto EnableDeviceEnd;
-            }
-
-            if (Response != I8042_PORT_TEST_SUCCESS) {
-                Status = STATUS_DEVICE_IO_ERROR;
-                goto EnableDeviceEnd;
-            }
-        }
-
-        //
-        // Enable the ports.
-        //
-
-        I8042pSendCommand(Device, I8042_COMMAND_ENABLE_KEYBOARD);
-        if (TwoPorts != FALSE) {
-            I8042pSendCommand(Device, I8042_COMMAND_ENABLE_MOUSE_PORT);
-        }
-
-        //
-        // Reset the keyboard.
-        //
-
-        Status = I8042pSendKeyboardCommand(Device,
-                                           KEYBOARD_COMMAND_RESET,
-                                           KEYBOARD_COMMAND_NO_PARAMETER);
-
-        if (!KSUCCESS(Status)) {
-            goto EnableDeviceEnd;
-        }
-
-        //
-        // Read the BAT (Basic Assurance Test) code that the keyboard sends
-        // when it finishes resetting.
-        //
-
-        Status = I8042pReceiveResponse(Device, &Response);
-        if (!KSUCCESS(Status)) {
-            goto EnableDeviceEnd;
-        }
-
-        if (Response != KEYBOARD_BAT_PASS) {
-            goto EnableDeviceEnd;
-        }
-
-        //
-        // Set the typematic rate/delay on the keyboard. Start by sending the
-        // command.
-        //
-
-        Status = I8042pSendKeyboardCommand(Device,
-                                           KEYBOARD_COMMAND_SET_TYPEMATIC,
-                                           DEFAULT_TYPEMATIC_VALUE);
-
-        if (!KSUCCESS(Status)) {
-            goto EnableDeviceEnd;
-        }
-
-        //
-        // Enable the keyboard.
-        //
-
-        Status = I8042pSendKeyboardCommand(Device,
-                                           KEYBOARD_COMMAND_ENABLE,
-                                           KEYBOARD_COMMAND_NO_PARAMETER);
-
-        if (!KSUCCESS(Status)) {
-            goto EnableDeviceEnd;
-        }
-
-        //
-        // Create the user input handle if not already done.
-        //
-
-        if (Device->UserInputDeviceHandle == INVALID_HANDLE) {
-            Description.Device = OsDevice;
-            Description.DeviceContext = Device;
-            Description.Type = UserInputDeviceKeyboard;
-            Description.InterfaceVersion =
-                                  USER_INPUT_KEYBOARD_DEVICE_INTERFACE_VERSION;
-
-            Description.U.KeyboardInterface.SetLedState = I8042pSetLedState;
-            Device->UserInputDeviceHandle = InRegisterInputDevice(&Description);
-            if (Device->UserInputDeviceHandle == INVALID_HANDLE) {
-                Status = STATUS_UNSUCCESSFUL;
-                goto EnableDeviceEnd;
-            }
-        }
-
-        //
-        // Enable the keyboard interrupt.
-        //
-
-        CommandByte |= I8042_COMMAND_BYTE_KEYBOARD_INTERRUPT_ENABLED;
-        I8042pWriteCommandByte(Device, CommandByte);
     }
 
+    //
+    // Enable the ports.
+    //
+
+    I8042pSendCommand(Device, I8042_COMMAND_ENABLE_KEYBOARD);
+    if (TwoPorts != FALSE) {
+        I8042pSendCommand(Device, I8042_COMMAND_ENABLE_MOUSE_PORT);
+    }
+
+    //
+    // Reset the keyboard.
+    //
+
+    Status = I8042pSendKeyboardCommand(Device,
+                                       KEYBOARD_COMMAND_RESET,
+                                       KEYBOARD_COMMAND_NO_PARAMETER);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableDeviceEnd;
+    }
+
+    //
+    // Read the BAT (Basic Assurance Test) code that the keyboard sends
+    // when it finishes resetting.
+    //
+
+    Status = I8042pReceiveResponse(Device, &Response);
+    if (!KSUCCESS(Status)) {
+        goto EnableDeviceEnd;
+    }
+
+    if (Response != KEYBOARD_BAT_PASS) {
+        goto EnableDeviceEnd;
+    }
+
+    //
+    // Set the typematic rate/delay on the keyboard. Start by sending the
+    // command.
+    //
+
+    Status = I8042pSendKeyboardCommand(Device,
+                                       KEYBOARD_COMMAND_SET_TYPEMATIC,
+                                       DEFAULT_TYPEMATIC_VALUE);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableDeviceEnd;
+    }
+
+    //
+    // Enable the keyboard.
+    //
+
+    Status = I8042pSendKeyboardCommand(Device,
+                                       KEYBOARD_COMMAND_ENABLE,
+                                       KEYBOARD_COMMAND_NO_PARAMETER);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableDeviceEnd;
+    }
+
+    //
+    // Create the user input handle if not already done.
+    //
+
+    if (Device->KeyboardInputHandle == INVALID_HANDLE) {
+        RtlZeroMemory(&Description, sizeof(USER_INPUT_DEVICE_DESCRIPTION));
+        Description.Device = Device->KeyboardDevice;
+        Description.DeviceContext = Device;
+        Description.Type = UserInputDeviceKeyboard;
+        Description.InterfaceVersion =
+                              USER_INPUT_KEYBOARD_DEVICE_INTERFACE_VERSION;
+
+        Description.U.KeyboardInterface.SetLedState = I8042pSetLedState;
+        Device->KeyboardInputHandle = InRegisterInputDevice(&Description);
+        if (Device->KeyboardInputHandle == INVALID_HANDLE) {
+            Status = STATUS_UNSUCCESSFUL;
+            goto EnableDeviceEnd;
+        }
+    }
+
+    //
+    // Enable the keyboard interrupt.
+    //
+
+    CommandByte |= I8042_COMMAND_BYTE_KEYBOARD_INTERRUPT_ENABLED;
+    I8042pWriteCommandByte(Device, CommandByte);
+
 EnableDeviceEnd:
+    return Status;
+}
+
+KSTATUS
+I8042pEnableMouse (
+    PI8042_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enables the given 8042 device.
+
+Arguments:
+
+    Device - Supplies a pointer to this 8042 controller device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UCHAR CommandByte;
+    USER_INPUT_DEVICE_DESCRIPTION Description;
+    UCHAR MouseId;
+    RUNLEVEL OldRunLevel;
+    UCHAR Reset;
+    KSTATUS Status;
+
+    //
+    // Create the user input handle if not already done.
+    //
+
+    if (Device->MouseInputHandle == INVALID_HANDLE) {
+        RtlZeroMemory(&Description, sizeof(USER_INPUT_DEVICE_DESCRIPTION));
+        Description.Device = Device->MouseDevice;
+        Description.DeviceContext = Device;
+        Description.Type = UserInputDeviceMouse;
+        Device->MouseInputHandle = InRegisterInputDevice(&Description);
+        if (Device->MouseInputHandle == INVALID_HANDLE) {
+            return STATUS_UNSUCCESSFUL;
+        }
+    }
+
+    OldRunLevel = KeRaiseRunLevel(Device->InterruptRunLevel);
+    KeAcquireSpinLock(&(Device->InterruptLock));
+
+    //
+    // Enable the mouse but disable the interrupt during initialization.
+    //
+
+    CommandByte = I8042pReadCommandByte(Device);
+    CommandByte &= ~(I8042_COMMAND_BYTE_MOUSE_DISABLED |
+                     I8042_COMMAND_BYTE_MOUSE_INTERRUPT_ENABLED |
+                     I8042_COMMAND_BYTE_KEYBOARD_INTERRUPT_ENABLED);
+
+    CommandByte |= I8042_COMMAND_BYTE_KEYBOARD_DISABLED;
+    I8042pWriteCommandByte(Device, CommandByte);
+
+    //
+    // Reset the mouse.
+    //
+
+    Status = I8042pSendMouseCommand(Device,
+                                    MOUSE_COMMAND_RESET,
+                                    MOUSE_COMMAND_NO_PARAMETER);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableMouseEnd;
+    }
+
+    while (TRUE) {
+        Status = I8042pReceiveMouseResponse(Device, &Reset);
+        if (!KSUCCESS(Status)) {
+            goto EnableMouseEnd;
+        }
+
+        if (Reset == 0xAA) {
+
+            //
+            // Also get the mouse ID. Failure here is not fatal.
+            //
+
+            I8042pReceiveMouseResponse(Device, &MouseId);
+            break;
+        }
+    }
+
+    //
+    // Restore the defaults.
+    //
+
+    Status = I8042pSendMouseCommand(Device,
+                                    MOUSE_COMMAND_SET_DEFAULTS,
+                                    MOUSE_COMMAND_NO_PARAMETER);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableMouseEnd;
+    }
+
+    Status = I8042pSendMouseCommand(Device,
+                                    MOUSE_COMMAND_GET_MOUSE_ID,
+                                    MOUSE_COMMAND_NO_PARAMETER);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableMouseEnd;
+    }
+
+    Status = I8042pReceiveMouseResponse(Device, &MouseId);
+    if (!KSUCCESS(Status)) {
+        goto EnableMouseEnd;
+    }
+
+    //
+    // If the mouse ID is 3 or 4, the 4-byte reports with the scroll wheel are
+    // already enabled. Otherwise, send the magic knock sequence to enable
+    // 4-byte reports with the scroll wheel.
+    //
+
+    if ((MouseId != PS2_MOUSE_WITH_SCROLL_WHEEL) &&
+        (MouseId != PS2_FIVE_BUTTON_MOUSE)) {
+
+        Status = I8042pSendMouseCommand(Device,
+                                        MOUSE_COMMAND_SET_SAMPLE_RATE,
+                                        200);
+
+        if (!KSUCCESS(Status)) {
+            goto EnableMouseEnd;
+        }
+
+        Status = I8042pSendMouseCommand(Device,
+                                        MOUSE_COMMAND_SET_SAMPLE_RATE,
+                                        100);
+
+        if (!KSUCCESS(Status)) {
+            goto EnableMouseEnd;
+        }
+    }
+
+    //
+    // The magic knock sequence ends with 80, but do it unconditionally since
+    // that's also a decent sampling rate to end up at.
+    //
+
+    Status = I8042pSendMouseCommand(Device,
+                                    MOUSE_COMMAND_SET_SAMPLE_RATE,
+                                    80);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableMouseEnd;
+    }
+
+    //
+    // Now get the mouse ID again. If it's 3 or 4, then the reports are 4 bytes
+    // long.
+    //
+
+    Status = I8042pSendMouseCommand(Device,
+                                    MOUSE_COMMAND_GET_MOUSE_ID,
+                                    MOUSE_COMMAND_NO_PARAMETER);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableMouseEnd;
+    }
+
+    Status = I8042pReceiveMouseResponse(Device, &MouseId);
+    if (!KSUCCESS(Status)) {
+        goto EnableMouseEnd;
+    }
+
+    if ((MouseId == PS2_MOUSE_WITH_SCROLL_WHEEL) ||
+        (MouseId == PS2_FIVE_BUTTON_MOUSE)) {
+
+        Device->MouseReportSize = 4;
+    }
+
+    //
+    // Okay, everything is ready to go. Enable streaming mouse input.
+    //
+
+    Status = I8042pSendMouseCommand(Device,
+                                    MOUSE_COMMAND_ENABLE,
+                                    MOUSE_COMMAND_NO_PARAMETER);
+
+    if (!KSUCCESS(Status)) {
+        goto EnableMouseEnd;
+    }
+
+    //
+    // Enable the mouse interrupt.
+    //
+
+EnableMouseEnd:
+    if (KSUCCESS(Status)) {
+        CommandByte |= I8042_COMMAND_BYTE_MOUSE_INTERRUPT_ENABLED;
+    }
+
+    CommandByte |= I8042_COMMAND_BYTE_KEYBOARD_INTERRUPT_ENABLED;
+    CommandByte &= ~I8042_COMMAND_BYTE_KEYBOARD_DISABLED;
+    I8042pWriteCommandByte(Device, CommandByte);
+    KeReleaseSpinLock(&(Device->InterruptLock));
+    KeLowerRunLevel(OldRunLevel);
     return Status;
 }
 
@@ -1432,6 +1896,7 @@ Return Value:
 
     PI8042_DEVICE I8042Device;
     UCHAR KeyboardLedState;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     I8042Device = (PI8042_DEVICE)DeviceContext;
@@ -1453,10 +1918,14 @@ Return Value:
         KeyboardLedState |= KEYBOARD_LED_CAPS_LOCK;
     }
 
+    OldRunLevel = KeRaiseRunLevel(I8042Device->InterruptRunLevel);
+    KeAcquireSpinLock(&(I8042Device->InterruptLock));
     Status = I8042pSendKeyboardCommand(I8042Device,
                                        KEYBOARD_COMMAND_SET_LEDS,
                                        KeyboardLedState);
 
+    KeReleaseSpinLock(&(I8042Device->InterruptLock));
+    KeLowerRunLevel(OldRunLevel);
     return Status;
 }
 
@@ -1485,6 +1954,7 @@ Return Value:
 {
 
     I8042pSendCommand(Device, I8042_COMMAND_READ_COMMAND_BYTE);
+    WAIT_FOR_OUTPUT_BUFFER(Device);
     return READ_DATA_REGISTER(Device);
 }
 
@@ -1588,6 +2058,76 @@ Return Value:
 }
 
 KSTATUS
+I8042pSendMouseCommand (
+    PI8042_DEVICE Device,
+    UCHAR Command,
+    UCHAR Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a command byte to the mouse and checks the return status
+    byte.
+
+Arguments:
+
+    Device - Supplies a pointer to this 8042 controller device.
+
+    Command - Supplies the command to write to the keyboard.
+
+    Parameter - Supplies an additional byte to send. Set this to 0xFF to
+        skip sending this byte.
+
+Return Value:
+
+    Status code indicating whether the keyboard succeeded or failed the
+    command.
+
+--*/
+
+{
+
+    UCHAR MouseResult;
+    KSTATUS Status;
+
+    Status = I8042pSendCommand(Device, I8042_COMMAND_WRITE_TO_MOUSE);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    WRITE_DATA_REGISTER(Device, Command);
+    Status = I8042pReceiveMouseResponse(Device, &MouseResult);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    if (MouseResult != MOUSE_STATUS_ACKNOWLEDGE) {
+        return STATUS_DEVICE_IO_ERROR;
+    }
+
+    if (Parameter != MOUSE_COMMAND_NO_PARAMETER) {
+        Status = I8042pSendCommand(Device, I8042_COMMAND_WRITE_TO_MOUSE);
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
+
+        WRITE_DATA_REGISTER(Device, Parameter);
+        Status = I8042pReceiveMouseResponse(Device, &MouseResult);
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
+
+        if (MouseResult != MOUSE_STATUS_ACKNOWLEDGE) {
+            return STATUS_DEVICE_IO_ERROR;
+        }
+    }
+
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
 I8042pSendCommand (
     PI8042_DEVICE Device,
     UCHAR Command
@@ -1651,10 +2191,7 @@ Return Value:
     UCHAR StatusRegister;
     ULONGLONG Timeout;
 
-    Timeout = KeGetRecentTimeCounter() +
-              ((HlQueryTimeCounterFrequency() * I8042_COMMAND_TIMEOUT) /
-               MILLISECONDS_PER_SECOND);
-
+    Timeout = 0;
     StatusCode = STATUS_TIMEOUT;
     do {
         StatusRegister = READ_STATUS_REGISTER(Device);
@@ -1672,8 +2209,161 @@ Return Value:
             break;
         }
 
-    } while (KeGetRecentTimeCounter() <= Timeout);
+        if (Timeout == 0) {
+            Timeout = HlQueryTimeCounter() +
+                      ((HlQueryTimeCounterFrequency() * I8042_COMMAND_TIMEOUT) /
+                       MILLISECONDS_PER_SECOND);
+
+        }
+
+    } while (HlQueryTimeCounter() <= Timeout);
 
     return StatusCode;
+}
+
+KSTATUS
+I8042pReceiveMouseResponse (
+    PI8042_DEVICE Device,
+    PUCHAR Data
+    )
+
+/*++
+
+Routine Description:
+
+    This routine receives a byte from the mouse data port, with a timeout.
+
+Arguments:
+
+    Device - Supplies a pointer to this 8042 controller device.
+
+    Data - Supplies a pointer where the data will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS StatusCode;
+    UCHAR StatusRegister;
+    ULONGLONG Timeout;
+
+    Timeout = 0;
+    StatusCode = STATUS_TIMEOUT;
+    do {
+        StatusRegister = READ_STATUS_REGISTER(Device);
+        if ((StatusRegister & I8042_STATUS_TIMEOUT) != 0) {
+            StatusCode = STATUS_TIMEOUT;
+            break;
+
+        } else if ((StatusRegister & I8042_STATUS_PARITY_ERROR) != 0) {
+            StatusCode = STATUS_PARITY_ERROR;
+            break;
+
+        } else if (((StatusRegister & I8042_STATUS_DATA_FROM_MOUSE) != 0) &&
+                   ((StatusRegister & I8042_STATUS_OUTPUT_BUFFER_FULL) != 0)) {
+
+            *Data = READ_DATA_REGISTER(Device);
+            StatusCode = STATUS_SUCCESS;
+            break;
+        }
+
+        if (Timeout == 0) {
+            Timeout = HlQueryTimeCounter() +
+                      ((HlQueryTimeCounterFrequency() * I8042_COMMAND_TIMEOUT) /
+                       MILLISECONDS_PER_SECOND);
+
+        }
+
+    } while (HlQueryTimeCounter() <= Timeout);
+
+    return StatusCode;
+}
+
+VOID
+I8042pProcessMouseReport (
+    PI8042_DEVICE Device,
+    UCHAR Report[4]
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes a mouse report.
+
+Arguments:
+
+    Device - Supplies a pointer to this 8042 controller device.
+
+    Report - Supplies the mouse report, which is always 4 bytes even if the
+        mouse doesn't support scroll wheel operations.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    USER_INPUT_EVENT Event;
+
+    if ((Report[0] & PS2_MOUSE_REPORT_OVERFLOW) != 0) {
+        RtlDebugPrint("PS2 Mouse overflow %x %x %x\n",
+                      Report[0],
+                      Report[1],
+                      Report[2]);
+
+        return;
+    }
+
+    RtlZeroMemory(&Event, sizeof(USER_INPUT_EVENT));
+    Event.EventType = UserInputEventMouse;
+    Event.U.Mouse.MovementX = Report[1];
+    Event.U.Mouse.MovementY = Report[2];
+    if ((Report[0] & PS2_MOUSE_REPORT_X_NEGATIVE) != 0) {
+        Event.U.Mouse.MovementX |= 0xFFFFFF00;
+    }
+
+    if ((Report[0] & PS2_MOUSE_REPORT_Y_NEGATIVE) != 0) {
+        Event.U.Mouse.MovementY |= 0xFFFFFF00;
+    }
+
+    ASSERT((PS2_MOUSE_REPORT_LEFT_BUTTON == MOUSE_BUTTON_LEFT) &&
+           (PS2_MOUSE_REPORT_RIGHT_BUTTON == MOUSE_BUTTON_RIGHT) &&
+           (PS2_MOUSE_REPORT_MIDDLE_BUTTON == MOUSE_BUTTON_MIDDLE));
+
+    Event.U.Mouse.Buttons = Report[0] & PS2_MOUSE_REPORT_BUTTONS;
+    switch (Report[3] & 0x0F) {
+    case 0x0:
+        break;
+
+    case 0x1:
+        Event.U.Mouse.ScrollY = 1;
+        break;
+
+    case 0x2:
+        Event.U.Mouse.ScrollX = 1;
+        break;
+
+    case 0xE:
+        Event.U.Mouse.ScrollX = -1;
+        break;
+
+    case 0xF:
+        Event.U.Mouse.ScrollY = -1;
+        break;
+
+    default:
+        RtlDebugPrint("PS/2 Mouse: Unknown scroll movement 0x%x\n", Report[3]);
+        break;
+    }
+
+    InReportInputEvent(Device->MouseInputHandle, &Event);
+    return;
 }
 

@@ -719,6 +719,7 @@ Return Value:
     //
 
     if (Device->UserInputHandle == INVALID_HANDLE) {
+        RtlZeroMemory(&Description, sizeof(USER_INPUT_DEVICE_DESCRIPTION));
         Description.Device = Irp->Device;
         Description.DeviceContext = Device;
         Description.Type = UserInputDeviceKeyboard;
@@ -1200,6 +1201,7 @@ Return Value:
         return;
     }
 
+    RtlZeroMemory(&Event, sizeof(USER_INPUT_EVENT));
     Previous = &(Device->PreviousReport);
     RtlCopyMemory(&PreviousCopy, Previous, sizeof(USB_KEYBOARD_REPORT));
 

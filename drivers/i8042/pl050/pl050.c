@@ -1197,6 +1197,7 @@ Return Value:
         //
 
         if (Device->UserInputDeviceHandle == INVALID_HANDLE) {
+            RtlZeroMemory(&Description, sizeof(USER_INPUT_DEVICE_DESCRIPTION));
             Description.Device = OsDevice;
             Description.DeviceContext = Device;
             Description.Type = UserInputDeviceKeyboard;

@@ -415,6 +415,12 @@ Return Value:
 
     Runlevel = RunLevelLow;
     for (Index = 0; Index < HandleCount; Index += 1) {
+        if ((Handles[Index] == INVALID_HANDLE) ||
+            (Handles[Index] == NULL)) {
+
+            continue;
+        }
+
         Interrupt = Handles[Index];
         if (Interrupt->RunLevel > Runlevel) {
             Runlevel = Interrupt->RunLevel;

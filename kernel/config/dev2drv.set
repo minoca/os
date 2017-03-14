@@ -51,6 +51,8 @@ DPNP0C02=null.drv
 DPNP0C04=null.drv
 DPNP0C0F=null.drv
 DPNP0D20=ehci.drv
+DPNP0F03=i8042.drv
+DPNP0F13=i8042.drv
 
 DRKC0001=rk32spi.drv
 DRKC0002=rk32gpio.drv
@@ -69,6 +71,7 @@ DTEX3359=am3soc.drv
 DTEX4004=sdomap4.drv
 DTEX4006=om4gpio.drv
 DUsbRootHub=usbhub.drv
+#DVMW0003=i8042.drv
 
 # PCI device IDs
 DVEN_1013&DEV_00B8=null.drv

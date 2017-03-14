@@ -60,7 +60,7 @@ Author:
 // Define the amount of time to wait for a command in milliseconds.
 //
 
-#define I8042_COMMAND_TIMEOUT 1000
+#define I8042_COMMAND_TIMEOUT 250
 #define I8042_SELF_TEST_SUCCESS 0x55
 #define I8042_PORT_TEST_SUCCESS 0x00
 #define I8042_PORT_TEST_CLOCK_STUCK_LOW 0x01
@@ -88,6 +88,7 @@ Author:
 //
 
 #define KEYBOARD_COMMAND_NO_PARAMETER 0xFF
+#define MOUSE_COMMAND_NO_PARAMETER 0xFF
 
 //
 // Define commands that can be sent to the mouse.
@@ -96,13 +97,21 @@ Author:
 #define MOUSE_COMMAND_SET_1_1_SCALING 0xE6
 #define MOUSE_COMMAND_SET_2_1_SCALING 0xE7
 #define MOUSE_COMMAND_SET_RESOLUTION 0xE8
-#define MOUSE_COMMAND_GET_INFORMATION 0xE9
-#define MOUSE_COMMAND_READ_ID 0xF2
+#define MOUSE_COMMAND_GET_STATUS 0xE9
+#define MOUSE_COMMAND_REQUEST_PACKET 0xEB
+#define MOUSE_COMMAND_GET_MOUSE_ID 0xF2
 #define MOUSE_COMMAND_SET_SAMPLE_RATE 0xF3
 #define MOUSE_COMMAND_ENABLE 0xF4
 #define MOUSE_COMMAND_DISABLE 0xF5
 #define MOUSE_COMMAND_SET_DEFAULTS 0xF6
+#define MOUSE_COMMAND_RESEND 0xFE
 #define MOUSE_COMMAND_RESET 0xFF
+
+//
+// Define mouse return codes.
+//
+
+#define MOUSE_STATUS_ACKNOWLEDGE 0xFA
 
 //
 // Define typematic rate and delay values. Rates are defined with decimal
@@ -178,6 +187,25 @@ Author:
 #define PS2_STANDARD_MOUSE 0x00
 #define PS2_MOUSE_WITH_SCROLL_WHEEL 0x03
 #define PS2_FIVE_BUTTON_MOUSE 0x04
+
+//
+// Define mouse report flags.
+//
+
+#define PS2_MOUSE_REPORT_LEFT_BUTTON 0x01
+#define PS2_MOUSE_REPORT_RIGHT_BUTTON 0x02
+#define PS2_MOUSE_REPORT_MIDDLE_BUTTON 0x04
+#define PS2_MOUSE_REPORT_X_OVERFLOW 0x80
+#define PS2_MOUSE_REPORT_X_NEGATIVE 0x10
+#define PS2_MOUSE_REPORT_Y_NEGATIVE 0x20
+#define PS2_MOUSE_REPORT_Y_OVERFLOW 0x40
+
+#define PS2_MOUSE_REPORT_OVERFLOW \
+    (PS2_MOUSE_REPORT_X_OVERFLOW | PS2_MOUSE_REPORT_Y_OVERFLOW)
+
+#define PS2_MOUSE_REPORT_BUTTONS \
+    (PS2_MOUSE_REPORT_MIDDLE_BUTTON | PS2_MOUSE_REPORT_RIGHT_BUTTON | \
+     PS2_MOUSE_REPORT_LEFT_BUTTON);
 
 //
 // Define the scan code for set 1 that means 2 bytes are required.
