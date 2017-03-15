@@ -42,6 +42,8 @@ include $(SRCDIR)/../sources
 TARGETLIBS = $(OBJROOT)/os/apps/ck/modules/app/build/app.a       \
              $(OBJROOT)/os/apps/ck/modules/bundle/build/bundle.a \
 
+OS ?= $(shell uname -s)
+
 ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 OBJS += $(WIN32_OBJS)

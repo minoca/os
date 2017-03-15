@@ -37,6 +37,8 @@ VPATH += ..:
 
 include $(SRCDIR)/../../sources
 
+OS ?= $(shell uname -s)
+
 ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 BINARY := os.dll

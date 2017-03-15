@@ -38,6 +38,8 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
+OS ?= $(shell uname -s)
+
 ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 OBJS += $(WIN32_OBJS)
