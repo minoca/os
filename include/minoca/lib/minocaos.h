@@ -3325,7 +3325,7 @@ OsGetTimeZoneData (
     BOOL AllZones,
     PSTR ZoneName,
     PVOID *ZoneData,
-    PULONG ZoneDataSize
+    PUINTN ZoneDataSize
     );
 
 /*++
@@ -3362,7 +3362,7 @@ KSTATUS
 OsSetSystemTimeZone (
     PSTR Zone,
     PSTR OriginalZoneName,
-    PULONG OriginalZoneNameSize
+    PUINTN OriginalZoneNameSize
     );
 
 /*++

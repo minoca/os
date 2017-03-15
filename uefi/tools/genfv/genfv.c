@@ -453,8 +453,8 @@ Return Value:
     Buffer = malloc(BufferSize);
     if (Buffer == NULL) {
         fprintf(stderr,
-                "Error: Failed to allocate image buffer, size 0x%llx.\n",
-                CurrentOffset);
+                "Error: Failed to allocate image buffer, size 0x%lx.\n",
+                (long)CurrentOffset);
 
         Status = ENOMEM;
         goto CreateVolumeEnd;
@@ -656,7 +656,7 @@ Return Value:
     if (BytesRead < HeaderSize) {
         fprintf(stderr,
                 "Error: Only read %ld bytes of %s.\n",
-                BytesRead,
+                (long)BytesRead,
                 FileName);
 
         Status = EINVAL;
@@ -797,9 +797,9 @@ Return Value:
 
     if (BufferSize != 0) {
         if ((Context->Flags & GENFV_OPTION_VERBOSE) != 0) {
-            printf("Adding file %s at offset %llx, size %llx\n",
+            printf("Adding file %s at offset %lx, size %llx\n",
                    FileName,
-                   *Offset,
+                   (long)*Offset,
                    FileSize);
         }
 
@@ -903,8 +903,8 @@ Return Value:
         PadFile->Attributes = 0;
         PadFileSize = (NewOffset - *Offset) - sizeof(EFI_FFS_FILE_HEADER);
         if ((Context->Flags & GENFV_OPTION_VERBOSE) != 0) {
-            printf("Creating pad file at 0x%llx, Size %llx to new offset "
-                   "0x%llx.\n",
+            printf("Creating pad file at 0x%lx, Size %lx to new offset "
+                   "0x%lx.\n",
                    *Offset,
                    PadFileSize,
                    NewOffset);

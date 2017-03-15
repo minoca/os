@@ -5417,7 +5417,7 @@ Return Value:
     PDEBUG_SYMBOLS Symbols;
     PSTR SymbolString;
     PTYPE_SYMBOL Type;
-    ULONG TypeSize;
+    UINTN TypeSize;
 
     Address = 0;
     AddressStartIndex = 1;
@@ -5466,7 +5466,7 @@ Return Value:
 
             DataStream = malloc(TypeSize);
             if (DataStream == NULL) {
-                DbgOut("Error: unable to allocate %d bytes of memory\n",
+                DbgOut("Error: unable to allocate %ld bytes of memory\n",
                        TypeSize);
 
                 Result = ENOMEM;
@@ -5591,7 +5591,7 @@ Return Value:
     if ((RawDataStream != NULL) && (RawDataStreamSizeInBytes != 0)) {
         if (RawDataStreamSizeInBytes < TypeSize) {
             DbgOut("Error: Supplied buffer of size %d is not big enough to "
-                   "print type of size %d.\n",
+                   "print type of size %ld.\n",
                    RawDataStreamSizeInBytes,
                    TypeSize);
 
@@ -5644,7 +5644,7 @@ Return Value:
                                    &BytesRead);
 
             if (Result != 0) {
-                DbgOut("Error reading virtual memory, only read %d bytes, type "
+                DbgOut("Error reading virtual memory, only read %ld bytes, type "
                        "is %d bytes!\n",
                        TypeSize,
                        BytesRead);

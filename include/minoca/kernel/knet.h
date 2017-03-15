@@ -748,7 +748,7 @@ typedef struct _SOCKET {
     NET_DOMAIN_TYPE Domain;
     NET_SOCKET_TYPE Type;
     ULONG Protocol;
-    UINTN ReferenceCount;
+    ULONG ReferenceCount;
     PIO_OBJECT_STATE IoState;
     PIO_HANDLE IoHandle;
     ULONG Flags;

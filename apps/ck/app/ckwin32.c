@@ -33,7 +33,7 @@ Environment:
 #define _WIN32_WINNT 0x0600
 
 #include <windows.h>
-#include <shlwapi.h>
+#include <shlobj.h>
 
 #include <assert.h>
 #include <libgen.h>

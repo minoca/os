@@ -43,7 +43,7 @@ VPATH += ..:
 
 include $(SRCDIR)/../../sources
 
-ifeq ($(OS),Windows_NT)
+ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 BINARY := chalk.dll
 BINARYTYPE := dll

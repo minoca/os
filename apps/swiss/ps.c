@@ -1882,10 +1882,10 @@ Return Value:
     case PsDataBlockSize:
     case PsDataVirtualSize:
         if (Column->RightJustified != FALSE) {
-            printf("%*lu", Column->Width, SizeData);
+            printf("%*lu", Column->Width, (unsigned long)SizeData);
 
         } else {
-            printf("%-*lu", Column->Width, SizeData);
+            printf("%-*lu", Column->Width, (unsigned long)SizeData);
         }
 
         break;

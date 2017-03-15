@@ -42,6 +42,10 @@ all:
 ##
 
 OS ?= $(shell uname -s)
+ifneq ($(findstring CYGWIN,$(shell uname -s)),)
+OS := cygwin
+endif
+
 BUILD_ARCH = $(shell uname -m)
 ifeq ($(BUILD_ARCH), $(filter i686 i586,$(BUILD_ARCH)))
 BUILD_ARCH := x86
@@ -235,7 +239,7 @@ EXTRA_CFLAGS += -fno-builtin -fno-omit-frame-pointer -g -save-temps=obj \
 EXTRA_CFLAGS_FOR_BUILD := $(EXTRA_CFLAGS)
 
 EXTRA_CFLAGS += -fpic
-ifneq ($(OS),Windows_NT)
+ifneq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 EXTRA_CFLAGS_FOR_BUILD += -fpic
 endif
 

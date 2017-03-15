@@ -461,7 +461,7 @@ Return Value:
                 printf("Error: Immediately after writing block %d, offset %lu "
                        "had %x in it instead of %x\n",
                        BlockIndex,
-                       FillIndex * sizeof(ULONG),
+                       (long)FillIndex * sizeof(ULONG),
                        PageBuffer[FillIndex],
                        PageValue);
 

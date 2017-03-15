@@ -2389,7 +2389,7 @@ BOOL
 DbgGetDataSymbolTypeInformation (
     PDATA_SYMBOL DataSymbol,
     PTYPE_SYMBOL *TypeSymbol,
-    PULONG TypeSize
+    PUINTN TypeSize
     );
 
 /*++

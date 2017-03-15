@@ -54,7 +54,7 @@ Environment:
 
 #endif
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__CYGWIN__)
 
 #define fseeko64 fseeko
 #define ftello64 ftello

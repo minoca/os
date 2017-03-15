@@ -47,6 +47,8 @@ Environment:
 
 #if defined(O_BINARY) && (O_BINARY != O_TEXT)
 
+#include <io.h>
+
 #define SET_BINARY_MODE(_Descriptor) _setmode(_Descriptor, O_BINARY)
 
 #else

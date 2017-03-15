@@ -96,13 +96,13 @@ Return Value:
     strncpy(Name->SystemName, "Windows", sizeof(Name->SystemName));
     snprintf(Name->Release,
              sizeof(Name->Release),
-             "%d.%d",
+             "%ld.%ld",
              VersionInfo.dwMajorVersion,
              VersionInfo.dwMinorVersion);
 
     snprintf(Name->Version,
              sizeof(Name->Version),
-             "%d %s",
+             "%ld %s",
              VersionInfo.dwBuildNumber,
              VersionInfo.szCSDVersion);
 

@@ -1179,7 +1179,7 @@ Return Value:
         Table = Context->Sections.Frame.Data;
         End = Table + Context->Sections.Frame.Size;
         if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
-            printf(".debug_frame section, %ld bytes\n", End - Table);
+            printf(".debug_frame section, %ld bytes\n", (long)(End - Table));
         }
 
         EhFrame = FALSE;
@@ -1188,7 +1188,7 @@ Return Value:
         Table = Context->Sections.EhFrame.Data;
         End = Table + Context->Sections.EhFrame.Size;
         if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
-            printf(".eh_frame section, %ld bytes\n", End - Table);
+            printf(".eh_frame section, %ld bytes\n", (long)(End - Table));
         }
 
         EhFrame = TRUE;
@@ -1220,7 +1220,7 @@ Return Value:
             if (Status == EAGAIN) {
                 if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
                     printf(" Zero terminator Offset %lx.\n\n",
-                           ObjectStart - Start);
+                           (long)(ObjectStart - Start));
                 }
 
                 continue;
@@ -1241,7 +1241,7 @@ Return Value:
                        "  Return Address Register: %llu\n"
                        "  Augmentation Length: %llu\n"
                        "  Language Encoding: ",
-                       ObjectStart - Start,
+                       (long)(ObjectStart - Start),
                        Cie.UnitLength,
                        Cie.Version,
                        Cie.Augmentation,
@@ -1266,7 +1266,7 @@ Return Value:
             if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
                 printf("  FDE Offset %lx Length %llx CIE %lld "
                        "PC %llx - %llx\n",
-                       ObjectStart - Start,
+                       (long)(ObjectStart - Start),
                        Fde.Length,
                        Fde.CiePointer,
                        Fde.InitialLocation,

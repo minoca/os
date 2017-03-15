@@ -183,7 +183,7 @@ Return Value:
             return NULL;
         }
 
-        sprintf(Symbol, "0x%08I64x", Address);
+        sprintf(Symbol, "0x%08llx", Address);
         return Symbol;
     }
 
@@ -259,7 +259,7 @@ Return Value:
                 if (Line != NULL) {
                     snprintf(Symbol,
                              SymbolSize,
-                             "%s!%s+0x%I64x [%s:%d]",
+                             "%s!%s+0x%llx [%s:%d]",
                              Module->ModuleName,
                              SearchResult.U.FunctionResult->Name,
                              Offset,
@@ -269,7 +269,7 @@ Return Value:
                 } else {
                     snprintf(Symbol,
                              SymbolSize,
-                             "%s!%s+0x%I64x",
+                             "%s!%s+0x%llx",
                              Module->ModuleName,
                              SearchResult.U.FunctionResult->Name,
                              Offset);
@@ -343,11 +343,11 @@ Return Value:
     Address += Module->BaseDifference;
     if (Address >= Module->LowestAddress) {
         Offset = Address - Module->LowestAddress;
-        sprintf(Symbol, "%s+0x%I64x", Module->ModuleName, Offset);
+        sprintf(Symbol, "%s+0x%llx", Module->ModuleName, Offset);
 
     } else {
         Offset = Module->LowestAddress - Address;
-        sprintf(Symbol, "%s-0x%I64x", Module->ModuleName, Offset);
+        sprintf(Symbol, "%s-0x%llx", Module->ModuleName, Offset);
     }
 
     return Symbol;
@@ -357,7 +357,7 @@ BOOL
 DbgGetDataSymbolTypeInformation (
     PDATA_SYMBOL DataSymbol,
     PTYPE_SYMBOL *TypeSymbol,
-    PULONG TypeSize
+    PUINTN TypeSize
     )
 
 /*++
@@ -680,7 +680,7 @@ Return Value:
                 Printed = snprintf(
                                Location,
                                LocationSize,
-                               "[@%s+0x%I64x]",
+                               "[@%s+0x%llx]",
                                DbgGetRegisterName(Symbols->Machine, Register),
                                Offset);
 
@@ -688,7 +688,7 @@ Return Value:
                 Printed = snprintf(
                                Location,
                                LocationSize,
-                               "[@%s-0x%I64x]",
+                               "[@%s-0x%llx]",
                                DbgGetRegisterName(Symbols->Machine, Register),
                                -Offset);
             }
@@ -726,7 +726,7 @@ Return Value:
         if (LocationSize != 0) {
             Printed = snprintf(Location,
                                LocationSize,
-                               "[%+I64x]",
+                               "[%llx]",
                                TargetAddress);
 
             if (Printed > 0) {
@@ -852,7 +852,7 @@ Return Value:
     CHAR Location[64];
     INT Result;
     PTYPE_SYMBOL Type;
-    ULONG TypeSize;
+    UINTN TypeSize;
 
     DataStream = NULL;
 
@@ -1645,7 +1645,7 @@ Return Value:
 {
 
     PVOID Data;
-    UINTN DataSize;
+    ULONG DataSize;
     INT Status;
     PTYPE_SYMBOL Type;
 
@@ -1859,7 +1859,7 @@ Return Value:
 
             NumericValue.Uint64 = 0;
             memcpy(&NumericValue, Data, TypeSize);
-            DbgOut("0x%08I64x", NumericValue.Uint64);
+            DbgOut("0x%08llx", NumericValue.Uint64);
             break;
         }
 
@@ -1903,7 +1903,7 @@ Return Value:
                 }
 
                 DbgOut("\n%*s", SpaceLevel, "");
-                DbgOut("[%I64d] --------------------------------------"
+                DbgOut("[%lld] --------------------------------------"
                        "-------", ArrayIndex);
 
                 DbgOut("\n%*s", SpaceLevel + 2, "");
@@ -1958,7 +1958,7 @@ Return Value:
             return EINVAL;
         }
 
-        DbgOut("%I64d", NumericValue.Int64);
+        DbgOut("%lld", NumericValue.Int64);
         EnumerationMember = Enumeration->FirstMember;
         while (EnumerationMember != NULL) {
             if (EnumerationMember->Value == NumericValue.Int64) {
@@ -2081,7 +2081,7 @@ Return Value:
 
         NumericValue.Uint64 = 0;
         memcpy(&NumericValue, Data, TypeSize);
-        DbgOut("(*0x%08I64x)()", NumericValue.Uint64);
+        DbgOut("(*0x%08llx)()", NumericValue.Uint64);
         break;
 
     default:
@@ -3060,7 +3060,7 @@ Return Value:
             break;
 
         default:
-            DbgOut("%I64x", NumericValue.Uint64);
+            DbgOut("%llx", NumericValue.Uint64);
             break;
         }
 
@@ -3080,12 +3080,12 @@ Return Value:
 
         case 8:
         default:
-            DbgOut("%I64d", NumericValue.Int64);
+            DbgOut("%lld", NumericValue.Int64);
             break;
         }
 
     } else {
-        DbgOut("0x%I64x", NumericValue.Uint64);
+        DbgOut("0x%llx", NumericValue.Uint64);
     }
 
     return 0;

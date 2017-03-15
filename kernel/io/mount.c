@@ -2556,7 +2556,7 @@ Return Value:
     PMOUNT_POINT_ENTRY MountPointEntry;
     UINTN MountPointEntrySize;
     PSTR MountPointPath;
-    UINTN MountPointPathSize;
+    ULONG MountPointPathSize;
     PATH_POINT PathPoint;
     KSTATUS Status;
     UINTN TargetPathSize;

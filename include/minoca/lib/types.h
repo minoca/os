@@ -161,8 +161,12 @@ typedef unsigned int ULONG, *PULONG;
 typedef long long LONGLONG, *PLONGLONG;
 typedef unsigned long long ULONGLONG, *PULONGLONG;
 
-typedef __INTPTR_TYPE__ INTN, *PINTN;
-typedef __UINTPTR_TYPE__ UINTN, *PUINTN;
+#if __SIZEOF_LONG__ != __SIZEOF_POINTER__
+#error INTN and UINTN definitions are wrong.
+#endif
+
+typedef long INTN, *PINTN;
+typedef unsigned long UINTN, *PUINTN;
 
 typedef unsigned long long PHYSICAL_ADDRESS, *PPHYSICAL_ADDRESS;
 

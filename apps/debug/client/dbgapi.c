@@ -2729,7 +2729,7 @@ Return Value:
             AccessString = "Write";
         }
 
-        printf("%s %d bytes at address %08I64x.\n",
+        printf("%s %d bytes at address %08llx.\n",
                AccessString,
                BufferSize,
                Address);

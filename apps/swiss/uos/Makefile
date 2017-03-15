@@ -52,7 +52,9 @@ OBJS = $(COMMON_OBJS)   \
 ##
 
 ifneq ($(shell uname -s),Darwin)
+ifeq ($(findstring CYGWIN,$(shell uname -s)),)
 OBJS += $(LOGIN_OBJS)
+endif
 endif
 
 TARGETLIBS = $(OBJROOT)/os/lib/termlib/build/termlib.a                       \

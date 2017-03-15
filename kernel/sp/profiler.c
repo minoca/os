@@ -2086,7 +2086,7 @@ Return Value:
     RUNLEVEL OldRunLevel;
     PPROCESS_INFORMATION Process;
     PPROCESS_INFORMATION ProcessList;
-    ULONG ProcessListSize;
+    UINTN ProcessListSize;
     ULONG ProcessorNumber;
     KSTATUS Status;
     KSTATUS ThreadStatus;
@@ -2303,7 +2303,7 @@ Return Value:
     RUNLEVEL OldRunLevel;
     PPROCESS_INFORMATION Process;
     ULONG ProcessorNumber;
-    ULONG ProcessSize;
+    UINTN ProcessSize;
     KSTATUS Status;
 
     if ((SpEnabledFlags & PROFILER_TYPE_FLAG_THREAD_STATISTICS) == 0) {

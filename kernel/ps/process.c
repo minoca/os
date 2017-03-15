@@ -129,14 +129,14 @@ PspDebugGetThreadList (
 KSTATUS
 PspGetAllProcessInformation (
     PVOID Buffer,
-    PULONG BufferSize
+    PUINTN BufferSize
     );
 
 KSTATUS
 PspGetProcessInformation (
     PKPROCESS Process,
     PPROCESS_INFORMATION Buffer,
-    PULONG BufferSize
+    PUINTN BufferSize
     );
 
 VOID
@@ -185,7 +185,7 @@ KSTATUS
 PsGetAllProcessInformation (
     ULONG AllocationTag,
     PVOID *Buffer,
-    PULONG BufferSize
+    PUINTN BufferSize
     )
 
 /*++
@@ -224,7 +224,7 @@ Return Value:
 {
 
     PVOID Allocation;
-    ULONG Size;
+    UINTN Size;
     KSTATUS Status;
     ULONG Try;
 
@@ -275,7 +275,7 @@ KSTATUS
 PsGetProcessInformation (
     PROCESS_ID ProcessId,
     PPROCESS_INFORMATION Buffer,
-    PULONG BufferSize
+    PUINTN BufferSize
     )
 
 /*++
@@ -4455,7 +4455,7 @@ DebugGetThreadListEnd:
 KSTATUS
 PspGetAllProcessInformation (
     PVOID Buffer,
-    PULONG BufferSize
+    PUINTN BufferSize
     )
 
 /*++
@@ -4488,7 +4488,7 @@ Return Value:
     PKPROCESS *Processes;
     ULONG ProcessIndex;
     PPROCESS_INFORMATION ProcessInformation;
-    ULONG ProcessSize;
+    UINTN ProcessSize;
     KSTATUS ProcessStatus;
     ULONG RemainingSize;
     ULONG Size;
@@ -4535,7 +4535,7 @@ KSTATUS
 PspGetProcessInformation (
     PKPROCESS Process,
     PPROCESS_INFORMATION Buffer,
-    PULONG BufferSize
+    PUINTN BufferSize
     )
 
 /*++

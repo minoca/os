@@ -35,6 +35,11 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifndef PACKED
+#define PACKED __attribute__((__packed__))
+#endif
+
 #include <minoca/debug/spproto.h>
 #include <minoca/debug/dbgext.h>
 #include "dbgrprof.h"

@@ -740,7 +740,7 @@ KSTATUS
 MmpInitializePhysicalPageAllocator (
     PMEMORY_DESCRIPTOR_LIST MemoryMap,
     PVOID *InitMemory,
-    PULONG InitMemorySize
+    PUINTN InitMemorySize
     )
 
 /*++
@@ -776,7 +776,7 @@ Return Value:
 
 {
 
-    ULONG AllocationSize;
+    UINTN AllocationSize;
     INIT_PHYSICAL_MEMORY_ITERATOR Context;
     UINTN Count;
     ULONG LastBitIndex;

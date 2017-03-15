@@ -3189,7 +3189,7 @@ Return Value:
     KSTATUS Status;
     PSTR Variable;
     PVOID ZoneData;
-    ULONG ZoneDataSize;
+    UINTN ZoneDataSize;
 
     OldData = NULL;
     ZoneData = NULL;

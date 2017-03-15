@@ -3126,7 +3126,7 @@ Return Value:
     PNET_DEVICE_LINK_GET_SET_INFORMATION GetSetInformation;
     PNET_LINK Link;
     ULONG PromiscuousMode;
-    ULONG PromiscuousModeSize;
+    UINTN PromiscuousModeSize;
     KSTATUS Status;
 
     ASSERT(KeIsQueuedLockHeld(IgmpLink->Lock) != FALSE);

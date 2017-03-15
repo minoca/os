@@ -3913,7 +3913,7 @@ Return Value:
 {
 
     PSTR Path;
-    UINTN PathSize;
+    ULONG PathSize;
     KSTATUS Status;
 
     //

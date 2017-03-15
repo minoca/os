@@ -348,7 +348,7 @@ EFI_STATUS
 EfipNs16550Transmit (
     PNS16550_CONTEXT Context,
     VOID *Data,
-    UINT32 Size
+    UINTN Size
     )
 
 /*++
@@ -410,7 +410,7 @@ EFI_STATUS
 EfipNs16550Receive (
     PNS16550_CONTEXT Context,
     VOID *Data,
-    UINT32 *Size
+    UINTN *Size
     )
 
 /*++

@@ -296,11 +296,11 @@ Return Value:
     fprintf(stderr,
             "\nreal %ld.%06d\nuser %ld.%06d\nsys %ld.%06d\n",
             (long)RealTime.tv_sec,
-            RealTime.tv_usec,
+            (int)RealTime.tv_usec,
             (long)UserTime.tv_sec,
-            UserTime.tv_usec,
+            (int)UserTime.tv_usec,
             (long)SystemTime.tv_sec,
-            SystemTime.tv_usec);
+            (int)SystemTime.tv_usec);
 
     Status = ReturnValue;
 

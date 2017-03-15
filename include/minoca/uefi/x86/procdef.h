@@ -94,8 +94,12 @@ typedef char CHAR8;
 // Define the native architectural integer size.
 //
 
-typedef UINT32 UINTN;
-typedef INT32 INTN;
+#if __SIZEOF_LONG__ != 4
+#error INTN and UINTN definitions are wrong.
+#endif
+
+typedef unsigned long UINTN;
+typedef long INTN;
 
 //
 // -------------------------------------------------------------------- Globals

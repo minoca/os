@@ -1235,7 +1235,7 @@ Return Value:
     ULONG TableIndex;
     ULONG TestTablesExaminedBytes;
     PVOID TestTablesPhysical;
-    ULONG TestTablesSize;
+    UINTN TestTablesSize;
     PVOID TestTablesVirtual;
 
     DsdtTable = NULL;
@@ -2001,7 +2001,7 @@ Return Value:
 
 {
 
-    ULONG DataSize;
+    UINTN DataSize;
     PVOID DataVirtual;
     KSTATUS Status;
 

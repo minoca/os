@@ -49,11 +49,11 @@ KSTATUS
 OspTimeZoneControl (
     TIME_ZONE_OPERATION Operation,
     PVOID DataBuffer,
-    PULONG DataBufferSize,
+    PUINTN DataBufferSize,
     PSTR ZoneName,
-    ULONG ZoneNameSize,
+    UINTN ZoneNameSize,
     PSTR OriginalZoneName,
-    PULONG OriginalZoneNameSize
+    PUINTN OriginalZoneNameSize
     );
 
 KSTATUS
@@ -539,7 +539,7 @@ OsGetTimeZoneData (
     BOOL AllZones,
     PSTR ZoneName,
     PVOID *ZoneData,
-    PULONG ZoneDataSize
+    PUINTN ZoneDataSize
     )
 
 /*++
@@ -574,11 +574,11 @@ Return Value:
 {
 
     PVOID Data;
-    ULONG DataSize;
+    UINTN DataSize;
     TIME_ZONE_OPERATION Operation;
     KSTATUS Status;
     PUSER_SHARED_DATA UserSharedData;
-    ULONG ZoneNameSize;
+    UINTN ZoneNameSize;
 
     Data = NULL;
     DataSize = 0;
@@ -666,7 +666,7 @@ KSTATUS
 OsSetSystemTimeZone (
     PSTR Zone,
     PSTR OriginalZoneName,
-    PULONG OriginalZoneNameSize
+    PUINTN OriginalZoneNameSize
     )
 
 /*++
@@ -695,7 +695,7 @@ Return Value:
 
 {
 
-    ULONG NameLength;
+    UINTN NameLength;
     KSTATUS Status;
 
     NameLength = 0;
@@ -1033,11 +1033,11 @@ KSTATUS
 OspTimeZoneControl (
     TIME_ZONE_OPERATION Operation,
     PVOID DataBuffer,
-    PULONG DataBufferSize,
+    PUINTN DataBufferSize,
     PSTR ZoneName,
-    ULONG ZoneNameSize,
+    UINTN ZoneNameSize,
     PSTR OriginalZoneName,
-    PULONG OriginalZoneNameSize
+    PUINTN OriginalZoneNameSize
     )
 
 /*++

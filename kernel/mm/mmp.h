@@ -402,7 +402,7 @@ KSTATUS
 MmpInitializePhysicalPageAllocator (
     PMEMORY_DESCRIPTOR_LIST MemoryMap,
     PVOID *InitMemory,
-    PULONG InitMemorySize
+    PUINTN InitMemorySize
     );
 
 /*++

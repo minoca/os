@@ -38,7 +38,7 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
-ifeq ($(OS),Windows_NT)
+ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 OBJS += $(WIN32_OBJS)
 

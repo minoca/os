@@ -3061,7 +3061,7 @@ KSTATUS
 PsGetAllProcessInformation (
     ULONG AllocationTag,
     PVOID *Buffer,
-    PULONG BufferSize
+    PUINTN BufferSize
     );
 
 /*++
@@ -3101,7 +3101,7 @@ KSTATUS
 PsGetProcessInformation (
     PROCESS_ID ProcessId,
     PPROCESS_INFORMATION Buffer,
-    PULONG BufferSize
+    PUINTN BufferSize
     );
 
 /*++

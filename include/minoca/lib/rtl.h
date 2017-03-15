@@ -427,10 +427,19 @@ Author:
 
 #else
 
-#define RtlAtomicExchange RtlAtomicExchange32
-#define RtlAtomicCompareExchange RtlAtomicCompareExchange32
-#define RtlAtomicAdd RtlAtomicAdd32
-#define RtlAtomicOr RtlAtomicAdd32
+#define RtlAtomicExchange(_Pointer, _Value) \
+    RtlAtomicExchange32((PULONG)(_Pointer), (_Value))
+
+#define RtlAtomicCompareExchange(_Pointer, _Exchange, _Compare) \
+    RtlAtomicCompareExchange32((PULONG)(_Pointer), \
+                               (_Exchange), \
+                               (_Compare))
+
+#define RtlAtomicAdd(_Pointer, _Value) \
+    RtlAtomicAdd32((PULONG)(_Pointer), (_Value))
+
+#define RtlAtomicOr(_Pointer, _Value) \
+    RtlAtomicAdd32((PULONG)(_Pointer), (_Value))
 
 #define RtlCountLeadingZeros RtlCountLeadingZeros32
 #define RtlCountTrailingZeros RtlCountTrailingZeros32

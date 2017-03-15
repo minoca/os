@@ -391,7 +391,7 @@ Return Value:
     PFILE_BLOCK_IO_CONTEXT BlockIoContext;
     PDISK_BLOCK_IO_RESET BlockIoReset;
     PVOID Buffer;
-    UINTN BufferSize;
+    ULONG BufferSize;
     UINTN BytesCompleted;
     USHORT Checksum;
     PCRASH_DUMP_FILE CrashFile;

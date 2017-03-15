@@ -37,7 +37,7 @@ VPATH += ..:
 
 include $(SRCDIR)/../../sources
 
-ifeq ($(OS),Windows_NT)
+ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 BINARY := os.dll
 BINARYTYPE := dll

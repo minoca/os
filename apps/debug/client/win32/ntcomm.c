@@ -37,6 +37,11 @@ Environment:
 #include <fcntl.h>
 #include <stdio.h>
 #include <windows.h>
+#include <winsock.h>
+
+#ifndef PACKED
+#define PACKED __attribute__((__packed__))
+#endif
 
 #include <minoca/debug/spproto.h>
 #include <minoca/debug/dbgext.h>
@@ -195,7 +200,7 @@ Return Value:
 
 {
 
-    return _pipe(FileDescriptors, 0, _O_BINARY);
+    return _pipe(FileDescriptors, 0, O_BINARY);
 }
 
 char *

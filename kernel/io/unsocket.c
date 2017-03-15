@@ -1366,7 +1366,7 @@ Return Value:
     PUNIX_SOCKET UnixSocket;
     BOOL UnixSocketLockHeld;
     PCSTR WalkedPath;
-    UINTN WalkedPathSize;
+    ULONG WalkedPathSize;
 
     BytesCompleted = 0;
     Packet = NULL;

@@ -226,7 +226,7 @@ Members:
 
 typedef struct _LOADER_BUFFER {
     PVOID Buffer;
-    ULONG Size;
+    UINTN Size;
 } LOADER_BUFFER, *PLOADER_BUFFER;
 
 /*++

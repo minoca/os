@@ -42,6 +42,12 @@ Author:
 
 #endif
 
+#if defined(__CYGWIN__)
+
+#define setdomainname(_Domainname, _Length) -1, errno = ENOSYS
+
+#endif
+
 //
 // ---------------------------------------------------------------- Definitions
 //

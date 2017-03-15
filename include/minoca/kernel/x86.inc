@@ -191,7 +191,7 @@ Environment:
     mov     %ax, %fs                # Load it.
 .endm
 
-#if defined(__WINNT__)
+#if defined(__WINNT__) || defined(__CYGWIN__)
 
 #define FUNCTION(_Name) \
     _Name: \
