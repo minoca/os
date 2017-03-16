@@ -724,6 +724,41 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/qingy-1.0.0"
         },
         {
+            "name": "Make libexif",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libexif-0.6.21"
+        },
+        {
+            "name": "Make libid3tag",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libid3tag-0.15.1b"
+        },
+        {
+            "name": "Make libogg",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libogg-1.3.2"
+        },
+        {
+            "name": "Make flac",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/flac-1.3.2"
+        },
+        {
+            "name": "Make libvorbis",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libvorbis-1.3.5"
+        },
+        {
+            "name": "Make ffmpeg",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/ffmpeg-3.2.1"
+        },
+        {
+            "name": "Make minidlna",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/minidlna-1.1.5"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
