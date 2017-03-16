@@ -368,6 +368,7 @@ Return Value:
     NetpUdpInitialize();
     NetpTcpInitialize();
     NetpRawInitialize();
+    NetpIgmpInitialize();
     NetpDhcpInitialize();
     NetpNetlinkInitialize();
     NetpNetlinkGenericInitialize(0);
