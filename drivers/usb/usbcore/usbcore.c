@@ -2730,6 +2730,9 @@ Return Value:
     USB_SETUP_PACKET SetupPacket;
     KSTATUS Status;
     USHORT TotalLength;
+    PUSB_UNKNOWN_DESCRIPTION Unknown;
+    ULONG UnknownCount;
+    ULONG UnknownSize;
 
     *Configuration = NULL;
     ConfigurationDescriptor = NULL;
@@ -2868,6 +2871,8 @@ Return Value:
 
     InterfaceCount = 0;
     EndpointCount = 0;
+    UnknownCount = 0;
+    UnknownSize = 0;
     Length = ConfigurationDescriptor->Length;
     BufferPointer = (PUCHAR)ConfigurationDescriptor +
                     ConfigurationDescriptor->Length;
@@ -2885,6 +2890,10 @@ Return Value:
 
         } else if (DescriptorType == UsbDescriptorTypeEndpoint) {
             EndpointCount += 1;
+
+        } else {
+            UnknownCount += 1;
+            UnknownSize += DescriptorLength + sizeof(ULONGLONG) - 1;
         }
 
         //
@@ -2901,7 +2910,9 @@ Return Value:
 
     AllocationSize = sizeof(USB_CONFIGURATION) +
                      (InterfaceCount * sizeof(USB_INTERFACE)) +
-                     (EndpointCount * sizeof(USB_ENDPOINT_DESCRIPTION));
+                     (EndpointCount * sizeof(USB_ENDPOINT_DESCRIPTION)) +
+                     (UnknownCount * sizeof(USB_UNKNOWN_DESCRIPTION)) +
+                     UnknownSize;
 
     CurrentConfiguration = MmAllocatePagedPool(AllocationSize,
                                                USB_CORE_ALLOCATION_TAG);
@@ -2938,6 +2949,11 @@ Return Value:
 
         DescriptorLength = *BufferPointer;
         DescriptorType = *(BufferPointer + 1);
+        if (Length + DescriptorLength > LengthTransferred) {
+            Status = STATUS_INVALID_CONFIGURATION;
+            goto GetConfigurationEnd;
+        }
+
         if (DescriptorType == UsbDescriptorTypeInterface) {
             CurrentInterface = (PUSB_INTERFACE)NewBufferPointer;
             if (DescriptorLength < sizeof(USB_INTERFACE_DESCRIPTOR)) {
@@ -2951,6 +2967,9 @@ Return Value:
 
             INITIALIZE_LIST_HEAD(
                             &(CurrentInterface->Description.EndpointListHead));
+
+            INITIALIZE_LIST_HEAD(
+                            &(CurrentInterface->Description.UnknownListHead));
 
             INITIALIZE_LIST_HEAD(&(CurrentInterface->EndpointList));
             INSERT_BEFORE(
@@ -2984,6 +3003,27 @@ Return Value:
                           &(CurrentInterface->Description.EndpointListHead));
 
             NewBufferPointer = (PUCHAR)(Endpoint + 1);
+
+        //
+        // Add an unknown descriptor to the interface if there is one. HID
+        // descriptors are nestled in this way.
+        //
+
+        } else {
+            if (CurrentInterface != NULL) {
+                Unknown = (PUSB_UNKNOWN_DESCRIPTION)NewBufferPointer;
+                Unknown->Descriptor = (PUCHAR)(Unknown + 1);
+                RtlCopyMemory(Unknown->Descriptor,
+                              BufferPointer,
+                              DescriptorLength);
+
+                INSERT_BEFORE(&(Unknown->ListEntry),
+                              &(CurrentInterface->Description.UnknownListHead));
+
+                NewBufferPointer =
+                     ALIGN_POINTER_UP(Unknown->Descriptor + DescriptorLength,
+                                      sizeof(ULONGLONG));
+            }
         }
 
         //
@@ -2994,7 +3034,7 @@ Return Value:
         Length += DescriptorLength;
     }
 
-    ASSERT((UINTN)NewBufferPointer - (UINTN)CurrentConfiguration ==
+    ASSERT((UINTN)NewBufferPointer - (UINTN)CurrentConfiguration <=
                                                                AllocationSize);
 
     //

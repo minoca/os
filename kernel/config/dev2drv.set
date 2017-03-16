@@ -21,6 +21,7 @@ CSdHostPio=sd.drv
 CSerial16550=ser16550.drv
 CUHCI=uhci.drv
 CUsbBootKeyboard=usbkbd.drv
+CUsbBootMouse=usbmouse.drv
 CUsbCompoundDevice=usbcomp.drv
 CUsbHub=usbhub.drv
 CUsbMassStorage=usbmass.drv

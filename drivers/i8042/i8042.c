@@ -2333,6 +2333,8 @@ Return Value:
         Event.U.Mouse.MovementY |= 0xFFFFFF00;
     }
 
+    Event.U.Mouse.MovementY = -Event.U.Mouse.MovementY;
+
     ASSERT((PS2_MOUSE_REPORT_LEFT_BUTTON == MOUSE_BUTTON_LEFT) &&
            (PS2_MOUSE_REPORT_RIGHT_BUTTON == MOUSE_BUTTON_RIGHT) &&
            (PS2_MOUSE_REPORT_MIDDLE_BUTTON == MOUSE_BUTTON_MIDDLE));

@@ -40,8 +40,10 @@ function build() {
         "drivers/usb/onering/usbrelay:usbrelay",
         "drivers/usb/usbcomp:usbcomp",
         "drivers/usb/usbhub:usbhub",
+        "drivers/usb/usbhid:usbhid",
         "drivers/usb/usbkbd:usbkbd",
-        "drivers/usb/usbmass:usbmass"
+        "drivers/usb/usbmass:usbmass",
+        "drivers/usb/usbmouse:usbmouse"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {

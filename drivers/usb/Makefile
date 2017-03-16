@@ -33,11 +33,13 @@ USB_HOST_CONTROLLERS = am3usb  \
                        uhci    \
 
 USB_CLASS_DRIVERS = usbcomp    \
+                    usbhid     \
                     usbhub     \
                     usbmass    \
 
 USB_DEVICE_DRIVERS = onering   \
                      usbkbd    \
+                     usbmouse  \
 
 DIRS = usbcore                 \
        $(USB_CLASS_DRIVERS)    \
@@ -47,4 +49,6 @@ DIRS = usbcore                 \
 include $(SRCROOT)/os/minoca.mk
 
 $(USB_HOST_CONTROLLERS) $(USB_CLASS_DRIVERS) $(USB_DEVICE_DRIVERS): usbcore
+
+usbmouse: usbhid
 

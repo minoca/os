@@ -1834,7 +1834,7 @@ Return Value:
                          USB_SETUP_REQUEST_DEVICE_RECIPIENT;
 
     Setup->Request = USB_DEVICE_REQUEST_GET_DESCRIPTOR;
-    Setup->Value = USB_HUB_DESCRIPTOR_TYPE << 8;
+    Setup->Value = UsbDescriptorTypeHub << 8;
     Setup->Index = 0;
     Setup->Length = USB_HUB_DESCRIPTOR_MAX_SIZE;
     Hub->ControlTransfer->Length = sizeof(USB_SETUP_PACKET) +
@@ -1851,7 +1851,7 @@ Return Value:
     }
 
     HubDescriptor = (PUSB_HUB_DESCRIPTOR)(Setup + 1);
-    if ((HubDescriptor->DescriptorType != USB_HUB_DESCRIPTOR_TYPE) ||
+    if ((HubDescriptor->DescriptorType != UsbDescriptorTypeHub) ||
         (HubDescriptor->Length < sizeof(USB_HUB_DESCRIPTOR))) {
 
         Status = STATUS_NOT_SUPPORTED;

@@ -48,12 +48,6 @@ Author:
 #define USB_MAX_DESCRIPTOR_SIZE 0xFF
 
 //
-// Define the hub descriptor type.
-//
-
-#define USB_HUB_DESCRIPTOR_TYPE 0x29
-
-//
 // Define the values in the Setup Packet's RequestType field.
 //
 
@@ -376,6 +370,10 @@ typedef enum _USB_DESCRIPTOR_TYPE {
     UsbDescriptorTypeEndpoint                = 0x05,
     UsbDescriptorTypeDeviceQualifier         = 0x06,
     UsbDescriptorTypeOtherSpeedConfiguration = 0x07,
+    UsbDescriptorTypeHid                     = 0x21,
+    UsbDescriptorTypeHidReport               = 0x22,
+    UsbDescriptorTypeHidPhysical             = 0x23,
+    UsbDescriptorTypeHub                     = 0x29,
 } USB_DESCRIPTOR_TYPE, *PUSB_DESCRIPTOR_TYPE;
 
 typedef enum _USB_INTERFACE_CLASS {
@@ -718,6 +716,60 @@ typedef struct _USB_HUB_DESCRIPTOR {
 
 Structure Description:
 
+    This structure defines the format of a report description within a HID
+    descriptor.
+
+Members:
+
+    Type - Stores the class specific descriptor type.
+
+    Length - Stores the descriptor length.
+
+--*/
+
+typedef struct _USB_HID_DESCRIPTOR_REPORT {
+    UCHAR Type;
+    USHORT Length;
+} PACKED USB_HID_DESCRIPTOR_REPORT, *PUSB_HID_DESCRIPTOR_REPORT;
+
+/*++
+
+Structure Description:
+
+    This structure defines the format of the USB Human Interface Device
+    descriptor. Report descriptors underneath this follow.
+
+Members:
+
+    Length - Stores the length of the structure, including all subordinate
+        descriptors.
+
+    DescriptorType - Stores a constant indicating that this is a HID descriptor.
+
+    HidVersion - Stores the BCD HID version.
+
+    CountryCode - Stores an optional country code.
+
+    DescriptorCount - Stores the number of report descriptors that follow.
+
+    Descriptors - Stores the size and types of the descriptors. This will
+        always be at least one for the report descriptor.
+
+--*/
+
+typedef struct _USB_HID_DESCRIPTOR {
+    UCHAR Length;
+    UCHAR DescriptorType;
+    USHORT HidVersion;
+    UCHAR CountryCode;
+    UCHAR DescriptorCount;
+    USB_HID_DESCRIPTOR_REPORT Descriptors[ANYSIZE_ARRAY];
+} PACKED USB_HID_DESCRIPTOR, *PUSB_HID_DESCRIPTOR;
+
+/*++
+
+Structure Description:
+
     This structure defines a USB setup packet.
 
 Members:
@@ -804,12 +856,15 @@ Members:
     EndpointListHead - Stores the head of the list of endpoints in this
         interface.
 
+    UnknownListHead - Stores teh head of the list of other descriptors present
+        in this interface.
 --*/
 
 typedef struct _USB_INTERFACE_DESCRIPTION {
     LIST_ENTRY ListEntry;
     USB_INTERFACE_DESCRIPTOR Descriptor;
     LIST_ENTRY EndpointListHead;
+    LIST_ENTRY UnknownListHead;
 } USB_INTERFACE_DESCRIPTION, *PUSB_INTERFACE_DESCRIPTION;
 
 /*++
@@ -831,6 +886,27 @@ typedef struct _USB_ENDPOINT_DESCRIPTION {
     LIST_ENTRY ListEntry;
     USB_ENDPOINT_DESCRIPTOR Descriptor;
 } USB_ENDPOINT_DESCRIPTION, *PUSB_ENDPOINT_DESCRIPTION;
+
+/*++
+
+Structure Description:
+
+    This structure defines an alternate descriptor within the USB interface.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous descriptors in the
+        parent interface.
+
+    Descriptor - Stores a pointer to the descriptor. The length is in the
+        descriptor.
+
+--*/
+
+typedef struct _USB_UNKNOWN_DESCRIPTION {
+    LIST_ENTRY ListEntry;
+    PUCHAR Descriptor;
+} USB_UNKNOWN_DESCRIPTION, *PUSB_UNKNOWN_DESCRIPTION;
 
 typedef
 VOID
