@@ -343,6 +343,11 @@ LzpRangeEncoderFlushStream (
     PLZMA_RANGE_ENCODER RangeEncoder
     );
 
+LZ_STATUS
+LzpWriteCheckFields (
+    PLZMA_ENCODER Encoder
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -521,7 +526,6 @@ Return Value:
 {
 
     PLZMA_ENCODER Encoder;
-    UCHAR PropertiesData[LZMA_PROPERTIES_SIZE];
     UINTN PropertiesSize;
     LZ_STATUS Result;
 
@@ -532,23 +536,6 @@ Return Value:
 
     Result = LzpLzmaEncoderSetProperties(Encoder, Properties);
     if (Result != LzSuccess) {
-        goto LzmaEncodeStreamEnd;
-    }
-
-    //
-    // Write the properties bytes out.
-    //
-
-    PropertiesSize = sizeof(PropertiesData);
-    Result = LzpLzmaWriteProperties(Encoder, PropertiesData, &PropertiesSize);
-    if (Result != LzSuccess) {
-        goto LzmaEncodeStreamEnd;
-    }
-
-    if (Context->Write(Context, PropertiesData, PropertiesSize) !=
-        PropertiesSize) {
-
-        Result = LzErrorWrite;
         goto LzmaEncodeStreamEnd;
     }
 
@@ -565,10 +552,37 @@ Return Value:
     }
 
     //
+    // Write the properties bytes out directly into the range encoder buffer
+    // so they get written out with the first flush.
+    //
+
+    PropertiesSize = Encoder->RangeEncoder.BufferLimit -
+                     Encoder->RangeEncoder.Buffer;
+
+    Result = LzpLzmaWriteProperties(Encoder,
+                                    Encoder->RangeEncoder.Buffer,
+                                    &PropertiesSize);
+
+    if (Result != LzSuccess) {
+        goto LzmaEncodeStreamEnd;
+    }
+
+    Encoder->RangeEncoder.Buffer += PropertiesSize;
+
+    //
     // Run the encoder.
     //
 
     Result = LzpLzmaEncode(Encoder);
+    if (Result != LzSuccess) {
+        goto LzmaEncodeStreamEnd;
+    }
+
+    //
+    // Write out the the verification fields.
+    //
+
+    Result = LzpWriteCheckFields(Encoder);
 
 LzmaEncodeStreamEnd:
     LzpLzmaDestroyEncoder(Encoder, Context);
@@ -762,6 +776,10 @@ Return Value:
     LZMA_ENCODER_PROPERTIES Properties;
     LZ_STATUS Status;
 
+    Context->CompressedCrc32 = 0;
+    Context->UncompressedCrc32 = 0;
+    Context->UncompressedSize = 0;
+    LzpCrcInitialize();
     Encoder = Context->Reallocate(NULL, sizeof(LZMA_ENCODER));
     if (Encoder == NULL) {
         return NULL;
@@ -1746,6 +1764,7 @@ Return Value:
     }
 
     LzpLzmaEncoderFinish(Encoder);
+    Encoder->RangeEncoder.System->UncompressedSize = Encoder->Position64;
     return Result;
 }
 
@@ -3294,8 +3313,53 @@ Return Value:
         RangeEncoder->Result = LzErrorWrite;
     }
 
+    RangeEncoder->System->CompressedCrc32 =
+                         LzpComputeCrc32(RangeEncoder->System->CompressedCrc32,
+                                         RangeEncoder->BufferBase,
+                                         Size);
+
     RangeEncoder->Processed += Size;
     RangeEncoder->Buffer = RangeEncoder->BufferBase;
     return;
+}
+
+LZ_STATUS
+LzpWriteCheckFields (
+    PLZMA_ENCODER Encoder
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes the uncompressed data size, compressed CRC32 and
+    uncompressed CRC32 to the output.
+
+Arguments:
+
+    Encoder - Supplies a pointer to the encoder.
+
+Return Value:
+
+    LZ Status code.
+
+--*/
+
+{
+
+    UCHAR Buffer[LZMA_CHECK_FIELDS_SIZE];
+    PLZ_CONTEXT System;
+    INTN Written;
+
+    System = Encoder->RangeEncoder.System;
+    memcpy(&(Buffer[0]), &(System->UncompressedSize), sizeof(ULONGLONG));
+    memcpy(&(Buffer[8]), &(System->CompressedCrc32), sizeof(ULONG));
+    memcpy(&(Buffer[12]), &(System->UncompressedCrc32), sizeof(ULONG));
+    Written = System->Write(System->Context, Buffer, sizeof(Buffer));
+    if (Written != sizeof(Buffer)) {
+        return LzErrorWrite;
+    }
+
+    return LzSuccess;
 }
 

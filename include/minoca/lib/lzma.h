@@ -198,6 +198,14 @@ Members:
     WriteContext - Stores an unused context pointer available for use by the
         surrounding application. This often sotres the output file information.
 
+    CompressedCrc32 - Stores the CRC32 of the compressed data, which covers
+        the properties and the range encoded bytes, but not the magic, length,
+        or CRCs.
+
+    UncompressedCrc32 - Stores the CRC32 of the uncompressed data.
+
+    UncompressedSize - Stores the size in bytes of the uncompressed data.
+
 --*/
 
 struct _LZ_CONTEXT {
@@ -208,6 +216,9 @@ struct _LZ_CONTEXT {
     PLZ_PERFORM_IO Write;
     PVOID ReadContext;
     PVOID WriteContext;
+    ULONG CompressedCrc32;
+    ULONG UncompressedCrc32;
+    ULONGLONG UncompressedSize;
 };
 
 /*++

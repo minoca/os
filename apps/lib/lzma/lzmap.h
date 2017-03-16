@@ -77,6 +77,8 @@ Author:
 
 #define LZMA_RANGE_TOP_VALUE (1 << 24)
 
+#define LZMA_CHECK_FIELDS_SIZE 16
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -87,6 +89,58 @@ typedef USHORT LZ_PROB, *PLZ_PROB;
 // -------------------------------------------------------------------- Globals
 //
 
+extern ULONG LzCrc32[0x100];
+
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+VOID
+LzpCrcInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the CRC-32 table.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+ULONG
+LzpComputeCrc32 (
+    ULONG InitialCrc,
+    PCVOID Buffer,
+    ULONG Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the CRC-32 on the given buffer of data.
+
+Arguments:
+
+    InitialCrc - Supplies an initial CRC value to start with. Supply 0
+        initially.
+
+    Buffer - Supplies a pointer to the buffer to compute the CRC32 of.
+
+    Size - Supplies the size of the buffer, in bytes.
+
+Return Value:
+
+    Returns the CRC32 hash of the buffer.
+
+--*/
+

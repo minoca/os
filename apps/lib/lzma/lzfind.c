@@ -34,6 +34,7 @@ Environment:
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/lzma.h>
+#include "lzmap.h"
 #include "lzfind.h"
 
 //
@@ -82,7 +83,7 @@ Environment:
 //
 
 #define LZP_HASH3(_Finder, _Bytes, _HashValue2, _HashValue3) \
-    (_HashValue3) = (_Finder)->Crc[(_Bytes)[0]] ^ (_Bytes)[1]; \
+    (_HashValue3) = LzCrc32[(_Bytes)[0]] ^ (_Bytes)[1]; \
     (_HashValue2) = (_HashValue3) & (LZMA_HASH2_SIZE - 1); \
     (_HashValue3) = ((_HashValue3) ^ ((ULONG)(_Bytes)[2] << 8)) & \
                     (_Finder)->HashMask;
@@ -92,18 +93,16 @@ Environment:
 //
 
 #define LZP_HASH4(_Finder, _Bytes, _HashValue2, _HashValue3, _HashValue4) \
-    (_HashValue4) = (_Finder)->Crc[(_Bytes)[0]] ^ (_Bytes)[1]; \
+    (_HashValue4) = LzCrc32[(_Bytes)[0]] ^ (_Bytes)[1]; \
     (_HashValue2) = (_HashValue4) & (LZMA_HASH2_SIZE - 1); \
     (_HashValue4) ^= ((ULONG)(_Bytes)[2]) << 8; \
     (_HashValue3) = (_HashValue4) & (LZMA_HASH3_SIZE - 1); \
-    (_HashValue4) = ((_HashValue4) ^ ((_Finder)->Crc[(_Bytes)[3]] << 5)) & \
+    (_HashValue4) = ((_HashValue4) ^ (LzCrc32[(_Bytes)[3]] << 5)) & \
                     (_Finder)->HashMask;
 
 //
 // ---------------------------------------------------------------- Definitions
 //
-
-#define LZMA_CRC_POLYNOMIAL 0xEDB88320
 
 #define LZMA_HASH2_SIZE (1 << 10)
 #define LZMA_HASH3_SIZE (1 << 16)
@@ -299,24 +298,10 @@ Return Value:
 
 {
 
-    ULONG Bit;
-    ULONG Index;
-    ULONG Rotate;
-
     Finder->BufferBase = NULL;
     Finder->DirectInput = FALSE;
     Finder->Hash = NULL;
     LzpMatchFinderSetDefaults(Finder);
-    for (Index = 0; Index < 0x100; Index += 1) {
-        Rotate = Index;
-        for (Bit = 0; Bit < 8; Bit += 1) {
-            Rotate = (Rotate >> 1) ^
-                     (LZMA_CRC_POLYNOMIAL & ~((Rotate & 0x1) - 1));
-        }
-
-        Finder->Crc[Index] = Rotate;
-    }
-
     return;
 }
 
@@ -1476,6 +1461,11 @@ Return Value:
             Finder->StreamEndWasReached = TRUE;
             break;
         }
+
+        Finder->System->UncompressedCrc32 =
+                             LzpComputeCrc32(Finder->System->UncompressedCrc32,
+                                             Destination,
+                                             Size);
 
         Finder->StreamPosition += Size;
         if (Finder->StreamPosition - Finder->Position > Finder->KeepSizeAfter) {

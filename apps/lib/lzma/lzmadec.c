@@ -400,6 +400,12 @@ LzpLzmaDecoderWriteRemainder (
     UINTN Limit
     );
 
+LZ_STATUS
+LzpVerifyCheckFields (
+    UCHAR CheckFields[LZMA_CHECK_FIELDS_SIZE],
+    PLZ_CONTEXT Context
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -573,6 +579,7 @@ Return Value:
     PVOID AllocatedIn;
     PVOID AllocatedOut;
     INTN BytesComplete;
+    UCHAR CheckBuffer[LZMA_CHECK_FIELDS_SIZE];
     LZ_COMPLETION_STATUS CompletionStatus;
     LZMA_DECODER Decoder;
     BOOL DecoderInitialized;
@@ -651,6 +658,10 @@ Return Value:
     }
 
     DecoderInitialized = TRUE;
+    Context->CompressedCrc32 = LzpComputeCrc32(Context->CompressedCrc32,
+                                               InBuffer,
+                                               LZMA_PROPERTIES_SIZE);
+
     InPosition = LZMA_PROPERTIES_SIZE;
 
     //
@@ -678,6 +689,15 @@ Return Value:
                                        FALSE,
                                        &CompletionStatus);
 
+        //
+        // Only add the portion of the buffer that's actually compressed data
+        // to the CRC.
+        //
+
+        Context->CompressedCrc32 = LzpComputeCrc32(Context->CompressedCrc32,
+                                                   InBuffer + InPosition,
+                                                   InProcessed);
+
         InPosition += InProcessed;
         OutPosition += OutProcessed;
         BytesComplete = Context->Write(Context, OutBuffer, OutPosition);
@@ -686,6 +706,11 @@ Return Value:
             goto LzmaDecodeStreamEnd;
         }
 
+        Context->UncompressedCrc32 = LzpComputeCrc32(Context->UncompressedCrc32,
+                                                     OutBuffer,
+                                                     OutPosition);
+
+        Context->UncompressedSize += OutPosition;
         OutPosition = 0;
         if (Status != LzSuccess) {
             goto LzmaDecodeStreamEnd;
@@ -699,6 +724,41 @@ Return Value:
             break;
         }
     }
+
+    //
+    // Get or read in the check fields.
+    //
+
+    if (InPosition < InSize) {
+        if (InSize - InPosition > LZMA_CHECK_FIELDS_SIZE) {
+            InSize = InPosition + LZMA_CHECK_FIELDS_SIZE;
+        }
+
+        memcpy(CheckBuffer, InBuffer + InPosition, InSize - InPosition);
+        InSize = InSize - InPosition;
+
+    } else {
+        InSize = 0;
+    }
+
+    while (InSize < LZMA_CHECK_FIELDS_SIZE) {
+        BytesComplete = Context->Read(Context,
+                                      CheckBuffer + InSize,
+                                      LZMA_CHECK_FIELDS_SIZE - InSize);
+
+        if (BytesComplete == 0) {
+            Status = LzErrorInputEof;
+            goto LzmaDecodeStreamEnd;
+
+        } else if (BytesComplete < 0) {
+            Status = LzErrorRead;
+            goto LzmaDecodeStreamEnd;
+        }
+
+        InSize += BytesComplete;
+    }
+
+    Status = LzpVerifyCheckFields(CheckBuffer, Context);
 
 LzmaDecodeStreamEnd:
     if (AllocatedIn != NULL) {
@@ -760,6 +820,10 @@ Return Value:
     ULONG ProbabilitiesCount;
     LZ_STATUS Status;
 
+    LzpCrcInitialize();
+    Context->CompressedCrc32 = 0;
+    Context->UncompressedCrc32 = 0;
+    Context->UncompressedSize = 0;
     Decoder->Dict = NULL;
     Decoder->Probabilities = NULL;
     Decoder->ProbabilityCount = 0;
@@ -2543,5 +2607,49 @@ Return Value:
 
     Decoder->DictPosition = DictPosition;
     return;
+}
+
+LZ_STATUS
+LzpVerifyCheckFields (
+    UCHAR CheckFields[LZMA_CHECK_FIELDS_SIZE],
+    PLZ_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine verifies the check fields at the end of a stream.
+
+Arguments:
+
+    CheckFields - Supplies the buffer containing the uncompressed length,
+        compressed CRC32 and uncompressed CRC32.
+
+    Context - Supplies the context containing the computed values.
+
+Return Value:
+
+    LZ Status Code.
+
+--*/
+
+{
+
+    ULONG CompressedCrc32;
+    ULONG UncompressedCrc32;
+    ULONGLONG UncompressedSize;
+
+    memcpy(&UncompressedSize, &(CheckFields[0]), sizeof(ULONGLONG));
+    memcpy(&CompressedCrc32, &(CheckFields[8]), sizeof(ULONG));
+    memcpy(&UncompressedCrc32, &(CheckFields[12]), sizeof(ULONG));
+    if ((UncompressedSize != Context->UncompressedSize) ||
+        (CompressedCrc32 != Context->CompressedCrc32) ||
+        (UncompressedCrc32 != Context->UncompressedCrc32)) {
+
+        return LzErrorCrc;
+    }
+
+    return LzSuccess;
 }
 
