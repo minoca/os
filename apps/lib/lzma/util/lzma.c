@@ -157,6 +157,11 @@ LzpUtilGetNumericOption (
     INT Max
     );
 
+PCSTR
+LzpUtilGetErrorString (
+    LZ_STATUS Status
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -180,6 +185,21 @@ struct option LzmaLongOptions[] = {
     {"version", no_argument, 0, 'V'},
     {"verbose", no_argument, 0, 'v'},
     {NULL, 0, 0, 0},
+};
+
+PCSTR LzStatusStrings[] = {
+    "Success",
+    "Corrupt data",
+    "Allocation failure",
+    "CRC error",
+    "Unsupported",
+    "Invalid parameter",
+    "Unexpected end of input",
+    "Unexpected end of output",
+    "Read error",
+    "Write error",
+    "Progress error",
+    "Invalid magic value"
 };
 
 //
@@ -232,7 +252,7 @@ Return Value:
     Context.Lz.ReportProgress = LzpUtilReportProgress;
     Context.Lz.Read = LzpUtilRead;
     Context.Lz.Write = LzpUtilWrite;
-    LzLzmaEncoderInitializeProperties(&(Context.EncoderProperties));
+    LzLzmaInitializeProperties(&(Context.EncoderProperties));
     Context.EncoderProperties.WriteEndMark = TRUE;
     Status = 1;
 
@@ -487,23 +507,77 @@ Return Value:
     }
 
     if (Action == LzmaActionCompress) {
-        LzStatus = LzLzmaEncodeStream(&(Context.EncoderProperties),
-                                      &(Context.Lz));
+        LzStatus = LzLzmaInitializeEncoder(&(Context.Lz),
+                                           &(Context.EncoderProperties));
 
         if (LzStatus != LzSuccess) {
             fprintf(stderr,
-                    "Error: Failed to encode: %d.\n",
-                    LzStatus);
+                    "Error: Failed to initialize encoder: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto MainEnd;
+        }
+
+        LzStatus = LzLzmaWriteHeader(&(Context.Lz));
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to write file header: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto MainEnd;
+        }
+
+        LzStatus = LzLzmaEncode(&(Context.Lz));
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to encode: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto MainEnd;
+        }
+
+        LzStatus = LzLzmaFinishEncode(&(Context.Lz), TRUE);
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to finish: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
 
             goto MainEnd;
         }
 
     } else {
-        LzStatus = LzLzmaDecodeStream(&(Context.Lz), NULL, 0, NULL, 0);
+        LzStatus = LzLzmaInitializeDecoder(&(Context.Lz), NULL);
         if (LzStatus != LzSuccess) {
             fprintf(stderr,
-                    "Error: Failed to decode: %d.\n",
-                    LzStatus);
+                    "Error: Failed to initialize decoder: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto MainEnd;
+        }
+
+        LzStatus = LzLzmaReadHeader(&(Context.Lz));
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to read file header: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto MainEnd;
+        }
+
+        LzStatus = LzLzmaDecode(&(Context.Lz));
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to encode: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto MainEnd;
+        }
+
+        LzStatus = LzLzmaFinishDecode(&(Context.Lz), TRUE);
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to finish: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
 
             goto MainEnd;
         }
@@ -759,5 +833,38 @@ Return Value:
     }
 
     return Result;
+}
+
+PCSTR
+LzpUtilGetErrorString (
+    LZ_STATUS Status
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns an error string associated with the given status
+    code.
+
+Arguments:
+
+    Status - Supplies the LZ status code to convert.
+
+Return Value:
+
+    Returns a string representation of the given error.
+
+--*/
+
+{
+
+    if ((Status < 0) ||
+        (Status > (sizeof(LzStatusStrings) / sizeof(LzStatusStrings[0])))) {
+
+        return "Unknown error";
+    }
+
+    return LzStatusStrings[Status];
 }
 

@@ -41,6 +41,15 @@ Author:
 #define LZMA_MINIMUM_DICT_SIZE (1 << 12)
 
 //
+// Define the magic value at the top of the file format.
+//
+
+#define LZMA_HEADER_MAGIC 0x414D5A4C
+#define LZMA_HEADER_MAGIC_SIZE 4
+
+#define LZMA_HEADER_SIZE (LZMA_HEADER_MAGIC_SIZE + LZMA_PROPERTIES_SIZE)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -55,8 +64,14 @@ typedef enum _LZ_STATUS {
     LzErrorOutputEof,
     LzErrorRead,
     LzErrorWrite,
-    LzErrorProgress
+    LzErrorProgress,
+    LzErrorMagic,
 } LZ_STATUS, *PLZ_STATUS;
+
+typedef enum _LZ_FLUSH_OPTION {
+    LzNoFlush,
+    LzFlushNow,
+} LZ_FLUSH_OPTION, *PLZ_FLUSH_OPTION;
 
 //
 // LZMA decoder completion status, indicating whether the stream has ended or
@@ -188,7 +203,8 @@ Members:
     ReportProgress - Stores an optional pointer to a function used to report
         progress updates to the surrounding environment.
 
-    Read - Stores a pointer to a function used to read input data.
+    Read - Stores an optional pointer to a function used to read input data. If
+        this is not supplied, then the read buffer must be supplied.
 
     Write - Stores a pointer to a function used to write output data.
 
@@ -198,13 +214,29 @@ Members:
     WriteContext - Stores an unused context pointer available for use by the
         surrounding application. This often sotres the output file information.
 
+    Input - Stores an optional pointer to an input memory buffer to read
+        data from. If the read function is supplied then this buffer is ignored.
+        This pointer will be updated as input data is consumed.
+
+    InputSize - Stores the size of available input. This will be updated as
+        input data is consumed.
+
+    Output - Stores an optional pointer to the output memory buffer to write
+        data to. If the write function is supplied then this buffer is ignored.
+        This pointer will be updated as output is written.
+
+    OutputSize - Stores the available size of the output buffer in bytes. This
+        will be updated (decreased) as output is written.
+
     CompressedCrc32 - Stores the CRC32 of the compressed data, which covers
-        the properties and the range encoded bytes, but not the magic, length,
+        the properties and the range encoded bytes, but not the length or
         or CRCs.
 
     UncompressedCrc32 - Stores the CRC32 of the uncompressed data.
 
     UncompressedSize - Stores the size in bytes of the uncompressed data.
+
+    InternalState - Stores the internal state, opaque outside the library.
 
 --*/
 
@@ -216,9 +248,14 @@ struct _LZ_CONTEXT {
     PLZ_PERFORM_IO Write;
     PVOID ReadContext;
     PVOID WriteContext;
+    PVOID Input;
+    UINTN InputSize;
+    PVOID Output;
+    UINTN OutputSize;
     ULONG CompressedCrc32;
     ULONG UncompressedCrc32;
     ULONGLONG UncompressedSize;
+    PVOID InternalState;
 };
 
 /*++
@@ -298,7 +335,7 @@ typedef struct _LZMA_ENCODER_PROPERTIES {
 //
 
 VOID
-LzLzmaEncoderInitializeProperties (
+LzLzmaInitializeProperties (
     PLZMA_ENCODER_PROPERTIES Properties
     );
 
@@ -306,7 +343,7 @@ LzLzmaEncoderInitializeProperties (
 
 Routine Description:
 
-    This routine initializes LZMA encoder properties to their defaults.
+    This routine initializes LZMA properties to their defaults.
 
 Arguments:
 
@@ -319,60 +356,36 @@ Return Value:
 --*/
 
 LZ_STATUS
-LzLzmaEncode (
-    PUCHAR Destination,
-    PUINTN DestinationSize,
-    PCUCHAR Source,
-    UINTN SourceSize,
-    PLZMA_ENCODER_PROPERTIES Properties,
-    PUCHAR EncodedProperties,
-    PUINTN EncodedPropertiesSize,
-    BOOL WriteEndMark,
-    PLZ_CONTEXT Context
+LzLzmaInitializeEncoder (
+    PLZ_CONTEXT Context,
+    PLZMA_ENCODER_PROPERTIES Properties
     );
 
 /*++
 
 Routine Description:
 
-    This routine LZMA encodes the given data block.
+    This routine initializes a given LZ context for encoding. The structure
+    should be zeroed and initialized before this function is called. If the
+    read/write functions are going to be used, they should already be non-null.
 
 Arguments:
 
-    Destination - Supplies a pointer to buffer where the compressed data will
-        be returned.
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
 
-    DestinationSize - Supplies a pointer that on input contains the size of the
-        destination buffer. On output, will contain the size of the encoded
-        data.
-
-    Source - Supplies a pointer to the data to compress.
-
-    SourceSize - Supplies the number of bytes in the source buffer.
-
-    Properties - Supplies a pointer to the encoding properties.
-
-    EncodedProperties - Supplies a pointer where the encoded properties will be
-        returned on success.
-
-    EncodedPropertiesSize - Supplies a pointer that on input contains the size
-        of the encoded properties buffer. On output, contains the size of the
-        encoded properties.
-
-    WriteEndMark - Supplies a boolean indicating whether or not to write an
-        end marker.
-
-    Context - Supplies a pointer to the general LZ context.
+    Properties - Supplies an optional pointer to the properties to set in the
+        encoder. If NULL is supplied, default properties will be set that are
+        equivalent to compression level five.
 
 Return Value:
 
-    LZ status.
+    LZ Status code.
 
 --*/
 
 LZ_STATUS
-LzLzmaEncodeStream (
-    PLZMA_ENCODER_PROPERTIES Properties,
+LzLzmaWriteHeader (
     PLZ_CONTEXT Context
     );
 
@@ -380,115 +393,162 @@ LzLzmaEncodeStream (
 
 Routine Description:
 
-    This routine LZMA encodes the given stream.
+    This routine writes the LZMA file header, including a magic value and
+    the encoding properties.
 
 Arguments:
 
-    Properties - Supplies the encoder properties to set.
-
-    Context - Supplies a pointer to the general LZ context.
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
 
 Return Value:
 
-    LZ status.
+    LZ Status code.
+
+--*/
+
+LZ_STATUS
+LzLzmaEncode (
+    PLZ_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine encodes the given initialized LZMA stream.
+
+Arguments:
+
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
+
+Return Value:
+
+    LZ Status code.
+
+--*/
+
+LZ_STATUS
+LzLzmaFinishEncode (
+    PLZ_CONTEXT Context,
+    BOOL WriteCheckFields
+    );
+
+/*++
+
+Routine Description:
+
+    This routine flushes the LZMA encoder, and potentially writes the ending
+    CRC and length fields.
+
+Arguments:
+
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
+
+    WriteCheckFields - Supplies a boolean indicating whether or not to write
+        the check fields.
+
+Return Value:
+
+    LZ Status code.
+
+--*/
+
+LZ_STATUS
+LzLzmaInitializeDecoder (
+    PLZ_CONTEXT Context,
+    PLZMA_ENCODER_PROPERTIES Properties
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes an LZMA context for decoding.
+
+Arguments:
+
+    Context - Supplies a pointer to the system context, which should be filled
+        out by the caller.
+
+    Properties - Supplies an optional pointer to the properties used in the
+        upcoming encoding stream. If this is NULL, default properties
+        equivalent to an encoding level of five will be set.
+
+Return Value:
+
+    Returns an LZ status code indicating overall success or failure.
+
+--*/
+
+LZ_STATUS
+LzLzmaReadHeader (
+    PLZ_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads the file header out of a compressed LZMA stream, which
+    validates the magic value and reads the properties into the decoder.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+Return Value:
+
+    LZ Status code.
 
 --*/
 
 LZ_STATUS
 LzLzmaDecode (
-    PLZ_CONTEXT Context,
-    PUCHAR Destination,
-    PUINTN DestinationSize,
-    PCUCHAR Source,
-    PUINTN SourceSize,
-    PCUCHAR Properties,
-    ULONG PropertiesSize,
-    BOOL HasEndMark,
-    PLZ_COMPLETION_STATUS CompletionStatus
+    PLZ_CONTEXT Context
     );
 
 /*++
 
 Routine Description:
 
-    This routine decompresses a block of LZMA encoded data in a single shot.
-    It is an error if the destination buffer is not big enough to hold the
-    decompressed data.
+    This routine decompresses an LZMA stream.
 
 Arguments:
 
-    Context - Supplies a pointer to the system context, which should be filled
-        out by the caller.
-
-    Destination - Supplies a pointer where the uncompressed data should be
-        written.
-
-    DestinationSize - Supplies a pointer that on input contains the size of the
-        uncompressed data buffer. On output this will be updated to contain
-        the number of valid bytes in the destination buffer.
-
-    Source - Supplies a pointer to the compressed data.
-
-    SourceSize - Supplies a pointer that on input contains the size of the
-        source buffer. On output this will be updated to contain the number of
-        source bytes consumed.
-
-    Properties - Supplies a pointer to the properties bytes.
-
-    PropertiesSize - Supplies the number of properties bytes in byte given
-        buffer.
-
-    HasEndMark - Supplies a boolean indicating whether an end mark is expected
-        within this block of data. Supply TRUE if the compressed stream was
-        finished with an end mark. Supply FALSE if the given data ends when the
-        source buffer ends.
-
-    CompletionStatus - Supplies a pointer where the completion status will be
-        returned indicating whether an end mark was found or more data is
-        expected. This field only has meaning if the decoding chews through
-        the entire source buffer.
+    Context - Supplies a pointer to the context.
 
 Return Value:
 
-    Returns an LZ status code indicating overall success or failure.
+    LZ Status code.
 
 --*/
 
 LZ_STATUS
-LzLzmaDecodeStream (
+LzLzmaFinishDecode (
     PLZ_CONTEXT Context,
-    PVOID InBuffer,
-    UINTN InBufferSize,
-    PVOID OutBuffer,
-    UINTN OutBufferSize
+    BOOL ReadCheckFields
     );
 
 /*++
 
 Routine Description:
 
-    This routine decompresses a stream of LZMA encoded data.
+    This routine flushes the LZMA decoder, and potentially writes the reads
+    and verefies the CRC and length fields.
 
 Arguments:
 
-    Context - Supplies a pointer to the system context, which should be filled
-        out by the caller.
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
 
-    InBuffer - Supplies an optional pointer to the working buffer to use for
-        input. If not supplied, a working buffer will be allocated.
-
-    InBufferSize - Supplies the size of the optional working input buffer.
-        Supply zero if none was provided.
-
-    OutBuffer - Supplies an optional pointer to the working buffer to use for
-        output. If not supplied, a working buffer will be allocated.
-
-    OutBufferSize - Supplies the size of the optional working input buffer.
-        Supply zero if none was provided.
+    ReadCheckFields - Supplies a boolean indicating whether or not to read
+        and verify the check fields.
 
 Return Value:
 
-    Returns an LZ status code indicating overall success or failure.
+    LZ Status code.
 
 --*/
-

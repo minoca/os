@@ -60,12 +60,6 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef struct _LZMA_ENCODER_OUT_BUFFER {
-    PUCHAR Data;
-    UINTN Remaining;
-    BOOL Overflow;
-} LZMA_ENCODER_OUT_BUFFER, *PLZMA_ENCODER_OUT_BUFFER;
-
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -113,26 +107,6 @@ LzpLzmaInitializeFastPosition (
 VOID
 LzpLzmaInitializePriceTables (
     PULONG Prices
-    );
-
-LZ_STATUS
-LzpLzmaMemoryEncode (
-    PLZMA_ENCODER Encoder,
-    PUCHAR Destination,
-    PUINTN DestinationSize,
-    PCUCHAR Source,
-    UINTN SourceSize,
-    BOOL WriteEndMark,
-    PLZ_CONTEXT Context
-    );
-
-LZ_STATUS
-LzpLzmaPrepareMemoryEncode (
-    PLZMA_ENCODER Encoder,
-    PCUCHAR Source,
-    UINTN SourceSize,
-    ULONG KeepWindowSize,
-    PLZ_CONTEXT Context
     );
 
 LZ_STATUS
@@ -195,13 +169,6 @@ LzpLzmaEncoderWriteEndMark (
 LZ_STATUS
 LzpLzmaEncoderGetError (
     PLZMA_ENCODER Encoder
-    );
-
-INTN
-LzpLzmaEncodeBufferWrite (
-    PLZ_CONTEXT Context,
-    PVOID Buffer,
-    UINTN Size
     );
 
 VOID
@@ -373,7 +340,7 @@ const UCHAR LzLzmaShortRepNextStates[LZMA_STATE_COUNT] = {
 //
 
 VOID
-LzLzmaEncoderInitializeProperties (
+LzLzmaInitializeProperties (
     PLZMA_ENCODER_PROPERTIES Properties
     )
 
@@ -381,7 +348,7 @@ LzLzmaEncoderInitializeProperties (
 
 Routine Description:
 
-    This routine initializes LZMA encoder properties to their defaults.
+    This routine initializes LZMA properties to their defaults.
 
 Arguments:
 
@@ -412,96 +379,92 @@ Return Value:
 }
 
 LZ_STATUS
-LzLzmaEncode (
-    PUCHAR Destination,
-    PUINTN DestinationSize,
-    PCUCHAR Source,
-    UINTN SourceSize,
-    PLZMA_ENCODER_PROPERTIES Properties,
-    PUCHAR EncodedProperties,
-    PUINTN EncodedPropertiesSize,
-    BOOL WriteEndMark,
-    PLZ_CONTEXT Context
+LzLzmaInitializeEncoder (
+    PLZ_CONTEXT Context,
+    PLZMA_ENCODER_PROPERTIES Properties
     )
 
 /*++
 
 Routine Description:
 
-    This routine LZMA encodes the given data block.
+    This routine initializes a given LZ context for encoding. The structure
+    should be zeroed and initialized before this function is called. If the
+    read/write functions are going to be used, they should already be non-null.
 
 Arguments:
 
-    Destination - Supplies a pointer to buffer where the compressed data will
-        be returned.
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
 
-    DestinationSize - Supplies a pointer that on input contains the size of the
-        destination buffer. On output, will contain the size of the encoded
-        data.
-
-    Source - Supplies a pointer to the data to compress.
-
-    SourceSize - Supplies the number of bytes in the source buffer.
-
-    Properties - Supplies a pointer to the encoding properties.
-
-    EncodedProperties - Supplies a pointer where the encoded properties will be
-        returned on success.
-
-    EncodedPropertiesSize - Supplies a pointer that on input contains the size
-        of the encoded properties buffer. On output, contains the size of the
-        encoded properties.
-
-    WriteEndMark - Supplies a boolean indicating whether or not to write an
-        end marker.
-
-    Context - Supplies a pointer to the general LZ context.
+    Properties - Supplies an optional pointer to the properties to set in the
+        encoder. If NULL is supplied, default properties will be set that are
+        equivalent to compression level five.
 
 Return Value:
 
-    LZ status.
+    LZ Status code.
 
 --*/
 
 {
 
     PLZMA_ENCODER Encoder;
-    LZ_STATUS Result;
+    BOOL EncoderCreated;
+    LZ_STATUS Status;
 
-    Encoder = LzpLzmaCreateEncoder(Context);
-    if (Encoder == NULL) {
-        return LzErrorMemory;
+    Encoder = NULL;
+    EncoderCreated = FALSE;
+    if (Context->Reallocate == NULL) {
+        return LzErrorInvalidParameter;
     }
 
-    Result = LzpLzmaEncoderSetProperties(Encoder, Properties);
-    if (Result != LzSuccess) {
-        goto LzmaEncodeEnd;
+    Context->CompressedCrc32 = 0;
+    Context->UncompressedCrc32 = 0;
+    Context->UncompressedSize = 0;
+    if (Context->InternalState == NULL) {
+        Context->InternalState = LzpLzmaCreateEncoder(Context);
+        if (Context->InternalState == NULL) {
+            return LzErrorMemory;
+        }
+
+        EncoderCreated = TRUE;
     }
 
-    Result = LzpLzmaWriteProperties(Encoder,
-                                    EncodedProperties,
-                                    EncodedPropertiesSize);
-
-    if (Result != LzSuccess) {
-        goto LzmaEncodeEnd;
+    Encoder = Context->InternalState;
+    if (Properties != NULL) {
+        Status = LzpLzmaEncoderSetProperties(Encoder, Properties);
+        if (Status != LzSuccess) {
+            goto InitializeEncoderEnd;
+        }
     }
 
-    Result = LzpLzmaMemoryEncode(Encoder,
-                                 Destination,
-                                 DestinationSize,
-                                 Source,
-                                 SourceSize,
-                                 WriteEndMark,
-                                 Context);
+    if (Context->Read == NULL) {
+        Encoder->MatchFinderData.DirectInput = TRUE;
+    }
 
-LzmaEncodeEnd:
-    LzpLzmaDestroyEncoder(Encoder, Context);
-    return Result;
+    if (Context->Write == NULL) {
+        Encoder->RangeEncoder.DirectOutput = TRUE;
+    }
+
+    Encoder->NeedInitialization = TRUE;
+    Status = LzpLzmaAllocateBuffers(Encoder, 0, Context);
+    Encoder->MatchFinderData.System = Context;
+    Encoder->RangeEncoder.System = Context;
+
+InitializeEncoderEnd:
+    if (Status != LzSuccess) {
+        if (EncoderCreated != FALSE) {
+            LzpLzmaDestroyEncoder(Context->InternalState, Context);
+            Context->InternalState = NULL;
+        }
+    }
+
+    return Status;
 }
 
 LZ_STATUS
-LzLzmaEncodeStream (
-    PLZMA_ENCODER_PROPERTIES Properties,
+LzLzmaWriteHeader (
     PLZ_CONTEXT Context
     )
 
@@ -509,46 +472,37 @@ LzLzmaEncodeStream (
 
 Routine Description:
 
-    This routine LZMA encodes the given stream.
+    This routine writes the LZMA file header, including a magic value and
+    the encoding properties.
 
 Arguments:
 
-    Properties - Supplies the encoder properties to set.
-
-    Context - Supplies a pointer to the general LZ context.
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
 
 Return Value:
 
-    LZ status.
+    LZ Status code.
 
 --*/
 
 {
 
     PLZMA_ENCODER Encoder;
+    ULONG Magic;
     UINTN PropertiesSize;
-    LZ_STATUS Result;
+    LZ_STATUS Status;
 
-    Encoder = LzpLzmaCreateEncoder(Context);
-    if (Encoder == NULL) {
-        return LzErrorMemory;
+    Encoder = Context->InternalState;
+    if (Context->UncompressedSize != 0) {
+        return LzErrorInvalidParameter;
     }
 
-    Result = LzpLzmaEncoderSetProperties(Encoder, Properties);
-    if (Result != LzSuccess) {
-        goto LzmaEncodeStreamEnd;
-    }
-
-    //
-    // Prepare the encoder.
-    //
-
-    Encoder->MatchFinderData.System = Context;
-    Encoder->NeedInitialization = TRUE;
-    Encoder->RangeEncoder.System = Context;
-    Result = LzpLzmaAllocateBuffers(Encoder, 0, Context);
-    if (Result != LzSuccess) {
-        goto LzmaEncodeStreamEnd;
+    if (Context->Write == NULL) {
+        Encoder->RangeEncoder.BufferBase = Context->Output;
+        Encoder->RangeEncoder.Buffer = Context->Output;
+        Encoder->RangeEncoder.BufferLimit =
+                                         Context->Output + Context->OutputSize;
     }
 
     //
@@ -559,34 +513,145 @@ Return Value:
     PropertiesSize = Encoder->RangeEncoder.BufferLimit -
                      Encoder->RangeEncoder.Buffer;
 
-    Result = LzpLzmaWriteProperties(Encoder,
+    if (PropertiesSize < LZMA_HEADER_MAGIC_SIZE + LZMA_PROPERTIES_SIZE) {
+        return LzErrorOutputEof;
+    }
+
+    Magic = LZMA_HEADER_MAGIC;
+    memcpy(Encoder->RangeEncoder.Buffer, &Magic, LZMA_HEADER_MAGIC_SIZE);
+    Encoder->RangeEncoder.Buffer += LZMA_HEADER_MAGIC_SIZE;
+    PropertiesSize -= LZMA_HEADER_MAGIC_SIZE;
+    Status = LzpLzmaWriteProperties(Encoder,
                                     Encoder->RangeEncoder.Buffer,
                                     &PropertiesSize);
 
-    if (Result != LzSuccess) {
-        goto LzmaEncodeStreamEnd;
+    if (Status != LzSuccess) {
+        return Status;
     }
 
     Encoder->RangeEncoder.Buffer += PropertiesSize;
+    return Status;
+}
+
+LZ_STATUS
+LzLzmaEncode (
+    PLZ_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine encodes the given initialized LZMA stream.
+
+Arguments:
+
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
+
+Return Value:
+
+    LZ Status code.
+
+--*/
+
+{
+
+    PLZMA_ENCODER Encoder;
+    LZ_STATUS Status;
+
+    Encoder = Context->InternalState;
+
+    //
+    // Currently, there's only one shot to call the encoder.
+    //
+
+    if (Context->UncompressedSize != 0) {
+        return LzErrorInvalidParameter;
+    }
+
+    //
+    // If encoding via memory, set the buffer now.
+    //
+
+    if (Context->Read == NULL) {
+        if (Encoder->MatchFinderData.DirectInput == FALSE) {
+            return LzErrorInvalidParameter;
+        }
+
+        Encoder->MatchFinderData.BufferBase = Context->Input;
+        Encoder->MatchFinderData.DirectInputRemaining = Context->InputSize;
+    }
+
+    //
+    // If writing via memory, set up the memory destination.
+    //
+
+    if (Context->Write == NULL) {
+        Encoder->RangeEncoder.BufferBase = Context->Output;
+        Encoder->RangeEncoder.BufferLimit =
+                                         Context->Output + Context->OutputSize;
+    }
 
     //
     // Run the encoder.
     //
 
-    Result = LzpLzmaEncode(Encoder);
-    if (Result != LzSuccess) {
-        goto LzmaEncodeStreamEnd;
+    Status = LzpLzmaEncode(Encoder);
+    return Status;
+}
+
+LZ_STATUS
+LzLzmaFinishEncode (
+    PLZ_CONTEXT Context,
+    BOOL WriteCheckFields
+    )
+
+/*++
+
+Routine Description:
+
+    This routine flushes the LZMA encoder, and potentially writes the ending
+    CRC and length fields.
+
+Arguments:
+
+    Context - Supplies a pointer to the context, which should already be
+        initialized by the user.
+
+    WriteCheckFields - Supplies a boolean indicating whether or not to write
+        the check fields.
+
+Return Value:
+
+    LZ Status code.
+
+--*/
+
+{
+
+    PLZMA_ENCODER Encoder;
+    LZ_STATUS Status;
+
+    Encoder = Context->InternalState;
+
+    //
+    // Write out the the verification fields if requested.
+    //
+
+    if (WriteCheckFields != FALSE) {
+        Status = LzpWriteCheckFields(Encoder);
+        if (Status != LzSuccess) {
+            goto FinishEncodeEnd;
+        }
     }
 
-    //
-    // Write out the the verification fields.
-    //
+    Status = LzSuccess;
 
-    Result = LzpWriteCheckFields(Encoder);
-
-LzmaEncodeStreamEnd:
+FinishEncodeEnd:
     LzpLzmaDestroyEncoder(Encoder, Context);
-    return Result;
+    Context->InternalState = NULL;
+    return Status;
 }
 
 //
@@ -774,11 +839,7 @@ Return Value:
 
     PLZMA_ENCODER Encoder;
     LZMA_ENCODER_PROPERTIES Properties;
-    LZ_STATUS Status;
 
-    Context->CompressedCrc32 = 0;
-    Context->UncompressedCrc32 = 0;
-    Context->UncompressedSize = 0;
     LzpCrcInitialize();
     Encoder = Context->Reallocate(NULL, sizeof(LZMA_ENCODER));
     if (Encoder == NULL) {
@@ -786,25 +847,13 @@ Return Value:
     }
 
     memset(Encoder, 0, sizeof(LZMA_ENCODER));
-    Status = LzpRangeEncoderInitialize(&(Encoder->RangeEncoder), Context);
-    if (Status != LzSuccess) {
-        goto CreateEncoderEnd;
-    }
-
     LzpInitializeMatchFinder(&(Encoder->MatchFinderData));
-    LzLzmaEncoderInitializeProperties(&Properties);
+    LzLzmaInitializeProperties(&Properties);
     LzpLzmaEncoderSetProperties(Encoder, &Properties);
     LzpLzmaInitializeFastPosition(Encoder->FastPosition);
     LzpLzmaInitializePriceTables(Encoder->ProbabilityPrices);
     Encoder->LiteralProbabilities = NULL;
     Encoder->SaveState.LiteralProbabilities = NULL;
-    Status = LzSuccess;
-
-CreateEncoderEnd:
-    if (Status != LzSuccess) {
-        LzpLzmaDestroyEncoder(Encoder, Context);
-    }
-
     return Encoder;
 }
 
@@ -1234,128 +1283,6 @@ Return Value:
 }
 
 LZ_STATUS
-LzpLzmaMemoryEncode (
-    PLZMA_ENCODER Encoder,
-    PUCHAR Destination,
-    PUINTN DestinationSize,
-    PCUCHAR Source,
-    UINTN SourceSize,
-    BOOL WriteEndMark,
-    PLZ_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine LZMA encodes the given data block in memory.
-
-Arguments:
-
-    Encoder - Supplies a pointer to the encoder.
-
-    Destination - Supplies a pointer to buffer where the compressed data will
-        be returned.
-
-    DestinationSize - Supplies a pointer that on input contains the size of the
-        destination buffer. On output, will contain the size of the encoded
-        data.
-
-    Source - Supplies a pointer to the data to compress.
-
-    SourceSize - Supplies the number of bytes in the source buffer.
-
-    WriteEndMark - Supplies a boolean indicating whether or not to write an
-        end marker.
-
-    Context - Supplies a pointer to the general LZ context.
-
-Return Value:
-
-    LZ status.
-
---*/
-
-{
-
-    LZ_CONTEXT LocalContext;
-    LZMA_ENCODER_OUT_BUFFER Out;
-    LZ_STATUS Result;
-
-    Out.Data = Destination;
-    Out.Remaining = *DestinationSize;
-    Out.Overflow = FALSE;
-    Encoder->WriteEndMark = WriteEndMark;
-    memcpy(&LocalContext, Context, sizeof(LZ_CONTEXT));
-    LocalContext.Write = LzpLzmaEncodeBufferWrite;
-    LocalContext.WriteContext = &Out;
-    Encoder->RangeEncoder.System = &LocalContext;
-    Result = LzpLzmaPrepareMemoryEncode(Encoder,
-                                        Source,
-                                        SourceSize,
-                                        FALSE,
-                                        &LocalContext);
-
-    if (Result != LzSuccess) {
-        return Result;
-    }
-
-    Result = LzpLzmaEncode(Encoder);
-    if ((Result == LzSuccess) && (Encoder->Position64 != SourceSize)) {
-        Result = LzErrorCorruptData;
-    }
-
-    *DestinationSize -= Out.Remaining;
-    if (Out.Overflow != FALSE) {
-        return LzErrorOutputEof;
-    }
-
-    return Result;
-}
-
-LZ_STATUS
-LzpLzmaPrepareMemoryEncode (
-    PLZMA_ENCODER Encoder,
-    PCUCHAR Source,
-    UINTN SourceSize,
-    ULONG KeepWindowSize,
-    PLZ_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine prepares for a memory-based LZMA encoding.
-
-Arguments:
-
-    Encoder - Supplies a pointer to the encoder.
-
-    Source - Supplies a pointer to the data to compress.
-
-    SourceSize - Supplies the number of bytes in the source buffer.
-
-    KeepWindowSize - Supplies the minimum window size to use.
-
-    Context - Supplies a pointer to the general LZ context.
-
-Return Value:
-
-    LZ status.
-
---*/
-
-{
-
-    Encoder->MatchFinderData.DirectInput = TRUE;
-    Encoder->MatchFinderData.BufferBase = (PUCHAR)Source;
-    Encoder->MatchFinderData.DirectInputRemaining = SourceSize;
-    Encoder->NeedInitialization = TRUE;
-    return LzpLzmaAllocateBuffers(Encoder, KeepWindowSize, Context);
-}
-
-LZ_STATUS
 LzpLzmaAllocateBuffers (
     PLZMA_ENCODER Encoder,
     ULONG KeepWindowSize,
@@ -1403,6 +1330,11 @@ Return Value:
     //
     // Allocate encoder buffers.
     //
+
+    Result = LzpRangeEncoderInitialize(&(Encoder->RangeEncoder), Context);
+    if (Result != LzSuccess) {
+        return Result;
+    }
 
     Sum = Encoder->Lc + Encoder->Lp;
     if ((Encoder->LiteralProbabilities == NULL) ||
@@ -1458,7 +1390,7 @@ Return Value:
 
     LzpLzmaResetEncoder(Encoder);
     LzpLzmaResetPrices(Encoder);
-    Encoder->Position64 = 0;
+    Context->UncompressedSize = 0;
     return LzSuccess;
 }
 
@@ -1753,7 +1685,7 @@ Return Value:
 
         if (ReportProgress != NULL) {
             Result = ReportProgress(RangeEncoder->System,
-                                    Encoder->Position64,
+                                    RangeEncoder->System->UncompressedSize,
                                     LzpRangeEncoderGetProcessed(RangeEncoder));
 
             if (Result != LzSuccess) {
@@ -1764,7 +1696,6 @@ Return Value:
     }
 
     LzpLzmaEncoderFinish(Encoder);
-    Encoder->RangeEncoder.System->UncompressedSize = Encoder->Position64;
     return Result;
 }
 
@@ -1867,7 +1798,7 @@ Return Value:
     }
 
     Range = &(Encoder->RangeEncoder);
-    CurrentPosition32 = (ULONG)(Encoder->Position64);
+    CurrentPosition32 = (ULONG)(Range->System->UncompressedSize);
     StartPosition32 = CurrentPosition32;
 
     //
@@ -1876,9 +1807,9 @@ Return Value:
     // repeat.
     //
 
-    if (Encoder->Position64 == 0) {
+    if (Range->System->UncompressedSize == 0) {
         if (Encoder->MatchFinder.GetCount(Encoder->MatchFinderContext) == 0) {
-            return LzpLzmaEncoderFlush(Encoder, CurrentPosition32);
+            goto LzmaEncodeOneBlockEnd;
         }
 
         LzpLzmaReadMatchDistances(Encoder, &PairCount);
@@ -2138,14 +2069,16 @@ Return Value:
                 }
 
             } else if (Processed >= (1 << 17)) {
-                Encoder->Position64 += CurrentPosition32 - StartPosition32;
+                Range->System->UncompressedSize +=
+                                           CurrentPosition32 - StartPosition32;
+
                 return LzpLzmaEncoderGetError(Encoder);
             }
         }
     }
 
 LzmaEncodeOneBlockEnd:
-    Encoder->Position64 += CurrentPosition32 - StartPosition32;
+    Range->System->UncompressedSize += CurrentPosition32 - StartPosition32;
     return LzpLzmaEncoderFlush(Encoder, CurrentPosition32);
 }
 
@@ -2289,55 +2222,6 @@ Return Value:
     }
 
     return Encoder->Result;
-}
-
-INTN
-LzpLzmaEncodeBufferWrite (
-    PLZ_CONTEXT Context,
-    PVOID Buffer,
-    UINTN Size
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs a simple write operation to a buffer for the memory
-    encode version of the encoder.
-
-Arguments:
-
-    Context - Supplies a pointer to the LZ context.
-
-    Buffer - Supplies a pointer where the read data should be returned for
-        read operations, or where the data to write exists for write oprations.
-
-    Size - Supplies the number of bytes to read or write.
-
-Return Value:
-
-    Returns the number of bytes read or written. For writes, anything other
-    than the full write size is considered failure. Reads however can return
-    less than asked for. If a read returns zero, that indicates end of file.
-
-    -1 on I/O failure.
-
---*/
-
-{
-
-    PLZMA_ENCODER_OUT_BUFFER Out;
-
-    Out = Context->WriteContext;
-    if (Out->Remaining < Size) {
-        Size = Out->Remaining;
-        Out->Overflow = TRUE;
-    }
-
-    memcpy(Out->Data, Buffer, Size);
-    Out->Remaining -= Size;
-    Out->Data += Size;
-    return Size;
 }
 
 VOID
@@ -3013,15 +2897,17 @@ Return Value:
 {
 
     RangeEncoder->System = NULL;
-    RangeEncoder->BufferBase =
+    if (RangeEncoder->DirectOutput == FALSE) {
+        RangeEncoder->BufferBase =
                      Context->Reallocate(NULL, LZMA_RANGE_ENCODER_BUFFER_SIZE);
 
-    if (RangeEncoder->BufferBase == NULL) {
-        return LzErrorMemory;
-    }
+        if (RangeEncoder->BufferBase == NULL) {
+            return LzErrorMemory;
+        }
 
-    RangeEncoder->BufferLimit = RangeEncoder->BufferBase +
-                                LZMA_RANGE_ENCODER_BUFFER_SIZE;
+        RangeEncoder->BufferLimit = RangeEncoder->BufferBase +
+                                    LZMA_RANGE_ENCODER_BUFFER_SIZE;
+    }
 
     return LzSuccess;
 }
@@ -3052,7 +2938,12 @@ Return Value:
 
 {
 
-    Context->Reallocate(RangeEncoder->BufferBase, 0);
+    if ((RangeEncoder->BufferBase != NULL) &&
+        (RangeEncoder->DirectOutput == FALSE)) {
+
+        Context->Reallocate(RangeEncoder->BufferBase, 0);
+    }
+
     RangeEncoder->BufferBase = NULL;
     return;
 }
@@ -3305,12 +3196,19 @@ Return Value:
     }
 
     Size = RangeEncoder->Buffer - RangeEncoder->BufferBase;
-    Written = RangeEncoder->System->Write(RangeEncoder->System,
-                                          RangeEncoder->BufferBase,
-                                          Size);
+    if (RangeEncoder->System->Write != NULL) {
+        Written = RangeEncoder->System->Write(RangeEncoder->System,
+                                              RangeEncoder->BufferBase,
+                                              Size);
 
-    if (Size != Written) {
-        RangeEncoder->Result = LzErrorWrite;
+        if (Size != Written) {
+            RangeEncoder->Result = LzErrorWrite;
+        }
+
+    } else {
+        if (RangeEncoder->Buffer == RangeEncoder->BufferLimit) {
+            RangeEncoder->Result = LzErrorOutputEof;
+        }
     }
 
     RangeEncoder->System->CompressedCrc32 =

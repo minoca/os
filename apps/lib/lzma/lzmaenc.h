@@ -187,6 +187,9 @@ Members:
 
     Result - Stores the resulting status code.
 
+    DirectOutput - Stores a boolean indicating whether or not the buffer was
+        allocated (FALSE) or not (TRUE).
+
 --*/
 
 typedef struct _LZMA_RANGE_ENCODER {
@@ -200,6 +203,7 @@ typedef struct _LZMA_RANGE_ENCODER {
     PLZ_CONTEXT System;
     ULONGLONG Processed;
     LZ_STATUS Result;
+    BOOL DirectOutput;
 } LZMA_RANGE_ENCODER, *PLZMA_RANGE_ENCODER;
 
 /*++
@@ -359,8 +363,6 @@ Members:
     NeedInitialization - Stores a boolean indicating whether or not the
         encoder still needs initialization.
 
-    Position64 - Stores the total offset the encoder is in the contents.
-
     MatchPriceCount - Stores the count of match prices.
 
     AlignPriceCount - Stores the count of align prices.
@@ -450,7 +452,6 @@ typedef struct _LZMA_ENCODER {
     BOOL Finished;
     BOOL Multithread;
     BOOL NeedInitialization;
-    ULONGLONG Position64;
     ULONG MatchPriceCount;
     ULONG AlignPriceCount;
     ULONG DistanceTableSize;
