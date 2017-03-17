@@ -123,7 +123,7 @@ function build() {
 
     } else {
         buildSources = commonSources + uosSources;
-        if (buildOs != "Darwin") {
+        if (buildOs != "Darwin" && buildOs != "FreeBSD") {
             buildConfig["DYNLIBS"] = ["-ldl"];
         }
     }

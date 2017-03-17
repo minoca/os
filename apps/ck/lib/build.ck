@@ -163,7 +163,7 @@ function build() {
     // Create the dynamic libraries.
     //
 
-    if ((buildOs != "Darwin") && (buildOs != "Windows")) {
+    if ((buildOs != "Darwin") && (buildOs != "Windows") && (buildOs != "FreeBSD")) {
        buildLibConfig["DYNLIBS"] = ["-ldl"];
     }
 

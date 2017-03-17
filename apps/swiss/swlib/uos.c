@@ -1391,7 +1391,7 @@ Return Value:
     strncpy(Name->Machine, UtsName.machine, sizeof(Name->Machine));
     Name->Machine[sizeof(Name->Machine) - 1] = '\0';
 
-#if defined(__APPLE__) || defined(__CYGWIN__)
+#if defined(__APPLE__) || defined(__CYGWIN__) || defined(__FreeBSD__)
 
     Name->DomainName[0] = '\0';
 

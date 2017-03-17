@@ -302,25 +302,57 @@ STTY_MEMBER SttyOptions[] = {
     {"onlcr", SttyTermiosOutput, ONLCR, 0, STTY_SANE_SET},
     {"onocr", SttyTermiosOutput, ONOCR, 0, STTY_SANE_CLEAR},
     {"onlret", SttyTermiosOutput, ONLRET, 0, STTY_SANE_CLEAR},
+#ifdef OFILL
     {"ofill", SttyTermiosOutput, OFILL, 0, STTY_SANE_CLEAR},
+#endif
+#ifdef OFDEL
     {"ofdel", SttyTermiosOutput, OFDEL, 0, STTY_SANE_CLEAR},
+#endif
+#ifdef CR0
     {"cr0", SttyTermiosOutput, CR0, CRDLY, STTY_NO_NEGATE | STTY_SANE_SET},
+#endif
+#ifdef CR1
     {"cr1", SttyTermiosOutput, CR1, CRDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
+#ifdef CR2
     {"cr2", SttyTermiosOutput, CR2, CRDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
+#ifdef CR3
     {"cr3", SttyTermiosOutput, CR3, CRDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
+#ifdef NL0
     {"nl0", SttyTermiosOutput, NL0, NLDLY, STTY_NO_NEGATE | STTY_SANE_SET},
+#endif
+#ifdef NL1
     {"nl1", SttyTermiosOutput, NL1, NLDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
     {"tab0", SttyTermiosOutput, TAB0, TABDLY, STTY_NO_NEGATE | STTY_SANE_SET},
+#ifdef TAB1
     {"tab1", SttyTermiosOutput, TAB1, TABDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
+#ifdef TAB2
     {"tab2", SttyTermiosOutput, TAB2, TABDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
     {"tab3", SttyTermiosOutput, TAB3, TABDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
     {"tabs", SttyTermiosOutput, TAB0, TABDLY, STTY_NO_NEGATE | STTY_HIDDEN},
+#ifdef BS0
     {"bs0", SttyTermiosOutput, BS0, BSDLY, STTY_NO_NEGATE | STTY_SANE_SET},
+#endif
+#ifdef BS1
     {"bs1", SttyTermiosOutput, BS1, BSDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
+#ifdef FF0
     {"ff0", SttyTermiosOutput, FF0, FFDLY, STTY_NO_NEGATE | STTY_SANE_SET},
+#endif
+#ifdef FF1
     {"ff1", SttyTermiosOutput, FF1, FFDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
+#ifdef VT0
     {"vt0", SttyTermiosOutput, VT0, VTDLY, STTY_NO_NEGATE | STTY_SANE_SET},
+#endif
+#ifdef VT1
     {"vt1", SttyTermiosOutput, VT1, VTDLY, STTY_NO_NEGATE | STTY_SANE_CLEAR},
+#endif
     {"parenb", SttyTermiosControl, PARENB, 0, 0},
     {"parodd", SttyTermiosControl, PARODD, 0, 0},
     {"cs5", SttyTermiosControl, CS5, CSIZE, STTY_NO_NEGATE},

@@ -66,7 +66,7 @@ TARGETLIBS = $(OBJROOT)/os/lib/yy/build/yy.a                     \
 
 include $(SRCROOT)/os/minoca.mk
 
-ifneq ($(OS),$(filter Windows_NT Minoca,$(OS)))
+ifneq ($(OS),$(filter Windows_NT Minoca FreeBSD,$(OS)))
 
 DYNLIBS += -ldl
 

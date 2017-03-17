@@ -32,7 +32,9 @@ Environment:
 
 #include <minoca/lib/types.h>
 
+#ifndef __FreeBSD__
 #include <alloca.h>
+#endif
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
