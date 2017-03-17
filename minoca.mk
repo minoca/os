@@ -59,7 +59,7 @@ else ifeq ($(BUILD_ARCH), $(filter armv7 armv6,$(BUILD_ARCH)))
 BUILD_BFD_ARCH := arm
 BUILD_OBJ_FORMAT := elf32-littlearm
 
-else ifeq ($(BUILD_ARCH), x86_64)
+else ifeq ($(BUILD_ARCH), $(filter x86_64 amd64,$(BUILD_ARCH)))
 BUILD_ARCH := x64
 BUILD_OBJ_FORMAT := elf64-x86-64
 BUILD_BFD_ARCH := i386

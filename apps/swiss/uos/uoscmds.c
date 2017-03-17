@@ -124,7 +124,7 @@ SWISS_COMMAND_ENTRY SwissCommands[] = {
      HostnameMain,
      0},
 
-#if !defined(__APPLE__) && !defined(__CYGWIN__)
+#if !defined(__APPLE__) && !defined(__CYGWIN__) && !defined(__FreeBSD__)
 
     {USERADD_COMMAND_NAME, USERADD_COMMAND_DESCRIPTION, UseraddMain, 0},
     {USERDEL_COMMAND_NAME, USERDEL_COMMAND_DESCRIPTION, UserdelMain, 0},

@@ -54,7 +54,9 @@ OBJS = $(COMMON_OBJS)   \
        misc.o    \
        part.o    \
 
+ifneq ($(shell uname -s),FreeBSD)
 DYNLIBS = -ldl
+endif
 
 endif
 
