@@ -37,7 +37,6 @@ function build() {
     var tzDataDir = "data/";
     var tzDataFiles;
     var tzDefault = "America/Los_Angeles";
-    var tzDefaultConfig;
     var tzDefaultData;
     var tzFiles;
     var tzSourceFiles;
@@ -92,34 +91,30 @@ function build() {
     almanac = {
         "type": "target",
         "label": "tzdata",
+        "output": mconfig.binroot + "/skel/usr/share/tz/tzdata";
         "inputs": tzFiles,
         "implicit": [":build_tzcomp"],
         "tool": "tzcomp",
-        "nostrip": true,
-    };
-
-    tzDefaultConfig = {
-        "TZCOMP_FLAGS": ["-z " + tzDefault, "-y" + tzCutoffYear]
+        "config": {"TZCOMP_FLAGS": ["-y" + tzCutoffYear]}
     };
 
     tzDefaultData = {
         "type": "target",
-        "label": "tzdflt",
+        "label": "tz",
+        "output": mconfig.binroot + "/skel/etc/tz";
         "inputs": tzFiles,
         "implicit": [":build_tzcomp"],
         "tool": "tzcomp",
-        "config": tzDefaultConfig,
-        "nostrip": true
+        "config": {"TZCOMP_FLAGS": ["-z" + tzDefault, "-y" + tzCutoffYear]},
     };
 
-    entries += binplace(almanac);
-    entries += binplace(tzDefaultData);
+    entries += [almanac, tzDefaultData];
 
     //
     // Create a group for the data files.
     //
 
-    tzDataFiles = [":tzdata", ":tzdflt"];
+    tzDataFiles = [":tzdata", ":tz"];
     entries += group("tz_files", tzDataFiles);
     return entries;
 }

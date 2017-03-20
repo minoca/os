@@ -62,13 +62,15 @@ include $(SRCROOT)/os/minoca.mk
 
 VPATH += $(BINROOT)
 
-postbuild: tzdata tzdflt
+postbuild: $(BINROOT)/skel/usr/share/tz/tzdata $(BINROOT)/skel/etc/tz
 
-tzdata: $(TZ_FILES) | $(BINARY)
+$(BINROOT)/skel/usr/share/tz/tzdata: $(TZ_FILES) | $(BINARY)
 	@echo Compiling time zone almanac
-	@./$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdata -y $(TZ_CUTOFF_YEAR)
+	@mkdir -p $(BINROOT)/skel/usr/share/tz
+	./$(BINARY) $(TZ_FILES) -o $@ -y $(TZ_CUTOFF_YEAR)
 
-tzdflt: $(TZ_FILES) | $(BINARY)
+$(BINROOT)/skel/etc/tz: $(TZ_FILES) | $(BINARY)
 	@echo Compiling default time zone: $(TZ_DEFAULT)
-	@.//$(BINARY) $(TZ_FILES) -o $(BINROOT)/tzdflt -z $(TZ_DEFAULT) -y $(TZ_CUTOFF_YEAR)
+	@mkdir -p $(BINROOT)/skel/etc
+	./$(BINARY) $(TZ_FILES) -o $@ -z $(TZ_DEFAULT) -y $(TZ_CUTOFF_YEAR)
 

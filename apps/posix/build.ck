@@ -44,14 +44,15 @@ function build() {
     var updateRcTool;
 
     binfiles = [
+        ["apps/debug/client:debug", "debug"]
         ["apps/efiboot:efiboot", "efiboot"],
         ["apps/mount:mount", "mount"],
+        ["apps/setup:msetup", "msetup"],
         ["apps/netcon:netcon", "netcon"],
         ["apps/profile:profile", "profile"],
-        ["apps/setup:msetup", "msetup"],
         ["apps/swiss:swiss", "sh"],
+        ["apps/tzset:tzset", "tzset"],
         ["apps/unmount:umount", "umount"],
-        ["apps/debug/client:debug", "debug"]
     ];
 
     libfiles = [

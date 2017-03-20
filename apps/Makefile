@@ -39,6 +39,7 @@ APPS = ck       \
        swiss    \
        testapps \
        tzcomp   \
+       tzset    \
        unmount  \
        vmstat   \
 

@@ -58,6 +58,7 @@ function build() {
         "apps/swiss:swiss",
         "apps/swiss:build_swiss",
         "apps/tzcomp:tz_files",
+        "apps/tzset:tzset",
         "apps/unmount:umount",
         "apps/vmstat:vmstat",
     ];

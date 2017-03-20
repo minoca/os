@@ -82,6 +82,13 @@ extern "C" {
 #define _PATH_VARTMP    "/var/tmp/"
 
 //
+// Minoca-specific paths.
+//
+
+#define _PATH_TZ        "/etc/tz"
+#define _PATH_TZALMANAC "/usr/share/tz/tzdata"
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
