@@ -168,8 +168,6 @@ var SystemConfigFiles = [
     "devmap.set",
     "init.set",
     "init.sh",
-    "tzdata",
-    "tzdflt",
 ];
 
 var SystemFiles = [
@@ -506,8 +504,6 @@ if (plat == "install-armv6") {
         "spb.drv",
         "special.drv",
         "tps65217.drv",
-        "tzdata",
-        "tzdflt",
         "usbcomp.drv",
         "usbcore.drv",
         "usbhid.drv",
@@ -635,8 +631,6 @@ if (plat == "install-armv7") {
         "spb.drv",
         "special.drv",
         "tps65217.drv",
-        "tzdata",
-        "tzdflt",
         "usbcomp.drv",
         "usbcore.drv",
         "usbhid.drv",
@@ -748,8 +742,6 @@ if (plat == "install-x86") {
         "ser16550.drv",
         "smsc95xx.drv",
         "special.drv",
-        "tzdata",
-        "tzdflt",
         "uhci.drv",
         "usbcomp.drv",
         "usbcore.drv",

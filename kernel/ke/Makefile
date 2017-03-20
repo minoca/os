@@ -56,7 +56,6 @@ OBJS = crash.o    \
        sysclock.o \
        sysres.o   \
        timer.o    \
-       timezone.o \
        version.o  \
        video.o    \
        workitem.o \

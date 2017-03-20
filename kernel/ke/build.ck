@@ -53,7 +53,6 @@ function build() {
         "sysclock.c",
         "sysres.c",
         "timer.c",
-        "timezone.c",
         "version.c",
         "video.c",
         "workitem.c"

@@ -35,7 +35,7 @@ Author:
 
 #define BOOT_INITIALIZATION_BLOCK_VERSION 3
 
-#define KERNEL_INITIALIZATION_BLOCK_VERSION 3
+#define KERNEL_INITIALIZATION_BLOCK_VERSION 4
 
 //
 // Define boot initialization flags.
@@ -287,8 +287,6 @@ Members:
         the kernel by the loader. All system resources begin with a
         SYSTEM_RESOURCE_HEADER.
 
-    TimeZoneData - Stores a pointer to the initial time zone data.
-
     BootEntry - Stores a pointer to the boot entry that was launched.
 
     BootTime - Stores the boot time of the system.
@@ -321,7 +319,6 @@ typedef struct _KERNEL_INITIALIZATION_BLOCK {
     LOADER_BUFFER DeviceToDriverFile;
     LOADER_BUFFER DeviceMapFile;
     LIST_ENTRY SystemResourceListHead;
-    LOADER_BUFFER TimeZoneData;
     PVOID BootEntry;
     SYSTEM_TIME BootTime;
     SYSTEM_FIRMWARE_TYPE FirmwareType;

@@ -797,7 +797,7 @@ Return Value:
     File = fopen(FilePath, "rb");
     if (File == NULL) {
         fprintf(stderr,
-                "tzdata: Failed to open %s: %s\n",
+                "tzcomp: Failed to open %s: %s\n",
                 FilePath,
                 strerror(errno));
 

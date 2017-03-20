@@ -106,12 +106,6 @@ LIST_ENTRY HlCalendarTimers;
 KSPIN_LOCK HlCalendarTimerLock;
 
 //
-// Store a global indicating if hardware time is UTC or local time.
-//
-
-BOOL HlHardwareTimeIsLocal = FALSE;
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -158,7 +152,6 @@ Return Value:
     RUNLEVEL OldRunLevel;
     PCALENDAR_TIMER_READ Read;
     KSTATUS Status;
-    LONG TimeZoneOffset;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -220,13 +213,6 @@ Return Value:
         SystemTime->Nanoseconds = HardwareTime.U.SystemTime.Nanoseconds;
 
     } else {
-        if (HlHardwareTimeIsLocal != FALSE) {
-            Status = KeGetCurrentTimeZoneOffset(&TimeZoneOffset);
-            if (KSUCCESS(Status)) {
-                HardwareTime.U.CalendarTime.Second += TimeZoneOffset;
-            }
-        }
-
         Status = RtlCalendarTimeToSystemTime(&(HardwareTime.U.CalendarTime),
                                              SystemTime);
 
@@ -337,20 +323,7 @@ Return Value:
              CALENDAR_TIMER_FEATURE_WANT_CALENDAR_FORMAT) != 0) {
 
             CalendarTime = &(HardwareTime.U.CalendarTime);
-            if (HlHardwareTimeIsLocal != FALSE) {
-
-                //
-                // The time zone data is protected by a dispatch level lock,
-                // so interrupts cannot be disabled until after this call.
-                //
-
-                RtlSystemTimeToLocalCalendarTime(&SystemTime, CalendarTime);
-                Enabled = ArDisableInterrupts();
-
-            } else {
-                RtlSystemTimeToGmtCalendarTime(&SystemTime, CalendarTime);
-            }
-
+            RtlSystemTimeToGmtCalendarTime(&SystemTime, CalendarTime);
             HardwareTime.IsCalendarTime = TRUE;
 
         } else {
@@ -635,18 +608,7 @@ Return Value:
     // hardware.
     //
 
-    if (HlHardwareTimeIsLocal != FALSE) {
-
-        //
-        // The time zone data is protected by a dispatch level lock,
-        // so interrupts cannot be disabled until after this call.
-        //
-
-        RtlSystemTimeToLocalCalendarTime(&SystemTime, &CalendarTime);
-
-    } else {
-        RtlSystemTimeToGmtCalendarTime(&SystemTime, &CalendarTime);
-    }
+    RtlSystemTimeToGmtCalendarTime(&SystemTime, &CalendarTime);
 
     //
     // Convert the calendar time to an EFI time.

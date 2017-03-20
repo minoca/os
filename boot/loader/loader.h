@@ -47,7 +47,6 @@ Author:
 #define DEVICE_TO_DRIVER_FILE "dev2drv.set"
 #define DEVICE_MAP_FILE "devmap.set"
 #define FIRMWARE_TABLES_FILE "fwtables.dat"
-#define TIME_ZONE_DATA_FILE "tzdflt"
 
 //
 // ------------------------------------------------------ Data Type Definitions

@@ -93,13 +93,6 @@ BopGetConfigurationDirectory (
     );
 
 VOID
-BopLoadTimeZoneData (
-    PBOOT_VOLUME BootDevice,
-    FILE_ID ConfigurationDirectory,
-    PKERNEL_INITIALIZATION_BLOCK Parameters
-    );
-
-VOID
 BopSetBootTime (
     PKERNEL_INITIALIZATION_BLOCK Parameters
     );
@@ -595,16 +588,6 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto MainEnd;
     }
-
-    //
-    // Load the kernel's time zone data.
-    //
-
-    BopLoadTimeZoneData(BootDevice,
-                        ConfigurationDirectory,
-                        KernelParameters);
-
-    LoaderStep += 1;
 
     //
     // Load the boot driver list, device to driver database, and boot device
@@ -1968,59 +1951,6 @@ Return Value:
 
     *DirectoryFileId = Properties.FileId;
     return STATUS_SUCCESS;
-}
-
-VOID
-BopLoadTimeZoneData (
-    PBOOT_VOLUME BootDevice,
-    FILE_ID ConfigurationDirectory,
-    PKERNEL_INITIALIZATION_BLOCK Parameters
-    )
-
-/*++
-
-Routine Description:
-
-    This routine loads the default time zone data and attaches it to the
-    kernel initialization block.
-
-Arguments:
-
-    BootDevice - Supplies a pointer to the boot device.
-
-    ConfigurationDirectory - Supplies the file ID of the configuration
-        directory.
-
-    Parameters - Supplies a pointer to the kernel initialization block.
-
-Return Value:
-
-    None, as failure here is not fatal.
-
---*/
-
-{
-
-    UINTN DataSize;
-    PVOID DataVirtual;
-    KSTATUS Status;
-
-    Status = BoLoadFile(BootDevice,
-                        &ConfigurationDirectory,
-                        TIME_ZONE_DATA_FILE,
-                        &DataVirtual,
-                        &DataSize,
-                        NULL);
-
-    if (!KSUCCESS(Status)) {
-        goto LoadTimeZoneDataEnd;
-    }
-
-    Parameters->TimeZoneData.Buffer = DataVirtual;
-    Parameters->TimeZoneData.Size = DataSize;
-
-LoadTimeZoneDataEnd:
-    return;
 }
 
 VOID

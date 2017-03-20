@@ -183,31 +183,6 @@ Return Value:
 
 --*/
 
-KSTATUS
-KepInitializeTimeZoneSupport (
-    PVOID TimeZoneData,
-    ULONG TimeZoneDataSize
-    );
-
-/*++
-
-Routine Description:
-
-    This routine initializes time zone support in the kernel.
-
-Arguments:
-
-    TimeZoneData - Supplies a pointer to the initial time zone data from the
-        loader. A copy of this data will be made.
-
-    TimeZoneDataSize - Supplies the size of the data in bytes.
-
-Return Value:
-
-    Status code.
-
---*/
-
 VOID
 KepExecutePendingDpcs (
     VOID

@@ -237,18 +237,6 @@ Return Value:
             }
 
             //
-            // Initialize time zone support.
-            //
-
-            Status = KepInitializeTimeZoneSupport(
-                                               Parameters->TimeZoneData.Buffer,
-                                               Parameters->TimeZoneData.Size);
-
-            if (!KSUCCESS(Status)) {
-                goto InitializeEnd;
-            }
-
-            //
             // Initialize system crash support.
             //
 
@@ -536,9 +524,6 @@ Return Value:
     UserSharedData->ProcessorCounterFrequency =
                                             HlQueryProcessorCounterFrequency();
 
-    RtlGetTimeZoneData(NULL,
-                       (PULONG)&(UserSharedData->CurrentTimeZoneDataSize));
-
     //
     // If no calendar services are around, set this to the boot time and go
     // from there.
@@ -556,8 +541,8 @@ Return Value:
     //
 
     KeGetSystemTime(&SystemTime);
-    RtlSystemTimeToLocalCalendarTime(&(Parameters->BootTime), &CalendarTime);
-    RtlDebugPrint("Boot time: %02d/%02d/%04d %02d:%02d:%02d\n",
+    RtlSystemTimeToGmtCalendarTime(&(Parameters->BootTime), &CalendarTime);
+    RtlDebugPrint("Boot time: %02d/%02d/%04d %02d:%02d:%02d GMT\n",
                   CalendarTime.Month + 1,
                   CalendarTime.Day,
                   CalendarTime.Year,
