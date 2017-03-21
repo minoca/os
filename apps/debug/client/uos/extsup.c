@@ -30,7 +30,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <assert.h>
+#include <dlfcn.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>
 #include <minoca/debug/dbgext.h>
@@ -38,6 +41,8 @@ Environment:
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+#define HANDLE_TABLE_GROWTH 10
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -50,6 +55,10 @@ Environment:
 //
 // -------------------------------------------------------------------- Globals
 //
+
+PVOID *DbgHandleTable = NULL;
+ULONG DbgHandleTableSize = 0;
+ULONG DbgNextHandle = 1;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -80,8 +89,50 @@ Return Value:
 
 {
 
-    DbgOut("Error: Loading of extensions not yet supported!\n");
-    return 0;
+    PVOID NewHandle;
+    PVOID *NewHandleTable;
+
+    //
+    // Attempt to load the library. Bail on failure.
+    //
+
+    NewHandle = dlopen(BinaryName, RTLD_NOW | RTLD_GLOBAL);
+    if (NewHandle == NULL) {
+        return 0;
+    }
+
+    //
+    // Save the new handle in the table and return the index representing that
+    // handle. If saving this new handle overruns the current buffer, allocate
+    // a bigger buffer, copy the old contents in, and free the old buffer.
+    //
+
+    if (DbgNextHandle >= DbgHandleTableSize) {
+        NewHandleTable = malloc((DbgHandleTableSize + HANDLE_TABLE_GROWTH) *
+                                sizeof(PVOID));
+
+        if (NewHandleTable == NULL) {
+            dlclose(NewHandle);
+            return 0;
+        }
+
+        if (DbgHandleTable != NULL) {
+            memcpy(NewHandleTable,
+                   DbgHandleTable,
+                   DbgHandleTableSize * sizeof(PVOID));
+
+            free(DbgHandleTable);
+        }
+
+        DbgHandleTable = NewHandleTable;
+        DbgHandleTableSize += HANDLE_TABLE_GROWTH;
+    }
+
+    assert(DbgNextHandle < DbgHandleTableSize);
+
+    DbgHandleTable[DbgNextHandle] = NewHandle;
+    DbgNextHandle += 1;
+    return DbgNextHandle - 1;
 }
 
 VOID
@@ -107,7 +158,7 @@ Return Value:
 
 {
 
-    DbgOut("Error: Unloading of extensions not yet supported!\n");
+    dlclose(DbgHandleTable[Handle]);
     return;
 }
 
@@ -139,8 +190,7 @@ Return Value:
 
 {
 
-    DbgOut("Error: DbgGetProcedureAddress not yet supported!\n");
-    return NULL;
+    return dlsym(DbgHandleTable[Handle], ProcedureName);
 }
 
 //

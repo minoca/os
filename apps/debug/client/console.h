@@ -37,7 +37,7 @@ Author:
 //
 
 typedef
-VOID
+PVOID
 (*PDBGR_THREAD_ROUTINE) (
     PVOID Parameter
     );
@@ -54,7 +54,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns a pointer value.
 
 --*/
 
@@ -679,7 +679,7 @@ Return Value:
 
 --*/
 
-ULONG
+BOOL
 CommReceiveBytesReady (
     VOID
     );
@@ -688,8 +688,8 @@ CommReceiveBytesReady (
 
 Routine Description:
 
-    This routine determines how many bytes of data are ready to be read from
-    the communication channel.
+    This routine determines whether or not bytes can be read from the
+    debugger connection.
 
 Arguments:
 
@@ -697,7 +697,9 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes ready to be read.
+    TRUE if there are bytes ready to be read.
+
+    FALSE if no bytes are ready at this time.
 
 --*/
 

@@ -3232,7 +3232,6 @@ Return Value:
 
 {
 
-    ULONG BytesAvailable;
     ULONG HeaderSize;
     UCHAR Magic;
     ULONG Retries;
@@ -3255,8 +3254,7 @@ Return Value:
         if (TimeoutMilliseconds != 0) {
             TimeWaited = 0;
             while (TRUE) {
-                BytesAvailable = CommReceiveBytesReady();
-                if (BytesAvailable != 0) {
+                if (CommReceiveBytesReady() != FALSE) {
                     break;
                 }
 
@@ -3391,7 +3389,7 @@ Return Value:
     // Check to see if the target has already sent a sync to the host.
     //
 
-    while (CommReceiveBytesReady() != 0) {
+    while (CommReceiveBytesReady() != FALSE) {
         Result = DbgpKdReceiveBytes(&SynchronizeByte, sizeof(UCHAR));
         if (Result == FALSE) {
             Status = EPIPE;
@@ -3425,7 +3423,7 @@ Return Value:
 
         TimeWaited = 0;
         while (TimeWaited < 5000) {
-            if (CommReceiveBytesReady() != 0) {
+            if (CommReceiveBytesReady() != FALSE) {
                 Result = DbgpKdReceiveBytes(&SynchronizeByte, 1);
                 if (Result == FALSE) {
                     Status = EPIPE;

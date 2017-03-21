@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2013 Minoca Corp.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,16 +9,16 @@
 #
 #   Binary Name:
 #
-#       DbgExt
+#       DbgExt (Build Machine)
 #
 #   Abstract:
 #
 #       This module implements the import library for kernel debugger
-#       extensions.
+#       extensions on the build machine.
 #
 #   Author:
 #
-#       Evan Green 8-May-2013
+#       Evan Green 20-Mar-2017
 #
 #   Environment:
 #
@@ -30,19 +30,11 @@ BINARY = dbgext.a
 
 BINARYTYPE = library
 
-BINPLACE = bin
+BINPLACE = tools/lib
 
 OBJS = extimp.o   \
 
-ifeq ($(OS),Windows_NT)
-
-DIRS = win32
-
-else
-
-DIRS = uos
-
-endif
+VPATH += ..:
 
 include $(SRCROOT)/os/minoca.mk
 

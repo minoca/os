@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2013 Minoca Corp.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,50 +9,46 @@
 #
 #   Binary Name:
 #
-#       Minoca Debugger
+#       Build Debugger
 #
 #   Abstract:
 #
-#       This program implements the debugger (command line version), targeted
-#       at Minoca OS.
+#       This program implements the Minoca debugger compiled for the build
+#       machine.
 #
 #   Author:
 #
-#       Evan Green 27-May-2013
+#       Evan Green 20-Mar-2017
 #
 #   Environment:
 #
-#       User Mode
+#       POSIX
 #
 ################################################################################
 
 BINARY = debug
 
-BINPLACE = bin
+BINPLACE = tools/bin
 
 BINARYTYPE = app
 
 INCLUDES += $(SRCDIR)/..;                        \
             $(SRCROOT)/os/lib/im;                \
-            $(SRCROOT)/os/apps/libc/include;
 
-TARGETLIBS = $(OBJROOT)/os/lib/im/im.a                  \
+TARGETLIBS = $(OBJROOT)/os/lib/im/build/im.a     \
 
-DYNLIBS = -lminocaos
+ifneq ($(OS),$(filter Windows_NT Minoca FreeBSD,$(OS)))
+
+DYNLIBS = -ldl -pthread
+
+endif
 
 VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
 OBJS = $(COMMON_OBJS)   \
-       ptrace.o         \
-       uos/commos.o     \
-       uos/extsup.o     \
-       uos/sock.o       \
+       $(UOS_OBJS)      \
 
 include $(SRCROOT)/os/minoca.mk
-
-postbuild:
-	@mkdir -p $(BINROOT)/skel/bin
-	@$(STRIP) -p -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY)
 

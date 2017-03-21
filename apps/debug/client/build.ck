@@ -26,7 +26,7 @@ Environment:
 
 --*/
 
-from menv import application, mconfig;
+from menv import addConfig, application, mconfig;
 
 function build() {
     var arch = mconfig.arch;
@@ -50,6 +50,7 @@ function build() {
     var targetDynlibs;
     var targetLibs;
     var targetSources;
+    var uosSources;
     var win32CmdSources;
     var win32CommonSources;
     var win32GuiSources;
@@ -93,10 +94,18 @@ function build() {
         "armv7/dbgarch.c"
     ];
 
+    uosSources = [
+        "uos/commos.c",
+        "uos/extsup.c",
+        "uos/ptrace.c",
+        "uos/sock.c",
+    ];
+
     minocaSources = [
-        "minoca/cmdln.c",
-        "minoca/extsup.c",
-        "minoca/sock.c"
+        "uos/commos.c",
+        "uos/extsup.c",
+        "minoca/ptrace.c",
+        "uos/sock.c",
     ];
 
     win32Sources = [
@@ -146,7 +155,7 @@ function build() {
     }
 
     targetSources = commonSources + minocaSources + targetLibs +
-                     targetDynlibs + archSources;
+                    targetDynlibs + archSources;
 
     if ((buildArch == "x86") || (buildArch == "x64")) {
         buildArchSources = x86Sources;
@@ -162,7 +171,7 @@ function build() {
     buildGuiConfig = {};
     if (buildOs == "Windows") {
         win32CommonSources = commonSources + buildArchSources +
-                               win32Sources;
+                             win32Sources;
 
         buildSources = win32CommonSources + win32CmdSources;
         buildGuiSources = win32CommonSources + win32GuiSources;
@@ -179,6 +188,14 @@ function build() {
     } else if (buildOs == "Minoca") {
         buildSources = commonSources + minocaSources + targetLibs;
         buildConfig["DYNLIBS"] = ["-lminocaos"];
+
+    } else {
+        buildSources = commonSources + uosSources + buildArchSources;
+        if ((buildOs != "Darwin") && (buildOs != "FreeBSD")) {
+            addConfig(buildConfig, "DYNLIBS", "-ldl");
+        }
+
+        addConfig(buildConfig, "DYNLIBS", "-lpthread");
 
     } else {
         buildSources = null;

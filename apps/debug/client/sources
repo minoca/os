@@ -59,5 +59,10 @@ ARMV7_OBJS = armv7/dbgarch.o
 
 ARMV6_OBJS = $(ARMV7_OBJS)
 
-EXTRA_SRC_DIRS = x86 armv7 armv6
+UOS_OBJS = uos/commos.o \
+           uos/extsup.o \
+           uos/ptrace.o \
+           uos/sock.o   \
+
+EXTRA_SRC_DIRS = x86 armv7 armv6 uos
 

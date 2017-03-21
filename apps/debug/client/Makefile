@@ -31,6 +31,10 @@ ifeq ($(OS),Windows_NT)
 
 DIRS += win32   \
 
+else
+
+DIRS += uos     \
+
 endif
 
 TESTDIRS = tdwarf   \

@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2012 Minoca Corp.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,29 +9,41 @@
 #
 #   Binary Name:
 #
-#       Kernel Debugging Extensions
+#       Kernel Debugger Extensions (Build Machine)
 #
 #   Abstract:
 #
-#       This module implements kernel debugger extensions.
+#       This shared library contains the debugger extensions built for the
+#       build machine.
 #
 #   Author:
 #
-#       Evan Green 10-Sep-2012
+#       Evan Green 20-Mar-2017
 #
 #   Environment:
 #
-#       Debug Client
+#       POSIX
 #
 ################################################################################
 
-BINARY = kexts.so
+SO_VERSION_MAJOR := 1
+SO_VERSION_MINOR := 0
+
+BINARY := kexts.so
 
 BINARYTYPE = so
 
-BINPLACE = bin
+BUILD = yes
 
-TARGETLIBS = $(BINROOT)/dbgext.a
+BINPLACE = tools/lib
+
+TARGETLIBS = $(TOOLBINROOT)/lib/dbgext.a
+
+INCLUDES += $(SRCDIR)/..;
+
+VPATH += ..:
+
+OS ?= $(shell uname -s)
 
 OBJS = acpiext.o  \
        kexts.o    \
@@ -40,13 +52,9 @@ OBJS = acpiext.o  \
        reslist.o  \
        threads.o  \
 
-ifeq ($(OS),Windows_NT)
-
-DIRS = win32
-
-else
-
-DIRS = uos
+ifeq ($(OS),Darwin)
+BINARY := kexts.$(SO_VERSION_MAJOR).dylib
+endif
 
 endif
 

@@ -77,22 +77,22 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-VOID
+PVOID
 DbgrpServerThread (
     PVOID Parameter
     );
 
-VOID
+PVOID
 DbgrpServerConnectionThread (
     PVOID Parameter
     );
 
-VOID
+PVOID
 DbgrpServerConnectionReceiveThread (
     PVOID Parameter
     );
 
-VOID
+PVOID
 DbgrpClientNetworkThread (
     PVOID Parameter
     );
@@ -870,7 +870,7 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
-VOID
+PVOID
 DbgrpServerThread (
     PVOID Parameter
     )
@@ -889,7 +889,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    NULL always.
 
 --*/
 
@@ -944,10 +944,10 @@ Return Value:
     //
 
     Context->Server.ShutDown = 0;
-    return;
+    return NULL;
 }
 
-VOID
+PVOID
 DbgrpServerConnectionThread (
     PVOID Parameter
     )
@@ -966,7 +966,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    NULL always.
 
 --*/
 
@@ -1339,10 +1339,10 @@ ServerConnectionThreadEnd:
     DbgrpServerAcquireLock(Context);
     DbgrpServerDestroyClient(Client);
     DbgrpServerReleaseLock(Context);
-    return;
+    return NULL;
 }
 
-VOID
+PVOID
 DbgrpServerConnectionReceiveThread (
     PVOID Parameter
     )
@@ -1361,7 +1361,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    NULL always.
 
 --*/
 
@@ -1483,10 +1483,10 @@ Return Value:
     }
 
     Client->ReceiveState = DebuggerServerReceiveShutDown;
-    return;
+    return NULL;
 }
 
-VOID
+PVOID
 DbgrpClientNetworkThread (
     PVOID Parameter
     )
@@ -1505,7 +1505,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    NULL always.
 
 --*/
 
@@ -1807,7 +1807,7 @@ Return Value:
 
     DbgrSocketClose(Context->Client.Socket);
     Context->Client.ShutDown = 1;
-    return;
+    return NULL;
 }
 
 INT

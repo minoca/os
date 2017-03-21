@@ -63,7 +63,7 @@ ConsoleControlHandler (
     DWORD ControlType
     );
 
-VOID
+PVOID
 DbgrpWin32InputThread (
     PVOID Parameter
     );
@@ -591,7 +591,7 @@ Return Value:
     return FALSE;
 }
 
-VOID
+PVOID
 DbgrpWin32InputThread (
     PVOID Parameter
     )
@@ -611,7 +611,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    NULL always.
 
 --*/
 
@@ -655,6 +655,6 @@ Return Value:
         close(DbgStandardInPipe[1]);
     }
 
-    return;
+    return NULL;
 }
 

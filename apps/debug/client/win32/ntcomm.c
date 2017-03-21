@@ -654,7 +654,7 @@ Return Value:
     return TRUE;
 }
 
-ULONG
+BOOL
 CommReceiveBytesReady (
     VOID
     )
@@ -663,8 +663,8 @@ CommReceiveBytesReady (
 
 Routine Description:
 
-    This routine determines how many bytes of data are ready to be read from
-    the communication channel.
+    This routine determines whether or not bytes can be read from the
+    debugger connection.
 
 Arguments:
 
@@ -672,7 +672,9 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes ready to be read.
+    TRUE if there are bytes ready to be read.
+
+    FALSE if no bytes are ready at this time.
 
 --*/
 
@@ -689,6 +691,7 @@ Return Value:
     // available to be received.
     //
 
+    BytesAvailable = 0;
     switch (CommChannelType) {
     case CommChannelPipe:
     case CommChannelExec:
@@ -707,10 +710,7 @@ Return Value:
 
     case CommChannelSerial:
         Result = ClearCommError(CommChannel, NULL, &SerialStatus);
-        if (Result == FALSE) {
-            BytesAvailable = 0;
-
-        } else {
+        if (Result != FALSE) {
             BytesAvailable = SerialStatus.cbInQue;
         }
 
@@ -718,10 +718,7 @@ Return Value:
 
     case CommChannelTcp:
         PeekSize = DbgrSocketPeek((int)CommChannel, Peek, sizeof(Peek));
-        if (PeekSize < 0) {
-            BytesAvailable = 0;
-
-        } else {
+        if (PeekSize > 0) {
             BytesAvailable = PeekSize;
         }
 
@@ -731,11 +728,14 @@ Return Value:
 
         assert(FALSE);
 
-        BytesAvailable = 0;
         break;
     }
 
-    return BytesAvailable;
+    if (BytesAvailable != 0) {
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 VOID
