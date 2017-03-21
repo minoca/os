@@ -38,11 +38,6 @@ Environment:
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
-#ifdef __FreeBSD__
-#define __freadahead(stream) 0
-#else
-#include <stdio_ext.h>
-#endif
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -285,9 +280,16 @@ Return Value:
 --*/
 
 {
+
+    int Result;
     pthread_t Thread;
 
-    return pthread_create(&Thread, NULL, ThreadRoutine, Parameter);
+    Result = pthread_create(&Thread, NULL, ThreadRoutine, Parameter);
+    if (Result == 0) {
+        pthread_detach(Thread);
+    }
+
+    return Result;
 }
 
 int
@@ -481,76 +483,63 @@ Return Value:
     int Result;
 
     ControlKeyValue = 0;
+    while (TRUE) {
+        fflush(NULL);
 
-    //
-    // If standard in is ready to go, then just read that.
-    //
+        //
+        // Wait for either standard in or a remote command.
+        //
 
-    if (__freadahead(stdin) != 0) {
-        Character = fgetc(stdin);
-
-        assert(Character != -1);
-
-    } else {
-        while (TRUE) {
-            fflush(NULL);
-
-            //
-            // Wait for either standard in or a remote command.
-            //
-
-            Events[0].fd = fileno(stdin);
-            Events[0].events = POLLIN;
-            Events[0].revents = 0;
-            Events[1].fd = DbgRemoteInputPipe[1];
-            Events[1].events = POLLIN;
-            Events[1].revents = 0;
-            Result = poll(Events, 2, -1);
-            if (Result == -1) {
-                if (errno == EINTR) {
-                    continue;
-
-                } else {
-                    DbgOut("Failed to poll: %s\n", strerror(errno));
-                    return FALSE;
-                }
-            }
-
-            //
-            // Grab a character from standard in.
-            //
-
-            if ((Events[0].revents & POLLIN) != 0) {
-                Character = fgetc(stdin);
-                if (Character == -1) {
-                    if (errno == EINTR) {
-                        continue;
-                    }
-
-                    DbgOut("Failed to get character. Errno %d\n", errno);
-                    return FALSE;
-                }
-
-                break;
-
-            //
-            // Perform the read from the pipe to get the data out. The data
-            // itself doesn't matter, the pipe is just a signaling mechanism.
-            //
-
-            } else if ((Events[1].revents & POLLIN) != 0) {
-                do {
-                    BytesRead = read(DbgRemoteInputPipe[1], &Character, 1);
-
-                } while ((BytesRead < 0) && (errno == EINTR));
-
-                Character = 0;
-                ControlKeyValue = KEY_REMOTE;
-                break;
+        Events[0].fd = STDIN_FILENO;
+        Events[0].events = POLLIN;
+        Events[0].revents = 0;
+        Events[1].fd = DbgRemoteInputPipe[1];
+        Events[1].events = POLLIN;
+        Events[1].revents = 0;
+        Result = poll(Events, 2, -1);
+        if (Result == -1) {
+            if (errno == EINTR) {
+                continue;
 
             } else {
-                DbgOut("Poll succeeded, but nothing available.\n");
+                DbgOut("Failed to poll: %s\n", strerror(errno));
+                return FALSE;
             }
+        }
+
+        //
+        // Grab a character from standard in.
+        //
+
+        if ((Events[0].revents & POLLIN) != 0) {
+            do {
+                BytesRead = read(STDIN_FILENO, &Character, 1);
+
+            } while ((BytesRead < 0) && (errno == EINTR));
+
+            if (BytesRead <= 0) {
+                return FALSE;
+            }
+
+            break;
+
+        //
+        // Perform the read from the pipe to get the data out. The data
+        // itself doesn't matter, the pipe is just a signaling mechanism.
+        //
+
+        } else if ((Events[1].revents & POLLIN) != 0) {
+            do {
+                BytesRead = read(DbgRemoteInputPipe[1], &Character, 1);
+
+            } while ((BytesRead < 0) && (errno == EINTR));
+
+            Character = 0;
+            ControlKeyValue = KEY_REMOTE;
+            break;
+
+        } else {
+            DbgOut("Poll succeeded, but nothing available.\n");
         }
     }
 
