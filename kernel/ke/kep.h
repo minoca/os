@@ -74,9 +74,9 @@ extern volatile ULONG KeActiveProcessorCount;
 // Store the version information jammed into a packed format.
 //
 
-extern ULONGLONG KeEncodedVersion;
-extern ULONGLONG KeVersionSerial;
-extern ULONGLONG KeBuildTime;
+extern ULONG KeEncodedVersion;
+extern ULONG KeVersionSerial;
+extern ULONG KeBuildTime;
 extern PSTR KeBuildString;
 extern PSTR KeProductName;
 

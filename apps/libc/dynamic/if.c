@@ -989,8 +989,8 @@ Return Value:
 
         memset(Broadcast, 0, sizeof(struct sockaddr_in));
         Broadcast->sin_family = AF_INET;
-        Address = *((PULONG)Information.Address.Address);
-        Subnet = *((PULONG)Information.Subnet.Address);
+        Address = (ULONG)(Information.Address.Address[0]);
+        Subnet = (ULONG)(Information.Subnet.Address[0]);
         Address &= Subnet;
         Address |= ~Subnet;
         Broadcast->sin_addr.s_addr = Address;

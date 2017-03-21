@@ -1764,7 +1764,7 @@ Return Value:
     if (NetworkAddress->Domain == NetDomainIp4) {
         Ip4Address.sin_family = AF_INET;
         Ip4Address.sin_port = htons((USHORT)(NetworkAddress->Port));
-        Ip4Address.sin_addr.s_addr = *((PULONG)(NetworkAddress->Address));
+        Ip4Address.sin_addr.s_addr = (ULONG)(NetworkAddress->Address[0]);
         TotalSize = sizeof(Ip4Address);
         Source = &Ip4Address;
 
