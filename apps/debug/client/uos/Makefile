@@ -41,9 +41,17 @@ TARGETLIBS = $(OBJROOT)/os/lib/im/build/im.a              \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a   \
              $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a      \
 
+OS ?= $(shell uname -s)
+
 ifneq ($(OS),$(filter Windows_NT Minoca FreeBSD,$(OS)))
 
-DYNLIBS = -ldl -pthread
+DYNLIBS = -ldl
+
+endif
+
+ifneq ($(OS),$(filter Windows_NT Minoca,$(OS)))
+
+DYNLIBS = -pthread
 
 endif
 
