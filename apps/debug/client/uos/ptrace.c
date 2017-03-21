@@ -30,6 +30,14 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <stdio.h>
+
+#include <minoca/lib/types.h>
+#include <minoca/debug/spproto.h>
+#include <minoca/debug/dbgext.h>
+
+#include "dbgapi.h"
+
 //
 // --------------------------------------------------------------------- Macros
 //

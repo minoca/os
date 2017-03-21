@@ -32,9 +32,11 @@ BINARYTYPE = library
 
 BINPLACE = tools/lib
 
+BUILD = yes
+
 OBJS = extimp.o   \
 
-VPATH += ..:
+VPATH += $(SRCDIR)/..:
 
 include $(SRCROOT)/os/minoca.mk
 

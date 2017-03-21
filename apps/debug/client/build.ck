@@ -55,6 +55,7 @@ function build() {
     var win32CommonSources;
     var win32GuiSources;
     var win32Sources;
+    var x64Sources;
     var x86Sources;
 
     commonSources = [
@@ -84,6 +85,10 @@ function build() {
         "thmdis.c",
         "thm32dis.c",
         "x86dis.c"
+    ];
+
+    x64Sources = [
+        "x64/dbgarch.c"
     ];
 
     x86Sources = [
@@ -150,6 +155,9 @@ function build() {
     } else if ((arch == "armv7") || (arch == "armv6")) {
         archSources = armSources;
 
+    } else if (arch == "x64") {
+        archSources = x64Sources;
+
     } else {
         Core.raise(ValueError("Unknown architecture"));
     }
@@ -157,8 +165,11 @@ function build() {
     targetSources = commonSources + minocaSources + targetLibs +
                     targetDynlibs + archSources;
 
-    if ((buildArch == "x86") || (buildArch == "x64")) {
+    if (buildArch == "x86") {
         buildArchSources = x86Sources;
+
+    } else if (buildArch == "x64") {
+        buildArchSources = x64Sources;
 
     } else if ((buildArch == "armv7") || (buildArch == "armv6")) {
         buildArchSources = armSources;

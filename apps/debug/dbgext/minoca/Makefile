@@ -26,17 +26,15 @@
 #
 ################################################################################
 
-DIRS = minoca
+BINARY = dbgext.a
 
-ifeq ($(OS),Windows_NT)
+BINARYTYPE = library
 
-DIRS += win32
+BINPLACE = bin
 
-else
+OBJS = extimp.o   \
 
-DIRS += uos
-
-endif
+VPATH += $(SRCDIR)/..:
 
 include $(SRCROOT)/os/minoca.mk
 

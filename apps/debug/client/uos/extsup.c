@@ -34,6 +34,8 @@ Environment:
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>
 #include <minoca/debug/dbgext.h>

@@ -49,6 +49,7 @@ Author:
 
 #define MACHINE_TYPE_X86 0x1
 #define MACHINE_TYPE_ARM 0x2
+#define MACHINE_TYPE_X64 0x3
 
 //
 // Define the maximum size of a debug packet, including the header.

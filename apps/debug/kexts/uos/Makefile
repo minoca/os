@@ -37,11 +37,11 @@ BUILD = yes
 
 BINPLACE = tools/lib
 
-TARGETLIBS = $(TOOLBINROOT)/lib/dbgext.a
+TARGETLIBS = $(TOOLROOT)/lib/dbgext.a
 
 INCLUDES += $(SRCDIR)/..;
 
-VPATH += ..:
+VPATH += $(SRCDIR)/..:
 
 OS ?= $(shell uname -s)
 
@@ -56,7 +56,4 @@ ifeq ($(OS),Darwin)
 BINARY := kexts.$(SO_VERSION_MAJOR).dylib
 endif
 
-endif
-
 include $(SRCROOT)/os/minoca.mk
-
