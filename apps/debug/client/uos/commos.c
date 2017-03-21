@@ -38,7 +38,11 @@ Environment:
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
+#ifdef __FreeBSD__
+#define __freadahead(stream) 0
+#else
 #include <stdio_ext.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -281,8 +285,9 @@ Return Value:
 --*/
 
 {
+    pthread_t Thread;
 
-    return pthread_create(NULL, NULL, ThreadRoutine, Parameter);
+    return pthread_create(&Thread, NULL, ThreadRoutine, Parameter);
 }
 
 int
