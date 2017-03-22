@@ -175,6 +175,8 @@ Return Value:
                 Status = STATUS_INSUFFICIENT_RESOURCES;
                 break;
             }
+
+            CompletePathCapacity = CompletePathSize;
         }
 
         if (PrefixLength != 0) {
@@ -383,8 +385,8 @@ Return Value:
 
 {
 
+    PSTR CurrentCharacter;
     PSTR CurrentPath;
-    PSTR CurrentVariable;
     UINTN Delta;
     PELF_LIBRARY_PATH_VARIABLE_ENTRY Entry;
     UINTN EntryCount;
@@ -393,50 +395,53 @@ Return Value:
     PSTR Name;
     UINTN NameLength;
     PSTR NewBuffer;
+    UINTN RemainderOffset;
     PSTR Replacement;
     UINTN ReplacementLength;
-    UINTN ReplaceSize;
-    UINTN ReplaceStart;
     KSTATUS Status;
+    UINTN VariableLength;
+    UINTN VariableOffset;
+    PSTR VariableStart;
 
     EntryCount = sizeof(ElfLibraryPathVariables) /
                  sizeof(ElfLibraryPathVariables[0]);
 
-    CurrentVariable = RtlStringFindCharacter(*Path, '$', -1);
-    while (CurrentVariable != NULL) {
+    CurrentCharacter = RtlStringFindCharacter(*Path, '$', -1);
+    while (CurrentCharacter != NULL) {
 
         //
         // Find the name of the variable and the size of the region to replace.
         //
 
-        ReplaceStart = (UINTN)CurrentVariable - (UINTN)(*Path);
-        CurrentVariable += 1;
-        if (*CurrentVariable == '{') {
-            CurrentVariable += 1;
-            Name = CurrentVariable;
-            while ((*CurrentVariable != '\0') && (*CurrentVariable != '}')) {
-                CurrentVariable += 1;
+        VariableStart = CurrentCharacter;
+        CurrentCharacter += 1;
+        if (*CurrentCharacter == '{') {
+            CurrentCharacter += 1;
+            Name = CurrentCharacter;
+            while ((*CurrentCharacter != '\0') && (*CurrentCharacter != '}')) {
+                CurrentCharacter += 1;
             }
 
-            if (*CurrentVariable != '}') {
+            if (*CurrentCharacter != '}') {
                 RtlDebugPrint("ELF: Missing closing brace on %s.\n", *Path);
                 Status = STATUS_INVALID_SEQUENCE;
                 goto ElfPerformLibraryPathSubstitutionsEnd;
             }
 
-            NameLength = (UINTN)CurrentVariable - (UINTN)Name;
-            CurrentVariable += 1;
+            NameLength = (UINTN)CurrentCharacter - (UINTN)Name;
+            CurrentCharacter += 1;
 
         } else {
-            Name = CurrentVariable;
-            while (RtlIsCharacterAlphabetic(*CurrentVariable) != FALSE) {
-                CurrentVariable += 1;
+            Name = CurrentCharacter;
+            while (RtlIsCharacterAlphabetic(*CurrentCharacter) != FALSE) {
+                CurrentCharacter += 1;
             }
 
-            NameLength = (UINTN)CurrentVariable - (UINTN)Name;
+            NameLength = (UINTN)CurrentCharacter - (UINTN)Name;
         }
 
-        ReplaceSize = (UINTN)CurrentVariable - (UINTN)ReplaceStart;
+        VariableLength = (UINTN)CurrentCharacter - (UINTN)VariableStart;
+        VariableOffset = (UINTN)VariableStart - (UINTN)(*Path);
 
         //
         // Decode the variable.
@@ -487,34 +492,34 @@ Return Value:
             ReplacementLength = RtlStringLength(Replacement);
 
             //
-            // If the replacement is shorter than the original, then just
-            // copy the replacement over followed by the rest.
+            // If the replacement is shorter than the original variable, then
+            // just copy the replacement over and shift the rest to the left.
             //
 
-            if (ReplacementLength <= ReplaceSize) {
-                CurrentPath = *Path;
-                RtlCopyMemory(CurrentPath + ReplaceStart,
+            if (ReplacementLength <= VariableLength) {
+                RtlCopyMemory(VariableStart,
                               Replacement,
                               ReplacementLength);
 
-                Delta = ReplaceSize - ReplacementLength;
+                Delta = VariableLength - ReplacementLength;
                 if (Delta != 0) {
-                    for (Index = ReplaceStart + ReplaceSize;
+                    CurrentPath = *Path;
+                    for (Index = VariableOffset + ReplacementLength;
                          Index < *PathCapacity - Delta;
                          Index += 1) {
 
                         CurrentPath[Index] = CurrentPath[Index + Delta];
                     }
 
-                    CurrentVariable -= Delta;
+                    CurrentCharacter -= Delta;
                 }
 
             //
-            // The replacement is bigger than the region it's replacing.
+            // The replacement is bigger than the variable it's replacing.
             //
 
             } else {
-                Delta = ReplacementLength - ReplaceSize;
+                Delta = ReplacementLength - VariableLength;
                 NewBuffer = ImAllocateMemory(*PathCapacity + Delta,
                                              IM_ALLOCATION_TAG);
 
@@ -523,20 +528,22 @@ Return Value:
                     goto ElfPerformLibraryPathSubstitutionsEnd;
                 }
 
-                RtlCopyMemory(NewBuffer, *Path, ReplaceStart);
-                RtlCopyMemory(NewBuffer + ReplaceStart,
+                RtlCopyMemory(NewBuffer, *Path, VariableOffset);
+                RtlCopyMemory(NewBuffer + VariableOffset,
                               Replacement,
                               ReplacementLength);
 
-                RtlCopyMemory(NewBuffer + ReplaceStart + ReplacementLength,
-                              *Path + ReplaceSize,
-                              *PathCapacity - (ReplaceStart + ReplaceSize));
+                RemainderOffset = VariableOffset + VariableLength;
+                RtlCopyMemory(NewBuffer + VariableOffset + ReplacementLength,
+                              *Path + RemainderOffset,
+                              *PathCapacity - (RemainderOffset));
 
-                CurrentVariable = (PSTR)((UINTN)CurrentVariable -
-                                         (UINTN)(*Path) +
-                                         (UINTN)NewBuffer);
+                CurrentCharacter = (PSTR)((UINTN)NewBuffer +
+                                          VariableOffset +
+                                          ReplacementLength);
 
                 ImFreeMemory(*Path);
+                *Path = NewBuffer;
                 *PathCapacity += Delta;
             }
         }
@@ -545,7 +552,7 @@ Return Value:
         // Find the next variable.
         //
 
-        CurrentVariable = RtlStringFindCharacter(CurrentVariable, '$', -1);
+        CurrentCharacter = RtlStringFindCharacter(CurrentCharacter, '$', -1);
     }
 
     Status = STATUS_SUCCESS;
