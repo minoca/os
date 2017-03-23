@@ -279,11 +279,12 @@ Return Value:
 
 {
 
+    PELF_DYNAMIC_ENTRY ParentRunPath;
     PSTR PathList;
     PLOADED_IMAGE PrimaryExecutable;
-    ULONG PrimaryLoad;
     PELF_DYNAMIC_ENTRY RPath;
     PLOADED_IMAGE RPathParent;
+    PLOADED_IMAGE RPathRoot;
     PELF_DYNAMIC_ENTRY RunPath;
     PSTR Slash;
     KSTATUS Status;
@@ -303,26 +304,29 @@ Return Value:
     // ignore the older DT_RPATH. DT_RPATH goes up the chain of imports.
     //
 
-    PrimaryLoad = 0;
-    RunPath = ImpElfGetDynamicEntry(Parent, ELF_DYNAMIC_RUN_PATH);
-    if (RunPath == NULL) {
+    ParentRunPath = ImpElfGetDynamicEntry(Parent, ELF_DYNAMIC_RUN_PATH);
+    if (ParentRunPath == NULL) {
+        RPathRoot = NULL;
         RPathParent = Parent;
         while (RPathParent != NULL) {
-            PrimaryLoad |= RPathParent->LoadFlags;
-            RPath = ImpElfGetDynamicEntry(RPathParent, ELF_DYNAMIC_RPATH);
-            if (RPath != NULL) {
-                PathList = RPathParent->ExportStringTable + RPath->Value;
-                Status = ImpElfOpenWithPathList(Parent,
-                                                LibraryName,
-                                                PathList,
-                                                File,
-                                                Path);
+            RunPath = ImpElfGetDynamicEntry(RPathParent, ELF_DYNAMIC_RUN_PATH);
+            if (RunPath == NULL) {
+                RPath = ImpElfGetDynamicEntry(RPathParent, ELF_DYNAMIC_RPATH);
+                if (RPath != NULL) {
+                    PathList = RPathParent->ExportStringTable + RPath->Value;
+                    Status = ImpElfOpenWithPathList(RPathParent,
+                                                    LibraryName,
+                                                    PathList,
+                                                    File,
+                                                    Path);
 
-                if (KSUCCESS(Status)) {
-                    goto OpenLibraryEnd;
+                    if (KSUCCESS(Status)) {
+                        goto OpenLibraryEnd;
+                    }
                 }
             }
 
+            RPathRoot = RPathParent;
             RPathParent = RPathParent->Parent;
         }
 
@@ -331,12 +335,15 @@ Return Value:
         // already searched.
         //
 
-        if ((PrimaryLoad & IMAGE_LOAD_FLAG_PRIMARY_LOAD) == 0) {
-            PrimaryExecutable = ImPrimaryExecutable;
-            if ((PrimaryExecutable != NULL) &&
-                (PrimaryExecutable != Parent) &&
-                (PrimaryExecutable->DynamicSection != NULL)) {
+        PrimaryExecutable = ImPrimaryExecutable;
+        if ((PrimaryExecutable != NULL) &&
+            (PrimaryExecutable != RPathRoot) &&
+            (PrimaryExecutable->DynamicSection != NULL)) {
 
+            RunPath = ImpElfGetDynamicEntry(PrimaryExecutable,
+                                            ELF_DYNAMIC_RUN_PATH);
+
+            if (RunPath == NULL) {
                 RPath = ImpElfGetDynamicEntry(PrimaryExecutable,
                                               ELF_DYNAMIC_RPATH);
 
@@ -344,7 +351,7 @@ Return Value:
                     PathList = PrimaryExecutable->ExportStringTable +
                                RPath->Value;
 
-                    Status = ImpElfOpenWithPathList(Parent,
+                    Status = ImpElfOpenWithPathList(PrimaryExecutable,
                                                     LibraryName,
                                                     PathList,
                                                     File,
@@ -379,8 +386,8 @@ Return Value:
     // Try DT_RUNPATH.
     //
 
-    if (RunPath != NULL) {
-        PathList = Parent->ExportStringTable + RunPath->Value;
+    if (ParentRunPath != NULL) {
+        PathList = Parent->ExportStringTable + ParentRunPath->Value;
         Status = ImpElfOpenWithPathList(Parent,
                                         LibraryName,
                                         PathList,
