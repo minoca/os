@@ -102,6 +102,13 @@ Author:
 #define IMAGE_LOAD_FLAG_GLOBAL 0x00000100
 
 //
+// Set this flag if loading a dynamic library. This casues the load to search
+// through the primary executable's dynamic library paths.
+//
+
+#define IMAGE_LOAD_FLAG_DYNAMIC_LIBRARY 0x00000200
+
+//
 // Define flags passed into the map image section routine.
 //
 

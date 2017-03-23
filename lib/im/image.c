@@ -1207,6 +1207,7 @@ Return Value:
     PLOADED_IMAGE InterpreterImage;
     PSTR InterpreterPath;
     IMAGE_BUFFER LocalImageBuffer;
+    PLOADED_IMAGE OpenParent;
     KSTATUS Status;
 
     Image = NULL;
@@ -1302,8 +1303,21 @@ Return Value:
         RtlCopyMemory(Image->FileName, BinaryName, BinaryNameLength + 1);
 
     } else {
+
+        //
+        // A dynamically loaded library typically doesn't have a parent, but
+        // should be located as if the primary executable were its parent.
+        //
+
+        OpenParent = Parent;
+        if ((Parent == NULL) &&
+            ((Flags & IMAGE_LOAD_FLAG_DYNAMIC_LIBRARY) != 0)) {
+
+            OpenParent = ImPrimaryExecutable;
+        }
+
         Status = ImpOpenLibrary(ListHead,
-                                Parent,
+                                OpenParent,
                                 SystemContext,
                                 BinaryName,
                                 &(Image->File),
@@ -1589,8 +1603,6 @@ Arguments:
 
     File - Supplies a pointer where the information for the file including its
         open handle will be returned.
-
-    Image - Supplies a pointer where an existing image may be returned.
 
     Path - Supplies a pointer where the real path to the opened file will be
         returned. The caller is responsible for freeing this memory.

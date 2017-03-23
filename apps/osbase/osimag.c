@@ -507,6 +507,12 @@ Return Value:
     KSTATUS Status;
 
     //
+    // Always look through the primary executable's library paths.
+    //
+
+    Flags |= IMAGE_LOAD_FLAG_DYNAMIC_LIBRARY;
+
+    //
     // Prime the get environment variable function to ensure it does not
     // have to resolve a PLT entry (and reacquire the lock) during load.
     //
