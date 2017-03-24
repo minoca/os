@@ -462,12 +462,17 @@ Return Value:
 {
 
     IMAGE_BUFFER Buffer;
+    PSTR CurrentDirectory;
+    UINTN CurrentDirectorySize;
     IMAGE_FILE_INFORMATION File;
+    CHAR FirstCharacter;
     IMAGE_FORMAT Format;
     PPROCESS_ENVIRONMENT NewEnvironment;
     PSTR NewName;
     UINTN NewNameSize;
     PPROCESS_ENVIRONMENT OldEnvironment;
+    PSTR OverrideName;
+    UINTN OverrideNameSize;
     PSYSTEM_CALL_EXECUTE_IMAGE Parameters;
     BOOL PastPointOfNoReturn;
     PKPROCESS Process;
@@ -484,6 +489,9 @@ Return Value:
     ReturnValue = 0;
     Thread = KeGetCurrentThread();
     Process = Thread->OwningProcess;
+    OverrideName = NULL;
+    OverrideNameSize = 0;
+    CurrentDirectory = NULL;
 
     ASSERT(Process != PsGetKernelProcess());
 
@@ -498,13 +506,68 @@ Return Value:
     }
 
     //
+    // Check to see if the image name is a relative path. If so, create an
+    // absolute path and pass that as an override to copy environment.
+    //
+
+    if (Parameters->Environment.ImageNameLength != 0) {
+        Status = MmCopyFromUserMode(&FirstCharacter,
+                                    Parameters->Environment.ImageName,
+                                    sizeof(CHAR));
+
+        if (!KSUCCESS(Status)) {
+            goto SysExecuteProcessEnd;
+        }
+
+        if (FirstCharacter != PATH_SEPARATOR) {
+            Status = IoGetCurrentDirectory(TRUE,
+                                           FALSE,
+                                           &CurrentDirectory,
+                                           &CurrentDirectorySize);
+
+            if (!KSUCCESS(Status)) {
+                goto SysExecuteProcessEnd;
+            }
+
+            OverrideNameSize = CurrentDirectorySize +
+                               Parameters->Environment.ImageNameLength;
+
+            OverrideName = MmAllocatePagedPool(OverrideNameSize,
+                                               PS_ALLOCATION_TAG);
+
+            if (OverrideName == NULL) {
+                Status = STATUS_INSUFFICIENT_RESOURCES;
+                goto SysExecuteProcessEnd;
+            }
+
+            //
+            // Copy the current directory up to but not including the NULL
+            // terminator. Set '/' where the NULL terminator using the space
+            // for the NULL terminator and then copy in the image name from
+            // user mode, which includes a NULL terminator.
+            //
+
+            RtlCopyMemory(OverrideName,
+                          CurrentDirectory,
+                          CurrentDirectorySize - 1);
+
+            OverrideName[CurrentDirectorySize - 1] = PATH_SEPARATOR;
+            MmCopyFromUserMode(OverrideName + CurrentDirectorySize,
+                               Parameters->Environment.ImageName,
+                               Parameters->Environment.ImageNameLength);
+        }
+    }
+
+    //
     // Create the new environment in kernel mode.
     //
 
     Status = PsCopyEnvironment(&(Parameters->Environment),
                                &NewEnvironment,
                                TRUE,
-                               NULL);
+                               NULL,
+                               OverrideName,
+                               OverrideNameSize);
 
     if (!KSUCCESS(Status)) {
         goto SysExecuteProcessEnd;
@@ -657,6 +720,14 @@ Return Value:
 SysExecuteProcessEnd:
     if (File.Handle != INVALID_HANDLE) {
         IoClose(File.Handle);
+    }
+
+    if (CurrentDirectory != NULL) {
+        MmFreePagedPool(CurrentDirectory);
+    }
+
+    if (OverrideName != NULL) {
+        MmFreePagedPool(OverrideName);
     }
 
     if (!KSUCCESS(Status)) {
@@ -1991,7 +2062,9 @@ Return Value:
             Status = PsCopyEnvironment(SourceEnvironment,
                                        &Environment,
                                        FALSE,
-                                       NULL);
+                                       NULL,
+                                       NULL,
+                                       0);
 
         } else {
             Status = PsCreateEnvironment(CommandLine,

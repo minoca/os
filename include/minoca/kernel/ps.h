@@ -3575,7 +3575,9 @@ PsCopyEnvironment (
     PPROCESS_ENVIRONMENT Source,
     PPROCESS_ENVIRONMENT *Destination,
     BOOL FromUserMode,
-    PKTHREAD DestinationThread
+    PKTHREAD DestinationThread,
+    PSTR OverrideImageName,
+    UINTN OverrideImageNameSize
     );
 
 /*++
@@ -3597,6 +3599,12 @@ Arguments:
     DestinationThread - Supplies an optional pointer to the user mode thread
         to copy the environment into. Supply NULL to copy the environment to
         a new kernel mode buffer.
+
+    OverrideImageName - Supplies an optional pointer to an image name to use as
+        an override of the image name in the source environment.
+
+    OverrideImageNameSize - Supplies the size of the override image name,
+        including the null terminator.
 
 Return Value:
 

@@ -71,7 +71,9 @@ PsCopyEnvironment (
     PPROCESS_ENVIRONMENT Source,
     PPROCESS_ENVIRONMENT *Destination,
     BOOL FromUserMode,
-    PKTHREAD DestinationThread
+    PKTHREAD DestinationThread,
+    PSTR OverrideImageName,
+    UINTN OverrideImageNameSize
     )
 
 /*++
@@ -94,6 +96,13 @@ Arguments:
         to copy the environment into. Supply NULL to copy the environment to
         a new kernel mode buffer.
 
+    OverrideImageName - Supplies an optional pointer to an image name to use as
+        an override of the image name in the source environment. The override
+        is assumed to be a kernel mode buffer.
+
+    OverrideImageNameSize - Supplies the size of the override image name,
+        including the null terminator.
+
 Return Value:
 
     Status code.
@@ -109,6 +118,8 @@ Return Value:
     ULONG ElementCount;
     ULONG ElementIndex;
     UINTN EnvironmentBufferLength;
+    PSTR ImageName;
+    UINTN ImageNameBufferLength;
     UINTN ImageNameLength;
     PPROCESS_ENVIRONMENT NewEnvironment;
     UINTN Offset;
@@ -144,7 +155,14 @@ Return Value:
         TerminatedEnvironmentCount += 1;
     }
 
-    if ((Source->ImageName == NULL) || (Source->ImageNameLength <= 1)) {
+    ImageName = Source->ImageName;
+    ImageNameLength = Source->ImageNameLength;
+    if (OverrideImageName != NULL) {
+        ImageName = OverrideImageName;
+        ImageNameLength = OverrideImageNameSize;
+    }
+
+    if ((ImageName == NULL) || (ImageNameLength <= 1)) {
         Status = STATUS_INVALID_PARAMETER;
         goto CopyEnvironmentEnd;
     }
@@ -154,14 +172,14 @@ Return Value:
     // pointers to arguments ends in a null pointer, hence the extra 1.
     //
 
-    ImageNameLength = ALIGN_RANGE_UP(Source->ImageNameLength, sizeof(PVOID));
+    ImageNameBufferLength = ALIGN_RANGE_UP(ImageNameLength, sizeof(PVOID));
     ArgumentsBufferLength = ALIGN_RANGE_UP(Source->ArgumentsBufferLength,
                                            sizeof(PVOID));
 
     EnvironmentBufferLength = ALIGN_RANGE_UP(Source->EnvironmentBufferLength,
                                              sizeof(PVOID));
 
-    AllocationSize = sizeof(PROCESS_ENVIRONMENT) + ImageNameLength +
+    AllocationSize = sizeof(PROCESS_ENVIRONMENT) + ImageNameBufferLength +
                      ((Source->ArgumentCount + 1) * sizeof(PSTR)) +
                      ArgumentsBufferLength +
                      (TerminatedEnvironmentCount * sizeof(PSTR)) +
@@ -227,15 +245,15 @@ Return Value:
     //
 
     CurrentBuffer = NewEnvironment->ImageName;
-    NewEnvironment->ImageNameLength = Source->ImageNameLength;
-    if (Source->ImageNameLength != 0) {
+    NewEnvironment->ImageNameLength = ImageNameLength;
+    if (ImageNameLength != 0) {
 
-        ASSERT(AllocationSize >= Source->ImageNameLength);
+        ASSERT(AllocationSize >= ImageNameLength);
 
-        BufferSize = Source->ImageNameLength;
-        if (FromUserMode != FALSE) {
+        BufferSize = ImageNameLength;
+        if ((FromUserMode != FALSE) && (ImageName == Source->ImageName)) {
             Status = MmCopyFromUserMode(NewEnvironment->ImageName,
-                                        Source->ImageName,
+                                        ImageName,
                                         BufferSize);
 
             if (!KSUCCESS(Status)) {
@@ -244,7 +262,7 @@ Return Value:
 
         } else {
             RtlCopyMemory(NewEnvironment->ImageName,
-                          Source->ImageName,
+                          ImageName,
                           BufferSize);
         }
 
@@ -254,8 +272,8 @@ Return Value:
         // Move beyond the image name buffer and realign to a pointer boundary.
         //
 
-        CurrentBuffer += ImageNameLength;
-        AllocationSize -= ImageNameLength;
+        CurrentBuffer += ImageNameBufferLength;
+        AllocationSize -= ImageNameBufferLength;
     }
 
     //
@@ -475,10 +493,6 @@ Return Value:
 CopyEnvironmentEnd:
     if (!KSUCCESS(Status)) {
         if (NewEnvironment != NULL) {
-            if (NewEnvironment->ImageName != NULL) {
-                MmFreePagedPool(NewEnvironment->ImageName);
-            }
-
             MmFreePagedPool(NewEnvironment);
             NewEnvironment = NULL;
         }
