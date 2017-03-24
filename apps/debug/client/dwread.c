@@ -1268,10 +1268,11 @@ Return Value:
 
     //
     // Anything larger than a 64-bit integer would overflow the current
-    // data representation.
+    // data representation. 64 doesn't divide by 7, so move to the next integer
+    // that does.
     //
 
-    assert(Shift <= 64);
+    assert(Shift <= 70);
 
     return Result;
 }
@@ -1333,10 +1334,11 @@ Return Value:
 
     //
     // Anything larger than a 64-bit integer would overflow the current
-    // data representation.
+    // data representation. 64 doesn't divide by 7, so move to the next integer
+    // that does.
     //
 
-    assert(Shift <= 64);
+    assert(Shift <= 70);
 
     return Result;
 }
