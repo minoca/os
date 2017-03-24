@@ -40,7 +40,15 @@ SCP="$SRCROOT/git/usr/bin/scp.exe"
 UPLOAD_DATE=
 NIGHTLIES=nightlies
 
-SSH_CMD="$SSH -p $UPPORT $UPUSER@$UPDEST -- "
+##
+## It would be great to just use ssh-agent, but that seems to busy-spin hang
+## regularly. This hard-coded path is ugly, but $SRCROOT cannot be used because
+## scp and ssh are msys tools (so they need /c/ instead of C:/).
+##
+
+KEYFILE="/c/autosrc/upload_minocacorp.key"
+
+SSH_CMD="$SSH -p $UPPORT $UPUSER@$UPDEST -i $KEYFILE -- "
 
 run_ssh_cmd() {
     echo "Running: $@" >&2
@@ -93,7 +101,7 @@ upload_to_production() {
     for f in $@; do
         echo "Uploading $f to production in $UPLOAD_DATE"
         for try in 1 2 3 4 5; do
-            $SCP -o TCPKeepAlive=yes -P $UPPORT $f \
+            $SCP -o TCPKeepAlive=yes -i $KEYFILE -P $UPPORT $f \
                 $UPUSER@$UPDEST:$NIGHTLIES/$UPLOAD_DATE/$f && break
         done
     done
