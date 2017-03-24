@@ -979,9 +979,7 @@ Return Value:
             Request->Command.Status = STATUS_TOO_LATE;
 
         } else {
-            Request->Command.Status = PspDebugEnable(CurrentProcess,
-                                                     CurrentProcess->Parent);
-
+            Request->Command.Status = PspDebugEnable(CurrentProcess, Parent);
             ObReleaseReference(Parent);
         }
 
@@ -3743,8 +3741,20 @@ Return Value:
 
     DebugData = Process->DebugData;
     KeAcquireQueuedLock(TracingProcess->QueuedLock);
-    KeAcquireSpinLock(&(Process->DebugData->TracerLock));
     LockHeld = TRUE;
+
+    //
+    // If the tracing process is actually dead (no threads), then do not add
+    // another tracee to its list. The new tracee likely missed the kill
+    // signals sent by the tracer.
+    //
+
+    if (TracingProcess->ThreadCount == 0) {
+        Status = STATUS_TOO_LATE;
+        goto DebugEnableEnd;
+    }
+
+    KeAcquireSpinLock(&(Process->DebugData->TracerLock));
     if (DebugData->TracingProcess != NULL) {
         KeReleaseSpinLock(&(Process->DebugData->TracerLock));
         Status = STATUS_RESOURCE_IN_USE;
