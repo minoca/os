@@ -1010,6 +1010,114 @@ Return Value:
 
 LIBC_API
 double
+fmin (
+    double FirstValue,
+    double SecondValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the minimum numeric value between the two given
+    arguments. NaN arguments are treated as missing data. If one argument is
+    NaN and the other is not, the numeric argument is returned.
+
+Arguments:
+
+    FirstValue - Supplies the first value to consider.
+
+    SecondValue - Supplies the second value to consider.
+
+Return Value:
+
+    Returns the minimum of the two.
+
+--*/
+
+LIBC_API
+float
+fminf (
+    float FirstValue,
+    float SecondValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the minimum numeric value between the two given
+    arguments. NaN arguments are treated as missing data. If one argument is
+    NaN and the other is not, the numeric argument is returned.
+
+Arguments:
+
+    FirstValue - Supplies the first value to consider.
+
+    SecondValue - Supplies the second value to consider.
+
+Return Value:
+
+    Returns the minimum of the two.
+
+--*/
+
+LIBC_API
+double
+fmax (
+    double FirstValue,
+    double SecondValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the maximum numeric value between the two given
+    arguments. NaN arguments are treated as missing data. If one argument is
+    NaN and the other is not, the numeric argument is returned.
+
+Arguments:
+
+    FirstValue - Supplies the first value to consider.
+
+    SecondValue - Supplies the second value to consider.
+
+Return Value:
+
+    Returns the maximum of the two.
+
+--*/
+
+LIBC_API
+float
+fmaxf (
+    float FirstValue,
+    float SecondValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the maximum numeric value between the two given
+    arguments. NaN arguments are treated as missing data. If one argument is
+    NaN and the other is not, the numeric argument is returned.
+
+Arguments:
+
+    FirstValue - Supplies the first value to consider.
+
+    SecondValue - Supplies the second value to consider.
+
+Return Value:
+
+    Returns the maximum of the two.
+
+--*/
+
+LIBC_API
+double
 fmod (
     double Dividend,
     double Divisor
@@ -1630,6 +1738,50 @@ Return Value:
 
 LIBC_API
 double
+exp2 (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the base 2 exponential of the given value.
+
+Arguments:
+
+    Value - Supplies the value to raise 2 to.
+
+Return Value:
+
+    Returns 2 to the given value.
+
+--*/
+
+LIBC_API
+float
+exp2f (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the base 2 exponential of the given value.
+
+Arguments:
+
+    Value - Supplies the value to raise 2 to.
+
+Return Value:
+
+    Returns 2 to the given value.
+
+--*/
+
+LIBC_API
+double
 expm1 (
     double Value
     );
@@ -1969,6 +2121,52 @@ Arguments:
 Return Value:
 
     Returns the value with the modified sign bit.
+
+--*/
+
+LIBC_API
+double
+trunc (
+    double Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine truncates the value to an integer, nearest to but not greater
+    in magnitude than the argument.
+
+Arguments:
+
+    Value - Supplies the value to truncated.
+
+Return Value:
+
+    Returns the nearest integer.
+
+--*/
+
+LIBC_API
+float
+truncf (
+    float Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine truncates the value to an integer, nearest to but not greater
+    in magnitude than the argument.
+
+Arguments:
+
+    Value - Supplies the value to truncated.
+
+Return Value:
+
+    Returns the nearest integer.
 
 --*/
 

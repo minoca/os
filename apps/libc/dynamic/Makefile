@@ -83,6 +83,8 @@ OBJS = assert.o             \
        math/div.o           \
        math/exp.o           \
        math/expf.o          \
+       math/exp2.o          \
+       math/exp2f.o         \
        math/expm1.o         \
        math/expm1f.o        \
        math/floor.o         \
@@ -99,6 +101,8 @@ OBJS = assert.o             \
        math/log10f.o        \
        math/lround.o        \
        math/lroundf.o       \
+       math/minmax.o        \
+       math/minmaxf.o       \
        math/modf.o          \
        math/modff.o         \
        math/pow.o           \
@@ -115,6 +119,8 @@ OBJS = assert.o             \
        math/trigarcf.o      \
        math/trighyp.o       \
        math/trighypf.o      \
+       math/trunc.o         \
+       math/truncf.o        \
        math/util.o          \
        memory.o             \
        netaddr.o            \

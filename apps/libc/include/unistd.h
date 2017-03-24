@@ -2205,7 +2205,7 @@ Arguments:
         The section to be locked or unlocked starts at the current offset in
         the file and extends forward for a positve size or backwards for a
         negative size (the preceding bytes up to but not including the current
-        offset). If size is 0, the section from teh current offset through the
+        offset). If size is 0, the section from the current offset through the
         largest possible offset shall be locked. Locks may exist past the
         current end of file.
 

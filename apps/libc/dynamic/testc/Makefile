@@ -48,6 +48,8 @@ OBJS = bsearch.o           \
        ceilf.o             \
        exp.o               \
        expf.o              \
+       exp2.o              \
+       exp2f.o             \
        expm1.o             \
        expm1f.o            \
        floor.o             \
@@ -62,6 +64,8 @@ OBJS = bsearch.o           \
        log2f.o             \
        log10.o             \
        log10f.o            \
+       minmax.o            \
+       minmaxf.o           \
        modf.o              \
        modff.o             \
        pow.o               \
@@ -76,6 +80,8 @@ OBJS = bsearch.o           \
        trigarcf.o          \
        trighyp.o           \
        trighypf.o          \
+       trunc.o             \
+       truncf.o            \
        util.o              \
        mathtst.o           \
        mathftst.o          \

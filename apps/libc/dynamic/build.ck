@@ -58,6 +58,8 @@ function build() {
         "math/div.c",
         "math/exp.c",
         "math/expf.c",
+        "math/exp2.c",
+        "math/exp2f.c",
         "math/expm1.c",
         "math/expm1f.c",
         "math/floor.c",
@@ -74,6 +76,8 @@ function build() {
         "math/log10f.c",
         "math/lround.c",
         "math/lroundf.c",
+        "math/minmax.c",
+        "math/minmaxf.c",
         "math/modf.c",
         "math/modff.c",
         "math/pow.c",
@@ -90,6 +94,8 @@ function build() {
         "math/trigarcf.c",
         "math/trighyp.c",
         "math/trighypf.c",
+        "math/trunc.c",
+        "math/truncf.c",
         "math/util.c",
     ];
 
