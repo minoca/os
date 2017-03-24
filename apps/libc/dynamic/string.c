@@ -575,6 +575,46 @@ Return Value:
 }
 
 LIBC_API
+size_t
+strnlen (
+    const char *String,
+    size_t MaxLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the length of the given string, not including the
+    null terminator, but will only examine up to the given maximum number of
+    bytes.
+
+Arguments:
+
+    String - Supplies a pointer to the string whose length should be computed.
+
+    MaxLength - Supplies the maximum number of bytes to examine.
+
+Return Value:
+
+    Returns the length of the string, not including the null terminator, or
+    the maximum length provided if no null terminator was found.
+
+--*/
+
+{
+
+    size_t Size;
+
+    Size = 0;
+    while ((Size < MaxLength) && (String[Size] != '\0')) {
+        Size += 1;
+    }
+
+    return Size;
+}
+
+LIBC_API
 char *
 strcpy (
     char *DestinationString,
