@@ -4005,11 +4005,51 @@ Return Value:
 --*/
 
 KSTATUS
+IopGetUserFilePath (
+    PPATH_POINT Entry,
+    PPATH_POINT Root,
+    PSTR UserBuffer,
+    PUINTN UserBufferSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine copies the full path of the given path entry (as seen from
+    the given root) into the given user mode buffer.
+
+Arguments:
+
+    Entry - Supplies a pointer to the path point to get the full path of.
+
+    Root - Supplies a pointer to the user's root.
+
+    UserBuffer - Supplies a pointer to the user mode buffer where the full path
+        should be returned.
+
+    UserBufferSize - Supplies a pointer that on success contains the size of
+        the user mode buffer. Returns the actual size of the file path, even if
+        the supplied buffer was too small.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_PATH_NOT_FOUND if the path entry has no path.
+
+    STATUS_ACCESS_VIOLATION if the buffer was invalid.
+
+    STATUS_BUFFER_TOO_SMALL if the buffer was too small.
+
+--*/
+
+KSTATUS
 IopGetPathFromRoot (
     PPATH_POINT Entry,
     PPATH_POINT Root,
     PSTR *Path,
-    PULONG PathSize
+    PUINTN PathSize
     );
 
 /*++
@@ -4042,7 +4082,7 @@ IopGetPathFromRootUnlocked (
     PPATH_POINT Entry,
     PPATH_POINT Root,
     PSTR *Path,
-    PULONG PathSize
+    PUINTN PathSize
     );
 
 /*++

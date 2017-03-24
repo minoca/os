@@ -1804,7 +1804,7 @@ Structure Description:
 
 Members:
 
-    Root - Stores a pointer indicating whether to get the path to the current
+    Root - Stores a boolean indicating whether to get the path to the current
         working directory (FALSE) or to get the path of the current chroot
         environment (TRUE). If the caller does not have permission to escape
         a changed root, or the root has not been changed, then / is returned
@@ -1815,8 +1815,6 @@ Members:
 
     BufferSize - Stores the size of the buffer on input. On output, stores the
         required size of the buffer.
-
-    Status - Stores the resulting status code from the kernel.
 
 --*/
 

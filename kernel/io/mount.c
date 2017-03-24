@@ -70,7 +70,7 @@ IopCreateMountPoint (
     PPATH_POINT Mount,
     PPATH_POINT Target,
     PSTR TargetPath,
-    ULONG TargetPathSize,
+    UINTN TargetPathSize,
     ULONG Flags
     );
 
@@ -85,7 +85,7 @@ IopCreateAndCopyMountPoint (
     PPATH_POINT Target,
     PLIST_ENTRY MountList,
     PSTR TargetPath,
-    ULONG TargetPathSize,
+    UINTN TargetPathSize,
     ULONG Flags
     );
 
@@ -1158,7 +1158,7 @@ Return Value:
     PATH_POINT RootCopy;
     KSTATUS Status;
     PSTR TargetPath;
-    ULONG TargetPathSize;
+    UINTN TargetPathSize;
 
     LockHeld = FALSE;
     MountCountIncremented = FALSE;
@@ -1654,7 +1654,7 @@ IopCreateMountPoint (
     PPATH_POINT Mount,
     PPATH_POINT Target,
     PSTR TargetPath,
-    ULONG TargetPathSize,
+    UINTN TargetPathSize,
     ULONG Flags
     )
 
@@ -1687,7 +1687,7 @@ Return Value:
 
 {
 
-    ULONG AllocationSize;
+    UINTN AllocationSize;
     PMOUNT_POINT MountPoint;
     POBJECT_HEADER TargetRootObject;
 
@@ -1801,7 +1801,7 @@ IopCreateAndCopyMountPoint (
     PPATH_POINT Target,
     PLIST_ENTRY MountList,
     PSTR TargetPath,
-    ULONG TargetPathSize,
+    UINTN TargetPathSize,
     ULONG Flags
     )
 
@@ -2556,7 +2556,7 @@ Return Value:
     PMOUNT_POINT_ENTRY MountPointEntry;
     UINTN MountPointEntrySize;
     PSTR MountPointPath;
-    ULONG MountPointPathSize;
+    UINTN MountPointPathSize;
     PATH_POINT PathPoint;
     KSTATUS Status;
     UINTN TargetPathSize;

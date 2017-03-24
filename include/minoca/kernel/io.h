@@ -2561,8 +2561,8 @@ Members:
 
 typedef struct _MOUNT_POINT_ENTRY {
     ULONG Flags;
-    ULONG MountPointPathOffset;
-    ULONG TargetPathOffset;
+    UINTN MountPointPathOffset;
+    UINTN TargetPathOffset;
 } MOUNT_POINT_ENTRY, *PMOUNT_POINT_ENTRY;
 
 /*++
@@ -6692,6 +6692,47 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+KSTATUS
+IoGetCurrentDirectory (
+    BOOL FromKernelMode,
+    BOOL Root,
+    PSTR *Path,
+    PUINTN PathSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets either the current working directory or the path of the
+    current chroot environment.
+
+Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not a kernel mode
+        caller is requesting the directory information. This dictates how the
+        given path buffer is treated.
+
+    Root - Supplies a boolean indicating whether to get the path to the current
+        working directory (FALSE) or to get the path of the current chroot
+        environment (TRUE). If the caller does not have permission to escape a
+        changed root, or the root has not been changed, then / is returned in
+        the path argument.
+
+    Path - Supplies a pointer to a buffer that will contain the desired path on
+        output. If the call is from kernel mode and the pointer is NULL, then
+        a buffer will be allocated.
+
+    PathSize - Supplies a pointer to the size of the path buffer on input. On
+        output it stores the required size of the path buffer. This includes
+        the null terminator.
+
+Return Value:
+
+    Status code.
 
 --*/
 

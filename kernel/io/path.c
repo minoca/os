@@ -1067,11 +1067,275 @@ Return Value:
 }
 
 KSTATUS
+IoGetCurrentDirectory (
+    BOOL FromKernelMode,
+    BOOL Root,
+    PSTR *Path,
+    PUINTN PathSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets either the current working directory or the path of the
+    current chroot environment.
+
+Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not a kernel mode
+        caller is requesting the directory information. This dictates how the
+        given path buffer is treated.
+
+    Root - Supplies a boolean indicating whether to get the path to the current
+        working directory (FALSE) or to get the path of the current chroot
+        environment (TRUE). If the caller does not have permission to escape a
+        changed root, or the root has not been changed, then / is returned in
+        the path argument.
+
+    Path - Supplies a pointer to a buffer that will contain the desired path on
+        output. If the call is from kernel mode and the pointer is NULL, then
+        a buffer will be allocated.
+
+    PathSize - Supplies a pointer to the size of the path buffer on input. On
+        output it stores the required size of the path buffer. This includes
+        the null terminator.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PPATH_POINT CurrentDirectory;
+    PATH_POINT CurrentDirectoryCopy;
+    PPROCESS_PATHS Paths;
+    PKPROCESS Process;
+    PPATH_POINT RootDirectory;
+    PATH_POINT RootDirectoryCopy;
+    PSTR RootPath;
+    UINTN RootPathSize;
+    KSTATUS Status;
+
+    Process = PsGetCurrentProcess();
+    RootPath = NULL;
+    RootPathSize = 0;
+
+    ASSERT((FromKernelMode != FALSE) || (Process != PsGetKernelProcess()));
+
+    //
+    // Get the path entries for this process's current directory and root
+    // directory.
+    //
+
+    CurrentDirectory = NULL;
+    RootDirectory = NULL;
+    Paths = &(Process->Paths);
+    KeAcquireQueuedLock(Paths->Lock);
+    if (Root != FALSE) {
+        if (Paths->Root.PathEntry != NULL) {
+            IO_COPY_PATH_POINT(&CurrentDirectoryCopy, &(Paths->Root));
+            IO_PATH_POINT_ADD_REFERENCE(&CurrentDirectoryCopy);
+            CurrentDirectory = &CurrentDirectoryCopy;
+        }
+
+        //
+        // Leave the root NULL for now (i.e. the real root). It will get set to
+        // the current directory if the caller does not have permission to
+        // escape a changed root.
+        //
+
+    } else {
+
+        ASSERT(Paths->CurrentDirectory.PathEntry != NULL);
+
+        IO_COPY_PATH_POINT(&CurrentDirectoryCopy, &(Paths->CurrentDirectory));
+        IO_PATH_POINT_ADD_REFERENCE(&CurrentDirectoryCopy);
+        CurrentDirectory = &CurrentDirectoryCopy;
+        if (Paths->Root.PathEntry != NULL) {
+            IO_COPY_PATH_POINT(&RootDirectoryCopy, &(Paths->Root));
+            IO_PATH_POINT_ADD_REFERENCE(&RootDirectoryCopy);
+            RootDirectory = &RootDirectoryCopy;
+        }
+    }
+
+    KeReleaseQueuedLock(Process->Paths.Lock);
+
+    //
+    // If the caller does not have permission to escape a changed root, then
+    // pretend they're at the real root.
+    //
+
+    if ((Root != FALSE) &&
+        (!KSUCCESS(PsCheckPermission(PERMISSION_ESCAPE_CHROOT)))) {
+
+        RootDirectory = CurrentDirectory;
+        if (RootDirectory != NULL) {
+            IO_PATH_POINT_ADD_REFERENCE(RootDirectory);
+        }
+    }
+
+    //
+    // If the caller is from kernel mode and did not supply a buffer, pass an
+    // allocated buffer back.
+    //
+
+    if (FromKernelMode != FALSE) {
+        Status = IopGetPathFromRoot(CurrentDirectory,
+                                    RootDirectory,
+                                    &RootPath,
+                                    &RootPathSize);
+
+        if (!KSUCCESS(Status)) {
+            goto GetCurrentDirectoryEnd;
+        }
+
+        if (*Path != NULL) {
+            if (*PathSize < RootPathSize) {
+                Status = STATUS_BUFFER_TOO_SMALL;
+                goto GetCurrentDirectoryEnd;
+            }
+
+            RtlCopyMemory(*Path, RootPath, RootPathSize);
+
+        } else {
+            *Path = RootPath;
+            RootPath = NULL;
+        }
+
+    //
+    // The user mode path must always copy into the provided path buffer.
+    //
+
+    } else {
+        Status = IopGetUserFilePath(CurrentDirectory,
+                                    RootDirectory,
+                                    *Path,
+                                    PathSize);
+
+        if (!KSUCCESS(Status)) {
+            goto GetCurrentDirectoryEnd;
+        }
+    }
+
+GetCurrentDirectoryEnd:
+    if (CurrentDirectory != NULL) {
+        IO_PATH_POINT_RELEASE_REFERENCE(CurrentDirectory);
+    }
+
+    if (RootDirectory != NULL) {
+        IO_PATH_POINT_RELEASE_REFERENCE(RootDirectory);
+    }
+
+    if (FromKernelMode != FALSE) {
+        if (RootPath != NULL) {
+            MmFreePagedPool(RootPath);
+        }
+
+        *PathSize = RootPathSize;
+    }
+
+    return Status;
+}
+
+KSTATUS
+IopGetUserFilePath (
+    PPATH_POINT Entry,
+    PPATH_POINT Root,
+    PSTR UserBuffer,
+    PUINTN UserBufferSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine copies the full path of the given path entry (as seen from
+    the given root) into the given user mode buffer.
+
+Arguments:
+
+    Entry - Supplies a pointer to the path point to get the full path of.
+
+    Root - Supplies a pointer to the user's root.
+
+    UserBuffer - Supplies a pointer to the user mode buffer where the full path
+        should be returned.
+
+    UserBufferSize - Supplies a pointer that on success contains the size of
+        the user mode buffer. Returns the actual size of the file path, even if
+        the supplied buffer was too small.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_PATH_NOT_FOUND if the path entry has no path.
+
+    STATUS_ACCESS_VIOLATION if the buffer was invalid.
+
+    STATUS_BUFFER_TOO_SMALL if the buffer was too small.
+
+--*/
+
+{
+
+    PSTR Path;
+    UINTN PathSize;
+    KSTATUS Status;
+
+    //
+    // Create the path.
+    //
+
+    Path = NULL;
+    PathSize = 0;
+    Status = IopGetPathFromRoot(Entry,
+                                Root,
+                                &Path,
+                                &PathSize);
+
+    if (!KSUCCESS(Status)) {
+        goto GetUserFilePathEnd;
+    }
+
+    //
+    // If not enough space was supplied, then return the required size.
+    //
+
+    if (*UserBufferSize < PathSize) {
+        Status = STATUS_BUFFER_TOO_SMALL;
+        goto GetUserFilePathEnd;
+    }
+
+    //
+    // Copy the path to the supplied buffer.
+    //
+
+    if (UserBuffer != NULL) {
+        Status = MmCopyToUserMode(UserBuffer, Path, PathSize);
+        if (!KSUCCESS(Status)) {
+            goto GetUserFilePathEnd;
+        }
+    }
+
+GetUserFilePathEnd:
+    if (Path != NULL) {
+        MmFreePagedPool(Path);
+    }
+
+    *UserBufferSize = PathSize;
+    return Status;
+}
+
+KSTATUS
 IopGetPathFromRoot (
     PPATH_POINT Entry,
     PPATH_POINT Root,
     PSTR *Path,
-    PULONG PathSize
+    PUINTN PathSize
     )
 
 /*++
@@ -1114,7 +1378,7 @@ IopGetPathFromRootUnlocked (
     PPATH_POINT Entry,
     PPATH_POINT Root,
     PSTR *Path,
-    PULONG PathSize
+    PUINTN PathSize
     )
 
 /*++
@@ -1146,12 +1410,12 @@ Return Value:
 {
 
     PSTR Name;
-    ULONG NameSize;
-    ULONG Offset;
+    UINTN NameSize;
+    UINTN Offset;
     PSTR PathBuffer;
-    ULONG PathBufferSize;
+    UINTN PathBufferSize;
     PATH_POINT PathPoint;
-    ULONG PrefixSize;
+    UINTN PrefixSize;
     KSTATUS Status;
     PPATH_POINT TrueRoot;
     BOOL Unreachable;

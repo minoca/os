@@ -57,7 +57,7 @@ ULONG
 RtlStringCopy (
     PSTR Destination,
     PCSTR Source,
-    ULONG BufferSize
+    UINTN BufferSize
     )
 
 /*++
