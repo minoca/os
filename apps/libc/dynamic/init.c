@@ -51,40 +51,6 @@ Environment:
 // ------------------------------------------------------------------ Functions
 //
 
-LIBC_API
-void
-ClInitialize (
-    void *Environment
-    )
-
-/*++
-
-Routine Description:
-
-    This routine initializes the C Runtime library. This routine is normally
-    called by statically linked assembly within a program, and unless developing
-    outside the usual paradigm should not need to call this routine directly.
-
-Arguments:
-
-    Environment - Supplies a pointer to the environment information to be passed
-        on to the OS Base library.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    //
-    // TODO: Remove this after a build goes around.
-    //
-
-    return;
-}
-
 __CONSTRUCTOR
 void
 ClpInitialize (
