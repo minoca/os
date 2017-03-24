@@ -2373,7 +2373,7 @@ Return Value:
     FoundProcess = NULL;
     CurrentEntry = Parent->ChildListHead.Next;
     while (CurrentEntry != &(Parent->ChildListHead)) {
-        Process = LIST_VALUE(CurrentEntry, KPROCESS, ListEntry);
+        Process = LIST_VALUE(CurrentEntry, KPROCESS, SiblingListEntry);
         if (Process->Identifiers.ProcessId == ProcessId) {
             FoundProcess = Process;
             ObAddReference(FoundProcess);
