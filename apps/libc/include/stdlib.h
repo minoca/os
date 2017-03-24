@@ -29,6 +29,7 @@ Author:
 //
 
 #include <libcbase.h>
+#include <alloca.h>
 #include <stddef.h>
 #include <wchar.h>
 #include <sys/select.h>
