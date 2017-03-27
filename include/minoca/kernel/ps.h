@@ -1099,7 +1099,13 @@ Members:
 
     TracingProcess - Stores an optional pointer to the process that is
         tracing (debugging) this process. The tracing process will be notified
-        and this process stopped on every signal and system call.
+        and this process stopped on every signal and system call. The tracee
+        does not have a reference on its tracing process. To freely use the
+        tracer outside of the tracee process' queued lock, the tracee must
+        acquire its lock, check to make sure the tracing process is not NULL,
+        take a reference, and then release the lock. This synchronizes with the
+        tracer's destruction, as it will acquire the tracee's process lock and
+        NULL this pointer.
 
     TraceeListHead - Stores the list of processes this process traces.
 
@@ -1328,7 +1334,12 @@ Members:
     ChildListHead - Stores the list of child processes that inherit from this
         process.
 
-    Parent - Stores a pointer to the parent process if it is still alive.
+    Parent - Stores a pointer to the parent process if it is still alive. A
+        child does not have a reference on the parent. To freely use the
+        parent outside of its queued lock, a child must acquire the lock, check
+        to see if the parent is not NULL, take a reference, and then release
+        the lock. This synchronizes with the parent's destruction, as the
+        parent will acquire the child's lock and NULL the parent point.
 
     ThreadCount - Stores the number of threads that belong to this process.
 

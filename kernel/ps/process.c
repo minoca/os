@@ -117,6 +117,11 @@ PspCreateDebugDataIfNeeded (
     );
 
 VOID
+PspDestroyDebugData (
+    PPROCESS_DEBUG_DATA DebugData
+    );
+
+VOID
 PspDebugGetLoadedModules (
     PSYSTEM_CALL_DEBUG Command
     );
@@ -1792,12 +1797,14 @@ Return Value:
     PPATH_POINT SharedMemoryDirectory;
     PATH_POINT SharedMemoryDirectoryCopy;
     KSTATUS Status;
+    PKPROCESS TracingProcess;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     CurrentDirectory = NULL;
     RootDirectory = NULL;
     SharedMemoryDirectory = NULL;
+    TracingProcess = NULL;
 
     //
     // Get the processes root and current directories. Add references in case a
@@ -1871,6 +1878,19 @@ Return Value:
     NewProcess->IgnoredSignals = Process->IgnoredSignals;
     NewProcess->Umask = Process->Umask;
     INSERT_BEFORE(&(NewProcess->SiblingListEntry), &(Process->ChildListHead));
+
+    //
+    // Check for a tracing process while the lock is held. An exiting tracer
+    // sets this pointer to NULL with the tracee's lock held.
+    //
+
+    if ((Process->DebugData != NULL) &&
+        (Process->DebugData->TracingProcess != NULL)) {
+
+        TracingProcess = Process->DebugData->TracingProcess;
+        ObAddReference(TracingProcess);
+    }
+
     KeReleaseQueuedLock(Process->QueuedLock);
     PspAddProcessToParentProcessGroup(NewProcess);
 
@@ -1904,10 +1924,8 @@ Return Value:
     // Add the tracing process if needed.
     //
 
-    if ((Process->DebugData != NULL) &&
-        (Process->DebugData->TracingProcess != NULL)) {
-
-        Status = PspDebugEnable(NewProcess, Process->DebugData->TracingProcess);
+    if (TracingProcess != NULL) {
+        Status = PspDebugEnable(NewProcess, TracingProcess);
         if (!KSUCCESS(Status)) {
             goto CopyProcessEnd;
         }
@@ -1970,6 +1988,10 @@ CopyProcessEnd:
 
     if (CreatedProcess != NULL) {
         *CreatedProcess = NewProcess;
+    }
+
+    if (TracingProcess != NULL) {
+        ObReleaseReference(TracingProcess);
     }
 
     return Status;
@@ -3088,6 +3110,7 @@ Return Value:
 {
 
     PKPROCESS Parent;
+    PKPROCESS TracingProcess;
 
     //
     // Remove the process from the global list of processes so that it can no
@@ -3106,13 +3129,22 @@ Return Value:
     //
     // Remove the process from the parent's list. Acquire the process lock
     // to synchronize with the parent dying and trying to null out the parent
-    // pointer.
+    // pointer. Also synchronize with the tracer and attempt to get a reference
+    // on it.
     //
 
+    TracingProcess = NULL;
     KeAcquireQueuedLock(Process->QueuedLock);
     Parent = Process->Parent;
     if (Parent != NULL) {
         ObAddReference(Parent);
+    }
+
+    if ((Process->DebugData != NULL) &&
+        (Process->DebugData->TracingProcess != NULL)) {
+
+        TracingProcess = Process->DebugData->TracingProcess;
+        ObAddReference(TracingProcess);
     }
 
     KeReleaseQueuedLock(Process->QueuedLock);
@@ -3137,6 +3169,32 @@ Return Value:
         //
 
         ObReleaseReference(Parent);
+    }
+
+    //
+    // Remove the process from the tracer's list. If the tracer is detaching
+    // itself from the tracee, it will have set the tracee's tracing process
+    // pointer to NULL and removed it from the list.
+    //
+
+    if (TracingProcess != NULL) {
+        KeAcquireQueuedLock(TracingProcess->QueuedLock);
+        if (Process->DebugData->TracingProcess != NULL) {
+
+            ASSERT(Process->DebugData->TracerListEntry.Next != NULL);
+
+            LIST_REMOVE(&(Process->DebugData->TracerListEntry));
+            Process->DebugData->TracerListEntry.Next = NULL;
+            Process->DebugData->TracingProcess = NULL;
+        }
+
+        KeReleaseQueuedLock(TracingProcess->QueuedLock);
+
+        //
+        // Release the reference added above when the tracer was grabbed.
+        //
+
+        ObReleaseReference(TracingProcess);
     }
 
     return;
@@ -3221,9 +3279,7 @@ Return Value:
 
 {
 
-    PPROCESS_DEBUG_DATA DebugData;
     PKPROCESS Process;
-    PKPROCESS TracingProcess;
 
     //
     // This routine must not touch paged objects (including freeing paged pool),
@@ -3262,42 +3318,12 @@ Return Value:
     //
 
     if (Process->DebugData != NULL) {
-        DebugData = Process->DebugData;
-        TracingProcess = DebugData->TracingProcess;
-        if (TracingProcess != NULL) {
 
-            //
-            // Acquire the tracing process lock to remove this process from its
-            // list.
-            //
+        ASSERT(LIST_EMPTY(&(Process->DebugData->TraceeListHead)) != FALSE);
+        ASSERT(Process->DebugData->TracingProcess == NULL);
+        ASSERT(Process->DebugData->TracerListEntry.Next == NULL);
 
-            KeAcquireQueuedLock(TracingProcess->QueuedLock);
-
-            ASSERT(Process->DebugData->TracerListEntry.Next != NULL);
-
-            LIST_REMOVE(&(Process->DebugData->TracerListEntry));
-            Process->DebugData->TracerListEntry.Next = NULL;
-            DebugData->TracingProcess = NULL;
-            KeReleaseQueuedLock(TracingProcess->QueuedLock);
-
-            //
-            // Release the reference added when the debug connection was made.
-            //
-
-            ObReleaseReference(TracingProcess);
-        }
-
-        if (DebugData->AllStoppedEvent != NULL) {
-            KeDestroyEvent(DebugData->AllStoppedEvent);
-            DebugData->AllStoppedEvent = NULL;
-        }
-
-        if (DebugData->DebugCommandCompleteEvent != NULL) {
-            KeDestroyEvent(DebugData->DebugCommandCompleteEvent);
-            DebugData->DebugCommandCompleteEvent = NULL;
-        }
-
-        MmFreeNonPagedPool(Process->DebugData);
+        PspDestroyDebugData(Process->DebugData);
         Process->DebugData = NULL;
     }
 
@@ -3362,9 +3388,10 @@ Return Value:
 {
 
     PKPROCESS Child;
-    PPROCESS_DEBUG_DATA ChildDebugData;
     PLIST_ENTRY CurrentEntry;
+    PPROCESS_DEBUG_DATA DebugData;
     PROCESS_DEBUG_COMMAND TerminateCommand;
+    PKPROCESS Tracee;
 
     //
     // Disassociate the children from their dying parent.
@@ -3388,45 +3415,88 @@ Return Value:
         KeReleaseQueuedLock(Child->QueuedLock);
     }
 
+    KeReleaseQueuedLock(Process->QueuedLock);
+
     //
-    // Also release and continue any processes this process is tracing.
+    // Disassociate the tracees from the dying tracer. The process should have
+    // no threads, meaning that no new tracees should be added to the list. A
+    // tracee may remove itself (under the protection of the tracer's lock), so
+    // annoyingly grab the lock on each removal attempt. It should also be
+    // noted that this lock dance is done because debug commands cannot be
+    // issued while the tracer's process lock is held; the system may deadlock
+    // between the process lock and the debug command completion event.
     //
 
     if (Process->DebugData != NULL) {
-        CurrentEntry = Process->DebugData->TraceeListHead.Next;
-        while (CurrentEntry != &(Process->DebugData->TraceeListHead)) {
-            ChildDebugData = LIST_VALUE(CurrentEntry,
-                                        PROCESS_DEBUG_DATA,
-                                        TracerListEntry);
 
-            Child = ChildDebugData->Process;
-            CurrentEntry = CurrentEntry->Next;
+        ASSERT(Process->ThreadCount == 0);
+
+        while (LIST_EMPTY(&(Process->DebugData->TraceeListHead)) == FALSE) {
+            Tracee = NULL;
+            KeAcquireQueuedLock(Process->QueuedLock);
+            if (LIST_EMPTY(&(Process->DebugData->TraceeListHead)) == FALSE) {
+                DebugData = LIST_VALUE(Process->DebugData->TraceeListHead.Next,
+                                       PROCESS_DEBUG_DATA,
+                                       TracerListEntry);
+
+                Tracee = DebugData->Process;
+                KeAcquireQueuedLock(Tracee->QueuedLock);
+
+                //
+                // The tracing process pointer should not be NULL.
+                //
+
+                ASSERT(DebugData->TracingProcess == Process);
+
+                LIST_REMOVE(&(DebugData->TracerListEntry));
+                DebugData->TracerListEntry.Next = NULL;
+                DebugData->TracingProcess = NULL;
+
+                //
+                // Add a reference to the tracee so it does not disappear when
+                // the lock is released.
+                //
+
+                ObAddReference(Tracee);
+                KeReleaseQueuedLock(Tracee->QueuedLock);
+            }
+
+            KeReleaseQueuedLock(Process->QueuedLock);
 
             //
-            // Only the child process can detach itself from the tracer (though
-            // it can't go through with that until acquiring the process lock
-            // already held here). Coerce the process into doing this by sending
-            // a kill signal. Additionally, if the child is already waiting on
-            // this process for tracing, then continue it with the kill signal.
+            // If there was a tracee, kill it. The owning tracer is dead and it
+            // likely shouldn't be alive without the tracer.
             //
 
-            PspSetProcessExitStatus(Child,
-                                    CHILD_SIGNAL_REASON_KILLED,
-                                    SIGNAL_ABORT);
+            if (Tracee != NULL) {
+                PspSetProcessExitStatus(Tracee,
+                                        CHILD_SIGNAL_REASON_KILLED,
+                                        SIGNAL_ABORT);
 
-            PsSignalProcess(Child, SIGNAL_KILL, NULL);
-            if (KeIsSpinLockHeld(&(ChildDebugData->TracerLock)) != FALSE) {
-                RtlZeroMemory(&TerminateCommand, sizeof(PROCESS_DEBUG_COMMAND));
-                TerminateCommand.Command = DebugCommandContinue;
-                TerminateCommand.SignalToDeliver =
-                          ChildDebugData->TracerSignalInformation.SignalNumber;
+                PsSignalProcess(Tracee, SIGNAL_KILL, NULL);
 
-                PspDebugIssueCommand(Process, Child, &TerminateCommand);
+                //
+                // If the tracee is already waiting on this tracer, then
+                // continue it so it can run head first into the kill signal.
+                // Cruel.
+                //
+
+                if (KeIsSpinLockHeld(&(DebugData->TracerLock)) != FALSE) {
+                    RtlZeroMemory(&TerminateCommand,
+                                  sizeof(PROCESS_DEBUG_COMMAND));
+
+                    TerminateCommand.Command = DebugCommandContinue;
+                    TerminateCommand.SignalToDeliver =
+                               DebugData->TracerSignalInformation.SignalNumber;
+
+                    PspDebugIssueCommand(Process, Tracee, &TerminateCommand);
+                }
+
+                ObReleaseReference(Tracee);
             }
         }
     }
 
-    KeReleaseQueuedLock(Process->QueuedLock);
     return;
 }
 
@@ -3754,22 +3824,20 @@ Return Value:
         goto DebugEnableEnd;
     }
 
-    KeAcquireSpinLock(&(Process->DebugData->TracerLock));
-    if (DebugData->TracingProcess != NULL) {
-        KeReleaseSpinLock(&(Process->DebugData->TracerLock));
-        Status = STATUS_RESOURCE_IN_USE;
-        goto DebugEnableEnd;
+    Status = STATUS_RESOURCE_IN_USE;
+    KeAcquireQueuedLock(Process->QueuedLock);
+    if (DebugData->TracingProcess == NULL) {
 
-    } else {
+        ASSERT(Process->DebugData->TracerListEntry.Next == NULL);
+
         INSERT_BEFORE(&(Process->DebugData->TracerListEntry),
                       &(TracingProcess->DebugData->TraceeListHead));
 
         DebugData->TracingProcess = TracingProcess;
-        ObAddReference(DebugData->TracingProcess);
+        Status = STATUS_SUCCESS;
     }
 
-    KeReleaseSpinLock(&(Process->DebugData->TracerLock));
-    Status = STATUS_SUCCESS;
+    KeReleaseQueuedLock(Process->QueuedLock);
 
 DebugEnableEnd:
     if (LockHeld != FALSE) {
@@ -3914,7 +3982,9 @@ Return Value:
 
     //
     // Fail if that process is not stopped at a tracer break, indicated by the
-    // lock being held.
+    // lock being held. If the target process just died, it should not be
+    // holding this lock. If it does have the lock, it should not die before
+    // the command completes.
     //
 
     if (KeIsSpinLockHeld(&(TargetProcess->DebugData->TracerLock)) == FALSE) {
@@ -4018,6 +4088,14 @@ Return Value:
     KeSignalEvent(TargetProcess->StopEvent, SignalOptionSignalAll);
 
     //
+    // Wait for the command to complete.
+    //
+
+    KeWaitForEvent(TargetProcess->DebugData->DebugCommandCompleteEvent,
+                   FALSE,
+                   WAIT_TIME_INDEFINITE);
+
+    //
     // For commands that let 'er rip, the process debug command structure is
     // no longer safe to read. Plus there's nothing to read out of there anyway.
     //
@@ -4031,14 +4109,6 @@ Return Value:
         Command->Status = STATUS_SUCCESS;
         goto DebugIssueCommandEnd;
     }
-
-    //
-    // Wait for the command to complete.
-    //
-
-    KeWaitForEvent(TargetProcess->DebugData->DebugCommandCompleteEvent,
-                   FALSE,
-                   WAIT_TIME_INDEFINITE);
 
     ASSERT(ProcessCommand->Size <= LocalCommand.Size);
     ASSERT(ProcessCommand->Command == DebugCommandInvalid);
@@ -4170,11 +4240,7 @@ CreateDebugDataIfNeededEnd:
         ASSERT(Process->DebugData == NULL);
 
         if (DebugData != NULL) {
-            if (DebugData->AllStoppedEvent != NULL) {
-                KeDestroyEvent(DebugData->AllStoppedEvent);
-            }
-
-            MmFreePagedPool(DebugData);
+            PspDestroyDebugData(DebugData);
         }
     }
 
@@ -4183,6 +4249,41 @@ CreateDebugDataIfNeededEnd:
     }
 
     return Status;
+}
+
+VOID
+PspDestroyDebugData (
+    PPROCESS_DEBUG_DATA DebugData
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys the given process debug data structure.
+
+Arguments:
+
+    DebugData - Supplies a pointer to the debug data to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (DebugData->AllStoppedEvent != NULL) {
+        KeDestroyEvent(DebugData->AllStoppedEvent);
+    }
+
+    if (DebugData->DebugCommandCompleteEvent != NULL) {
+        KeDestroyEvent(DebugData->DebugCommandCompleteEvent);
+    }
+
+    MmFreeNonPagedPool(DebugData);
+    return;
 }
 
 VOID
@@ -4242,7 +4343,9 @@ Return Value:
 
     //
     // Fail if that process is not stopped at a tracer break, indicated by the
-    // lock being held.
+    // lock being held. If the process just died, it should not be holding this
+    // lock. If it does have the lock, it should not die before the calling
+    // process continues it.
     //
 
     if (KeIsSpinLockHeld(&(Process->DebugData->TracerLock)) == FALSE) {
@@ -4442,7 +4545,9 @@ Return Value:
 
     //
     // Fail if that process is not stopped at a tracer break, indicated by the
-    // lock being held.
+    // lock being held. If the process just died, it should not be holding this
+    // lock. If it does have the lock, it should not die before the calling
+    // process continues it.
     //
 
     if (KeIsSpinLockHeld(&(Process->DebugData->TracerLock)) == FALSE) {
