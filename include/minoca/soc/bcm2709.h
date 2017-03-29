@@ -342,6 +342,94 @@ Author:
 #define BCM2709_PRM_WATCHDOG_RESET_TICKS 10
 
 //
+// Define the bits for the I2C control register.
+//
+
+#define BCM2709_I2C_CONTROL_ENABLE             0x00008000
+#define BCM2709_I2C_CONTROL_INTERRUPT_RECEIVE  0x00000400
+#define BCM2709_I2C_CONTROL_INTERRUPT_TRANSMIT 0x00000200
+#define BCM2709_I2C_CONTROL_INTERRUPT_DONE     0x00000100
+#define BCM2709_I2C_CONTROL_START_TRANSFER     0x00000080
+#define BCM2709_I2C_CONTROL_CLEAR_FIFO         0x00000030
+#define BCM2709_I2C_CONTROL_READ_TRANSFER      0x00000001
+
+#define BCM2709_I2C_BUFFER_SIZE 16
+
+//
+// Define the bits for the I2C status register.
+//
+
+#define BCM2709_I2C_STATUS_CLOCK_STRETCH_TIMEOUT 0x00000200
+#define BCM2709_I2C_STATUS_ACK_ERROR             0x00000100
+#define BCM2709_I2C_STATUS_RECEIVE_FIFO_FULL     0x00000080
+#define BCM2709_I2C_STATUS_TRANSMIT_FIFO_EMPTY   0x00000040
+#define BCM2709_I2C_STATUS_RECEIVE_FIFO_DATA     0x00000020
+#define BCM2709_I2C_STATUS_TRANSMIT_FIFO_DATA    0x00000010
+#define BCM2709_I2C_STATUS_RECEIVE_FIFO_READING  0x00000008
+#define BCM2709_I2C_STATUS_TRANSMIT_FIFO_WRITING 0x00000004
+#define BCM2709_I2C_STATUS_TRANSFER_DONE         0x00000002
+#define BCM2709_I2C_STATUS_TRANSFER_ACTIVE       0x00000001
+
+//
+// Define the bits for the I2C data length register.
+//
+
+#define BCM2709_I2C_DATA_LENGTH_MASK  0x0000FFFF
+#define BCM2709_I2C_DATA_LENGTH_SHIFT 0
+
+#define BCM2709_I2C_DATA_LENGTH_MAX 0xFFFF
+
+//
+// Define the bits for the I2C slave address register.
+//
+
+#define BCM2709_I2C_SLAVE_ADDRESS_MASK  0x0000007F
+#define BCM2709_I2C_SLAVE_ADDRESS_SHIFT 0
+
+//
+// Define the bits for a 10-bit slave address.
+//
+
+#define BCM2709_I2C_10_BIT_ADDRESS_HIGH_MASK  0x00000300
+#define BCM2709_I2C_10_BIT_ADDRESS_HIGH_SHIFT 8
+#define BCM2709_I2C_10_BIT_ADDRESS_LOW_MASK   0x000000FF
+#define BCM2709_I2C_10_BIT_ADDRESS_LOW_SHIFT  0
+
+#define BCM2709_I2C_SLAVE_ADDRESS_10_BIT_HIGH_MASK  0x00000003
+#define BCM2709_I2C_SLAVE_ADDRESS_10_BIT_HIGH_SHIFT 0
+#define BCM2709_I2C_SLAVE_ADDRESS_10_BIT_HEADER     0x00000078
+
+//
+// Define the bits for the I2C FIFO register.
+//
+
+#define BCM2709_I2C_FIFO_REGISTER_DATA_MASK  0x0000000F
+#define BCM2709_I2C_FIFO_REGISTER_DATA_SHIFT 0
+
+//
+// Define the bits for the I2C clock divider register.
+//
+
+#define BCM2709_I2C_CLOCK_DIVIDER_MASK  0x0000FFFF
+#define BCM2709_I2C_CLOCK_DIVIDER_SHIFT 0
+
+//
+// Define the bits for the I2C data delay register.
+//
+
+#define BCM2709_I2C_DATA_DELAY_FALLING_EDGE_MASK  0xFFFF0000
+#define BCM2709_I2C_DATA_DELAY_FALLING_EDGE_SHIFT 16
+#define BCM2709_I2C_DATA_DELAY_RISING_EDGE_MASK   0x0000FFFF
+#define BCM2709_I2C_DATA_DELAY_RISING_EDGE_SHIFT  0
+
+//
+// Define the bits for the I2C clock stretch timeout register.
+//
+
+#define BCM2709_I2C_CLOCK_STRETCH_TIMEOUT_VALUE_MASK  0x0000FFFF
+#define BCM2709_I2C_CLOCK_STRETCH_TIMEOUT_VALUE_SHIFT 0
+
+//
 // Define the GPIO function select values.
 //
 
@@ -600,6 +688,21 @@ typedef enum _BCM2709_PRM_REGISTER {
     Bcm2709PrmResetStatus  = 0x20,
     Bcm2709PrmWatchdog     = 0x24,
 } BCM2709_PRM_REGISTER, *PBCM2709_PRM_REGISTER;
+
+//
+// Define the offsets to I2C registers, in bytes.
+//
+
+typedef enum _BCM2709_I2C_REGISTER {
+    Bcm2709I2cControl             = 0x00,
+    Bcm2709I2cStatus              = 0x04,
+    Bcm2709I2cDataLength          = 0x08,
+    Bcm2709I2cSlaveAddress        = 0x0C,
+    Bcm2709I2cDataFifo            = 0x10,
+    Bcm2709I2cClockDivider        = 0x14,
+    Bcm2709I2cDataDelay           = 0x18,
+    Bcm2709I2cClockStretchTimeout = 0x1c
+} BCM2709_I2C_REGISTER, *PBCM2709_I2C_REGISTER;
 
 //
 // Define the offsets to the GPIO registers, in bytes.

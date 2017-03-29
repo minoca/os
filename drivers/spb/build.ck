@@ -38,6 +38,7 @@ function build() {
 
     spbDrivers = [
         "drivers/spb/i2c/am3i2c:am3i2c",
+        "drivers/spb/i2c/bcm27i2c:bcm27i2c",
         "drivers/spb/i2c/rk3i2c:rk3i2c",
         "drivers/spb/spi/rk32spi:rk32spi"
     ];
