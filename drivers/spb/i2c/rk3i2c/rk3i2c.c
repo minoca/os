@@ -232,7 +232,7 @@ Rk3I2cSendStop (
 
 PDRIVER Rk3I2cDriver;
 
-SPB_FUNCTION_TABLE Rk2I2cFunctionTableTemplate = {
+SPB_FUNCTION_TABLE Rk3I2cFunctionTableTemplate = {
     Rk3I2cConfigureBus,
     Rk3I2cSubmitTransfer,
     NULL,
@@ -948,7 +948,7 @@ Return Value:
         Registration.MaxFrequency = 400000;
         Registration.BusType = ResourceSpbBusI2c;
         RtlCopyMemory(&(Registration.FunctionTable),
-                      &Rk2I2cFunctionTableTemplate,
+                      &Rk3I2cFunctionTableTemplate,
                       sizeof(SPB_FUNCTION_TABLE));
 
         Status = SpbCreateController(&Registration, &(Device->SpbController));
