@@ -2201,8 +2201,8 @@ Members:
     Flags - Stores a bitmask of flags returned by lookup. See LOOKUP_FLAGS_*
         for definitions.
 
-    Directory - Stores a pointer to the properties of the directory file that
-        is to be searched.
+    DirectoryProperties - Stores a pointer to the properties of the directory
+        file that is to be searched.
 
     FileName - Stores a pointer to the name of the file, which may not be
         null terminated.
