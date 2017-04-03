@@ -3721,6 +3721,69 @@ Return Value:
 --*/
 
 KSTATUS
+IopSharedMemoryNotifyFileMapping (
+    PFILE_OBJECT FileObject,
+    BOOL Mapping
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to notify a shared memory object that it is being
+    mapped into memory or unmapped.
+
+Arguments:
+
+    FileObject - Supplies a pointer to the file object being mapped.
+
+    Mapping - Supplies a boolean indicating if a new mapping is being created
+        (TRUE) or an old mapping is being destroyed (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+IopSharedMemoryUserControl (
+    PIO_HANDLE Handle,
+    SHARED_MEMORY_COMMAND CodeNumber,
+    BOOL FromKernelMode,
+    PVOID ContextBuffer,
+    UINTN ContextBufferSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine handles user control requests destined for a shared memory
+    object.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    CodeNumber - Supplies the minor code of the request.
+
+    FromKernelMode - Supplies a boolean indicating whether or not this request
+        (and the buffer associated with it) originates from user mode (FALSE)
+        or kernel mode (TRUE).
+
+    ContextBuffer - Supplies a pointer to the context buffer allocated by the
+        caller for the request.
+
+    ContextBufferSize - Supplies the size of the supplied context buffer.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 IopInitializePathSupport (
     VOID
     );

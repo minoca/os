@@ -179,6 +179,12 @@ typedef signed long long time_t;
 typedef unsigned int useconds_t;
 
 //
+// Define the key type used for interprocess communication.
+//
+
+typedef int key_t;
+
+//
 // Define some old BSD types.
 //
 

@@ -337,11 +337,17 @@ Author:
 #define PERMISSION_MOUNT 25
 
 //
+// This permission allows arbitrary control over IPC objects.
+//
+
+#define PERMISSION_IPC 26
+
+//
 // Define the mask of valid permission. It must be kept up to date if new
 // permissions are added.
 //
 
-#define PERMISSION_MAX PERMISSION_MOUNT
+#define PERMISSION_MAX PERMISSION_IPC
 #define PERMISSION_MASK (PERMISSION_TO_MASK(PERMISSION_MAX + 1) - 1)
 
 //

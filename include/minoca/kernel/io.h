@@ -924,6 +924,19 @@ Author:
 #define LOADED_FILE_VERSION 1
 
 //
+// Define shared memory properties, stored in the permissions field of the
+// permissions structure.
+//
+
+//
+// Set this flag if the shared memory object is unlinked and will be destroyed
+// when the last reference is closed. This lines up with SHM_DEST in the C
+// library.
+//
+
+#define SHARED_MEMORY_PROPERTY_UNLINKED 0x00010000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -1032,6 +1045,13 @@ typedef enum _IO_INFORMATION_TYPE {
     IoInformationMountPoints,
     IoInformationCacheStatistics,
 } IO_INFORMATION_TYPE, *PIO_INFORMATION_TYPE;
+
+typedef enum _SHARED_MEMORY_COMMAND {
+    SharedMemoryCommandInvalid,
+    SharedMemoryCommandUnlink,
+    SharedMemoryCommandSet,
+    SharedMemoryCommandStat
+} SHARED_MEMORY_COMMAND, *PSHARED_MEMORY_COMMAND;
 
 /*++
 
@@ -2738,6 +2758,74 @@ Return Value:
     None.
 
 --*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the permission set for a shared memory object. This
+    lines up with struct ipc_perm in the C library.
+
+Members:
+
+    OwnerUserId - Stores the user ID of the owner.
+
+    OwnerGroupId - Stores the group ID of the owner.
+
+    CreatorUserId - Stores the user ID of the creator.
+
+    CreatorGroupId - Stores the group ID of the creator.
+
+    Permissions - Stores the permission set for this object.
+
+--*/
+
+typedef struct _SHARED_MEMORY_PERMISSIONS {
+    USER_ID OwnerUserId;
+    GROUP_ID OwnerGroupId;
+    USER_ID CreatorUserId;
+    GROUP_ID CreatorGroupId;
+    ULONG Permissions;
+} SHARED_MEMORY_PERMISSIONS, *PSHARED_MEMORY_PERMISSIONS;
+
+/*++
+
+Structure Description:
+
+    This structure defines the properties of a shared memory object. This
+    structure lines up with struct shmid_ds in the C library.
+
+Members:
+
+    Permissions - Stores the permissions information for the object.
+
+    Size - Stores the size of the shared memory object in bytes.
+
+    AttachTime - Stores the last time an attach occurred.
+
+    DetachTime - Stores the last time a detach occurred.
+
+    ChangeTime - Stores the last time the object was changed (via a set).
+
+    CreatorPid - Stores the process ID of the process that created this object.
+
+    LastPid - Stores the process ID of the last process to operate on this
+        object.
+
+    AttachCount - Stores the number of active attachments.
+
+--*/
+
+typedef struct _SHARED_MEMORY_PROPERTIES {
+    SHARED_MEMORY_PERMISSIONS Permissions;
+    IO_OFFSET Size;
+    SYSTEM_TIME AttachTime;
+    SYSTEM_TIME DetachTime;
+    SYSTEM_TIME ChangeTime;
+    PROCESS_ID CreatorPid;
+    PROCESS_ID LastPid;
+    UINTN AttachCount;
+} SHARED_MEMORY_PROPERTIES, *PSHARED_MEMORY_PROPERTIES;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -6579,6 +6667,32 @@ Arguments:
 
     FileSize - Supplies a pointer where the file size in bytes will be returned
         on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+IoNotifyFileMapping (
+    PIO_HANDLE Handle,
+    BOOL Mapping
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to notify a file object that it is being mapped
+    into memory or unmapped.
+
+Arguments:
+
+    Handle - Supplies the handle being mapped.
+
+    Mapping - Supplies a boolean indicating if a new mapping is being created
+        (TRUE) or an old mapping is being destroyed (FALSE).
 
 Return Value:
 

@@ -103,6 +103,8 @@ Members:
     BackingRegionList - Stores the list of backing regions for this shared
         memory object.
 
+    Properties - Stores the current properties of the shared memory object.
+
 --*/
 
 typedef struct _SHARED_MEMORY_OBJECT {
@@ -110,6 +112,7 @@ typedef struct _SHARED_MEMORY_OBJECT {
     PFILE_OBJECT FileObject;
     PSHARED_EXCLUSIVE_LOCK Lock;
     LIST_ENTRY BackingRegionList;
+    SHARED_MEMORY_PROPERTIES Properties;
 } SHARED_MEMORY_OBJECT, *PSHARED_MEMORY_OBJECT;
 
 //
@@ -352,11 +355,14 @@ Return Value:
     ULONG FileObjectFlags;
     FILE_PROPERTIES FileProperties;
     PFILE_OBJECT NewFileObject;
+    PSHARED_MEMORY_PROPERTIES Properties;
     PSHARED_MEMORY_OBJECT SharedMemoryObject;
     KSTATUS Status;
+    PKTHREAD Thread;
 
     NewFileObject = NULL;
     SharedMemoryObject = NULL;
+    Thread = KeGetCurrentThread();
 
     //
     // Get the shared memory object directory for the process.
@@ -400,6 +406,14 @@ Return Value:
     }
 
     INITIALIZE_LIST_HEAD(&(SharedMemoryObject->BackingRegionList));
+    Properties = &(SharedMemoryObject->Properties);
+    Properties->CreatorPid = Thread->OwningProcess->Identifiers.ProcessId;
+    KeGetSystemTime(&(Properties->ChangeTime));
+    Properties->Permissions.Permissions = Create->Permissions;
+    Properties->Permissions.OwnerUserId = Thread->Identity.EffectiveUserId;
+    Properties->Permissions.CreatorUserId = Thread->Identity.EffectiveUserId;
+    Properties->Permissions.OwnerGroupId = Thread->Identity.EffectiveGroupId;
+    Properties->Permissions.CreatorGroupId = Thread->Identity.EffectiveGroupId;
     SharedMemoryObject->Lock = KeCreateSharedExclusiveLock();
     if (SharedMemoryObject->Lock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -574,6 +588,8 @@ Return Value:
     }
 
     FileObject->Properties.Size = NewSize;
+    SharedMemoryObject->Properties.Size = NewSize;
+    KeGetSystemTime(&(SharedMemoryObject->Properties.ChangeTime));
     return STATUS_SUCCESS;
 }
 
@@ -631,6 +647,9 @@ Return Value:
             IopFileObjectReleaseReference(SharedMemoryObject->FileObject);
             SharedMemoryObject->FileObject = NULL;
         }
+
+        SharedMemoryObject->Properties.Permissions.Permissions |=
+                                               SHARED_MEMORY_PROPERTY_UNLINKED;
 
         *Unlinked = TRUE;
     }
@@ -924,6 +943,7 @@ PerformSharedMemoryIoOperationEnd:
 
     if ((IoContext->Write != FALSE) && (BytesCompleted != 0)) {
         FileSize = IoContext->Offset + BytesCompleted;
+        MemoryObject->Properties.Size = FileSize;
         IopUpdateFileObjectFileSize(FileObject, FileSize);
     }
 
@@ -938,6 +958,248 @@ PerformSharedMemoryIoOperationEnd:
 
     MmSetIoBufferCurrentOffset(IoContext->IoBuffer, OriginalIoBufferOffset);
     IoContext->BytesCompleted = BytesCompleted;
+    return Status;
+}
+
+KSTATUS
+IopSharedMemoryNotifyFileMapping (
+    PFILE_OBJECT FileObject,
+    BOOL Mapping
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to notify a shared memory object that it is being
+    mapped into memory or unmapped.
+
+Arguments:
+
+    FileObject - Supplies a pointer to the file object being mapped.
+
+    Mapping - Supplies a boolean indicating if a new mapping is being created
+        (TRUE) or an old mapping is being destroyed (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN Add;
+    PKPROCESS Process;
+    PSHARED_MEMORY_OBJECT SharedMemory;
+
+    SharedMemory = FileObject->SpecialIo;
+    if (Mapping != FALSE) {
+        Add = 1;
+        KeGetSystemTime(&(SharedMemory->Properties.AttachTime));
+
+    } else {
+        Add = (UINTN)-1L;
+        KeGetSystemTime(&(SharedMemory->Properties.DetachTime));
+    }
+
+    RtlAtomicAdd(&(SharedMemory->Properties.AttachCount), Add);
+    Process = PsGetCurrentProcess();
+    SharedMemory->Properties.LastPid = Process->Identifiers.ProcessId;
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+IopSharedMemoryUserControl (
+    PIO_HANDLE Handle,
+    SHARED_MEMORY_COMMAND CodeNumber,
+    BOOL FromKernelMode,
+    PVOID ContextBuffer,
+    UINTN ContextBufferSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine handles user control requests destined for a shared memory
+    object.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    CodeNumber - Supplies the minor code of the request.
+
+    FromKernelMode - Supplies a boolean indicating whether or not this request
+        (and the buffer associated with it) originates from user mode (FALSE)
+        or kernel mode (TRUE).
+
+    ContextBuffer - Supplies a pointer to the context buffer allocated by the
+        caller for the request.
+
+    ContextBufferSize - Supplies the size of the supplied context buffer.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    USER_ID EffectiveId;
+    PFILE_OBJECT FileObject;
+    BOOL Locked;
+    BOOL LockedExclusive;
+    FILE_PERMISSIONS Permissions;
+    PSHARED_MEMORY_OBJECT SharedMemory;
+    KSTATUS Status;
+    PKTHREAD Thread;
+    SHARED_MEMORY_PROPERTIES UserProperties;
+
+    FileObject = Handle->FileObject;
+    Locked = FALSE;
+    LockedExclusive = FALSE;
+    SharedMemory = FileObject->SpecialIo;
+    Thread = KeGetCurrentThread();
+    EffectiveId = Thread->Identity.EffectiveUserId;
+    switch (CodeNumber) {
+
+    //
+    // Unlink the shared memory object if the effective user ID is the owner
+    // or creator, or the process has special permission.
+    //
+
+    case SharedMemoryCommandUnlink:
+        if ((EffectiveId != SharedMemory->Properties.Permissions.OwnerUserId) &&
+            (EffectiveId !=
+             SharedMemory->Properties.Permissions.CreatorUserId) &&
+            (!KSUCCESS(PsCheckPermission(PERMISSION_IPC)))) {
+
+            Status = STATUS_PERMISSION_DENIED;
+            goto SharedMemoryUserControlEnd;
+        }
+
+        //
+        // Delete as kernel mode, which skips the permission checks
+        // (done above).
+        //
+
+        Status = IopDeleteByHandle(TRUE, Handle, DELETE_FLAG_SHARED_MEMORY);
+        break;
+
+    //
+    // Set the owner user, owner group, and permission set of the object. The
+    // caller must be the owner or creator, or must have special permission.
+    //
+
+    case SharedMemoryCommandSet:
+        KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
+        Locked = TRUE;
+        LockedExclusive = TRUE;
+        if ((EffectiveId != SharedMemory->Properties.Permissions.OwnerUserId) &&
+            (EffectiveId !=
+             SharedMemory->Properties.Permissions.CreatorUserId) &&
+            (!KSUCCESS(PsCheckPermission(PERMISSION_IPC)))) {
+
+            Status = STATUS_PERMISSION_DENIED;
+            goto SharedMemoryUserControlEnd;
+        }
+
+        if (ContextBufferSize < sizeof(SHARED_MEMORY_PROPERTIES)) {
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto SharedMemoryUserControlEnd;
+        }
+
+        if (FromKernelMode != FALSE) {
+            RtlCopyMemory(&UserProperties,
+                          ContextBuffer,
+                          sizeof(SHARED_MEMORY_PROPERTIES));
+
+        } else {
+            Status = MmCopyFromUserMode(&UserProperties,
+                                        ContextBuffer,
+                                        sizeof(SHARED_MEMORY_PROPERTIES));
+
+            if (!KSUCCESS(Status)) {
+                goto SharedMemoryUserControlEnd;
+            }
+        }
+
+        Permissions = UserProperties.Permissions.Permissions &
+                      FILE_PERMISSION_ALL;
+
+        SharedMemory->Properties.Permissions.OwnerUserId =
+                                       UserProperties.Permissions.OwnerUserId;
+
+        SharedMemory->Properties.Permissions.OwnerGroupId =
+                                      UserProperties.Permissions.OwnerGroupId;
+
+        SharedMemory->Properties.Permissions.Permissions =
+            (SharedMemory->Properties.Permissions.Permissions &
+             ~FILE_PERMISSION_ALL) |
+            Permissions;
+
+        FileObject->Properties.UserId = UserProperties.Permissions.OwnerUserId;
+        FileObject->Properties.GroupId =
+                                      UserProperties.Permissions.OwnerGroupId;
+
+        FileObject->Properties.Permissions = Permissions;
+        KeGetSystemTime(&(FileObject->Properties.StatusChangeTime));
+        SharedMemory->Properties.ChangeTime =
+                                       FileObject->Properties.StatusChangeTime;
+
+        break;
+
+    //
+    // Get the info. The caller must have read access to the object.
+    //
+
+    case SharedMemoryCommandStat:
+        KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+        Locked = TRUE;
+        Status = IopCheckPermissions(FALSE,
+                                     &(Handle->PathPoint),
+                                     IO_ACCESS_READ);
+
+        if (!KSUCCESS(Status)) {
+            goto SharedMemoryUserControlEnd;
+        }
+
+        if (ContextBufferSize < sizeof(SHARED_MEMORY_PROPERTIES)) {
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto SharedMemoryUserControlEnd;
+        }
+
+        if (FromKernelMode != FALSE) {
+            RtlCopyMemory(ContextBuffer,
+                          &(SharedMemory->Properties),
+                          sizeof(SHARED_MEMORY_PROPERTIES));
+
+        } else {
+            Status = MmCopyToUserMode(ContextBuffer,
+                                      &(SharedMemory->Properties),
+                                      sizeof(SHARED_MEMORY_PROPERTIES));
+        }
+
+        break;
+
+    default:
+        Status = STATUS_NOT_SUPPORTED;
+        goto SharedMemoryUserControlEnd;
+    }
+
+SharedMemoryUserControlEnd:
+    if (Locked != FALSE) {
+        if (LockedExclusive != FALSE) {
+            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+
+        } else {
+            KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+        }
+    }
+
     return Status;
 }
 

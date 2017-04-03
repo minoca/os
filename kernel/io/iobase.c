@@ -2730,6 +2730,15 @@ Return Value:
 
         break;
 
+    case IoObjectSharedMemoryObject:
+        Status = IopSharedMemoryUserControl(Handle,
+                                            MinorCode,
+                                            FromKernelMode,
+                                            ContextBuffer,
+                                            ContextBufferSize);
+
+        break;
+
     default:
         Status = STATUS_NOT_SUPPORTED;
         break;
@@ -2873,6 +2882,51 @@ Return Value:
                     RtlAtomicOr64(&(IoGlobalStatistics.PagingBytesWritten), 0);
 
     return STATUS_SUCCESS;
+}
+
+KSTATUS
+IoNotifyFileMapping (
+    PIO_HANDLE Handle,
+    BOOL Mapping
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to notify a file object that it is being mapped
+    into memory or unmapped.
+
+Arguments:
+
+    Handle - Supplies the handle being mapped.
+
+    Mapping - Supplies a boolean indicating if a new mapping is being created
+        (TRUE) or an old mapping is being destroyed (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PFILE_OBJECT FileObject;
+    KSTATUS Status;
+
+    FileObject = Handle->FileObject;
+    switch (FileObject->Properties.Type) {
+    case IoObjectSharedMemoryObject:
+        Status = IopSharedMemoryNotifyFileMapping(FileObject, Mapping);
+        break;
+
+    default:
+        Status = STATUS_SUCCESS;
+        break;
+    }
+
+    return Status;
 }
 
 KSTATUS

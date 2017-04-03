@@ -1094,6 +1094,12 @@ Return Value:
 
     INSERT_AFTER(&(NewSection->AddressListEntry), EntryBefore);
     MmReleaseAddressSpaceLock(AddressSpace);
+    if (ImageHandle != INVALID_HANDLE) {
+        Status = IoNotifyFileMapping(ImageHandle, TRUE);
+        if (!KSUCCESS(Status)) {
+            goto AddImageSectionEnd;
+        }
+    }
 
     //
     // If the image section is non-paged and accessible, then page in and lock
@@ -1366,6 +1372,15 @@ Return Value:
                       &(ImageSectionList->ListHead));
 
         KeReleaseQueuedLock(ImageSectionList->Lock);
+    }
+
+    if (NewSection->ImageBacking.DeviceHandle != INVALID_HANDLE) {
+        Status = IoNotifyFileMapping(NewSection->ImageBacking.DeviceHandle,
+                                     TRUE);
+
+        if (!KSUCCESS(Status)) {
+            goto CopyImageSectionEnd;
+        }
     }
 
     //
@@ -3018,6 +3033,15 @@ Return Value:
         if (!KSUCCESS(Status)) {
             goto ClipImageSectionEnd;
         }
+
+        if (Section->ImageBacking.DeviceHandle != INVALID_HANDLE) {
+            Status = IoNotifyFileMapping(Section->ImageBacking.DeviceHandle,
+                                         TRUE);
+
+            if (!KSUCCESS(Status)) {
+                goto ClipImageSectionEnd;
+            }
+        }
     }
 
     RemainderPages = RemainderSize >> PageShift;
@@ -3312,6 +3336,10 @@ Return Value:
     Section->AddressListEntry.Next = NULL;
     if (AddressSpaceLockHeld == FALSE) {
         MmReleaseAddressSpaceLock(Section->AddressSpace);
+    }
+
+    if (Section->ImageBacking.DeviceHandle != INVALID_HANDLE) {
+        IoNotifyFileMapping(Section->ImageBacking.DeviceHandle, FALSE);
     }
 
     //

@@ -87,6 +87,7 @@ extern "C" {
 
 #define _PATH_TZ        "/etc/tz"
 #define _PATH_TZALMANAC "/usr/share/tz/tzdata"
+#define _PATH_URANDOM   "/dev/urandom"
 
 //
 // ------------------------------------------------------ Data Type Definitions
