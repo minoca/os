@@ -45,13 +45,13 @@ OS ?= $(shell uname -s)
 
 ifneq ($(OS),$(filter Windows_NT Minoca FreeBSD,$(OS)))
 
-DYNLIBS = -ldl
+DYNLIBS += -ldl
 
 endif
 
 ifneq ($(OS),$(filter Windows_NT Minoca,$(OS)))
 
-DYNLIBS = -pthread
+DYNLIBS += -pthread
 
 endif
 
