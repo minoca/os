@@ -116,7 +116,7 @@ _EOS
 AUTO_ROOT_ARGS="$AUTO_ROOT_ARGS --script=./keep_hostname"
 fi
 
-echo "Running msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy -a2048"
-msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy -a2048
+echo "Running msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy -a3072"
+msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy -a3072
 echo "Done running setup."
 
