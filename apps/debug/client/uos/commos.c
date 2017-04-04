@@ -35,7 +35,6 @@ Environment:
 #include <poll.h>
 #include <pthread.h>
 #include <pwd.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,6 +49,7 @@ Environment:
 #include <minoca/debug/dbgext.h>
 #include "dbgrprof.h"
 #include "console.h"
+#include "sock.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -140,6 +140,28 @@ Return Value:
     return DbgrMain(ArgumentCount, Arguments);
 }
 
+void  ConsoleInterruptHandler(
+    int Signal
+    )
+/*++
+
+Routine Description:
+
+    This routine is called when a debug process receive SIGINT, for example
+    using Control+C. It requests a break in.
+
+Arguments:
+
+    Signal - The number of triggered signal. Should be SIGINT.
+
+--*/
+
+{
+    signal(Signal, SIG_IGN);
+    DbgrRequestBreakIn();
+    signal(Signal, ConsoleInterruptHandler);
+}
+
 BOOL
 DbgrOsInitializeConsole (
     PBOOL EchoCommands
@@ -192,6 +214,12 @@ Return Value:
     if (Result != 0) {
         return FALSE;
     }
+
+    //
+    // Set the Control+C handler.
+    //
+
+    signal(SIGINT, ConsoleInterruptHandler);
 
     return TRUE;
 }
@@ -477,7 +505,7 @@ Return Value:
 {
 
     ssize_t BytesRead;
-    int Character;
+    UCHAR Character;
     UCHAR ControlKeyValue;
     struct pollfd Events[2];
     int Result;
@@ -852,30 +880,91 @@ Return Value:
 
 {
 
-    struct termios Termios;
+    BOOL Result;
+    PSTR HostCopy;
 
-    DbgKdDescriptor = open(Channel, O_RDWR | O_BINARY);
-    if (DbgKdDescriptor < 0) {
-        DbgOut("Cannot open %s: %s\n", Channel, strerror(errno));
-        return FALSE;
-    }
+    HostCopy = NULL;
+    Result = FALSE;
 
-    if (tcgetattr(DbgKdDescriptor, &Termios) == 0) {
-        memcpy(&DbgOriginalKdSettings, &Termios, sizeof(Termios));
-        cfsetispeed(&Termios, Baudrate);
-        cfsetospeed(&Termios, Baudrate);
-        Termios.c_cflag = CS8 | CREAD | HUPCL;
-        Termios.c_lflag = 0;
-        Termios.c_iflag = 0;
-        Termios.c_oflag = 0;
-        if (tcsetattr(DbgKdDescriptor, TCSANOW, &Termios) != 0) {
-            DbgOut("Warning: Failed to set serial settings on %s: %s\n",
-                   Channel,
-                   strerror(errno));
+    if (strncasecmp(Channel, "tcp:", 4) == 0) {
+        PSTR AfterScan;
+        PSTR Colon;
+        unsigned long Port;
+
+        if (DbgrSocketInitializeLibrary() != 0) {
+            DbgOut("Failed to initialize socket library.\n");
+            return FALSE;
+        }
+
+        HostCopy = strdup(Channel + 4);
+        if (HostCopy == NULL) {
+            return FALSE;
+        }
+
+        Colon = strrchr(HostCopy, ':');
+        if (Colon == NULL) {
+            DbgOut("Error: Port number expected in the form host:port.\n");
+            goto InitializeCommunicationsEnd;
+        }
+
+        *Colon = '\0';
+        Port = strtoul(Colon + 1, &AfterScan, 10);
+        if ((*AfterScan != '\0') || (AfterScan == Colon + 1)) {
+            DbgOut("Error: Invalid port '%s'.\n", Colon + 1);
+        }
+
+        DbgKdDescriptor = DbgrSocketCreateStreamSocket();
+        if (DbgKdDescriptor < 0) {
+            DbgOut("Failed to create socket.\n");
+            goto InitializeCommunicationsEnd;
+        }
+
+        DbgOut("Connecting via TCP to %s on port %u...", HostCopy, Port);
+        if (DbgrSocketConnect(DbgKdDescriptor, HostCopy, Port) != 0) {
+            DbgOut("Failed to connect: %s", strerror(errno));
+            goto InitializeCommunicationsEnd;
+        }
+
+    } else {
+        struct termios Termios;
+
+        DbgKdDescriptor = open(Channel, O_RDWR | O_BINARY);
+        if (DbgKdDescriptor < 0) {
+            DbgOut("Cannot open %s: %s\n", Channel, strerror(errno));
+            return FALSE;
+        }
+
+        if (tcgetattr(DbgKdDescriptor, &Termios) == 0) {
+            memcpy(&DbgOriginalKdSettings, &Termios, sizeof(Termios));
+            cfsetispeed(&Termios, Baudrate);
+            cfsetospeed(&Termios, Baudrate);
+            Termios.c_cflag = CS8 | CREAD | HUPCL;
+            Termios.c_lflag = 0;
+            Termios.c_iflag = 0;
+            Termios.c_oflag = 0;
+            if (tcsetattr(DbgKdDescriptor, TCSANOW, &Termios) != 0) {
+                DbgOut("Warning: Failed to set serial settings on %s: %s\n",
+                       Channel,
+                       strerror(errno));
+            }
         }
     }
 
-    return TRUE;
+    Result = TRUE;
+
+InitializeCommunicationsEnd:
+    if (HostCopy != NULL) {
+        free(HostCopy);
+    }
+
+    if (Result == FALSE) {
+        if (DbgKdDescriptor >= 0) {
+            DbgrSocketClose(DbgKdDescriptor);
+            DbgKdDescriptor = -1;
+        }
+    }
+
+    return Result;
 }
 
 VOID
@@ -1036,10 +1125,10 @@ Return Value:
     Poll.fd = DbgKdDescriptor;
     Poll.events = POLLIN;
     if (poll(&Poll, 1, 0) <= 0) {
-        return 1;
+        return FALSE;
     }
 
-    return 0;
+    return TRUE;
 }
 
 VOID
@@ -1199,4 +1288,3 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
