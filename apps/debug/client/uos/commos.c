@@ -67,6 +67,11 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+void
+DbgrConsoleInterruptHandler (
+    int Signal
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -92,6 +97,7 @@ pid_t DbgInitialTerminalErrorForegroundProcessGroup;
 
 struct termios DbgTerminalSettings;
 struct termios DbgOriginalTerminalSettings;
+struct sigaction DbgOriginalSigint;
 
 //
 // Store the ID of the terminal's original foreground process group.
@@ -140,28 +146,6 @@ Return Value:
     return DbgrMain(ArgumentCount, Arguments);
 }
 
-void  ConsoleInterruptHandler(
-    int Signal
-    )
-/*++
-
-Routine Description:
-
-    This routine is called when a debug process receive SIGINT, for example
-    using Control+C. It requests a break in.
-
-Arguments:
-
-    Signal - The number of triggered signal. Should be SIGINT.
-
---*/
-
-{
-    signal(Signal, SIG_IGN);
-    DbgrRequestBreakIn();
-    signal(Signal, ConsoleInterruptHandler);
-}
-
 BOOL
 DbgrOsInitializeConsole (
     PBOOL EchoCommands
@@ -188,6 +172,7 @@ Return Value:
 
 {
 
+    struct sigaction Action;
     int Result;
 
     if (tcgetattr(STDIN_FILENO, &DbgTerminalSettings) != 0) {
@@ -219,8 +204,9 @@ Return Value:
     // Set the Control+C handler.
     //
 
-    signal(SIGINT, ConsoleInterruptHandler);
-
+    memset(&Action, 0, sizeof(Action));
+    Action.sa_handler = DbgrConsoleInterruptHandler;
+    sigaction(SIGINT, &Action, &DbgOriginalSigint);
     return TRUE;
 }
 
@@ -251,6 +237,8 @@ Return Value:
     struct sigaction OriginalAction;
     int Result;
     struct sigaction SignalAction;
+
+    sigaction(SIGINT, &DbgOriginalSigint, NULL);
 
     //
     // Temporarily ignore SIGTTOU as the current process may not be in the
@@ -880,17 +868,16 @@ Return Value:
 
 {
 
-    BOOL Result;
+    PSTR AfterScan;
+    PSTR Colon;
     PSTR HostCopy;
+    unsigned long Port;
+    BOOL Result;
+    struct termios Termios;
 
     HostCopy = NULL;
     Result = FALSE;
-
     if (strncasecmp(Channel, "tcp:", 4) == 0) {
-        PSTR AfterScan;
-        PSTR Colon;
-        unsigned long Port;
-
         if (DbgrSocketInitializeLibrary() != 0) {
             DbgOut("Failed to initialize socket library.\n");
             return FALSE;
@@ -926,8 +913,6 @@ Return Value:
         }
 
     } else {
-        struct termios Termios;
-
         DbgKdDescriptor = open(Channel, O_RDWR | O_BINARY);
         if (DbgKdDescriptor < 0) {
             DbgOut("Cannot open %s: %s\n", Channel, strerror(errno));
@@ -1288,3 +1273,32 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+void
+DbgrConsoleInterruptHandler (
+    int Signal
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when a debug process receives SIGINT, for example
+    using Control+C. It requests a break in.
+
+Arguments:
+
+    Signal - Supplies the number of triggered signal. Should be SIGINT.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    DbgrRequestBreakIn();
+    return;
+}
+
