@@ -794,9 +794,6 @@ Return Value:
             //
 
             if (LineEnd - Device < 2) {
-
-                ASSERT(LineEnd != Device);
-
                 if (LineEnd + 3 >= FileEnd) {
                     break;
                 }
@@ -931,8 +928,6 @@ Return Value:
             //
 
             if (LineEnd - Device < 2) {
-
-                ASSERT(LineEnd != Device);
 
                 if (LineEnd + 3 >= FileEnd) {
                     break;
