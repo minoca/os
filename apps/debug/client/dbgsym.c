@@ -2882,7 +2882,9 @@ Return Value:
         // Check if the name matches.
         //
 
-        if (strcasecmp(LocalName, CurrentLocal->Name) != 0) {
+        if ((CurrentLocal->Name == NULL) ||
+            (strcasecmp(LocalName, CurrentLocal->Name) != 0)) {
+
             continue;
         }
 
