@@ -65,7 +65,8 @@ IoGetIoHandleAccessPermissions (
 
 Routine Description:
 
-    This routine returns the access permissions for the given I/O handle.
+    This routine returns the access permissions for the given I/O handle. For
+    directories, no access is always returned.
 
 Arguments:
 
@@ -78,6 +79,14 @@ Return Value:
 --*/
 
 {
+
+    //
+    // Return no access for a directory.
+    //
+
+    if (IoHandle->FileObject->Properties.Type == IoObjectRegularDirectory) {
+        return 0;
+    }
 
     return IoHandle->Access;
 }
