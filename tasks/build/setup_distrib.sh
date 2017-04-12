@@ -58,7 +58,7 @@ make_index="$SRCROOT/third-party/build/opkg-utils/opkg-make-index"
 package_dir="$SRCROOT/$ARCH$VARIANT$DEBUG/bin/packages"
 index_file="$package_dir/Packages"
 python "$make_index" "$package_dir" > "$index_file"
-cat "$index_file" | tr -d '\r' | gzip > "${index_file}.gz"
+cat "$index_file" | tr -d '\r' | gzip -9 > "${index_file}.gz"
 
 ##
 ## Create a local configuration that prefers the local package repository.
