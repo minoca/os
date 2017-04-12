@@ -45,6 +45,7 @@ Environment:
 #include <unistd.h>
 
 #include <minoca/lib/types.h>
+#include <minoca/lib/tty.h>
 #include <minoca/debug/spproto.h>
 #include <minoca/debug/dbgext.h>
 #include "dbgrprof.h"
@@ -874,6 +875,7 @@ Return Value:
     unsigned long Port;
     BOOL Result;
     struct termios Termios;
+    PTTY_BAUD_RATE Rate;
 
     HostCopy = NULL;
     Result = FALSE;
@@ -921,12 +923,25 @@ Return Value:
 
         if (tcgetattr(DbgKdDescriptor, &Termios) == 0) {
             memcpy(&DbgOriginalKdSettings, &Termios, sizeof(Termios));
-            cfsetispeed(&Termios, Baudrate);
-            cfsetospeed(&Termios, Baudrate);
             Termios.c_cflag = CS8 | CREAD | HUPCL;
             Termios.c_lflag = 0;
             Termios.c_iflag = 0;
             Termios.c_oflag = 0;
+            /* Some systems (linux) use enumerations instead of direct
+             * baud rates for speed_t type, so we have to convert it.
+             * Also speed have to be set after flags, because cfset*speed()
+             * might modify them. */
+            for (Rate = TtyBaudRates; Rate->Name != NULL; Rate++) {
+                if (Rate->Rate == Baudrate) {
+                    break;
+                }
+            }
+            if (Rate->Name == NULL) {
+                DbgOut("Invalid baud rate: %lu\n", Baudrate);
+                return FALSE;
+            }
+            cfsetispeed(&Termios, Rate->Value);
+            cfsetospeed(&Termios, Rate->Value);
             if (tcsetattr(DbgKdDescriptor, TCSANOW, &Termios) != 0) {
                 DbgOut("Warning: Failed to set serial settings on %s: %s\n",
                        Channel,
