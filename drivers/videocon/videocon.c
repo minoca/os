@@ -1419,6 +1419,7 @@ Return Value:
     case FrameBufferGetMode:
         if (UserControl->UserBufferSize < sizeof(FRAME_BUFFER_MODE)) {
             Status = STATUS_BUFFER_TOO_SMALL;
+            break;
         }
 
         RtlZeroMemory(&Mode, sizeof(Mode));
@@ -1436,6 +1437,50 @@ Return Value:
         break;
 
     case FrameBufferSetMode:
+        if (UserControl->UserBufferSize < sizeof(FRAME_BUFFER_MODE)) {
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        //
+        // See if there's no difference.
+        //
+
+        if (UserControl->FromKernelMode != FALSE) {
+            RtlCopyMemory(&Mode,
+                          UserControl->UserBuffer,
+                          sizeof(FRAME_BUFFER_MODE));
+
+        } else {
+            Status = MmCopyFromUserMode(&Mode,
+                                        UserControl->UserBuffer,
+                                        sizeof(FRAME_BUFFER_MODE));
+
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        //
+        // See if there's no change.
+        //
+
+        if ((Mode.ResolutionX == Console->Width) &&
+            (Mode.ResolutionY == Console->Height) &&
+            (Mode.VirtualResolutionX == Mode.ResolutionX) &&
+            (Mode.VirtualResolutionY == Mode.ResolutionY) &&
+            (Mode.BitsPerPixel == Console->BitsPerPixel) &&
+            (Mode.OffsetX == 0) &&
+            (Mode.OffsetY == 0) &&
+            (Mode.Rotate == 0)) {
+
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+        Status = STATUS_NOT_HANDLED;
+        break;
+
     default:
         Status = STATUS_NOT_HANDLED;
         break;
