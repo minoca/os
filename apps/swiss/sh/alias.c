@@ -53,13 +53,6 @@ ShDestroyAlias (
     PSHELL_ALIAS Alias
     );
 
-PSHELL_ALIAS
-ShLookupAlias (
-    PSHELL Shell,
-    PSTR Name,
-    ULONG NameSize
-    );
-
 BOOL
 ShPrintAlias (
     PSHELL_ALIAS Alias
@@ -511,6 +504,71 @@ Return Value:
     }
 
     return NULL;
+}
+
+BOOL
+ShCopyAliases (
+    PSHELL Source,
+    PSHELL Destination
+    )
+
+/*++
+
+Routine Description:
+
+    This routine copies the list of declared aliases from one shell to
+    another.
+
+Arguments:
+
+    Source - Supplies a pointer to the shell containing the aliases to copy.
+
+    Destination - Supplies a pointer to the shell where the aliases should be
+        copied to.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+{
+
+    PSHELL_ALIAS Alias;
+    PLIST_ENTRY CurrentEntry;
+    PSHELL_ALIAS NewAlias;
+
+    CurrentEntry = Source->AliasList.Next;
+    while (CurrentEntry != &(Source->AliasList)) {
+        Alias = LIST_VALUE(CurrentEntry, SHELL_ALIAS, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        NewAlias = malloc(sizeof(SHELL_ALIAS));
+        if (NewAlias == NULL) {
+            return FALSE;
+        }
+
+        memcpy(NewAlias, Alias, sizeof(SHELL_ALIAS));
+        NewAlias->Name = SwStringDuplicate(Alias->Name, Alias->NameSize);
+        NewAlias->Value = SwStringDuplicate(Alias->Value, Alias->ValueSize);
+        if ((NewAlias->Name == NULL) || (NewAlias->Value == NULL)) {
+            if (NewAlias->Name != NULL) {
+                free(NewAlias->Name);
+            }
+
+            if (NewAlias->Value != NULL) {
+                free(NewAlias->Value);
+            }
+
+            free(NewAlias);
+            return FALSE;
+        }
+
+        INSERT_BEFORE(&(NewAlias->ListEntry), &(Destination->AliasList));
+    }
+
+    return TRUE;
 }
 
 //

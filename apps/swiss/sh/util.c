@@ -324,6 +324,11 @@ Return Value:
         goto CreateSubshellEnd;
     }
 
+    Result = ShCopyAliases(Shell, Subshell);
+    if (Result == FALSE) {
+        goto CreateSubshellEnd;
+    }
+
     if (Input != NULL) {
 
         assert(InputSize != 0);

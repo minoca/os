@@ -2597,6 +2597,34 @@ Return Value:
 
 --*/
 
+BOOL
+ShCopyAliases (
+    PSHELL Source,
+    PSHELL Destination
+    );
+
+/*++
+
+Routine Description:
+
+    This routine copies the list of declared aliases from one shell to
+    another.
+
+Arguments:
+
+    Source - Supplies a pointer to the shell containing the aliases to copy.
+
+    Destination - Supplies a pointer to the shell where the aliases should be
+        copied to.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
 //
 // Signal/trap support functions
 //
