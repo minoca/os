@@ -3520,11 +3520,14 @@ Return Value:
 
 {
 
+    PVOID Buffer;
+    UINTN BufferSize;
     ULONG Integer;
     PTCP_RECEIVED_SEGMENT Segment;
     KSTATUS Status;
     PTCP_SOCKET TcpSocket;
 
+    Status = STATUS_SUCCESS;
     TcpSocket = (PTCP_SOCKET)Socket;
     KeAcquireQueuedLock(TcpSocket->Lock);
     switch (CodeNumber) {
@@ -3559,14 +3562,21 @@ Return Value:
             }
         }
 
-        if (FromKernelMode != FALSE) {
-            RtlCopyMemory(ContextBuffer, &Integer, sizeof(ULONG));
+        Buffer = &Integer;
+        BufferSize = sizeof(ULONG);
+        break;
 
-        } else {
-            MmCopyToUserMode(ContextBuffer, &Integer, sizeof(ULONG));
+    case TcpUserControlGetInputQueuedSize:
+        if (TcpSocket->State == TcpStateListening) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
         }
 
-        Status = STATUS_SUCCESS;
+        Integer = TcpSocket->ReceiveWindowTotalSize -
+                  TcpSocket->ReceiveWindowFreeSize;
+
+        Buffer = &Integer;
+        BufferSize = sizeof(ULONG);
         break;
 
     default:
@@ -3575,6 +3585,20 @@ Return Value:
     }
 
     KeReleaseQueuedLock(TcpSocket->Lock);
+
+    //
+    // Copy the gathered data on success.
+    //
+
+    if (KSUCCESS(Status)) {
+        if (FromKernelMode != FALSE) {
+            RtlCopyMemory(ContextBuffer, Buffer, BufferSize);
+
+        } else {
+            MmCopyToUserMode(ContextBuffer, Buffer, BufferSize);
+        }
+    }
+
     return Status;
 }
 

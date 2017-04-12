@@ -29,6 +29,7 @@ Author:
 //
 
 #include <sys/uio.h>
+#include <sys/ioctl.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -450,6 +451,13 @@ extern "C" {
 //
 
 #define SIOCATMARK 0x7300
+
+//
+// This ioctl returns the amount of unread data in the receive buffer for
+// stream sockets.
+//
+
+#define SIOCINQ FIONREAD
 
 //
 // Define the maximum length of the connection backlog queue for listen calls
