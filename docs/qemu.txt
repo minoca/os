@@ -1,0 +1,28 @@
+Running Qemu on *nix OSes with Minoca OS as a guest:
+I was able to get up and running with this command:
+qemu-system-x86_64 -hda $SRCROOT/x86dbg/bin/pc.img -m 256 -vnc 0.0.0.0:0 -serial pty
+
+When you run it qemu spits out something to the effect of:
+char device redirected to /dev/pts/2
+
+I was then able to connect the debugger with:
+debug -k /dev/pts/2 -s $SRCROOT/$ARCH$VARIANT$DEBUG/bin
+
+Although the debugger is a binary protocol, you can poke it manually to see if
+it's alive by doing "cat /dev/pts/2" on one session, letting that sit, and
+doing "echo ? > /dev/pts/2" on another. You should see an exclamation point
+show up on the cat session, as ? and ! are our resynchronization protocol.
+
+Qemu on Windows:
+That's another story. The short version is to use the aliases and versions
+checked in to https://gitlab.com/minoca/tools. Typing 'run' fires up a Qemu
+instance, which presents no window until you type 'dx' to fire up the kernel
+debugger which connects to the named pipe Qemu is waiting for.
+
+Newer versions of Qemu on Windows seem to get into a livelock situation when
+using a Named Pipe where serial data is written by the host but cannot yet be
+read by the guest. It then spends all of its time in this loop and the VM stops
+making progress. I created some patches to try and work around it, and it
+worked okay on the ARM version. The x86 version had medium performance, if I
+remember correctly, but didn't seem to be worth the upgrade from our blazing
+fast 0.13 version.
