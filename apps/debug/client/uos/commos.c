@@ -41,7 +41,6 @@ Environment:
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <termios.h>
 #include <unistd.h>
 
 #include <minoca/lib/types.h>
@@ -927,19 +926,22 @@ Return Value:
             Termios.c_lflag = 0;
             Termios.c_iflag = 0;
             Termios.c_oflag = 0;
-            /* Some systems (linux) use enumerations instead of direct
-             * baud rates for speed_t type, so we have to convert it.
-             * Also speed have to be set after flags, because cfset*speed()
-             * might modify them. */
-            for (Rate = TtyBaudRates; Rate->Name != NULL; Rate++) {
+
+            //
+            // Convert the baud rate into a speed_t value.
+            //
+
+            for (Rate = TtyBaudRates; Rate->Name != NULL; Rate += 1) {
                 if (Rate->Rate == Baudrate) {
                     break;
                 }
             }
+
             if (Rate->Name == NULL) {
                 DbgOut("Invalid baud rate: %lu\n", Baudrate);
                 return FALSE;
             }
+
             cfsetispeed(&Termios, Rate->Value);
             cfsetospeed(&Termios, Rate->Value);
             if (tcsetattr(DbgKdDescriptor, TCSANOW, &Termios) != 0) {

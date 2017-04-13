@@ -13,7 +13,8 @@ Module Name:
 
 Abstract:
 
-    This header contains definitions for TTY
+    This header contains the definition of a global variable that converts
+    baud rates into speed_t values.
 
 Author:
 
@@ -22,11 +23,14 @@ Author:
 Environment:
 
     POSIX
+
 --*/
 
 //
 // ------------------------------------------------------------------- Includes
 //
+
+#include <termios.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -44,7 +48,7 @@ Environment:
 
 Structure Description:
 
-    This structure stores an TTY baud rate speed conversion.
+    This structure stores a terminal baud rate speed conversion.
 
 Members:
 
