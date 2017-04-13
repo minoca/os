@@ -98,9 +98,13 @@ EXPORTED_FUNCTION(___tls_get_addr)
     ##
 
 ___tls_get_addrSlowPath:
+    pushl   %ebx                # Save ebx.
+    call    __x86.get_pc_thunk.bx # ebx must be set up correctly for the PLT.
+    addl    $_GLOBAL_OFFSET_TABLE_,%ebx # Get GOT address.
     pushl   %eax                # Push the structure parameter.
     call    OsGetTlsAddress@PLT # Call the OS API routine.
     addl    $4, %esp            # Pop the parameter.
+    popl    %ebx                # Restore ebx.
     ret                         # Return.
 
 END_FUNCTION(___tls_get_addr)

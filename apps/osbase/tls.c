@@ -418,6 +418,7 @@ Return Value:
 
     PVOID Allocation;
     UINTN AllocationSize;
+    BOOL AnyAssigned;
     PLIST_ENTRY CurrentEntry;
     PVOID CurrentPointer;
     UINTN CurrentSize;
@@ -429,10 +430,11 @@ Return Value:
     UINTN VectorSize;
 
     Allocation = NULL;
+    AnyAssigned = FALSE;
 
     //
     // Figure out how much to allocate for the thread control block and the
-    // initial TLS allocations.
+    // static TLS allocations.
     //
 
     ModuleCount = 0;
@@ -446,12 +448,16 @@ Return Value:
             ModuleCount = Image->ModuleNumber;
         }
 
-        if (Image->TlsAlignment <= 1) {
-            AllocationSize += Image->TlsSize;
+        if (((Image->Flags & IMAGE_FLAG_STATIC_TLS) != 0) ||
+            ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) != 0)) {
 
-        } else {
-            AllocationSize = ALIGN_RANGE_UP(AllocationSize + Image->TlsSize,
-                                            Image->TlsAlignment);
+            if (Image->TlsAlignment <= 1) {
+                AllocationSize += Image->TlsSize;
+
+            } else {
+                AllocationSize = ALIGN_RANGE_UP(AllocationSize + Image->TlsSize,
+                                                Image->TlsAlignment);
+            }
         }
     }
 
@@ -512,7 +518,10 @@ Return Value:
         ASSERT((Image->ModuleNumber <= ThreadControlBlock->ModuleCount) &&
                (Image->ModuleNumber != 0));
 
-        if (Image->TlsSize == 0) {
+        if ((Image->TlsSize == 0) ||
+            (((Image->Flags & IMAGE_FLAG_STATIC_TLS) == 0) &&
+             ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE) == 0))) {
+
             continue;
         }
 
@@ -524,10 +533,27 @@ Return Value:
                                          Image->TlsAlignment);
         }
 
-        ASSERT((Image->TlsOffset == (UINTN)-1) ||
-               (Image->TlsOffset == CurrentSize));
+        //
+        // If static TLS offsets have not been assigned, then assign one now.
+        //
 
-        Image->TlsOffset = CurrentSize;
+        if (Image->TlsOffset == (UINTN)-1) {
+            Image->TlsOffset = CurrentSize;
+            AnyAssigned = TRUE;
+
+        //
+        // Otherwise, use the TLS offset previously assigned. There must not be
+        // a mix of assigned and unassigned, since the required sizes would
+        // come out differently depending on order.
+        //
+
+        } else {
+
+            ASSERT(AnyAssigned == FALSE);
+
+            CurrentSize = Image->TlsOffset;
+        }
+
         CurrentPointer = ((PVOID)ThreadControlBlock) - CurrentSize;
 
         //

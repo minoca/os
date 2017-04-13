@@ -2188,9 +2188,10 @@ Return Value:
                              NULL);
 
             if (!KSUCCESS(Status)) {
-                RtlDebugPrint("%s: Failed to find import '%s'.\n",
+                RtlDebugPrint("%s: Failed to find import '%s': %d\n",
                               Image->FileName,
-                              ImportName);
+                              ImportName,
+                              Status);
 
                 goto LoadImportsForImageEnd;
             }
