@@ -155,21 +155,6 @@ KepPrintFormattedPercent (
     ULONG PercentTimesTen
     );
 
-VOID
-KepQueueDistributionTimer (
-    VOID
-    );
-
-VOID
-KepDistributionTimerDpcRoutine (
-    PDPC Dpc
-    );
-
-VOID
-KepDistributionTimerWorkRoutine (
-    PVOID Parameter
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -182,6 +167,12 @@ volatile ULONG KeProcessorStartLock = 0;
 volatile ULONG KeProcessorsReady = 0;
 volatile BOOL KeAllProcessorsInitialize = FALSE;
 volatile BOOL KeAllProcessorsGo = FALSE;
+
+//
+// Odd values are off, even values are on.
+//
+
+volatile ULONG KeBannerThreadEnabled = 1;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -583,6 +574,120 @@ ApplicationProcessorStartupEnd:
     return;
 }
 
+KSTATUS
+KepSetBannerThread (
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enables or disables the banner thread.
+
+Arguments:
+
+    Data - Supplies a pointer to the data buffer where the data is either
+        returned for a get operation or given for a set operation.
+
+    DataSize - Supplies a pointer that on input contains the size of the
+        data buffer. On output, contains the required size of the data buffer.
+
+    Set - Supplies a boolean indicating if this is a get operation (FALSE) or
+        a set operation (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG PreviousValue;
+    KSTATUS Status;
+    PULONG Value;
+
+    if (*DataSize < sizeof(ULONG)) {
+        *DataSize = sizeof(ULONG);
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    Value = Data;
+    *DataSize = sizeof(ULONG);
+    if (Set == FALSE) {
+        *Value = (KeBannerThreadEnabled & 0x1) != FALSE;
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // This is privileged because there's no reason random users should be
+    // doing it. Also since the threads linger hammering on this could lead to
+    // resource exhaustion.
+    //
+
+    Status = PsCheckPermission(PERMISSION_SYSTEM_ADMINISTRATOR);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    //
+    // Loop increasing the generation number until the correct edge is
+    // performed.
+    //
+
+    while (TRUE) {
+        PreviousValue = KeBannerThreadEnabled;
+
+        //
+        // If the current value agrees with what the user wants, then break out.
+        //
+
+        if ((PreviousValue & 0x1) == (*Value != FALSE)) {
+            break;
+        }
+
+        //
+        // Bump the generation, which will hopefully make the desired
+        // transition, but might end up doing the opposite if multiple threads
+        // are in here.
+        //
+
+        PreviousValue = RtlAtomicAdd32(&KeBannerThreadEnabled, 1);
+
+        //
+        // Handle the thread previously being on (ie this turned it off). If the
+        // user wanted it off, then great. Otherwise, loop again to try and
+        // turn it back on.
+        //
+
+        if ((PreviousValue & 0x1) != 0) {
+            if (*Value == FALSE) {
+                break;
+            }
+
+        //
+        // This action just turned it on. If the user wanted it on, then great,
+        // create the thread. Otherwise, loop again to try and turn it off.
+        //
+
+        } else {
+            if (*Value != FALSE) {
+                Status = PsCreateKernelThread(KepBannerThread,
+                                              (PVOID)(UINTN)(PreviousValue + 1),
+                                              "KepBannerThread");
+
+                break;
+            }
+        }
+    }
+
+    *Value = (PreviousValue & 0x1) != FALSE;
+    return Status;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -666,17 +771,11 @@ Return Value:
     // Fire up the banner thread.
     //
 
-    PsCreateKernelThread(KepBannerThread, NULL, "KepBannerThread");
-
-    //
-    // Enable this for the free public builds.
-    //
-
-#if 0
-
-    KepQueueDistributionTimer();
-
-#endif
+    if ((KeBannerThreadEnabled & 0x1) != 0) {
+        PsCreateKernelThread(KepBannerThread,
+                             (PVOID)(UINTN)KeBannerThreadEnabled,
+                             "KepBannerThread");
+    }
 
 CompleteSystemInitializationEnd:
     if (!KSUCCESS(Status)) {
@@ -778,7 +877,8 @@ Routine Description:
 
 Arguments:
 
-    Context - Supplies an unused context pointer.
+    Context - Supplies a context pointer, which in this case is a generation
+        number. If the generation number changes from this, the thread exits.
 
 Return Value:
 
@@ -791,6 +891,8 @@ Return Value:
     CHAR BannerString[120];
     IO_CACHE_STATISTICS Cache;
     CHAR CacheString[16];
+    ULONG CellHeight;
+    ULONG Columns;
     CHAR CpuIdleString[16];
     CHAR CpuInterruptString[16];
     CHAR CpuKernelString[16];
@@ -811,6 +913,7 @@ Return Value:
     CHAR PagingValueString[16];
     IO_GLOBAL_STATISTICS PreviousIoStatistics;
     ULONGLONG ReadDifference;
+    ULONG Rows;
     ULONGLONG Seconds;
     ULONG Size;
     KSTATUS Status;
@@ -834,29 +937,36 @@ Return Value:
     IoStatistics.Version = IO_GLOBAL_STATISTICS_VERSION;
     Memory.Version = MM_STATISTICS_VERSION;
     Cache.Version = IO_CACHE_STATISTICS_VERSION;
-    if (!KSUCCESS(KeVideoGetDimensions(&Width, NULL))) {
+    Status = KeVideoGetDimensions(&Width,
+                                  NULL,
+                                  NULL,
+                                  &CellHeight,
+                                  &Columns,
+                                  &Rows);
+
+    if ((!KSUCCESS(Status)) || (Rows < 3)) {
         return;
     }
 
-    if (Width > sizeof(BannerString) - 1) {
-        Width = sizeof(BannerString) - 1;
+    if (Columns > sizeof(BannerString) - 1) {
+        Columns = sizeof(BannerString) - 1;
     }
 
     //
     // Determine the right format given the width of the console.
     //
 
-    if (Width >= KE_BANNER_FULL_WIDTH) {
+    if (Columns >= KE_BANNER_FULL_WIDTH) {
         MemoryFormat = KE_BANNER_FULL_MEMORY_FORMAT;
         TimeFormat = KE_BANNER_FULL_TIME_FORMAT;
         PagingFormat = KE_BANNER_FULL_PAGING_FORMAT;
 
-    } else if (Width >= KE_BANNER_SHORT_WIDTH) {
+    } else if (Columns >= KE_BANNER_SHORT_WIDTH) {
         MemoryFormat = KE_BANNER_SHORT_MEMORY_FORMAT;
         TimeFormat = KE_BANNER_SHORT_TIME_FORMAT;
         PagingFormat = KE_BANNER_SHORT_PAGING_FORMAT;
 
-    } else if (Width >= KE_BANNER_TINY_WIDTH) {
+    } else if (Columns >= KE_BANNER_TINY_WIDTH) {
         MemoryFormat = KE_BANNER_TINY_MEMORY_FORMAT;
         TimeFormat = KE_BANNER_TINY_TIME_FORMAT;
         PagingFormat = KE_BANNER_TINY_PAGING_FORMAT;
@@ -870,7 +980,12 @@ Return Value:
         return;
     }
 
+    KeVideoClearScreen(0, 0, Width, CellHeight * 3);
     while (TRUE) {
+        if (KeBannerThreadEnabled != (ULONG)(UINTN)Context) {
+            break;
+        }
+
         Status = MmGetMemoryStatistics(&Memory);
         if (!KSUCCESS(Status)) {
             RtlDebugPrint("Failed to get MM statistics.\n");
@@ -885,12 +1000,12 @@ Return Value:
         IoGetGlobalStatistics(&IoStatistics);
         TimeCounter = KeGetRecentTimeCounter();
         Seconds = TimeCounter / Frequency;
-        Minutes = Seconds / 60;
-        Seconds %= 60;
-        Hours = Minutes / 60;
-        Minutes %= 60;
-        Days = Hours / 24;
-        Hours %= 24;
+        Minutes = Seconds / SECONDS_PER_MINUTE;
+        Seconds %= SECONDS_PER_MINUTE;
+        Hours = Minutes / MINUTES_PER_HOUR;
+        Minutes %= MINUTES_PER_HOUR;
+        Days = Hours / HOURS_PER_DAY;
+        Hours %= HOURS_PER_DAY;
         KepPrintFormattedMemoryUsage(TotalMemoryString,
                                      sizeof(TotalMemoryString),
                                      Memory.AllocatedPhysicalPages << PageShift,
@@ -917,9 +1032,9 @@ Return Value:
                                      Cache.DirtyPageCount << PageShift,
                                      Cache.PhysicalPageCount << PageShift);
 
-        if (Width >= KE_BANNER_SHORT_WIDTH) {
+        if (Columns >= KE_BANNER_SHORT_WIDTH) {
             Size = RtlPrintToString(BannerString,
-                                    Width + 1,
+                                    Columns + 1,
                                     CharacterEncodingDefault,
                                     MemoryFormat,
                                     TotalMemoryString,
@@ -929,7 +1044,7 @@ Return Value:
 
         } else {
             Size = RtlPrintToString(BannerString,
-                                    Width + 1,
+                                    Columns + 1,
                                     CharacterEncodingDefault,
                                     MemoryFormat,
                                     TotalMemoryString,
@@ -937,7 +1052,7 @@ Return Value:
         }
 
         Size -= 1;
-        while (Size < Width) {
+        while (Size < Columns) {
             BannerString[Size] = ' ';
             Size += 1;
         }
@@ -954,7 +1069,7 @@ Return Value:
             RtlPrintToString(UptimeString,
                              sizeof(UptimeString),
                              CharacterEncodingAscii,
-                             "%02I64d:%02I64d:%02I64d",
+                             "%02lld:%02lld:%02lld",
                              Hours,
                              Minutes,
                              Seconds);
@@ -963,7 +1078,7 @@ Return Value:
             RtlPrintToString(UptimeString,
                              sizeof(UptimeString),
                              CharacterEncodingAscii,
-                             "%02I64d:%02I64d:%02I64d:%02I64d",
+                             "%02lld:%02lld:%02lld:%02lld",
                              Days,
                              Hours,
                              Minutes,
@@ -1021,9 +1136,9 @@ Return Value:
                       &IoStatistics,
                       sizeof(IO_GLOBAL_STATISTICS));
 
-        if (Width >= KE_BANNER_SHORT_WIDTH) {
+        if (Columns >= KE_BANNER_SHORT_WIDTH) {
             Size = RtlPrintToString(BannerString,
-                                    Width + 1,
+                                    Columns + 1,
                                     CharacterEncodingDefault,
                                     TimeFormat,
                                     UptimeString,
@@ -1036,7 +1151,7 @@ Return Value:
 
         } else {
             Size = RtlPrintToString(BannerString,
-                                    Width + 1,
+                                    Columns + 1,
                                     CharacterEncodingDefault,
                                     TimeFormat,
                                     UptimeString,
@@ -1046,7 +1161,7 @@ Return Value:
         }
 
         Size -= 1;
-        while (Size < Width) {
+        while (Size < Columns) {
             BannerString[Size] = ' ';
             Size += 1;
         }
@@ -1380,149 +1495,5 @@ Return Value:
     }
 
     return Size;
-}
-
-VOID
-KepQueueDistributionTimer (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine queues the distribution timer.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PDPC Dpc;
-    ULONGLONG DueTime;
-    ULONGLONG Interval;
-    KSTATUS Status;
-    PKTIMER Timer;
-
-    Dpc = NULL;
-
-    //
-    // Create the reset timer that reboots the system every few days.
-    //
-
-    Timer = KeCreateTimer(MM_ALLOCATION_TAG);
-    if (Timer == NULL) {
-        goto QueueDistributionTimerEnd;
-    }
-
-    Dpc = KeCreateDpc(KepDistributionTimerDpcRoutine, Timer);
-    if (Dpc == NULL) {
-        goto QueueDistributionTimerEnd;
-    }
-
-    Interval = MICROSECONDS_PER_SECOND * SECONDS_PER_DAY * 3;
-    DueTime = KeGetRecentTimeCounter() +
-              KeConvertMicrosecondsToTimeTicks(Interval);
-
-    Status = KeQueueTimer(Timer, TimerQueueSoftWake, DueTime, 0, 0, Dpc);
-    if (!KSUCCESS(Status)) {
-        goto QueueDistributionTimerEnd;
-    }
-
-    Timer = NULL;
-    Dpc = NULL;
-
-QueueDistributionTimerEnd:
-    if (Timer != NULL) {
-        KeDestroyTimer(Timer);
-    }
-
-    if (Dpc != NULL) {
-        KeDestroyDpc(Dpc);
-    }
-
-    return;
-}
-
-VOID
-KepDistributionTimerDpcRoutine (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the distribution DPC routine. It is called when the
-    distribution timer fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    KeCreateAndQueueWorkItem(NULL,
-                             WorkPriorityNormal,
-                             KepDistributionTimerWorkRoutine,
-                             Dpc);
-
-    return;
-}
-
-VOID
-KepDistributionTimerWorkRoutine (
-    PVOID Parameter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine prototype represents a work item.
-
-Arguments:
-
-    Parameter - Supplies an optional parameter passed in by the creator of the
-        work item.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    KSTATUS (*ActionRoutine)(SYSTEM_RESET_TYPE);
-    PDPC Dpc;
-    PKTIMER Timer;
-
-    Dpc = Parameter;
-    Timer = Dpc->UserData;
-    KeDestroyTimer(Timer);
-    KeDestroyDpc(Dpc);
-
-    //
-    // Reset the system. Be casually tricky by not just calling the routine
-    // directly. Really it's not that tricky.
-    //
-
-    ActionRoutine = KeResetSystem;
-    ActionRoutine(SystemResetShutdown);
-    return;
 }
 

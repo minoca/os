@@ -166,8 +166,56 @@ Return Value:
     return;
 }
 
+VOID
+KeVideoClearScreen (
+    LONG MinimumX,
+    LONG MinimumY,
+    LONG MaximumX,
+    LONG MaximumY
+    )
+
+/*++
+
+Routine Description:
+
+    This routine clears a portion of the video screen.
+
+Arguments:
+
+    MinimumX - Supplies the minimum X coordinate of the rectangle to clear,
+        inclusive.
+
+    MinimumY - Supplies the minimum Y coordinate of the rectangle to clear,
+        inclusive.
+
+    MaximumX - Supplies the maximum X coordinate of the rectangle to clear,
+        exclusive.
+
+    MaximumY - Supplies the maximum Y coordinate of the rectangle to clear,
+        exclusive.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (KeVideoContext.FrameBuffer == NULL) {
+        return;
+    }
+
+    VidClearScreen(&KeVideoContext, MinimumX, MinimumY, MaximumX, MaximumY);
+    return;
+}
+
 KSTATUS
 KeVideoGetDimensions (
+    PULONG Width,
+    PULONG Height,
+    PULONG CellWidth,
+    PULONG CellHeight,
     PULONG Columns,
     PULONG Rows
     )
@@ -176,9 +224,25 @@ KeVideoGetDimensions (
 
 Routine Description:
 
-    This routine returns the text dimensions of the kernel's video frame buffer.
+    This routine returns the dimensions of the kernel's video frame buffer.
 
 Arguments:
+
+    Width - Supplies an optional pointer where the width in pixels will be
+        returned. For text-based frame buffers, this will be equal to the
+        number of text columns.
+
+    Height - Supplies an optional pointer where the height in pixels will be
+        returned. For text-based frame buffers, this will be equal to the
+        number of text rows.
+
+    CellWidth - Supplies an optional pointer where the width in pixels of a
+        text character will be returned on success. For text-based frame
+        buffers, 1 will be returned.
+
+    CellHeight - Supplies an optional pointer where the height in pixels of a
+        text character will be returned on success. For text-based frame
+        buffers, 1 will be returned.
 
     Columns - Supplies an optional pointer where the number of text columns
         will be returned.
@@ -198,6 +262,22 @@ Return Value:
 
     if (KeVideoContext.FrameBuffer == NULL) {
         return STATUS_NOT_INITIALIZED;
+    }
+
+    if (Width != NULL) {
+        *Width = KeVideoContext.Width;
+    }
+
+    if (Height != NULL) {
+        *Height = KeVideoContext.Height;
+    }
+
+    if (CellWidth != NULL) {
+        *CellWidth = KeVideoContext.Font->CellWidth;
+    }
+
+    if (CellHeight != NULL) {
+        *CellHeight = KeVideoContext.Font->CellHeight;
     }
 
     if (Columns != NULL) {

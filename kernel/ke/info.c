@@ -568,6 +568,10 @@ Return Value:
         Status = KepGetKernelCommandLine(Data, DataSize, Set);
         break;
 
+    case KeInformationBannerThread:
+        Status = KepSetBannerThread(Data, DataSize, Set);
+        break;
+
     default:
         Status = STATUS_INVALID_PARAMETER;
         *DataSize = 0;

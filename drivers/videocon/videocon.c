@@ -372,6 +372,9 @@ Members:
     PixelsPerScanLine - Stores the number of pixels in a line, including
         any extra non-visual pixels.
 
+    BannerThreadEnabled - Stores a boolean indicating if the banner thread was
+        previously enabled or not.
+
 --*/
 
 typedef struct _VIDEO_CONSOLE_DEVICE {
@@ -410,6 +413,7 @@ typedef struct _VIDEO_CONSOLE_DEVICE {
     ULONG GreenMask;
     ULONG BlueMask;
     ULONG PixelsPerScanLine;
+    ULONG BannerThreadEnabled;
 } VIDEO_CONSOLE_DEVICE, *PVIDEO_CONSOLE_DEVICE;
 
 //
@@ -498,6 +502,7 @@ VcpEraseArea (
 VOID
 VcpRedrawArea (
     PVIDEO_CONSOLE_DEVICE Console,
+    BOOL Force,
     LONG StartColumn,
     LONG StartRow,
     LONG EndColumn,
@@ -1090,12 +1095,30 @@ Return Value:
 {
 
     PVIDEO_CONSOLE_DEVICE Console;
+    UINTN DataSize;
     ULONG PreviousHandles;
 
     Console = (PVIDEO_CONSOLE_DEVICE)DeviceContext;
     PreviousHandles = RtlAtomicAdd32(&(Console->OpenHandles), 1);
 
     ASSERT(PreviousHandles < 0x10000000);
+
+    if (PreviousHandles == 0) {
+
+        //
+        // Disable the banner thread since the frame buffer is about to be
+        // owned by user mode. Failure is not fatal, it just means people will
+        // be competing for the frame buffer.
+        //
+
+        Console->BannerThreadEnabled = FALSE;
+        DataSize = sizeof(Console->BannerThreadEnabled);
+        KeGetSetSystemInformation(SystemInformationKe,
+                                  KeInformationBannerThread,
+                                  &(Console->BannerThreadEnabled),
+                                  &DataSize,
+                                  TRUE);
+    }
 
     IoCompleteIrp(VcDriver, Irp, STATUS_SUCCESS);
     return;
@@ -1134,12 +1157,36 @@ Return Value:
 {
 
     PVIDEO_CONSOLE_DEVICE Console;
+    UINTN DataSize;
     ULONG PreviousHandles;
 
     Console = (PVIDEO_CONSOLE_DEVICE)DeviceContext;
     PreviousHandles = RtlAtomicAdd32(&(Console->OpenHandles), -1);
 
     ASSERT((PreviousHandles <= 0x10000000) && (PreviousHandles != 0));
+
+    if (PreviousHandles == 1) {
+
+        //
+        // Re-enable the banner thread if it was previously enabled.
+        //
+
+        if (Console->BannerThreadEnabled != FALSE) {
+            DataSize = sizeof(Console->BannerThreadEnabled);
+            KeGetSetSystemInformation(SystemInformationKe,
+                                      KeInformationBannerThread,
+                                      &(Console->BannerThreadEnabled),
+                                      &DataSize,
+                                      TRUE);
+        }
+
+        VcpRedrawArea(Console,
+                      TRUE,
+                      0,
+                      0,
+                      Console->Columns,
+                      Console->ScreenRows - 1);
+    }
 
     IoCompleteIrp(VcDriver, Irp, STATUS_SUCCESS);
     return;
@@ -1603,11 +1650,14 @@ Return Value:
             Line = GET_CONSOLE_LINE(Device, CursorRow);
             Line->Character[CursorColumn].Data.Attributes ^= BASE_VIDEO_CURSOR;
             CursorAttributes = Line->Character[CursorColumn].Data.Attributes;
-            VcpRedrawArea(Device,
-                          CursorColumn,
-                          CursorRow,
-                          CursorColumn + 1,
-                          CursorRow);
+            if (Device->OpenHandles == 0) {
+                VcpRedrawArea(Device,
+                              FALSE,
+                              CursorColumn,
+                              CursorRow,
+                              CursorColumn + 1,
+                              CursorRow);
+            }
 
             BlinkCount += 1;
 
@@ -1623,7 +1673,7 @@ Return Value:
             break;
         }
 
-        if (BytesRead != 0) {
+        if ((BytesRead != 0) && (Device->OpenHandles == 0)) {
             BlinkCount = 0;
             VcpWriteToConsole(Device, ReadBuffer, BytesRead);
         }
@@ -1994,7 +2044,7 @@ Return Value:
     // Redraw the portion of the screen that was modified.
     //
 
-    VcpRedrawArea(Console, StartColumn, StartRow, EndColumn, EndRow);
+    VcpRedrawArea(Console, FALSE, StartColumn, StartRow, EndColumn, EndRow);
     KeReleaseQueuedLock(Console->Lock);
     return;
 }
@@ -2831,6 +2881,7 @@ Return Value:
 VOID
 VcpRedrawArea (
     PVIDEO_CONSOLE_DEVICE Console,
+    BOOL Force,
     LONG StartColumn,
     LONG StartRow,
     LONG EndColumn,
@@ -2846,6 +2897,10 @@ Routine Description:
 Arguments:
 
     Console - Supplies a pointer to the video console to write to.
+
+    Force - Supplies a boolean indicating whether or not to redraw characters
+        even if supposedly unnecessary. Set this if someone else has drawn on
+        the frame buffer.
 
     StartColumn - Supplies the starting column, inclusive, to redraw at.
 
@@ -2869,7 +2924,9 @@ Return Value:
     LONG CurrentColumn;
     LONG CurrentRow;
     LONG EndColumnThisRow;
+    LONG Height;
     PVIDEO_CONSOLE_LINE Line;
+    LONG Remainder;
     PBASE_VIDEO_CHARACTER ScreenCharacters;
     PVIDEO_CONSOLE_LINE ScreenLine;
     LONG StartDrawColumn;
@@ -2884,7 +2941,7 @@ Return Value:
     ASSERT((StartColumn <= Console->Columns) &&
            (EndColumn <= Console->Columns));
 
-    ASSERT((StartRow < Console->ScreenRows) && (EndRow <= Console->ScreenRows));
+    ASSERT((StartRow < Console->ScreenRows) && (EndRow < Console->ScreenRows));
 
     if (StartColumn >= Console->Columns) {
         StartColumn = Console->Columns - 1;
@@ -2968,26 +3025,36 @@ Return Value:
                 // Skip characters that are already drawn correctly.
                 //
 
-                if (ScreenCharacters[CurrentColumn].AsUint32 ==
-                    Characters[CurrentColumn].AsUint32) {
+                if (Force == FALSE) {
+                    if (ScreenCharacters[CurrentColumn].AsUint32 ==
+                        Characters[CurrentColumn].AsUint32) {
 
-                    CurrentColumn += 1;
-                    continue;
-                }
+                        CurrentColumn += 1;
+                        continue;
+                    }
 
-                //
-                // Collect characters that need redrawing.
-                //
+                    //
+                    // Collect characters that need redrawing.
+                    //
 
-                StartDrawColumn = CurrentColumn;
-                while ((CurrentColumn < EndColumnThisRow) &&
-                       (ScreenCharacters[CurrentColumn].AsUint32 !=
-                        Characters[CurrentColumn].AsUint32)) {
+                    StartDrawColumn = CurrentColumn;
+                    while ((CurrentColumn < EndColumnThisRow) &&
+                           (ScreenCharacters[CurrentColumn].AsUint32 !=
+                            Characters[CurrentColumn].AsUint32)) {
 
-                    ScreenCharacters[CurrentColumn].AsUint32 =
+                        ScreenCharacters[CurrentColumn].AsUint32 =
                                             Characters[CurrentColumn].AsUint32;
 
-                    CurrentColumn += 1;
+                        CurrentColumn += 1;
+                    }
+
+                //
+                // Redraw the whole row.
+                //
+
+                } else {
+                    StartDrawColumn = CurrentColumn;
+                    CurrentColumn = EndColumnThisRow;
                 }
 
                 VidPrintCharacters(&(Console->VideoContext),
@@ -3004,24 +3071,34 @@ Return Value:
                 // Skip characters that are already blank.
                 //
 
-                if (ScreenCharacters[CurrentColumn].AsUint32 ==
-                    Blank.AsUint32) {
+                if (Force == FALSE) {
+                    if (ScreenCharacters[CurrentColumn].AsUint32 ==
+                        Blank.AsUint32) {
 
-                    CurrentColumn += 1;
-                    continue;
-                }
+                        CurrentColumn += 1;
+                        continue;
+                    }
+
+                    //
+                    // Batch together characters that need redrawing.
+                    //
+
+                    StartDrawColumn = CurrentColumn;
+                    while ((CurrentColumn < EndColumnThisRow) &&
+                           (ScreenCharacters[CurrentColumn].AsUint32 !=
+                            Blank.AsUint32)) {
+
+                        ScreenCharacters[CurrentColumn] = Blank;
+                        CurrentColumn += 1;
+                    }
 
                 //
-                // Batch together characters that need redrawing.
+                // Redraw the whole row.
                 //
 
-                StartDrawColumn = CurrentColumn;
-                while ((CurrentColumn < EndColumnThisRow) &&
-                       (ScreenCharacters[CurrentColumn].AsUint32 !=
-                        Blank.AsUint32)) {
-
-                    ScreenCharacters[CurrentColumn] = Blank;
-                    CurrentColumn += 1;
+                } else {
+                    StartDrawColumn = CurrentColumn;
+                    CurrentColumn = EndColumnThisRow;
                 }
 
                 VidPrintCharacters(&(Console->VideoContext),
@@ -3046,6 +3123,39 @@ Return Value:
 
         CurrentColumn = 0;
         CurrentRow += 1;
+    }
+
+    //
+    // If clearing the whole screen, also clear any remainder along the right
+    // and bottom edges that doesn't divide evenly by text cell.
+    //
+
+    if ((Force != FALSE) &&
+        (StartRow == 0) && (StartColumn == 0) &&
+        (EndRow >= Console->ScreenRows - 1) &&
+        (EndColumn >= Console->Columns - 1)) {
+
+        Width = Console->VideoContext.Width;
+        Height = Console->VideoContext.Height;
+        Remainder = Console->Columns * Console->VideoContext.Font->CellWidth;
+        if (Remainder < Width) {
+            VidClearScreen(&(Console->VideoContext),
+                           Remainder,
+                           0,
+                           Width,
+                           Height);
+        }
+
+        Remainder = Console->ScreenRows *
+                    Console->VideoContext.Font->CellHeight;
+
+        if (Remainder < Height) {
+            VidClearScreen(&(Console->VideoContext),
+                           0,
+                           Remainder,
+                           Width,
+                           Height);
+        }
     }
 
     return;
