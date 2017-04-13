@@ -774,6 +774,8 @@ Members:
 
     StackBase - Stores the base of the stack.
 
+    IgnoredSignals - Stores a mask of which signals are ignored.
+
 --*/
 
 typedef struct _PROCESS_START_DATA {
@@ -786,6 +788,7 @@ typedef struct _PROCESS_START_DATA {
     PVOID ExecutableBase;
     PVOID EntryPoint;
     PVOID StackBase;
+    SIGNAL_SET IgnoredSignals;
 } PROCESS_START_DATA, *PPROCESS_START_DATA;
 
 /*++

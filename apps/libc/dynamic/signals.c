@@ -1689,6 +1689,26 @@ Return Value:
 
 {
 
+    PPROCESS_ENVIRONMENT Environment;
+    SIGNAL_SET IgnoredSignals;
+    ULONG Signal;
+
+    //
+    // Mark the signals that were left ignored by the parent process.
+    //
+
+    Environment = OsGetCurrentEnvironment();
+    IgnoredSignals = Environment->StartData->IgnoredSignals;
+    Signal = 1;
+    while ((!IS_SIGNAL_SET_EMPTY(IgnoredSignals)) && (Signal < SIGNAL_COUNT)) {
+        if (IS_SIGNAL_SET(IgnoredSignals, Signal)) {
+            ClSignalHandlers[Signal].sa_handler = SIG_IGN;
+            REMOVE_SIGNAL(IgnoredSignals, Signal);
+        }
+
+        Signal += 1;
+    }
+
     OsSetSignalHandler(ClpHandleSignal);
     return;
 }
