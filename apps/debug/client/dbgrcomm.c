@@ -3340,7 +3340,7 @@ Return Value:
 
     if (ArgumentCount < 2) {
         DbgOut("Usage: %s <N>\nDelete a breakpoint with the given number N. "
-               "Use * for all breakpoints. Use bl to list all breakpoints.",
+               "Use * for all breakpoints. Use bl to list all breakpoints.\n",
                Arguments[0]);
 
         Status = EINVAL;
