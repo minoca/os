@@ -352,7 +352,7 @@ BOOL
 IopIsIoBufferPageCacheBackedHelper (
     PFILE_OBJECT FileObject,
     PIO_BUFFER IoBuffer,
-    IO_OFFSET Offset,
+    IO_OFFSET FileOffset,
     UINTN SizeInBytes
     );
 
@@ -4840,7 +4840,7 @@ BOOL
 IopIsIoBufferPageCacheBackedHelper (
     PFILE_OBJECT FileObject,
     PIO_BUFFER IoBuffer,
-    IO_OFFSET Offset,
+    IO_OFFSET FileOffset,
     UINTN SizeInBytes
     )
 
@@ -4859,7 +4859,7 @@ Arguments:
 
     IoBuffer - Supplies a pointer to an I/O buffer.
 
-    Offset - Supplies an offset into the file or device object.
+    FileOffset - Supplies an offset into the file or device object.
 
     SizeInBytes - Supplies the number of bytes in the I/O buffer that should be
         cache backed.
@@ -4875,13 +4875,45 @@ Return Value:
 
     UINTN BufferOffset;
     PPAGE_CACHE_ENTRY CacheEntry;
+    UINTN OffsetShift;
     ULONG PageSize;
 
     PageSize = MmPageSize();
 
     ASSERT(IS_ALIGNED(SizeInBytes, PageSize) != FALSE);
 
-    BufferOffset = 0;
+    //
+    // I/O may still be page cache backed even if the given file offset is not
+    // page aligned. The contrapositive is also true - I/O may not be page
+    // cache backed even if the given file offset is page aligned. These
+    // scenarios can occur if the I/O buffer's current offset is not page
+    // aligned. For example, writing 512 bytes to a file at offset 512 can be
+    // considered page cache backed as long as the I/O buffer's offset is 512
+    // and the I/O buffer's first page cache entry has a file offset of 0. And
+    // writing 512 bytes to offset 4096 isn't page cache backed if the I/O
+    // buffer's offset is 512; no page cache entry is going to have a file
+    // offset of 3584.
+    //
+    // To account for this, align the I/O buffer and file offsets back to the
+    // nearest page boundary. This makes the local buffer offset negative, but
+    // the routine that gets the page cache entry adds the current offset back.
+    //
+
+    OffsetShift = MmGetIoBufferCurrentOffset(IoBuffer);
+    OffsetShift = REMAINDER(OffsetShift, PageSize);
+    BufferOffset = -OffsetShift;
+    FileOffset -= OffsetShift;
+    SizeInBytes += ALIGN_RANGE_UP(OffsetShift, PageSize);
+
+    //
+    // All page cache entries have page aligned offsets. They will never match
+    // a file offset that isn't aligned.
+    //
+
+    if (IS_ALIGNED(FileOffset, PageSize) == FALSE) {
+        return FALSE;
+    }
+
     while (SizeInBytes != 0) {
 
         //
@@ -4894,14 +4926,14 @@ Return Value:
         if ((CacheEntry == NULL) ||
             (CacheEntry->FileObject != FileObject) ||
             (CacheEntry->Node.Parent == NULL) ||
-            (CacheEntry->Offset != Offset)) {
+            (CacheEntry->Offset != FileOffset)) {
 
             return FALSE;
         }
 
         SizeInBytes -= PageSize;
         BufferOffset += PageSize;
-        Offset += PageSize;
+        FileOffset += PageSize;
     }
 
     return TRUE;

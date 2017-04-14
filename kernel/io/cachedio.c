@@ -873,7 +873,6 @@ Return Value:
     WriteContext.BytesCompleted = 0;
     WriteContext.CacheBuffer = NULL;
     WriteContext.IoFlags = IoContext->Flags;
-    PageByteOffset = 0;
     PageSize = MmPageSize();
     SizeInBytes = IoContext->SizeInBytes;
     WriteOutNow = FALSE;
@@ -900,45 +899,30 @@ Return Value:
     }
 
     //
-    // If the the offset is page-aligned, check to see if the buffer is backed
-    // by the page cache. If so, pass this on to a short-cut routine that just
-    // marks page cache entries dirty. Otherwise, just set the size and page
-    // byte offset as appropriate.
+    // If the I/O buffer is backed by page cache entries for this region of the
+    // file, then the data is already in place. The page cache entries just
+    // need to be marked dirty.
+    //
+
+    CacheBacked = IopIsIoBufferPageCacheBacked(FileObject,
+                                               IoContext->IoBuffer,
+                                               IoContext->Offset,
+                                               SizeInBytes);
+
+    if (CacheBacked != FALSE) {
+        Status = IopPerformCachedIoBufferWrite(FileObject,
+                                               IoContext,
+                                               WriteOutNow);
+
+        goto PerformCachedWriteEnd;
+    }
+
+    //
+    // Pages must be queried from the cache with aligned offsets.
     //
 
     PageAlignedOffset = ALIGN_RANGE_DOWN(IoContext->Offset, PageSize);
-    if (PageAlignedOffset == IoContext->Offset) {
-
-        //
-        // A buffer is page cache backed if the first fragment has a valid page
-        // cache entry for the current file object and at the current offset.
-        //
-
-        CacheBacked = IopIsIoBufferPageCacheBacked(FileObject,
-                                                   IoContext->IoBuffer,
-                                                   IoContext->Offset,
-                                                   SizeInBytes);
-
-        if (CacheBacked != FALSE) {
-            Status = IopPerformCachedIoBufferWrite(FileObject,
-                                                   IoContext,
-                                                   WriteOutNow);
-
-            goto PerformCachedWriteEnd;
-        }
-
-    //
-    // Otherwise, increase the number of bytes that need to be be written
-    // (aligning down) and set the source byte offset. This does not need to
-    // align up to a full page.
-    //
-
-    } else {
-        PageByteOffset = IoContext->Offset - PageAlignedOffset;
-
-        ASSERT(PageByteOffset < PageSize);
-    }
-
+    PageByteOffset = IoContext->Offset - PageAlignedOffset;
     AdjustedSize = SizeInBytes + PageByteOffset;
 
     //
@@ -1157,6 +1141,7 @@ Return Value:
 
 {
 
+    UINTN BufferOffset;
     UINTN CacheBufferSize;
     IO_OFFSET FileOffset;
     IO_CONTEXT MissContext;
@@ -1271,7 +1256,15 @@ Return Value:
                  ((WriteContext->FileOffset + WriteContext->BytesRemaining) >=
                   WriteContext->FileSize))));
 
-        if (IS_ALIGNED(WriteContext->SourceOffset, PageSize) != FALSE) {
+        //
+        // There is no hope to link the page cache entries if the source's data
+        // is actually in the middle of a page. This needs to account for the
+        // source buffer's current offset.
+        //
+
+        BufferOffset = MmGetIoBufferCurrentOffset(WriteContext->SourceBuffer);
+        BufferOffset += WriteContext->SourceOffset;
+        if (IS_ALIGNED(BufferOffset, PageSize) != FALSE) {
             SourceEntry = MmGetIoBufferPageCacheEntry(
                                                    WriteContext->SourceBuffer,
                                                    WriteContext->SourceOffset);
@@ -1462,6 +1455,7 @@ Return Value:
 
 {
 
+    UINTN BufferOffset;
     BOOL Linked;
     ULONG PageSize;
     PPAGE_CACHE_ENTRY SourceEntry;
@@ -1474,13 +1468,19 @@ Return Value:
     // bad to associate regions of a file with an unassociated portion of the
     // disk.
     //
+    // There is no hope to link the page cache entries if the source's data is
+    // actually in the middle of a page. This needs to account for the source
+    // buffer's current offset.
+    //
 
     Linked = FALSE;
     PageSize = MmPageSize();
+    BufferOffset = MmGetIoBufferCurrentOffset(WriteContext->SourceBuffer);
+    BufferOffset += WriteContext->SourceOffset;
     if (((WriteContext->IoFlags & IO_FLAG_FS_DATA) != 0) &&
         (WriteContext->PageByteOffset == 0) &&
         (WriteContext->BytesThisRound == PageSize) &&
-        (IS_ALIGNED(WriteContext->SourceOffset, PageSize) != 0)) {
+        (IS_ALIGNED(BufferOffset, PageSize) != FALSE)) {
 
         SourceEntry = MmGetIoBufferPageCacheEntry(WriteContext->SourceBuffer,
                                                   WriteContext->SourceOffset);
@@ -1751,13 +1751,30 @@ Return Value:
     UINTN BytesRemaining;
     UINTN BytesThisRound;
     IO_OFFSET FileOffset;
+    UINTN OffsetShift;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     KSTATUS Status;
 
-    BufferOffset = 0;
-    BytesRemaining = IoContext->SizeInBytes;
+    //
+    // The I/O offset may not be page aligned, but this fast track routine can
+    // still be invoked if the I/O buffer's current offset is not page
+    // aligned. For example, the write may be to offset 512, but that's OK if
+    // the I/O buffer's offset is 512 and the page cache entry that backs it
+    // has an offset of 0.
+    //
+    // Account for this, so that the correct page cache entries are marked, by
+    // subtracting the I/O buffer's current offset from the local buffer
+    // offset. The routine that gets an I/O buffer's page cache entry always
+    // adds the current offset back. In the above example, getting the page
+    // cache entry at offset -512 would get the page cache entry at offset 0.
+    //
+
     PageSize = MmPageSize();
+    OffsetShift = MmGetIoBufferCurrentOffset(IoContext->IoBuffer);
+    OffsetShift = REMAINDER(OffsetShift, PageSize);
+    BufferOffset = -OffsetShift;
+    BytesRemaining = IoContext->SizeInBytes + OffsetShift;
     while (BytesRemaining != 0) {
         PageCacheEntry = MmGetIoBufferPageCacheEntry(IoContext->IoBuffer,
                                                      BufferOffset);
@@ -1774,7 +1791,7 @@ Return Value:
 
         ASSERT(PageCacheEntry != NULL);
         ASSERT(IopGetPageCacheEntryOffset(PageCacheEntry) ==
-               (IoContext->Offset + BufferOffset));
+               (IoContext->Offset + (IO_OFFSET)(INTN)BufferOffset));
 
         //
         // If this is a synchronized I/O call, then mark the pages clean, they
