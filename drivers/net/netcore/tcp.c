@@ -4083,13 +4083,6 @@ Return Value:
         return;
     }
 
-    //
-    // If the socket is not active, then things like the remote host will have
-    // been cleared and processing should not continue.
-    //
-
-    ASSERT((Socket->NetSocket.Flags & NET_SOCKET_FLAG_ACTIVE) != 0);
-
     RemoteSequence = NETWORK_TO_CPU32(Header->SequenceNumber);
     AcknowledgeNumber = NETWORK_TO_CPU32(Header->AcknowledgmentNumber);
 
@@ -4148,6 +4141,16 @@ Return Value:
 
         return;
     }
+
+    //
+    // The socket should only be inactive in the closed or initialized states.
+    // If it's in any other state, then there is likely a bug in the state
+    // machine. Deactivation should coincide with destroying a socket's list of
+    // received packets. As it would be bad to add a new packet to that list,
+    // assert that the socket is active.
+    //
+
+    ASSERT((Socket->NetSocket.Flags & NET_SOCKET_FLAG_ACTIVE) != 0);
 
     //
     // Perform special handling for a listening socket.
