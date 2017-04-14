@@ -482,7 +482,7 @@ EfipBcm2836InitializeApbClock (
 
 Routine Description:
 
-    This routine initializes the APB clock. This is the video cores clock and
+    This routine initializes the APB clock. This is the video core's clock and
     can be configured via config.txt. Initialization simply consists of reading
     the clock and updating the BCM2 ACPI table if necessary.
 

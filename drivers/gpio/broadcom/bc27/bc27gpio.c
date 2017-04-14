@@ -59,7 +59,7 @@ Environment:
 
 Structure Description:
 
-    This structure defines the context for an BC27xx GPIO controller.
+    This structure defines the context for a BC27xx GPIO controller.
 
 Members:
 

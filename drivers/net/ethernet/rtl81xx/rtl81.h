@@ -996,6 +996,12 @@ Members:
     ReceiveInterruptMask - Stores a mask of interrupt status bits that trigger
         the processing of received frames.
 
+    PciMsiFlags - Stores a bitmask of flags indicating whether or not MSI/MSI-X
+        interrupts should be used. See RTL81_PCI_MSI_FLAG_* for definitions.
+
+    PciMsiInterface - Stores the interface to enable PCI message signaled
+        interrupts.
+
     PendingInterrupts - Stores the bitmask of pending interrupts. See
         RTL81_INTERRUPT_* for definitions.
 
