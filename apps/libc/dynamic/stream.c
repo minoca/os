@@ -610,23 +610,29 @@ Return Value:
 
     if (Stream->BufferMode == _IONBF) {
         ClpFlushAllStreams(FALSE, Stream);
-        do {
-            Result = read(Stream->Descriptor,
-                          Buffer + TotalBytesRead,
-                          TotalBytesToRead - TotalBytesRead);
+        while (TotalBytesRead != TotalBytesToRead) {
+            do {
+                Result = read(Stream->Descriptor,
+                              Buffer + TotalBytesRead,
+                              TotalBytesToRead - TotalBytesRead);
 
-        } while ((Result < 0) && (errno == EINTR));
+            } while ((Result < 0) && (errno == EINTR));
 
-        if (Result == 0) {
-            Stream->Flags |= FILE_FLAG_END_OF_FILE;
+            if (Result <= 0) {
+                if (Result < 0) {
+                    Stream->Flags |= FILE_FLAG_ERROR;
+
+                } else {
+                    Stream->Flags |= FILE_FLAG_END_OF_FILE;
+                }
+
+                break;
+            }
+
+            TotalBytesRead += Result;
         }
 
-        if (Result == -1) {
-            Stream->Flags |= FILE_FLAG_ERROR;
-            Result = 0;
-        }
-
-        return Result / Size;
+        return TotalBytesRead / Size;
     }
 
     assert(Stream->Buffer != NULL);

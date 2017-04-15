@@ -68,17 +68,17 @@ int ClpStatusToErrorNumber[] = {
     ENOMEM,
     EBADF,
     EINVAL,
-    EINVAL,
+    EINVAL,         /* 10 */
     ENOMEM,
     EIO,
     EINVAL,
     ENODEV,
     ENOENT,
-    ENOENT,         /* 10 */
+    ENOENT,
     0,
     ERANGE,
     EINVAL,
-    ENAMETOOLONG,
+    ENAMETOOLONG,   /* 20 */
     ENOEXEC,
     ENOTSUP,
     ENOMEM,
@@ -88,9 +88,9 @@ int ClpStatusToErrorNumber[] = {
     EILSEQ,
     EILSEQ,
     EINVAL,
-    EINVAL,
+    EINVAL,         /* 30 */
     ENOSYS,
-    EINVAL,         /* 20 */
+    EINVAL,
     ENOBUFS,
     EACCES,
     ENOBUFS,
@@ -98,7 +98,7 @@ int ClpStatusToErrorNumber[] = {
     EINVAL,
     EISDIR,
     ENOTDIR,
-    EIO,
+    EIO,            /* 40 */
     ENOSPC,
     EEXIST,
     ENOENT,
@@ -106,9 +106,9 @@ int ClpStatusToErrorNumber[] = {
     EINVAL,
     ERANGE,
     ERANGE,
-    EILSEQ,         /* 30 */
+    EILSEQ,
     EIO,
-    EAGAIN,
+    EAGAIN,         /* 50 */
     EINVAL,
     EINVAL,
     EDOM,
@@ -118,17 +118,17 @@ int ClpStatusToErrorNumber[] = {
     EAGAIN,
     ENOBUFS,
     EINVAL,
-    EILSEQ,
+    EILSEQ,         /* 60 */
     ECANCELED,
     EWOULDBLOCK,
     EOVERFLOW,
-    ENOSYS,         /* 40 */
+    ENOSYS,
     EIO,
     EILSEQ,
     ESRCH,
     ESRCH,
     EADDRNOTAVAIL,
-    ENETDOWN,
+    ENETDOWN,       /* 70 */
     ENETUNREACH,
     ECONNRESET,
     EISCONN,
@@ -138,7 +138,7 @@ int ClpStatusToErrorNumber[] = {
     ENOTSOCK,
     EWOULDBLOCK,
     EAGAIN,
-    EILSEQ,         /* 50 */
+    EILSEQ,         /* 80 */
     ERANGE,
     EAGAIN,
     EAGAIN,
@@ -148,17 +148,17 @@ int ClpStatusToErrorNumber[] = {
     ENOTEMPTY,
     EXDEV,
     EINVAL,
-    EINVAL,
+    EINVAL,         /* 90 */
     EINVAL,
     ECHILD,
     EILSEQ,
     ENFILE,
     ENOTBLK,
-    ENODEV,         /* 60 */
+    ENODEV,
     EALREADY,
     ENOMEM,
     ENOPROTOOPT,
-    EMSGSIZE,
+    EMSGSIZE,       /* 100 */
     ENOTCONN,
     EDESTADDRREQ,
     EPERM,
@@ -168,9 +168,9 @@ int ClpStatusToErrorNumber[] = {
     EAFNOSUPPORT,
     EPROTONOSUPPORT,
     EDOM,
-    ENODEV,
+    ENODEV,         /* 110 */
     EDEADLK,
-    EINTR,          /* 70 */
+    EINTR,
     EINTR
 };
 
