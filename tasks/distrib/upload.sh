@@ -41,6 +41,14 @@ UPLOAD_DATE=
 NIGHTLIES=nightlies
 
 ##
+## The ssh-agent on Windows seems to hang frequently. Unset these variables to
+## keep from using it.
+##
+
+unset SSH_AGENT_PID
+unset SSH_AGENT_SOCK
+
+##
 ## It would be great to just use ssh-agent, but that seems to busy-spin hang
 ## regularly. This hard-coded path is ugly, but $SRCROOT cannot be used because
 ## scp and ssh are msys tools (so they need /c/ instead of C:/).
