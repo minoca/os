@@ -2048,7 +2048,14 @@ Return Value:
         break;
 
     case FileControlCommandGetLock:
-        RtlZeroMemory(&(LocalParameters.FileLock), sizeof(FILE_LOCK));
+        Status = MmCopyFromUserMode(&LocalParameters,
+                                    FileControl->Parameters,
+                                    sizeof(FILE_LOCK));
+
+        if (!KSUCCESS(Status)) {
+            goto SysFileControlEnd;
+        }
+
         Status = IopGetFileLock(IoHandle, &(LocalParameters.FileLock));
         if (KSUCCESS(Status)) {
             CopyOutSize = sizeof(FILE_LOCK);
