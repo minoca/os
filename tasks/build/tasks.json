@@ -191,7 +191,7 @@
         {
             "name": "Make perl",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/perl-5.20.1"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/perl-5.24.1"
         },
         {
             "name": "Make mbedtls",
@@ -381,17 +381,17 @@
         {
             "name": "Make autoconf",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/autotools/autoconf"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/autoconf-2.69"
         },
         {
             "name": "Make automake",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/autotools/automake"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/automake-1.15"
         },
         {
             "name": "Make libtool",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/autotools/libtool"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libtool-2.4.6"
         },
         {
             "name": "Make tcl",
@@ -759,6 +759,41 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/minidlna-1.1.5"
         },
         {
+            "name": "Make freetype",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-2.7.1"
+        },
+        {
+            "name": "Make harfbuzz",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/harfbuzz-1.4.4"
+        },
+        {
+            "name": "Make fontconfig",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/fontconfig-2.12.1"
+        },
+        {
+            "name": "Make pixman",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/pixman-0.34.0"
+        },
+        {
+            "name": "Make samba",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/samba-4.6.2"
+        },
+        {
+            "name": "Make file",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/file-5.30"
+        },
+        {
+            "name": "Run Native Compile X",
+            "type": "runtask",
+            "parameter": "Native Compile X"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
@@ -787,6 +822,637 @@
             "name": "Package Binaries",
             "type": "execute",
             "parameter": "src/os/tasks/build/package_binaries.sh"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Native Compile X",
+    "steps": [
+        {
+            "name": "Make util-macros",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/util-macros-1.19.1"
+        },
+        {
+            "name": "Make bigreqsproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/bigreqsproto-1.1.2"
+        },
+        {
+            "name": "Make compositeproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/compositeproto-0.4.2"
+        },
+        {
+            "name": "Make damageproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/damageproto-1.2.1"
+        },
+        {
+            "name": "Make dmxproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/dmxproto-2.3.1"
+        },
+        {
+            "name": "Make dri2proto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/dri2proto-2.8"
+        },
+        {
+            "name": "Make dri3proto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/dri3proto-1.0"
+        },
+        {
+            "name": "Make fixesproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/fixesproto-5.0"
+        },
+        {
+            "name": "Make fontsproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/fontsproto-2.1.3"
+        },
+        {
+            "name": "Make glproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/glproto-1.4.17"
+        },
+        {
+            "name": "Make inputproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/inputproto-2.3.2"
+        },
+        {
+            "name": "Make kbproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/kbproto-1.0.7"
+        },
+        {
+            "name": "Make presentproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/presentproto-1.1"
+        },
+        {
+            "name": "Make randrproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/randrproto-1.5.0"
+        },
+        {
+            "name": "Make recordproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/recordproto-1.14.2"
+        },
+        {
+            "name": "Make renderproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/renderproto-0.11.1"
+        },
+        {
+            "name": "Make resourceproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/resourceproto-1.2.0"
+        },
+        {
+            "name": "Make scrnsaverproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/scrnsaverproto-1.2.2"
+        },
+        {
+            "name": "Make videoproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/videoproto-2.3.3"
+        },
+        {
+            "name": "Make xcmiscproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcmiscproto-1.2.2"
+        },
+        {
+            "name": "Make xextproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xextproto-7.3.0"
+        },
+        {
+            "name": "Make xf86bigfontproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xf86bigfontproto-1.2.0"
+        },
+        {
+            "name": "Make xf86dgaproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xf86dgaproto-2.1"
+        },
+        {
+            "name": "Make xf86driproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xf86driproto-2.1.1"
+        },
+        {
+            "name": "Make xf86vidmodeproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xf86vidmodeproto-2.3.1"
+        },
+        {
+            "name": "Make xineramaproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xineramaproto-1.2.1"
+        },
+        {
+            "name": "Make xproto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xproto-7.0.31"
+        },
+        {
+            "name": "Make libxau",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXau-1.0.8"
+        },
+        {
+            "name": "Make libxdmcp",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXdmcp-1.1.2"
+        },
+        {
+            "name": "Make xcb-proto",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcb-proto-1.12"
+        },
+        {
+            "name": "Make libxcb",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libxcb-1.12"
+        },
+        {
+            "name": "Make xtrans",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xtrans-1.3.5"
+        },
+        {
+            "name": "Make libx11",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libX11-1.6.5"
+        },
+        {
+            "name": "Make libxext",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXext-1.3.3"
+        },
+        {
+            "name": "Make libfs",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libFS-1.0.7"
+        },
+        {
+            "name": "Make libice",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libICE-1.0.9"
+        },
+        {
+            "name": "Make libsm",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libSM-1.2.2"
+        },
+        {
+            "name": "Make libxscrnsaver",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXScrnSaver-1.2.2"
+        },
+        {
+            "name": "Make libxt",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXt-1.1.5"
+        },
+        {
+            "name": "Make libxmu",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXmu-1.1.2"
+        },
+        {
+            "name": "Make libxpm",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXpm-3.5.12"
+        },
+        {
+            "name": "Make libxaw",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXaw-1.0.13"
+        },
+        {
+            "name": "Make libxfixes",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXfixes-5.0.3"
+        },
+        {
+            "name": "Make libxcomposite",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXcomposite-0.4.4"
+        },
+        {
+            "name": "Make libxrender",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXrender-0.9.10"
+        },
+        {
+            "name": "Make libxcursor",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXcursor-1.1.14"
+        },
+        {
+            "name": "Make libxdamage",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXdamage-1.1.4"
+        },
+        {
+            "name": "Make libfontenc",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libfontenc-1.1.3"
+        },
+        {
+            "name": "Make libxfont2",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXfont2-2.0.1"
+        },
+        {
+            "name": "Make libxft",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXft-2.3.2"
+        },
+        {
+            "name": "Make libxi",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXi-1.7.9"
+        },
+        {
+            "name": "Make libxinerama",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXinerama-1.1.3"
+        },
+        {
+            "name": "Make libxrandr",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXrandr-1.5.1"
+        },
+        {
+            "name": "Make libxres",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXres-1.0.7"
+        },
+        {
+            "name": "Make libxtst",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXtst-1.2.3"
+        },
+        {
+            "name": "Make libxv",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXv-1.0.11"
+        },
+        {
+            "name": "Make libxvmc",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXvMC-1.0.10"
+        },
+        {
+            "name": "Make libxxf86dga",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXxf86dga-1.14"
+        },
+        {
+            "name": "Make libxxf86vm",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXxf86vm-1.1.4"
+        },
+        {
+            "name": "Make libdmx",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libdmx-1.1.3"
+        },
+        {
+            "name": "Make libxkbfile",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libxkbfile-1.0.9"
+        },
+        {
+            "name": "Make libxshmfence",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libxshmfence-1.2"
+        },
+        {
+            "name": "Make xcb-util",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcb-util-0.4.0"
+        },
+        {
+            "name": "Make xcb-util-image",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcb-util-image-0.4.0"
+        },
+        {
+            "name": "Make xcb-util-keysyms",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcb-util-keysyms-0.4.0"
+        },
+        {
+            "name": "Make xcb-util-renderutil",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcb-util-renderutil-0.3.9"
+        },
+        {
+            "name": "Make xcb-util-wm",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcb-util-wm-0.4.1"
+        },
+        {
+            "name": "Make mesa",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mesa-17.0.0"
+        },
+        {
+            "name": "Make xbitmaps",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xbitmaps-1.1.1"
+        },
+        {
+            "name": "Make iceauth",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/iceauth-1.0.7"
+        },
+        {
+            "name": "Make luit",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/luit-1.1.1"
+        },
+        {
+            "name": "Make mkfontdir",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mkfontdir-1.0.7"
+        },
+        {
+            "name": "Make mkfontscale",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mkfontscale-1.1.2"
+        },
+        {
+            "name": "Make sessreg",
+            "type": "no-op",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/sessreg-1.1.1"
+        },
+        {
+            "name": "Make setxkbmap",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/setxkbmap-1.3.1"
+        },
+        {
+            "name": "Make smproxy",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/smproxy-1.0.6"
+        },
+        {
+            "name": "Make x11perf",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/x11perf-1.6.0"
+        },
+        {
+            "name": "Make xauth",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xauth-1.0.10"
+        },
+        {
+            "name": "Make xbacklight",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xbacklight-1.2.1"
+        },
+        {
+            "name": "Make xcmsdb",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcmsdb-1.0.5"
+        },
+        {
+            "name": "Make xcursorgen",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcursorgen-1.0.6"
+        },
+        {
+            "name": "Make xdpyinfo",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xdpyinfo-1.3.2"
+        },
+        {
+            "name": "Make xdriinfo",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xdriinfo-1.0.5"
+        },
+        {
+            "name": "Make xev",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xev-1.2.2"
+        },
+        {
+            "name": "Make xgamma",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xgamma-1.0.6"
+        },
+        {
+            "name": "Make xhost",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xhost-1.0.7"
+        },
+        {
+            "name": "Make xinput",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xinput-1.6.2"
+        },
+        {
+            "name": "Make xkbcomp",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xkbcomp-1.3.1"
+        },
+        {
+            "name": "Make xkbevd",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xkbevd-1.1.4"
+        },
+        {
+            "name": "Make xkbutils",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xkbutils-1.0.4"
+        },
+        {
+            "name": "Make xkill",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xkill-1.0.4"
+        },
+        {
+            "name": "Make xlsatoms",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xlsatoms-1.1.2"
+        },
+        {
+            "name": "Make xlsclients",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xlsclients-1.1.3"
+        },
+        {
+            "name": "Make xmessage",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xmessage-1.0.4"
+        },
+        {
+            "name": "Make xmodmap",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xmodmap-1.0.9"
+        },
+        {
+            "name": "Make xpr",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xpr-1.0.4"
+        },
+        {
+            "name": "Make xprop",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xprop-1.2.2"
+        },
+        {
+            "name": "Make xrandr",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xrandr-1.5.0"
+        },
+        {
+            "name": "Make xrdb",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xrdb-1.1.0"
+        },
+        {
+            "name": "Make xrefresh",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xrefresh-1.0.5"
+        },
+        {
+            "name": "Make xset",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xset-1.2.3"
+        },
+        {
+            "name": "Make xsetroot",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xsetroot-1.1.1"
+        },
+        {
+            "name": "Make xvinfo",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xvinfo-1.1.3"
+        },
+        {
+            "name": "Make xwd",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xwd-1.0.6"
+        },
+        {
+            "name": "Make xwininfo",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xwininfo-1.1.3"
+        },
+        {
+            "name": "Make xwud",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xwud-1.0.4"
+        },
+        {
+            "name": "Make font-util",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/font-util-1.3.1"
+        },
+        {
+            "name": "Make font-alias",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/font-alias-1.0.3"
+        },
+        {
+            "name": "Make xcursor-themes",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xcursor-themes-1.0.4"
+        },
+        {
+            "name": "Make encodings",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/encodings-1.0.4"
+        },
+        {
+            "name": "Make font-adobe-utopia-type1",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/font-adobe-utopia-type1-1.0.4"
+        },
+        {
+            "name": "Make font-bh-ttf",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/font-bh-ttf-1.0.3"
+        },
+        {
+            "name": "Make font-bh-type1",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/font-bh-type1-1.0.3"
+        },
+        {
+            "name": "Make font-ibm-type1",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/font-ibm-type1-1.0.3"
+        },
+        {
+            "name": "Make font-misc-ethopic",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/font-misc-ethiopic-1.0.3"
+        },
+        {
+            "name": "Make font-xfree86-type1",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/font-xfree86-type1-1.0.4"
+        },
+        {
+            "name": "Make intltool",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/intltool-0.50.2"
+        },
+        {
+            "name": "Make xkeyboard-config",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xkeyboard-config-2.20"
+        },
+        {
+            "name": "Make xorg-server",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xorg-server-1.19.3"
+        },
+        {
+            "name": "Make xf86-video-fbdev",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xf86-video-fbdev-0.4.4"
+        },
+        {
+            "name": "Make xf86-input-minoca",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xf86-input-minoca"
+        },
+        {
+            "name": "Make twm",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/twm-1.0.9"
+        },
+        {
+            "name": "Make xterm",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xterm-327"
+        },
+        {
+            "name": "Make xclock",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xclock-1.0.7"
+        },
+        {
+            "name": "Make xinit-1.3.4",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xinit-1.3.4"
         }
     ]
 },
