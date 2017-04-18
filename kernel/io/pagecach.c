@@ -2445,6 +2445,7 @@ Return Value:
 {
 
     BOOL Backed;
+    UINTN CheckSize;
     ULONG PageSize;
 
     ASSERT(IoBuffer->FragmentCount != 0);
@@ -2455,10 +2456,15 @@ Return Value:
     //
 
     PageSize = MmPageSize();
+    CheckSize = SizeInBytes;
+    if (CheckSize > PageSize) {
+        CheckSize = PageSize;
+    }
+
     Backed = IopIsIoBufferPageCacheBackedHelper(FileObject,
                                                 IoBuffer,
                                                 Offset,
-                                                PageSize);
+                                                CheckSize);
 
     //
     // Assert that the assumption above is correct.
@@ -2468,8 +2474,7 @@ Return Value:
            (IopIsIoBufferPageCacheBackedHelper(FileObject,
                                                IoBuffer,
                                                Offset,
-                                               ALIGN_RANGE_UP(SizeInBytes,
-                                                              PageSize))));
+                                               SizeInBytes)));
 
     return Backed;
 }
@@ -4875,12 +4880,11 @@ Return Value:
 
     UINTN BufferOffset;
     PPAGE_CACHE_ENTRY CacheEntry;
+    IO_OFFSET EndOffset;
     UINTN OffsetShift;
     ULONG PageSize;
 
     PageSize = MmPageSize();
-
-    ASSERT(IS_ALIGNED(SizeInBytes, PageSize) != FALSE);
 
     //
     // I/O may still be page cache backed even if the given file offset is not
@@ -4903,7 +4907,7 @@ Return Value:
     OffsetShift = REMAINDER(OffsetShift, PageSize);
     BufferOffset = -OffsetShift;
     FileOffset -= OffsetShift;
-    SizeInBytes += ALIGN_RANGE_UP(OffsetShift, PageSize);
+    SizeInBytes += OffsetShift;
 
     //
     // All page cache entries have page aligned offsets. They will never match
@@ -4914,7 +4918,8 @@ Return Value:
         return FALSE;
     }
 
-    while (SizeInBytes != 0) {
+    EndOffset = FileOffset + SizeInBytes;
+    while (FileOffset < EndOffset) {
 
         //
         // If this page in the buffer is not backed by a page cache entry or
@@ -4931,7 +4936,6 @@ Return Value:
             return FALSE;
         }
 
-        SizeInBytes -= PageSize;
         BufferOffset += PageSize;
         FileOffset += PageSize;
     }
