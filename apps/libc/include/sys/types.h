@@ -185,6 +185,77 @@ typedef unsigned int useconds_t;
 typedef int key_t;
 
 //
+// Define some pthread types.
+//
+
+//
+// Define the type of a thread identifier.
+//
+
+typedef long pthread_t;
+
+//
+// Define the type used for a "once" object.
+//
+
+typedef int pthread_once_t;
+
+//
+// Define the type used for a key object.
+//
+
+typedef int pthread_key_t;
+
+//
+// Define pthread structures. Their internals are not exposed.
+//
+
+typedef union {
+    char Data[16];
+    long int AlignMember;
+} pthread_mutex_t;
+
+typedef union {
+    char Data[16];
+    long int AlignMember;
+} pthread_mutexattr_t;
+
+typedef union {
+    char Data[16];
+    long int AlignMember;
+} pthread_cond_t;
+
+typedef union {
+    char Data[16];
+    long int AlignMember;
+} pthread_condattr_t;
+
+typedef union {
+    char Data[48];
+    long int AlignMember;
+} pthread_rwlock_t;
+
+typedef union {
+    char Data[16];
+    long int AlignMember;
+} pthread_rwlockattr_t;
+
+typedef union {
+    char Data[64];
+    long int AlignMember;
+} pthread_attr_t;
+
+typedef union {
+    char Data[32];
+    long int AlignMember;
+} pthread_barrier_t;
+
+typedef union {
+    char Data[16];
+    long int AlignMember;
+} pthread_barrierattr_t;
+
+//
 // Define some old BSD types.
 //
 
