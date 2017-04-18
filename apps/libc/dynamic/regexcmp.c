@@ -2294,7 +2294,7 @@ Return Value:
     // next character.
     //
 
-    Lexer->Token = Character;
+    Lexer->Token = (CHAR)Character;
 
 GetRegularExpressionTokenEnd:
     return Status;
@@ -2351,7 +2351,7 @@ Return Value:
     //
 
     if (Character != '[') {
-        Lexer->Token = Character;
+        Lexer->Token = (UCHAR)Character;
         goto GetBracketExpressionTokenEnd;
     }
 
