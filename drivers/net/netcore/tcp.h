@@ -354,7 +354,7 @@ Author:
 
 typedef enum _TCP_USER_CONTROL_CODE {
     TcpUserControlAtUrgentMark = 0x7300,
-    TcpUserControlGetInputQueuedSize = 0x741B,
+    TcpUserControlGetInputQueueSize = 0x741B,
 } TCP_USER_CONTROL_CODE, *PTCP_USER_CONTROL_CODE;
 
 //

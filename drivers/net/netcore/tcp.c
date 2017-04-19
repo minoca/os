@@ -3566,7 +3566,7 @@ Return Value:
         BufferSize = sizeof(ULONG);
         break;
 
-    case TcpUserControlGetInputQueuedSize:
+    case TcpUserControlGetInputQueueSize:
         if (TcpSocket->State == TcpStateListening) {
             Status = STATUS_INVALID_PARAMETER;
             break;
