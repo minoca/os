@@ -1050,6 +1050,7 @@ Return Value:
 
     Buffer = &(Device->MouseData);
     ReadIndex = Buffer->ReadIndex;
+    Size = 0;
     while (ReadIndex != Buffer->WriteIndex) {
 
         //
@@ -1066,13 +1067,14 @@ Return Value:
             ReadIndex = (ReadIndex + 1) & I8042_BUFFER_MASK;
         }
 
-        Buffer->ReadIndex = ReadIndex;
+        if (Size == Device->MouseReportSize) {
+            Buffer->ReadIndex = ReadIndex;
 
         //
         // If the whole report did not come in, look to see when it was.
         //
 
-        if (Size != Device->MouseReportSize) {
+        } else {
 
             //
             // If this is the first time a strange size has come in, timestamp
@@ -1089,7 +1091,7 @@ Return Value:
             // indicating the mouse is out of sync.
             //
 
-            Timeout = (HlQueryTimeCounterFrequency() * 100) /
+            Timeout = (HlQueryTimeCounterFrequency() * 1000ULL) /
                       MILLISECONDS_PER_SECOND;
 
             if (HlQueryTimeCounter() > Device->LastMouseEvent + Timeout) {
@@ -1098,7 +1100,14 @@ Return Value:
                 // Throw all the data away in an attempt to get back in sync.
                 //
 
-                RtlDebugPrint("PS/2 Mouse resync\n");
+                RtlDebugPrint("PS/2 Mouse resync: %d: %x %x %x %x, WI %x\n",
+                              Size,
+                              Report[0],
+                              Report[1],
+                              Report[2],
+                              Report[3],
+                              Buffer->WriteIndex);
+
                 Device->LastMouseEvent = 0;
                 Buffer->ReadIndex = Buffer->WriteIndex;
             }
@@ -1107,6 +1116,14 @@ Return Value:
         }
 
         I8042pProcessMouseReport(Device, Report);
+    }
+
+    //
+    // If it ended well, then reset the timeout.
+    //
+
+    if (Size == Device->MouseReportSize) {
+        Device->LastMouseEvent = 0;
     }
 
     KeReleaseQueuedLock(Device->ReadLock);
@@ -1683,6 +1700,7 @@ Return Value:
     RUNLEVEL OldRunLevel;
     UCHAR Reset;
     KSTATUS Status;
+    ULONG Try;
 
     //
     // Create the user input handle if not already done.
@@ -1726,9 +1744,17 @@ Return Value:
         goto EnableMouseEnd;
     }
 
-    while (TRUE) {
+    for (Try = 0; Try < 5; Try += 1) {
         Status = I8042pReceiveMouseResponse(Device, &Reset);
+        if (Status == STATUS_TIMEOUT) {
+            continue;
+        }
+
         if (!KSUCCESS(Status)) {
+            RtlDebugPrint("i8042: Mouse failed reset response: %d %x\n",
+                          Status,
+                          Reset);
+
             goto EnableMouseEnd;
         }
 
@@ -1741,6 +1767,13 @@ Return Value:
             I8042pReceiveMouseResponse(Device, &MouseId);
             break;
         }
+    }
+
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("i8042: Failed to get mouse reset response: %d\n",
+                      Status);
+
+        goto EnableMouseEnd;
     }
 
     //
@@ -2263,12 +2296,18 @@ Return Value:
             StatusCode = STATUS_PARITY_ERROR;
             break;
 
-        } else if (((StatusRegister & I8042_STATUS_DATA_FROM_MOUSE) != 0) &&
-                   ((StatusRegister & I8042_STATUS_OUTPUT_BUFFER_FULL) != 0)) {
-
+        } else if ((StatusRegister & I8042_STATUS_OUTPUT_BUFFER_FULL) != 0) {
             *Data = READ_DATA_REGISTER(Device);
-            StatusCode = STATUS_SUCCESS;
-            break;
+
+            //
+            // If it's from the mouse, hooray. If it's from the keyboard, throw
+            // it away.
+            //
+
+            if ((StatusRegister & I8042_STATUS_DATA_FROM_MOUSE) != 0) {
+                StatusCode = STATUS_SUCCESS;
+                break;
+            }
         }
 
         if (Timeout == 0) {
