@@ -2065,6 +2065,10 @@ Members:
         the driver must not access the user buffer directly, but instead use
         MM copy routines to copy to and from user mode.
 
+    DeviceContext - Stores a pointer to the device context supplied by the
+        device driver upon opening the device. This is used to uniquely
+        identify the open file.
+
     UserBuffer - Supplies a pointer to the buffer containing the context for
         the user control IRP. This will be a user mode pointer and must be
         treated with caution.
@@ -2076,6 +2080,7 @@ Members:
 
 typedef struct _IRP_USER_CONTROL {
     BOOL FromKernelMode;
+    PVOID DeviceContext;
     PVOID UserBuffer;
     UINTN UserBufferSize;
 } IRP_USER_CONTROL, *PIRP_USER_CONTROL;

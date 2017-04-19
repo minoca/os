@@ -1628,7 +1628,7 @@ SendSystemControlIrpEnd:
 
 KSTATUS
 IopSendUserControlIrp (
-    PDEVICE Device,
+    PIO_HANDLE Handle,
     ULONG MinorCode,
     BOOL FromKernelMode,
     PVOID UserContext,
@@ -1639,13 +1639,12 @@ IopSendUserControlIrp (
 
 Routine Description:
 
-    This routine sends a user control request to the given device. This
-    routine must be called at low level.
+    This routine sends a user control request to the device associated with
+    the given handle. This routine must be called at low level.
 
 Arguments:
 
-    Device - Supplies a pointer to the device to send the user control
-        request to.
+    Handle - Supplies the open file handle.
 
     MinorCode - Supplies the minor code of the request.
 
@@ -1666,10 +1665,15 @@ Return Value:
 
 {
 
+    PDEVICE Device;
     PIRP Irp;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    Device = Handle->FileObject->Device;
+
+    ASSERT(Device->Header.Type == ObjectDevice);
 
     Irp = NULL;
     KeAcquireSharedExclusiveLockShared(Device->Lock);
@@ -1686,6 +1690,7 @@ Return Value:
 
     Irp->MinorCode = MinorCode;
     Irp->U.UserControl.FromKernelMode = FromKernelMode;
+    Irp->U.UserControl.DeviceContext = Handle->DeviceContext;
     Irp->U.UserControl.UserBuffer = UserContext;
     Irp->U.UserControl.UserBufferSize = UserContextSize;
     Status = IoSendSynchronousIrp(Irp);

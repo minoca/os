@@ -2691,19 +2691,12 @@ Return Value:
 
 {
 
-    PDEVICE Device;
-    PFILE_OBJECT FileObject;
     KSTATUS Status;
 
-    FileObject = Handle->FileObject;
-    switch (FileObject->Properties.Type) {
+    switch (Handle->FileObject->Properties.Type) {
     case IoObjectBlockDevice:
     case IoObjectCharacterDevice:
-        Device = FileObject->Device;
-
-        ASSERT(Device->Header.Type == ObjectDevice);
-
-        Status = IopSendUserControlIrp(Device,
+        Status = IopSendUserControlIrp(Handle,
                                        MinorCode,
                                        FromKernelMode,
                                        ContextBuffer,
