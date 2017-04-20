@@ -1855,6 +1855,7 @@ Return Value:
 {
 
     ULONG AllocationSize;
+    BOOL Beginner;
     CHAR Delimiter;
     PSTR ExpressionBegin;
     ULONG Flags;
@@ -1871,6 +1872,7 @@ Return Value:
 
     assert(Function->Type == SedFunctionSubstitute);
 
+    Beginner = FALSE;
     Result = FALSE;
     Script = *ScriptPointer;
 
@@ -1901,6 +1903,9 @@ Return Value:
     }
 
     Size = (UINTN)Script - (UINTN)ExpressionBegin;
+    if ((Size != 0) && (*ExpressionBegin == '^')) {
+        Beginner = TRUE;
+    }
 
     //
     // Create the regular expression.
@@ -1991,7 +1996,10 @@ Return Value:
             Script += 1;
 
         } else if (*Script == 'g') {
-            Flags |= SED_SUBSTITUTE_FLAG_GLOBAL;
+            if (Beginner == FALSE) {
+                Flags |= SED_SUBSTITUTE_FLAG_GLOBAL;
+            }
+
             Script += 1;
 
         } else if (*Script == 'p') {

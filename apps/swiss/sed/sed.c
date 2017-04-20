@@ -347,6 +347,8 @@ Return Value:
             INSERT_BEFORE(&(InputEntry->ListEntry), &(Context.InputList));
 
         } else {
+            TotalStatus = errno;
+            SwPrintError(TotalStatus, Argument, "Cannot open");
             free(InputEntry);
         }
     }

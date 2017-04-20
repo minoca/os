@@ -1114,6 +1114,7 @@ Return Value:
     ULONG Occurrence;
     PSED_STRING Pattern;
     UINTN PatternOffset;
+    UINTN PreviousEnd;
     PSTR Replace;
     ULONG ReplaceEnd;
     PSED_STRING Replacement;
@@ -1130,6 +1131,7 @@ Return Value:
     BOOL WasBackslash;
 
     Pattern = Context->PatternSpace;
+    PreviousEnd = 0;
     ReplaceEnd = 0;
     Replacement = NULL;
     ReplaceStart = 0;
@@ -1169,6 +1171,19 @@ Return Value:
             (Substitute->OccurrenceNumber != Occurrence)) {
 
             PatternOffset += Substitute->Matches[0].rm_eo;
+            continue;
+        }
+
+        //
+        // If this is an empty match right after a substitution, ignore it for
+        // compatibility and move forward one.
+        //
+
+        if ((Substitute->Matches[0].rm_so == Substitute->Matches[0].rm_eo) &&
+            (SubstitutionMade != FALSE) &&
+            (PatternOffset == PreviousEnd)) {
+
+            PatternOffset += 1;
             continue;
         }
 
@@ -1373,29 +1388,7 @@ Return Value:
             break;
         }
 
-        //
-        // Handle an empty match.
-        //
-
-        if (Substitute->Matches[0].rm_so == Substitute->Matches[0].rm_eo) {
-
-            //
-            // If the match was empty and the end of the string, then stop, as
-            // the end of the string is just going to match empty again.
-            //
-
-            if (PatternOffset == Pattern->Size - 1) {
-                break;
-
-            //
-            // If the replacement was empty, then move the pattern forward
-            // to prevent replacing empty with empty forever.
-            //
-
-            } else if (ReplacementSize == 1) {
-                PatternOffset += 1;
-            }
-        }
+        PreviousEnd = PatternOffset;
     }
 
     //
