@@ -1264,6 +1264,7 @@ Return Value:
                     ImportIndex += 1;
                 }
 
+                PrimaryExecutable->ScopeSize -= 1;
                 break;
             }
         }
