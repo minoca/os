@@ -122,11 +122,6 @@ SwpReadSheBang (
     char **NewArgument
     );
 
-void
-SwpPrintLastError (
-    void
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -3956,8 +3951,13 @@ Return Value:
                             NULL);
 
     if (FileHandle == INVALID_HANDLE_VALUE) {
-        SwpPrintLastError();
-        return -1;
+
+        //
+        // Try to open the file again so that errno gets set correctly.
+        //
+
+        FileDescriptor = open(Path, OpenFlags, Mode);
+        return FileDescriptor;
     }
 
     //
@@ -4468,48 +4468,5 @@ ReadSheBangEnd:
     }
 
     return Status;
-}
-
-void
-SwpPrintLastError (
-    void
-    )
-
-/*++
-
-Routine Description:
-
-    This routine prints the result of GetLastError.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    DWORD Flags;
-    PCHAR MessageBuffer;
-
-    Flags = FORMAT_MESSAGE_ALLOCATE_BUFFER |
-            FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS;
-
-    FormatMessage(Flags,
-                  NULL,
-                  GetLastError(),
-                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                  (LPTSTR)&MessageBuffer,
-                  0,
-                  NULL);
-
-    fprintf(stderr, "Last Error: %s\n", MessageBuffer);
-    LocalFree(MessageBuffer);
-    return;
 }
 
