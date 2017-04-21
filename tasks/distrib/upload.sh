@@ -45,8 +45,8 @@ NIGHTLIES=nightlies
 ## keep from using it.
 ##
 
-unset SSH_AGENT_PID
-unset SSH_AGENT_SOCK
+unset SSH_AGENT_PID || true
+unset SSH_AUTH_SOCK || true
 
 ##
 ## It would be great to just use ssh-agent, but that seems to busy-spin hang
