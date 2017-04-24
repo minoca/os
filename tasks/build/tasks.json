@@ -1475,7 +1475,7 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/pango-1.40.5"
         },
         {
-            "name": "Make "gdk-pixbuf,
+            "name": "Make gdk-pixbuf",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/gdk-pixbuf-2.36.6"
         },
