@@ -635,6 +635,16 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/libjpeg-turbo-1.5.1"
         },
         {
+            "name": "Make freetype-prebuild",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/freetype-prebuild"
+        },
+        {
+            "name": "Make harfbuzz",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/harfbuzz-1.4.4"
+        },
+        {
             "name": "Make freetype",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/freetype-2.7.1"
@@ -675,16 +685,6 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/minidlna-1.1.5"
         },
         {
-            "name": "Make freetype",
-            "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/freetype-2.7.1"
-        },
-        {
-            "name": "Make harfbuzz",
-            "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/harfbuzz-1.4.4"
-        },
-        {
             "name": "Make fontconfig",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/fontconfig-2.12.1"
@@ -693,6 +693,11 @@
             "name": "Make pixman",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/pixman-0.34.0"
+        },
+        {
+            "name": "Make tiff",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/tiff-4.0.7"
         },
         {
             "name": "Run Cross Compile X",

@@ -714,16 +714,6 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/DirectFB-DIRECTFB_1_7_7"
         },
         {
-            "name": "Make SDL",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/SDL2-2.0.5"
-        },
-        {
-            "name": "Make qingy",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/qingy-1.0.0"
-        },
-        {
             "name": "Make libexif",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/libexif-0.6.21"
@@ -759,14 +749,19 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/minidlna-1.1.5"
         },
         {
-            "name": "Make freetype",
+            "name": "Make freetype-prebuild",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-2.7.1"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-prebuild"
         },
         {
             "name": "Make harfbuzz",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/harfbuzz-1.4.4"
+        },
+        {
+            "name": "Make freetype",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-2.7.1"
         },
         {
             "name": "Make fontconfig",
@@ -787,6 +782,16 @@
             "name": "Make file",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/file-5.30"
+        },
+        {
+            "name": "Make scons",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/scons-src-2.5.1"
+        },
+        {
+            "name": "Make tiff",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/tiff-4.0.7"
         },
         {
             "name": "Run Native Compile X",
@@ -1453,6 +1458,51 @@
             "name": "Make xinit-1.3.4",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/xinit-1.3.4"
+        },
+        {
+            "name": "Make atk",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/atk-2.24"
+        },
+        {
+            "name": "Make cairo",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/cairo-1.14.8"
+        },
+        {
+            "name": "Make pango",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/pango-1.40.5"
+        },
+        {
+            "name": "Make "gdk-pixbuf,
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gdk-pixbuf-2.36.6"
+        },
+        {
+            "name": "Make hicolor-icon-theme",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/hicolor-icon-theme-0.15"
+        },
+        {
+            "name": "Make gtk",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gtk+-2.24.31"
+        },
+        {
+            "name": "Make SDL2",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/SDL2-2.0.5"
+        },
+        {
+            "name": "Make SDL",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/SDL-1.2.15"
+        },
+        {
+            "name": "Make fceux",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/fceux-2.2.3"
         }
     ]
 },
