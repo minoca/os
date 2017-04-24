@@ -2483,7 +2483,9 @@ Return Value:
                 // the must be loaded with the initial executable.
                 //
 
-                if ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_LOAD) == 0) {
+                if ((Image->TlsImageSize != 0) &&
+                    ((Image->LoadFlags & IMAGE_LOAD_FLAG_PRIMARY_LOAD) == 0)) {
+
                     Status = STATUS_TOO_LATE;
                     goto GatherExportInformationEnd;
                 }
