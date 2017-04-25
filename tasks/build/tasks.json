@@ -510,7 +510,7 @@
         },
         {
             "name": "Make mysql",
-            "type": "no-op",
+            "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/mysql-5.7.13"
         },
         {
@@ -793,47 +793,6 @@
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/tiff-4.0.7"
         },
-        {
-            "name": "Run Native Compile X",
-            "type": "runtask",
-            "parameter": "Native Compile X"
-        },
-        {
-            "name": "Setup Distribution",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/setup_distrib.sh"
-        },
-        {
-            "name": "Make OS (Distribution)",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh os"
-        },
-        {
-            "name": "Make Packet",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/build_packet.sh"
-        },
-        {
-            "name": "Add Files",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/add_files.sh"
-        },
-        {
-            "name": "Make OS (Automation)",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh os"
-        },
-        {
-            "name": "Package Binaries",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/package_binaries.sh"
-        }
-    ]
-},
-{
-    "type": "task",
-    "name": "Native Compile X",
-    "steps": [
         {
             "name": "Make util-macros",
             "type": "execute",
@@ -1201,7 +1160,7 @@
         },
         {
             "name": "Make sessreg",
-            "type": "no-op",
+            "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/sessreg-1.1.1"
         },
         {
@@ -1503,6 +1462,36 @@
             "name": "Make fceux",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/fceux-2.2.3"
+        },
+        {
+            "name": "Setup Distribution",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/setup_distrib.sh"
+        },
+        {
+            "name": "Make OS (Distribution)",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh os"
+        },
+        {
+            "name": "Make Packet",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/build_packet.sh"
+        },
+        {
+            "name": "Add Files",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/add_files.sh"
+        },
+        {
+            "name": "Make OS (Automation)",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh os"
+        },
+        {
+            "name": "Package Binaries",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/package_binaries.sh"
         }
     ]
 },
