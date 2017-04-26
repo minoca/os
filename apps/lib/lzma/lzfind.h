@@ -112,8 +112,6 @@ Members:
 
     Result - Stores the resulting status code.
 
-    Crc - Stores a CRC table.
-
     ReferenceCount - Stores the total number of elements in the giant flat
         array of hash tables and the son array.
 
@@ -147,7 +145,6 @@ typedef struct _LZ_MATCH_FINDER {
     ULONG FixedHashSize;
     ULONG HashSizeSum;
     LZ_STATUS Result;
-    ULONG Crc[256];
     UINTN ReferenceCount;
 } LZ_MATCH_FINDER, *PLZ_MATCH_FINDER;
 
@@ -170,6 +167,36 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+typedef
+LZ_STATUS
+(*PLZ_MATCH_FINDER_LOAD) (
+    PLZ_MATCH_FINDER Finder,
+    LZ_FLUSH_OPTION Flush
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads data into a match finder context. It is primarily needed
+    as a data shuttle in case the user supplied less than KeepSizeAfter bytes.
+
+Arguments:
+
+    Finder - Supplies a pointer to the match finder context.
+
+    Flush - Supplies the flush option the encoder was called with, which
+        indicates whether more input data is coming or not.
+
+Return Value:
+
+    LZ Status code.
+
+    Returns LzErrorProgress if input data was read but it was not enough to
+    process.
 
 --*/
 
@@ -280,6 +307,9 @@ Members:
     Initialize - Stores a pointer to a function used to initialize a match
         finder interface.
 
+    Load - Stores a pointer to a function used to load input data into the
+        match finder.
+
     GetCount - Stores a pointer to a function used to to get the number of
         available bytes in the match finder.
 
@@ -295,6 +325,7 @@ Members:
 
 typedef struct _LZ_MATCH_FINDER_INTERFACE {
     PLZ_MATCH_FINDER_INITIALIZE Initialize;
+    PLZ_MATCH_FINDER_LOAD Load;
     PLZ_MATCH_FINDER_GET_COUNT GetCount;
     PLZ_MATCH_FINDER_GET_POSITION GetPosition;
     PLZ_MATCH_FINDER_GET_MATCHES GetMatches;

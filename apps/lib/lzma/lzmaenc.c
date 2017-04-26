@@ -47,8 +47,42 @@ Environment:
 
 #define LzpRangeEncoderGetProcessed(_RangeEncoder) \
     ((_RangeEncoder)->Processed + \
-     ((_RangeEncoder)->Buffer - (_RangeEncoder)->BufferBase) + \
+     ((_RangeEncoder)->Buffer - (_RangeEncoder)->BufferRead) + \
      (_RangeEncoder)->CacheSize)
+
+//
+// Continue to forge ahead on account of the input if either:
+// 1) The input is finished (indicated by flush or found naturally).
+// 2) There is a read function.
+// 3) The number of bytes in the match finder buffer is greater than the
+//    "keep size after" value (so that a maximum length can be matched against).
+//
+
+#define LZMA_HAS_INPUT_SPACE(_Encoder, _Flush) \
+    (((_Flush) != LzNoFlush) || \
+     ((_Encoder)->MatchFinderData.System->Read != NULL) || \
+     ((_Encoder)->MatchFinderData.StreamEndWasReached != FALSE) || \
+     (((_Encoder)->MatchFinder.GetCount((_Encoder)->MatchFinderContext) + \
+       (_Encoder)->RangeEncoder.System->InputSize) >= \
+      (_Encoder)->MatchFinderData.KeepSizeAfter))
+
+//
+// Continue to forge ahead on account of the output if either:
+// 1) Completely flushing now.
+// 2) There is a write function.
+// 3) There is enough buffer space in the range encoder to encode the longest
+//    possible symbol.
+//
+
+#define LZMA_HAS_OUTPUT_SPACE(_Encoder, _Flush) \
+    (((_Flush) == LzFlushNow) || \
+     ((_Encoder)->RangeEncoder.System->Write != NULL) || \
+     (((_Encoder)->RangeEncoder.BufferLimit - \
+       (_Encoder)->RangeEncoder.Buffer) >= LZMA_MAX_INPUT))
+
+#define LZMA_HAS_BUFFER_SPACE(_Encoder, _Flush) \
+    ((LZMA_HAS_INPUT_SPACE(_Encoder, _Flush)) && \
+     (LZMA_HAS_OUTPUT_SPACE(_Encoder, _Flush)))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -138,20 +172,11 @@ LzpLzmaFillAlignPrices (
 
 LZ_STATUS
 LzpLzmaEncode (
-    PLZMA_ENCODER Encoder
-    );
-
-VOID
-LzpLzmaEncoderFinish (
-    PLZMA_ENCODER Encoder
-    );
-
-LZ_STATUS
-LzpLzmaEncodeOneBlock (
     PLZMA_ENCODER Encoder,
     BOOL UseLimits,
     ULONG MaxPackSize,
-    ULONG MaxUnpackSize
+    ULONG MaxUnpackSize,
+    LZ_FLUSH_OPTION Flush
     );
 
 LZ_STATUS
@@ -315,6 +340,11 @@ LzpWriteCheckFields (
     PLZMA_ENCODER Encoder
     );
 
+BOOL
+LzpLzmaCopyOutput (
+    PLZ_CONTEXT Context
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -374,14 +404,15 @@ Return Value:
     Properties->BinTreeMode = -1;
     Properties->HashByteCount = -1;
     Properties->ThreadCount = -1;
-    Properties->WriteEndMark = FALSE;
+    Properties->EndMark = TRUE;
     return;
 }
 
 LZ_STATUS
 LzLzmaInitializeEncoder (
     PLZ_CONTEXT Context,
-    PLZMA_ENCODER_PROPERTIES Properties
+    PLZMA_ENCODER_PROPERTIES Properties,
+    BOOL FileWrapper
     )
 
 /*++
@@ -400,6 +431,9 @@ Arguments:
     Properties - Supplies an optional pointer to the properties to set in the
         encoder. If NULL is supplied, default properties will be set that are
         equivalent to compression level five.
+
+    FileWrapper - Supplies a boolean indicating if the file header and footer
+        should be written to the output stream.
 
 Return Value:
 
@@ -432,19 +466,19 @@ Return Value:
     }
 
     Encoder = Context->InternalState;
+    Encoder->FileWrapper = FileWrapper;
+    if (FileWrapper != FALSE) {
+        Encoder->Stage = LzmaStageFileHeader;
+
+    } else {
+        Encoder->Stage = LzmaStageData;
+    }
+
     if (Properties != NULL) {
         Status = LzpLzmaEncoderSetProperties(Encoder, Properties);
         if (Status != LzSuccess) {
             goto InitializeEncoderEnd;
         }
-    }
-
-    if (Context->Read == NULL) {
-        Encoder->MatchFinderData.DirectInput = TRUE;
-    }
-
-    if (Context->Write == NULL) {
-        Encoder->RangeEncoder.DirectOutput = TRUE;
     }
 
     Encoder->NeedInitialization = TRUE;
@@ -464,78 +498,9 @@ InitializeEncoderEnd:
 }
 
 LZ_STATUS
-LzLzmaWriteHeader (
-    PLZ_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine writes the LZMA file header, including a magic value and
-    the encoding properties.
-
-Arguments:
-
-    Context - Supplies a pointer to the context, which should already be
-        initialized by the user.
-
-Return Value:
-
-    LZ Status code.
-
---*/
-
-{
-
-    PLZMA_ENCODER Encoder;
-    ULONG Magic;
-    UINTN PropertiesSize;
-    LZ_STATUS Status;
-
-    Encoder = Context->InternalState;
-    if (Context->UncompressedSize != 0) {
-        return LzErrorInvalidParameter;
-    }
-
-    if (Context->Write == NULL) {
-        Encoder->RangeEncoder.BufferBase = Context->Output;
-        Encoder->RangeEncoder.Buffer = Context->Output;
-        Encoder->RangeEncoder.BufferLimit =
-                                         Context->Output + Context->OutputSize;
-    }
-
-    //
-    // Write the properties bytes out directly into the range encoder buffer
-    // so they get written out with the first flush.
-    //
-
-    PropertiesSize = Encoder->RangeEncoder.BufferLimit -
-                     Encoder->RangeEncoder.Buffer;
-
-    if (PropertiesSize < LZMA_HEADER_MAGIC_SIZE + LZMA_PROPERTIES_SIZE) {
-        return LzErrorOutputEof;
-    }
-
-    Magic = LZMA_HEADER_MAGIC;
-    memcpy(Encoder->RangeEncoder.Buffer, &Magic, LZMA_HEADER_MAGIC_SIZE);
-    Encoder->RangeEncoder.Buffer += LZMA_HEADER_MAGIC_SIZE;
-    PropertiesSize -= LZMA_HEADER_MAGIC_SIZE;
-    Status = LzpLzmaWriteProperties(Encoder,
-                                    Encoder->RangeEncoder.Buffer,
-                                    &PropertiesSize);
-
-    if (Status != LzSuccess) {
-        return Status;
-    }
-
-    Encoder->RangeEncoder.Buffer += PropertiesSize;
-    return Status;
-}
-
-LZ_STATUS
 LzLzmaEncode (
-    PLZ_CONTEXT Context
+    PLZ_CONTEXT Context,
+    LZ_FLUSH_OPTION Flush
     )
 
 /*++
@@ -549,6 +514,9 @@ Arguments:
     Context - Supplies a pointer to the context, which should already be
         initialized by the user.
 
+    Flush - Supplies the flush option, which indicates whether the encoder
+        should be flushed and terminated with this call or not.
+
 Return Value:
 
     LZ Status code.
@@ -558,53 +526,182 @@ Return Value:
 {
 
     PLZMA_ENCODER Encoder;
+    ULONG Magic;
+    PVOID OldOutBuffer;
+    UINTN OutSize;
+    PLZMA_RANGE_ENCODER Range;
     LZ_STATUS Status;
 
     Encoder = Context->InternalState;
+    OldOutBuffer = NULL;
+    Range = &(Encoder->RangeEncoder);
 
     //
-    // Currently, there's only one shot to call the encoder.
+    // If this is the only time the encode function is being called, then
+    // encode directly to memory if no read/write functions are supplied.
     //
 
-    if (Context->UncompressedSize != 0) {
-        return LzErrorInvalidParameter;
+    if (Context->UncompressedSize == 0) {
+        if ((Flush != LzNoFlush) && (Context->Read == NULL)) {
+            Context->Reallocate(Encoder->MatchFinderData.BufferBase, 0);
+            Encoder->MatchFinderData.BufferBase = Context->Input;
+            Encoder->MatchFinderData.DirectInputRemaining = Context->InputSize;
+            Encoder->MatchFinderData.DirectInput = TRUE;
+        }
     }
 
     //
-    // If encoding via memory, set the buffer now.
+    // If there's no leftover data in the allocated output buffer and the
+    // supplied one is large enough, use it directly.
     //
 
-    if (Context->Read == NULL) {
-        if (Encoder->MatchFinderData.DirectInput == FALSE) {
-            return LzErrorInvalidParameter;
+    if ((Context->Write == NULL) && (LzpLzmaCopyOutput(Context) != FALSE) &&
+        (Context->OutputSize >= LZMA_MAX_INPUT) &&
+        (Range->DirectOutput == FALSE)) {
+
+        OldOutBuffer = Range->Buffer;
+        Range->Buffer = Context->Output;
+        Range->BufferLimit = Context->Output + Context->OutputSize;
+        Range->BufferRead = Context->Output;
+        Range->BufferBase = Context->Output;
+        Range->DirectOutput = TRUE;
+    }
+
+    //
+    // If writing the header out, do that now. Either the range encoder buffer
+    // was allocated internally, in which case it's definitely big enough, or
+    // it's the user's, in which case they only get one shot for the whole
+    // thing to be big enough anyway.
+    //
+
+    if (Encoder->Stage == LzmaStageFileHeader) {
+        if (Range->BufferLimit - Range->Buffer < LZMA_HEADER_SIZE) {
+            Status = LzErrorOutputEof;
+            goto EncodeEnd;
         }
 
-        Encoder->MatchFinderData.BufferBase = Context->Input;
-        Encoder->MatchFinderData.DirectInputRemaining = Context->InputSize;
+        Magic = LZMA_HEADER_MAGIC;
+        memcpy(Range->Buffer, &Magic, LZMA_HEADER_MAGIC_SIZE);
+        Range->Buffer += LZMA_HEADER_MAGIC_SIZE;
+        OutSize = LZMA_HEADER_SIZE - LZMA_HEADER_MAGIC_SIZE;
+        Status = LzpLzmaWriteProperties(Encoder, Range->Buffer, &OutSize);
+        if (Status != LzSuccess) {
+            goto EncodeEnd;
+        }
+
+        Range->Buffer += OutSize;
+        Encoder->Stage = LzmaStageData;
     }
 
     //
-    // If writing via memory, set up the memory destination.
+    // Potentially encode some input data.
     //
 
-    if (Context->Write == NULL) {
-        Encoder->RangeEncoder.BufferBase = Context->Output;
-        Encoder->RangeEncoder.BufferLimit =
-                                         Context->Output + Context->OutputSize;
+    if (Encoder->Stage == LzmaStageData) {
+        Status = LzpLzmaEncode(Encoder, FALSE, 0, 0, Flush);
+        if (Status != LzSuccess) {
+            if (Status == LzErrorProgress) {
+                Status = LzSuccess;
+            }
+
+            goto EncodeEnd;
+        }
+
+        if (Encoder->MatchFinderData.StreamEndWasReached != FALSE) {
+            Status = LzpLzmaEncoderFlush(Encoder,
+                                         (ULONG)(Context->UncompressedSize));
+
+            if (Status != LzSuccess) {
+                goto EncodeEnd;
+            }
+
+            Encoder->Stage = LzmaStageFlushingOutput;
+        }
     }
 
     //
-    // Run the encoder.
+    // Continue to push the remaining output. Input is finished. With a write
+    // function there's actually nothing to do. Potentially move on to the
+    // footer.
     //
 
-    Status = LzpLzmaEncode(Encoder);
+    if (Encoder->Stage == LzmaStageFlushingOutput) {
+        if ((Context->Write != NULL) || (LzpLzmaCopyOutput(Context) != FALSE)) {
+            if (Encoder->FileWrapper != FALSE) {
+                Encoder->Stage = LzmaStageFileFooter;
+                if (Range->BufferLimit - Range->Buffer < LZMA_FOOTER_SIZE) {
+                    Status = LzErrorOutputEof;
+                    goto EncodeEnd;
+                }
+
+                memcpy(&(Range->Buffer[0]),
+                       &(Context->UncompressedSize),
+                       sizeof(ULONGLONG));
+
+                memcpy(&(Range->Buffer[8]),
+                       &(Context->CompressedCrc32),
+                       sizeof(ULONG));
+
+                memcpy(&(Range->Buffer[12]),
+                       &(Context->UncompressedCrc32),
+                       sizeof(ULONG));
+
+                Range->Buffer += LZMA_FOOTER_SIZE;
+
+            } else {
+                Encoder->Stage = LzmaStageComplete;
+            }
+        }
+    }
+
+    //
+    // Write the check fields out if it's time for the file footer.
+    //
+
+    if (Encoder->Stage == LzmaStageFileFooter) {
+        if (Context->Write != NULL) {
+            if (Context->Write(Context, Range->BufferRead, LZMA_FOOTER_SIZE) !=
+                LZMA_FOOTER_SIZE) {
+
+                Status = LzErrorWrite;
+                goto EncodeEnd;
+            }
+
+            Encoder->Stage = LzmaStageComplete;
+
+        } else {
+            if (LzpLzmaCopyOutput(Context) != FALSE) {
+                Encoder->Stage = LzmaStageComplete;
+            }
+        }
+    }
+
+    Status = LzSuccess;
+    if (Encoder->Stage == LzmaStageComplete) {
+        Status = LzStreamComplete;
+    }
+
+EncodeEnd:
+
+    //
+    // Put the originally allocated output buffer back if it had been hijacked.
+    //
+
+    if (OldOutBuffer != NULL) {
+        LzpLzmaCopyOutput(Context);
+        Range->Buffer = OldOutBuffer;
+        Range->BufferLimit = OldOutBuffer + LZMA_RANGE_ENCODER_BUFFER_SIZE;
+        Range->BufferBase = OldOutBuffer;
+        Range->BufferRead = OldOutBuffer;
+        Range->DirectOutput = FALSE;
+    }
+
     return Status;
 }
 
 LZ_STATUS
 LzLzmaFinishEncode (
-    PLZ_CONTEXT Context,
-    BOOL WriteCheckFields
+    PLZ_CONTEXT Context
     )
 
 /*++
@@ -619,9 +716,6 @@ Arguments:
     Context - Supplies a pointer to the context, which should already be
         initialized by the user.
 
-    WriteCheckFields - Supplies a boolean indicating whether or not to write
-        the check fields.
-
 Return Value:
 
     LZ Status code.
@@ -634,21 +728,7 @@ Return Value:
     LZ_STATUS Status;
 
     Encoder = Context->InternalState;
-
-    //
-    // Write out the the verification fields if requested.
-    //
-
-    if (WriteCheckFields != FALSE) {
-        Status = LzpWriteCheckFields(Encoder);
-        if (Status != LzSuccess) {
-            goto FinishEncodeEnd;
-        }
-    }
-
-    Status = LzSuccess;
-
-FinishEncodeEnd:
+    Status = LzLzmaEncode(Context, LzFlushNow);
     LzpLzmaDestroyEncoder(Encoder, Context);
     Context->InternalState = NULL;
     return Status;
@@ -997,7 +1077,7 @@ Return Value:
 
     Encoder->MatchFinderData.HashByteCount = HashBytes;
     Encoder->MatchFinderData.CutValue = NewProperties.MatchCount;
-    Encoder->WriteEndMark = NewProperties.WriteEndMark;
+    Encoder->WriteEndMark = NewProperties.EndMark;
     Encoder->Multithread = FALSE;
     if (NewProperties.ThreadCount > 1) {
         Encoder->Multithread = TRUE;
@@ -1311,6 +1391,7 @@ Return Value:
 
 {
 
+    ULONG AdvanceSize;
     UINTN AllocationSize;
     ULONG BeforeSize;
     ULONG Log;
@@ -1369,11 +1450,19 @@ Return Value:
         BeforeSize = KeepWindowSize - Encoder->DictSize;
     }
 
+    //
+    // The number of bytes of data ahead to keep is bounded by the maximum
+    // number of times get matches will be called between emitting symbols. At
+    // worst case it may be called once for each potential price, and have a
+    // huge match at the end.
+    //
+
+    AdvanceSize = LZMA_OPTIMAL_COUNT + LZMA_MAX_MATCH_LENGTH;
     Result = LzpMatchFinderAllocateBuffers(&(Encoder->MatchFinderData),
                                            Encoder->DictSize,
                                            BeforeSize,
                                            Encoder->FastByteCount,
-                                           LZMA_MAX_MATCH_LENGTH,
+                                           AdvanceSize,
                                            Context);
 
     if (Result != LzSuccess) {
@@ -1649,94 +1738,11 @@ Return Value:
 
 LZ_STATUS
 LzpLzmaEncode (
-    PLZMA_ENCODER Encoder
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the block encoding loop on a fully initialized and
-    reset LZMA encoder.
-
-Arguments:
-
-    Encoder - Supplies a pointer to the encoder.
-
-Return Value:
-
-    LZ Status.
-
---*/
-
-{
-
-    PLZMA_RANGE_ENCODER RangeEncoder;
-    PLZ_REPORT_PROGRESS ReportProgress;
-    LZ_STATUS Result;
-
-    RangeEncoder = &(Encoder->RangeEncoder);
-    ReportProgress = RangeEncoder->System->ReportProgress;
-    while (TRUE) {
-        Result = LzpLzmaEncodeOneBlock(Encoder, FALSE, 0, 0);
-        if ((Result != LzSuccess) || (Encoder->Finished != FALSE)) {
-            break;
-        }
-
-        if (ReportProgress != NULL) {
-            Result = ReportProgress(RangeEncoder->System,
-                                    RangeEncoder->System->UncompressedSize,
-                                    LzpRangeEncoderGetProcessed(RangeEncoder));
-
-            if (Result != LzSuccess) {
-                Result = LzErrorProgress;
-                break;
-            }
-        }
-    }
-
-    LzpLzmaEncoderFinish(Encoder);
-    return Result;
-}
-
-VOID
-LzpLzmaEncoderFinish (
-    PLZMA_ENCODER Encoder
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs completion activities associated with a finished
-    encoder.
-
-Arguments:
-
-    Encoder - Supplies a pointer to the encoder.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    //
-    // If there were multiple threads, this would be where the multithreaded
-    // match finder would be cleaned up.
-    //
-
-    return;
-}
-
-LZ_STATUS
-LzpLzmaEncodeOneBlock (
     PLZMA_ENCODER Encoder,
     BOOL UseLimits,
     ULONG MaxPackSize,
-    ULONG MaxUnpackSize
+    ULONG MaxUnpackSize,
+    LZ_FLUSH_OPTION Flush
     )
 
 /*++
@@ -1744,7 +1750,7 @@ LzpLzmaEncodeOneBlock (
 Routine Description:
 
     This routine implements the crux of the LZMA encoder, the encoding of a
-    single block.
+    block of data.
 
 Arguments:
 
@@ -1756,6 +1762,9 @@ Arguments:
     MaxPackSize - Supplies the maximum encoded block size.
 
     MaxUnpackSize - Supplies the maximum decoded block size.
+
+    Flush - Supplies the flush option, used to decide how to buffer input
+        data.
 
 Return Value:
 
@@ -1797,6 +1806,16 @@ Return Value:
         return Result;
     }
 
+    //
+    // Ask the match finder to load up on input. If the user is supplying tiny
+    // amounts of input at a time, this makes sure that progress is being made.
+    //
+
+    Result = Encoder->MatchFinder.Load(Encoder->MatchFinderContext, Flush);
+    if (Result != LzSuccess) {
+        return Result;
+    }
+
     Range = &(Encoder->RangeEncoder);
     CurrentPosition32 = (ULONG)(Range->System->UncompressedSize);
     StartPosition32 = CurrentPosition32;
@@ -1809,7 +1828,7 @@ Return Value:
 
     if (Range->System->UncompressedSize == 0) {
         if (Encoder->MatchFinder.GetCount(Encoder->MatchFinderContext) == 0) {
-            goto LzmaEncodeOneBlockEnd;
+            goto LzmaEncodeEnd;
         }
 
         LzpLzmaReadMatchDistances(Encoder, &PairCount);
@@ -1830,10 +1849,14 @@ Return Value:
     }
 
     if (Encoder->MatchFinder.GetCount(Encoder->MatchFinderContext) == 0) {
-        goto LzmaEncodeOneBlockEnd;
+        goto LzmaEncodeEnd;
     }
 
-    while (TRUE) {
+    //
+    // Loop encoding symbols as long as there's both input and output space.
+    //
+
+    while (LZMA_HAS_BUFFER_SPACE(Encoder, Flush)) {
 
         //
         // Go do all the work to figure out the longest match.
@@ -2068,18 +2091,21 @@ Return Value:
                     break;
                 }
 
-            } else if (Processed >= (1 << 17)) {
-                Range->System->UncompressedSize +=
-                                           CurrentPosition32 - StartPosition32;
+            //
+            // Update the uncompressed size occasionally in the loop, otherwise
+            // chunks of 4GB could be lost.
+            //
 
-                return LzpLzmaEncoderGetError(Encoder);
+            } else if (Processed >= (1 << 24)) {
+                Range->System->UncompressedSize += Processed;
+                StartPosition32 = CurrentPosition32;
             }
         }
     }
 
-LzmaEncodeOneBlockEnd:
+LzmaEncodeEnd:
     Range->System->UncompressedSize += CurrentPosition32 - StartPosition32;
-    return LzpLzmaEncoderFlush(Encoder, CurrentPosition32);
+    return LzpLzmaEncoderGetError(Encoder);
 }
 
 LZ_STATUS
@@ -2976,6 +3002,7 @@ Return Value:
     RangeEncoder->CacheSize = 1;
     RangeEncoder->Cache = 0;
     RangeEncoder->Buffer = RangeEncoder->BufferBase;
+    RangeEncoder->BufferRead = RangeEncoder->Buffer;
     RangeEncoder->Processed = 0;
     RangeEncoder->Result = LzSuccess;
     return;
@@ -3191,24 +3218,32 @@ Return Value:
     INTN Size;
     INTN Written;
 
-    if (RangeEncoder->Result != LzSuccess) {
+    //
+    // Don't bother if the encoder's already borked. If there is no write
+    // function, then copy out ensures that there's always space.
+    //
+
+    if ((RangeEncoder->Result != LzSuccess) ||
+        (RangeEncoder->System->Write == NULL)) {
+
+        //
+        // This should really be an assert, as it should never happen.
+        //
+
+        if (RangeEncoder->Buffer >= RangeEncoder->BufferLimit) {
+            RangeEncoder->Result = LzErrorOutputEof;
+        }
+
         return;
     }
 
     Size = RangeEncoder->Buffer - RangeEncoder->BufferBase;
-    if (RangeEncoder->System->Write != NULL) {
-        Written = RangeEncoder->System->Write(RangeEncoder->System,
-                                              RangeEncoder->BufferBase,
-                                              Size);
+    Written = RangeEncoder->System->Write(RangeEncoder->System,
+                                          RangeEncoder->BufferBase,
+                                          Size);
 
-        if (Size != Written) {
-            RangeEncoder->Result = LzErrorWrite;
-        }
-
-    } else {
-        if (RangeEncoder->Buffer == RangeEncoder->BufferLimit) {
-            RangeEncoder->Result = LzErrorOutputEof;
-        }
+    if (Size != Written) {
+        RangeEncoder->Result = LzErrorWrite;
     }
 
     RangeEncoder->System->CompressedCrc32 =
@@ -3218,6 +3253,7 @@ Return Value:
 
     RangeEncoder->Processed += Size;
     RangeEncoder->Buffer = RangeEncoder->BufferBase;
+    RangeEncoder->BufferRead = RangeEncoder->BufferBase;
     return;
 }
 
@@ -3245,7 +3281,7 @@ Return Value:
 
 {
 
-    UCHAR Buffer[LZMA_CHECK_FIELDS_SIZE];
+    UCHAR Buffer[LZMA_FOOTER_SIZE];
     PLZ_CONTEXT System;
     INTN Written;
 
@@ -3259,5 +3295,78 @@ Return Value:
     }
 
     return LzSuccess;
+}
+
+BOOL
+LzpLzmaCopyOutput (
+    PLZ_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine copies encoder output to the user buffer.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+Return Value:
+
+    TRUE if all data from the output buffer was copied.
+
+    FALSE if there is still more stuff in the output buffer.
+
+--*/
+
+{
+
+    PLZMA_ENCODER Encoder;
+    BOOL Finished;
+    PLZMA_RANGE_ENCODER Range;
+    UINTN Size;
+
+    Encoder = Context->InternalState;
+    Finished = TRUE;
+    Range = &(Encoder->RangeEncoder);
+
+    //
+    // Copy as much as possible from the range encoder buffer.
+    //
+
+    if (Range->Buffer > Range->BufferRead) {
+        Size = Range->Buffer - Range->BufferRead;
+        if (Size > Context->OutputSize) {
+            Size = Context->OutputSize;
+            Finished = FALSE;
+        }
+
+        if (Range->DirectOutput == FALSE) {
+            memcpy(Context->Output, Range->BufferRead, Size);
+        }
+
+        Range->System->CompressedCrc32 =
+                                LzpComputeCrc32(Range->System->CompressedCrc32,
+                                                Range->BufferRead,
+                                                Size);
+
+        Range->Processed += Size;
+        Range->BufferRead += Size;
+        Context->Output += Size;
+        Context->OutputSize -= Size;
+
+        //
+        // Reset the range encoder buffer if it's all clear. Don't do that if
+        // this is the user's buffer.
+        //
+
+        if ((Range->DirectOutput == FALSE) && (Finished != FALSE)) {
+            Range->Buffer = Range->BufferBase;
+            Range->BufferRead = Range->BufferBase;
+        }
+    }
+
+    return Finished;
 }
 

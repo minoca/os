@@ -154,13 +154,6 @@ Environment:
 #define LZMA_LITERAL_SIZE 0x300
 
 //
-// Define the maximum size of an LZMA input symbol. The maximum number of bits
-// is log2((2^11 / 31) ^ 22) + 26 = 134 + 26 = 160.
-//
-
-#define LZMA_MAX_INPUT 20
-
-//
 // Define the maximum number of bits that contribute to position encoding.
 //
 
@@ -267,6 +260,8 @@ Members:
 
     State - Stores the current decoder state.
 
+    Stage - Stores the stage of decoding.
+
     Reps - Stores the last four repeat values, used by opcodes to repeat them.
 
     RemainingLength - Stores the number of bytes remaining in the compressed
@@ -298,6 +293,15 @@ Members:
     OutputPosition - Stores the position within the output buffer to write the
         next byte.
 
+    FileWrapper - Stores a boolean indicating if the file footer is expected.
+
+    HasEndMark - Stores a boolean indicating if the stream has an end mark.
+
+    InputFinished - Stores a boolean indicating whether this is the end of
+        the input or not.
+
+    Error - Stores the error that occurred during decoding.
+
 --*/
 
 typedef struct _LZMA_DECODER {
@@ -315,6 +319,7 @@ typedef struct _LZMA_DECODER {
     ULONG ProcessedPosition;
     ULONG CheckDictSize;
     ULONG State;
+    LZMA_STAGE Stage;
     ULONG Reps[LZMA_REP_COUNT];
     ULONG RemainingLength;
     BOOL NeedFlush;
@@ -327,6 +332,10 @@ typedef struct _LZMA_DECODER {
     ULONG InputPosition;
     ULONG InputSize;
     ULONG OutputPosition;
+    BOOL FileWrapper;
+    BOOL HasEndMark;
+    BOOL InputFinished;
+    LZ_STATUS Error;
 } LZMA_DECODER, *PLZMA_DECODER;
 
 //
@@ -367,6 +376,11 @@ LzpLzmaDecoderInitializeState (
     PLZMA_DECODER Decoder,
     BOOL InitializeDictionary,
     BOOL InitializeState
+    );
+
+LZ_STATUS
+LzpLzmaReadHeader (
+    PLZ_CONTEXT Context
     );
 
 LZ_STATUS
@@ -424,7 +438,7 @@ LzpLzmaDecoderWriteRemainder (
 
 LZ_STATUS
 LzpVerifyCheckFields (
-    UCHAR CheckFields[LZMA_CHECK_FIELDS_SIZE],
+    UCHAR CheckFields[LZMA_FOOTER_SIZE],
     PLZ_CONTEXT Context
     );
 
@@ -446,7 +460,8 @@ LzpLzmaDecoderRead (
 LZ_STATUS
 LzLzmaInitializeDecoder (
     PLZ_CONTEXT Context,
-    PLZMA_ENCODER_PROPERTIES Properties
+    PLZMA_ENCODER_PROPERTIES Properties,
+    BOOL FileWrapper
     )
 
 /*++
@@ -463,6 +478,9 @@ Arguments:
     Properties - Supplies an optional pointer to the properties used in the
         upcoming encoding stream. If this is NULL, default properties
         equivalent to an encoding level of five will be set.
+
+    FileWrapper - Supplies a boolean indicating if the file header and footer
+        should be expected from the input stream.
 
 Return Value:
 
@@ -490,6 +508,14 @@ Return Value:
         Decoder = Context->InternalState;
     }
 
+    Decoder->FileWrapper = FileWrapper;
+    if (FileWrapper != FALSE) {
+        Decoder->Stage = LzmaStageFileHeader;
+
+    } else {
+        Decoder->Stage = LzmaStageData;
+    }
+
     if (Properties != NULL) {
         Status = LzpLzmaDecoderInitialize(Context, Properties);
         if (Status != LzSuccess) {
@@ -511,70 +537,9 @@ InitializeDecoderEnd:
 }
 
 LZ_STATUS
-LzLzmaReadHeader (
-    PLZ_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine reads the file header out of a compressed LZMA stream, which
-    validates the magic value and reads the properties into the decoder.
-
-Arguments:
-
-    Context - Supplies a pointer to the context.
-
-Return Value:
-
-    LZ Status code.
-
---*/
-
-{
-
-    UCHAR Header[LZMA_HEADER_SIZE];
-    ULONG Magic;
-    LZ_STATUS Status;
-
-    //
-    // Read both the magic and the properties.
-    //
-
-    Status = LzpLzmaDecoderRead(Context, Header, sizeof(Header));
-    if (Status != LzSuccess) {
-        return Status;
-    }
-
-    memcpy(&Magic, Header, sizeof(Magic));
-
-    //
-    // Validate the magic value.
-    //
-
-    if (Magic != LZMA_HEADER_MAGIC) {
-        return LzErrorMagic;
-    }
-
-    Status = LzpLzmaDecodeProperties(Context,
-                                     &(Header[LZMA_HEADER_MAGIC_SIZE]),
-                                     LZMA_HEADER_SIZE - LZMA_HEADER_MAGIC_SIZE);
-
-    if (Status != LzSuccess) {
-        return Status;
-    }
-
-    Context->CompressedCrc32 = LzpComputeCrc32(Context->CompressedCrc32,
-                                               Header,
-                                               LZMA_HEADER_SIZE);
-
-    return Status;
-}
-
-LZ_STATUS
 LzLzmaDecode (
-    PLZ_CONTEXT Context
+    PLZ_CONTEXT Context,
+    LZ_FLUSH_OPTION Flush
     )
 
 /*++
@@ -587,6 +552,9 @@ Arguments:
 
     Context - Supplies a pointer to the context.
 
+    Flush - Supplies the flush option, which indicates whether the decoder
+        should be flushed and terminated with this call or not.
+
 Return Value:
 
     LZ Status code.
@@ -596,8 +564,10 @@ Return Value:
 {
 
     INTN BytesComplete;
+    UCHAR CheckBuffer[LZMA_FOOTER_SIZE];
     LZ_COMPLETION_STATUS CompletionStatus;
     PLZMA_DECODER Decoder;
+    BOOL EndMark;
     PUCHAR InBuffer;
     UINTN InBufferSize;
     UINTN InPosition;
@@ -614,184 +584,325 @@ Return Value:
     Decoder = Context->InternalState;
 
     //
-    // If using the buffer, decode directly to the output buffer, since there's
-    // only one shot.
+    // Remember any errors that had occurred previously, like a broken record.
     //
 
-    if ((Context->Write == NULL) && (Context->Read == NULL)) {
-        OriginalDict = Decoder->Dict;
-        OriginalBufferSize = Decoder->DictBufferSize;
-        Decoder->Dict = Context->Output;
-        Decoder->DictBufferSize = Context->OutputSize;
-        InSize = Context->InputSize;
-        Status = LzpLzmaDecodeToDictionary(Decoder,
-                                           Decoder->DictBufferSize,
-                                           Context->Input,
-                                           &InSize,
-                                           TRUE,
-                                           &CompletionStatus);
+    Status = Decoder->Error;
+    if (Status != LzSuccess) {
+        goto DecodeEnd;
+    }
 
-        Decoder->Dict = OriginalDict;
-        Decoder->DictBufferSize = OriginalBufferSize;
-        if ((Status == LzSuccess) &&
-            (CompletionStatus == LzCompletionMoreInputRequired)) {
+    //
+    // Decode the file header, which may advance on to the data stage, or may
+    // not.
+    //
 
-            Status = LzErrorInputEof;
+    if (Decoder->Stage == LzmaStageFileHeader) {
+        Status = LzpLzmaReadHeader(Context);
+        if (Status != LzSuccess) {
+            goto DecodeEnd;
+        }
+    }
+
+    //
+    // The meat is here, decoding data.
+    //
+
+    if (Decoder->Stage == LzmaStageData) {
+
+        //
+        // Figure out which buffers to use: previously allocated internal
+        // buffers or the buffers coming in direct from the user.
+        //
+
+        if (Context->Read != NULL) {
+            InBuffer = Decoder->AllocatedInput;
+            InBufferSize = LZMA_DECODE_DEFAULT_WORKING_SIZE;
+            InSize = Decoder->InputSize;
+            InPosition = Decoder->InputPosition;
+
+        } else {
+            InBuffer = Context->Input;
+            InBufferSize = Context->InputSize;
+            InSize = Context->InputSize;
+            InPosition = 0;
         }
 
-        return Status;
-    }
+        if (Context->Write != NULL) {
+            OutBuffer = Decoder->AllocatedOutput;
+            OutPosition = Decoder->OutputPosition;
+            OutBufferSize = LZMA_DECODE_DEFAULT_WORKING_SIZE;
 
-    if (Context->Read != NULL) {
-        InBuffer = Decoder->AllocatedInput;
-        InBufferSize = LZMA_DECODE_DEFAULT_WORKING_SIZE;
-        InSize = Decoder->InputSize;
-        InPosition = Decoder->InputPosition;
+        } else {
+            OutBuffer = Context->Output;
+            OutPosition = 0;
+            OutBufferSize = Context->OutputSize;
+        }
 
-    } else {
-        InBuffer = Context->Input;
-        InBufferSize = Context->InputSize;
-        InPosition = 0;
-    }
+        //
+        // If using the buffer, decode directly to the output buffer, since
+        // there's only one shot.
+        //
 
-    if (Context->Write != NULL) {
-        OutBuffer = Decoder->AllocatedOutput;
-        OutPosition = Decoder->OutputPosition;
-        OutBufferSize = LZMA_DECODE_DEFAULT_WORKING_SIZE;
+        CompletionStatus = LzCompletionNotSpecified;
+        if ((Context->Write == NULL) && (Context->Read == NULL) &&
+            (Flush == LzFlushNow)) {
 
-    } else {
-        OutBuffer = Context->Output;
-        OutPosition = 0;
-        OutBufferSize = Context->OutputSize;
-    }
+            OriginalDict = Decoder->Dict;
+            OriginalBufferSize = Decoder->DictBufferSize;
+            Decoder->Dict = Context->Output;
+            Decoder->DictBufferSize = Context->OutputSize;
+            Status = LzpLzmaDecodeToDictionary(Decoder,
+                                               Decoder->DictBufferSize,
+                                               Context->Input,
+                                               &InSize,
+                                               Decoder->HasEndMark,
+                                               &CompletionStatus);
 
-    //
-    // Loop decoding the stream.
-    //
+            Decoder->Dict = OriginalDict;
+            Decoder->DictBufferSize = OriginalBufferSize;
+            Context->CompressedCrc32 = LzpComputeCrc32(Context->CompressedCrc32,
+                                                       Context->Input,
+                                                       InSize);
 
-    while (TRUE) {
-        if (InPosition >= InSize) {
-            if (Context->Read != NULL) {
-                InSize = Context->Read(Context, InBuffer, InBufferSize);
-                if (InSize < 0) {
-                    Status = LzErrorRead;
-                    goto DecodeEnd;
+            Context->Input += InSize;
+            Context->InputSize -= InSize;
+            Context->UncompressedCrc32 =
+                                    LzpComputeCrc32(Context->UncompressedCrc32,
+                                                    Context->Output,
+                                                    Decoder->DictPosition);
+
+            Context->UncompressedSize += Decoder->DictPosition;
+            Context->Output += Decoder->DictPosition;
+            Context->OutputSize -= Decoder->DictPosition;
+            if ((Status == LzSuccess) &&
+                ((CompletionStatus == LzCompletionMoreInputRequired) ||
+                 (CompletionStatus == LzCompletionNotFinished))) {
+
+                Status = LzErrorInputEof;
+            }
+
+            if (Status != LzSuccess) {
+                goto DecodeEnd;
+            }
+
+        } else {
+
+            //
+            // This is the normal loop for decoding the stream.
+            //
+
+            while (TRUE) {
+                EndMark = FALSE;
+                if (InPosition >= InSize) {
+                    if (Context->Read == NULL) {
+                        if (Flush != LzNoFlush) {
+                            EndMark = Decoder->HasEndMark;
+
+                        } else {
+                            break;
+                        }
+
+                    } else if (Decoder->InputFinished == FALSE) {
+                        InSize = Context->Read(Context, InBuffer, InBufferSize);
+                        if (InSize == 0) {
+                            Decoder->InputFinished = TRUE;
+                            EndMark = Decoder->HasEndMark;
+
+                        } else if (InSize < 0) {
+                            Status = LzErrorRead;
+                            break;
+                        }
+
+                        InPosition = 0;
+
+                    } else {
+                        EndMark = Decoder->HasEndMark;
+                    }
                 }
 
-                InPosition = 0;
+                InProcessed = InSize - InPosition;
+                OutProcessed = OutBufferSize - OutPosition;
+                if (OutProcessed == 0) {
+                    Status = LzSuccess;
+                    break;
+                }
+
+                Status = LzpLzmaDecodeToBuffer(Decoder,
+                                               OutBuffer + OutPosition,
+                                               &OutProcessed,
+                                               InBuffer + InPosition,
+                                               &InProcessed,
+                                               EndMark,
+                                               &CompletionStatus);
+
+                //
+                // Only add the portion of the buffer that's actually compressed
+                // data to the CRC.
+                //
+
+                Context->CompressedCrc32 =
+                                      LzpComputeCrc32(Context->CompressedCrc32,
+                                                      InBuffer + InPosition,
+                                                      InProcessed);
+
+                InPosition += InProcessed;
+                OutPosition += OutProcessed;
+                if (Context->Write != NULL) {
+                    BytesComplete = Context->Write(Context,
+                                                   OutBuffer,
+                                                   OutPosition);
+
+                    if (BytesComplete != OutPosition) {
+                        Status = LzErrorWrite;
+                        break;
+                    }
+                }
+
+                Context->UncompressedCrc32 =
+                                    LzpComputeCrc32(Context->UncompressedCrc32,
+                                                    OutBuffer,
+                                                    OutPosition);
+
+                Context->UncompressedSize += OutPosition;
+                if (Context->Write != NULL) {
+                    OutPosition = 0;
+                }
+
+                if (Status != LzSuccess) {
+                    break;
+                }
+
+                if (CompletionStatus == LzCompletionFinishedWithMark) {
+                    break;
+                }
+
+                if ((InProcessed == 0) && (OutProcessed == 0)) {
+                    break;
+                }
             }
-        }
 
-        InProcessed = InSize - InPosition;
-        OutProcessed = OutBufferSize - OutPosition;
-        if (OutProcessed == 0) {
-            Status = LzSuccess;
-            break;
-        }
+            if (Context->Read != NULL) {
+                Decoder->InputSize = InSize;
+                Decoder->InputPosition = InPosition;
 
-        Status = LzpLzmaDecodeToBuffer(Decoder,
-                                       OutBuffer + OutPosition,
-                                       &OutProcessed,
-                                       InBuffer + InPosition,
-                                       &InProcessed,
-                                       FALSE,
-                                       &CompletionStatus);
+            } else {
+                Context->Input += InPosition;
+                Context->InputSize -= InPosition;
+                Context->Output += OutPosition;
+                Context->OutputSize -= OutPosition;
+            }
 
-        //
-        // Only add the portion of the buffer that's actually compressed data
-        // to the CRC.
-        //
-
-        Context->CompressedCrc32 = LzpComputeCrc32(Context->CompressedCrc32,
-                                                   InBuffer + InPosition,
-                                                   InProcessed);
-
-        InPosition += InProcessed;
-        OutPosition += OutProcessed;
-        if (Context->Write != NULL) {
-            BytesComplete = Context->Write(Context, OutBuffer, OutPosition);
-            if (BytesComplete != OutPosition) {
-                Status = LzErrorWrite;
+            if (Status != LzSuccess) {
                 goto DecodeEnd;
             }
         }
 
-        Context->UncompressedCrc32 = LzpComputeCrc32(Context->UncompressedCrc32,
-                                                     OutBuffer,
-                                                     OutPosition);
+        //
+        // See if the stream is complete, and advance the stage if so.
+        //
 
-        Context->UncompressedSize += OutPosition;
-        if (Context->Write != NULL) {
-            OutPosition = 0;
+        if ((CompletionStatus == LzCompletionFinishedWithMark) ||
+            ((Decoder->HasEndMark == FALSE) &&
+             (CompletionStatus == LzCompletionMaybeFinishedWithoutMark))) {
+
+            if (Decoder->FileWrapper != FALSE) {
+                Decoder->Stage = LzmaStageFileFooter;
+
+            } else {
+                Decoder->Stage = LzmaStageComplete;
+            }
         }
 
-        if (Status != LzSuccess) {
+        //
+        // If the stream was supposed to finish but didn't, that's an error.
+        //
+
+        if ((Flush == LzFlushNow) && (Decoder->Stage == LzmaStageData)) {
+            Status = LzErrorInputEof;
             goto DecodeEnd;
         }
 
-        if ((InProcessed == 0) || (OutProcessed == 0)) {
-            if (CompletionStatus != LzCompletionFinishedWithMark) {
-                Status = LzErrorCorruptData;
+        //
+        // If no progress was made, fail. If the caller wanted to flush, make
+        // the error permanent.
+        //
+
+        if ((InBuffer == Context->Input) && (OutBuffer == Context->Output)) {
+            Status = LzErrorInvalidParameter;
+            if (Flush == LzNoFlush) {
+                return Status;
             }
 
-            break;
+            goto DecodeEnd;
         }
     }
 
-    if (Context->Read != NULL) {
-        Decoder->InputSize = InSize;
-        Decoder->InputPosition = InPosition;
+    //
+    // If the stage is now on the footer, read and process that.
+    //
+
+    if (Decoder->Stage == LzmaStageFileFooter) {
+        Status = LzpLzmaDecoderRead(Context, CheckBuffer, sizeof(CheckBuffer));
+        if (Status != LzSuccess) {
+            if (Status == LzErrorProgress) {
+                Status = LzSuccess;
+            }
+
+            goto DecodeEnd;
+        }
+
+        Status = LzpVerifyCheckFields(CheckBuffer, Context);
+        Decoder->Stage = LzmaStageComplete;
+    }
+
+    //
+    // If done, then hooray.
+    //
+
+    if (Decoder->Stage == LzmaStageComplete) {
+        Status = LzStreamComplete;
     }
 
 DecodeEnd:
+    if (Status != LzSuccess) {
+        Decoder->Error = Status;
+    }
+
     return Status;
 }
 
-LZ_STATUS
+VOID
 LzLzmaFinishDecode (
-    PLZ_CONTEXT Context,
-    BOOL ReadCheckFields
+    PLZ_CONTEXT Context
     )
 
 /*++
 
 Routine Description:
 
-    This routine flushes the LZMA decoder, and potentially writes the reads
-    and verefies the CRC and length fields.
+    This routine discards any pending input and output data, and tears down
+    all allocations associated with the given decoder.
 
 Arguments:
 
     Context - Supplies a pointer to the context, which should already be
         initialized by the user.
 
-    ReadCheckFields - Supplies a boolean indicating whether or not to read
-        and verify the check fields.
-
 Return Value:
 
-    LZ Status code.
+    None.
 
 --*/
 
 {
 
-    UCHAR CheckBuffer[LZMA_CHECK_FIELDS_SIZE];
-    PLZMA_DECODER Decoder;
-    LZ_STATUS Status;
-
-    Decoder = Context->InternalState;
-    Status = LzpLzmaDecoderRead(Context, CheckBuffer, sizeof(CheckBuffer));
-    if (Status != 0) {
-        goto FinishDecodeEnd;
+    if (Context->InternalState != NULL) {
+        LzpLzmaDecoderDestroy(Context, Context->InternalState);
+        Context->InternalState = NULL;
     }
 
-    Status = LzpVerifyCheckFields(CheckBuffer, Context);
-
-FinishDecodeEnd:
-    LzpLzmaDecoderDestroy(Context, Decoder);
-    Context->InternalState = NULL;
-    return Status;
+    return;
 }
 
 //
@@ -936,6 +1047,8 @@ Return Value:
     }
 
     Decoder->DictBufferSize = DictBufferSize;
+    Decoder->HasEndMark = Properties->EndMark;
+    Decoder->Error = LzSuccess;
     LzpLzmaDecoderReset(Decoder);
     return LzSuccess;
 }
@@ -1079,6 +1192,7 @@ Return Value:
 {
 
     Decoder->DictPosition = 0;
+    Decoder->InputFinished = FALSE;
     LzpLzmaDecoderInitializeState(Decoder, TRUE, TRUE);
     return;
 }
@@ -1128,6 +1242,86 @@ Return Value:
     }
 
     return;
+}
+
+LZ_STATUS
+LzpLzmaReadHeader (
+    PLZ_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the file header out of a compressed LZMA stream, which
+    validates the magic value and reads the properties into the decoder.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+Return Value:
+
+    LZ Status code.
+
+--*/
+
+{
+
+    PLZMA_DECODER Decoder;
+    UCHAR Header[LZMA_HEADER_SIZE];
+    ULONG Magic;
+    LZ_STATUS Status;
+
+    Decoder = Context->InternalState;
+
+    //
+    // Read both the magic and the properties.
+    //
+
+    Status = LzpLzmaDecoderRead(Context, Header, sizeof(Header));
+
+    //
+    // If progress is returned, that's a wink that nothing went wrong but the
+    // full size isn't there yet.
+    //
+
+    if (Status == LzErrorProgress) {
+        return LzSuccess;
+    }
+
+    if (Status != LzSuccess) {
+        return Status;
+    }
+
+    memcpy(&Magic, Header, sizeof(Magic));
+
+    //
+    // Validate the magic value.
+    //
+
+    if (Magic != LZMA_HEADER_MAGIC) {
+        return LzErrorMagic;
+    }
+
+    Status = LzpLzmaDecodeProperties(Context,
+                                     &(Header[LZMA_HEADER_MAGIC_SIZE]),
+                                     LZMA_HEADER_SIZE - LZMA_HEADER_MAGIC_SIZE);
+
+    if (Status != LzSuccess) {
+        return Status;
+    }
+
+    Context->CompressedCrc32 = LzpComputeCrc32(Context->CompressedCrc32,
+                                               Header,
+                                               LZMA_HEADER_SIZE);
+
+    //
+    // Advance to the data portion.
+    //
+
+    Decoder->Stage = LzmaStageData;
+    return Status;
 }
 
 LZ_STATUS
@@ -2687,7 +2881,7 @@ Return Value:
 
 LZ_STATUS
 LzpVerifyCheckFields (
-    UCHAR CheckFields[LZMA_CHECK_FIELDS_SIZE],
+    UCHAR CheckFields[LZMA_FOOTER_SIZE],
     PLZ_CONTEXT Context
     )
 
@@ -2752,7 +2946,8 @@ Arguments:
 
 Return Value:
 
-    LZ Status code.
+    LZ Status code. Returns LzErrorProgress to indicate that not enough data
+    is available yet.
 
 --*/
 
@@ -2765,6 +2960,7 @@ Return Value:
     UINTN InPosition;
     PUCHAR Input;
     UINTN InSize;
+    LZ_STATUS Status;
 
     if (Size > LZMA_MAX_INPUT) {
         return LzErrorInvalidParameter;
@@ -2773,8 +2969,7 @@ Return Value:
     Decoder = Context->InternalState;
 
     //
-    // Save the data into the working buffer first so it can be done in
-    // multiple attempts.
+    // Decide what buffer is going to be read from.
     //
 
     if (Context->Read != NULL) {
@@ -2790,63 +2985,107 @@ Return Value:
         InSize = Context->InputSize;
     }
 
-    while (Size != 0) {
+    //
+    // Try to repeatedly get the working buffer full.
+    //
+
+    Status = LzErrorProgress;
+    while (Decoder->WorkingSize < Size) {
 
         //
-        // Do a read if necessary.
-        //
-
-        if (InPosition >= InSize) {
-            if (Context->Read == NULL) {
-                return LzErrorInputEof;
-            }
-
-            BytesRead = Context->Read(Context, Input, InBufferSize);
-            if (BytesRead == 0) {
-                return LzErrorInputEof;
-            }
-
-            if (BytesRead < 0) {
-                return LzErrorRead;
-            }
-
-            InPosition = 0;
-            InSize = BytesRead;
-            if (Context->Read != NULL) {
-                Decoder->InputSize = InSize;
-            }
-        }
-
-        //
-        // Copy out of the buffer
+        // Read buffer from the input if available. This is either the
+        // allocated buffer used to accept read data or the buffer directly
+        // from the user.
         //
 
         if (InPosition < InSize) {
             CopySize = InSize - InPosition;
-            if (CopySize > Size) {
-                CopySize = Size;
+            if (CopySize > Size - Decoder->WorkingSize) {
+                CopySize = Size - Decoder->WorkingSize;
             }
 
-            memcpy(Buffer, Input + InPosition, CopySize);
-            Buffer += CopySize;
-            Size -= CopySize;
-            InPosition += CopySize;
+            memcpy(Decoder->Working + Decoder->WorkingSize,
+                   Input + InPosition,
+                   CopySize);
 
-            //
-            // Update the pointers.
-            //
-
-            if (Context->Read != NULL) {
-                Decoder->InputPosition = InPosition;
+            Decoder->WorkingSize += CopySize;
+            if (Context->Read == NULL) {
+                Input += CopySize;
+                InSize -= CopySize;
 
             } else {
-                Context->Input += CopySize;
-                Context->InputSize -= CopySize;
+                InPosition += CopySize;
             }
 
+            //
+            // Break out if finished.
+            //
+
+            if (Decoder->WorkingSize >= Size) {
+                Status = LzSuccess;
+                break;
+            }
+        }
+
+        //
+        // If there's no way to get more data, then there's nothing more that
+        // can be done now.
+        //
+
+        if ((Context->Read == NULL) || (Decoder->InputFinished != FALSE)) {
+            break;
+        }
+
+        //
+        // Read some new data.
+        //
+
+        InPosition = 0;
+        InSize = 0;
+        BytesRead = Context->Read(Context, Input, InBufferSize);
+        if (BytesRead <= 0) {
+            if (BytesRead == 0) {
+                Decoder->InputFinished = TRUE;
+                Status = LzErrorInputEof;
+                break;
+            }
+
+            Status = LzErrorRead;
+            break;
+        }
+
+        InSize = BytesRead;
+    }
+
+    if (Context->Read != NULL) {
+        Decoder->InputPosition = InPosition;
+        Decoder->InputSize = InSize;
+
+    } else {
+        Context->Input = Input;
+        Context->InputSize = InSize;
+    }
+
+    if (Status != LzSuccess) {
+        return Status;
+    }
+
+    //
+    // The data is all here. Hand it to the caller. If there's too much data
+    // in the working buffer, scootch it down.
+    //
+
+    memcpy(Buffer, Decoder->Working, Size);
+    if (Decoder->WorkingSize > Size) {
+        for (InPosition = 0;
+             InPosition < Decoder->WorkingSize - Size;
+             InPosition += 1) {
+
+            Decoder->Working[InPosition] = Decoder->Working[InPosition + Size];
         }
     }
 
+    Decoder->WorkingSize -= Size;
     return LzSuccess;
 }
 

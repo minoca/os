@@ -77,11 +77,26 @@ Author:
 
 #define LZMA_RANGE_TOP_VALUE (1 << 24)
 
-#define LZMA_CHECK_FIELDS_SIZE 16
+#define LZMA_FOOTER_SIZE 16
+
+//
+// Define the maximum size of an LZMA input symbol. The maximum number of bits
+// is log2((2^11 / 31) ^ 22) + 26 = 134 + 26 = 160.
+//
+
+#define LZMA_MAX_INPUT 20
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef enum _LZMA_STAGE {
+    LzmaStageFileHeader,
+    LzmaStageData,
+    LzmaStageFlushingOutput,
+    LzmaStageFileFooter,
+    LzmaStageComplete
+} LZMA_STAGE, *PLZMA_STAGE;
 
 typedef USHORT LZ_PROB, *PLZ_PROB;
 

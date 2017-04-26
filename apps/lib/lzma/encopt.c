@@ -293,12 +293,10 @@ Return Value:
     // potentially just output a single literal here.
     //
 
-    Encoder->LongestMatchLength =
-                     LzpLzmaReadMatchDistances(Encoder, &(Encoder->PairCount));
-
-    if (Encoder->LongestMatchLength >= 2) {
+    LongestMatch = LzpLzmaReadMatchDistances(Encoder, &(Encoder->PairCount));
+    Encoder->LongestMatchLength = LongestMatch;
+    if (LongestMatch >= 2) {
         NewDistance = Matches[Encoder->PairCount - 1];
-        LongestMatch = Encoder->LongestMatchLength;
         if (((LongestMatch >= MainLength) && (NewDistance < MainDistance)) ||
             ((LongestMatch == MainLength + 1) &&
              (!LzpLzmaChangePair(MainDistance, NewDistance))) ||

@@ -68,11 +68,13 @@ Environment:
     "  -d, --decompress - Decompress data.\n" \
     "  -i, --input=<file> - Read input from the given file (default stdin).\n" \
     "  -o, --output=<file> - Write output fo the given file (default stoud).\n"\
-    "  -0123456789, --level=<level> - Set decompression level (default 5).\n" \
+    "  -0123456789, --level=<level> - Set compression level (default 5).\n" \
     "  --mode=[0|1] - Set compression mode (default 1: max).\n" \
     "  --dict-size=<size> - Set dictionary size [12, 30] (default 24).\n" \
     "  --fast-bytes=<size> - Set fast byte count [5, 273] (default 128).\n"\
     "  --match-count=<count> - Set match finder cycles.\n" \
+    "  --memory-test=<count> - Run in memory buffer mode, with a specified \n" \
+    "      buffer size.\n" \
     "  --lc=<count> - Set number of literal context bits [0, 8] (default 3).\n"\
     "  --lp=<count> - Set number of literal position bits [0, 4] " \
     "(default 0).\n" \
@@ -100,6 +102,7 @@ typedef enum _LZMA_UTIL_ARGUMENT {
     LzmaUtilDictSize,
     LzmaUtilFastBytes,
     LzmaUtilMatchCount,
+    LzmaUtilMemoryTest,
     LzmaUtilLc,
     LzmaUtilLp,
     LzmaUtilPb,
@@ -117,11 +120,18 @@ typedef struct _LZMA_UTIL {
     LZ_CONTEXT Lz;
     LZMA_ENCODER_PROPERTIES EncoderProperties;
     ULONG Options;
+    UINTN MemoryTest;
 } LZMA_UTIL, *PLZMA_UTIL;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+INT
+LzpUtilRunMemoryTest (
+    PLZMA_UTIL Context,
+    LZMA_UTIL_ACTION Action
+    );
 
 PVOID
 LzpUtilReallocate (
@@ -176,6 +186,7 @@ struct option LzmaLongOptions[] = {
     {"dict-size", required_argument, 0, LzmaUtilDictSize},
     {"fast-bytes", required_argument, 0, LzmaUtilFastBytes},
     {"match-count", required_argument, 0, LzmaUtilMatchCount},
+    {"memory-test", required_argument, 0, LzmaUtilMemoryTest},
     {"lc", required_argument, 0, LzmaUtilLc},
     {"lp", required_argument, 0, LzmaUtilLp},
     {"pb", required_argument, 0, LzmaUtilPb},
@@ -189,6 +200,7 @@ struct option LzmaLongOptions[] = {
 
 PCSTR LzStatusStrings[] = {
     "Success",
+    "Stream complete",
     "Corrupt data",
     "Allocation failure",
     "CRC error",
@@ -253,7 +265,7 @@ Return Value:
     Context.Lz.Read = LzpUtilRead;
     Context.Lz.Write = LzpUtilWrite;
     LzLzmaInitializeProperties(&(Context.EncoderProperties));
-    Context.EncoderProperties.WriteEndMark = TRUE;
+    Context.EncoderProperties.EndMark = TRUE;
     Status = 1;
 
     //
@@ -356,6 +368,15 @@ Return Value:
             Context.EncoderProperties.MatchCount = Integer;
             break;
 
+        case LzmaUtilMemoryTest:
+            Integer = LzpUtilGetNumericOption(optarg, 1, 1 << 30);
+            if (Integer < 0) {
+                goto MainEnd;
+            }
+
+            Context.MemoryTest = Integer;
+            break;
+
         case LzmaUtilLc:
             Integer = LzpUtilGetNumericOption(optarg, 0, 8);
             if (Integer < 0) {
@@ -409,7 +430,7 @@ Return Value:
             break;
 
         case LzmaUtilNoEos:
-            Context.EncoderProperties.WriteEndMark = FALSE;
+            Context.EncoderProperties.EndMark = FALSE;
             break;
 
         case 'v':
@@ -506,9 +527,19 @@ Return Value:
         SET_BINARY_MODE(fileno(stdout));
     }
 
+    //
+    // If memory test mode was requested, go off and do things the buffer way.
+    //
+
+    if (Context.MemoryTest != 0) {
+        Status = LzpUtilRunMemoryTest(&Context, Action);
+        goto MainEnd;
+    }
+
     if (Action == LzmaActionCompress) {
         LzStatus = LzLzmaInitializeEncoder(&(Context.Lz),
-                                           &(Context.EncoderProperties));
+                                           &(Context.EncoderProperties),
+                                           TRUE);
 
         if (LzStatus != LzSuccess) {
             fprintf(stderr,
@@ -518,17 +549,8 @@ Return Value:
             goto MainEnd;
         }
 
-        LzStatus = LzLzmaWriteHeader(&(Context.Lz));
-        if (LzStatus != LzSuccess) {
-            fprintf(stderr,
-                    "Error: Failed to write file header: %s.\n",
-                    LzpUtilGetErrorString(LzStatus));
-
-            goto MainEnd;
-        }
-
-        LzStatus = LzLzmaEncode(&(Context.Lz));
-        if (LzStatus != LzSuccess) {
+        LzStatus = LzLzmaEncode(&(Context.Lz), LzFlushNow);
+        if (LzStatus != LzStreamComplete) {
             fprintf(stderr,
                     "Error: Failed to encode: %s.\n",
                     LzpUtilGetErrorString(LzStatus));
@@ -536,8 +558,8 @@ Return Value:
             goto MainEnd;
         }
 
-        LzStatus = LzLzmaFinishEncode(&(Context.Lz), TRUE);
-        if (LzStatus != LzSuccess) {
+        LzStatus = LzLzmaFinishEncode(&(Context.Lz));
+        if (LzStatus != LzStreamComplete) {
             fprintf(stderr,
                     "Error: Failed to finish: %s.\n",
                     LzpUtilGetErrorString(LzStatus));
@@ -546,7 +568,7 @@ Return Value:
         }
 
     } else {
-        LzStatus = LzLzmaInitializeDecoder(&(Context.Lz), NULL);
+        LzStatus = LzLzmaInitializeDecoder(&(Context.Lz), NULL, TRUE);
         if (LzStatus != LzSuccess) {
             fprintf(stderr,
                     "Error: Failed to initialize decoder: %s.\n",
@@ -555,32 +577,16 @@ Return Value:
             goto MainEnd;
         }
 
-        LzStatus = LzLzmaReadHeader(&(Context.Lz));
-        if (LzStatus != LzSuccess) {
+        LzStatus = LzLzmaDecode(&(Context.Lz), LzFlushNow);
+        if (LzStatus != LzStreamComplete) {
             fprintf(stderr,
-                    "Error: Failed to read file header: %s.\n",
+                    "Error: Failed to decode: %s.\n",
                     LzpUtilGetErrorString(LzStatus));
 
             goto MainEnd;
         }
 
-        LzStatus = LzLzmaDecode(&(Context.Lz));
-        if (LzStatus != LzSuccess) {
-            fprintf(stderr,
-                    "Error: Failed to encode: %s.\n",
-                    LzpUtilGetErrorString(LzStatus));
-
-            goto MainEnd;
-        }
-
-        LzStatus = LzLzmaFinishDecode(&(Context.Lz), TRUE);
-        if (LzStatus != LzSuccess) {
-            fprintf(stderr,
-                    "Error: Failed to finish: %s.\n",
-                    LzpUtilGetErrorString(LzStatus));
-
-            goto MainEnd;
-        }
+        LzLzmaFinishDecode(&(Context.Lz));
     }
 
     Status = 0;
@@ -604,6 +610,199 @@ MainEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+INT
+LzpUtilRunMemoryTest (
+    PLZMA_UTIL Context,
+    LZMA_UTIL_ACTION Action
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a compress or decompress operation in memory buffer
+    mode. It is useful for testing the encoder/decoder.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Action - Supplies the action to perform.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    UINTN BufferSize;
+    LZ_FLUSH_OPTION Flush;
+    PVOID InBuffer;
+    PLZ_CONTEXT Lz;
+    LZ_STATUS LzStatus;
+    PVOID OutBuffer;
+    INTN Size;
+    INT Status;
+    PSTR Verb;
+
+    Lz = &(Context->Lz);
+    BufferSize = Context->MemoryTest;
+    InBuffer = malloc(BufferSize * 2);
+    if (InBuffer == NULL) {
+        Status = ENOMEM;
+        goto RunMemoryTestEnd;
+    }
+
+    Flush = LzNoFlush;
+    OutBuffer = InBuffer + BufferSize;
+    Context->Lz.Output = OutBuffer;
+    Context->Lz.OutputSize = BufferSize;
+    Context->Lz.Read = NULL;
+    Context->Lz.Write = NULL;
+    if (Action == LzmaActionCompress) {
+        Verb = "encode";
+        LzStatus = LzLzmaInitializeEncoder(Lz,
+                                           &(Context->EncoderProperties),
+                                           TRUE);
+
+    } else {
+        Verb = "decode";
+        LzStatus = LzLzmaInitializeDecoder(Lz, NULL, TRUE);
+    }
+
+    if (LzStatus != LzSuccess) {
+        fprintf(stderr,
+                "Error: Failed to initialize %sr: %s.\n",
+                Verb,
+                LzpUtilGetErrorString(LzStatus));
+
+        Status = 1;
+        goto RunMemoryTestEnd;
+    }
+
+    //
+    // Loop crunching data.
+    //
+
+    while (TRUE) {
+
+        //
+        // Send out all pending write data.
+        //
+
+        if (Lz->OutputSize < BufferSize) {
+            Size = BufferSize - Lz->OutputSize;
+            if (LzpUtilWrite(Lz, OutBuffer, Size) != Size) {
+                Status = errno;
+                fprintf(stderr, "lzma: Write Error: %s\n", strerror(Status));
+                goto RunMemoryTestEnd;
+            }
+
+            Lz->Output = OutBuffer;
+            Lz->OutputSize = BufferSize;
+        }
+
+        //
+        // Read in any input needed to make the buffer full again.
+        //
+
+        if ((Lz->InputSize < BufferSize) && (Flush == LzNoFlush)) {
+            if (Lz->InputSize > 0) {
+                memmove(InBuffer, Lz->Input, Lz->InputSize);
+            }
+
+            Size = LzpUtilRead(Lz,
+                               InBuffer + Lz->InputSize,
+                               BufferSize - Lz->InputSize);
+
+            if (Size <= 0) {
+                if (Size == 0) {
+                    Flush = LzInputFinished;
+
+                } else {
+                    Status = errno;
+                    fprintf(stderr, "lzma: Read Error: %s\n", strerror(Status));
+                    goto RunMemoryTestEnd;
+                }
+            }
+
+            Lz->Input = InBuffer;
+            Lz->InputSize += Size;
+        }
+
+        if (Action == LzmaActionCompress) {
+            LzStatus = LzLzmaEncode(Lz, Flush);
+
+        } else {
+            LzStatus = LzLzmaDecode(Lz, Flush);
+        }
+
+        if (LzStatus == LzStreamComplete) {
+
+            //
+            // Do any final write.
+            //
+
+            if (Lz->OutputSize < BufferSize) {
+                Size = BufferSize - Lz->OutputSize;
+                if (LzpUtilWrite(Lz, OutBuffer, Size) != Size) {
+                    Status = errno;
+                    fprintf(stderr,
+                            "lzma: Write Error: %s\n",
+                            strerror(Status));
+
+                    goto RunMemoryTestEnd;
+                }
+            }
+
+            break;
+
+        } else if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to %s: %s.\n",
+                    Verb,
+                    LzpUtilGetErrorString(LzStatus));
+
+            Status = 1;
+            goto RunMemoryTestEnd;
+        }
+
+        if ((Lz->InputSize == BufferSize) && (Lz->OutputSize == BufferSize)) {
+            fprintf(stderr, "Error: No progress was made!\n");
+            Status = 1;
+            goto RunMemoryTestEnd;
+        }
+    }
+
+    if (Action == LzmaActionCompress) {
+        LzStatus = LzLzmaFinishEncode(Lz);
+        if (LzStatus != LzStreamComplete) {
+            fprintf(stderr,
+                    "Error: Failed to finish encoder: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            Status = 1;
+            goto RunMemoryTestEnd;
+        }
+
+    } else {
+        LzLzmaFinishDecode(Lz);
+    }
+
+    Status = 0;
+
+RunMemoryTestEnd:
+    if (InBuffer != NULL) {
+        free(InBuffer);
+    }
+
+    return Status;
+}
 
 PVOID
 LzpUtilReallocate (

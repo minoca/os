@@ -133,6 +133,12 @@ LzpMatchFinderInitialize (
     PLZ_MATCH_FINDER Finder
     );
 
+LZ_STATUS
+LzpMatchFinderLoad (
+    PLZ_MATCH_FINDER Finder,
+    LZ_FLUSH_OPTION Flush
+    );
+
 ULONG
 LzpMatchFinderGetCount (
     PLZ_MATCH_FINDER Finder
@@ -265,6 +271,7 @@ LzpMatchFinderMoveBlock (
 
 const LZ_MATCH_FINDER_INTERFACE LzDefaultMatchFinderInterface = {
     LzpMatchFinderInitialize,
+    LzpMatchFinderLoad,
     LzpMatchFinderGetCount,
     LzpMatchFinderGetPosition,
     LzpMatchFinderBinTree4GetMatches,
@@ -580,6 +587,62 @@ Return Value:
 
     LzpMatchFinderInitializeContext(Finder, TRUE);
     return;
+}
+
+LZ_STATUS
+LzpMatchFinderLoad (
+    PLZ_MATCH_FINDER Finder,
+    LZ_FLUSH_OPTION Flush
+    )
+
+/*++
+
+Routine Description:
+
+    This routine loads data into a match finder context. It is primarily needed
+    as a data shuttle in case the user supplied less than KeepSizeAfter bytes.
+
+Arguments:
+
+    Finder - Supplies a pointer to the match finder context.
+
+    Flush - Supplies the flush option the encoder was called with, which
+        indicates whether more input data is coming or not.
+
+Return Value:
+
+    LZ Status code.
+
+    Returns LzErrorProgress if input data was read but it was not enough to
+    process.
+
+--*/
+
+{
+
+    LzpMatchFinderCheckLimits(Finder);
+
+    //
+    // If this is not the end of the stream but there's not enough data to get
+    // the maximum match, then indicate not to encode just yet.
+    //
+
+    if ((Finder->StreamEndWasReached == FALSE) &&
+        (Finder->StreamPosition - Finder->Position <= Finder->KeepSizeAfter)) {
+
+        if (Flush == LzNoFlush) {
+            return LzErrorProgress;
+        }
+
+        //
+        // Either there's no more input or this is a complete flush. Either way
+        // no more input is coming.
+        //
+
+        Finder->StreamEndWasReached = TRUE;
+    }
+
+    return Finder->Result;
 }
 
 ULONG
@@ -1451,10 +1514,32 @@ Return Value:
             break;
         }
 
-        Size = Finder->System->Read(Finder->System, Destination, Size);
-        if (Size < 0) {
-            Finder->Result = LzErrorRead;
-            return;
+        //
+        // Call the read function if there is one.
+        //
+
+        if (Finder->System->Read != NULL) {
+            Size = Finder->System->Read(Finder->System, Destination, Size);
+            if (Size < 0) {
+                Finder->Result = LzErrorRead;
+                return;
+            }
+
+        //
+        // Otherwise, copy from the input buffer.
+        //
+
+        } else {
+            if (Size > Finder->System->InputSize) {
+                Size = Finder->System->InputSize;
+                if (Size == 0) {
+                    break;
+                }
+            }
+
+            memcpy(Destination, Finder->System->Input, Size);
+            Finder->System->Input += Size;
+            Finder->System->InputSize -= Size;
         }
 
         if (Size == 0) {
@@ -1832,7 +1917,7 @@ Return Value:
     }
 
     if ((Finder->StreamEndWasReached == FALSE) &&
-        (Finder->StreamPosition - Finder->Position == Finder->KeepSizeAfter)) {
+        (Finder->StreamPosition - Finder->Position <= Finder->KeepSizeAfter)) {
 
         if (LZP_MATCH_FINDER_NEEDS_MOVE(Finder)) {
             LzpMatchFinderMoveBlock(Finder);

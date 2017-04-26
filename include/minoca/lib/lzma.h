@@ -55,6 +55,7 @@ Author:
 
 typedef enum _LZ_STATUS {
     LzSuccess,
+    LzStreamComplete,
     LzErrorCorruptData,
     LzErrorMemory,
     LzErrorCrc,
@@ -68,9 +69,24 @@ typedef enum _LZ_STATUS {
     LzErrorMagic,
 } LZ_STATUS, *PLZ_STATUS;
 
+//
+// Flush options for encoding:
+// LzNoFlush - This is the normal option that should be passed, it leaves it up
+// to the encoder to decide when to flush data out.
+// LzInputFinished - Supply this value when there is no more data in the
+// input beyond what may or may not already be there. This indicates to the
+// encoder that it should completely process all input and flush the output
+// stream when there is space available.
+// LzFlushNow - Supply this value if this is the last time the encode function
+// is going to be called. It has the same behavior as LzInputFinished, but also
+// completely flushes the output buffer. It is an error if there is not enough
+// space in the output buffer to completely flush the stream.
+//
+
 typedef enum _LZ_FLUSH_OPTION {
     LzNoFlush,
-    LzFlushNow,
+    LzInputFinished,
+    LzFlushNow
 } LZ_FLUSH_OPTION, *PLZ_FLUSH_OPTION;
 
 //
@@ -302,8 +318,9 @@ Members:
     MatchCount - Stores the number of match finder cycles. Valid values are
         between 1 and (1 << 30), inclusive. The default is 32.
 
-    WriteEndMark - Stores a boolean indicating whether to write and end marker
-        or not. The default is FALSE.
+    EndMark - Stores a boolean indicating whether to write an end marker
+        or not. For decoders, stores whether or not to expect an end marker.
+        The default is TRUE.
 
     ThreadCount - Stores the thread count to use while encoding. Valid values
         are 1 and 2. The default is 2.
@@ -322,7 +339,7 @@ typedef struct _LZMA_ENCODER_PROPERTIES {
     INT BinTreeMode;
     INT HashByteCount;
     ULONG MatchCount;
-    BOOL WriteEndMark;
+    BOOL EndMark;
     INT ThreadCount;
 } LZMA_ENCODER_PROPERTIES, *PLZMA_ENCODER_PROPERTIES;
 
@@ -358,7 +375,8 @@ Return Value:
 LZ_STATUS
 LzLzmaInitializeEncoder (
     PLZ_CONTEXT Context,
-    PLZMA_ENCODER_PROPERTIES Properties
+    PLZMA_ENCODER_PROPERTIES Properties,
+    BOOL FileWrapper
     );
 
 /*++
@@ -378,28 +396,8 @@ Arguments:
         encoder. If NULL is supplied, default properties will be set that are
         equivalent to compression level five.
 
-Return Value:
-
-    LZ Status code.
-
---*/
-
-LZ_STATUS
-LzLzmaWriteHeader (
-    PLZ_CONTEXT Context
-    );
-
-/*++
-
-Routine Description:
-
-    This routine writes the LZMA file header, including a magic value and
-    the encoding properties.
-
-Arguments:
-
-    Context - Supplies a pointer to the context, which should already be
-        initialized by the user.
+    FileWrapper - Supplies a boolean indicating if the file header and footer
+        should be written to the output stream.
 
 Return Value:
 
@@ -409,7 +407,8 @@ Return Value:
 
 LZ_STATUS
 LzLzmaEncode (
-    PLZ_CONTEXT Context
+    PLZ_CONTEXT Context,
+    LZ_FLUSH_OPTION Flush
     );
 
 /*++
@@ -423,6 +422,9 @@ Arguments:
     Context - Supplies a pointer to the context, which should already be
         initialized by the user.
 
+    Flush - Supplies the flush option, which indicates whether the encoder
+        should be flushed and terminated with this call or not.
+
 Return Value:
 
     LZ Status code.
@@ -431,8 +433,7 @@ Return Value:
 
 LZ_STATUS
 LzLzmaFinishEncode (
-    PLZ_CONTEXT Context,
-    BOOL WriteCheckFields
+    PLZ_CONTEXT Context
     );
 
 /*++
@@ -447,9 +448,6 @@ Arguments:
     Context - Supplies a pointer to the context, which should already be
         initialized by the user.
 
-    WriteCheckFields - Supplies a boolean indicating whether or not to write
-        the check fields.
-
 Return Value:
 
     LZ Status code.
@@ -459,7 +457,8 @@ Return Value:
 LZ_STATUS
 LzLzmaInitializeDecoder (
     PLZ_CONTEXT Context,
-    PLZMA_ENCODER_PROPERTIES Properties
+    PLZMA_ENCODER_PROPERTIES Properties,
+    BOOL FileWrapper
     );
 
 /*++
@@ -477,6 +476,9 @@ Arguments:
         upcoming encoding stream. If this is NULL, default properties
         equivalent to an encoding level of five will be set.
 
+    FileWrapper - Supplies a boolean indicating if the file header and footer
+        should be expected from the input stream.
+
 Return Value:
 
     Returns an LZ status code indicating overall success or failure.
@@ -484,30 +486,9 @@ Return Value:
 --*/
 
 LZ_STATUS
-LzLzmaReadHeader (
-    PLZ_CONTEXT Context
-    );
-
-/*++
-
-Routine Description:
-
-    This routine reads the file header out of a compressed LZMA stream, which
-    validates the magic value and reads the properties into the decoder.
-
-Arguments:
-
-    Context - Supplies a pointer to the context.
-
-Return Value:
-
-    LZ Status code.
-
---*/
-
-LZ_STATUS
 LzLzmaDecode (
-    PLZ_CONTEXT Context
+    PLZ_CONTEXT Context,
+    LZ_FLUSH_OPTION Flush
     );
 
 /*++
@@ -520,35 +501,35 @@ Arguments:
 
     Context - Supplies a pointer to the context.
 
+    Flush - Supplies the flush option, which indicates whether the decoder
+        should be flushed and terminated with this call or not.
+
 Return Value:
 
     LZ Status code.
 
 --*/
 
-LZ_STATUS
+VOID
 LzLzmaFinishDecode (
-    PLZ_CONTEXT Context,
-    BOOL ReadCheckFields
+    PLZ_CONTEXT Context
     );
 
 /*++
 
 Routine Description:
 
-    This routine flushes the LZMA decoder, and potentially writes the reads
-    and verefies the CRC and length fields.
+    This routine discards any pending input and output data, and tears down
+    all allocations associated with the given decoder.
 
 Arguments:
 
     Context - Supplies a pointer to the context, which should already be
         initialized by the user.
 
-    ReadCheckFields - Supplies a boolean indicating whether or not to read
-        and verify the check fields.
-
 Return Value:
 
-    LZ Status code.
+    None.
 
 --*/
+

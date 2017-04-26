@@ -181,6 +181,9 @@ Members:
 
     BufferBase - Stores the initial buffer address.
 
+    BufferRead - Stores the next pointer to read output from if partial copies
+        have occurred.
+
     System - Stores the system context.
 
     Processed - Stores the number of bytes writtne.
@@ -200,6 +203,7 @@ typedef struct _LZMA_RANGE_ENCODER {
     PUCHAR Buffer;
     PUCHAR BufferLimit;
     PUCHAR BufferBase;
+    PUCHAR BufferRead;
     PLZ_CONTEXT System;
     ULONGLONG Processed;
     LZ_STATUS Result;
@@ -347,6 +351,8 @@ Members:
 
     LcLp - Stores Lc + Lp.
 
+    Stage - Stores the stage of encoding the encoder is currently in.
+
     LiteralProbabilities - Stores the probabilities for each literal.
 
     FastMode - Stores a boolean indicating whether the encoder is in fast mode.
@@ -362,6 +368,9 @@ Members:
 
     NeedInitialization - Stores a boolean indicating whether or not the
         encoder still needs initialization.
+
+    FileWrapper - Stores a boolean indicating whether the file header and
+        footer check fields should be written to the stream.
 
     MatchPriceCount - Stores the count of match prices.
 
@@ -446,12 +455,14 @@ typedef struct _LZMA_ENCODER {
     ULONG LpMask;
     ULONG PbMask;
     ULONG LcLp;
+    LZMA_STAGE Stage;
     PLZ_PROB LiteralProbabilities;
     BOOL FastMode;
     BOOL WriteEndMark;
     BOOL Finished;
     BOOL Multithread;
     BOOL NeedInitialization;
+    BOOL FileWrapper;
     ULONG MatchPriceCount;
     ULONG AlignPriceCount;
     ULONG DistanceTableSize;
