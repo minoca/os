@@ -55,6 +55,7 @@ Environment:
 // --------------------------------------------------------- Internal Functions
 //
 
+__USED
 RTL_API
 int
 __aeabi_idiv0 (
@@ -86,6 +87,7 @@ Return Value:
     return ReturnValue;
 }
 
+__USED
 RTL_API
 long long
 __aeabi_ldiv0 (
@@ -117,6 +119,7 @@ Return Value:
     return ReturnValue;
 }
 
+__USED
 RTL_API
 int
 __aeabi_idiv (
@@ -152,6 +155,7 @@ Return Value:
     return RtlDivide32(Numerator, Denominator);
 }
 
+__USED
 RTL_API
 unsigned int
 __aeabi_uidiv (
@@ -193,6 +197,7 @@ Return Value:
 // values are returned using integer registers.
 //
 
+__USED
 RTL_API
 unsigned long long
 __aeabi_i2d (
@@ -225,6 +230,7 @@ Return Value:
     return Result.Ulonglong;
 }
 
+__USED
 RTL_API
 unsigned long long
 __aeabi_ui2d (
@@ -257,6 +263,7 @@ Return Value:
     return Result.Ulonglong;
 }
 
+__USED
 RTL_API
 unsigned long long
 __aeabi_l2d (
@@ -289,6 +296,7 @@ Return Value:
     return Result.Ulonglong;
 }
 
+__USED
 RTL_API
 unsigned long long
 __aeabi_ul2d (
@@ -321,6 +329,7 @@ Return Value:
     return Result.Ulonglong;
 }
 
+__USED
 RTL_API
 int
 __aeabi_d2iz (
@@ -352,6 +361,7 @@ Return Value:
     return RtlDoubleConvertToInteger32RoundToZero(Parts.Double);
 }
 
+__USED
 RTL_API
 long long
 __aeabi_d2lz (
@@ -383,6 +393,7 @@ Return Value:
     return RtlDoubleConvertToInteger64RoundToZero(Parts.Double);
 }
 
+__USED
 RTL_API
 unsigned int
 __aeabi_d2uiz (
@@ -414,6 +425,7 @@ Return Value:
     return RtlDoubleConvertToInteger32RoundToZero(Parts.Double);
 }
 
+__USED
 RTL_API
 unsigned long long
 __aeabi_d2ulz (
@@ -445,6 +457,7 @@ Return Value:
     return RtlDoubleConvertToInteger64RoundToZero(Parts.Double);
 }
 
+__USED
 RTL_API
 unsigned long
 __aeabi_i2f (
@@ -477,6 +490,7 @@ Return Value:
     return Result.Ulong;
 }
 
+__USED
 RTL_API
 unsigned long
 __aeabi_ui2f (
@@ -509,6 +523,7 @@ Return Value:
     return Result.Ulong;
 }
 
+__USED
 RTL_API
 unsigned long
 __aeabi_l2f (
@@ -541,6 +556,7 @@ Return Value:
     return Result.Ulong;
 }
 
+__USED
 RTL_API
 unsigned long
 __aeabi_ul2f (
@@ -573,6 +589,7 @@ Return Value:
     return Result.Ulong;
 }
 
+__USED
 RTL_API
 int
 __aeabi_f2iz (
@@ -604,6 +621,7 @@ Return Value:
     return RtlFloatConvertToInteger32RoundToZero(Parts.Float);
 }
 
+__USED
 RTL_API
 long long
 __aeabi_f2lz (
@@ -635,6 +653,7 @@ Return Value:
     return RtlFloatConvertToInteger64RoundToZero(Parts.Float);
 }
 
+__USED
 RTL_API
 unsigned int
 __aeabi_f2uiz (
@@ -666,6 +685,7 @@ Return Value:
     return RtlFloatConvertToInteger32RoundToZero(Parts.Float);
 }
 
+__USED
 RTL_API
 unsigned long long
 __aeabi_f2ulz (

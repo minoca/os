@@ -229,6 +229,7 @@ PDRIVER UsbMouseDriver = NULL;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

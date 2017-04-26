@@ -431,6 +431,7 @@ DISK_INTERFACE SdBcm2709DiskInterfaceTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

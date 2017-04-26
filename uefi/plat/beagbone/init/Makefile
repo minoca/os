@@ -36,7 +36,7 @@ VPATH += $(BINROOT):
 INCLUDES += $(SRCROOT)/os/uefi/include;
 INCLUDES += $(SRCDIR)/../../panda/init;
 
-LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
+LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib -Wl,-zmax-page-size=1
 
 OBJS += boot.o      \
         clock.o     \
@@ -49,9 +49,7 @@ OBJS += boot.o      \
 
 ARMV7_OBJS = armv7/start.o  \
 
-TEXT_ADDRESS = 0x402F0408
-
-LINKER_SCRIPT = $(SRCROOT)/os/uefi/plat/panda/init/link.x
+TEXT_ADDRESS := 0x402F0408
 
 EXTRA_SRC_DIRS = armv7
 
@@ -65,7 +63,7 @@ postbuild: bbonemlo bbonemlo.bin
 
 bbonemlo: bbonemlo.bin
 	@echo Generating - $@
-	@bbonefwb/bbonefwb 0x402F0408 $^ $@
+	@bbonefwb/bbonefwb $(TEXT_ADDRESS) $^ $@
 	@cp -p $@ $(BINROOT)/
 
 bbonemlo.bin: $(BINARY)

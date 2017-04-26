@@ -53,6 +53,12 @@ Environment:
 .arm
 
 ##
+## Stick this in the .init section so it ends up at the front of the binary.
+##
+
+.section .init
+
+##
 ## .global allows this label to be visible to the linker. _start is the entry
 ## point to the MBR code, so it needs to be globally visible.
 ##

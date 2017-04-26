@@ -73,6 +73,7 @@ EFI_GUID BmLoadedImageProtocolGuid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 EFIAPI
 EFI_STATUS
 BmEfiApplicationMain (

@@ -44,9 +44,9 @@ X86_OBJS = vbr.o                    \
            realmode.o               \
            realmexe.o               \
 
-TEXT_ADDRESS = 0x7C00
-
 LDFLAGS += -Wl,-zmax-page-size=1 -nodefaultlibs -nostartfiles -nostdlib
+
+TEXT_ADDRESS := 0x7C00
 
 EXTRA_SRC_DIRS = x86 fw/pcat
 

@@ -373,6 +373,7 @@ SD_FUNCTION_TABLE SdRk32FunctionTable = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

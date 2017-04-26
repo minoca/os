@@ -35,9 +35,9 @@ OBJS += bootxfr.o   \
 
 X86_OBJS = x86/entry.o  \
 
-TEXT_ADDRESS = 0x100000
-
 LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
+
+TEXT_ADDRESS := 0x100000
 
 INCLUDES += $(SRCROOT)/os/boot/lib/include;$(SRCDIR)/..;
 

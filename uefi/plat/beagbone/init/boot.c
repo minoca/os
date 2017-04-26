@@ -112,6 +112,7 @@ BOOLEAN EfiSkipCrc;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 VOID
 EfiFirstStageLoader (
     PAM335_BOOT_DATA BootData

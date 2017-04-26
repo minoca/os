@@ -135,6 +135,7 @@ E1000_DEVICE_ENTRY E1000Devices[] = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

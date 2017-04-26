@@ -243,6 +243,7 @@ SPB_FUNCTION_TABLE Rk3I2cFunctionTableTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

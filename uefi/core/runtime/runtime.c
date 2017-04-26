@@ -118,6 +118,7 @@ EFI_SYSTEM_TABLE *EfiSystemTable;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 EFIAPI
 EFI_STATUS
 EfiRuntimeDriverEntry (

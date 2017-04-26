@@ -227,6 +227,7 @@ GPIO_FUNCTION_TABLE Rk32GpioFunctionTableTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

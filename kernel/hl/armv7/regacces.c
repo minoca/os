@@ -285,7 +285,7 @@ Return Value:
 {
 
     RtlMemoryBarrier();
-    return *((PULONG)RegisterAddress);
+    return *((volatile ULONG *)RegisterAddress);
 }
 
 KERNEL_API
@@ -317,7 +317,7 @@ Return Value:
 {
 
     RtlMemoryBarrier();
-    *((PULONG)RegisterAddress) = Value;
+    *((volatile ULONG *)RegisterAddress) = Value;
     RtlMemoryBarrier();
     return;
 }
@@ -348,7 +348,7 @@ Return Value:
 {
 
     RtlMemoryBarrier();
-    return *((PUSHORT)RegisterAddress);
+    return *((volatile USHORT *)RegisterAddress);
 }
 
 KERNEL_API
@@ -380,7 +380,7 @@ Return Value:
 {
 
     RtlMemoryBarrier();
-    *((PUSHORT)RegisterAddress) = Value;
+    *((volatile USHORT *)RegisterAddress) = Value;
     RtlMemoryBarrier();
     return;
 }
@@ -411,7 +411,7 @@ Return Value:
 {
 
     RtlMemoryBarrier();
-    return *((PUCHAR)RegisterAddress);
+    return *((volatile UCHAR *)RegisterAddress);
 }
 
 KERNEL_API
@@ -443,7 +443,7 @@ Return Value:
 {
 
     RtlMemoryBarrier();
-    *((PUCHAR)RegisterAddress) = Value;
+    *((volatile UCHAR *)RegisterAddress) = Value;
     RtlMemoryBarrier();
     return;
 }

@@ -186,6 +186,7 @@ NET80211_RATE_INFORMATION RtlwDefaultRateInformation = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

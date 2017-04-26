@@ -141,6 +141,7 @@ UCHAR Net80211Ip4MulticastBase[ETHERNET_ADDRESS_SIZE] =
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver
@@ -150,7 +151,7 @@ DriverEntry (
 
 Routine Description:
 
-    This routine implements the initial entry point of the networking core
+    This routine implements the initial entry point of the 802.11 core
     library, called when the library is first loaded.
 
 Arguments:

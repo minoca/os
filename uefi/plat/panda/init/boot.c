@@ -127,6 +127,7 @@ BOOLEAN EfiSkipCrc;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 VOID
 EfiFirstStageLoader (
     UINT8 *Information

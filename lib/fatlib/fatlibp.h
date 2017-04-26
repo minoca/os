@@ -43,11 +43,12 @@ Author:
 //
 
 #define FAT_READ_INT16(_Pointer) \
-    (((PUCHAR)(_Pointer))[0] | (((USHORT)((PUCHAR)(_Pointer))[1]) << 8))
+    (((volatile UCHAR *)(_Pointer))[0] | \
+     (((USHORT)((volatile UCHAR *)(_Pointer))[1]) << 8))
 
 #define FAT_WRITE_INT16(_Pointer, _Value)               \
-    ((PUCHAR)(_Pointer))[0] = (UCHAR)(_Value),          \
-    ((PUCHAR)(_Pointer))[1] = (UCHAR)((_Value) >> 8)
+    ((volatile UCHAR *)(_Pointer))[0] = (UCHAR)(_Value),          \
+    ((volatile UCHAR *)(_Pointer))[1] = (UCHAR)((_Value) >> 8)
 
 //
 // This macro gets the FAT window index for the given cluster. It's basically

@@ -647,6 +647,7 @@ PDRIVER Ser16550Driver = NULL;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

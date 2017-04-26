@@ -178,6 +178,7 @@ volatile ULONG KeBannerThreadEnabled = 1;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 VOID
 KepStartSystem (
     PKERNEL_INITIALIZATION_BLOCK Parameters

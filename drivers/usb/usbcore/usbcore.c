@@ -199,6 +199,7 @@ PSTR UsbErrorStrings[UsbErrorCount] = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

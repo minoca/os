@@ -3324,6 +3324,7 @@ Return Value:
 
 --*/
 
+__USED
 RTL_API
 ULONGLONG
 RtlDivideUnsigned64 (
@@ -3353,6 +3354,7 @@ Return Value:
 
 --*/
 
+__USED
 RTL_API
 LONGLONG
 RtlDivide64 (
@@ -3378,6 +3380,7 @@ Return Value:
 
 --*/
 
+__USED
 RTL_API
 LONGLONG
 RtlDivideModulo64 (
@@ -3406,6 +3409,7 @@ Return Value:
 
 --*/
 
+__USED
 RTL_API
 ULONG
 RtlDivideUnsigned32 (
@@ -3435,6 +3439,7 @@ Return Value:
 
 --*/
 
+__USED
 RTL_API
 LONG
 RtlDivide32 (
@@ -3460,6 +3465,7 @@ Return Value:
 
 --*/
 
+__USED
 RTL_API
 LONG
 RtlDivideModulo32 (
@@ -3487,6 +3493,7 @@ Return Value:
     Returns the quotient.
 
 --*/
+
 RTL_API
 ULONGLONG
 RtlByteSwapUlonglong (

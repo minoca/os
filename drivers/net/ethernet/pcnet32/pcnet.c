@@ -115,6 +115,7 @@ PDRIVER PcnetDriver = NULL;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

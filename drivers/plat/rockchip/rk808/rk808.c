@@ -308,6 +308,7 @@ RK808_LDO_RANGE Rk808LdoRanges[8] = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

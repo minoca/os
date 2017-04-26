@@ -178,7 +178,7 @@ function build() {
     flattenedUsb = flattenedBinary(flattenedUsb);
     entries += flattenedUsb;
     ubootConfig = {
-        "TEXT_ADDRESS": textAddress,
+        "text_address": textAddress,
         "MKUBOOT_FLAGS": "-c -a arm -f legacy"
     };
 

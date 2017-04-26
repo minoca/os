@@ -66,7 +66,7 @@ function build() {
     }
 
     mkubootCommand = "$O/uefi/tools/mkuboot/mkuboot $MKUBOOT_FLAGS " +
-                     "-l $TEXT_ADDRESS -e $TEXT_ADDRESS -o $OUT $IN";
+                     "-l $text_address -e $text_address -o $OUT $IN";
 
     tool = {
         "type": "tool",

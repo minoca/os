@@ -121,6 +121,7 @@ DMA_INTERFACE DmaInterfaceTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

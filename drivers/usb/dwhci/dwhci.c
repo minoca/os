@@ -185,6 +185,7 @@ PDRIVER DwhciDriver = NULL;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

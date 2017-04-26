@@ -590,6 +590,7 @@ PIO_HANDLE VcLocalTerminal;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

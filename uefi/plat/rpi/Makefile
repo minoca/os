@@ -49,7 +49,7 @@ OBJS += debug.o             \
 
 ARMV6_OBJS = armv6/entry.o  \
 
-TEXT_ADDRESS = 0x00008000
+TEXT_ADDRESS := 0x00008000
 
 TARGETLIBS += $(OBJROOT)/os/uefi/dev/pl11/pl11.a       \
               $(OBJROOT)/os/uefi/dev/sd/core/sd.a      \

@@ -181,6 +181,7 @@ UUID UhciPciConfigurationInterfaceUuid = UUID_PCI_CONFIG_ACCESS;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

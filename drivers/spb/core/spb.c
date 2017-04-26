@@ -132,6 +132,7 @@ SPB_INTERFACE SpbInterfaceTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

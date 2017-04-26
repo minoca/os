@@ -77,6 +77,7 @@ BOOLEAN EfiDisableWatchdog = FALSE;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 VOID
 EfiPandaBoardMain (
     VOID *TopOfStack,

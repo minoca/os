@@ -391,6 +391,7 @@ DISK_INTERFACE SdDiskInterfaceTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

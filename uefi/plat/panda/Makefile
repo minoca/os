@@ -59,7 +59,7 @@ OBJS += debug.o                 \
 ARMV7_OBJS = armv7/entry.o  \
              armv7/smpa.o   \
 
-TEXT_ADDRESS = 0x82000000
+TEXT_ADDRESS := 0x82000000
 
 TARGETLIBS += $(OBJROOT)/os/uefi/dev/gic/gic.a               \
               $(OBJROOT)/os/uefi/dev/sd/core/sd.a            \

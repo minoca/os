@@ -339,6 +339,7 @@ SPB_FUNCTION_TABLE Rk32SpiFunctionTableTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

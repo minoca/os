@@ -56,7 +56,7 @@ ARMV7_OBJS = armv7/entry.o   \
              armv7/minttbl.o \
              armv7/smpa.o    \
 
-TEXT_ADDRESS = 0x020000A4
+TEXT_ADDRESS := 0x020000A4
 
 TARGETLIBS += $(OBJROOT)/os/uefi/dev/gic/gic.a               \
               $(OBJROOT)/os/uefi/dev/ns16550/ns16550.a       \

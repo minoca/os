@@ -300,6 +300,7 @@ NET_SOCKET_OPTION NetBasicSocketOptions[] = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

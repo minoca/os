@@ -412,6 +412,7 @@ PCSTR I8042MouseDeviceIds[] = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

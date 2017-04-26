@@ -142,6 +142,7 @@ volatile ULONG RamDiskNextIdentifier = 0;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

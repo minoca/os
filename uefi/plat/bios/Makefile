@@ -53,7 +53,7 @@ OBJS += acpi.o      \
 X86_OBJS = x86/entry.o      \
            x86/realmexe.o   \
 
-TEXT_ADDRESS = 0x100000
+TEXT_ADDRESS := 0x100000
 
 TARGETLIBS += $(OBJROOT)/os/uefi/dev/ns16550/ns16550.a       \
 

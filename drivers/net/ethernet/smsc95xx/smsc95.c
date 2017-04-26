@@ -144,6 +144,7 @@ PDRIVER Sm95Driver = NULL;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

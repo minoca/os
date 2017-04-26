@@ -246,6 +246,7 @@ ULONG Bcm27GpioPullDownDefaults[2] = {0xCFFFFE00, 0x00000FE3};
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

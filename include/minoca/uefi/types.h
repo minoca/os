@@ -204,6 +204,7 @@ Author:
 #endif
 
 #define PACKED __attribute__((__packed__))
+#define __USED __attribute__((used))
 
 //
 // Define standard type limits.

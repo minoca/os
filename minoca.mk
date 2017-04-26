@@ -212,11 +212,12 @@ INCLUDES += $(SRCROOT)/os/include
 ## Define default CFLAGS if none were specified elsewhere.
 ##
 
+# LTO_OPT ?= -flto
 CFLAGS ?= -Wall -Werror
 ifeq ($(DEBUG),rel)
-CFLAGS += -O2 -Wno-unused-but-set-variable
+CFLAGS += -O2 $(LTO_OPT) -Wno-unused-but-set-variable
 else
-CFLAGS += -O1
+CFLAGS += -O1 $(LTO_OPT)
 endif
 
 ##
@@ -301,7 +302,9 @@ endif
 ##
 
 ifneq (,$(TEXT_ADDRESS))
-EXTRA_LDFLAGS += -Wl,-Ttext-segment=$(TEXT_ADDRESS) -Wl,-Ttext=$(TEXT_ADDRESS)
+EXTRA_LDFLAGS +=  -Wl,--section-start,.init=$(TEXT_ADDRESS) \
+ -Wl,-Ttext-segment=$(TEXT_ADDRESS)
+
 endif
 
 ifneq (,$(LINKER_SCRIPT))
@@ -309,7 +312,7 @@ EXTRA_LDFLAGS += -T$(LINKER_SCRIPT)
 endif
 
 ifeq ($(BINARYTYPE),driver)
-EXTRA_LDFLAGS += -nostdlib
+EXTRA_LDFLAGS += -nostdlib -Wl,--no-undefined
 ENTRY ?= DriverEntry
 BINARYTYPE := so
 endif

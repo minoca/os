@@ -78,6 +78,12 @@ Environment:
 .code16
 
 ##
+## Stick this in the .init section so it ends up at the front of the binary.
+##
+
+.section .init
+
+##
 ## .globl allows this label to be visible to the linker.
 ##
 

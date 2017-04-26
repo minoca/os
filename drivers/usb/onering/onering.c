@@ -227,6 +227,7 @@ UUID OneRingUsbLedMiniDeviceInformationUuid =
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

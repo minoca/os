@@ -98,6 +98,7 @@ BOOLEAN EfiBootedViaSd;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 VOID
 EfiVeyronMain (
     VOID *TopOfStack,

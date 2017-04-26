@@ -76,7 +76,7 @@ Return Value:
 
 {
 
-    return *((PULONG)RegisterAddress);
+    return *((volatile ULONG *)RegisterAddress);
 }
 
 KERNEL_API
@@ -107,7 +107,7 @@ Return Value:
 
 {
 
-    *((PULONG)RegisterAddress) = Value;
+    *((volatile ULONG *)RegisterAddress) = Value;
     return;
 }
 
@@ -136,7 +136,7 @@ Return Value:
 
 {
 
-    return *((PUSHORT)RegisterAddress);
+    return *((volatile USHORT *)RegisterAddress);
 }
 
 KERNEL_API
@@ -167,7 +167,7 @@ Return Value:
 
 {
 
-    *((PUSHORT)RegisterAddress) = Value;
+    *((volatile USHORT *)RegisterAddress) = Value;
     return;
 }
 
@@ -196,7 +196,7 @@ Return Value:
 
 {
 
-    return *((PUCHAR)RegisterAddress);
+    return *((volatile UCHAR *)RegisterAddress);
 }
 
 KERNEL_API
@@ -227,7 +227,7 @@ Return Value:
 
 {
 
-    *((PUCHAR)RegisterAddress) = Value;
+    *((volatile UCHAR *)RegisterAddress) = Value;
     return;
 }
 

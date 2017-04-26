@@ -130,6 +130,7 @@ KSPIN_LOCK AcpiDeviceListLock;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

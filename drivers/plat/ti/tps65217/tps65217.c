@@ -361,6 +361,7 @@ INTERFACE_TPS65217 Tps65217InterfaceTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

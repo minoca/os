@@ -332,6 +332,7 @@ BOOL GoecPrintKeyState = FALSE;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

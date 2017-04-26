@@ -172,6 +172,7 @@ EFI_BCM2709_GET_CLOCK_RATE EfiRpi2GetClockTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 VOID
 EfiRpi2Main (
     VOID *TopOfStack,

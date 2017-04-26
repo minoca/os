@@ -147,6 +147,7 @@ GPIO_ACCESS_INTERFACE GpioInterfaceTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

@@ -31,11 +31,11 @@ RTBASE = $(OBJROOT)/os/uefi/core/runtime/rtbase.ffs
 
 TARGETLIBS = $(OBJROOT)/os/kernel/kd/boot/kdboot.a           \
              $(OBJROOT)/os/kernel/kd/kdusb/kdnousb/kdnousb.a \
-             $(OBJROOT)/os/lib/rtl/base/boot/basertlb.a      \
              $(OBJROOT)/os/lib/basevid/basevid.a             \
              $(OBJROOT)/os/lib/fatlib/fat.a                  \
              $(OBJROOT)/os/uefi/core/ueficore.a              \
              $(OBJROOT)/os/uefi/archlib/uefiarch.a           \
+             $(OBJROOT)/os/lib/rtl/base/boot/basertlb.a      \
 
 ifeq ($(ARCH), armv7)
 

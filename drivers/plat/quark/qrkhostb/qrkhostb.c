@@ -289,6 +289,7 @@ BOOL QhbDebugImrs = FALSE;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

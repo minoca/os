@@ -127,6 +127,7 @@ UUID Rtl81PciMsiInterfaceUuid = UUID_PCI_MESSAGE_SIGNALED_INTERRUPTS;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

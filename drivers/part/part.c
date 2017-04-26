@@ -247,6 +247,7 @@ UUID PartPartitionDeviceInformationUuid = PARTITION_DEVICE_INFORMATION_UUID;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver
@@ -256,7 +257,7 @@ DriverEntry (
 
 Routine Description:
 
-    This routine implements the initial entry point of the networking core
+    This routine implements the initial entry point of the partition
     library, called when the library is first loaded.
 
 Arguments:

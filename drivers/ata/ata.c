@@ -321,6 +321,7 @@ DISK_INTERFACE AtaDiskInterfaceTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

@@ -166,6 +166,7 @@ ULONG AhciEnumerationMilliseconds;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

@@ -71,7 +71,6 @@ function build() {
         "label": "bbonemlo.elf",
         "inputs": sources,
         "includes": includes,
-        "linker_script": "$S/uefi/plat/panda/init/link.x",
         "text_address": textAddress,
         "config": linkConfig
     };
@@ -92,7 +91,7 @@ function build() {
     bbonefwbTool = {
         "type": "tool",
         "name": "bbonefwb",
-        "command": "$O/uefi/plat/beagbone/init/fwbuild $TEXT_ADDRESS $IN $OUT",
+        "command": "$O/uefi/plat/beagbone/init/fwbuild $text_address $IN $OUT",
         "description": "Building BeagleBone Firmware - $OUT"
     };
 
@@ -103,7 +102,7 @@ function build() {
         "tool": "bbonefwb",
         "inputs": [":bbonemlo.bin"],
         "implicit": [":fwbuild"],
-        "config": {"TEXT_ADDRESS": textAddress},
+        "config": {"text_address": textAddress},
         "nostrip": true
     };
 

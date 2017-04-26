@@ -67,6 +67,7 @@ UsbhidpReallocate (
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

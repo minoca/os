@@ -153,7 +153,7 @@ function build() {
     flattened = flattenedBinary(flattened);
     entries += flattened;
     ubootConfig = {
-        "TEXT_ADDRESS": textAddress,
+        "text_address": textAddress,
         "MKUBOOT_FLAGS": "-c -a arm -f fit"
     };
 
@@ -175,7 +175,7 @@ function build() {
     ];
 
     fwbConfig = {
-        "TEXT_ADDRESS": textAddress
+        "text_address": textAddress
     };
 
     fwb = {

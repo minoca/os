@@ -204,6 +204,7 @@ PDRIVER UsbKbdDriver = NULL;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

@@ -61,6 +61,7 @@ RtlpScanInteger (
     PULONG CharactersConsumed
     );
 
+__NOINLINE
 KSTATUS
 RtlpScanDouble (
     PSCAN_INPUT Input,
@@ -1690,6 +1691,13 @@ ScanIntegerEnd:
     return Status;
 }
 
+//
+// This function cannot be inlined because doing so runs the risk of adding
+// floating point register prologue/epilogus code in common paths used by the
+// kernel.
+//
+
+__NOINLINE
 KSTATUS
 RtlpScanDouble (
     PSCAN_INPUT Input,

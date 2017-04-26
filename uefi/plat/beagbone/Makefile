@@ -55,7 +55,7 @@ OBJS += clock.o                 \
 
 ARMV7_OBJS = armv7/entry.o  \
 
-TEXT_ADDRESS = 0x82000000
+TEXT_ADDRESS := 0x82000000
 
 TARGETLIBS += $(OBJROOT)/os/uefi/dev/sd/core/sd.a            \
               $(OBJROOT)/os/uefi/dev/omapuart/omapuart.a     \

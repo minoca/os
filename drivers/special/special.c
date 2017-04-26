@@ -246,6 +246,7 @@ UUID SpecialPseudoRandomInterfaceUuid = UUID_PSEUDO_RANDOM_SOURCE_INTERFACE;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver
@@ -255,8 +256,8 @@ DriverEntry (
 
 Routine Description:
 
-    This routine is the entry point for the null driver. It registers its other
-    dispatch functions, and performs driver-wide initialization.
+    This routine is the entry point for the special driver. It registers its
+    other dispatch functions, and performs driver-wide initialization.
 
 Arguments:
 

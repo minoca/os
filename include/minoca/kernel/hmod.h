@@ -37,11 +37,12 @@ Author:
 //
 
 #define READ_UNALIGNED16(_Pointer) \
-    (USHORT)(((PUCHAR)(_Pointer))[0] | (((USHORT)((PUCHAR)(_Pointer))[1]) << 8))
+    (USHORT)(((volatile UCHAR *)(_Pointer))[0] | \
+             (((USHORT)((volatile UCHAR *)(_Pointer))[1]) << 8))
 
 #define WRITE_UNALIGNED16(_Pointer, _Value)               \
-    ((PUCHAR)(_Pointer))[0] = (UCHAR)(_Value),            \
-    ((PUCHAR)(_Pointer))[1] = (UCHAR)((_Value) >> 8)
+    ((volatile UCHAR *)(_Pointer))[0] = (UCHAR)(_Value),            \
+    ((volatile UCHAR *)(_Pointer))[1] = (UCHAR)((_Value) >> 8)
 
 #define READ_UNALIGNED32(_Pointer)          \
     (ULONG)(READ_UNALIGNED16(_Pointer) |    \

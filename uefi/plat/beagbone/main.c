@@ -81,6 +81,7 @@ UINT32 EfiBootDeviceCode;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 VOID
 EfiBeagleBoneMain (
     VOID *TopOfStack,

@@ -78,7 +78,6 @@ function build() {
         "inputs": sources,
         "sources_config": sourcesConfig,
         "includes": includes,
-        "linker_script": "$S/uefi/plat/panda/init/link.x",
         "text_address": textAddress,
         "config": linkConfig
     };
@@ -99,7 +98,7 @@ function build() {
     fwbTool = {
         "type": "tool",
         "name": "pandafwb",
-        "command": "$O/uefi/plat/panda/init/pandafwb $TEXT_ADDRESS $IN $OUT",
+        "command": "$O/uefi/plat/panda/init/pandafwb $text_address $IN $OUT",
         "description": "Building PandaBoard Firmware - $OUT"
     };
 
@@ -110,7 +109,7 @@ function build() {
         "tool": "pandafwb",
         "inputs": [":omap4mlo.bin"],
         "implicit": [":pandafwb"],
-        "config": {"TEXT_ADDRESS": "0x40300000"},
+        "config": {"text_address": "0x40300000"},
         "nostrip": true
     };
 

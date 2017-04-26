@@ -115,6 +115,7 @@ PDRIVER A3eDriver = NULL;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver
@@ -124,8 +125,8 @@ DriverEntry (
 
 Routine Description:
 
-    This routine is the entry point for the e100 driver. It registers its other
-    dispatch functions, and performs driver-wide initialization.
+    This routine is the entry point for the AM3 ethernet driver. It registers
+    its other dispatch functions, and performs driver-wide initialization.
 
 Arguments:
 

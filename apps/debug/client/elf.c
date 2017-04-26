@@ -218,7 +218,6 @@ Return Value:
     FirstSection = NULL;
     Result = DbgpLoadElfSymbolTable(Symbols, Filename, &FirstSection);
     if (Result == FALSE) {
-        DbgOut("Error reading ELF symbol table.\n");
         goto LoadElfSymbolsEnd;
     }
 

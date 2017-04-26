@@ -1167,7 +1167,9 @@ Return Value:
 
     if (textAddress) {
         addConfig(params, "LDFLAGS", "-Wl,-Ttext-segment=" + textAddress);
-        addConfig(params, "LDFLAGS", "-Wl,-Ttext=" + textAddress);
+        addConfig(params,
+                  "LDFLAGS",
+                  "-Wl,--section-start,.init=" + textAddress);
     }
 
     if (linkerScript) {

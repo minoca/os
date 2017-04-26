@@ -98,6 +98,7 @@ RtlpPrintInteger (
     PPRINT_FORMAT_PROPERTIES Properties
     );
 
+__NOINLINE
 ULONG
 RtlpPrintDouble (
     PPRINT_FORMAT_CONTEXT Context,
@@ -1436,6 +1437,13 @@ Return Value:
     return TRUE;
 }
 
+//
+// This function cannot be inlined because doing so runs the risk of adding
+// floating point register prologue/epilogus code in common paths used by the
+// kernel.
+//
+
+__NOINLINE
 ULONG
 RtlpPrintDouble (
     PPRINT_FORMAT_CONTEXT Context,

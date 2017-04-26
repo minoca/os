@@ -427,6 +427,7 @@ DMA_INFORMATION EdmaInformationTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver
@@ -436,7 +437,7 @@ DriverEntry (
 
 Routine Description:
 
-    This routine is the entry point for the RK32 GPIO driver. It registers
+    This routine is the entry point for the EDMA3 driver. It registers
     its other dispatch functions, and performs driver-wide initialization.
 
 Arguments:

@@ -260,6 +260,7 @@ LIST_ENTRY InDeviceListHead;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

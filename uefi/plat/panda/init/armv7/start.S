@@ -51,10 +51,17 @@ Environment:
 .align 4
 
 ##
+## Stick this in the .init section so it ends up at the front of the binary.
+##
+
+.section .init
+
+##
 ## .globl allows this label to be visible to the linker.
 ##
 
 .globl _start
+.globl _end
 .globl EfiDisableInterrupts
 .globl EfiEnableInterrupts
 
@@ -95,8 +102,8 @@ _start:
     adr     %r8, ImageSize          @ Get the image size address (relatively).
     ldr     %r8, [%r8]              @ Get the image size.
     add     %r7, %r7, %r8           @ Add size to start to get image end.
-    ldr     %r8, =_start            @ Get correct address of start.
-    ldr     %r9, =__bss_end         @ Get correct address of end.
+    ldr     %r8, =_start            @ Get correct address of image start.
+    ldr     %r9, =_end              @ Get correct address of image end.
 
 CopyImage:
     ldr     %r6, [%r7], #-4         @ Load a word from the source.
@@ -115,7 +122,7 @@ DeadLoop:
     b       DeadLoop                @ Spin forever.
 
 ImageSize:
-    .word   __bss_end - _start
+    .word   _end - _start
 
 .ltorg
 

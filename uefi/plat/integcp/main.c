@@ -63,6 +63,7 @@ extern INT8 __executable_start;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 VOID
 EfiIntegratorMain (
     VOID *TopOfStack,

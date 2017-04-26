@@ -62,7 +62,9 @@ function build() {
     tool = {
         "type": "tool",
         "name": "veyrnfwb",
-        "command": "$O/uefi/plat/veyron/fwbuild/veyrnfwb $TEXT_ADDRESS $IN $OUT",
+        "command": "$O/uefi/plat/veyron/fwbuild/veyrnfwb $text_address "
+                   "$IN $OUT",
+
         "description": "Creating Verified Boot Image - $OUT"
     };
 

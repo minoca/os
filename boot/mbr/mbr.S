@@ -102,6 +102,13 @@ Environment:
 .code16
 
 ##
+## Stick this in the .init section so it ends up at the correct address, since
+## the build machinery sets the .init section address rather than .text.
+##
+
+.section .init
+
+##
 ## .globl allows this label to be visible to the linker.
 ##
 

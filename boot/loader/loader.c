@@ -200,6 +200,7 @@ extern FILE_ID BoSystemDirectoryId;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 INT
 BoMain (
     PBOOT_INITIALIZATION_BLOCK Parameters

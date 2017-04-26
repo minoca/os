@@ -278,6 +278,7 @@ DISK_INTERFACE SdOmap4DiskInterfaceTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

@@ -83,6 +83,7 @@ BOOT_RESERVED_REGION BmBootRegions[BOOT_MANAGER_RESERVED_REGION_COUNT];
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 INT
 BmPcatApplicationMain (
     PVOID TopOfStack,

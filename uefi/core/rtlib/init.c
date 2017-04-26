@@ -116,6 +116,7 @@ EFI_EVENT EfiRuntimeVirtualAddressChangeEvent;
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 EFIAPI
 EFI_STATUS
 EfiRuntimeCoreEntry (

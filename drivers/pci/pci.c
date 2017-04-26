@@ -236,6 +236,7 @@ UUID PciBusDriverDeviceUuid =
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

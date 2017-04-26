@@ -270,6 +270,7 @@ GPIO_FUNCTION_TABLE Omap4GpioFunctionTableTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

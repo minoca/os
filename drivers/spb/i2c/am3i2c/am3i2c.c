@@ -240,6 +240,7 @@ SPB_FUNCTION_TABLE Am3I2cFunctionTableTemplate = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

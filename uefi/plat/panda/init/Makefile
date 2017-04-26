@@ -35,7 +35,7 @@ VPATH += $(BINROOT):
 
 INCLUDES += $(SRCROOT)/os/uefi/include;
 
-LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
+LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib -Wl,-zmax-page-size=1
 
 ##
 ## The first stage loader has to be built in ARM mode since the ROM code
@@ -57,9 +57,7 @@ OBJS += boot.o      \
 
 ARMV7_OBJS = armv7/start.o  \
 
-TEXT_ADDRESS = 0x40308000
-
-LINKER_SCRIPT = $(SRCROOT)/os/uefi/plat/panda/init/link.x
+TEXT_ADDRESS := 0x40308000
 
 EXTRA_SRC_DIRS = armv7
 
@@ -78,3 +76,4 @@ omap4mlo.bin: $(BINARY)
 	@echo Flattening - $(notdir $<)
 	@$(OBJCOPY) -O binary $^ $@
 	@cp -p $@ $(BINROOT)/
+

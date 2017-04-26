@@ -29,11 +29,11 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#include "../../rtlp.h"
+
 //
 // ---------------------------------------------------------------- Definitions
 //
-
-#include "../../rtlp.h"
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -55,6 +55,7 @@ Environment:
 // --------------------------------------------------------- Internal Functions
 //
 
+__USED
 RTL_API
 LONGLONG
 __divdi3 (
@@ -86,6 +87,7 @@ Return Value:
     return RtlDivide64(Numerator, Denominator);
 }
 
+__USED
 RTL_API
 ULONGLONG
 __udivdi3 (
@@ -117,6 +119,7 @@ Return Value:
     return RtlDivideUnsigned64(Numerator, Denominator, NULL);
 }
 
+__USED
 RTL_API
 LONGLONG
 __moddi3 (
@@ -152,6 +155,7 @@ Return Value:
     return Remainder;
 }
 
+__USED
 RTL_API
 ULONGLONG
 __umoddi3 (
@@ -187,6 +191,7 @@ Return Value:
     return Remainder;
 }
 
+__USED
 RTL_API
 INT
 __ctzdi2 (
@@ -215,6 +220,7 @@ Return Value:
     return RtlCountTrailingZeros64(Value);
 }
 
+__USED
 RTL_API
 INT
 __ffsdi2 (
@@ -248,6 +254,7 @@ Return Value:
     return RtlCountTrailingZeros64(Value) + 1;
 }
 
+__USED
 RTL_API
 INT
 __popcountdi2 (
@@ -276,6 +283,7 @@ Return Value:
     return RtlCountSetBits64(Value);
 }
 
+__USED
 RTL_API
 INT
 __popcountsi2 (
@@ -308,6 +316,7 @@ Return Value:
 // Long double stubs.
 //
 
+__USED
 RTL_API
 long double
 __multf3 (
@@ -340,6 +349,7 @@ Return Value:
     return 0;
 }
 
+__USED
 RTL_API
 long double
 __divtf3 (
@@ -372,6 +382,7 @@ Return Value:
     return 0;
 }
 
+__USED
 RTL_API
 long double
 __subtf3 (
@@ -404,6 +415,7 @@ Return Value:
     return 0;
 }
 
+__USED
 RTL_API
 long double
 __addtf3 (
@@ -436,6 +448,7 @@ Return Value:
     return 0;
 }
 
+__USED
 RTL_API
 int
 __netf2 (
@@ -468,6 +481,7 @@ Return Value:
     return 0;
 }
 
+__USED
 RTL_API
 int
 __eqtf2 (
@@ -500,6 +514,7 @@ Return Value:
     return 0;
 }
 
+__USED
 RTL_API
 int
 __lttf2 (
@@ -532,6 +547,7 @@ Return Value:
     return 0;
 }
 
+__USED
 RTL_API
 long double
 __copysigntf3 (
@@ -564,6 +580,7 @@ Return Value:
     return Value;
 }
 
+__USED
 RTL_API
 long double
 __fabstf2 (
@@ -593,6 +610,7 @@ Return Value:
     return Value;
 }
 
+__USED
 RTL_API
 unsigned int
 __fixunstfsi (
@@ -623,6 +641,7 @@ Return Value:
     return 0;
 }
 
+__USED
 RTL_API
 long double
 __floatsitf (
@@ -652,6 +671,7 @@ Return Value:
     return 0.0;
 }
 
+__USED
 RTL_API
 long double
 __floatunsitf (
