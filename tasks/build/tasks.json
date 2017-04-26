@@ -1134,6 +1134,16 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/mesa-17.0.0"
         },
         {
+            "name": "Make glu",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/glu-9.0.0"
+        },
+        {
+            "name": "Make glew",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/glew-2.0.0"
+        },
+        {
             "name": "Make xbitmaps",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/xbitmaps-1.1.1"

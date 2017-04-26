@@ -1066,6 +1066,26 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mesa-17.0.0"
         },
         {
+            "name": "Make glu",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/glu-9.0.0"
+        },
+        {
+            "name": "Make glew",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/glew-2.0.0"
+        },
+        {
+            "name": "Make freeglut",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/freeglut-3.0.0"
+        },
+        {
+            "name": "Make mesa-demos",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mesa-demos-8.3.0"
+        },
+        {
             "name": "Make xbitmaps",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/xbitmaps-1.1.1"
