@@ -1757,9 +1757,7 @@ Return Value:
         OsGetSystemTime(&SystemTime);
         Seconds = ClpConvertSystemTimeToUnixTime(&SystemTime);
         Time->tv_sec = Seconds;
-        Time->tv_usec = (SystemTime.Nanoseconds +
-                         (NANOSECONDS_PER_MICROSECOND / 2)) /
-                        NANOSECONDS_PER_MICROSECOND;
+        Time->tv_usec = SystemTime.Nanoseconds / NANOSECONDS_PER_MICROSECOND;
     }
 
     return 0;
