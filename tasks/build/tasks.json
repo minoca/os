@@ -510,7 +510,7 @@
         },
         {
             "name": "Make mysql",
-            "type": "execute",
+            "type": "no-op",
             "parameter": "src/os/tasks/build/make.sh third-party/build/mysql-5.7.13"
         },
         {
@@ -1081,7 +1081,7 @@
         {
             "name": "Make libxxf86dga",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/libXxf86dga-1.14"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libXxf86dga-1.1.4"
         },
         {
             "name": "Make libxxf86vm",
@@ -1421,7 +1421,7 @@
         {
             "name": "Make atk",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/atk-2.24"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/atk-2.24.0"
         },
         {
             "name": "Make cairo",

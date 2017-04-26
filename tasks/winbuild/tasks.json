@@ -1013,7 +1013,7 @@
         {
             "name": "Make libxxf86dga",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/libXxf86dga-1.14"
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/libXxf86dga-1.1.4"
         },
         {
             "name": "Make libxxf86vm",
