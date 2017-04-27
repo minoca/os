@@ -364,7 +364,7 @@ Return Value:
         }
 
         //
-        // Allocate the command list and recieve FIS area if not already done.
+        // Allocate the command list and receive FIS area if not already done.
         // Without port multipliers the receive FIS size is only 256 bytes, so
         // it could technically all fit in one page. But with port multipliers
         // receive needs a whole page (256 * 16), so just do it anyway.

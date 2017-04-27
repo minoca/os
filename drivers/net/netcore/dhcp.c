@@ -941,7 +941,7 @@ Return Value:
         // Get the acknowledge back to make sure the DHCP heard the request.
         //
 
-        Step = "RecieveAcknowledge";
+        Step = "ReceiveAcknowledge";
         Status = NetpDhcpReceiveAcknowledge(DhcpContext);
         if (!KSUCCESS(Status)) {
             continue;
@@ -1255,7 +1255,7 @@ Return Value:
     // Get the acknowledge back to make sure the DHCP heard the request.
     //
 
-    Step = "RecieveAcknowledge";
+    Step = "ReceiveAcknowledge";
     Status = NetpDhcpReceiveAcknowledge(DhcpContext);
     if (!KSUCCESS(Status)) {
         goto DhcpLeaseExtensionThreadEnd;

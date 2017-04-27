@@ -755,7 +755,7 @@ Author:
 
 #define ATL_RECEIVED_PACKET_FLAG_CHECKSUM_ERROR 0x00100000
 #define ATL_RECEIVED_PACKET_FLAG_802_3_LENGTH_ERROR 0x40000000
-#define ATL_RECIEVED_PACKET_FLAG_VALID 0x80000000
+#define ATL_RECEIVED_PACKET_FLAG_VALID 0x80000000
 
 //
 // ------------------------------------------------------ Data Type Definitions

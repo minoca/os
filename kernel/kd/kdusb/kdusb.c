@@ -566,7 +566,7 @@ Return Value:
         }
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("Failed to recieve: %d\n", Status);
+            RtlDebugPrint("Failed to receive: %d\n", Status);
         }
 
         if (Size > KD_TEST_RECEIVE_BUFFER_SIZE) {

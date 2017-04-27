@@ -117,7 +117,7 @@ Author:
 #define TWL4030_BASEADD_BACKUP              0x0014
 #define TWL4030_BASEADD_INT                 0x002E
 #define TWL4030_BASEADD_PM_MASTER           0x0036
-#define TWL4030_BASEADD_PM_RECIEVER         0x005B
+#define TWL4030_BASEADD_PM_RECEIVER         0x005B
 #define TWL4030_BASEADD_RTC                 0x001C
 #define TWL4030_BASEADD_SECURED_REG         0x0000
 

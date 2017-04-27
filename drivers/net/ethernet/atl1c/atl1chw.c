@@ -1332,7 +1332,7 @@ Return Value:
         //
 
         if ((ReceivedPacket->FlagsAndLength &
-             ATL_RECIEVED_PACKET_FLAG_VALID) == 0) {
+             ATL_RECEIVED_PACKET_FLAG_VALID) == 0) {
 
             break;
         }
@@ -1380,7 +1380,7 @@ Return Value:
         //
 
         FramesProcessed += 1;
-        ReceivedPacket->FlagsAndLength &= ~ATL_RECIEVED_PACKET_FLAG_VALID;
+        ReceivedPacket->FlagsAndLength &= ~ATL_RECEIVED_PACKET_FLAG_VALID;
         Device->ReceiveNextToClean += 1;
         if (Device->ReceiveNextToClean == ATL1C_RECEIVE_FRAME_COUNT) {
             Device->ReceiveNextToClean = 0;

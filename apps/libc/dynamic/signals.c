@@ -964,7 +964,7 @@ sigwait (
 Routine Description:
 
     This routine waits for a signal from the given set and returns the number
-    of the recieved signal.
+    of the received signal.
 
 Arguments:
 

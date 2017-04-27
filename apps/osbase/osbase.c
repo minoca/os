@@ -1563,7 +1563,7 @@ Arguments:
 
     Status - Supplies the exit status, returned to the parent in the wait
         calls. Conventionally 0 indicates success, and non-zero indicates
-        failure. The C library only recieves the first eight bits of the return
+        failure. The C library only receives the first eight bits of the return
         status, portable applications should not set bits beyond that.
 
 Return Value:
@@ -3048,7 +3048,7 @@ Arguments:
     Set - Supplies a boolean indicating whether to set the new groups (TRUE) or
         just get the current list of supplementary groups.
 
-    Groups - Supplies a pointer that recieves the supplementary groups for a
+    Groups - Supplies a pointer that receives the supplementary groups for a
         get operation or contains the new group IDs to set for a set operation.
 
     Count - Supplies a pointer that on input contains the number of elements

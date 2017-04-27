@@ -560,7 +560,7 @@ NetpTcpTransmissionTimeout (
 
 Routine Description:
 
-    This routine is called when an acknowledge is not recieved for a sent
+    This routine is called when an acknowledge is not received for a sent
     packet in a timely manner (the packet timed out).
 
 Arguments:
