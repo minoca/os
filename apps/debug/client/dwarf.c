@@ -81,6 +81,14 @@ DwarfGetAddressOfDataSymbol (
     PULONGLONG Address
     );
 
+BOOL
+DwarfpCheckRange (
+    PDEBUG_SYMBOLS Symbols,
+    PSOURCE_FILE_SYMBOL Source,
+    ULONGLONG Address,
+    PVOID Ranges
+    );
+
 INT
 DwarfpProcessDebugInfo (
     PDWARF_CONTEXT Context
@@ -164,6 +172,18 @@ DwarfpProcessGenericBlock (
     PDWARF_DIE Die
     );
 
+PSOURCE_FILE_SYMBOL
+DwarfpCreateSource (
+    PDWARF_CONTEXT Context,
+    PSTR Directory,
+    PSTR FileName
+    );
+
+VOID
+DwarfpDestroyFunction (
+    PFUNCTION_SYMBOL Function
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -173,7 +193,8 @@ DEBUG_SYMBOL_INTERFACE DwarfSymbolInterface = {
     DwarfUnloadSymbols,
     DwarfStackUnwind,
     DwarfReadDataSymbol,
-    DwarfGetAddressOfDataSymbol
+    DwarfGetAddressOfDataSymbol,
+    DwarfpCheckRange
 };
 
 //
@@ -520,26 +541,7 @@ Return Value:
                                   FUNCTION_SYMBOL,
                                   ListEntry);
 
-            while (!LIST_EMPTY(&(Function->ParametersHead))) {
-                DataSymbol = LIST_VALUE(Function->ParametersHead.Next,
-                                        DATA_SYMBOL,
-                                        ListEntry);
-
-                LIST_REMOVE(&(DataSymbol->ListEntry));
-                free(DataSymbol);
-            }
-
-            while (!LIST_EMPTY(&(Function->LocalsHead))) {
-                DataSymbol = LIST_VALUE(Function->LocalsHead.Next,
-                                        DATA_SYMBOL,
-                                        ListEntry);
-
-                LIST_REMOVE(&(DataSymbol->ListEntry));
-                free(DataSymbol);
-            }
-
-            LIST_REMOVE(&(Function->ListEntry));
-            free(Function);
+            DwarfpDestroyFunction(Function);
         }
 
         while (!LIST_EMPTY(&(SourceFile->DataSymbolsHead))) {
@@ -915,6 +917,80 @@ GetAddressOfDataSymbolEnd:
     return Status;
 }
 
+BOOL
+DwarfpCheckRange (
+    PDEBUG_SYMBOLS Symbols,
+    PSOURCE_FILE_SYMBOL Source,
+    ULONGLONG Address,
+    PVOID Ranges
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the given address is actually in range of
+    the given ranges. This is used for things like inline functions that have
+    several discontiguous address ranges.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debug symbols.
+
+    Source - Supplies a pointer to the compilation unit the given object is in.
+
+    Address - Supplies the address to query.
+
+    Ranges - Supplies the opaque pointer to the range list information.
+
+Return Value:
+
+    TRUE if the address is within the range list for the object.
+
+    FALSE if the address is not within the range list for the object.
+
+--*/
+
+{
+
+    ULONGLONG Base;
+    PUCHAR Bytes;
+    BOOL Is64Bit;
+    ULONGLONG RangeEnd;
+    ULONGLONG RangeStart;
+    PDWARF_COMPILATION_UNIT Unit;
+
+    Bytes = Ranges;
+    Unit = Source->SymbolContext;
+    Is64Bit = Unit->Is64Bit;
+    Base = Unit->LowPc;
+    while (TRUE) {
+        RangeStart = DWARF_READN(&Bytes, Is64Bit);
+        RangeEnd = DWARF_READN(&Bytes, Is64Bit);
+        if ((RangeStart == 0) && (RangeEnd == 0)) {
+            break;
+        }
+
+        //
+        // If the first value is the max address, then the second value is a
+        // new base.
+        //
+
+        if (((Is64Bit != FALSE) && (RangeStart == MAX_ULONGLONG)) ||
+            ((Is64Bit == FALSE) && (RangeStart == MAX_ULONG))) {
+
+            Base = RangeEnd;
+            continue;
+        }
+
+        if ((Address >= RangeStart + Base) && (Address < RangeEnd + Base)) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 PSOURCE_FILE_SYMBOL
 DwarfpFindSource (
     PDWARF_CONTEXT Context,
@@ -953,6 +1029,10 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PSOURCE_FILE_SYMBOL File;
+    PSTR Potential;
+    BOOL PotentialDirectory;
+    PSTR Search;
+    BOOL SearchDirectory;
 
     CurrentEntry = Context->SourcesHead->Next;
     while (CurrentEntry != Context->SourcesHead) {
@@ -960,24 +1040,59 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
 
         //
-        // Check the directory, being careful since one or both might be NULL.
+        // Check the concatenation of the directory and the file.
         //
 
-        if (Directory != NULL) {
-            if (File->SourceDirectory == NULL) {
-                continue;
-            }
-
-            if (strcmp(File->SourceDirectory, Directory) != 0) {
-                continue;
-            }
-
-        } else if (File->SourceDirectory != NULL) {
-            continue;
+        Potential = File->SourceDirectory;
+        PotentialDirectory = TRUE;
+        if (Potential == NULL) {
+            Potential = File->SourceFile;
+            PotentialDirectory = FALSE;
         }
 
-        if (strcmp(File->SourceFile, FileName) == 0) {
-            return File;
+        Search = Directory;
+        SearchDirectory = TRUE;
+        if (Search == NULL) {
+            Search = FileName;
+            SearchDirectory = FALSE;
+        }
+
+        while (TRUE) {
+
+            //
+            // If it's the end of the line for both, then it's a match.
+            //
+
+            if ((*Search == '\0') && (*Potential == '\0') &&
+                (SearchDirectory == FALSE) && (PotentialDirectory == FALSE)) {
+
+                return File;
+            }
+
+            if ((*Search == '\0') && (SearchDirectory != FALSE)) {
+                if ((*Potential == '/') || (*Potential == '\\')) {
+                    Potential += 1;
+                }
+
+                Search = FileName;
+                SearchDirectory = FALSE;
+            }
+
+            if ((*Potential == '\0') && (PotentialDirectory != FALSE)) {
+                if ((*Search == '/') || (*Search == '\\')) {
+                    Search += 1;
+                }
+
+                Potential = File->SourceFile;
+                PotentialDirectory = FALSE;
+            }
+
+            if (*Search != *Potential) {
+                break;
+            }
+
+            Search += 1;
+            Potential += 1;
         }
     }
 
@@ -985,20 +1100,7 @@ Return Value:
         return NULL;
     }
 
-    File = malloc(sizeof(SOURCE_FILE_SYMBOL));
-    if (File == NULL) {
-        return NULL;
-    }
-
-    memset(File, 0, sizeof(SOURCE_FILE_SYMBOL));
-    INITIALIZE_LIST_HEAD(&(File->SourceLinesHead));
-    INITIALIZE_LIST_HEAD(&(File->DataSymbolsHead));
-    INITIALIZE_LIST_HEAD(&(File->FunctionsHead));
-    INITIALIZE_LIST_HEAD(&(File->TypesHead));
-    File->SourceDirectory = Directory;
-    File->SourceFile = FileName;
-    INSERT_BEFORE(&(File->ListEntry), Context->SourcesHead);
-    return File;
+    return DwarfpCreateSource(Context, Directory, FileName);
 }
 
 //
@@ -1236,6 +1338,7 @@ Return Value:
         break;
 
     case DwarfTagSubprogram:
+    case DwarfTagInlinedSubroutine:
         Status = DwarfpProcessSubprogram(Context, Die);
         break;
 
@@ -1343,20 +1446,21 @@ Return Value:
     BOOL Result;
     PSOURCE_FILE_SYMBOL SourceFile;
     INT Status;
+    PDWARF_COMPILATION_UNIT Unit;
 
     LoadingContext = Context->LoadingContext;
-    SourceFile = DwarfpFindSource(
+    Unit = LoadingContext->CurrentUnit;
+    SourceFile = DwarfpCreateSource(
                         Context,
                         DwarfpGetStringAttribute(Context, Die, DwarfAtCompDir),
-                        DwarfpGetStringAttribute(Context, Die, DwarfAtName),
-                        TRUE);
+                        DwarfpGetStringAttribute(Context, Die, DwarfAtName));
 
     if (SourceFile == NULL) {
         return ENOMEM;
     }
 
     SourceFile->Identifier = DWARF_DIE_ID(Context, Die);
-    SourceFile->SymbolContext = LoadingContext->CurrentUnit;
+    SourceFile->SymbolContext = Unit;
 
     //
     // Get the starting PC for the compilation unit. There might not be one
@@ -1366,14 +1470,15 @@ Return Value:
     Result = DwarfpGetAddressAttribute(Context,
                                        Die,
                                        DwarfAtLowPc,
-                                       &(SourceFile->StartAddress));
+                                       &(Unit->LowPc));
 
     if (Result != FALSE) {
-        SourceFile->EndAddress = SourceFile->StartAddress + 1;
+        SourceFile->StartAddress = Unit->LowPc;
+        Unit->HighPc = Unit->LowPc + 1;
         Result = DwarfpGetAddressAttribute(Context,
                                            Die,
                                            DwarfAtHighPc,
-                                           &(SourceFile->EndAddress));
+                                           &(Unit->HighPc));
 
         if (Result == FALSE) {
 
@@ -1385,24 +1490,24 @@ Return Value:
             Result = DwarfpGetIntegerAttribute(Context,
                                                Die,
                                                DwarfAtHighPc,
-                                               &(SourceFile->EndAddress));
+                                               &(Unit->HighPc));
 
             if (Result != FALSE) {
-                SourceFile->EndAddress += SourceFile->StartAddress;
+                Unit->HighPc += Unit->LowPc;
             }
         }
+
+        SourceFile->EndAddress = Unit->HighPc;
     }
 
-    //
-    // Update the low and high PC values in the compilation unit structure.
-    // They're used by the location list search routine, for instance.
-    //
-
-    assert((LoadingContext->CurrentUnit != NULL) &&
-           (LoadingContext->CurrentUnit->LowPc == 0));
-
-    LoadingContext->CurrentUnit->LowPc = SourceFile->StartAddress;
-    LoadingContext->CurrentUnit->HighPc = SourceFile->EndAddress;
+    Unit->Ranges = DwarfpGetRangeList(Context, Die, DwarfAtRanges);
+    if (Unit->Ranges != NULL) {
+        DwarfpGetRangeSpan(Context,
+                           Unit->Ranges,
+                           Unit,
+                           &(SourceFile->StartAddress),
+                           &(SourceFile->EndAddress));
+    }
 
     //
     // Set the current file as this one, and process all children.
@@ -2169,6 +2274,7 @@ Return Value:
 
 {
 
+    PDWARF_DIE Abstract;
     ULONG AllocationSize;
     ULONGLONG Declaration;
     PDWARF_FUNCTION_SYMBOL DwarfFunction;
@@ -2192,8 +2298,8 @@ Return Value:
     }
 
     //
-    // Also ignore inlined functions. It seems that even a value of 0
-    // (indicating not inlined) results in no low-pc value.
+    // Ignore abstract inline functions. They'll be created later with their
+    // instantiations.
     //
 
     Result = DwarfpGetIntegerAttribute(Context,
@@ -2204,6 +2310,15 @@ Return Value:
     if (Result != FALSE) {
         return 0;
     }
+
+    //
+    // If this is an inlined instance, go get its abstract origin to flesh out
+    // the information.
+    //
+
+    Abstract = DwarfpGetDieReferenceAttribute(Context,
+                                              Die,
+                                              DwarfAtAbstractOrigin);
 
     AllocationSize = sizeof(FUNCTION_SYMBOL) + sizeof(DWARF_FUNCTION_SYMBOL);
     Function = malloc(AllocationSize);
@@ -2217,12 +2332,21 @@ Return Value:
     DwarfFunction->Unit = LoadingContext->CurrentUnit;
     INITIALIZE_LIST_HEAD(&(Function->ParametersHead));
     INITIALIZE_LIST_HEAD(&(Function->LocalsHead));
+    INITIALIZE_LIST_HEAD(&(Function->FunctionsHead));
     Function->ParentSource = LoadingContext->CurrentFile;
     Result = DwarfpGetTypeReferenceAttribute(Context,
                                              Die,
                                              DwarfAtType,
                                              &(Function->ReturnTypeOwner),
                                              &(Function->ReturnTypeNumber));
+
+    if ((Result == FALSE) && (Abstract != NULL)) {
+        Result = DwarfpGetTypeReferenceAttribute(Context,
+                                                 Abstract,
+                                                 DwarfAtType,
+                                                 &(Function->ReturnTypeOwner),
+                                                 &(Function->ReturnTypeNumber));
+    }
 
     if (Result == FALSE) {
         free(Function);
@@ -2233,31 +2357,54 @@ Return Value:
     PreviousFunction = LoadingContext->CurrentFunction;
     LoadingContext->CurrentFunction = Function;
     Function->Name = DwarfpGetStringAttribute(Context, Die, DwarfAtName);
-    DwarfpGetAddressAttribute(Context,
-                              Die,
-                              DwarfAtLowPc,
-                              &(Function->StartAddress));
+    if ((Function->Name == NULL) && (Abstract != NULL)) {
+        Function->Name = DwarfpGetStringAttribute(Context,
+                                                  Abstract,
+                                                  DwarfAtName);
+    }
+
+    //
+    // Get the function bounds, which is a low/high PC or a set of ranges.
+    // There's no need to check the abstract origin since function locations
+    // are always a concrete thing.
+    //
 
     Result = DwarfpGetAddressAttribute(Context,
                                        Die,
-                                       DwarfAtHighPc,
-                                       &(Function->EndAddress));
+                                       DwarfAtLowPc,
+                                       &(Function->StartAddress));
 
-    if (Result == FALSE) {
-
-        //
-        // DWARF4 also allows constant forms for high PC, in which case
-        // it's an offset from low PC.
-        //
-
-        Result = DwarfpGetIntegerAttribute(Context,
+    if (Result != FALSE) {
+        Result = DwarfpGetAddressAttribute(Context,
                                            Die,
                                            DwarfAtHighPc,
                                            &(Function->EndAddress));
 
-        if (Result != FALSE) {
-            Function->EndAddress += Function->StartAddress;
+        if (Result == FALSE) {
+
+            //
+            // DWARF4 also allows constant forms for high PC, in which case
+            // it's an offset from low PC.
+            //
+
+            Result = DwarfpGetIntegerAttribute(Context,
+                                               Die,
+                                               DwarfAtHighPc,
+                                               &(Function->EndAddress));
+
+            if (Result != FALSE) {
+                Function->EndAddress += Function->StartAddress;
+            }
         }
+    }
+
+    Function->Ranges = DwarfpGetRangeList(Context, Die, DwarfAtRanges);
+    if (Function->Ranges != NULL) {
+        DwarfpGetRangeSpan(Context,
+                           Function->Ranges,
+                           DwarfFunction->Unit,
+                           &(Function->StartAddress),
+                           &(Function->EndAddress));
     }
 
     if ((Function->EndAddress < Function->StartAddress) &&
@@ -2273,8 +2420,23 @@ Return Value:
                sizeof(DWARF_ATTRIBUTE_VALUE));
     }
 
-    INSERT_BEFORE(&(Function->ListEntry),
-                  &(LoadingContext->CurrentFile->FunctionsHead));
+    if (PreviousFunction != NULL) {
+        INSERT_BEFORE(&(Function->ListEntry),
+                      &(PreviousFunction->FunctionsHead));
+
+        Function->ParentFunction = PreviousFunction;
+
+    } else {
+        INSERT_BEFORE(&(Function->ListEntry),
+                      &(LoadingContext->CurrentFile->FunctionsHead));
+    }
+
+    if (Abstract != NULL) {
+        Status = DwarfpProcessChildDies(Context, Abstract);
+        if (Status != 0) {
+            DWARF_ERROR("DWARF: Failed to process abstract child dies.\n");
+        }
+    }
 
     Status = DwarfpProcessChildDies(Context, Die);
 
@@ -2425,5 +2587,111 @@ Return Value:
 {
 
     return DwarfpProcessChildDies(Context, Die);
+}
+
+PSOURCE_FILE_SYMBOL
+DwarfpCreateSource (
+    PDWARF_CONTEXT Context,
+    PSTR Directory,
+    PSTR FileName
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new source file symbol.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Directory - Supplies a pointer to the source directory.
+
+    FileName - Supplies a pointer to the source file name.
+
+Return Value:
+
+    Returns a pointer to a source file symbol on success.
+
+    NULL if no such file exists.
+
+--*/
+
+{
+
+    PSOURCE_FILE_SYMBOL File;
+
+    File = malloc(sizeof(SOURCE_FILE_SYMBOL));
+    if (File == NULL) {
+        return NULL;
+    }
+
+    memset(File, 0, sizeof(SOURCE_FILE_SYMBOL));
+    INITIALIZE_LIST_HEAD(&(File->SourceLinesHead));
+    INITIALIZE_LIST_HEAD(&(File->DataSymbolsHead));
+    INITIALIZE_LIST_HEAD(&(File->FunctionsHead));
+    INITIALIZE_LIST_HEAD(&(File->TypesHead));
+    File->SourceDirectory = Directory;
+    File->SourceFile = FileName;
+    INSERT_BEFORE(&(File->ListEntry), Context->SourcesHead);
+    return File;
+}
+
+VOID
+DwarfpDestroyFunction (
+    PFUNCTION_SYMBOL Function
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a function symbol.
+
+Arguments:
+
+    Function - Supplies a pointer to the function to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PDATA_SYMBOL DataSymbol;
+    PFUNCTION_SYMBOL SubFunction;
+
+    while (!LIST_EMPTY(&(Function->ParametersHead))) {
+        DataSymbol = LIST_VALUE(Function->ParametersHead.Next,
+                                DATA_SYMBOL,
+                                ListEntry);
+
+        LIST_REMOVE(&(DataSymbol->ListEntry));
+        free(DataSymbol);
+    }
+
+    while (!LIST_EMPTY(&(Function->LocalsHead))) {
+        DataSymbol = LIST_VALUE(Function->LocalsHead.Next,
+                                DATA_SYMBOL,
+                                ListEntry);
+
+        LIST_REMOVE(&(DataSymbol->ListEntry));
+        free(DataSymbol);
+    }
+
+    while (!LIST_EMPTY(&(Function->FunctionsHead))) {
+        SubFunction = LIST_VALUE(Function->FunctionsHead.Next,
+                                 FUNCTION_SYMBOL,
+                                 ListEntry);
+
+        DwarfpDestroyFunction(SubFunction);
+    }
+
+    LIST_REMOVE(&(Function->ListEntry));
+    free(Function);
+    return;
 }
 

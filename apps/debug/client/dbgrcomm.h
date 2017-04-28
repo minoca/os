@@ -2361,7 +2361,8 @@ Return Value:
 PSTR
 DbgGetAddressSymbol (
     PDEBUGGER_CONTEXT Context,
-    ULONGLONG Address
+    ULONGLONG Address,
+    PFUNCTION_SYMBOL *Function
     );
 
 /*++
@@ -2378,6 +2379,9 @@ Arguments:
 
     Address - Supplies the virtual address of the target to get information
         about.
+
+    Function - Supplies an optional pointer where the function symbol will be
+        returned if this turned out to be a function.
 
 Return Value:
 

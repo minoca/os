@@ -220,6 +220,7 @@ DEBUG_SYMBOL_INTERFACE DbgStabsSymbolInterface = {
     DbgpStabsUnloadSymbols,
     NULL,
     NULL,
+    NULL,
     NULL
 };
 
@@ -674,6 +675,8 @@ Return Value:
                 FREE(LocalVariable);
                 CurrentLocalEntry = NextLocalEntry;
             }
+
+            assert(LIST_EMPTY(&(Function->FunctionsHead)));
 
             NextFunctionEntry = CurrentFunctionEntry->Next;
             FREE(Function);
@@ -3193,6 +3196,7 @@ Return Value:
     memset(NewFunction, 0, sizeof(FUNCTION_SYMBOL));
     INITIALIZE_LIST_HEAD(&(NewFunction->ParametersHead));
     INITIALIZE_LIST_HEAD(&(NewFunction->LocalsHead));
+    INITIALIZE_LIST_HEAD(&(NewFunction->FunctionsHead));
     NewFunction->Name = Name;
 
     //

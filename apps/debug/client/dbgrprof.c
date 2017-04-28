@@ -2019,7 +2019,7 @@ Return Value:
     // Get the name for the stack data entry.
     //
 
-    AddressSymbol = DbgGetAddressSymbol(Context, Address);
+    AddressSymbol = DbgGetAddressSymbol(Context, Address, NULL);
     if (AddressSymbol == NULL) {
         DbgOut("Error: failed to get symbol for address 0x%I64x.\n", Address);
         goto CreateStackDataEntryEnd;

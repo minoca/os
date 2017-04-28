@@ -133,6 +133,9 @@ Members:
 
     HighPc - Stores the high PC value from the compile unit DIE.
 
+    Ranges - Stores the ranges for the compilation unit if the compilation
+        unit convers a non-contiguous region.
+
 --*/
 
 struct _DWARF_COMPILATION_UNIT {
@@ -148,6 +151,7 @@ struct _DWARF_COMPILATION_UNIT {
     PUCHAR DiesEnd;
     ULONGLONG LowPc;
     ULONGLONG HighPc;
+    PVOID Ranges;
 };
 
 /*++
@@ -753,6 +757,36 @@ Return Value:
 
 --*/
 
+PDWARF_DIE
+DwarfpGetDieReferenceAttribute (
+    PDWARF_CONTEXT Context,
+    PDWARF_DIE Die,
+    DWARF_ATTRIBUTE Attribute
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a pointer to the DIE referred to by the given
+    attribute.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Die - Supplies a pointer to the DIE to get the attribute from.
+
+    Attribute - Supplies the attribute to retrieve.
+
+Return Value:
+
+    Returns a pointer to the DIE on success.
+
+    NULL on failure.
+
+--*/
+
 BOOL
 DwarfpGetLocalReferenceAttribute (
     PDWARF_CONTEXT Context,
@@ -815,6 +849,36 @@ Return Value:
     TRUE if a value was retrieved.
 
     FALSE if no value was retrieved or it was not of type reference.
+
+--*/
+
+PVOID
+DwarfpGetRangeList (
+    PDWARF_CONTEXT Context,
+    PDWARF_DIE Die,
+    DWARF_ATTRIBUTE Attribute
+    );
+
+/*++
+
+Routine Description:
+
+    This routine looks up the given attribute as a range list pointer.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Die - Supplies a pointer to the DIE to get the attribute from.
+
+    Attribute - Supplies the attribute to retrieve.
+
+Return Value:
+
+    Returns a pointer within the .debug_ranges structure on success.
+
+    NULL if there was no attribute, the attribute was not of the right type, or
+    there is no .debug_ranges section.
 
 --*/
 
@@ -889,6 +953,42 @@ Return Value:
     EAGAIN if the locations section is missing.
 
     ENOENT if none of the entries matched the current PC value.
+
+--*/
+
+VOID
+DwarfpGetRangeSpan (
+    PDWARF_CONTEXT Context,
+    PVOID Ranges,
+    PDWARF_COMPILATION_UNIT Unit,
+    PULONGLONG Start,
+    PULONGLONG End
+    );
+
+/*++
+
+Routine Description:
+
+    This routine runs through a range list to figure out the maximum and
+    minimum values.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Ranges - Supplies the range list pointer.
+
+    Unit - Supplies the current compilation unit.
+
+    Start - Supplies a pointer where the lowest address in the range will be
+        returned.
+
+    End - Supplies a pointer where the first address just beyond the range will
+        be returned.
+
+Return Value:
+
+    None.
 
 --*/
 

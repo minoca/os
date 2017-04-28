@@ -1715,8 +1715,10 @@ Return Value:
     ULONG FrameCount;
     ULONG FrameIndex;
     PSTACK_FRAME Frames;
+    PFUNCTION_SYMBOL Function;
     REGISTERS_UNION LocalRegisters;
     INT Result;
+    PSTR SymbolName;
 
     Frames = NULL;
     if (Registers == NULL) {
@@ -1763,6 +1765,36 @@ Return Value:
 
     DbgOut("Frame    RetAddr  Call Site\n");
     for (FrameIndex = 0; FrameIndex < FrameCount; FrameIndex += 1) {
+        SymbolName = DbgGetAddressSymbol(Context, CallSite, &Function);
+
+        //
+        // If this function is inlined, print out it and its inlined parents as
+        // such.
+        //
+
+        if ((Function != NULL) && (Function->ParentFunction != NULL)) {
+            if (PrintFrameNumbers != FALSE) {
+                DbgOut("   ");
+            }
+
+            DbgOut("<inline>          %s\n", SymbolName);
+            free(SymbolName);
+            SymbolName = NULL;
+            Function = Function->ParentFunction;
+            while (Function->ParentFunction != NULL) {
+                if (PrintFrameNumbers != FALSE) {
+                    DbgOut("   ");
+                }
+
+                DbgOut("<inline>          %s\n", Function->Name);
+                Function = Function->ParentFunction;
+            }
+        }
+
+        //
+        // Now print the real frame.
+        //
+
         if (PrintFrameNumbers != FALSE) {
             DbgOut("%2d ", FrameIndex);
         }
@@ -1771,13 +1803,16 @@ Return Value:
                Frames[FrameIndex].FramePointer,
                Frames[FrameIndex].ReturnAddress);
 
-        //
-        // Attempt to print the call site location with symbols. If nothing was
-        // printed, fall back to printing the raw address.
-        //
+        if (SymbolName != NULL) {
+            DbgOut("%s\n", SymbolName);
+            free(SymbolName);
 
-        DbgPrintAddressSymbol(Context, CallSite);
-        DbgOut("\n");
+        } else if (Function != NULL) {
+            DbgOut("%s\n", Function->Name);
+
+        } else {
+            DbgOut("%s\n");
+        }
 
         //
         // The next stack frame's call site is this frame's return address. Set

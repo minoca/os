@@ -111,6 +111,7 @@ DEBUG_SYMBOL_INTERFACE DbgCoffSymbolInterface = {
     DbgpCoffFreeSymbols,
     NULL,
     NULL,
+    NULL,
     NULL
 };
 
@@ -335,6 +336,7 @@ Return Value:
 
             assert(LIST_EMPTY(&(Function->ParametersHead)));
             assert(LIST_EMPTY(&(Function->LocalsHead)));
+            assert(LIST_EMPTY(&(Function->FunctionsHead)));
 
             if (Function->Name != NULL) {
                 FREE(Function->Name);
@@ -944,6 +946,7 @@ Return Value:
             NewFunction->FunctionNumber = 1000;
             INITIALIZE_LIST_HEAD(&(NewFunction->ParametersHead));
             INITIALIZE_LIST_HEAD(&(NewFunction->LocalsHead));
+            INITIALIZE_LIST_HEAD(&(NewFunction->FunctionsHead));
             NewFunction->StartAddress = Value;
             NewFunction->EndAddress = Value + 0x20;
             NewFunction->ReturnTypeNumber = 0;

@@ -119,7 +119,7 @@ Return Value:
 
     PSTR AddressSymbol;
 
-    AddressSymbol = DbgGetAddressSymbol(Context, Address);
+    AddressSymbol = DbgGetAddressSymbol(Context, Address, NULL);
     if (AddressSymbol == NULL) {
         return ENOENT;
     }
@@ -132,7 +132,8 @@ Return Value:
 PSTR
 DbgGetAddressSymbol (
     PDEBUGGER_CONTEXT Context,
-    ULONGLONG Address
+    ULONGLONG Address,
+    PFUNCTION_SYMBOL *Function
     )
 
 /*++
@@ -149,6 +150,9 @@ Arguments:
 
     Address - Supplies the virtual address of the target to get information
         about.
+
+    Function - Supplies an optional pointer where the function symbol will be
+        returned if this turned out to be a function.
 
 Return Value:
 
@@ -168,6 +172,10 @@ Return Value:
     PSTR Symbol;
     ULONG SymbolSize;
 
+    if (Function != NULL) {
+        *Function = NULL;
+    }
+
     Line = NULL;
 
     //
@@ -183,7 +191,7 @@ Return Value:
             return NULL;
         }
 
-        sprintf(Symbol, "0x%08llx", Address);
+        snprintf(Symbol, SymbolSize, "0x%08llx", Address);
         return Symbol;
     }
 
@@ -204,6 +212,10 @@ Return Value:
 
     if (ResultValid != NULL) {
         if (SearchResult.Variety == SymbolResultFunction) {
+            if (Function != NULL) {
+                *Function = SearchResult.U.FunctionResult;
+            }
+
             LineNumber = 0;
             if ((Context->Flags & DEBUGGER_FLAG_PRINT_LINE_NUMBERS) != 0) {
                 Line = DbgLookupSourceLine(Module->Symbols, Address);
@@ -313,10 +325,11 @@ Return Value:
                 return NULL;
             }
 
-            sprintf(Symbol,
-                    "%s!%s",
-                    Module->ModuleName,
-                    SearchResult.U.DataResult->Name);
+            snprintf(Symbol,
+                     SymbolSize,
+                     "%s!%s",
+                     Module->ModuleName,
+                     SearchResult.U.DataResult->Name);
 
             return Symbol;
 

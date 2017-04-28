@@ -903,6 +903,58 @@ Return Value:
     return TRUE;
 }
 
+PDWARF_DIE
+DwarfpGetDieReferenceAttribute (
+    PDWARF_CONTEXT Context,
+    PDWARF_DIE Die,
+    DWARF_ATTRIBUTE Attribute
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a pointer to the DIE referred to by the given
+    attribute.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Die - Supplies a pointer to the DIE to get the attribute from.
+
+    Attribute - Supplies the attribute to retrieve.
+
+Return Value:
+
+    Returns a pointer to the DIE on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    PDWARF_LOADING_CONTEXT LoadingContext;
+    ULONGLONG Offset;
+    BOOL Result;
+    PDWARF_DIE ResultDie;
+
+    ResultDie = NULL;
+    Result = DwarfpGetLocalReferenceAttribute(Context,
+                                              Die,
+                                              Attribute,
+                                              &Offset);
+
+    if (Result != FALSE) {
+        LoadingContext = Context->LoadingContext;
+        ResultDie = DwarfpFindDie(LoadingContext->CurrentUnit,
+                                  LoadingContext->CurrentUnit->Start + Offset);
+    }
+
+    return ResultDie;
+}
+
 BOOL
 DwarfpGetLocalReferenceAttribute (
     PDWARF_CONTEXT Context,
@@ -1013,6 +1065,56 @@ Return Value:
     return FALSE;
 }
 
+PVOID
+DwarfpGetRangeList (
+    PDWARF_CONTEXT Context,
+    PDWARF_DIE Die,
+    DWARF_ATTRIBUTE Attribute
+    )
+
+/*++
+
+Routine Description:
+
+    This routine looks up the given attribute as a range list pointer.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Die - Supplies a pointer to the DIE to get the attribute from.
+
+    Attribute - Supplies the attribute to retrieve.
+
+Return Value:
+
+    Returns a pointer within the .debug_ranges structure on success.
+
+    NULL if there was no attribute, the attribute was not of the right type, or
+    there is no .debug_ranges section.
+
+--*/
+
+{
+
+    PDWARF_LOADING_CONTEXT LoadingContext;
+    PDWARF_ATTRIBUTE_VALUE Value;
+
+    LoadingContext = Context->LoadingContext;
+    Value = DwarfpGetAttribute(Context, Die, Attribute);
+    if ((Value == NULL) ||
+        (Value->Value.Offset >= Context->Sections.Ranges.Size)) {
+
+        return NULL;
+    }
+
+    if (!DWARF_SECTION_OFFSET_FORM(Value->Form, LoadingContext->CurrentUnit)) {
+        return NULL;
+    }
+
+    return Context->Sections.Ranges.Data + Value->Value.Offset;
+}
+
 PDWARF_ATTRIBUTE_VALUE
 DwarfpGetAttribute (
     PDWARF_CONTEXT Context,
@@ -1045,11 +1147,7 @@ Return Value:
 
 {
 
-    PUCHAR DieStart;
     UINTN Index;
-    PDWARF_LOADING_CONTEXT LoadingContext;
-    ULONGLONG Offset;
-    BOOL Result;
     PDWARF_DIE Specification;
 
     for (Index = 0; Index < Die->Count; Index += 1) {
@@ -1079,22 +1177,11 @@ Return Value:
         // so.
         //
 
-        Result = DwarfpGetLocalReferenceAttribute(Context,
-                                                  Die,
-                                                  DwarfAtSpecification,
-                                                  &Offset);
+        Specification = DwarfpGetDieReferenceAttribute(Context,
+                                                       Die,
+                                                       DwarfAtSpecification);
 
-        if (Result != FALSE) {
-            LoadingContext = Context->LoadingContext;
-            DieStart = LoadingContext->CurrentUnit->Start + Offset;
-            Specification = DwarfpFindDie(LoadingContext->CurrentUnit,
-                                          DieStart);
-
-            Die->Specification = Specification;
-
-        } else if (DwarfpGetAttribute(Context, Die, DwarfAtSpecification)) {
-            DWARF_ERROR("TODO: Implement non-local specification.\n");
-        }
+        Die->Specification = Specification;
     }
 
     //
@@ -1220,6 +1307,90 @@ Return Value:
     }
 
     return ENOENT;
+}
+
+VOID
+DwarfpGetRangeSpan (
+    PDWARF_CONTEXT Context,
+    PVOID Ranges,
+    PDWARF_COMPILATION_UNIT Unit,
+    PULONGLONG Start,
+    PULONGLONG End
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs through a range list to figure out the maximum and
+    minimum values.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Ranges - Supplies the range list pointer.
+
+    Unit - Supplies the current compilation unit.
+
+    Start - Supplies a pointer where the lowest address in the range will be
+        returned.
+
+    End - Supplies a pointer where the first address just beyond the range will
+        be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG Base;
+    PUCHAR Bytes;
+    BOOL Is64Bit;
+    ULONGLONG Max;
+    ULONGLONG Min;
+    ULONGLONG RangeEnd;
+    ULONGLONG RangeStart;
+
+    Bytes = Ranges;
+    Min = MAX_ULONGLONG;
+    Max = 0;
+    Is64Bit = Unit->Is64Bit;
+    Base = Unit->LowPc;
+    while (TRUE) {
+        RangeStart = DWARF_READN(&Bytes, Is64Bit);
+        RangeEnd = DWARF_READN(&Bytes, Is64Bit);
+        if ((RangeStart == 0) && (RangeEnd == 0)) {
+            break;
+        }
+
+        //
+        // If the first value is the max address, then the second value is a
+        // new base.
+        //
+
+        if (((Is64Bit != FALSE) && (RangeStart == MAX_ULONGLONG)) ||
+            ((Is64Bit == FALSE) && (RangeStart == MAX_ULONG))) {
+
+            Base = RangeEnd;
+            continue;
+        }
+
+        if (Min > RangeStart + Base) {
+            Min = RangeStart + Base;
+        }
+
+        if (Max < RangeEnd + Base) {
+            Max = RangeEnd + Base;
+        }
+    }
+
+    *Start = Min;
+    *End = Max;
+    return;
 }
 
 DWARF_LEB128
