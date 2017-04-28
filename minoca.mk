@@ -142,7 +142,7 @@ endif
 RCC := windres
 
 ifeq (x86, $(ARCH)$(VARIANT))
-CC := i686-pc-minoca-gcc
+CC := i686-pc-minoca-gcc --sysroot=$(TOOLROOT)
 AR := i686-pc-minoca-ar
 OBJCOPY := i686-pc-minoca-objcopy
 STRIP := i686-pc-minoca-strip
