@@ -46,7 +46,7 @@ Environment:
 //
 
 #define LzpRangeEncoderGetProcessed(_RangeEncoder) \
-    ((_RangeEncoder)->Processed + \
+    ((_RangeEncoder)->System->CompressedSize + \
      ((_RangeEncoder)->Buffer - (_RangeEncoder)->BufferRead) + \
      (_RangeEncoder)->CacheSize)
 
@@ -335,11 +335,6 @@ LzpRangeEncoderFlushStream (
     PLZMA_RANGE_ENCODER RangeEncoder
     );
 
-LZ_STATUS
-LzpWriteCheckFields (
-    PLZMA_ENCODER Encoder
-    );
-
 BOOL
 LzpLzmaCopyOutput (
     PLZ_CONTEXT Context
@@ -455,6 +450,7 @@ Return Value:
 
     Context->CompressedCrc32 = 0;
     Context->UncompressedCrc32 = 0;
+    Context->CompressedSize = 0;
     Context->UncompressedSize = 0;
     if (Context->InternalState == NULL) {
         Context->InternalState = LzpLzmaCreateEncoder(Context);
@@ -3003,7 +2999,6 @@ Return Value:
     RangeEncoder->Cache = 0;
     RangeEncoder->Buffer = RangeEncoder->BufferBase;
     RangeEncoder->BufferRead = RangeEncoder->Buffer;
-    RangeEncoder->Processed = 0;
     RangeEncoder->Result = LzSuccess;
     return;
 }
@@ -3216,15 +3211,17 @@ Return Value:
 {
 
     INTN Size;
+    PLZ_CONTEXT System;
     INTN Written;
+
+    System = RangeEncoder->System;
 
     //
     // Don't bother if the encoder's already borked. If there is no write
     // function, then copy out ensures that there's always space.
     //
 
-    if ((RangeEncoder->Result != LzSuccess) ||
-        (RangeEncoder->System->Write == NULL)) {
+    if ((RangeEncoder->Result != LzSuccess) || (System->Write == NULL)) {
 
         //
         // This should really be an assert, as it should never happen.
@@ -3238,63 +3235,19 @@ Return Value:
     }
 
     Size = RangeEncoder->Buffer - RangeEncoder->BufferBase;
-    Written = RangeEncoder->System->Write(RangeEncoder->System,
-                                          RangeEncoder->BufferBase,
-                                          Size);
-
+    Written = System->Write(System, RangeEncoder->BufferBase, Size);
     if (Size != Written) {
         RangeEncoder->Result = LzErrorWrite;
     }
 
-    RangeEncoder->System->CompressedCrc32 =
-                         LzpComputeCrc32(RangeEncoder->System->CompressedCrc32,
-                                         RangeEncoder->BufferBase,
-                                         Size);
+    System->CompressedCrc32 = LzpComputeCrc32(System->CompressedCrc32,
+                                              RangeEncoder->BufferBase,
+                                              Size);
 
-    RangeEncoder->Processed += Size;
+    System->CompressedSize += Size;
     RangeEncoder->Buffer = RangeEncoder->BufferBase;
     RangeEncoder->BufferRead = RangeEncoder->BufferBase;
     return;
-}
-
-LZ_STATUS
-LzpWriteCheckFields (
-    PLZMA_ENCODER Encoder
-    )
-
-/*++
-
-Routine Description:
-
-    This routine writes the uncompressed data size, compressed CRC32 and
-    uncompressed CRC32 to the output.
-
-Arguments:
-
-    Encoder - Supplies a pointer to the encoder.
-
-Return Value:
-
-    LZ Status code.
-
---*/
-
-{
-
-    UCHAR Buffer[LZMA_FOOTER_SIZE];
-    PLZ_CONTEXT System;
-    INTN Written;
-
-    System = Encoder->RangeEncoder.System;
-    memcpy(&(Buffer[0]), &(System->UncompressedSize), sizeof(ULONGLONG));
-    memcpy(&(Buffer[8]), &(System->CompressedCrc32), sizeof(ULONG));
-    memcpy(&(Buffer[12]), &(System->UncompressedCrc32), sizeof(ULONG));
-    Written = System->Write(System->Context, Buffer, sizeof(Buffer));
-    if (Written != sizeof(Buffer)) {
-        return LzErrorWrite;
-    }
-
-    return LzSuccess;
 }
 
 BOOL
@@ -3346,12 +3299,11 @@ Return Value:
             memcpy(Context->Output, Range->BufferRead, Size);
         }
 
-        Range->System->CompressedCrc32 =
-                                LzpComputeCrc32(Range->System->CompressedCrc32,
-                                                Range->BufferRead,
-                                                Size);
+        Context->CompressedCrc32 = LzpComputeCrc32(Context->CompressedCrc32,
+                                                   Range->BufferRead,
+                                                   Size);
 
-        Range->Processed += Size;
+        Context->CompressedSize += Size;
         Range->BufferRead += Size;
         Context->Output += Size;
         Context->OutputSize -= Size;

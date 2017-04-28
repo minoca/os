@@ -67,6 +67,9 @@ Environment:
     "  -c, --compress - Compress data.\n" \
     "  -d, --decompress - Decompress data.\n" \
     "  -i, --input=<file> - Read input from the given file (default stdin).\n" \
+    "  -l, --list - Show the file name, uncompressed size, compressed size\n" \
+    "      and compression ratio. If combined with -v, also prints \n" \
+    "      uncompressed and compressed CRC32.\n" \
     "  -o, --output=<file> - Write output fo the given file (default stoud).\n"\
     "  -0123456789, --level=<level> - Set compression level (default 5).\n" \
     "  --mode=[0|1] - Set compression mode (default 1: max).\n" \
@@ -84,12 +87,13 @@ Environment:
     "  --help - Display this help message.\n" \
     "  --version -- Display the version information and exit.\n"
 
-#define LZMA_OPTIONS_STRING "cdi:o:0123456789hvV"
+#define LZMA_OPTIONS_STRING "cdi:lo:0123456789hvV"
 
 #define LZMA_UTIL_VERSION_MAJOR 1
 #define LZMA_UTIL_VERSION_MINOR 0
 
 #define LZMA_UTIL_OPTION_VERBOSE 0x00000001
+#define LZMA_UTIL_OPTION_LIST 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -128,6 +132,14 @@ typedef struct _LZMA_UTIL {
 //
 
 INT
+LzpUtilProcessStream (
+    PLZMA_UTIL Context,
+    PCSTR InputPath,
+    PCSTR OutputPath,
+    LZMA_UTIL_ACTION Action
+    );
+
+INT
 LzpUtilRunMemoryTest (
     PLZMA_UTIL Context,
     LZMA_UTIL_ACTION Action
@@ -137,13 +149,6 @@ PVOID
 LzpUtilReallocate (
     PVOID Allocation,
     UINTN NewSize
-    );
-
-LZ_STATUS
-LzpUtilReportProgress (
-    PLZ_CONTEXT Context,
-    ULONGLONG InputSize,
-    ULONGLONG OutputSize
     );
 
 INTN
@@ -180,6 +185,7 @@ struct option LzmaLongOptions[] = {
     {"compress", no_argument, 0, 'c'},
     {"decompress", no_argument, 0, 'd'},
     {"input", required_argument, 0, 'i'},
+    {"list", no_argument, 0, 'l'},
     {"output", required_argument, 0, 'o'},
     {"level", required_argument, 0, LzmaUtilLevel},
     {"mode", required_argument, 0, LzmaUtilMode},
@@ -247,13 +253,14 @@ Return Value:
 {
 
     LZMA_UTIL_ACTION Action;
+    INT ArgumentIndex;
     LZMA_UTIL Context;
     PSTR InputPath;
     INT Integer;
-    LZ_STATUS LzStatus;
     INT Option;
     PSTR OutputPath;
     INT Status;
+    INT TotalStatus;
 
     Action = LzmaActionUnspecified;
     InputPath = NULL;
@@ -261,12 +268,12 @@ Return Value:
     memset(&Context, 0, sizeof(LZMA_UTIL));
     Context.Lz.Context = &Context;
     Context.Lz.Reallocate = LzpUtilReallocate;
-    Context.Lz.ReportProgress = LzpUtilReportProgress;
     Context.Lz.Read = LzpUtilRead;
     Context.Lz.Write = LzpUtilWrite;
     LzLzmaInitializeProperties(&(Context.EncoderProperties));
     Context.EncoderProperties.EndMark = TRUE;
     Status = 1;
+    TotalStatus = 0;
 
     //
     // Process the control arguments.
@@ -304,6 +311,10 @@ Return Value:
 
         case 'i':
             InputPath = optarg;
+            break;
+
+        case 'l':
+            Context.Options |= LZMA_UTIL_OPTION_LIST;
             break;
 
         case 'o':
@@ -464,144 +475,88 @@ Return Value:
     }
 
     //
-    // Open up the input and output files if specified.
+    // Print the listing header.
     //
 
-    if (InputPath != NULL) {
-        if (strcmp(InputPath, "-") == 0) {
-            Context.Lz.ReadContext = stdin;
-            SET_BINARY_MODE(fileno(stdin));
+    if ((Context.Options & LZMA_UTIL_OPTION_LIST) != 0) {
+        if ((Context.Options & LZMA_UTIL_OPTION_VERBOSE) != 0) {
+            fprintf(stderr,
+                    "%-15s%-15s%-7s%-10s%-10s%s\n",
+                    "Uncompressed",
+                    "Compressed",
+                    "Ratio",
+                    "UncompCRC",
+                    "ComprCRC",
+                    "Name");
 
         } else {
-            Context.Lz.ReadContext = fopen(InputPath, "rb");
-            if (Context.Lz.ReadContext == NULL) {
-                fprintf(stderr,
-                        "Error: Failed to open %s: %s.\n",
-                        InputPath,
-                        strerror(errno));
+            fprintf(stderr,
+                    "%-15s%-15s%-7s%s\n",
+                    "Uncompressed",
+                    "Compressed",
+                    "Ratio",
+                    "Name");
+        }
+    }
 
-                goto MainEnd;
+    if (optind < ArgumentCount) {
+        if ((InputPath != NULL) || (OutputPath != NULL)) {
+            fprintf(stderr,
+                    "lzma: Cannot mix -i/-o and command line arguments.\n");
+
+            Status = EINVAL;
+            goto MainEnd;
+        }
+
+        //
+        // Process each argument on the command line.
+        //
+
+        for (ArgumentIndex = optind;
+             ArgumentIndex < ArgumentCount;
+             ArgumentIndex += 1) {
+
+            Status = LzpUtilProcessStream(&Context,
+                                          Arguments[ArgumentIndex],
+                                          NULL,
+                                          Action);
+
+            if (Status != 0) {
+                TotalStatus = Status;
             }
         }
 
     } else {
-        if (isatty(STDIN_FILENO)) {
-            fprintf(stderr,
-                    "Error: Not reading from interactive terminal. Use "
-                    "--input=- to force this behavior.\n");
-
-            goto MainEnd;
-        }
-
-        Context.Lz.ReadContext = stdin;
-        SET_BINARY_MODE(fileno(stdin));
-    }
-
-    if (OutputPath != NULL) {
-        if (strcmp(OutputPath, "-") == 0) {
-            Context.Lz.WriteContext = stdout;
-            SET_BINARY_MODE(fileno(stdout));
-
-        } else {
-            Context.Lz.WriteContext = fopen(OutputPath, "wb");
-            if (Context.Lz.WriteContext == NULL) {
+        if (InputPath == NULL) {
+            if (isatty(STDIN_FILENO)) {
                 fprintf(stderr,
-                        "Error: Failed to open %s: %s.\n",
-                        OutputPath,
-                        strerror(errno));
+                        "Error: Not reading from interactive terminal. Use "
+                        "--input=- to force this behavior.\n");
 
                 goto MainEnd;
             }
+
+            InputPath = "-";
         }
 
-    } else {
-        if (isatty(STDOUT_FILENO)) {
-            fprintf(stderr,
-                    "Error: Not writing to interactive terminal. Use "
-                    "--output=- to force this behavior.\n");
+        if (OutputPath == NULL) {
+            if (isatty(STDOUT_FILENO)) {
+                fprintf(stderr,
+                        "Error: Not writing to interactive terminal. Use "
+                        "--output=- to force this behavior.\n");
 
-            goto MainEnd;
+                goto MainEnd;
+            }
+
+            OutputPath = "-";
         }
 
-        Context.Lz.WriteContext = stdout;
-        SET_BINARY_MODE(fileno(stdout));
+        Status = LzpUtilProcessStream(&Context, InputPath, OutputPath, Action);
     }
-
-    //
-    // If memory test mode was requested, go off and do things the buffer way.
-    //
-
-    if (Context.MemoryTest != 0) {
-        Status = LzpUtilRunMemoryTest(&Context, Action);
-        goto MainEnd;
-    }
-
-    if (Action == LzmaActionCompress) {
-        LzStatus = LzLzmaInitializeEncoder(&(Context.Lz),
-                                           &(Context.EncoderProperties),
-                                           TRUE);
-
-        if (LzStatus != LzSuccess) {
-            fprintf(stderr,
-                    "Error: Failed to initialize encoder: %s.\n",
-                    LzpUtilGetErrorString(LzStatus));
-
-            goto MainEnd;
-        }
-
-        LzStatus = LzLzmaEncode(&(Context.Lz), LzFlushNow);
-        if (LzStatus != LzStreamComplete) {
-            fprintf(stderr,
-                    "Error: Failed to encode: %s.\n",
-                    LzpUtilGetErrorString(LzStatus));
-
-            goto MainEnd;
-        }
-
-        LzStatus = LzLzmaFinishEncode(&(Context.Lz));
-        if (LzStatus != LzStreamComplete) {
-            fprintf(stderr,
-                    "Error: Failed to finish: %s.\n",
-                    LzpUtilGetErrorString(LzStatus));
-
-            goto MainEnd;
-        }
-
-    } else {
-        LzStatus = LzLzmaInitializeDecoder(&(Context.Lz), NULL, TRUE);
-        if (LzStatus != LzSuccess) {
-            fprintf(stderr,
-                    "Error: Failed to initialize decoder: %s.\n",
-                    LzpUtilGetErrorString(LzStatus));
-
-            goto MainEnd;
-        }
-
-        LzStatus = LzLzmaDecode(&(Context.Lz), LzFlushNow);
-        if (LzStatus != LzStreamComplete) {
-            fprintf(stderr,
-                    "Error: Failed to decode: %s.\n",
-                    LzpUtilGetErrorString(LzStatus));
-
-            goto MainEnd;
-        }
-
-        LzLzmaFinishDecode(&(Context.Lz));
-    }
-
-    Status = 0;
 
 MainEnd:
-    if ((Context.Lz.ReadContext != NULL) &&
-        (Context.Lz.ReadContext != stdin)) {
-
-        fclose(Context.Lz.ReadContext);
-    }
-
-    if ((Context.Lz.WriteContext != NULL) &&
-        (Context.Lz.WriteContext != stdout)) {
-
-        fclose(Context.Lz.WriteContext);
+    if ((Status == 0) && (TotalStatus != 0)) {
+        Status = TotalStatus;
     }
 
     return Status;
@@ -610,6 +565,271 @@ MainEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+INT
+LzpUtilProcessStream (
+    PLZMA_UTIL Context,
+    PCSTR InputPath,
+    PCSTR OutputPath,
+    LZMA_UTIL_ACTION Action
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a compress or decompress operation on a single stream.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    InputPath - Supplies the input path of the stream to open, or "-" to use
+        stdin.
+
+    OutputPath - Supplies the path to the output stream, or "-" to use stdout.
+
+    Action - Supplies the action to perform.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    PCSTR BaseName;
+    size_t InLength;
+    PSTR LastDot;
+    PLZ_CONTEXT Lz;
+    LZ_STATUS LzStatus;
+    PSTR OutPathBuffer;
+    size_t OutPathSize;
+    ULONG Ratio;
+    CHAR RatioString[6];
+    PCSTR Search;
+    INT Status;
+
+    Lz = &(Context->Lz);
+    OutPathBuffer = NULL;
+    Status = 2;
+
+    //
+    // Open up the input and output files if specified.
+    //
+
+    if (strcmp(InputPath, "-") == 0) {
+        Lz->ReadContext = stdin;
+        SET_BINARY_MODE(fileno(stdin));
+
+    } else {
+        Lz->ReadContext = fopen(InputPath, "rb");
+        if (Lz->ReadContext == NULL) {
+            fprintf(stderr,
+                    "Error: Failed to open %s: %s.\n",
+                    InputPath,
+                    strerror(errno));
+
+            goto ProcessStreamEnd;
+        }
+    }
+
+    //
+    // Come up with an output name if there is none.
+    //
+
+    if (OutputPath == NULL) {
+        InLength = strlen(InputPath);
+        if (Action == LzmaActionCompress) {
+            OutPathSize = InLength + 4;
+            OutPathBuffer = malloc(OutPathSize);
+            if (OutPathBuffer == NULL) {
+                goto ProcessStreamEnd;
+            }
+
+            snprintf(OutPathBuffer, OutPathSize, "%s.lz", InputPath);
+
+        //
+        // Try to strip off the last extension.
+        //
+
+        } else {
+            OutPathBuffer = strdup(InputPath);
+            if (OutPathBuffer == NULL) {
+                goto ProcessStreamEnd;
+            }
+
+            //
+            // Find the basename of the string.
+            //
+
+            Search = OutPathBuffer;
+            BaseName = Search;
+            while (*Search != '\0') {
+                if ((*Search == '/') || (*Search == '\\')) {
+                    BaseName = Search + 1;
+                }
+
+                Search += 1;
+            }
+
+            //
+            // Find the last dot, which is the extension. If there is no
+            // extension, calle it <file>.out.
+            //
+
+            LastDot = strrchr(BaseName, '.');
+            if ((LastDot == NULL) || (LastDot == BaseName)) {
+                free(OutPathBuffer);
+                OutPathSize = InLength + 5;
+                OutPathBuffer = malloc(OutPathSize);
+                if (OutPathBuffer == NULL) {
+                    goto ProcessStreamEnd;
+                }
+
+                snprintf(OutPathBuffer, OutPathSize, "%s.out", InputPath);
+
+            } else {
+                *LastDot = '\0';
+            }
+
+        }
+
+        OutputPath = OutPathBuffer;
+    }
+
+    //
+    // Open up the output.
+    //
+
+    if (strcmp(OutputPath, "-") == 0) {
+        Lz->WriteContext = stdout;
+        SET_BINARY_MODE(fileno(stdout));
+
+    } else {
+        Lz->WriteContext = fopen(OutputPath, "wb");
+        if (Lz->WriteContext == NULL) {
+            fprintf(stderr,
+                    "Error: Failed to open %s: %s.\n",
+                    OutputPath,
+                    strerror(errno));
+
+            goto ProcessStreamEnd;
+        }
+    }
+
+    //
+    // If memory test mode was requested, go off and do things the buffer way.
+    //
+
+    if (Context->MemoryTest != 0) {
+        Status = LzpUtilRunMemoryTest(Context, Action);
+        goto ProcessStreamEnd;
+    }
+
+    if (Action == LzmaActionCompress) {
+        LzStatus = LzLzmaInitializeEncoder(Lz,
+                                           &(Context->EncoderProperties),
+                                           TRUE);
+
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to initialize encoder: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto ProcessStreamEnd;
+        }
+
+        LzStatus = LzLzmaEncode(Lz, LzFlushNow);
+        if (LzStatus != LzStreamComplete) {
+            fprintf(stderr,
+                    "Error: Failed to encode: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto ProcessStreamEnd;
+        }
+
+        LzStatus = LzLzmaFinishEncode(Lz);
+        if (LzStatus != LzStreamComplete) {
+            fprintf(stderr,
+                    "Error: Failed to finish: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto ProcessStreamEnd;
+        }
+
+    } else {
+        LzStatus = LzLzmaInitializeDecoder(Lz, NULL, TRUE);
+        if (LzStatus != LzSuccess) {
+            fprintf(stderr,
+                    "Error: Failed to initialize decoder: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto ProcessStreamEnd;
+        }
+
+        LzStatus = LzLzmaDecode(Lz, LzFlushNow);
+        if (LzStatus != LzStreamComplete) {
+            fprintf(stderr,
+                    "Error: Failed to decode: %s.\n",
+                    LzpUtilGetErrorString(LzStatus));
+
+            goto ProcessStreamEnd;
+        }
+
+        LzLzmaFinishDecode(Lz);
+    }
+
+    //
+    // Spit out the listing if requested.
+    //
+
+    if ((Context->Options & LZMA_UTIL_OPTION_LIST) != 0) {
+        Ratio = (Lz->CompressedSize * 1000ULL) / Lz->UncompressedSize;
+        snprintf(RatioString,
+                 sizeof(RatioString),
+                 "%d.%d%%",
+                 Ratio / 10,
+                 Ratio % 10);
+
+        if ((Context->Options & LZMA_UTIL_OPTION_VERBOSE) != 0) {
+            fprintf(stderr,
+                    "%-15lld%-15lld%-7s%08x  %08x  %s\n",
+                    Lz->UncompressedSize,
+                    Lz->CompressedSize,
+                    RatioString,
+                    Lz->UncompressedCrc32,
+                    Lz->CompressedCrc32,
+                    InputPath);
+
+        } else {
+            fprintf(stderr,
+                    "%-15lld%-15lld%-7s%s\n",
+                    Lz->UncompressedSize,
+                    Lz->CompressedSize,
+                    RatioString,
+                    InputPath);
+        }
+    }
+
+    Status = 0;
+
+ProcessStreamEnd:
+    if ((Lz->ReadContext != NULL) && (Lz->ReadContext != stdin)) {
+        fclose(Lz->ReadContext);
+        Lz->ReadContext = NULL;
+    }
+
+    if ((Lz->WriteContext != NULL) && (Lz->WriteContext != stdout)) {
+        fclose(Lz->WriteContext);
+        Lz->WriteContext = NULL;
+    }
+
+    return Status;
+}
 
 INT
 LzpUtilRunMemoryTest (
@@ -837,50 +1057,6 @@ Return Value:
 {
 
     return realloc(Allocation, NewSize);
-}
-
-LZ_STATUS
-LzpUtilReportProgress (
-    PLZ_CONTEXT Context,
-    ULONGLONG InputSize,
-    ULONGLONG OutputSize
-    )
-
-/*++
-
-Routine Description:
-
-    This routine represents the prototype of the function called when the LZMA
-    library is reporting a progress update.
-
-Arguments:
-
-    Context - Supplies a pointer to the LZ context.
-
-    InputSize - Supplies the number of input bytes processed. Set to -1ULL if
-        unknown.
-
-    OutputSize - Supplies the number of output bytes processed. Set to -1ULL if
-        unknown.
-
-Return Value:
-
-    0 on success.
-
-    Returns a non-zero value to cancel the operation.
-
---*/
-
-{
-
-    PLZMA_UTIL Util;
-
-    Util = Context->Context;
-    if ((Util->Options & LZMA_UTIL_OPTION_VERBOSE) != 0) {
-        printf("%lld/%lld", InputSize, OutputSize);
-    }
-
-    return LzSuccess;
 }
 
 INTN

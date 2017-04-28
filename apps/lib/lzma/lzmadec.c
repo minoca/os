@@ -602,6 +602,16 @@ Return Value:
         if (Status != LzSuccess) {
             goto DecodeEnd;
         }
+
+        //
+        // Specifically bail out now if reading the header used up all the
+        // input data. There's detection below if no progress was made, and
+        // that would fire in this case.
+        //
+
+        if ((Context->Read == NULL) && (Context->InputSize == 0)) {
+            goto DecodeEnd;
+        }
     }
 
     //
@@ -665,6 +675,7 @@ Return Value:
                                                        Context->Input,
                                                        InSize);
 
+            Context->CompressedSize += InSize;
             Context->Input += InSize;
             Context->InputSize -= InSize;
             Context->UncompressedCrc32 =
@@ -746,6 +757,7 @@ Return Value:
                                                       InBuffer + InPosition,
                                                       InProcessed);
 
+                Context->CompressedSize += InProcessed;
                 InPosition += InProcessed;
                 OutPosition += OutProcessed;
                 if (Context->Write != NULL) {
@@ -804,6 +816,7 @@ Return Value:
 
         if ((CompletionStatus == LzCompletionFinishedWithMark) ||
             ((Decoder->HasEndMark == FALSE) &&
+             (Flush != LzNoFlush) &&
              (CompletionStatus == LzCompletionMaybeFinishedWithoutMark))) {
 
             if (Decoder->FileWrapper != FALSE) {
@@ -854,6 +867,9 @@ Return Value:
 
         Status = LzpVerifyCheckFields(CheckBuffer, Context);
         Decoder->Stage = LzmaStageComplete;
+        if (Status != LzSuccess) {
+            goto DecodeEnd;
+        }
     }
 
     //
@@ -1003,6 +1019,7 @@ Return Value:
     Decoder = Context->InternalState;
     Context->CompressedCrc32 = 0;
     Context->UncompressedCrc32 = 0;
+    Context->CompressedSize = 0;
     Context->UncompressedSize = 0;
     Decoder->DictSize = Properties->DictionarySize;
     if (Decoder->DictSize < LZMA_MINIMUM_DICT_SIZE) {
@@ -1164,6 +1181,7 @@ Return Value:
     Parameters /= 9;
     Properties.Pb = Parameters / 5;
     Properties.Lp = Parameters % 5;
+    Properties.EndMark = TRUE;
     Status = LzpLzmaDecoderInitialize(Context, &Properties);
     return Status;
 }
@@ -1315,6 +1333,8 @@ Return Value:
     Context->CompressedCrc32 = LzpComputeCrc32(Context->CompressedCrc32,
                                                Header,
                                                LZMA_HEADER_SIZE);
+
+    Context->CompressedSize += LZMA_HEADER_SIZE;
 
     //
     // Advance to the data portion.

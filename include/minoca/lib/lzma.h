@@ -136,39 +136,6 @@ Return Value:
 --*/
 
 typedef
-LZ_STATUS
-(*PLZ_REPORT_PROGRESS) (
-    PLZ_CONTEXT Context,
-    ULONGLONG InputSize,
-    ULONGLONG OutputSize
-    );
-
-/*++
-
-Routine Description:
-
-    This routine represents the prototype of the function called when the LZMA
-    library is reporting a progress update.
-
-Arguments:
-
-    Context - Supplies a pointer to the LZ context.
-
-    InputSize - Supplies the number of input bytes processed. Set to -1ULL if
-        unknown.
-
-    OutputSize - Supplies the number of output bytes processed. Set to -1ULL if
-        unknown.
-
-Return Value:
-
-    0 on success.
-
-    Returns a non-zero value to cancel the operation.
-
---*/
-
-typedef
 INTN
 (*PLZ_PERFORM_IO) (
     PLZ_CONTEXT Context,
@@ -216,9 +183,6 @@ Members:
     Reallocate - Stores a pointer to a function used to allocate, reallocate,
         and free memory.
 
-    ReportProgress - Stores an optional pointer to a function used to report
-        progress updates to the surrounding environment.
-
     Read - Stores an optional pointer to a function used to read input data. If
         this is not supplied, then the read buffer must be supplied.
 
@@ -250,6 +214,9 @@ Members:
 
     UncompressedCrc32 - Stores the CRC32 of the uncompressed data.
 
+    CompressedSize - Stores the size in bytes of the compressed data, including
+        any file headers and footers.
+
     UncompressedSize - Stores the size in bytes of the uncompressed data.
 
     InternalState - Stores the internal state, opaque outside the library.
@@ -259,7 +226,6 @@ Members:
 struct _LZ_CONTEXT {
     PVOID Context;
     PLZ_REALLOCATE Reallocate;
-    PLZ_REPORT_PROGRESS ReportProgress;
     PLZ_PERFORM_IO Read;
     PLZ_PERFORM_IO Write;
     PVOID ReadContext;
@@ -270,6 +236,7 @@ struct _LZ_CONTEXT {
     UINTN OutputSize;
     ULONG CompressedCrc32;
     ULONG UncompressedCrc32;
+    ULONGLONG CompressedSize;
     ULONGLONG UncompressedSize;
     PVOID InternalState;
 };

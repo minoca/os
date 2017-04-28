@@ -186,8 +186,6 @@ Members:
 
     System - Stores the system context.
 
-    Processed - Stores the number of bytes writtne.
-
     Result - Stores the resulting status code.
 
     DirectOutput - Stores a boolean indicating whether or not the buffer was
@@ -205,7 +203,6 @@ typedef struct _LZMA_RANGE_ENCODER {
     PUCHAR BufferBase;
     PUCHAR BufferRead;
     PLZ_CONTEXT System;
-    ULONGLONG Processed;
     LZ_STATUS Result;
     BOOL DirectOutput;
 } LZMA_RANGE_ENCODER, *PLZMA_RANGE_ENCODER;
