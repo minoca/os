@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2012 Minoca Corp.
+Copyright (c) 2013 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -9,16 +9,16 @@ Copyright (c) 2012 Minoca Corp.
 
 Module Name:
 
-    i8042 Keyboard
+    PL-050 Keyboard
 
 Abstract:
 
-    This module implements a keyboard and mouse driver for the Intel 8042
-    keyboard controller.
+    This module implements a keyboard and mouse driver for the ARM
+    PrimeCell PL050 keyboard and mouse controller.
 
 Author:
 
-    Evan Green 20-Dec-2012
+    Evan Green 22-Sep-2013
 
 Environment:
 
@@ -32,16 +32,16 @@ function build() {
     var drv;
     var dynlibs;
     var entries;
-    var name = "i8042";
+    var name = "pl050";
     var sources;
 
     sources = [
-        "i8042.c",
-        "scancode.c"
+        "pl050.c",
+        "drivers/input/i8042:scancode.o"
     ];
 
     dynlibs = [
-        "drivers/usrinput:usrinput"
+        "drivers/input/usrinput:usrinput"
     ];
 
     drv = {

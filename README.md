@@ -75,7 +75,7 @@ Below is a brief orientation of a few of the directories in the repository. Chec
      * `usbkbd` - USB keyboard support
      * `usbmass` - USB mass storage support
      * `usbmouse` - USB mouse support
-   * `usrinput` - User input device support
+   * `input` - User input drivers
    * `videocon` - Video terminal console driver
  * `images` - Recipes to create the final images for each supported platform
  * `include` - Public header files

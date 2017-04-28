@@ -39,7 +39,7 @@ function build() {
         "drivers/ata:ata",
         "drivers/devrem:devrem",
         "drivers/fat:fat",
-        "drivers/i8042:i8042",
+        "drivers/input:input_drivers,"
         "drivers/net:net_drivers",
         "drivers/null:null",
         "drivers/part:part",
