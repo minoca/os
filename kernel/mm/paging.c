@@ -3204,7 +3204,6 @@ Return Value:
         //
 
         ASSERT(IoBuffer->FragmentCount == 1);
-        ASSERT(IoBuffer->Fragment[0].Size == MmPageSize());
 
         PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, 0);
         PhysicalAddress = IoBuffer->Fragment[0].PhysicalAddress;
@@ -3559,7 +3558,6 @@ Return Value:
 
             ASSERT(IoBuffer != NULL);
             ASSERT(IoBuffer->FragmentCount == 1);
-            ASSERT(IoBuffer->Fragment[0].Size == MmPageSize());
 
             PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, 0);
             PageCacheAddress = IoBuffer->Fragment[0].PhysicalAddress;
@@ -3771,7 +3769,6 @@ Return Value:
         //
 
         ASSERT(IoBuffer->FragmentCount == 1);
-        ASSERT(IoBuffer->Fragment[0].Size == MmPageSize());
 
         PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, 0);
         PageCacheAddress = IoBuffer->Fragment[0].PhysicalAddress;
