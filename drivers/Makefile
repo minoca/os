@@ -42,6 +42,7 @@ DIRS = acpi      \
        ramdisk   \
        sd        \
        spb       \
+       sound     \
        special   \
        term      \
        usb       \

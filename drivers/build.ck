@@ -47,6 +47,7 @@ function build() {
         "drivers/plat:platform_drivers",
         "drivers/ramdisk:ramdisk",
         "drivers/sd:sd_drivers",
+        "drivers/sound:sound_drivers",
         "drivers/special:special",
         "drivers/term/ser16550:ser16550",
         "drivers/usb:usb_drivers",
