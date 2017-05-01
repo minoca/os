@@ -767,6 +767,10 @@ Return Value:
         KeDestroyQueuedLock(Device->ConfigurationLock);
     }
 
+    if (Device->InterruptHandle != INVALID_HANDLE){
+        IoDisconnectInterrupt(Device->InterruptHandle);
+    }
+
     if ((Device->Flags & RTL81_FLAG_TRANSMIT_MODE_LEGACY) != 0) {
         if (Device->U.LegacyData.ReceiveIoBuffer != NULL) {
             MmFreeIoBuffer(Device->U.LegacyData.ReceiveIoBuffer);
