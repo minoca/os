@@ -533,6 +533,24 @@ DefinitionBlock (
         }
     }
 
+    Scope(\_SB.I2C4) {
+        Device(MOUS) {
+            Name(_HID, "ELAN0000")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                I2CSerialBus(0x15, ControllerInitiated, 400000,
+                             AddressingMode7Bit, "\\_SB_I2C4", , , , )
+
+                GpioInt(Edge, ActiveLow, Shared, PullUp, ,
+                        "\\_SB_GPI7") {3}
+            })
+        }
+    }
+
     //
     // Define SD and eMMC under the PMIC since it's needed to provide 1.8V
     // switching.

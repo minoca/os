@@ -138,6 +138,7 @@ if (arch == "x86") {
 } else if ((arch == "armv7") || (arch == "armv6")) {
     DriverFiles += [
         "dma.drv",
+        "elani2c.drv",
         "gpio.drv",
         "spb.drv",
     ];
@@ -468,6 +469,7 @@ if (plat == "install-armv6") {
         "dmab2709.drv",
         "dwhci.drv",
         "ehci.drv",
+        "elani2c.drv",
         "fat.drv",
         "goec.drv",
         "gpio.drv",
@@ -592,6 +594,7 @@ if (plat == "install-armv7") {
         "dwhci.drv",
         "edma3.drv",
         "ehci.drv",
+        "elani2c.drv",
         "fat.drv",
         "goec.drv",
         "gpio.drv",

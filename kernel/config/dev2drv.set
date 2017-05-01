@@ -36,6 +36,7 @@ DBCM0001=bc27gpio.drv
 DDEVREMCHLD=devrem.drv
 DDEVREMROOT=devrem.drv
 DDWC0000=dwhci.drv
+DELAN0000=elani2c.drv
 DGOO0001=goec.drv
 DKTestDevice=ktestdrv.drv
 

@@ -53,6 +53,7 @@ Author:
 
 #define RK32_SD_BASE 0xFF0C0000
 #define RK32_EMMC_BASE 0xFF0F0000
+#define RK32_I2C_TP_BASE 0xFF160000
 #define RK32_I2C_PMU_BASE 0xFF650000
 #define RK32_TIMER0_5_BASE 0xFF6B0000
 #define RK32_UART_DEBUG_BASE 0xFF690000
@@ -207,6 +208,19 @@ Author:
 #define RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER1_SHIFT 0
 
 //
+// Define the CRU clock select 10 register bits.
+//
+
+#define RK32_CRU_CLOCK_SELECT10_PROTECT_SHIFT       16
+#define RK32_CRU_CLOCK_SELECT10_GENERAL_PLL         (1 << 15)
+#define RK32_CRU_CLOCK_SELECT10_PCLK_DIVIDER_MASK   (0x3 << 12)
+#define RK32_CRU_CLOCK_SELECT10_PCLK_DIVIDER_SHIFT  12
+#define RK32_CRU_CLOCK_SELECT10_HCLK_DIVIDER_MASK   (0x3 << 8)
+#define RK32_CRU_CLOCK_SELECT10_HCLK_DIVIDER_SHIFT  8
+#define RK32_CRU_CLOCK_SELECT10_ACLK_DIVIDER_MASK   (0x1F << 0)
+#define RK32_CRU_CLOCK_SELECT10_ACLK_DIVIDER_SHIFT  0
+
+//
 // Define the CRU clock select 11 register bits.
 //
 
@@ -305,8 +319,8 @@ Author:
 // Define the default values for the I2C PMU iomux.
 //
 
-#define RK32_PMU_IOMUX_I2C0_SDA_DEFAULT (1 << 14)
-#define RK32_PMU_IOMUX_I2C0_SCL_DEFAULT (1 << 0)
+#define RK32_PMU_IOMUX_GPIO0B_I2C0_SDA (1 << 14)
+#define RK32_PMU_IOMUX_GPIO0C_I2C0_SCL (1 << 0)
 
 //
 // Define GRF I/O Vsel register bits.
@@ -328,10 +342,22 @@ Author:
 #define RK32_GRF_GPIO6C_IOMUX_VALUE 0x2AAA1555
 
 //
+// Define the GRF GPIO7CL IOMUX initialization value.
+//
+
+#define RK32_GRF_GPIO7CL_IOMUX_VALUE 0x01100110
+
+//
 // Define the GRF GPIO7CH IOMUX initialization values.
 //
 
 #define RK32_GRF_GPIO7CH_IOMUX_VALUE 0x33001100
+
+//
+// Defien the GRF GPIO7A pull value.
+//
+
+#define RK32_GRF_GPIO7A_PULL_VALUE 0x00C00040
 
 //
 // Define LCD system control register bits.
@@ -544,6 +570,7 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruModeControl = 0x50,
     Rk32CruClockSelect0 = 0x60,
     Rk32CruClockSelect1 = 0x64,
+    Rk32CruClockSelect10 = 0x88,
     Rk32CruClockSelect11 = 0x8C,
     Rk32CruClockSelect12 = 0x90,
     Rk32CruClockSelect33 = 0xE4,
@@ -574,13 +601,16 @@ typedef enum _RK32_PLL_TYPE {
 typedef enum _RK32_PMU_REGISTER {
     Rk32PmuPowerDownControl = 0x08,
     Rk32PmuPowerDownStatus = 0x0C,
-    Rk32PmuIomuxI2c0Sda = 0x88,
-    Rk32PmuIomuxI2c0Scl = 0x8C
+    Rk32PmuIomuxGpio0A = 0x84,
+    Rk32PmuIomuxGpio0B = 0x88,
+    Rk32PmuIomuxGpio0C = 0x8C
 } RK32_PMU_REGISTER, *PRK32_PMU_REGISTER;
 
 typedef enum _RK32_GRF_REGISTER {
-    Rk32GrfGpio6cIomux = 0x64,
-    Rk32GrfGpio7chIomux = 0x78,
+    Rk32GrfGpio6cIomux = 0x064,
+    Rk32GrfGpio7clIomux = 0x074,
+    Rk32GrfGpio7chIomux = 0x078,
+    Rk32GrfGpio7aPull = 0x1A0,
     Rk32GrfSocStatus0 = 0x280,
     Rk32GrfSocStatus1 = 0x284,
     Rk32GrfIoVsel = 0x380,

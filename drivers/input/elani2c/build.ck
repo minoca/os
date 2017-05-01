@@ -9,11 +9,11 @@ Copyright (c) 2017 Minoca Corp.
 
 Module Name:
 
-    Input
+    Elan i2C Touchpad
 
 Abstract:
 
-    This directory contains user input related drivers.
+    This module implements the Elan i2C touchpad driver.
 
 Author:
 
@@ -25,18 +25,29 @@ Environment:
 
 --*/
 
-from menv import group;
+from menv import driver;
 
 function build() {
+    var drv;
+    var dynlibs;
     var entries;
-    var inputDrivers;
+    var name = "elani2c";
+    var sources;
 
-    inputDrivers = [
-        "drivers/input/elani2c:elani2c"
-        "drivers/input/i8042:i8042"
+    sources = [
+        "elani2c.c",
     ];
 
-    entries = group("input_drivers", inputDrivers);
+    dynlibs = [
+        "drivers/input/usrinput:usrinput"
+    ];
+
+    drv = {
+        "label": name,
+        "inputs": sources + dynlibs,
+    };
+
+    entries = driver(drv);
     return entries;
 }
 

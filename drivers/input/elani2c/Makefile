@@ -9,11 +9,11 @@
 #
 #   Module Name:
 #
-#       Input
+#       Elan i2C Touchpad
 #
 #   Abstract:
 #
-#       This directory contains User Input related drivers.
+#       This module implements the Elan i2C touchpad driver.
 #
 #   Author:
 #
@@ -21,17 +21,20 @@
 #
 #   Environment:
 #
-#       Kernel
+#       Kernel Mode
 #
 ################################################################################
 
-INPUT_DEVICE_DRIVERS := elani2c \
-                        i8042   \
+BINARY = elani2c.drv
 
-DIRS = usrinput                \
-       $(INPUT_DEVICE_DRIVERS) \
+BINARYTYPE = driver
+
+BINPLACE = bin
+
+OBJS = elani2c.o  \
+
+DYNLIBS = $(BINROOT)/kernel                \
+          $(BINROOT)/usrinput.drv
 
 include $(SRCROOT)/os/minoca.mk
-
-$(INPUT_DEVICE_DRIVERS): usrinput
 

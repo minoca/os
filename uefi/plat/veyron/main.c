@@ -520,18 +520,27 @@ Return Value:
     UINT32 DivisorHigh;
     UINT32 DivisorLow;
     VOID *I2cPmuBase;
+    VOID *IoMuxRegister;
     RK32_PLL_TYPE PllType;
     VOID *PmuBase;
+    VOID *PullRegister;
     EFI_STATUS Status;
     UINT32 Value;
 
     I2cPmuBase = (VOID *)RK32_I2C_PMU_BASE;
     PmuBase = (VOID *)RK32_PMU_BASE;
-    EfiWriteRegister32(PmuBase + Rk32PmuIomuxI2c0Sda,
-                       RK32_PMU_IOMUX_I2C0_SDA_DEFAULT);
+    EfiWriteRegister32(PmuBase + Rk32PmuIomuxGpio0B,
+                       RK32_PMU_IOMUX_GPIO0B_I2C0_SDA);
 
-    EfiWriteRegister32(PmuBase + Rk32PmuIomuxI2c0Scl,
-                       RK32_PMU_IOMUX_I2C0_SCL_DEFAULT);
+    EfiWriteRegister32(PmuBase + Rk32PmuIomuxGpio0C,
+                       RK32_PMU_IOMUX_GPIO0C_I2C0_SCL);
+
+    //
+    // Initialize the I/O muxing for I2C4 for the touchpad.
+    //
+
+    IoMuxRegister = (VOID *)(RK32_GRF_BASE + Rk32GrfGpio7clIomux);
+    EfiWriteRegister32(IoMuxRegister, RK32_GRF_GPIO7CL_IOMUX_VALUE);
 
     //
     // Get the frequency of the bus PCLK. The bus's ACLK must first be
@@ -570,7 +579,7 @@ Return Value:
     BusPclkFrequency = BusAclkFrequency / BusPclkDivider;
 
     //
-    // Set the clock divisor to run at 400Mhz.
+    // Set the clock divisor to run at 400khz.
     //
 
     Divisor = (BusPclkFrequency + (8 * RK32_I2C_PMU_FREQUENCY - 1)) /
@@ -585,6 +594,56 @@ Return Value:
              RK32_I2C_CLOCK_DIVISOR_LOW_MASK;
 
     EfiWriteRegister32(I2cPmuBase + Rk32I2cClockDivisor, Value);
+
+    //
+    // Do all this same magic for I2C4, the touchpad controller. This is
+    // the code equivalent of tracing the clock tree diagram with your finger.
+    //
+
+    PllType = Rk32PllCodec;
+    Value = EfiReadRegister32((VOID *)RK32_CRU_BASE + Rk32CruClockSelect10);
+    if ((Value & RK32_CRU_CLOCK_SELECT10_GENERAL_PLL) != 0) {
+        PllType = Rk32PllGeneral;
+    }
+
+    Status = EfipRk32GetPllClockFrequency(PllType, &AclkPllFrequency);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    BusAclkDivider = (Value & RK32_CRU_CLOCK_SELECT10_ACLK_DIVIDER_MASK) >>
+                     RK32_CRU_CLOCK_SELECT10_ACLK_DIVIDER_SHIFT;
+
+    BusAclkDivider += 1;
+    BusAclkFrequency = AclkPllFrequency / BusAclkDivider;
+    BusPclkDivider = (Value & RK32_CRU_CLOCK_SELECT10_PCLK_DIVIDER_MASK) >>
+                     RK32_CRU_CLOCK_SELECT10_PCLK_DIVIDER_SHIFT;
+
+    BusPclkFrequency = BusAclkFrequency / (1 << BusPclkDivider);
+
+    //
+    // Set the clock divisor to run at 400kHz.
+    //
+
+    Divisor = (BusPclkFrequency + (8 * RK32_I2C_PMU_FREQUENCY - 1)) /
+              (8 * RK32_I2C_PMU_FREQUENCY);
+
+    DivisorHigh = ((Divisor * 3) / 7) - 1;
+    DivisorLow = Divisor - DivisorHigh - 2;
+    Value = (DivisorHigh << RK32_I2C_CLOCK_DIVISOR_HIGH_SHIFT) &
+            RK32_I2C_CLOCK_DIVISOR_HIGH_MASK;
+
+    Value |= (DivisorLow << RK32_I2C_CLOCK_DIVISOR_LOW_SHIFT) &
+             RK32_I2C_CLOCK_DIVISOR_LOW_MASK;
+
+    EfiWriteRegister32((VOID *)RK32_I2C_TP_BASE + Rk32I2cClockDivisor, Value);
+
+    //
+    // Enable the pull-up for the touchpad interrupt line.
+    //
+
+    PullRegister = (VOID *)RK32_GRF_BASE + Rk32GrfGpio7aPull;
+    EfiWriteRegister32(PullRegister, RK32_GRF_GPIO7A_PULL_VALUE);
     return EFI_SUCCESS;
 }
 
