@@ -3537,11 +3537,6 @@ Return Value:
     //
 
     case TcpUserControlAtUrgentMark:
-        if (ContextBufferSize < sizeof(ULONG)) {
-            Status = STATUS_DATA_LENGTH_MISMATCH;
-            break;
-        }
-
         Integer = FALSE;
         if (LIST_EMPTY(&(TcpSocket->ReceivedSegmentList)) == FALSE) {
             Segment = LIST_VALUE(TcpSocket->ReceivedSegmentList.Next,
@@ -3591,14 +3586,23 @@ Return Value:
     //
 
     if (KSUCCESS(Status)) {
+        if (ContextBufferSize < BufferSize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto UserControlEnd;
+        }
+
         if (FromKernelMode != FALSE) {
             RtlCopyMemory(ContextBuffer, Buffer, BufferSize);
 
         } else {
-            MmCopyToUserMode(ContextBuffer, Buffer, BufferSize);
+            Status = MmCopyToUserMode(ContextBuffer, Buffer, BufferSize);
+            if (!KSUCCESS(Status)) {
+                goto UserControlEnd;
+            }
         }
     }
 
+UserControlEnd:
     return Status;
 }
 
