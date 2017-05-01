@@ -918,7 +918,7 @@ Arguments:
     Data - Supplies a pointer to the data buffer where the data is either
         returned for a get operation or given for a set operation.
 
-    DataSize - Supplies a pointer that on input constains the size of the data
+    DataSize - Supplies a pointer that on input contains the size of the data
         buffer. On output, this contains the required size of the data buffer.
 
     Set - Supplies a boolean indicating if this is a get operation (FALSE) or

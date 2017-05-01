@@ -464,9 +464,6 @@ Arguments:
     IncludeDotDirectories - Supplies a boolean indicating if the dot and dot
         dot directories should be returned as well.
 
-    IoFlags - Supplies flags regarding the I/O operation. See IO_FLAG_*
-        definitions.
-
     Irp - Supplies an optional pointer to an IRP to use for transfers.
 
     BytesRead - Supplies a pointer that on input contains the number of bytes
