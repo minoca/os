@@ -838,6 +838,7 @@ Return Value:
     if (RtlAreUuidsEqual(Uuid, &NetNetworkDeviceInformationUuid) != FALSE) {
         if (*DataSize < sizeof(NETWORK_DEVICE_INFORMATION)) {
             *DataSize = sizeof(NETWORK_DEVICE_INFORMATION);
+            Status = STATUS_BUFFER_TOO_SMALL;
             goto GetSetLinkDeviceInformationEnd;
         }
 
