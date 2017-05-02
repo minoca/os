@@ -104,6 +104,15 @@ extern "C" {
 #define SNDCTL_DSP_SPEED 0x501D
 
 //
+// This ioctl sets the device into stereo (2 channels) or mono (1 channel).
+// This has been replaced by SNDCTL_DSP_CHANNELS, but older applications still
+// use it. Supply and integer value of 1 to select stereo mode or 0 to select
+// mono mode.
+//
+
+#define SNDCTL_DSP_STEREO 0x501E
+
+//
 // Define the audio format bits.
 //
 

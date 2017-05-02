@@ -1095,6 +1095,7 @@ Return Value:
 {
 
     UINTN BufferSize;
+    ULONG ChannelCount;
     UINTN ControllerOffset;
     PVOID CopyOutBuffer;
     UINTN CopySize;
@@ -1176,8 +1177,42 @@ Return Value:
             }
         }
 
-        Handle->ChannelCount = IntegerUlong;
+        if (IntegerUlong <= Handle->Device->MaxChannelCount) {
+            Handle->ChannelCount = IntegerUlong;
+        }
+
         CopyOutBuffer = &(Handle->ChannelCount);
+        break;
+
+    case SoundSetStereo:
+        CopySize = sizeof(ULONG);
+        if (RequestBufferSize < CopySize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (FromKernelMode != FALSE) {
+            IntegerUlong = *((PULONG)RequestBuffer);
+
+        } else {
+            Status = MmCopyFromUserMode(&IntegerUlong, RequestBuffer, CopySize);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        if ((IntegerUlong == 1) &&
+            (Handle->Device->MaxChannelCount >= SOUND_STEREO_CHANNEL_COUNT)) {
+
+            ChannelCount = SOUND_STEREO_CHANNEL_COUNT;
+
+        } else {
+            ChannelCount = SOUND_MONO_CHANNEL_COUNT;
+            IntegerUlong = 0;
+        }
+
+        Handle->ChannelCount = ChannelCount;
+        CopyOutBuffer = &IntegerUlong;
         break;
 
     case SoundSetSampleRate:

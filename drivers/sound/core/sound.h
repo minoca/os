@@ -69,6 +69,18 @@ Author:
 #define SOUND_SAMPLE_RATE_DEFAULT 48000
 
 //
+// Define the number of channels used in stereo sound.
+//
+
+#define SOUND_STEREO_CHANNEL_COUNT 2
+
+//
+// Define the number of channels used in mono sound.
+//
+
+#define SOUND_MONO_CHANNEL_COUNT 1
+
+//
 // Default to volumes of 50-50 in both channels.
 //
 

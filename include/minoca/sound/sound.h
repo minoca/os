@@ -114,6 +114,7 @@ typedef enum _SOUND_CONTROL {
     SoundSetInputRoute = 0x501B,
     SoundSetInputVolume = 0x501C,
     SoundSetSampleRate = 0x501D,
+    SoundSetStereo = 0x501E,
 } SOUND_CONTROL, *PSOUND_CONTROL;
 
 /*++
