@@ -26,9 +26,9 @@
 #
 ################################################################################
 
-BINARY = debugui.exe
+BINARY = debugui
 
-BINARYTYPE = win32
+BINARYTYPE = build
 
 BUILD = yes
 
@@ -43,20 +43,22 @@ TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \
 
 DYNLIBS = -lpsapi -lws2_32 -lmswsock -ladvapi32 -lshlwapi
 
+EXTRA_LDFLAGS += -mwindows
+
 VPATH += $(SRCDIR)/..:$(SRCDIR)/../..:
 
 ifeq ($(ARCH), x86)
 
 include $(SRCDIR)/../../sources
 
-X86_OBJS += $(COMMON_OBJS)   \
-            debugres.rsc \
-            ntcomm.o     \
-            ntdbgui.o    \
-            ntextsup.o   \
-            ntsock.o     \
-            ntusrdbg.o   \
-            ntusrsup.o   \
+OBJS = $(COMMON_OBJS) \
+       debugres.rsc   \
+       ntcomm.o       \
+       ntdbgui.o      \
+       ntextsup.o     \
+       ntsock.o       \
+       ntusrdbg.o     \
+       ntusrsup.o     \
 
 endif
 

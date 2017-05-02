@@ -26,13 +26,13 @@
 #
 ################################################################################
 
-BINARY = swiss.exe
+BINARY = swiss
 
 BINPLACE = tools/bin
 
 BUILD = yes
 
-BINARYTYPE = ntconsole
+BINARYTYPE = build
 
 INCLUDES += $(SRCROOT)/os/apps/libc/dynamic/wincsup/include;$(SRCDIR)/..;.;
 

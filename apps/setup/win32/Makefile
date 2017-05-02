@@ -26,13 +26,13 @@
 #
 ################################################################################
 
-BINARY = msetup.exe
+BINARY = msetup
 
 BINPLACE = tools/bin
 
 BUILD = yes
 
-BINARYTYPE = ntconsole
+BINARYTYPE = build
 
 VPATH += $(SRCDIR)/..:
 

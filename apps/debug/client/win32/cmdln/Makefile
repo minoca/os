@@ -26,9 +26,9 @@
 #
 ################################################################################
 
-BINARY = debug.exe
+BINARY = debug
 
-BINARYTYPE = ntconsole
+BINARYTYPE = build
 
 BUILD = yes
 

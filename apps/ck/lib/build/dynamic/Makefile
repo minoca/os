@@ -48,7 +48,6 @@ OS ?= $(shell uname -s)
 ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 BINARY := chalk.dll
-BINARYTYPE := dll
 
 OBJS += $(WIN32_OBJS)
 

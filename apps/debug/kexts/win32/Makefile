@@ -28,7 +28,7 @@
 
 BINARY = kexts.dll
 
-BINARYTYPE = dll
+BINARYTYPE = so
 
 BINPLACE = tools/bin
 

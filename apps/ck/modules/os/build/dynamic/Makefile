@@ -42,7 +42,6 @@ OS ?= $(shell uname -s)
 ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 BINARY := os.dll
-BINARYTYPE := dll
 
 OBJS += $(WIN32_OBJS)
 

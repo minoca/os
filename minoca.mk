@@ -255,7 +255,7 @@ endif
 ##
 
 ifeq (armv6, $(ARCH))
-ifneq ($(BINARYTYPE), $(filter ntconsole win32 dll,$(BINARYTYPE)))
+ifneq ($(BINARYTYPE), build)
 EXTRA_CPPFLAGS += -march=armv6zk -marm -mfpu=vfp
 endif
 endif
@@ -268,7 +268,7 @@ EXTRA_CFLAGS += -mno-ms-bitfields
 ##
 
 ifeq ($(VARIANT),q)
-ifneq ($(BINARYTYPE), $(filter ntconsole win32 dll,$(BINARYTYPE)))
+ifneq ($(BINARYTYPE), build)
 EXTRA_CPPFLAGS += -Wa,-momit-lock-prefix=yes -march=i586
 endif
 endif
@@ -441,18 +441,6 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
 	@echo Linking - $@
 	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -static -o $@ -Wl,--start-group $^ -Wl,--end-group -Bdynamic $(DYNLIBS)
     endif
-    ifeq ($(BINARYTYPE),ntconsole)
-	@echo Linking - $@
-	@$(CC) -o $@ $^ $(TARGETLIBS) -Bdynamic $(DYNLIBS)
-    endif
-    ifeq ($(BINARYTYPE),win32)
-	@echo Linking - $@
-	@$(CC) -mwindows -o $@ $^ $(TARGETLIBS) -Bdynamic $(DYNLIBS)
-    endif
-    ifeq ($(BINARYTYPE),dll)
-	@echo Linking - $@
-	@$(CC) -shared -o $@ $^ $(TARGETLIBS) -Bdynamic $(DYNLIBS)
-    endif
     ifeq ($(BINARYTYPE),library)
 	@echo Building Library - $@
 	@$(AR) rcs $@ $^ $(TARGETLIBS)
@@ -477,7 +465,7 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
     endif
     ifeq ($(BINARYTYPE),build)
 	@echo Linking - $@
-	@$(CC) $(LDFLAGS) -o $@ $^ $(TARGETLIBS) -Bdynamic $(DYNLIBS)
+	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -o $@ $^ $(TARGETLIBS) -Bdynamic $(DYNLIBS)
     endif
     ifneq ($(BINPLACE),)
 	@echo Binplacing - $(OUTROOT)/$(BINPLACE)/$(BINARY)
