@@ -57,7 +57,8 @@ extern PCSTR CkAppExecName;
 
 BOOL
 CkPreloadAppModule (
-    PCK_VM Vm
+    PCK_VM Vm,
+    PCSTR Argument0
     );
 
 /*++
@@ -70,6 +71,9 @@ Routine Description:
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
+
+    Argument0 - Supplies the zeroth argument to the original command line. This
+        is used to find the application executable.
 
 Return Value:
 

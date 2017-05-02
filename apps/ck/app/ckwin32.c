@@ -62,6 +62,8 @@ ChalkAddSearchPath (
 // -------------------------------------------------------------------- Globals
 //
 
+extern PSTR CkAppExecName;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -96,6 +98,8 @@ Return Value:
 
     PSTR Copy;
     CHAR Directory[MAX_PATH];
+    PSTR DirName;
+    PSTR ExecName;
     PSTR Next;
     PSTR Path;
     HRESULT Result;
@@ -157,6 +161,22 @@ Return Value:
         free(Copy);
 
     } else {
+
+        //
+        // Add the sysroot-like path relative to the executable.
+        //
+
+        if ((CkAppExecName != NULL) && (*CkAppExecName != '\0')) {
+            ExecName = strdup(CkAppExecName);
+            if (ExecName != NULL) {
+                DirName = dirname(ExecName);
+                if (DirName != NULL) {
+                    ChalkAddSearchPath(Vm, DirName, "../lib/chalk");
+                }
+
+                free(ExecName);
+            }
+        }
 
         //
         // Add the current user's application data directory.

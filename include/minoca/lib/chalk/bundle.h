@@ -38,13 +38,6 @@ Author:
 //
 
 //
-// Define the location of this executable. This must be set prior to creating
-// or loading a new bundle.
-//
-
-extern PSTR CkBundleExecName;
-
-//
 // -------------------------------------------------------- Function Prototypes
 //
 

@@ -34,6 +34,7 @@ Environment:
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/chalk.h>
+#include <minoca/lib/chalk/app.h>
 
 #include <errno.h>
 #include <libgen.h>
@@ -179,14 +180,7 @@ CK_VARIABLE_DESCRIPTION CkBundleModuleValues[] = {
 };
 
 //
-// Define the location of this executable. This must be set prior to creating
-// or loading a new bundle.
-//
-
-PSTR CkBundleExecName;
-
-//
-// Define the termporary directory name where modules are stored.
+// Define the temporary directory name where modules are stored.
 //
 
 CHAR CkBundleDirectory[256];
@@ -269,7 +263,7 @@ Return Value:
     INT Status;
 
     Buffer = NULL;
-    if (stat(CkBundleExecName, &Stat) != 0) {
+    if (stat(CkAppExecName, &Stat) != 0) {
         Status = errno;
         goto BundleThawEnd;
     }
@@ -280,7 +274,7 @@ Return Value:
         goto BundleThawEnd;
     }
 
-    File = fopen(CkBundleExecName, "rb");
+    File = fopen(CkAppExecName, "rb");
     if (File == NULL) {
         Status = errno;
         goto BundleThawEnd;
@@ -410,7 +404,7 @@ Return Value:
     // 3) The expression to execute once all modules are preloaded.
     //
 
-    if (CkBundleExecName == NULL) {
+    if ((CkAppExecName == NULL) || (*CkAppExecName == '\0')) {
         Status = EINVAL;
         goto BundleCreateEnd;
     }
@@ -426,12 +420,12 @@ Return Value:
         goto BundleCreateEnd;
     }
 
-    if (stat(CkBundleExecName, &Stat) != 0) {
+    if (stat(CkAppExecName, &Stat) != 0) {
         Status = errno;
         goto BundleCreateEnd;
     }
 
-    Executable = fopen(CkBundleExecName, "rb");
+    Executable = fopen(CkAppExecName, "rb");
     if (Executable == NULL) {
         Status = errno;
         goto BundleCreateEnd;

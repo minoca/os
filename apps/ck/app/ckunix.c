@@ -37,10 +37,15 @@ Environment:
 #include <unistd.h>
 
 #include <minoca/lib/types.h>
+#include <minoca/lib/chalk.h>
+#include <minoca/lib/chalk/app.h>
 
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+#define CK_APP_PREFIX "/usr"
+#define CK_APP_LIBDIR CK_APP_PREFIX "/lib"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -95,6 +100,8 @@ Return Value:
 
     PSTR Copy;
     PSTR CurrentDirectory;
+    PSTR DirName;
+    PSTR ExecName;
     PSTR Home;
     PSTR Next;
     PSTR Path;
@@ -163,6 +170,22 @@ Return Value:
     } else {
 
         //
+        // Add the sysroot-like path relative to the executable.
+        //
+
+        if ((CkAppExecName != NULL) && (*CkAppExecName != '\0')) {
+            ExecName = strdup(CkAppExecName);
+            if (ExecName != NULL) {
+                DirName = dirname(ExecName);
+                if (DirName != NULL) {
+                    ChalkAddSearchPath(Vm, DirName, "../lib/chalk");
+                }
+
+                free(ExecName);
+            }
+        }
+
+        //
         // Add the current user's home directory.
         //
 
@@ -172,12 +195,10 @@ Return Value:
         }
 
         //
-        // Add some standard paths.
+        // Add the system path.
         //
 
-        ChalkAddSearchPath(Vm, "/usr/local/lib", "chalk");
-        ChalkAddSearchPath(Vm, "/usr/lib", "chalk");
-        ChalkAddSearchPath(Vm, "/lib", "chalk");
+        ChalkAddSearchPath(Vm, CK_APP_LIBDIR, "chalk");
     }
 
     return;
