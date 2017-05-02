@@ -133,6 +133,14 @@ Author:
 #define IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED 0x00000400
 
 //
+// This flag is set if the page cache entries in the I/O buffer come from
+// file objects that must be mapped non-cached. There should not be a mix of
+// file objects in the same I/O buffer if this attribute is set.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_MAP_NON_CACHED 0x00000800
+
+//
 // --------------------------------------------------------------------- Macros
 //
 
@@ -221,6 +229,9 @@ Members:
 
     MaxTouched - Stores the maximum address that has been accessed.
 
+    MapFlags - Stores an additional bitmask of MAP_FLAG_* definitions to OR in
+        to any mappings of this section.
+
 --*/
 
 typedef struct _IMAGE_SECTION IMAGE_SECTION, *PIMAGE_SECTION;
@@ -246,6 +257,7 @@ struct _IMAGE_SECTION {
     UINTN ImageBackingReferenceCount;
     PVOID MinTouched;
     PVOID MaxTouched;
+    ULONG MapFlags;
 };
 
 /*++

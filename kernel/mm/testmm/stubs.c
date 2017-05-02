@@ -2595,7 +2595,8 @@ Return Value:
 
 BOOL
 IoIoHandleIsCacheable (
-    PIO_HANDLE IoHandle
+    PIO_HANDLE IoHandle,
+    PULONG MapFlags
     )
 
 /*++
@@ -2609,9 +2610,14 @@ Arguments:
 
     IoHandle - Supplies a pointer to an I/O handle.
 
+    MapFlags - Supplies an optional pointer where any additional map flags
+        needed when mapping sections from this handle will be returned.
+        See MAP_FLAG_* definitions.
+
 Return Value:
 
-    Returns TRUE if the I/O handle's object is cached or FALSE otherwise.
+    Returns TRUE if the I/O handle's object uses the page cache, FALSE
+    otherwise.
 
 --*/
 
@@ -2929,7 +2935,8 @@ Return Value:
 
 PHYSICAL_ADDRESS
 IoGetPageCacheEntryPhysicalAddress (
-    PPAGE_CACHE_ENTRY Entry
+    PPAGE_CACHE_ENTRY Entry,
+    PULONG MapFlags
     )
 
 /*++
@@ -2941,6 +2948,9 @@ Routine Description:
 Arguments:
 
     Entry - Supplies a pointer to a page cache entry.
+
+    MapFlags - Supplies an optional pointer to the additional mapping flags
+        mandated by the underlying file object.
 
 Return Value:
 

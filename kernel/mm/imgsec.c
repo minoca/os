@@ -1313,6 +1313,7 @@ Return Value:
     NewSection->PagingInIrp = NULL;
     NewSection->AddressListEntry.Next = NULL;
     NewSection->ImageListEntry.Next = NULL;
+    NewSection->MapFlags = SectionToCopy->MapFlags;
 
     //
     // If the image section is backed, then it will add itself to the backing
@@ -1691,7 +1692,7 @@ Return Value:
             LastDirtyPage = PageIndex;
         }
 
-        if ((Section->Flags & IMAGE_SECTION_CACHEABLE) != 0) {
+        if ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) {
 
             //
             // The page cache entries are in paged pool, but since this is a
@@ -2345,7 +2346,7 @@ Return Value:
     // Compute the appropriate flags for the page.
     //
 
-    MapFlags = MAP_FLAG_PAGABLE;
+    MapFlags = Section->MapFlags | MAP_FLAG_PAGABLE;
     if ((Section->Flags &
         (IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE)) != 0) {
 
@@ -2634,6 +2635,7 @@ Return Value:
     ULONG BitmapCount;
     ULONG BitmapSize;
     PIMAGE_SECTION_LIST ImageSectionList;
+    ULONG MapFlags;
     PIMAGE_SECTION NewSection;
     UINTN PageCount;
     ULONG PageMask;
@@ -2643,6 +2645,7 @@ Return Value:
     KSTATUS Status;
 
     ImageSectionList = NULL;
+    MapFlags = 0;
     NewSection = NULL;
     PageSize = MmPageSize();
     PageShift = MmPageShift();
@@ -2692,8 +2695,17 @@ Return Value:
         (IS_ALIGNED(ImageOffset, IoGetCacheEntryDataSize()) != FALSE)) {
 
         Flags |= IMAGE_SECTION_BACKED;
-        if (IoIoHandleIsCacheable(ImageHandle) != FALSE) {
-            Flags |= IMAGE_SECTION_CACHEABLE;
+        if (IoIoHandleIsCacheable(ImageHandle, &MapFlags) != FALSE) {
+            Flags |= IMAGE_SECTION_PAGE_CACHE_BACKED;
+        }
+
+        //
+        // If this is not a shared section, private mappings always get mapped
+        // cached, etc.
+        //
+
+        if ((Flags & IMAGE_SECTION_SHARED) == 0) {
+            MapFlags = 0;
         }
 
         //
@@ -2783,6 +2795,7 @@ Return Value:
     NewSection->ImageBackingReferenceCount = 1;
     NewSection->MinTouched = VirtualAddress + Size;
     NewSection->MaxTouched = VirtualAddress;
+    NewSection->MapFlags = MapFlags;
     if (ImageHandle != INVALID_HANDLE) {
         IoIoHandleAddReference(ImageHandle);
         NewSection->ImageBacking.Offset = ImageOffset;
@@ -3840,7 +3853,7 @@ Return Value:
         //
 
         if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) &&
-            ((Section->Flags & IMAGE_SECTION_CACHEABLE) != 0) &&
+            ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
             ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
             (PageWasDirty != FALSE)) {
 
@@ -4209,7 +4222,7 @@ Return Value:
         //
 
         if (((Section->Flags & IMAGE_SECTION_SHARED) != 0) &&
-            ((Section->Flags & IMAGE_SECTION_CACHEABLE) != 0) &&
+            ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) &&
             ((Section->Flags & IMAGE_SECTION_WAS_WRITABLE) != 0) &&
             (PageWasDirty != FALSE)) {
 

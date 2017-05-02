@@ -1114,6 +1114,7 @@ Return Value:
                                   IO_BUFFER_INTERNAL_FLAG_MAPPED |
                                   IO_BUFFER_INTERNAL_FLAG_VA_CONTIGUOUS);
 
+    IoBuffer->Internal.MapFlags = 0;
     if (IoBuffer->Internal.PageCacheEntries != NULL) {
         RtlZeroMemory(IoBuffer->Internal.PageCacheEntries,
                       IoBuffer->Internal.PageCacheEntryCount * sizeof(PVOID));
@@ -2395,6 +2396,7 @@ Return Value:
 
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
+    ULONG MapFlags;
     UINTN PageIndex;
     ULONG PageSize;
 
@@ -2447,7 +2449,10 @@ Return Value:
     //
 
     if (PageCacheEntry != NULL) {
-        PhysicalAddress = IoGetPageCacheEntryPhysicalAddress(PageCacheEntry);
+        PhysicalAddress = IoGetPageCacheEntryPhysicalAddress(PageCacheEntry,
+                                                             &MapFlags);
+
+        IoBuffer->Internal.MapFlags |= MapFlags;
         VirtualAddress = IoGetPageCacheEntryVirtualAddress(PageCacheEntry);
     }
 
@@ -2549,7 +2554,9 @@ Return Value:
 
 {
 
+    ULONG MapFlags;
     UINTN PageIndex;
+    PHYSICAL_ADDRESS PhysicalAddress;
 
     IoBufferOffset += IoBuffer->Internal.CurrentOffset;
 
@@ -2570,9 +2577,14 @@ Return Value:
     ASSERT(PageIndex < IoBuffer->Internal.PageCacheEntryCount);
     ASSERT(IoBuffer->Internal.PageCacheEntries != NULL);
     ASSERT(IoBuffer->Internal.PageCacheEntries[PageIndex] == NULL);
-    ASSERT(MmGetIoBufferPhysicalAddress(IoBuffer, IoBufferOffset) ==
-           IoGetPageCacheEntryPhysicalAddress(PageCacheEntry));
 
+    PhysicalAddress = IoGetPageCacheEntryPhysicalAddress(PageCacheEntry,
+                                                         &MapFlags);
+
+    ASSERT(MmGetIoBufferPhysicalAddress(IoBuffer, IoBufferOffset) ==
+           PhysicalAddress);
+
+    IoBuffer->Internal.MapFlags |= MapFlags;
     IoPageCacheEntryAddReference(PageCacheEntry);
     IoBuffer->Internal.PageCacheEntries[PageIndex] = PageCacheEntry;
 
@@ -2954,7 +2966,8 @@ Return Value:
 
                 ASSERT((Flags & IO_BUFFER_INTERNAL_FLAG_CACHE_BACKED) != 0);
                 ASSERT((Fragment->PhysicalAddress + (PageIndex * PageSize)) ==
-                       IoGetPageCacheEntryPhysicalAddress(PageCacheEntry));
+                       IoGetPageCacheEntryPhysicalAddress(PageCacheEntry,
+                                                          NULL));
 
                 IoPageCacheEntryReleaseReference(PageCacheEntry);
 
@@ -3042,6 +3055,7 @@ Return Value:
     FragmentEnd = FragmentStart + FragmentCount;
     PageShift = MmPageShift();
     PageSize = MmPageSize();
+    MapFlags |= IoBuffer->Internal.MapFlags;
 
     //
     // Get the current page offset if this is page cache backed.

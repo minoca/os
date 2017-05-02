@@ -195,10 +195,11 @@ Author:
 #define FILE_OBJECT_FLAG_DIRTY_PROPERTIES 0x00000008
 
 //
-// This flag is set in the file object if its data should not be cached.
+// This flag is set in the file object if its data should not be cached in the
+// page cache.
 //
 
-#define FILE_OBJECT_FLAG_NON_CACHED 0x00000010
+#define FILE_OBJECT_FLAG_NO_PAGE_CACHE 0x00000010
 
 //
 // This flag is set if the file object gets its I/O state from elsewhere, and
@@ -321,7 +322,7 @@ Author:
 
 #define IO_IS_FILE_OBJECT_CACHEABLE(_FileObject)                             \
     ((IO_IS_CACHEABLE_TYPE(_FileObject->Properties.Type) != FALSE) &&        \
-     ((_FileObject->Flags & FILE_OBJECT_FLAG_NON_CACHED) == 0))
+     ((_FileObject->Flags & FILE_OBJECT_FLAG_NO_PAGE_CACHE) == 0))
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -390,6 +391,9 @@ Members:
         FILE_OBJECT_FLAG_* for definitions. This must be modified with atomic
         operations.
 
+    MapFlags - Stores a set of additional mapping flags that should be set
+        when mapping contents from this file object.
+
     Properties - Stores the characteristics for this file.
 
     FileLockList - Stores the head of the list of file locks held on this
@@ -416,6 +420,7 @@ struct _FILE_OBJECT {
     volatile PIMAGE_SECTION_LIST ImageSectionList;
     volatile PVOID DeviceContext;
     volatile ULONG Flags;
+    ULONG MapFlags;
     FILE_PROPERTIES Properties;
     LIST_ENTRY FileLockList;
     PKEVENT FileLockEvent;
@@ -2109,7 +2114,8 @@ IopSendLookupRequest (
     PCSTR FileName,
     ULONG FileNameSize,
     PFILE_PROPERTIES Properties,
-    PULONG Flags
+    PULONG Flags,
+    PULONG MapFlags
     );
 
 /*++
@@ -2138,6 +2144,9 @@ Arguments:
 
     Flags - Supplies a pointer where the translated file object flags will be
         returned. See FILE_OBJECT_FLAG_* definitions.
+
+    MapFlags - Supplies a pointer where the required map flags associated with
+        this file object will be returned. See MAP_FLAG_* definitions.
 
 Return Value:
 
@@ -2415,6 +2424,7 @@ IopCreateOrLookupFileObject (
     PFILE_PROPERTIES Properties,
     PDEVICE Device,
     ULONG Flags,
+    ULONG MapFlags,
     PFILE_OBJECT *FileObject,
     PBOOL ObjectCreated
     );
@@ -2438,6 +2448,9 @@ Arguments:
 
     Flags - Supplies a bitmask of file object flags. See FILE_OBJECT_FLAG_* for
         definitions.
+
+    MapFlags - Supplies the additional map flags associated with this file
+        object. See MAP_FLAG_* definitions.
 
     FileObject - Supplies a pointer where the file object will be returned on
         success.

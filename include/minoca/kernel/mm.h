@@ -126,7 +126,7 @@ Author:
 #define IMAGE_SECTION_DESTROYING        0x00000100
 #define IMAGE_SECTION_DESTROYED         0x00000200
 #define IMAGE_SECTION_WAS_WRITABLE      0x00000400
-#define IMAGE_SECTION_CACHEABLE         0x00000800
+#define IMAGE_SECTION_PAGE_CACHE_BACKED 0x00000800
 
 //
 // Define a mask of image section flags that should be transfered when an image
@@ -152,7 +152,7 @@ Author:
 
 #define IMAGE_SECTION_INTERNAL_MASK \
     (IMAGE_SECTION_BACKED | IMAGE_SECTION_NO_IMAGE_BACKING | \
-     IMAGE_SECTION_CACHEABLE)
+     IMAGE_SECTION_PAGE_CACHE_BACKED)
 
 //
 // Define flags used for unmapping image sections.
@@ -572,6 +572,9 @@ Members:
     PageCacheEntries - Stores an array of page cache entries associated with
         this I/O buffer.
 
+    MapFlags - Stores any additional mapping flags mandated by the file object
+        for this I/O buffer. See MAP_FLAG_* definitions.
+
     Fragment - Stores an I/O buffer fragment structure used for stack-allocated
         I/O buffers that only require one fragment.
 
@@ -585,6 +588,7 @@ typedef struct _IO_BUFFER_INTERNAL {
     UINTN PageCacheEntryCount;
     PVOID PageCacheEntry;
     PVOID *PageCacheEntries;
+    ULONG MapFlags;
     IO_BUFFER_FRAGMENT Fragment;
 } IO_BUFFER_INTERNAL, *PIO_BUFFER_INTERNAL;
 

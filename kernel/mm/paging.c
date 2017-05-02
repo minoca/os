@@ -1736,7 +1736,7 @@ Return Value:
                 TraverseChildren = FALSE;
             }
 
-            MapFlags = MAP_FLAG_PAGABLE;
+            MapFlags = CurrentSection->MapFlags | MAP_FLAG_PAGABLE;
             if (VirtualAddress >= KERNEL_VA_START) {
                 MapFlags |= MAP_FLAG_GLOBAL;
 
@@ -3210,7 +3210,7 @@ Return Value:
 
         ASSERT((PageCacheEntry == NULL) ||
                (PhysicalAddress ==
-                IoGetPageCacheEntryPhysicalAddress(PageCacheEntry)));
+                IoGetPageCacheEntryPhysicalAddress(PageCacheEntry, NULL)));
 
         //
         // Acquire the image section lock.
@@ -3313,7 +3313,7 @@ PageInSharedSectionEnd:
             // unnecessary page cache cleaning when the section is destroyed.
             //
 
-            MapFlags = MAP_FLAG_READ_ONLY;
+            MapFlags = ImageSection->MapFlags | MAP_FLAG_READ_ONLY;
             if (VirtualAddress >= KERNEL_VA_START) {
                 MapFlags |= MAP_FLAG_GLOBAL;
 
@@ -3564,7 +3564,7 @@ Return Value:
 
             ASSERT((PageCacheEntry == NULL) ||
                    (PageCacheAddress ==
-                    IoGetPageCacheEntryPhysicalAddress(PageCacheEntry)));
+                    IoGetPageCacheEntryPhysicalAddress(PageCacheEntry, NULL)));
 
             //
             // Reset or initialize the locked page cache I/O buffer for use.
@@ -3775,7 +3775,7 @@ Return Value:
 
         ASSERT((PageCacheEntry == NULL) ||
                (PageCacheAddress ==
-                IoGetPageCacheEntryPhysicalAddress(PageCacheEntry)));
+                IoGetPageCacheEntryPhysicalAddress(PageCacheEntry, NULL)));
 
         //
         // Store the page cache entry in the locked I/O buffer.

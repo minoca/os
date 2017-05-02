@@ -2151,6 +2151,7 @@ Return Value:
         Status = IopCreateOrLookupFileObject(&Properties,
                                              RootObject,
                                              FILE_OBJECT_FLAG_EXTERNAL_IO_STATE,
+                                             0,
                                              &NewFileObject,
                                              &(Create->Created));
 

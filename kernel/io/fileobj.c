@@ -709,6 +709,7 @@ IopCreateOrLookupFileObject (
     PFILE_PROPERTIES Properties,
     PDEVICE Device,
     ULONG Flags,
+    ULONG MapFlags,
     PFILE_OBJECT *FileObject,
     PBOOL ObjectCreated
     )
@@ -732,6 +733,9 @@ Arguments:
 
     Flags - Supplies a bitmask of file object flags. See FILE_OBJECT_FLAG_* for
         definitions.
+
+    MapFlags - Supplies the additional map flags associated with this file
+        object. See MAP_FLAG_* definitions.
 
     FileObject - Supplies a pointer where the file object will be returned on
         success.
@@ -816,6 +820,7 @@ Return Value:
                 }
 
                 NewObject->Flags = Flags;
+                NewObject->MapFlags = Flags;
                 NewObject->Device = Device;
                 ObAddReference(Device);
 

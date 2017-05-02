@@ -707,6 +707,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     ULONG FileObjectFlags;
     PKPROCESS KernelProcess;
+    ULONG MapFlags;
     BOOL Match;
     PARTITION_DEVICE_INFORMATION PartitionInformation;
     UINTN PartitionInformationSize;
@@ -766,7 +767,8 @@ Return Value:
                                   NULL,
                                   0,
                                   &Properties,
-                                  &FileObjectFlags);
+                                  &FileObjectFlags,
+                                  &MapFlags);
 
     if (!KSUCCESS(Status)) {
         goto VolumeArrivalEnd;
@@ -781,6 +783,7 @@ Return Value:
     Status = IopCreateOrLookupFileObject(&Properties,
                                          &(Volume->Device),
                                          FileObjectFlags,
+                                         MapFlags,
                                          &FileObject,
                                          &Created);
 

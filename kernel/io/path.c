@@ -478,6 +478,7 @@ Return Value:
     Status = IopCreateOrLookupFileObject(&Properties,
                                          RootObject,
                                          FILE_OBJECT_FLAG_EXTERNAL_IO_STATE,
+                                         0,
                                          &FileObject,
                                          &Created);
 
@@ -2521,6 +2522,7 @@ Return Value:
     PFILE_OBJECT FileObject;
     ULONG FileObjectFlags;
     BOOL FoundPathPoint;
+    ULONG MapFlags;
     BOOL Negative;
     POBJECT_HEADER Object;
     PPATH_ENTRY PathEntry;
@@ -2679,8 +2681,8 @@ Return Value:
                 ASSERT(Properties.DeviceId == PathRoot->DeviceId);
 
                 FileObjectFlags = 0;
-                if ((OpenFlags & OPEN_FLAG_NON_CACHED) != 0) {
-                    FileObjectFlags |= FILE_OBJECT_FLAG_NON_CACHED;
+                if ((OpenFlags & OPEN_FLAG_NO_PAGE_CACHE) != 0) {
+                    FileObjectFlags |= FILE_OBJECT_FLAG_NO_PAGE_CACHE;
                 }
 
                 switch (Properties.Type) {
@@ -2700,6 +2702,7 @@ Return Value:
                 Status = IopCreateOrLookupFileObject(&Properties,
                                                      PathRoot,
                                                      FileObjectFlags,
+                                                     0,
                                                      &FileObject,
                                                      &Created);
 
@@ -2746,7 +2749,8 @@ Return Value:
                                           Name,
                                           NameSize,
                                           &Properties,
-                                          &FileObjectFlags);
+                                          &FileObjectFlags,
+                                          &MapFlags);
 
             if (!KSUCCESS(Status)) {
                 if (Status == STATUS_PATH_NOT_FOUND) {
@@ -2762,8 +2766,8 @@ Return Value:
 
             } else {
                 Properties.DeviceId = DirectoryFileObject->Properties.DeviceId;
-                if ((OpenFlags & OPEN_FLAG_NON_CACHED) != 0) {
-                    FileObjectFlags |= FILE_OBJECT_FLAG_NON_CACHED;
+                if ((OpenFlags & OPEN_FLAG_NO_PAGE_CACHE) != 0) {
+                    FileObjectFlags |= FILE_OBJECT_FLAG_NO_PAGE_CACHE;
                 }
 
                 switch (Properties.Type) {
@@ -2790,6 +2794,7 @@ Return Value:
                 Status = IopCreateOrLookupFileObject(&Properties,
                                                      DirectoryDevice,
                                                      FileObjectFlags,
+                                                     MapFlags,
                                                      &FileObject,
                                                      &Created);
 
@@ -2805,7 +2810,7 @@ Return Value:
         //
 
         if ((Created == FALSE) && (FileObject != NULL)) {
-            if (((OpenFlags & OPEN_FLAG_NON_CACHED) != 0) &&
+            if (((OpenFlags & OPEN_FLAG_NO_PAGE_CACHE) != 0) &&
                 (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE)) {
 
                 Status = STATUS_RESOURCE_IN_USE;
@@ -2951,7 +2956,8 @@ Return Value:
                                               NULL,
                                               0,
                                               &Properties,
-                                              &FileObjectFlags);
+                                              &FileObjectFlags,
+                                              &MapFlags);
 
                 if (KSUCCESS(Status)) {
                     PathRoot = (PDEVICE)Child;
@@ -3033,6 +3039,7 @@ Return Value:
             Status = IopCreateOrLookupFileObject(&Properties,
                                                  PathRoot,
                                                  FileObjectFlags,
+                                                 MapFlags,
                                                  &FileObject,
                                                  &Created);
 

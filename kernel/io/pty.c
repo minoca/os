@@ -1566,6 +1566,7 @@ Return Value:
             Status = IopCreateOrLookupFileObject(&Properties,
                                                  ObGetRootObject(),
                                                  0,
+                                                 0,
                                                  &NewFileObject,
                                                  &Created);
 
@@ -1672,6 +1673,7 @@ Return Value:
             Properties.Permissions = Create->Permissions;
             Status = IopCreateOrLookupFileObject(&Properties,
                                                  ObGetRootObject(),
+                                                 0,
                                                  0,
                                                  &NewFileObject,
                                                  &Created);

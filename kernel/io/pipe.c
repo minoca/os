@@ -358,6 +358,7 @@ Return Value:
         Status = IopCreateOrLookupFileObject(&FileProperties,
                                              ObGetRootObject(),
                                              0,
+                                             0,
                                              &NewFileObject,
                                              &Created);
 

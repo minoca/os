@@ -261,7 +261,7 @@ Author:
 // given file or device will bypass the page cache for all I/O operations.
 //
 
-#define OPEN_FLAG_NON_CACHED 0x20000000
+#define OPEN_FLAG_NO_PAGE_CACHE 0x20000000
 
 //
 // This flag is reserved for use only by the I/O manager. It indicates that the
@@ -856,11 +856,11 @@ Author:
 #define DIRECTORY_CONTENTS_OFFSET 2
 
 //
-// Set this flag in lookup if the device's data should not be cached. It is
-// intended for use with block devices.
+// Set this flag in lookup if the device's data should not be stored in the
+// page cache.
 //
 
-#define LOOKUP_FLAG_NON_CACHED 0x00000001
+#define LOOKUP_FLAG_NO_PAGE_CACHE 0x00000001
 
 //
 // Define the version number for the I/O cache statistics.
@@ -2206,6 +2206,10 @@ Members:
     Flags - Stores a bitmask of flags returned by lookup. See LOOKUP_FLAGS_*
         for definitions.
 
+    MapFlags - Supplies a bitmask of additional map flags to apply when mapping
+        physical addresses returned from doing I/O on this file object. See
+        MAP_FLAG_* definitions.
+
     DirectoryProperties - Stores a pointer to the properties of the directory
         file that is to be searched.
 
@@ -2224,6 +2228,7 @@ Members:
 typedef struct _SYSTEM_CONTROL_LOOKUP {
     BOOL Root;
     ULONG Flags;
+    ULONG MapFlags;
     PFILE_PROPERTIES DirectoryProperties;
     PCSTR FileName;
     ULONG FileNameSize;
@@ -6545,7 +6550,8 @@ Return Value:
 
 BOOL
 IoIoHandleIsCacheable (
-    PIO_HANDLE IoHandle
+    PIO_HANDLE IoHandle,
+    PULONG MapFlags
     );
 
 /*++
@@ -6559,9 +6565,14 @@ Arguments:
 
     IoHandle - Supplies a pointer to an I/O handle.
 
+    MapFlags - Supplies an optional pointer where any additional map flags
+        needed when mapping sections from this handle will be returned.
+        See MAP_FLAG_* definitions.
+
 Return Value:
 
-    Returns TRUE if the I/O handle's object is cached or FALSE otherwise.
+    Returns TRUE if the I/O handle's object uses the page cache, FALSE
+    otherwise.
 
 --*/
 
@@ -7598,7 +7609,8 @@ Return Value:
 
 PHYSICAL_ADDRESS
 IoGetPageCacheEntryPhysicalAddress (
-    PPAGE_CACHE_ENTRY Entry
+    PPAGE_CACHE_ENTRY Entry,
+    PULONG MapFlags
     );
 
 /*++
@@ -7610,6 +7622,9 @@ Routine Description:
 Arguments:
 
     Entry - Supplies a pointer to a page cache entry.
+
+    MapFlags - Supplies an optional pointer to the additional mapping flags
+        mandated by the underlying file object.
 
 Return Value:
 

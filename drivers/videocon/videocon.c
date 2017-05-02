@@ -1340,7 +1340,8 @@ Return Value:
     switch (Irp->MinorCode) {
     case IrpMinorSystemControlLookup:
         Lookup = (PSYSTEM_CONTROL_LOOKUP)Context;
-        Lookup->Flags = LOOKUP_FLAG_NON_CACHED;
+        Lookup->Flags = LOOKUP_FLAG_NO_PAGE_CACHE;
+        Lookup->MapFlags = MAP_FLAG_WRITE_THROUGH;
         Status = STATUS_PATH_NOT_FOUND;
         if (Lookup->Root != FALSE) {
 

@@ -232,7 +232,8 @@ Return Value:
 
 BOOL
 IoIoHandleIsCacheable (
-    PIO_HANDLE IoHandle
+    PIO_HANDLE IoHandle,
+    PULONG MapFlags
     )
 
 /*++
@@ -246,9 +247,14 @@ Arguments:
 
     IoHandle - Supplies a pointer to an I/O handle.
 
+    MapFlags - Supplies an optional pointer where any additional map flags
+        needed when mapping sections from this handle will be returned.
+        See MAP_FLAG_* definitions.
+
 Return Value:
 
-    Returns TRUE if the I/O handle's object is cached or FALSE otherwise.
+    Returns TRUE if the I/O handle's object uses the page cache, FALSE
+    otherwise.
 
 --*/
 
@@ -256,11 +262,15 @@ Return Value:
 
     PFILE_OBJECT FileObject;
 
+    FileObject = IoHandle->FileObject;
+    if (MapFlags != NULL) {
+        *MapFlags = FileObject->MapFlags;
+    }
+
     //
     // The I/O handle is deemed cacheable if the file object is cacheable.
     //
 
-    FileObject = IoHandle->FileObject;
     if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
         return TRUE;
     }

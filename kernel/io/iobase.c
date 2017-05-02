@@ -2999,7 +2999,7 @@ Return Value:
     // Open the file normally, but with the page file and non-cached flags set.
     //
 
-    Flags |= OPEN_FLAG_PAGE_FILE | OPEN_FLAG_NON_CACHED;
+    Flags |= OPEN_FLAG_PAGE_FILE | OPEN_FLAG_NO_PAGE_CACHE;
     Status = IopOpen(TRUE,
                      NULL,
                      Path,
@@ -4247,7 +4247,8 @@ IopSendLookupRequest (
     PCSTR FileName,
     ULONG FileNameSize,
     PFILE_PROPERTIES Properties,
-    PULONG Flags
+    PULONG Flags,
+    PULONG MapFlags
     )
 
 /*++
@@ -4277,6 +4278,9 @@ Arguments:
     Flags - Supplies a pointer where the translated file object flags will be
         returned. See FILE_OBJECT_FLAG_* definitions.
 
+    MapFlags - Supplies a pointer where the required map flags associated with
+        this file object will be returned. See MAP_FLAG_* definitions.
+
 Return Value:
 
     Status code.
@@ -4297,6 +4301,7 @@ Return Value:
     }
 
     Request.Flags = 0;
+    Request.MapFlags = 0;
     Request.DirectoryProperties = NULL;
     if (Directory != NULL) {
 
@@ -4315,8 +4320,8 @@ Return Value:
                                      &Request);
 
     *Flags = 0;
-    if ((Request.Flags & LOOKUP_FLAG_NON_CACHED) != 0) {
-        *Flags |= FILE_OBJECT_FLAG_NON_CACHED;
+    if ((Request.Flags & LOOKUP_FLAG_NO_PAGE_CACHE) != 0) {
+        *Flags |= FILE_OBJECT_FLAG_NO_PAGE_CACHE;
     }
 
     return Status;

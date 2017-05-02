@@ -1339,7 +1339,9 @@ Return Value:
             VirtualAddress = ScratchIoBuffer->Fragment[0].VirtualAddress;
 
         } else {
-            PhysicalAddress = IoGetPageCacheEntryPhysicalAddress(SourceEntry);
+            PhysicalAddress = IoGetPageCacheEntryPhysicalAddress(SourceEntry,
+                                                                 NULL);
+
             VirtualAddress = IoGetPageCacheEntryVirtualAddress(SourceEntry);
         }
 

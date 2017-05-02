@@ -658,7 +658,7 @@ Return Value:
             Properties->BlockSize = RAM_DISK_SECTOR_SIZE;
             Properties->BlockCount = Disk->Size / RAM_DISK_SECTOR_SIZE;
             Properties->Size = Disk->Size;
-            Lookup->Flags = LOOKUP_FLAG_NON_CACHED;
+            Lookup->Flags = LOOKUP_FLAG_NO_PAGE_CACHE;
             Status = STATUS_SUCCESS;
         }
 

@@ -739,7 +739,8 @@ Return Value:
 
 PHYSICAL_ADDRESS
 IoGetPageCacheEntryPhysicalAddress (
-    PPAGE_CACHE_ENTRY Entry
+    PPAGE_CACHE_ENTRY Entry,
+    PULONG MapFlags
     )
 
 /*++
@@ -752,6 +753,9 @@ Arguments:
 
     Entry - Supplies a pointer to a page cache entry.
 
+    MapFlags - Supplies an optional pointer to the additional mapping flags
+        mandated by the underlying file object.
+
 Return Value:
 
     Returns the physical address of the given page cache entry.
@@ -759,6 +763,10 @@ Return Value:
 --*/
 
 {
+
+    if (MapFlags != NULL) {
+        *MapFlags = Entry->FileObject->MapFlags;
+    }
 
     return Entry->PhysicalAddress;
 }
