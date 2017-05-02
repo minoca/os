@@ -704,6 +704,16 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/libjpeg-turbo-1.5.1"
         },
         {
+            "name": "Make freetype-prebuild",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-prebuild"
+        },
+        {
+            "name": "Make harfbuzz",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/harfbuzz-1.4.4"
+        },
+        {
             "name": "Make freetype",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-2.7.1"
@@ -747,21 +757,6 @@
             "name": "Make minidlna",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/minidlna-1.1.5"
-        },
-        {
-            "name": "Make freetype-prebuild",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-prebuild"
-        },
-        {
-            "name": "Make harfbuzz",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/harfbuzz-1.4.4"
-        },
-        {
-            "name": "Make freetype",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/freetype-2.7.1"
         },
         {
             "name": "Make fontconfig",
