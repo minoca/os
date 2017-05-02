@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2017 Minoca Corp. All rights reserved.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,15 +9,15 @@
 #
 #   Module Name:
 #
-#       Sound
+#       Intel High Definition Audio
 #
 #   Abstract:
 #
-#       This directory contains drivers related to sound input and output.
+#       This module implements Intel High Definition Audio support.
 #
 #   Author:
 #
-#       Chris Stevens 29-Mar-2017
+#       Chris Stevens 3-Apr-2017
 #
 #   Environment:
 #
@@ -25,10 +25,18 @@
 #
 ################################################################################
 
-SOUND_DRIVERS = core     \
-                intel    \
+BINARY = intelhda.drv
 
-DIRS = $(SOUND_DRIVERS) \
+BINARYTYPE = driver
+
+BINPLACE = bin
+
+OBJS = codec.o    \
+       hda.o      \
+       hdahw.o    \
+
+DYNLIBS = $(BINROOT)/kernel              \
+          $(BINROOT)/sound.drv           \
 
 include $(SRCROOT)/os/minoca.mk
 

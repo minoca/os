@@ -25,6 +25,7 @@ CUsbBootMouse=usbmouse.drv
 CUsbCompoundDevice=usbcomp.drv
 CUsbHub=usbhub.drv
 CUsbMassStorage=usbmass.drv
+CAudio=intelhda.drv
 
 DACPI=acpi.drv
 DACPI0007=null.drv

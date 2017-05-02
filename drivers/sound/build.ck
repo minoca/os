@@ -36,7 +36,9 @@ function build() {
         soundDrivers = [];
 
     } else if (arch == "x86") {
-        soundDrivers = [];
+        soundDrivers = [
+            "drivers/sound/intel/hda:intelhda"
+        ];
     }
 
     entries = group("sound_drivers", soundDrivers);
