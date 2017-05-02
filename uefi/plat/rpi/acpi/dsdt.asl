@@ -183,7 +183,7 @@ DefinitionBlock (
                             0x00001000)
 
                 Interrupt(, Level, ActiveHigh,) {62}
-                FixedDMA(11, 4, Width32Bit, )
+                FixedDMA(11, 11, Width32Bit, )
             })
         }
     }
