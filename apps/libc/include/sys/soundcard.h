@@ -169,7 +169,7 @@ Members:
 
 --*/
 
-typedef struct _audio_buf_info {
+typedef struct audio_buf_info {
     int bytes;
     int fragments;
     int fragsize;
