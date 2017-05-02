@@ -40,7 +40,7 @@ function build() {
     ];
 
     dynlibs = [
-        "drivers/usrinput:usrinput"
+        "drivers/input/usrinput:usrinput"
     ];
 
     drv = {

@@ -163,7 +163,9 @@ function build() {
     // Create the dynamic libraries.
     //
 
-    if ((buildOs != "Darwin") && (buildOs != "Windows") && (buildOs != "FreeBSD")) {
+    if ((buildOs != "Darwin") && (buildOs != "Windows") &&
+        (buildOs != "FreeBSD")) {
+
        buildLibConfig["DYNLIBS"] = ["-ldl"];
     }
 
@@ -199,7 +201,7 @@ function build() {
 
     for (entry in entries) {
         if ((entry.get("output")) && (entry.output.endsWith("ckcore.o"))) {
-            entry["implicits"] = ["ckcore.ck"];
+            entry["implicit"] = ["ckcore.ck"];
             addConfig(entry, "CPPFLAGS", "-I$S/apps/ck/lib");
         }
     }

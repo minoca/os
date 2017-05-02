@@ -32,7 +32,7 @@ function build() {
     var inputDrivers;
 
     inputDrivers = [
-        "drivers/input/elani2c:elani2c"
+        "drivers/input/elani2c:elani2c",
         "drivers/input/i8042:i8042"
     ];
 

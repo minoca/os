@@ -25,14 +25,22 @@ Environment:
 
 --*/
 
+from menv import driver;
+
 function build() {
+    var drv;
+    var dynlibs;
+    var entries;
+    var name;
+    var sources;
+
     name = "bcm27i2c";
     sources = [
         "bcm27i2c.c"
     ];
 
     dynlibs = [
-        "//drivers/spb/core:spb"
+        "drivers/spb/core:spb"
     ];
 
     drv = {
@@ -44,4 +52,3 @@ function build() {
     return entries;
 }
 
-return build();

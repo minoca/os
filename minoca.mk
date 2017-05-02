@@ -114,6 +114,16 @@ Makefile: ;
 %.mk :: ;
 % :: $(OBJDIR) ; @:
 
+##
+## If the current directory appears to be outside of SRCROOT, then there's a
+## problem. Having a symlink somewhere in SRCROOT causes this.
+##
+
+ifeq ($(CURDIR), $(subst $(SRCROOT),,$(CURDIR)))
+$(error The current directory $(CURDIR) does not appear to be a subdirectory \
+of SRCROOT=$(SRCROOT). Do you have a symlink in SRCROOT?)
+endif
+
 else
 
 THISDIR := $(subst $(OBJROOT)/,,$(CURDIR))
@@ -466,6 +476,10 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
     ifeq ($(BINARYTYPE),build)
 	@echo Linking - $@
 	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -o $@ $^ $(TARGETLIBS) -Bdynamic $(DYNLIBS)
+    endif
+    ifeq ($(BINARYTYPE),custom)
+	@echo Building - $@
+	@$(BUILD_COMMAND)
     endif
     ifneq ($(BINPLACE),)
 	@echo Binplacing - $(OUTROOT)/$(BINPLACE)/$(BINARY)

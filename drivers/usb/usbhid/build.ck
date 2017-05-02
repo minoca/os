@@ -29,7 +29,6 @@ from menv import driver;
 
 function build() {
     var drv;
-    var dynlibs;
     var entries;
     var name = "usbhid";
     var sources;
@@ -41,7 +40,7 @@ function build() {
 
     drv = {
         "label": name,
-        "inputs": sources + dynlibs,
+        "inputs": sources,
     };
 
     entries = driver(drv);

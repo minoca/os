@@ -60,7 +60,8 @@ function build() {
 
     linkLdflags = [
         "-nostdlib",
-        "-static"
+        "-static",
+        "-Wl,-zmax-page-size=1"
     ];
 
     linkConfig = {

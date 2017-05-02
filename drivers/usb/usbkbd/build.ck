@@ -41,7 +41,7 @@ function build() {
 
     dynlibs = [
         "drivers/usb/usbcore:usbcore",
-        "drivers/usrinput:usrinput"
+        "drivers/input/usrinput:usrinput"
     ];
 
     drv = {

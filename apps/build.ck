@@ -50,6 +50,7 @@ function build() {
         "apps/ck:chalk",
         "apps/debug:debug",
         "apps/efiboot:efiboot",
+        "apps/mingen:build_mingen",
         "apps/mount:mount",
         "apps/netcon:netcon",
         "apps/profile:profile",

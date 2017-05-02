@@ -36,6 +36,7 @@ function build() {
     var entries;
     var libs;
     var sources;
+    var tool;
 
     commonSources = [
         "chalk.c",

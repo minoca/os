@@ -39,7 +39,7 @@ function build() {
         "drivers/ata:ata",
         "drivers/devrem:devrem",
         "drivers/fat:fat",
-        "drivers/input:input_drivers,"
+        "drivers/input:input_drivers",
         "drivers/net:net_drivers",
         "drivers/null:null",
         "drivers/part:part",
@@ -58,7 +58,7 @@ function build() {
         drivers += [
             "drivers/dma:dma_drivers",
             "drivers/gpio:gpio_drivers",
-            "drivers/i8042/pl050:pl050",
+            "drivers/input/i8042/pl050:pl050",
             "drivers/spb:spb_drivers"
         ];
     }

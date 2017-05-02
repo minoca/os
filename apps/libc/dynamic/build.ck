@@ -265,7 +265,6 @@ function build() {
         "inputs": sources + mathSources + arch_sources + libs + dynlibs,
         "sources_config": sourcesConfig,
         "includes": sourcesIncludes,
-        "entry": "ClInitialize",
         "config": linkConfig,
         "major_version": "1"
     };

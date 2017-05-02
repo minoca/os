@@ -171,7 +171,7 @@ var longOptions = [
     "debug",
     "format=",
     "no-generator",
-    "input",
+    "input=",
     "dry-run",
     "output=",
     "help",
@@ -267,6 +267,7 @@ Return Value:
     //
     // The return from getopt is [config, remainingArgs]. Get the config now.
     //
+
     appOptions = appOptions[0];
     for (option in appOptions) {
         name = option[0];
@@ -588,6 +589,12 @@ Return Value:
 {
 
     var entryType;
+
+    if (!(entries is List)) {
+        Core.raise(TypeError("In %s: Return a list from build(), not a %s" %
+                             [moduleName,
+                              entries.type().name()]));
+    }
 
     for (entry in entries) {
         if (!(entry is Dict)) {
@@ -990,7 +997,15 @@ Return Value:
         module = input.rsplit(":", 1);
         label = module[1];
         module = module[0];
-        _loadModule(module);
+        try {
+            _loadModule(module);
+
+        } except ImportError as e {
+            _raiseModuleError(target.module,
+                              target,
+                              "Failed to import '%s'" % module);
+        }
+
         if (label == "") {
             inputTarget = _findAllTargets(module);
 

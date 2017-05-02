@@ -32,6 +32,7 @@
 APPS = ck       \
        debug    \
        efiboot  \
+       mingen   \
        mount    \
        netcon   \
        profile  \
@@ -56,5 +57,5 @@ libc: osbase
 $(APPS): libc lib netlink
 lib: libc
 netlink: libc
-setup: ck
+setup mingen: ck
 

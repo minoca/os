@@ -207,9 +207,6 @@ function build() {
         }
 
         addConfig(buildConfig, "DYNLIBS", "-lpthread");
-
-    } else {
-        buildSources = null;
     }
 
     targetApp = {

@@ -25,7 +25,7 @@ Environment:
 
 --*/
 
-from menv import application, binplace, group;
+from menv import application, binplace, group, mconfig;
 
 function build() {
     var almanac;
@@ -91,7 +91,7 @@ function build() {
     almanac = {
         "type": "target",
         "label": "tzdata",
-        "output": mconfig.binroot + "/skel/usr/share/tz/tzdata";
+        "output": mconfig.binroot + "/skel/usr/share/tz/tzdata",
         "inputs": tzFiles,
         "implicit": [":build_tzcomp"],
         "tool": "tzcomp",
@@ -101,7 +101,7 @@ function build() {
     tzDefaultData = {
         "type": "target",
         "label": "tz",
-        "output": mconfig.binroot + "/skel/etc/tz";
+        "output": mconfig.binroot + "/skel/etc/tz",
         "inputs": tzFiles,
         "implicit": [":build_tzcomp"],
         "tool": "tzcomp",
