@@ -13,7 +13,7 @@ Module Name:
 
 Abstract:
 
-    This directory contains Chalk language.
+    This directory contains the Chalk language.
 
 Author:
 

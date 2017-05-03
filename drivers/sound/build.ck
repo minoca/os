@@ -33,7 +33,7 @@ function build() {
     var soundDrivers;
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        soundDrivers = [];
+        soundDrivers = ["drivers/sound/core:sound"];
 
     } else if (arch == "x86") {
         soundDrivers = [

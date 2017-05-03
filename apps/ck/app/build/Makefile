@@ -54,14 +54,16 @@ else
 
 OBJS += $(POSIX_OBJS)
 
-DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/libchalk.so.1
-
-endif
-
-include $(SRCROOT)/os/minoca.mk
-
 ifeq ($(OS),Darwin)
 
 DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/libchalk.1.dylib
 
+else
+
+DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/libchalk.so.1
+EXTRA_LDFLAGS += -Wl,-rpath='$$ORIGIN/../lib'
 endif
+endif
+
+include $(SRCROOT)/os/minoca.mk
+

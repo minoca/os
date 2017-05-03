@@ -39,5 +39,5 @@ DIRS = build \
 
 include $(SRCROOT)/os/minoca.mk
 
-util: $(BINARY)
+util: $(BINARY) build
 

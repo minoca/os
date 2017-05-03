@@ -57,7 +57,7 @@ function build() {
         "label": "build_mingen",
         "output": appName,
         "inputs": ["mkbundle.ck"],
-        "implicit": sources + ["apps/ck/app:build_chalk"],
+        "implicit": sources + ["apps/ck:build_chalk"],
         "tool": "create_mingen",
         "config": config
     };

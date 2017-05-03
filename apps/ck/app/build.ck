@@ -29,10 +29,13 @@ from menv import application, mconfig;
 
 function build() {
     var app;
+    var binplaceLocation = "tools/lib";
+    var buildConfig = {};
     var buildLibs;
     var buildOs = mconfig.build_os;
     var buildSources;
     var commonSources;
+    var config;
     var entries;
     var libs;
     var sources;
@@ -65,19 +68,35 @@ function build() {
         "apps/ck/modules/bundle:build_bundle"
     ];
 
+    config = {
+        "LDFLAGS": ["-Wl,-rpath=\\$ORIGIN/../lib"]
+    };
+
     app = {
         "label": "chalk",
-        "inputs": sources + libs
+        "inputs": sources + libs,
+        "config": config
     };
 
     entries = application(app);
+    if (mconfig.build_os == "Windows") {
+        binplaceLocation = "tools/bin";
+
+    } else if (mconfig.build_os == "Darwin") {
+
+    } else {
+        buildConfig["LDFLAGS"] = ["-Wl,-rpath=\\$ORIGIN/../lib"];
+    }
+
+    buildConfig = {};
     app = {
         "label": "build_chalk",
         "output": "chalk",
         "inputs": buildSources + buildLibs,
         "build": true,
         "prefix": "build",
-        "binplace": "tools/bin"
+        "binplace": binplaceLocation,
+        "config": buildConfig
     };
 
     entries += application(app);

@@ -53,6 +53,9 @@ Environment:
 
 #define mkdir(_Path, _Permissions) mkdir(_Path)
 
+#define S_IXGRP 0
+#define S_IXOTH 0
+
 #endif
 
 #if defined(__APPLE__) || defined(__CYGWIN__) || defined(__FreeBSD__)
@@ -392,6 +395,7 @@ Return Value:
     Executable = NULL;
     File = NULL;
     ForeignFile = NULL;
+    OutputName = NULL;
     if (!CkCheckArguments(Vm, 3, CkTypeString, CkTypeList, CkTypeString)) {
         Status = -1;
         goto BundleCreateEnd;
@@ -747,6 +751,9 @@ BundleCreateEnd:
 
     if (File != NULL) {
         fclose(File);
+        if (stat(OutputName, &Stat) == 0) {
+            chmod(OutputName, Stat.st_mode | S_IXUSR | S_IXOTH | S_IXGRP);
+        }
     }
 
     if (ForeignFile != NULL) {

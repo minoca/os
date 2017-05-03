@@ -35,7 +35,7 @@ BINARYTYPE = so
 
 BUILD = yes
 
-BINPLACE = tools/bin
+BINPLACE = tools/lib
 
 INCLUDES += $(SRCDIR)/..;
 
@@ -48,6 +48,7 @@ OS ?= $(shell uname -s)
 ifeq ($(OS),$(filter Windows_NT cygwin,$(OS)))
 
 BINARY := chalk.dll
+BINPLACE := tools/bin
 
 OBJS += $(WIN32_OBJS)
 
