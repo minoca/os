@@ -55,6 +55,25 @@ Environment:
 
 Structure Description:
 
+    This structure defines a finger position.
+
+Members:
+
+    X - Stores the X position.
+
+    Y - Stores the Y position.
+
+--*/
+
+typedef struct _ELAN_I2C_POSITION {
+    ULONG X;
+    ULONG Y;
+} ELAN_I2C_POSITION, *PELAN_I2C_POSITION;
+
+/*++
+
+Structure Description:
+
     This structure defines the context for an Elan i2C touchpad device.
 
 Members:
@@ -124,11 +143,8 @@ Members:
 
     ResolutionY - Stores the vertical resolution.
 
-    LastX - Stores the previous X position, for translating absolute movement
-        into relative movement.
-
-    LastY - Stores the previous Y position, for translating absolute movement
-        into relative movement.
+    LastPosition - Stores the previous position for each of the fingers, or
+        zero if the finger is not down.
 
 --*/
 
@@ -159,8 +175,7 @@ typedef struct _ELAN_I2C_CONTROLLER {
     UCHAR TraceCountY;
     UCHAR ResolutionX;
     UCHAR ResolutionY;
-    ULONG LastX;
-    ULONG LastY;
+    ELAN_I2C_POSITION LastPosition[ELAN_I2C_FINGER_COUNT];
 } ELAN_I2C_CONTROLLER, *PELAN_I2C_CONTROLLER;
 
 //
@@ -316,6 +331,12 @@ UUID ElanI2cSpbInterfaceUuid = UUID_SPB_INTERFACE;
 //
 
 BOOL ElanI2cPrintEvents = FALSE;
+
+//
+// Set this debug boolean to TRUE to print the raw report bytes.
+//
+
+BOOL ElanI2cPrintReports = FALSE;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -1295,7 +1316,7 @@ Return Value:
         return STATUS_UNEXPECTED_TYPE;
     }
 
-    if (ElanI2cPrintEvents != FALSE) {
+    if (ElanI2cPrintReports != FALSE) {
         RtlDebugPrint("ElanI2c Report: ");
         for (Index = 0; Index < ELAN_I2C_REPORT_SIZE; Index += 1) {
             RtlDebugPrint("%02x ", Report[Index]);
@@ -1306,7 +1327,6 @@ Return Value:
 
     RtlZeroMemory(&Event, sizeof(USER_INPUT_EVENT));
     Event.EventType = UserInputEventMouse;
-    Finger = &(Report[ELAN_I2C_REPORT_FINGER_DATA_OFFSET]);
     Touches = Report[ELAN_I2C_REPORT_TOUCH_OFFSET];
     if ((Touches & ELAN_I2C_REPORT_TOUCH_LEFT_BUTTON) != 0) {
 
@@ -1328,45 +1348,65 @@ Return Value:
         }
     }
 
-    PositionX = ((Finger[ELAN_I2C_FINGER_XY_HIGH_OFFSET] & 0xF0) << 4) |
-                Finger[ELAN_I2C_FINGER_X_OFFSET];
+    Finger = &(Report[ELAN_I2C_REPORT_FINGER_DATA_OFFSET]);
+    for (Index = 0; Index < ELAN_I2C_FINGER_COUNT; Index += 1) {
+        if ((Touches & (ELAN_I2C_REPORT_TOUCH_FINGER << Index)) == 0) {
+            PositionX = 0;
+            PositionY = 0;
 
-    PositionY = ((Finger[ELAN_I2C_FINGER_XY_HIGH_OFFSET] & 0x0F) << 8) |
-                Finger[ELAN_I2C_FINGER_Y_OFFSET];
+        } else {
+            PositionX = ((Finger[ELAN_I2C_FINGER_XY_HIGH_OFFSET] & 0xF0) << 4) |
+                        Finger[ELAN_I2C_FINGER_X_OFFSET];
 
-    LastX = Controller->LastX;
-    LastY = Controller->LastY;
-    Event.U.Mouse.MovementX = PositionX - LastX;
+            PositionY = ((Finger[ELAN_I2C_FINGER_XY_HIGH_OFFSET] & 0x0F) << 8) |
+                        Finger[ELAN_I2C_FINGER_Y_OFFSET];
 
-    //
-    // Positive Y is up instead of down, so negate that here by swapping the
-    // order.
-    //
+            LastX = Controller->LastPosition[Index].X;
+            LastY = Controller->LastPosition[Index].Y;
+            if (((LastX | LastY) == 0) || ((PositionX | PositionY) == 0)) {
+                if (ElanI2cPrintEvents != FALSE) {
+                    RtlDebugPrint("Skipping finger %d (%d, %d) -> (%d, %d)\n",
+                                  Index,
+                                  LastX,
+                                  LastY,
+                                  PositionX,
+                                  PositionY);
+                }
 
-    Event.U.Mouse.MovementY = LastY - PositionY;
-    Controller->LastX = PositionX;
-    Controller->LastY = PositionY;
-    if (((LastX | LastY) == 0) || ((PositionX | PositionY) == 0)) {
-        if (ElanI2cPrintEvents != FALSE) {
-            RtlDebugPrint("Skipping (%d, %d) -> (%d, %d) [%x]\n",
-                          LastX,
-                          LastY,
-                          PositionX,
-                          PositionY,
-                          Event.U.Mouse.Buttons);
+            } else {
+                Event.U.Mouse.MovementX += PositionX - LastX;
+
+                //
+                // Positive Y is up instead of down, so negate that here by
+                // swapping the order.
+                //
+
+                Event.U.Mouse.MovementY += LastY - PositionY;
+                if (ElanI2cPrintEvents != FALSE) {
+                    RtlDebugPrint("Finger %d (%d, %d) -> (%d, %d)\n",
+                                  Index,
+                                  LastX,
+                                  LastY,
+                                  PositionX,
+                                  PositionY);
+                }
+
+            }
         }
 
-    } else {
-        if (ElanI2cPrintEvents != FALSE) {
-            RtlDebugPrint("ELAN I2C Movement %d, %d, buttons %d\n",
-                          Event.U.Mouse.MovementX,
-                          Event.U.Mouse.MovementY,
-                          Event.U.Mouse.Buttons);
-        }
-
-        Status = InReportInputEvent(Controller->InputHandle, &Event);
+        Controller->LastPosition[Index].X = PositionX;
+        Controller->LastPosition[Index].Y = PositionY;
+        Finger += ELAN_I2C_REPORT_FINGER_DATA_LENGTH;
     }
 
+    if (ElanI2cPrintEvents != FALSE) {
+        RtlDebugPrint("Event: (%d, %d) [%x]\n",
+                      Event.U.Mouse.MovementX,
+                      Event.U.Mouse.MovementY,
+                      Event.U.Mouse.Buttons);
+    }
+
+    Status = InReportInputEvent(Controller->InputHandle, &Event);
     return Status;
 }
 
