@@ -68,6 +68,33 @@ extern "C" {
 #define SNDCTL_DSP_GETOSPACE 0x5009
 
 //
+// This ioctl aborts any current sound recording on the device. This may or may
+// not reset the device to a state in which its format, rate, and channel count
+// can be changed.
+//
+
+#define SNDCTL_DSP_HALT_INPUT 0x5010
+#define SNDCTL_DSP_RESET_INPUT SNDCTL_DSP_HALT_INPUT
+
+//
+// This ioctl aborts any current sound playback on the device. This may or may
+// not reset the device to a state in which its format, rate, and channel count
+// can be changed.
+//
+
+#define SNDCTL_DSP_HALT_OUTPUT 0x5011
+#define SNDCTL_DSP_RESET_OUTPUT SNDCTL_DSP_HALT_OUTPUT
+
+//
+// This ioctl aborts any current sound playback or recording on the device.
+// This may or may not reset the device to a state in which its format, rate,
+// and channel count can be changed.
+//
+
+#define SNDCTL_DSP_HALT 0x5012
+#define SNDCTL_DSP_RESET SNDCTL_DSP_HALT
+
+//
 // This ioctl sets the number of audio channels to use for I/O. On return, the
 // ioctl will pass back the actual number of channels set for the device. This
 // may differ from the requested channel count if the device cannot support

@@ -33,8 +33,6 @@ Environment:
 #include <minoca/intrface/pci.h>
 #include "hda.h"
 
-//#include "buf.c"
-
 //
 // --------------------------------------------------------------------- Macros
 //
@@ -150,6 +148,7 @@ SOUND_FUNCTION_TABLE HdaSoundFunctionTable = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver

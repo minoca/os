@@ -77,7 +77,7 @@ SoundpInitializeDevice (
     );
 
 KSTATUS
-SoundpUninitializeDevice (
+SoundpResetDevice (
     PSOUND_DEVICE_HANDLE Handle
     );
 
@@ -123,6 +123,11 @@ SoundpUpdateBufferIoState (
     BOOL SoundCore
     );
 
+VOID
+SoundpSetHandleDefaults (
+    PSOUND_DEVICE_HANDLE Handle
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -145,6 +150,7 @@ PCSTR SoundSpecificDeviceFormats[SoundDeviceTypeCount] = {
 // ------------------------------------------------------------------ Functions
 //
 
+__USED
 KSTATUS
 DriverEntry (
     PDRIVER Driver
@@ -642,22 +648,7 @@ Return Value:
     // Set some default information in case the user does not.
     //
 
-    NewHandle->Buffer.FragmentSize = SOUND_FRAGMENT_SIZE_DEFAULT;
-    NewHandle->Buffer.FragmentCount = SOUND_FRAGMENT_COUNT_DEFAULT;
-    NewHandle->Buffer.Size = NewHandle->Buffer.FragmentSize *
-                             NewHandle->Buffer.FragmentCount;
-
-    ASSERT(NewHandle->Buffer.Size < Controller->Host.MaxBufferSize);
-
-    if (SoundDevice != NULL) {
-        NewHandle->Format = 1 << RtlCountTrailingZeros32(SoundDevice->Formats);
-        NewHandle->ChannelCount = SoundDevice->MaxChannelCount;
-        NewHandle->SampleRate = SoundpFindNearestRate(
-                                                    SoundDevice,
-                                                    SOUND_SAMPLE_RATE_DEFAULT);
-    }
-
-    NewHandle->Volume = SOUND_VOLUME_DEFAULT;
+    SoundpSetHandleDefaults(NewHandle);
     Status = STATUS_SUCCESS;
 
 OpenDeviceEnd:
@@ -699,7 +690,7 @@ Return Value:
 
     ULONG OldFlags;
 
-    SoundpUninitializeDevice(Handle);
+    SoundpResetDevice(Handle);
     if (Handle->Device != NULL) {
         OldFlags = RtlAtomicAnd32(&(Handle->Device->Flags),
                                   ~SOUND_DEVICE_FLAG_INTERNAL_BUSY);
@@ -707,19 +698,7 @@ Return Value:
         ASSERT((OldFlags & SOUND_DEVICE_FLAG_INTERNAL_BUSY) != 0);
     }
 
-    //
-    // An I/O buffer can only be allocated for a particular device, as each
-    // device on a controller may have different DMA requirements.
-    //
-
-    if (Handle->Buffer.IoBuffer != NULL) {
-
-        ASSERT(Handle->Device != NULL);
-
-        SoundpFreeIoBuffer(Handle->Controller,
-                           Handle->Device,
-                           Handle->Buffer.IoBuffer);
-    }
+    ASSERT(Handle->Buffer.IoBuffer == NULL);
 
     SoundpControllerReleaseReference(Handle->Controller);
     if (Handle->Lock != NULL) {
@@ -1341,6 +1320,26 @@ Return Value:
 
         break;
 
+    case SoundStopInput:
+        if (Handle->Device->Type != SoundDeviceInput) {
+            break;
+        }
+
+        Status = SoundpResetDevice(Handle);
+        break;
+
+    case SoundStopOutput:
+        if (Handle->Device->Type != SoundDeviceOutput) {
+            break;
+        }
+
+        Status = SoundpResetDevice(Handle);
+        break;
+
+    case SoundStopAll:
+        Status = SoundpResetDevice(Handle);
+        break;
+
     default:
         Status = STATUS_NOT_SUPPORTED;
         break;
@@ -1688,7 +1687,7 @@ InitializeDeviceEnd:
 }
 
 KSTATUS
-SoundpUninitializeDevice (
+SoundpResetDevice (
     PSOUND_DEVICE_HANDLE Handle
     )
 
@@ -1696,12 +1695,12 @@ SoundpUninitializeDevice (
 
 Routine Description:
 
-    This routine uninitializes a device, releasing it to operate on behalf of
-    another handle.
+    This routine resets a device, releasing it to operate on behalf of another
+    handle.
 
 Arguments:
 
-    Handle - Supplies a pointer to a handle to the device to uninitialize.
+    Handle - Supplies a pointer to a handle to the device to reset.
 
 Return Value:
 
@@ -1721,6 +1720,12 @@ Return Value:
         return STATUS_SUCCESS;
     }
 
+    Status = STATUS_SUCCESS;
+    KeAcquireQueuedLock(Handle->Lock);
+    if (Handle->State == SoundDeviceStateUninitialized) {
+        goto UninitializeDeviceEnd;
+    }
+
     Information.Version = SOUND_DEVICE_STATE_INFORMATION_VERSION;
     Information.State = SoundDeviceStateUninitialized;
     Controller = Handle->Controller;
@@ -1737,9 +1742,31 @@ Return Value:
         goto UninitializeDeviceEnd;
     }
 
+    //
+    // The buffer was allocated based on the current fragment size and count,
+    // which are about to be reset.
+    //
+
+    if (Handle->Buffer.IoBuffer != NULL) {
+
+        ASSERT(Handle->Device != NULL);
+
+        SoundpFreeIoBuffer(Handle->Controller,
+                           Handle->Device,
+                           Handle->Buffer.IoBuffer);
+
+        Handle->Buffer.IoBuffer = NULL;
+    }
+
+    //
+    // Reinitialize the default values.
+    //
+
+    SoundpSetHandleDefaults(Handle);
     Handle->State = SoundDeviceStateUninitialized;
 
 UninitializeDeviceEnd:
+    KeReleaseQueuedLock(Handle->Lock);
     return Status;
 }
 
@@ -2242,6 +2269,50 @@ Return Value:
 
     } while (SnappedOffset != *DynamicOffset);
 
+    return;
+}
+
+VOID
+SoundpSetHandleDefaults (
+    PSOUND_DEVICE_HANDLE Handle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets default values in the given sound device handle.
+
+Arguments:
+
+    Handle - Supplies a handle to the sound device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSOUND_DEVICE SoundDevice;
+
+    Handle->Buffer.FragmentSize = SOUND_FRAGMENT_SIZE_DEFAULT;
+    Handle->Buffer.FragmentCount = SOUND_FRAGMENT_COUNT_DEFAULT;
+    Handle->Buffer.Size = Handle->Buffer.FragmentSize *
+                             Handle->Buffer.FragmentCount;
+
+    ASSERT(Handle->Buffer.Size < Handle->Controller->Host.MaxBufferSize);
+
+    SoundDevice = Handle->Device;
+    if (SoundDevice != NULL) {
+        Handle->Format = 1 << RtlCountTrailingZeros32(SoundDevice->Formats);
+        Handle->ChannelCount = SoundDevice->MaxChannelCount;
+        Handle->SampleRate = SoundpFindNearestRate(SoundDevice,
+                                                   SOUND_SAMPLE_RATE_DEFAULT);
+    }
+
+    Handle->Volume = SOUND_VOLUME_DEFAULT;
     return;
 }
 

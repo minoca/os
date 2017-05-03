@@ -433,7 +433,7 @@ Members:
         interrupts. See HDA_SOFTWARE_INTERRUPT_* for definitions.
 
     ControllerBase - Stores the virtual address of the memory mapping to the
-        PCM registers.
+        registers.
 
     ControllerLock - Stores a pointer to a lock that synchronizes codec
         enumeration, stream allocation, and register access.
