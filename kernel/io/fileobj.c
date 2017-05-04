@@ -819,8 +819,19 @@ Return Value:
                     goto CreateOrLookupFileObjectEnd;
                 }
 
+                //
+                // Currently only character devices that want to map their
+                // hardware assets directly are known to need map flags. This
+                // assert catches accidental uninitialized map flags. Remove
+                // this assert if there's a need for other object types to
+                // specify map flags.
+                //
+
+                ASSERT((MapFlags == 0) ||
+                       (Properties->Type == IoObjectCharacterDevice));
+
                 NewObject->Flags = Flags;
-                NewObject->MapFlags = Flags;
+                NewObject->MapFlags = MapFlags;
                 NewObject->Device = Device;
                 ObAddReference(Device);
 

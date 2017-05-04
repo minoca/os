@@ -133,14 +133,6 @@ Author:
 #define IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED 0x00000400
 
 //
-// This flag is set if the page cache entries in the I/O buffer come from
-// file objects that must be mapped non-cached. There should not be a mix of
-// file objects in the same I/O buffer if this attribute is set.
-//
-
-#define IO_BUFFER_INTERNAL_FLAG_MAP_NON_CACHED 0x00000800
-
-//
 // --------------------------------------------------------------------- Macros
 //
 

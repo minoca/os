@@ -2950,6 +2950,7 @@ Return Value:
 
             Status = STATUS_UNSUCCESSFUL;
             FileObjectFlags = 0;
+            MapFlags = 0;
             if (Child->Type == ObjectDevice) {
                 Status = IopSendLookupRequest((PDEVICE)Child,
                                               NULL,

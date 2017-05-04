@@ -4324,6 +4324,7 @@ Return Value:
         *Flags |= FILE_OBJECT_FLAG_NO_PAGE_CACHE;
     }
 
+    *MapFlags = Request.MapFlags;
     return Status;
 }
 
