@@ -31,6 +31,8 @@ from menv import application, mconfig;
 function build() {
     var app;
     var appName = "mingen";
+    var bootstrapStamp;
+    var bootstrapTool;
     var config;
     var entries;
     var includes;
@@ -41,10 +43,11 @@ function build() {
     sources = [
         "make.ck",
         "mingen.ck",
-        "ninja.ck"
+        "ninja.ck",
+        "bootstrap/remakebs.sh"
     ];
 
-    if (mconfig.build_os == "win32") {
+    if (mconfig.build_os == "Windows") {
         appName += ".exe";
     }
 
@@ -69,7 +72,26 @@ function build() {
         "description": "Bundling mingen - $OUT"
     };
 
-    entries = [app, tool];
+    //
+    // If mingen ever gets rebuilt, also rebuild the bootstrap files in case
+    // the recipe to make mingen changed.
+    //
+
+    bootstrapStamp = {
+        "type": "target",
+        "label": "bootstrap_stamp",
+        "inputs": [":build_mingen"],
+        "tool": "rebuild_bootstrap"
+    };
+
+    bootstrapTool = {
+        "type": "tool",
+        "name": "rebuild_bootstrap",
+        "command": "$SHELL $S/apps/mingen/bootstrap/remakebs.sh $OUT",
+        "description": "Rebuilding bootstrap Makefiles"
+    };
+
+    entries = [app, bootstrapStamp, tool, bootstrapTool];
     return entries;
 }
 

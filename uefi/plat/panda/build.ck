@@ -132,6 +132,7 @@ function build() {
         "inputs": libs + ["uefi/core:emptyrd"],
         "sources_config": sourcesConfig,
         "includes": includes,
+        "text_address": textAddress,
         "config": linkConfig
     };
 
@@ -141,6 +142,7 @@ function build() {
         "inputs": ["ramdisk.S"] + libs,
         "sources_config": sourcesConfig,
         "includes": includes,
+        "text_address": textAddress,
         "config": linkConfig
     };
 

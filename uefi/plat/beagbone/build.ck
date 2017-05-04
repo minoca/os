@@ -105,6 +105,7 @@ function build() {
         "label": platfw + ".elf",
         "inputs": sources + libs,
         "sources_config": sourcesConfig,
+        "text_address": textAddress,
         "includes": includes,
         "config": linkConfig
     };

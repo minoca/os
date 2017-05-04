@@ -116,10 +116,6 @@ Return Value:
 
     UINTN FirmwareSize;
 
-    //
-    // Initialize UEFI enough to get into the debugger.
-    //
-
     EfipBeagleBoneBlackSetLeds(4);
     FirmwareSize = (UINTN)&_end - (UINTN)&__executable_start;
     EfiBootDeviceCode = BootDevice;

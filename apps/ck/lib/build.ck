@@ -31,6 +31,7 @@ from menv import addConfig, application, compiledSources, mconfig,
     sharedLibrary, staticLibrary;
 
 function build() {
+    var binplaceLocation = "tools/lib";
     var buildLibConfig = {};
     var buildLibs;
     var buildObjs;
@@ -163,10 +164,12 @@ function build() {
     // Create the dynamic libraries.
     //
 
-    if ((buildOs != "Darwin") && (buildOs != "Windows") &&
-        (buildOs != "FreeBSD")) {
-
+    if (buildOs == "Linux") {
        buildLibConfig["DYNLIBS"] = ["-ldl"];
+    }
+
+    if (buildOs == "Windows") {
+        binplaceLocation = "tools/bin";
     }
 
     lib = {
@@ -185,7 +188,7 @@ function build() {
         "config": buildLibConfig,
         "build": true,
         "prefix": "build",
-        "binplace": "tools/bin",
+        "binplace": binplaceLocation,
         "nostrip": true
     };
 

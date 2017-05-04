@@ -29,7 +29,6 @@ from menv import application, mconfig;
 
 function build() {
     var app;
-    var binplaceLocation = "tools/lib";
     var buildConfig = {};
     var buildLibs;
     var buildOs = mconfig.build_os;
@@ -79,12 +78,7 @@ function build() {
     };
 
     entries = application(app);
-    if (mconfig.build_os == "Windows") {
-        binplaceLocation = "tools/bin";
-
-    } else if (mconfig.build_os == "Darwin") {
-
-    } else {
+    if ((mconfig.build_os != "Windows") && (mconfig.build_os != "Darwin")) {
         buildConfig["LDFLAGS"] = ["-Wl,-rpath=\\$ORIGIN/../lib"];
     }
 
@@ -95,7 +89,7 @@ function build() {
         "inputs": buildSources + buildLibs,
         "build": true,
         "prefix": "build",
-        "binplace": binplaceLocation,
+        "binplace": "tools/bin",
         "config": buildConfig
     };
 

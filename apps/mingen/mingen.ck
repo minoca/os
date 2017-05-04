@@ -165,8 +165,9 @@ _printTarget (
 // -------------------------------------------------------------------- Globals
 //
 
-var shortOptions = "De:F:ghi:no:vV";
+var shortOptions = "B:De:F:ghi:no:O:uvV";
 var longOptions = [
+    "build-os=",
     "expr=",
     "debug",
     "format=",
@@ -174,7 +175,9 @@ var longOptions = [
     "input=",
     "dry-run",
     "output=",
+    "output-file=",
     "help",
+    "unanchored",
     "verbose",
     "version"
 ];
@@ -185,6 +188,7 @@ var usage =
     "the current directory. If specific targets are specified, then a build \n"
     "file for only those targets will be built. Otherwise, the build file \n"
     "is created for the whole project. Options are:\n"
+    "  -B, --build-os=os,machine -- Set the build OS and build machine.\n"
     "  -e, --expr=var=val -- Set a custom build option.\n"
     "      This can be specified multiple times.\n"
     "  -D, --debug -- Print lots of information during execution.\n"
@@ -197,19 +201,23 @@ var usage =
     "      default is to use the current working directory.\n"
     "  -o, --output=build_dir -- Set the given directory as the build \n"
     "      output directory.\n"
+    "  -O, --output-file=file -- Set the output file name.\n"
+    "  -u, --unanchored -- Leave the input and output directories blank in \n"
+    "      the final build file. They must be specified manually later.\n"
     "  -v, --verbose -- Print more information during processing.\n"
     "  --help -- Show this help text and exit.\n"
     "  --version -- Print the application version information and exit.\n\n";
 
 var config = {
     "build_os": os.system,
-    "is_unix": os.isUnix,
     "build_machine": os.machine,
     "debug": false,
     "format": null,
     "generator": true,
     "input": null,
     "output": null,
+    "output_file": null,
+    "unanchored": false,
     "verbose": false,
     "build_module_name": "build",
     "default_target": ":",
@@ -272,7 +280,14 @@ Return Value:
     for (option in appOptions) {
         name = option[0];
         value = option[1];
-        if ((name == "-e") || (name == "--expr")) {
+        if ((name == "-B") || (name == "--build-os")) {
+            value = value.split(",", 1);
+            config.build_os = value[0];
+            if (value.length() == 2) {
+                config.build_machine = value[1];
+            }
+
+        } else if ((name == "-e") || (name == "--expr")) {
             value = value.split("=", 1);
             if (value.length() == 2) {
                 config.cmdvars[value[0]] = value[1];
@@ -308,6 +323,12 @@ Return Value:
             if (!config.output) {
                 config.output = value;
             }
+
+        } else if ((name == "-O") || (name == "--output-file")) {
+            config.output_file = value;
+
+        } else if ((name == "-u") || (name == "--unanchored")) {
+            config.unanchored = true;
 
         } else if ((name == "-v") || (name == "--verbose")) {
             config.verbose = true;

@@ -51,3 +51,13 @@ include $(SRCROOT)/os/minoca.mk
 
 BUILD_COMMAND = chalk $(SRCDIR)/mkbundle.ck $@
 
+##
+## This would be the recipe needed to rebuild the bootstrap Makefiles. It's a
+## tad slow, and really is only needed once the (this) old system is gone. So
+## its disabled out for now.
+##
+
+#postbuild: bootstrap/remakebs.sh
+#	@echo Rebuilding bootstrap Makefiles
+#	@sh $(SRCDIR)/bootstrap/remakebs.sh
+
