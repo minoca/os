@@ -319,9 +319,7 @@ Return Value:
     // TODO: This would probably make more sense as a local socket.
     //
 
-    Permissions = FILE_PERMISSION_USER_READ | FILE_PERMISSION_GROUP_READ |
-                  FILE_PERMISSION_OTHER_READ;
-
+    Permissions = FILE_PERMISSION_USER_READ | FILE_PERMISSION_GROUP_READ;
     Status = IoCreatePipe(TRUE,
                           NULL,
                           USER_INPUT_PIPE_NAME,
@@ -837,12 +835,6 @@ Return Value:
     Event->Timestamp = HlQueryTimeCounter();
 
     //
-    // Potentially convert this event into some terminal characters.
-    //
-
-    InpProcessInputEventForTerminal(Event);
-
-    //
     // Create an I/O buffer for the write.
     //
 
@@ -869,6 +861,12 @@ Return Value:
     ASSERT((BytesWritten == 0) || (BytesWritten == sizeof(USER_INPUT_EVENT)));
 
     if (!KSUCCESS(Status)) {
+
+        //
+        // If sending it to the pipe failed, then forward it on to the terminal.
+        //
+
+        InpProcessInputEventForTerminal(Event);
         goto ProcessInputEventEnd;
     }
 
