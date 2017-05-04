@@ -314,7 +314,7 @@ Return Value:
     ULONG LoadFlags;
     PIMAGE_ENTRY_POINT Start;
     KSTATUS Status;
-    PVOID ThreadData;
+    PTHREAD_CONTROL_BLOCK Thread;
 
     //
     // Start by relocating this image. Until this is done, no global variables
@@ -428,8 +428,8 @@ Return Value:
     // Initialize TLS support.
     //
 
-    OspTlsAllocate(&OsLoadedImagesHead, &ThreadData);
-    OsSetThreadPointer(ThreadData);
+    OspTlsAllocate(&OsLoadedImagesHead, (PVOID *)&Thread, FALSE);
+    OsSetThreadPointer(Thread);
 
     //
     // Now that TLS offsets are settled, relocate the images.
@@ -451,6 +451,16 @@ Return Value:
         CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
 
         ASSERT((CurrentImage->Flags & IMAGE_FLAG_INITIALIZED) == 0);
+
+        //
+        // Copy in the TLS image if there is one.
+        //
+
+        if (CurrentImage->TlsImageSize != 0) {
+            RtlCopyMemory(Thread->TlsVector[CurrentImage->ModuleNumber],
+                          CurrentImage->TlsImage,
+                          CurrentImage->TlsImageSize);
+        }
 
         OspImInitializeImage(CurrentImage);
         CurrentImage->Flags |= IMAGE_FLAG_INITIALIZED;
@@ -876,7 +886,7 @@ Return Value:
     //
 
     OspAcquireImageLock(FALSE);
-    Status = OspTlsAllocate(&OsLoadedImagesHead, ThreadData);
+    Status = OspTlsAllocate(&OsLoadedImagesHead, ThreadData, TRUE);
     OspReleaseImageLock();
     return Status;
 }

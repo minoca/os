@@ -77,6 +77,48 @@ Return Value:
 
 --*/
 
+/*++
+
+Structure Description:
+
+    This structure stores the thread control block, a structure used in user
+    mode to contain information unique to each thread.
+
+Members:
+
+    Self - Stores a pointer to the thread control block itself. This member
+        is mandated by many application ABIs.
+
+    TlsVector - Stores an array of pointers to TLS regions for each module. The
+        first element is a generation number, indicating whether or not the
+        array needs to be resized. This member is access directly from assembly.
+
+    ModuleCount - Stores the count of loaded modules this thread is aware of.
+
+    BaseAllocation - Stores a pointer to the actual allocation pointer returned
+        to free this structure and all the initial TLS blocks.
+
+    StackGuard - Stores the stack guard value. This is referenced directly by
+        GCC, and must be at offset 0x14 on 32-bit systems, 0x28 on 64-bit
+        systems.
+
+    BaseAllocationSize - Stores the size of the base allocation region in bytes.
+
+    ListEntry - Stores pointers to the next and previous threads in the OS
+        Library thread list.
+
+--*/
+
+typedef struct _THREAD_CONTROL_BLOCK {
+    PVOID Self;
+    PVOID *TlsVector;
+    UINTN ModuleCount;
+    PVOID BaseAllocation;
+    UINTN StackGuard;
+    UINTN BaseAllocationSize;
+    LIST_ENTRY ListEntry;
+} THREAD_CONTROL_BLOCK, *PTHREAD_CONTROL_BLOCK;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -364,7 +406,8 @@ Return Value:
 KSTATUS
 OspTlsAllocate (
     PLIST_ENTRY ImageList,
-    PVOID *ThreadData
+    PVOID *ThreadData,
+    BOOL CopyInitImage
     );
 
 /*++
@@ -382,6 +425,11 @@ Arguments:
     ThreadData - Supplies a pointer where a pointer to the thread data will be
         returned on success. It is the callers responsibility to destroy this
         thread data.
+
+    CopyInitImage - Supplies a boolean indicating whether or not to copy the
+        initial image over to the new TLS area or not. If this is the initial
+        program load and images have not yet been relocated, then the copies
+        are skipped since they need to be done after relocations are applied.
 
 Return Value:
 
