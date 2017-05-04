@@ -258,7 +258,7 @@ Return Value:
         return -1;
     }
 
-    if (ioctl(TerminalDescriptor, TIOCSCTTY, NULL) < 0) {
+    if (ioctl(TerminalDescriptor, TIOCSCTTY, 0) < 0) {
         return -1;
     }
 

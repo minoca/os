@@ -2356,6 +2356,7 @@ Return Value:
             (Process->ControllingTerminal != NULL)) {
 
             Status = STATUS_PERMISSION_DENIED;
+            break;
         }
 
         //
@@ -2424,6 +2425,7 @@ Return Value:
             Process->ControllingTerminal = Terminal->SlaveFileObject;
             Terminal->SessionId = CurrentSessionId;
             Terminal->ProcessGroupId = Process->Identifiers.ProcessGroupId;
+            Status = STATUS_SUCCESS;
         }
 
         KeReleaseQueuedLock(Terminal->Lock);
@@ -2431,7 +2433,10 @@ Return Value:
         break;
 
     case TerminalControlGetCurrentSessionId:
-        if (FileObject->Properties.Type != IoObjectTerminalMaster) {
+        Process = PsGetCurrentProcess();
+        if ((FileObject->Properties.Type != IoObjectTerminalMaster) &&
+            (Process->ControllingTerminal != FileObject)) {
+
             Status = STATUS_NOT_A_TERMINAL;
             break;
         }
