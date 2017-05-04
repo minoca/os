@@ -104,15 +104,12 @@ Return Value:
 
 {
 
-    ULONG AddressSize;
-    ULONGLONG BasePointer;
-    ULONGLONG BasePointerAddress;
     ULONG BytesRead;
     PVOID Data;
     ULONG DataSize;
-    ULONGLONG InstructionPointer;
     REGISTERS_UNION LocalRegisters;
     ULONGLONG Preemptions;
+    ULONG Registers32[7];
     ULONGLONG StackPointer;
     ULONGLONG State;
     INT Status;
@@ -134,7 +131,6 @@ Return Value:
         return EINVAL;
     }
 
-    AddressSize = DbgGetTargetPointerSize(Context);
     memset(&LocalRegisters, 0, sizeof(REGISTERS_UNION));
 
     //
@@ -396,7 +392,6 @@ Return Value:
     // which are all needed for printing the call stack.
     //
 
-    InstructionPointer = (UINTN)NULL;
     Status = DbgReadIntegerMember(Context,
                                   ThreadType,
                                   "KernelStackPointer",
@@ -409,19 +404,25 @@ Return Value:
         goto ExtThreadEnd;
     }
 
-    BasePointer = (UINTN)NULL;
     switch (TargetInformation.MachineType) {
     case MACHINE_TYPE_X86:
+
+        //
+        // The stack should look like: magic, flags, esp, edi, esi, ebx, ebp,
+        // eip.
+        // ESP is after the call, so ignore that one.
+        //
+
         Status = DbgReadMemory(Context,
                                TRUE,
-                               StackPointer + 24,
-                               AddressSize,
-                               &BasePointer,
+                               StackPointer + sizeof(ULONG),
+                               sizeof(ULONG) * 7,
+                               Registers32,
                                &BytesRead);
 
-        if ((Status != 0) || (BytesRead != AddressSize)) {
-            DbgOut("Error: Could not get base pointer at 0x%08I64x.\n",
-                   StackPointer + 24);
+        if ((Status != 0) || (BytesRead != sizeof(ULONG) * 7)) {
+            DbgOut("Error: Could not get thread registers at 0x%08I64x.\n",
+                   StackPointer + 4);
 
             if (Status == 0) {
                 Status = EINVAL;
@@ -430,40 +431,32 @@ Return Value:
             return Status;
         }
 
-        Status = DbgReadMemory(Context,
-                               TRUE,
-                               StackPointer + 28,
-                               AddressSize,
-                               &InstructionPointer,
-                               &BytesRead);
-
-        if ((Status != 0) || (BytesRead != AddressSize)) {
-            DbgOut("Error: Could not get return address at 0x%08I64x.\n",
-                   StackPointer + 28);
-
-            if (Status == 0) {
-                Status = EINVAL;
-            }
-
-            return Status;
-        }
-
-        LocalRegisters.X86.Eip = InstructionPointer;
-        LocalRegisters.X86.Ebp = BasePointer;
-        LocalRegisters.X86.Esp = BasePointer;
+        LocalRegisters.X86.Eflags = Registers32[0];
+        LocalRegisters.X86.Esp = StackPointer + (sizeof(ULONG) * 8);
+        LocalRegisters.X86.Edi = Registers32[2];
+        LocalRegisters.X86.Esi = Registers32[3];
+        LocalRegisters.X86.Ebx = Registers32[4];
+        LocalRegisters.X86.Ebp = Registers32[5];
+        LocalRegisters.X86.Eip = Registers32[6];
         break;
 
     case MACHINE_TYPE_ARM:
+
+        //
+        // The context swap code does push {r4-r12,r14}, so read all those
+        // off.
+        //
+
         Status = DbgReadMemory(Context,
                                TRUE,
-                               StackPointer + 40,
-                               AddressSize,
-                               &InstructionPointer,
+                               StackPointer + sizeof(ULONG),
+                               10 * sizeof(ULONG),
+                               &(LocalRegisters.Arm.R4),
                                &BytesRead);
 
-        if ((Status != 0) || (BytesRead != AddressSize)) {
-            DbgOut("Error: Could not get return address at 0x%08I64x.\n",
-                   StackPointer + 36);
+        if ((Status != 0) || (BytesRead != 10 * sizeof(ULONG))) {
+            DbgOut("Error: Could not register context at 0x%08I64x.\n",
+                   StackPointer + 4);
 
             if (Status == 0) {
                 Status = EINVAL;
@@ -472,33 +465,14 @@ Return Value:
             return Status;
         }
 
-        BasePointerAddress = StackPointer + 32;
-        if ((InstructionPointer & ARM_THUMB_BIT) != 0) {
-            BasePointerAddress = StackPointer + 16;
-        }
+        //
+        // Put that last R14 and CPSR back in its spot.
+        //
 
-        Status = DbgReadMemory(Context,
-                               TRUE,
-                               BasePointerAddress,
-                               AddressSize,
-                               &BasePointer,
-                               &BytesRead);
-
-        if ((Status != 0) || (BytesRead != AddressSize)) {
-            DbgOut("Error: Could not get base pointer at 0x%08I64x.\n",
-                   BasePointerAddress);
-
-            if (Status == 0) {
-                Status = EINVAL;
-            }
-
-            return Status;
-        }
-
-        LocalRegisters.Arm.R15Pc = InstructionPointer;
-        LocalRegisters.Arm.R11Fp = BasePointer;
-        LocalRegisters.Arm.R7 = BasePointer;
-        LocalRegisters.Arm.R13Sp = BasePointer;
+        LocalRegisters.Arm.R15Pc = LocalRegisters.Arm.R13Sp;
+        LocalRegisters.Arm.Cpsr = LocalRegisters.Arm.R12Ip;
+        LocalRegisters.Arm.R12Ip = 0;
+        LocalRegisters.Arm.R13Sp = StackPointer + 4 + (10 * sizeof(ULONG));
         break;
 
     default:

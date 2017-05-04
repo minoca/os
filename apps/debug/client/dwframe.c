@@ -549,6 +549,28 @@ Return Value:
         }
     }
 
+    //
+    // Restore the CFA register if it wasn't explicitly restored.
+    //
+
+    if (State.Rules.Cfa.Type == DwarfFrameRegister) {
+        Index = State.Rules.Cfa.Operand;
+        if (State.Rules.Registers[Index].Type == DwarfFrameUndefined) {
+            if ((Context->Flags & DWARF_CONTEXT_VERBOSE_UNWINDING) != 0) {
+                DWARF_PRINT("   r%d (%s) <- %I64x <- CFA (implicit)\n",
+                            Index,
+                            DwarfGetRegisterName(Context, Index),
+                            Cfa);
+            }
+
+            Status = DwarfTargetWriteRegister(Context, Index, Cfa);
+            if (Status != 0) {
+                DWARF_ERROR("DWARF: Failed to set CFA register %d.\n", Index);
+                goto ExecuteFdeEnd;
+            }
+        }
+    }
+
     Status = 0;
 
 ExecuteFdeEnd:
@@ -1322,7 +1344,9 @@ Return Value:
                                      &Value);
 
             if ((Context->Flags & DWARF_CONTEXT_VERBOSE_UNWINDING) != 0) {
-                DWARF_PRINT("%I64x <- [%I64x]", Value, Location.Value.Address);
+                DWARF_PRINT("%I64x <- [%I64x]\n",
+                            Value,
+                            Location.Value.Address);
             }
 
         //
@@ -1333,7 +1357,7 @@ Return Value:
         } else {
             Value = Location.Value.Address;
             if ((Context->Flags & DWARF_CONTEXT_VERBOSE_UNWINDING) != 0) {
-                DWARF_PRINT("%I64x", Value);
+                DWARF_PRINT("%I64x\n", Value);
             }
 
             Status = 0;
@@ -1343,7 +1367,7 @@ Return Value:
 
     case DwarfFrameUndefined:
         if ((Context->Flags & DWARF_CONTEXT_VERBOSE_UNWINDING) != 0) {
-            DWARF_PRINT("Undefined");
+            DWARF_PRINT("Undefined\n");
         }
 
         Value = 0;
@@ -1356,7 +1380,7 @@ Return Value:
         Value = 0;
         Status = DwarfTargetReadRegister(Context, Register, &Value);
         if ((Context->Flags & DWARF_CONTEXT_VERBOSE_UNWINDING) != 0) {
-            DWARF_PRINT("%I64x (same)");
+            DWARF_PRINT("%I64x (same)\n");
         }
 
         break;
