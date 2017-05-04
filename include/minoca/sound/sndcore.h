@@ -205,6 +205,9 @@ Members:
 
     Flags - Stores a bitmask of flags. See SOUND_DEVICE_FLAG_* for definitions.
 
+    Capabilities - Stores a bitmask of device capabilities. See
+        SOUND_CAPABILITY_* for definitions.
+
     Formats - Stores a bitmask of supported formats. See SOUND_FORMAT_* for
         definitions.
 
@@ -225,6 +228,7 @@ typedef struct _SOUND_DEVICE {
     PVOID Context;
     SOUND_DEVICE_TYPE Type;
     volatile ULONG Flags;
+    ULONG Capabilities;
     ULONG Formats;
     ULONG MaxChannelCount;
     ULONG RateCount;

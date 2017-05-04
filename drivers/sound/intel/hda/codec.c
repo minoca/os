@@ -1007,8 +1007,10 @@ Return Value:
 {
 
     UINTN AllocationSize;
+    ULONG Capabilities;
     ULONG Formats;
     PHDA_DEVICE HdaDevice;
+    ULONG MaxChannelCount;
     INT RateCount;
     ULONG RateIndex;
     PULONG Rates;
@@ -1053,14 +1055,31 @@ Return Value:
     SoundDevice->StructureSize = sizeof(SOUND_DEVICE) + RatesSize;
     SoundDevice->Context = HdaDevice;
     WidgetType = HDA_GET_WIDGET_TYPE(Widget);
+    Capabilities = 0;
     if (WidgetType == HDA_AUDIO_WIDGET_TYPE_INPUT) {
         SoundDevice->Type = SoundDeviceInput;
+        if  ((Widget->WidgetCapabilities & HDA_AUDIO_WIDGET_DIGITAL) != 0) {
+            Capabilities |= SOUND_CAPABILITY_INTERFACE_DIGITAL_IN;
+
+        } else {
+            Capabilities |= SOUND_CAPABILITY_INTERFACE_ANALOG_IN;
+        }
+
+        Capabilities |= SOUND_CAPABILITY_INPUT;
 
     } else {
 
         ASSERT(WidgetType == HDA_AUDIO_WIDGET_TYPE_OUTPUT);
 
         SoundDevice->Type = SoundDeviceOutput;
+        if  ((Widget->WidgetCapabilities & HDA_AUDIO_WIDGET_DIGITAL) != 0) {
+            Capabilities |= SOUND_CAPABILITY_INTERFACE_DIGITAL_OUT;
+
+        } else {
+            Capabilities |= SOUND_CAPABILITY_INTERFACE_ANALOG_OUT;
+        }
+
+        Capabilities |= SOUND_CAPABILITY_OUTPUT;
     }
 
     Formats = 0;
@@ -1085,8 +1104,28 @@ Return Value:
         }
     }
 
+    if (Group->Type == HDA_FUNCTION_GROUP_TYPE_MODEM) {
+        Capabilities |= SOUND_CAPABILITY_MODEM;
+    }
+
+    //
+    // Use the max channel count as the preferred channel count.
+    //
+
+    MaxChannelCount = HDA_GET_WIDGET_CHANNEL_COUNT(Widget);
+    if (MaxChannelCount >= 3) {
+        Capabilities |= SOUND_CAPABILITY_CHANNEL_MULTI;
+
+    } else if (MaxChannelCount == 2) {
+        Capabilities |= SOUND_CAPABILITY_CHANNEL_STEREO;
+
+    } else {
+        Capabilities |= SOUND_CAPABILITY_CHANNEL_MONO;
+    }
+
+    SoundDevice->Capabilities = Capabilities;
     SoundDevice->Formats = Formats;
-    SoundDevice->MaxChannelCount = HDA_GET_WIDGET_CHANNEL_COUNT(Widget);
+    SoundDevice->MaxChannelCount = MaxChannelCount;
     SoundDevice->RateCount = RateCount;
     SoundDevice->RatesOffset = sizeof(SOUND_DEVICE);
     Rates = (PVOID)SoundDevice + SoundDevice->RatesOffset;

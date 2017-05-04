@@ -1340,6 +1340,11 @@ Return Value:
         Status = SoundpResetDevice(Handle);
         break;
 
+    case SoundGetDeviceCapabilities:
+        CopyOutBuffer = &(SoundDevice->Capabilities);
+        CopySize = sizeof(ULONG);
+        break;
+
     default:
         Status = STATUS_NOT_SUPPORTED;
         break;

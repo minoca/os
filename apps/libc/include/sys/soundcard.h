@@ -47,6 +47,13 @@ extern "C" {
 //
 
 //
+// This ioctl returns the capabilities supported by the device. It returns a
+// bitmask of PCM_CAP_* (or DSP_CAP_* for compatibility).
+//
+
+#define SNDCTL_DSP_GETCAPS 0x5006
+
+//
 // This ioctl reports the native sample formats supported by the device. It
 // returns a bitmask of AFMT_* values. The bitmask is the size of an int.
 //
@@ -168,6 +175,67 @@ extern "C" {
 #define AFMT_S24_OE AFMT_S24_BE
 #define AFMT_S32_NE AFMT_S32_LE
 #define AFMT_S32_OE AFMT_S32_BE
+
+//
+// Define the device capability bits.
+//
+
+#define PCM_CAP_REVISION   0x000000FF
+#define PCM_CAP_ADMASK     0x00000F00
+#define PCM_CAP_ANALOGIN   0x00000100
+#define PCM_CAP_ANALOGOUT  0x00000200
+#define PCM_CAP_DIGITALIN  0x00000400
+#define PCM_CAP_DIGITALOUT 0x00000800
+#define PCM_CAP_BATCH      0x00001000
+#define PCM_CAP_BIND       0x00002000
+#define PCM_CAP_COPROC     0x00004000
+#define PCM_CAP_DEFAULT    0x00008000
+#define PCM_CAP_DUPLEX     0x00010000
+#define PCM_CAP_FREERATE   0x00020000
+#define PCM_CAP_HIDDEN     0x00040000
+#define PCM_CAP_INPUT      0x00080000
+#define PCM_CAP_MMAP       0x00100000
+#define PCM_CAP_MODEM      0x00200000
+#define PCM_CAP_MULTI      0x00400000
+#define PCM_CAP_OUTPUT     0x00800000
+#define PCM_CAP_REALTIME   0x01000000
+#define PCM_CAP_SHADOW     0x02000000
+#define PCM_CAP_SPECIAL    0x04000000
+#define PCM_CAP_TRIGGER    0x08000000
+#define PCM_CAP_VIRTUAL    0x10000000
+#define DSP_CH_MASK        0x60000000
+#define DSP_CH_ANY         0x00000000
+#define DSP_CH_MONO        0x20000000
+#define DSP_CH_STEREO      0x40000000
+#define DSP_CH_MULTI       0x60000000
+
+//
+// Define the old capability names.
+//
+
+#define DSP_CAP_REVISION   PCM_CAP_REVISION
+#define DSP_CAP_ADMASK     PCM_CAP_ADMASK
+#define DSP_CAP_ANALOGIN   PCM_CAP_ANALOGIN
+#define DSP_CAP_ANALOGOUT  PCM_CAP_ANALOGOUT
+#define DSP_CAP_DIGITALIN  PCM_CAP_DIGITALIN
+#define DSP_CAP_DIGITALOUT PCM_CAP_DIGITALOUT
+#define DSP_CAP_BATCH      PCM_CAP_BATCH
+#define DSP_CAP_BIND       PCM_CAP_BIND
+#define DSP_CAP_COPROC     PCM_CAP_COPROC
+#define DSP_CAP_DEFAULT    PCM_CAP_DEFAULT
+#define DSP_CAP_DUPLEX     PCM_CAP_DUPLEX
+#define DSP_CAP_FREERATE   PCM_CAP_FREERATE
+#define DSP_CAP_HIDDEN     PCM_CAP_HIDDEN
+#define DSP_CAP_INPUT      PCM_CAP_INPUT
+#define DSP_CAP_MMAP       PCM_CAP_MMAP
+#define DSP_CAP_MODEM      PCM_CAP_MODEM
+#define DSP_CAP_MULTI      PCM_CAP_MULTI
+#define DSP_CAP_OUTPUT     PCM_CAP_OUTPUT
+#define DSP_CAP_REALTIME   PCM_CAP_REALTIME
+#define DSP_CAP_SHADOW     PCM_CAP_SHADOW
+#define DSP_CAP_SPECIAL    PCM_CAP_SPECIAL
+#define DSP_CAP_TRIGGER    PCM_CAP_TRIGGER
+#define DSP_CAP_VIRTUAL    PCM_CAP_VIRTUAL
 
 //
 // ------------------------------------------------------ Data Type Definitions

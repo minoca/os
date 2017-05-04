@@ -34,7 +34,7 @@ Author:
 //
 
 //
-// Define the sound format bits.
+// Define the sound format bits. These match the OSS format definitions.
 //
 
 #define SOUND_FORMAT_8_BIT_SIGNED                  0x00000001
@@ -74,6 +74,39 @@ Author:
 #define SOUND_VOLUME_LEFT_CHANNEL_SHIFT  0
 
 #define SOUND_VOLUME_MAXIMUM 100
+
+//
+// Define the device capability bits. These must match the OSS format.
+//
+
+#define SOUND_CAPABILITY_REVISION              0x000000FF
+#define SOUND_CAPABILITY_INTERFACE_MASK        0x00000F00
+#define SOUND_CAPABILITY_INTERFACE_ANALOG_IN   0x00000100
+#define SOUND_CAPABILITY_INTERFACE_ANALOG_OUT  0x00000200
+#define SOUND_CAPABILITY_INTERFACE_DIGITAL_IN  0x00000400
+#define SOUND_CAPABILITY_INTERFACE_DIGITAL_OUT 0x00000800
+#define SOUND_CAPABILITY_BATCH                 0x00001000
+#define SOUND_CAPABILITY_BIND                  0x00002000
+#define SOUND_CAPABILITY_COPROCESSOR           0x00004000
+#define SOUND_CAPABILITY_DEFAULT               0x00008000
+#define SOUND_CAPABILITY_DUPLEX                0x00010000
+#define SOUND_CAPABILITY_VARIABLE_RATES        0x00020000
+#define SOUND_CAPABILITY_HIDDEN                0x00040000
+#define SOUND_CAPABILITY_INPUT                 0x00080000
+#define SOUND_CAPABILITY_MMAP                  0x00100000
+#define SOUND_CAPABILITY_MODEM                 0x00200000
+#define SOUND_CAPABILITY_MULTIPLE_ENGINES      0x00400000
+#define SOUND_CAPABILITY_OUTPUT                0x00800000
+#define SOUND_CAPABILITY_REALTIME              0x01000000
+#define SOUND_CAPABILITY_SHADOW                0x02000000
+#define SOUND_CAPABILITY_SPECIAL               0x04000000
+#define SOUND_CAPABILITY_MANUAL_ENABLE         0x08000000
+#define SOUND_CAPABILITY_VIRTUAL               0x10000000
+#define SOUND_CAPABILITY_CHANNEL_MASK          0x60000000
+#define SOUND_CAPABILITY_CHANNEL_ANY           0x00000000
+#define SOUND_CAPABILITY_CHANNEL_MONO          0x20000000
+#define SOUND_CAPABILITY_CHANNEL_STEREO        0x40000000
+#define SOUND_CAPABILITY_CHANNEL_MULTI         0x60000000
 
 //
 // ------------------------------------------------------ Data Type Definitions
