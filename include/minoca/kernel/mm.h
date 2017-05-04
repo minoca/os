@@ -1142,7 +1142,7 @@ Routine Description:
 
 Arguments:
 
-    IoBuffer - Supplies a pointer to the I/O buffer to initialize.
+    IoBuffer - Supplies a pointer to the I/O buffer on which to append.
 
     VirtualAddress - Supplies the starting virtual address of the data to
         append.
@@ -1150,7 +1150,40 @@ Arguments:
     PhysicalAddress - Supplies the starting physical address of the data to
         append.
 
-    SizeInBytes - Supplies the size of the I/O buffer data, in bytes.
+    SizeInBytes - Supplies the size of the data to append, in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KERNEL_API
+KSTATUS
+MmAppendIoBuffer (
+    PIO_BUFFER IoBuffer,
+    PIO_BUFFER AppendBuffer,
+    UINTN AppendOffset,
+    UINTN SizeInBytes
+    );
+
+/*++
+
+Routine Description:
+
+    This routine appends one I/O buffer on another.
+
+Arguments:
+
+    IoBuffer - Supplies a pointer to the I/O buffer on which to append.
+
+    AppendBuffer - Supplies a pointer to the I/O buffer that owns the data to
+        append.
+
+    AppendOffset - Supplies the offset into the append buffer where the data to
+        append starts.
+
+    SizeInBytes - Supplies the size of the data to append, in bytes.
 
 Return Value:
 

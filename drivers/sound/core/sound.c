@@ -297,6 +297,13 @@ Return Value:
                       Registration->Devices[Index]->StructureSize);
 
         SoundDevice->Flags &= SOUND_DEVICE_FLAG_PUBLIC_MASK;
+
+        //
+        // There is nothing preventing a device from supporting mmap. Set it on
+        // all devices.
+        //
+
+        SoundDevice->Capabilities |= SOUND_CAPABILITY_MMAP;
         SoundDevice = (PVOID)SoundDevice + SoundDevice->StructureSize;
     }
 
@@ -508,13 +515,20 @@ LookupDeviceEnd:
                               FILE_PERMISSION_GROUP_READ |
                               FILE_PERMISSION_OTHER_READ;
 
+            //
+            // Output devices are read/write to allow mmap to work.
+            //
+
             } else {
 
                 ASSERT(Type == SoundDeviceOutput);
 
                 Permissions = FILE_PERMISSION_USER_WRITE |
                               FILE_PERMISSION_GROUP_WRITE |
-                              FILE_PERMISSION_OTHER_WRITE;
+                              FILE_PERMISSION_OTHER_WRITE |
+                              FILE_PERMISSION_USER_READ |
+                              FILE_PERMISSION_GROUP_READ |
+                              FILE_PERMISSION_OTHER_READ;
             }
         }
 
@@ -866,6 +880,42 @@ Return Value:
         CyclicOffset = &DestinationOffset;
 
     } else {
+
+        //
+        // If an I/O buffer is empty and mmap is supported, then just return
+        // the device's buffer directly.
+        //
+
+        if (IoBuffer->FragmentCount == 0) {
+            if ((Handle->Device->Capabilities & SOUND_CAPABILITY_MMAP) == 0) {
+                Status = STATUS_NOT_SUPPORTED;
+                goto PerformIoEnd;
+            }
+
+            if (*IoOffset >= Handle->Buffer.Size) {
+                Status = STATUS_END_OF_FILE;
+                goto PerformIoEnd;
+            }
+
+            if (((*IoOffset + SizeInBytes) < *IoOffset) ||
+                ((*IoOffset + SizeInBytes) > Handle->Buffer.Size)) {
+
+                SizeInBytes = Handle->Buffer.Size - *IoOffset;
+                BytesRemaining = SizeInBytes;
+            }
+
+            Status = MmAppendIoBuffer(IoBuffer,
+                                      Handle->Buffer.IoBuffer,
+                                      *IoOffset,
+                                      SizeInBytes);
+
+            if (KSUCCESS(Status)) {
+                BytesRemaining = 0;
+            }
+
+            goto PerformIoEnd;
+        }
+
         if (Handle->Device->Type == SoundDeviceOutput) {
             Status = STATUS_ACCESS_DENIED;
             goto PerformIoEnd;
@@ -1544,8 +1594,10 @@ Return Value:
 {
 
     PSOUND_ALLOCATE_DMA_BUFFER AllocateDmaBuffer;
+    UINTN BufferSize;
     KSTATUS Status;
 
+    Status = STATUS_SUCCESS;
     AllocateDmaBuffer = Controller->Host.FunctionTable->AllocateDmaBuffer;
     if (AllocateDmaBuffer != NULL) {
         Status = AllocateDmaBuffer(Controller->Host.Context,
@@ -1554,9 +1606,21 @@ Return Value:
                                    FragmentCount,
                                    NewIoBuffer);
 
+    } else if ((Device->Capabilities & SOUND_CAPABILITY_MMAP) != 0) {
+        BufferSize = FragmentSize * FragmentCount;
+        *NewIoBuffer = MmAllocateNonPagedIoBuffer(0,
+                                                  MAX_ULONGLONG,
+                                                  0,
+                                                  BufferSize,
+                                                  0);
+
+        if (*NewIoBuffer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+        }
+
     } else {
-        Status = STATUS_SUCCESS;
-        *NewIoBuffer = MmAllocatePagedIoBuffer(FragmentSize * FragmentCount, 0);
+        BufferSize = FragmentSize * FragmentCount;
+        *NewIoBuffer = MmAllocatePagedIoBuffer(BufferSize, 0);
         if (*NewIoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
         }

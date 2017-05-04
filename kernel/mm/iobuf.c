@@ -960,7 +960,7 @@ Routine Description:
 
 Arguments:
 
-    IoBuffer - Supplies a pointer to the I/O buffer to initialize.
+    IoBuffer - Supplies a pointer to the I/O buffer on which to append.
 
     VirtualAddress - Supplies the starting virtual address of the data to
         append.
@@ -968,7 +968,7 @@ Arguments:
     PhysicalAddress - Supplies the starting physical address of the data to
         append.
 
-    SizeInBytes - Supplies the size of the I/O buffer data, in bytes.
+    SizeInBytes - Supplies the size of the data to append, in bytes.
 
 Return Value:
 
@@ -979,6 +979,10 @@ Return Value:
 {
 
     PIO_BUFFER_FRAGMENT Fragment;
+
+    if ((IoBuffer->Internal.Flags & IO_BUFFER_INTERNAL_FLAG_EXTENDABLE) == 0) {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     //
     // First see if the fragment can be appended onto the end of the previous
@@ -1015,6 +1019,176 @@ Return Value:
     Fragment->PhysicalAddress = PhysicalAddress;
     Fragment->Size = SizeInBytes;
     IoBuffer->FragmentCount += 1;
+    IoBuffer->Internal.TotalSize += SizeInBytes;
+    return STATUS_SUCCESS;
+}
+
+KERNEL_API
+KSTATUS
+MmAppendIoBuffer (
+    PIO_BUFFER IoBuffer,
+    PIO_BUFFER AppendBuffer,
+    UINTN AppendOffset,
+    UINTN SizeInBytes
+    )
+
+/*++
+
+Routine Description:
+
+    This routine appends one I/O buffer on another.
+
+Arguments:
+
+    IoBuffer - Supplies a pointer to the I/O buffer on which to append.
+
+    AppendBuffer - Supplies a pointer to the I/O buffer that owns the data to
+        append.
+
+    AppendOffset - Supplies the offset into the append buffer where the data to
+        append starts.
+
+    SizeInBytes - Supplies the size of the data to append, in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PIO_BUFFER_FRAGMENT AppendFragment;
+    UINTN AppendFragmentIndex;
+    UINTN AppendFragmentOffset;
+    UINTN AppendFragmentSize;
+    UINTN AppendSize;
+    UINTN AvailableFragments;
+    UINTN BytesRemaining;
+    PIO_BUFFER_FRAGMENT Fragment;
+    UINTN Index;
+    UINTN RequiredFragments;
+
+    AppendOffset += AppendBuffer->Internal.CurrentOffset;
+    if ((IoBuffer->Internal.Flags & IO_BUFFER_INTERNAL_FLAG_EXTENDABLE) == 0) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if ((AppendBuffer->FragmentCount == 0) ||
+        ((AppendOffset + SizeInBytes) > AppendBuffer->Internal.TotalSize)) {
+
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    //
+    // Find the first fragment in the append buffer.
+    //
+
+    AppendFragment = NULL;
+    AppendFragmentOffset = 0;
+    AppendFragmentIndex = 0;
+    for (Index = 0; Index < AppendBuffer->FragmentCount; Index += 1) {
+        AppendFragment = &(AppendBuffer->Fragment[Index]);
+        if ((AppendFragmentOffset + AppendFragment->Size) > AppendOffset) {
+            AppendFragmentOffset = AppendOffset - AppendFragmentOffset;
+            AppendFragmentIndex = Index;
+            break;
+        }
+
+        AppendFragmentOffset += AppendFragment->Size;
+    }
+
+    ASSERT(AppendFragment != NULL);
+    ASSERT(Index != AppendBuffer->FragmentCount);
+
+    //
+    // Make sure the buffer can fit all of the append data. Assume the worst
+    // case that each append fragment will end up in its own fragment in the
+    // I/O buffer.
+    //
+
+    RequiredFragments = 1;
+    AppendFragmentSize = AppendFragment->Size - AppendFragmentOffset;
+    Index = AppendFragmentIndex;
+    BytesRemaining = SizeInBytes;
+    while (BytesRemaining > AppendFragmentSize) {
+        BytesRemaining -= AppendFragmentSize;
+        Index += 1;
+        RequiredFragments += 1;
+        AppendFragmentSize = AppendBuffer->Fragment[Index].Size;
+    }
+
+    AvailableFragments = IoBuffer->Internal.MaxFragmentCount -
+                         IoBuffer->FragmentCount;
+
+    if (RequiredFragments > AvailableFragments) {
+
+        ASSERT(FALSE);
+
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+
+    //
+    // Append as much to the I/O buffer's current fragment as possible. Assume
+    // the append buffer is already coalesced, so only try to append its first
+    // fragment to the I/O buffer's tail fragment.
+    //
+
+    BytesRemaining = SizeInBytes;
+    if (IoBuffer->FragmentCount != 0) {
+        Fragment = &(IoBuffer->Fragment[IoBuffer->FragmentCount - 1]);
+        if ((Fragment->PhysicalAddress + Fragment->Size) ==
+            (AppendFragment->PhysicalAddress + AppendFragmentOffset)) {
+
+            if (((AppendFragment->VirtualAddress == NULL) &&
+                 (Fragment->VirtualAddress == NULL)) ||
+                ((AppendFragment->VirtualAddress != NULL) &&
+                 ((Fragment->VirtualAddress + Fragment->Size) ==
+                  (AppendFragment->VirtualAddress + AppendFragmentOffset)))) {
+
+                AppendSize = AppendFragment->Size - AppendFragmentOffset;
+                if (AppendSize > BytesRemaining) {
+                    AppendSize = BytesRemaining;
+                }
+
+                if ((Fragment->Size + AppendSize) >= Fragment->Size) {
+                    Fragment->Size += AppendSize;
+                    BytesRemaining -= AppendSize;
+                    AppendFragmentIndex += 1;
+                    AppendFragmentOffset = 0;
+                }
+            }
+        }
+    }
+
+    //
+    // Add new fragments until the requested append size runs out.
+    //
+
+    while (BytesRemaining != 0) {
+
+        ASSERT(IoBuffer->FragmentCount < IoBuffer->Internal.MaxFragmentCount);
+
+        Fragment = &(IoBuffer->Fragment[IoBuffer->FragmentCount]);
+        AppendFragment = &(AppendBuffer->Fragment[AppendFragmentIndex]);
+        Fragment->VirtualAddress = AppendFragment->VirtualAddress +
+                                   AppendFragmentOffset;
+
+        Fragment->PhysicalAddress = AppendFragment->PhysicalAddress +
+                                    AppendFragmentOffset;
+
+        AppendSize = AppendFragment->Size - AppendFragmentOffset;
+        if (AppendSize > BytesRemaining) {
+            AppendSize = BytesRemaining;
+        }
+
+        Fragment->Size = AppendSize;
+        BytesRemaining -= AppendSize;
+        AppendFragmentOffset = 0;
+        AppendFragmentIndex += 1;
+        IoBuffer->FragmentCount += 1;
+    }
+
     IoBuffer->Internal.TotalSize += SizeInBytes;
     return STATUS_SUCCESS;
 }
