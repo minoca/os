@@ -49,6 +49,12 @@ Author:
 #define SOUND_DEVICE_FLAG_PUBLIC_MASK 0x0
 
 //
+// Define the set of controller wide flags.
+//
+
+#define SOUND_CONTROLLER_FLAG_NON_CACHED_BUFFERS 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -81,6 +87,9 @@ Members:
     FragmentSize - Stores the size of each sound fragment. This is not to be
         confused with an I/O buffer fragment size.
 
+    FragmentShift - Stores the number of bits to shift to convert from bytes to
+        fragments. This means that the fragment size must be a power of 2.
+
     FragmentCount - Stores the number of fragments in the sound buffer. This is
         not to be confused with the I/O buffer fragment count.
 
@@ -100,16 +109,25 @@ Members:
         worry about the buffer being full, it should just keep reading/writing.
         It's up the sound core to keep up.
 
+    BytesCompleted - Stores the total number of bytes that have been processed
+        by the device since its last reset.
+
+    FragmentsCompleted - Stores the total fragments that had been process by
+        the device by the last time the buffer position information was queried.
+
 --*/
 
 typedef struct _SOUND_IO_BUFFER {
     PIO_BUFFER IoBuffer;
     UINTN Size;
     UINTN FragmentSize;
+    UINTN FragmentShift;
     UINTN FragmentCount;
     PIO_OBJECT_STATE IoState;
     volatile UINTN CoreOffset;
     volatile UINTN ControllerOffset;
+    volatile UINTN BytesCompleted;
+    volatile UINTN FragmentsCompleted;
 } SOUND_IO_BUFFER, *PSOUND_IO_BUFFER;
 
 /*++
@@ -387,6 +405,9 @@ Members:
     OsDevice - Stores a pointer to the OS device associated with this
         controller.
 
+    Flags - Stores a bitmask of controller wide flags. See
+        SOUND_CONTROLLER_FLAG_* for definitions.
+
     FunctionTable - Stores a pointer to the function table the library uses to
         call back into the controller.
 
@@ -411,6 +432,7 @@ typedef struct _SOUND_CONTROLLER_INFORMATION {
     ULONG Version;
     PVOID Context;
     PDEVICE OsDevice;
+    ULONG Flags;
     PSOUND_FUNCTION_TABLE FunctionTable;
     UINTN MaxFragmentCount;
     UINTN MinFragmentSize;
@@ -698,26 +720,30 @@ Return Value:
 
 SOUND_API
 VOID
-SoundUpdateBufferIoState (
+SoundUpdateBufferState (
     PSOUND_IO_BUFFER Buffer,
-    ULONG Events
+    SOUND_DEVICE_TYPE Type,
+    UINTN Offset
     );
 
 /*++
 
 Routine Description:
 
-    This routine updates the given buffer's I/O state in a lock-less way based
-    on the current core and controller offsets. If the offsets are the same,
-    it will unset the events. If the offsets are different, it set the events.
+    This routine updates the given buffer's state in a lock-less way. It will
+    increment the total bytes processes and signal the I/O state if necessary.
+    It assumes, however, that the sound controller has some sort of
+    synchronization to prevent this routine from being called simultaneously
+    for the same buffer.
 
 Arguments:
 
-    Buffer - Supplies a pointer to the sound I/O buffer whose I/O state needs
-        to be updated.
+    Buffer - Supplies a pointer to the sound I/O buffer whose state needs to be
+        updated.
 
-    Events - Supplies the events to set/unset. This should really be
-        POLL_EVENT_IN or POLL_EVENT_OUT. Errors should be set separately.
+    Type - Supplies the type of sound device to which the buffer belongs.
+
+    Offset - Supplies the hardware's updated offset within the I/O buffer.
 
 Return Value:
 

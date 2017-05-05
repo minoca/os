@@ -1738,7 +1738,6 @@ Return Value:
 
 {
 
-    ULONG Events;
     UINTN Offset;
     ULONG Status;
 
@@ -1748,7 +1747,7 @@ Return Value:
     }
 
     //
-    // If a fragment is complete, update the buffer's controller offset.
+    // One or more fragments have been processed, notify sound core.
     //
 
     if ((Status & HDA_STREAM_STATUS_BUFFER_COMPLETE) != 0) {
@@ -1760,18 +1759,9 @@ Return Value:
             Offset = 0;
         }
 
-        Events = POLL_EVENT_OUT;
-        if (Device->SoundDevice.Type == SoundDeviceInput) {
-            Events = POLL_EVENT_IN;
-        }
-
-        Device->Buffer->ControllerOffset = Offset;
-        SoundUpdateBufferIoState(Device->Buffer, Events);
-
-        //
-        // TODO: Attempt to stop the stream if this is an output device.
-        //
-
+        SoundUpdateBufferState(Device->Buffer,
+                               Device->SoundDevice.Type,
+                               Offset);
     }
 
     if (((Status & HDA_STREAM_STATUS_DESCRIPTOR_ERROR) != 0) ||

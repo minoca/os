@@ -47,6 +47,24 @@ extern "C" {
 //
 
 //
+// This ioctl returns the current input pointer information. This allows an
+// application to determine where the hardware is currently operating within
+// the audio buffer. It only makes sense to use together with mmap. It takes a
+// count_info structure.
+//
+
+#define SNDCTL_DSP_GETIPTR 0x5004
+
+//
+// This ioctl returns the current output pointer information. This allows an
+// application to determine where the hardware is currently operating within
+// the audio buffer. It only makes sense to use together with mmap. It takes a
+// count_info structure.
+//
+
+#define SNDCTL_DSP_GETOPTR 0x5005
+
+//
 // This ioctl returns the capabilities supported by the device. It returns a
 // bitmask of PCM_CAP_* (or DSP_CAP_* for compatibility).
 //
@@ -286,6 +304,31 @@ typedef struct audio_buf_info {
     int fragsize;
     int fragstotal;
 } audio_buf_info;
+
+/*++
+
+Structure Description:
+
+    This structure describes the current location of a sound device within its
+    buffer and the amount of data processed by the device.
+
+Members:
+
+    bytes - Stores the total number of bytes processed by the device.
+
+    blocks - Stores the number of fragments processed since the last time the
+        count information was queried.
+
+    ptr - Stores the current offset into the sound device buffer. This will be
+        between 0 and the buffer size, minus one.
+
+--*/
+
+typedef struct count_info {
+    unsigned int bytes;
+    int blocks;
+    int ptr;
+} count_info;
 
 //
 // -------------------------------------------------------------------- Globals

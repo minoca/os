@@ -117,9 +117,10 @@ SoundpFindNearestRate (
     );
 
 VOID
-SoundpUpdateBufferIoState (
+SoundpUpdateBufferState (
     PSOUND_IO_BUFFER Buffer,
-    ULONG Events,
+    SOUND_DEVICE_TYPE Type,
+    UINTN Offset,
     BOOL SoundCore
     );
 
@@ -404,6 +405,7 @@ Return Value:
     PCSTR Format;
     ULONG FoundTypeIndex;
     ULONG ItemsScanned;
+    ULONG MapFlags;
     IO_OBJECT_TYPE ObjectType;
     FILE_PERMISSIONS Permissions;
     PFILE_PROPERTIES Properties;
@@ -411,6 +413,8 @@ Return Value:
     KSTATUS Status;
     SOUND_DEVICE_TYPE Type;
     ULONG TypeIndex;
+
+    MapFlags = 0;
 
     //
     // If this is the root lookup, just return a handle to the controller.
@@ -426,6 +430,17 @@ Return Value:
         ObjectType = IoObjectRegularDirectory;
         Status = STATUS_SUCCESS;
         goto LookupDeviceEnd;
+    }
+
+    //
+    // If the controller claims to have non-cached buffers, then report the
+    // map flags on lookup so that mmap knows to map buffers non-cached.
+    //
+
+    if ((Controller->Host.Flags &
+         SOUND_CONTROLLER_FLAG_NON_CACHED_BUFFERS) != 0) {
+
+        MapFlags |= MAP_FLAG_CACHE_DISABLE;
     }
 
     //
@@ -537,6 +552,7 @@ LookupDeviceEnd:
 
         Properties->Permissions = Permissions;
         Properties->Size = 0;
+        Lookup->MapFlags = MapFlags;
     }
 
     return Status;
@@ -1055,8 +1071,11 @@ Return Value:
             }
         }
 
-        Handle->Buffer.CoreOffset = CoreOffset;
-        SoundpUpdateBufferIoState(&(Handle->Buffer), Events, TRUE);
+        SoundpUpdateBufferState(&(Handle->Buffer),
+                                Handle->Device->Type,
+                                CoreOffset,
+                                TRUE);
+
         KeReleaseQueuedLock(Handle->Lock);
         LockHeld = FALSE;
 
@@ -1134,9 +1153,11 @@ Return Value:
     UINTN CopySize;
     UINTN CoreOffset;
     UINTN FragmentCount;
+    UINTN FragmentsCompleted;
     UINTN FragmentSize;
     ULONG IntegerUlong;
     ULONG OldFlags;
+    SOUND_POSITION_INFORMATION Position;
     SOUND_QUEUE_INFORMATION QueueInformation;
     ULONG SetFlags;
     INT Shift;
@@ -1275,6 +1296,59 @@ Return Value:
         CopyOutBuffer = &(Handle->SampleRate);
         break;
 
+    case SoundGetCurrentInputPosition:
+    case SoundGetCurrentOutputPosition:
+        CopySize = sizeof(SOUND_POSITION_INFORMATION);
+        if (RequestBufferSize < CopySize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (Handle->Device->Type == SoundDeviceInput) {
+            if (RequestCode == SoundGetCurrentOutputPosition) {
+                RtlZeroMemory(&Position, sizeof(Position));
+                break;
+            }
+
+        } else {
+            if (RequestCode == SoundGetCurrentInputPosition) {
+                RtlZeroMemory(&Position, sizeof(Position));
+                break;
+            }
+        }
+
+        //
+        // This must be synchronized in order to update the fragment count and
+        // the buffer state.
+        //
+
+        KeAcquireQueuedLock(Handle->Lock);
+        ControllerOffset = Handle->Buffer.ControllerOffset;
+        Position.TotalBytes = (ULONG)Handle->Buffer.BytesCompleted;
+        FragmentsCompleted = Position.TotalBytes >>
+                             Handle->Buffer.FragmentShift;
+
+        Position.FragmentCount = (LONG)(FragmentsCompleted -
+                                        Handle->Buffer.FragmentsCompleted);
+
+        Handle->Buffer.FragmentsCompleted = FragmentsCompleted;
+        Position.Offset = (LONG)ControllerOffset;
+
+        //
+        // This IOCTL is used in conjunction with mmap. As user mode will not
+        // make any official reads/writes, use this as an opportunity to move
+        // the core's offset forward to match the controller offset.
+        //
+
+        SoundpUpdateBufferState(&(Handle->Buffer),
+                                Handle->Device->Type,
+                                ControllerOffset,
+                                TRUE);
+
+        KeReleaseQueuedLock(Handle->Lock);
+        CopyOutBuffer = &Position;
+        break;
+
     case SoundGetInputQueueSize:
     case SoundGetOutputQueueSize:
         CopySize = sizeof(SOUND_QUEUE_INFORMATION);
@@ -1310,8 +1384,8 @@ Return Value:
             QueueInformation.BytesAvailable += ControllerOffset;
         }
 
-        QueueInformation.FragmentsAvailable = QueueInformation.BytesAvailable /
-                                              Handle->Buffer.FragmentSize;
+        QueueInformation.FragmentsAvailable = QueueInformation.BytesAvailable >>
+                                              Handle->Buffer.FragmentShift;
 
         QueueInformation.FragmentSize = (LONG)Handle->Buffer.FragmentSize;
         QueueInformation.FragmentCount = (LONG)Handle->Buffer.FragmentCount;
@@ -1369,6 +1443,8 @@ Return Value:
                 Handle->Buffer.Size = BufferSize;
                 Handle->Buffer.FragmentCount = FragmentCount;
                 Handle->Buffer.FragmentSize = FragmentSize;
+                Handle->Buffer.FragmentShift =
+                                           RtlCountTrailingZeros(FragmentSize);
             }
 
             KeReleaseQueuedLock(Handle->Lock);
@@ -1592,26 +1668,30 @@ GetSetDeviceInformationEnd:
 
 SOUND_API
 VOID
-SoundUpdateBufferIoState (
+SoundUpdateBufferState (
     PSOUND_IO_BUFFER Buffer,
-    ULONG Events
+    SOUND_DEVICE_TYPE Type,
+    UINTN Offset
     )
 
 /*++
 
 Routine Description:
 
-    This routine updates the given buffer's I/O state in a lock-less way based
-    on the current core and controller offsets. If the offsets are the same,
-    it will unset the events. If the offsets are different, it set the events.
+    This routine updates the given buffer's state in a lock-less way. It will
+    increment the total bytes processes and signal the I/O state if necessary.
+    It assumes, however, that the sound controller has some sort of
+    synchronization to prevent this routine from being called simultaneously
+    for the same buffer.
 
 Arguments:
 
-    Buffer - Supplies a pointer to the sound I/O buffer whose I/O state needs
-        to be updated.
+    Buffer - Supplies a pointer to the sound I/O buffer whose state needs to be
+        updated.
 
-    Events - Supplies the events to set/unset. This should really be
-        POLL_EVENT_IN or POLL_EVENT_OUT. Errors should be set separately.
+    Type - Supplies the type of sound device to which the buffer belongs.
+
+    Offset - Supplies the hardware's updated offset within the I/O buffer.
 
 Return Value:
 
@@ -1621,7 +1701,7 @@ Return Value:
 
 {
 
-    SoundpUpdateBufferIoState(Buffer, Events, FALSE);
+    SoundpUpdateBufferState(Buffer, Type, Offset, FALSE);
     return;
 }
 
@@ -2359,9 +2439,10 @@ Return Value:
 }
 
 VOID
-SoundpUpdateBufferIoState (
+SoundpUpdateBufferState (
     PSOUND_IO_BUFFER Buffer,
-    ULONG Events,
+    SOUND_DEVICE_TYPE Type,
+    UINTN Offset,
     BOOL SoundCore
     )
 
@@ -2369,19 +2450,23 @@ SoundpUpdateBufferIoState (
 
 Routine Description:
 
-    This routine updates the given buffer's I/O state in a lock-less way based
-    on the current core and controller offsets.
+    This routine updates the given buffer's state in a lock-less way. It
+    updates either the sound core or controller offset and updates the total
+    number of bytes processed by the controller a new controller offset is
+    supplied.
 
 Arguments:
 
-    Buffer - Supplies a pointer to the sound I/O buffer whose I/O state needs
-        to be updated.
+    Buffer - Supplies a pointer to the sound I/O buffer whose state needs to be
+        updated.
 
-    Events - Supplies the events to set/unset. This should really be
-        POLL_EVENT_IN or POLL_EVENT_OUT. Errors should be set separately.
+    Type - Supplies the type of sound device to which the buffer belongs.
 
-    SoundCore - Supplies a boolean indicating whether or not sound core (TRUE)
-        of the sound controller (FALSE) is the caller.
+    Offset - Supplies the sound core or controller's updated offset within the
+        I/O buffer.
+
+    SoundCore - Supplies a boolean indicating whether or not the offset is for
+        the sound core (TRUE) of the sound controller (FALSE).
 
 Return Value:
 
@@ -2391,10 +2476,22 @@ Return Value:
 
 {
 
+    UINTN BytesCompleted;
     volatile UINTN *DynamicOffset;
+    ULONG Events;
+    UINTN OldOffset;
     BOOL Set;
     UINTN SnappedOffset;
     UINTN StaticOffset;
+
+    //
+    // Pick the correct events based on the device type.
+    //
+
+    Events = POLL_EVENT_IN;
+    if (Type == SoundDeviceOutput) {
+        Events = POLL_EVENT_OUT;
+    }
 
     //
     // One of the buffer offsets may be in flux, the other should not be
@@ -2404,13 +2501,35 @@ Return Value:
     //
 
     if (SoundCore == FALSE) {
+
+        //
+        // Update the buffer's total bytes completed by the hardware before
+        // updating the controller offset.
+        //
+
+        OldOffset = Buffer->ControllerOffset;
+        if (OldOffset < Offset) {
+            BytesCompleted = Offset - OldOffset;
+
+        } else {
+            BytesCompleted = (Buffer->Size - OldOffset) + Offset;
+        }
+
+        //
+        // It's assumed that the controller has some synchronization to
+        // protected this update.
+        //
+
+        Buffer->BytesCompleted += BytesCompleted;
+        Buffer->ControllerOffset = Offset;
         DynamicOffset = &(Buffer->CoreOffset);
-        StaticOffset = Buffer->ControllerOffset;
 
     } else {
+        Buffer->CoreOffset = Offset;
         DynamicOffset = &(Buffer->ControllerOffset);
-        StaticOffset = Buffer->CoreOffset;
     }
+
+    StaticOffset = Offset;
 
     //
     // The buffer is empty if the offsets are equal.
@@ -2458,7 +2577,12 @@ Return Value:
     PSOUND_DEVICE SoundDevice;
     ULONG SoundFlags;
 
+    Handle->Buffer.BytesCompleted = 0;
+    Handle->Buffer.FragmentsCompleted = 0;
     Handle->Buffer.FragmentSize = SOUND_FRAGMENT_SIZE_DEFAULT;
+    Handle->Buffer.FragmentShift =
+                            RtlCountTrailingZeros(Handle->Buffer.FragmentSize);
+
     Handle->Buffer.FragmentCount = SOUND_FRAGMENT_COUNT_DEFAULT;
     Handle->Buffer.Size = Handle->Buffer.FragmentSize *
                              Handle->Buffer.FragmentCount;

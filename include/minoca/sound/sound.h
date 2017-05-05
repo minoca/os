@@ -188,6 +188,31 @@ typedef struct _SOUND_QUEUE_INFORMATION {
     LONG FragmentCount;
 } SOUND_QUEUE_INFORMATION, *PSOUND_QUEUE_INFORMATION;
 
+/*++
+
+Structure Description:
+
+    This structure describes the current position of a sound device within its
+    buffer and the amount of data processed by the device.
+
+Members:
+
+    TotalBytes - Stores the total number of bytes processed by the device.
+
+    FragmentCount - Stores the number of fragments processed since the last
+        time the count information was queried.
+
+    Offset - Stores the current offset into the sound device buffer. This will
+        be between 0 and the buffer size, minus one.
+
+--*/
+
+typedef struct _SOUND_POSITION_INFORMATION {
+    ULONG TotalBytes;
+    LONG FragmentCount;
+    LONG Offset;
+} SOUND_POSITION_INFORMATION, *PSOUND_POSITION_INFORMATION;
+
 //
 // -------------------------------------------------------------------- Globals
 //
