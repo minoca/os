@@ -299,11 +299,14 @@ Return Value:
         SoundDevice->Flags &= SOUND_DEVICE_FLAG_PUBLIC_MASK;
 
         //
-        // There is nothing preventing a device from supporting mmap. Set it on
-        // all devices.
+        // There is nothing preventing a device from supporting mmap or being
+        // manually started (rather than automatically started via read/write).
+        // Set them on all devices.
         //
 
-        SoundDevice->Capabilities |= SOUND_CAPABILITY_MMAP;
+        SoundDevice->Capabilities |= SOUND_CAPABILITY_MMAP |
+                                     SOUND_CAPABILITY_MANUAL_ENABLE;
+
         SoundDevice = (PVOID)SoundDevice + SoundDevice->StructureSize;
     }
 
@@ -1125,6 +1128,7 @@ Return Value:
 
     UINTN BufferSize;
     ULONG ChannelCount;
+    ULONG ClearFlags;
     UINTN ControllerOffset;
     PVOID CopyOutBuffer;
     UINTN CopySize;
@@ -1132,7 +1136,9 @@ Return Value:
     UINTN FragmentCount;
     UINTN FragmentSize;
     ULONG IntegerUlong;
+    ULONG OldFlags;
     SOUND_QUEUE_INFORMATION QueueInformation;
+    ULONG SetFlags;
     INT Shift;
     PSOUND_DEVICE SoundDevice;
     KSTATUS Status;
@@ -1393,6 +1399,76 @@ Return Value:
     case SoundGetDeviceCapabilities:
         CopyOutBuffer = &(SoundDevice->Capabilities);
         CopySize = sizeof(ULONG);
+        break;
+
+    case SoundEnableDevice:
+        if ((Handle->Device->Capabilities &
+             SOUND_CAPABILITY_MANUAL_ENABLE) == 0) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+
+        CopySize = sizeof(ULONG);
+        if (RequestBufferSize < CopySize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (FromKernelMode != FALSE) {
+            IntegerUlong = *((PULONG)RequestBuffer);
+
+        } else {
+            Status = MmCopyFromUserMode(&IntegerUlong, RequestBuffer, CopySize);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        //
+        // Figure out which flags need to be set vs. cleared.
+        //
+
+        SetFlags = SOUND_DEVICE_FLAG_INTERNAL_ENABLE_INPUT;
+        if (Handle->Device->Type == SoundDeviceOutput) {
+            SetFlags = SOUND_DEVICE_FLAG_INTERNAL_ENABLE_OUTPUT;
+        }
+
+        ClearFlags = 0;
+        if ((IntegerUlong & SOUND_ENABLE_INPUT) == 0) {
+            ClearFlags |= SOUND_DEVICE_FLAG_INTERNAL_ENABLE_INPUT;
+        }
+
+        if ((IntegerUlong & SOUND_ENABLE_OUTPUT) == 0) {
+            ClearFlags |= SOUND_DEVICE_FLAG_INTERNAL_ENABLE_OUTPUT;
+        }
+
+        if (ClearFlags != 0) {
+            SetFlags &= ~ClearFlags;
+            RtlAtomicAnd32(&(Handle->Device->Flags), ~ClearFlags);
+        }
+
+        //
+        // If a flags actually gets set, then try to start the device.
+        //
+
+        if (SetFlags != 0) {
+            OldFlags = RtlAtomicOr32(&(Handle->Device->Flags), SetFlags);
+            if ((OldFlags & SetFlags) != SetFlags) {
+                SoundpStartDevice(Handle);
+            }
+
+            IntegerUlong = 0;
+            if ((SetFlags & SOUND_DEVICE_FLAG_INTERNAL_ENABLE_INPUT) != 0) {
+                IntegerUlong |= SOUND_ENABLE_INPUT;
+            }
+
+            if ((SetFlags & SOUND_DEVICE_FLAG_INTERNAL_ENABLE_OUTPUT) != 0) {
+                IntegerUlong |= SOUND_ENABLE_OUTPUT;
+            }
+        }
+
+        CopyOutBuffer = &IntegerUlong;
         break;
 
     default:
@@ -1867,9 +1943,24 @@ Return Value:
     PSOUND_GET_SET_INFORMATION GetSetInformation;
     SOUND_DEVICE_STATE_INFORMATION Information;
     UINTN Size;
+    ULONG SoundFlags;
     KSTATUS Status;
 
     ASSERT(Handle->State > SoundDeviceStateUninitialized);
+
+    //
+    // If input/output is not enabled, do not start the device. An unsuccessful
+    // start request because the device is not enabled should not be fatal.
+    //
+
+    SoundFlags = SOUND_DEVICE_FLAG_INTERNAL_ENABLE_INPUT;
+    if (Handle->Device->Type == SoundDeviceOutput) {
+        SoundFlags = SOUND_DEVICE_FLAG_INTERNAL_ENABLE_OUTPUT;
+    }
+
+    if ((Handle->Device->Flags & SoundFlags) != SoundFlags) {
+        return STATUS_SUCCESS;
+    }
 
     Status = STATUS_SUCCESS;
     KeAcquireQueuedLock(Handle->Lock);
@@ -2365,6 +2456,7 @@ Return Value:
 {
 
     PSOUND_DEVICE SoundDevice;
+    ULONG SoundFlags;
 
     Handle->Buffer.FragmentSize = SOUND_FRAGMENT_SIZE_DEFAULT;
     Handle->Buffer.FragmentCount = SOUND_FRAGMENT_COUNT_DEFAULT;
@@ -2379,6 +2471,17 @@ Return Value:
         Handle->ChannelCount = SoundDevice->MaxChannelCount;
         Handle->SampleRate = SoundpFindNearestRate(SoundDevice,
                                                    SOUND_SAMPLE_RATE_DEFAULT);
+
+        //
+        // Reset the device to automatically start on the first read/write.
+        //
+
+        SoundFlags = SOUND_DEVICE_FLAG_INTERNAL_ENABLE_INPUT;
+        if (Handle->Device->Type == SoundDeviceOutput) {
+            SoundFlags = SOUND_DEVICE_FLAG_INTERNAL_ENABLE_OUTPUT;
+        }
+
+        RtlAtomicOr32(&(SoundDevice->Flags), SoundFlags);
     }
 
     Handle->Volume = SOUND_VOLUME_DEFAULT;

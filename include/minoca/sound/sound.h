@@ -109,6 +109,13 @@ Author:
 #define SOUND_CAPABILITY_CHANNEL_MULTI         0x60000000
 
 //
+// Define the enable bits. These must match the OSS format.
+//
+
+#define SOUND_ENABLE_INPUT  0x00000001
+#define SOUND_ENABLE_OUTPUT 0x00000002
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -148,6 +155,7 @@ typedef enum _SOUND_CONTROL {
     SoundSetInputVolume = 0x501C,
     SoundSetSampleRate = 0x501D,
     SoundSetStereo = 0x501E,
+    SoundEnableDevice = 0x501F,
 } SOUND_CONTROL, *PSOUND_CONTROL;
 
 /*++

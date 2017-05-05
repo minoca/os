@@ -147,6 +147,15 @@ extern "C" {
 #define SNDCTL_DSP_STEREO 0x501E
 
 //
+// This ioctl starts the audio input or output engine of a sound device. By
+// default, input and output will automatically be enabled once a read or write
+// is issued. To manually enable an engine, the trigger enable bits must first
+// be cleared and then set (i.e. this ioctl needs to be called twice).
+//
+
+#define SNDCTL_DSP_SETTRIGGER 0x501F
+
+//
 // Define the audio format bits.
 //
 
@@ -236,6 +245,13 @@ extern "C" {
 #define DSP_CAP_SPECIAL    PCM_CAP_SPECIAL
 #define DSP_CAP_TRIGGER    PCM_CAP_TRIGGER
 #define DSP_CAP_VIRTUAL    PCM_CAP_VIRTUAL
+
+//
+// Define the flags for the set trigger ioctl.
+//
+
+#define PCM_ENABLE_INPUT  0x00000001
+#define PCM_ENABLE_OUTPUT 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions

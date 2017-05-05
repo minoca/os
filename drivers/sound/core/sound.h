@@ -51,6 +51,15 @@ Author:
 #define SOUND_DEVICE_FLAG_INTERNAL_BUSY 0x80000000
 
 //
+// These flags dictate whether the device is automatically started on the first
+// read or write. If they are not set, then the device can only be started
+// via an ioctl. They are set by default on device open.
+//
+
+#define SOUND_DEVICE_FLAG_INTERNAL_ENABLE_INPUT  0x40000000
+#define SOUND_DEVICE_FLAG_INTERNAL_ENABLE_OUTPUT 0x20000000
+
+//
 // Define the default fragment size, in bytes.
 //
 
