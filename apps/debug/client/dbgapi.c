@@ -1336,7 +1336,6 @@ Return Value:
 
     ULONG FrameIndex;
     REGISTERS_UNION LocalRegisters;
-    INT SearchIndex;
     INT Status;
     BOOL Unwind;
 
@@ -1353,6 +1352,7 @@ Return Value:
 
     Unwind = TRUE;
     FrameIndex = 0;
+    Status = 0;
     while (FrameIndex < *FrameCount) {
         Status = DbgStackUnwind(Context,
                                 Registers,
@@ -1367,25 +1367,7 @@ Return Value:
             break;
         }
 
-        //
-        // If the stack frame appears to loop back on itself, stop.
-        //
-
-        for (SearchIndex = 0; SearchIndex < FrameIndex; SearchIndex += 1) {
-            if (Frames[SearchIndex].FramePointer ==
-                Frames[FrameIndex].FramePointer) {
-
-                break;
-            }
-        }
-
         FrameIndex += 1;
-        if (SearchIndex != FrameIndex - 1) {
-            DbgOut("Stack frame loops, frame %I64x.\n",
-                   Frames[FrameIndex].FramePointer);
-
-            break;
-        }
     }
 
     *FrameCount = FrameIndex;
@@ -1451,6 +1433,11 @@ Return Value:
     //
 
     Pc = DbgGetPc(Context, Registers);
+    if (Pc == 0) {
+        Status = EOF;
+        goto StackUnwindEnd;
+    }
+
     if (*Unwind != FALSE) {
         Module = DbgpFindModuleFromAddress(Context, Pc, &DebasedPc);
         if ((Module != NULL) && (Module->Symbols != NULL) &&
@@ -1463,21 +1450,22 @@ Return Value:
             Symbols->RegistersContext = Registers;
             Status = Symbols->Interface->Unwind(Symbols, DebasedPc, Frame);
             Symbols->RegistersContext = NULL;
-            if (Status != 0) {
-                if (Status != ENOENT) {
-                    DbgOut("Failed to unwind stack at PC 0x%I64x\n", Pc);
-                }
-
-            } else {
+            if (Status == 0) {
 
                 //
-                // Set the PC to the return address. For architectures like
-                // x86 this is a no-op. On ARM, the return address register
-                // (r14) is different than the PC (r15).
+                // Ignore the return address from the symbols interface, but
+                // look at how they restored the PC. This is done because
+                // DWARF returns the "return address" register, since that's
+                // all they know. But they may have restored the PC (such as
+                // from a trap frame), which is even better.
                 //
 
-                DbgSetPc(Context, Registers, Frame->ReturnAddress);
+                Frame->ReturnAddress = DbgGetPc(Context, Registers);
                 goto StackUnwindEnd;
+            }
+
+            if (Status != ENOENT) {
+                DbgOut("Failed to unwind stack at PC 0x%I64x\n", Pc);
             }
         }
 

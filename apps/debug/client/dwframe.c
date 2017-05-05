@@ -156,6 +156,8 @@ Members:
 
     MaxRegister - Stores the maximum register number that has been changed.
 
+    NewValue - Stores the unwound register values.
+
 --*/
 
 typedef struct _DWARF_FRAME_STATE {
@@ -165,6 +167,7 @@ typedef struct _DWARF_FRAME_STATE {
     PDWARF_FRAME_STACK RememberStack;
     UINTN RememberStackSize;
     ULONG MaxRegister;
+    ULONGLONG NewValue[DWARF_MAX_REGISTERS];
 } DWARF_FRAME_STATE, *PDWARF_FRAME_STATE;
 
 //
@@ -437,7 +440,9 @@ Return Value:
 {
 
     ULONGLONG Cfa;
+    ULONG DefaultCfaRegister;
     ULONG Index;
+    ULONG ReturnRegister;
     DWARF_FRAME_STATE State;
     INT Status;
     ULONGLONG Value;
@@ -447,6 +452,16 @@ Return Value:
 
     memset(&State, 0, sizeof(DWARF_FRAME_STATE));
     State.Location = Fde->InitialLocation;
+
+    //
+    // Set the return address register so that it keeps its same value.
+    //
+
+    ReturnRegister = Cie->ReturnAddressRegister;
+    if (ReturnRegister < DWARF_MAX_REGISTERS) {
+        State.Rules.Registers[ReturnRegister].Type = DwarfFrameSameValue;
+        State.MaxRegister = ReturnRegister;
+    }
 
     //
     // Execute the initial instructions to get the rules set up.
@@ -461,6 +476,11 @@ Return Value:
 
     if ((Context->Flags & DWARF_CONTEXT_DEBUG_FRAMES) != 0) {
         DWARF_PRINT("\n");
+    }
+
+    DefaultCfaRegister = -1;
+    if (State.Rules.Cfa.Type == DwarfFrameRegister) {
+        DefaultCfaRegister = State.Rules.Cfa.Operand;
     }
 
     if (Status != 0) {
@@ -518,7 +538,7 @@ Return Value:
     }
 
     //
-    // Now unwind the registers.
+    // Now evaluate the rules to get all the new register values.
     //
 
     for (Index = 0; Index <= State.MaxRegister; Index += 1) {
@@ -538,11 +558,44 @@ Return Value:
             goto ExecuteFdeEnd;
         }
 
-        if (Index == Cie->ReturnAddressRegister) {
+        if (Index == ReturnRegister) {
             Frame->ReturnAddress = Value;
         }
 
-        Status = DwarfTargetWriteRegister(Context, Index, Value);
+        State.NewValue[Index] = Value;
+    }
+
+    //
+    // Now apply all the new register values. This couldn't be done before
+    // because the registers may have depended on each other's old contents.
+    // Apply the return address register to the PC first because it's an
+    // implicit rule.
+    //
+
+    if (ReturnRegister < DWARF_MAX_REGISTERS) {
+        if (State.Rules.Registers[ReturnRegister].Type != DwarfFrameUndefined) {
+            DwarfTargetWritePc(Context, State.NewValue[ReturnRegister]);
+            if ((Context->Flags & DWARF_CONTEXT_VERBOSE_UNWINDING) != 0) {
+                DWARF_PRINT("   PC <- %I64x <- r%d (%s) (ReturnAddress)\n",
+                            State.NewValue[ReturnRegister],
+                            ReturnRegister,
+                            DwarfGetRegisterName(Context, ReturnRegister));
+            }
+
+        } else {
+            DwarfTargetWritePc(Context, 0);
+        }
+    }
+
+    for (Index = 0; Index <= State.MaxRegister; Index += 1) {
+        if (State.Rules.Registers[Index].Type == DwarfFrameUndefined) {
+            continue;
+        }
+
+        Status = DwarfTargetWriteRegister(Context,
+                                          Index,
+                                          State.NewValue[Index]);
+
         if (Status != 0) {
             DWARF_ERROR("DWARF: Failed to set register %d.\n", Index);
             goto ExecuteFdeEnd;
@@ -553,17 +606,18 @@ Return Value:
     // Restore the CFA register if it wasn't explicitly restored.
     //
 
-    if (State.Rules.Cfa.Type == DwarfFrameRegister) {
-        Index = State.Rules.Cfa.Operand;
-        if (State.Rules.Registers[Index].Type == DwarfFrameUndefined) {
+    if (DefaultCfaRegister != (ULONG)-1) {
+        if (State.Rules.Registers[DefaultCfaRegister].Type ==
+            DwarfFrameUndefined) {
+
             if ((Context->Flags & DWARF_CONTEXT_VERBOSE_UNWINDING) != 0) {
                 DWARF_PRINT("   r%d (%s) <- %I64x <- CFA (implicit)\n",
-                            Index,
-                            DwarfGetRegisterName(Context, Index),
+                            DefaultCfaRegister,
+                            DwarfGetRegisterName(Context, DefaultCfaRegister),
                             Cfa);
             }
 
-            Status = DwarfTargetWriteRegister(Context, Index, Cfa);
+            Status = DwarfTargetWriteRegister(Context, DefaultCfaRegister, Cfa);
             if (Status != 0) {
                 DWARF_ERROR("DWARF: Failed to set CFA register %d.\n", Index);
                 goto ExecuteFdeEnd;
@@ -1032,14 +1086,14 @@ Return Value:
                     DWARF_PRINT("}");
                 }
 
-                RuleType = DwarfFrameExpression;
-                if (Instruction == DwarfCfaValExpression) {
-                    RuleType = DwarfFrameExpressionValue;
+                RuleType = DwarfFrameExpressionValue;
+                if (Instruction == DwarfCfaExpression) {
+                    RuleType = DwarfFrameExpression;
                 }
 
                 DwarfpSetFrameRule(Context,
                                    State,
-                                   -1,
+                                   Register,
                                    RuleType,
                                    Operand,
                                    Operand2);
@@ -1380,7 +1434,7 @@ Return Value:
         Value = 0;
         Status = DwarfTargetReadRegister(Context, Register, &Value);
         if ((Context->Flags & DWARF_CONTEXT_VERBOSE_UNWINDING) != 0) {
-            DWARF_PRINT("%I64x (same)\n");
+            DWARF_PRINT("%I64x (same)\n", Value);
         }
 
         break;

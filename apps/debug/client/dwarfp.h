@@ -1477,6 +1477,33 @@ Return Value:
 
 --*/
 
+INT
+DwarfTargetWritePc (
+    PDWARF_CONTEXT Context,
+    ULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes a the instruction pointer register, presumably with the
+    return address.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Value - Supplies the new value of the register.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
 PSTR
 DwarfGetRegisterName (
     PDWARF_CONTEXT Context,
