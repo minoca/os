@@ -250,10 +250,22 @@ Environment:
 
 #define SystemCallRestoreContext 1
 #define SIGNAL_PARAMETERS_SIZE 24
+#define SIGNAL_CONTEXT_SIZE 32
 
 ##
 ## -------------------------------------------------------------------- Macros
 ##
+
+##
+## Define .cfi directives, macroed so they can be excised if unneeded.
+##
+
+#define CFI_DEF_CFA(_Register, _Offset) .cfi_def_cfa _Register, _Offset
+#define CFI_DEF_CFA_OFFSET(_Offset) .cfi_def_cfa_offset _Offset
+#define CFI_ADJUST_CFA_OFFSET(_Amount) .cfi_adjust_cfa_offset _Amount
+#define CFI_OFFSET(_Register, _Offset) .cfi_offset _Register, _Offset
+#define CFI_UNDEFINED(_Register) .cfi_undefined _Register
+#define CFI_SAME_VALUE(_Register) .cfi_same_value _Register
 
 ##
 ## This macro emits a thumb if-then instruction, if compiling in Thumb mode.
@@ -340,12 +352,7 @@ Environment:
     .endif
     .globl \FunctionName
     .cfi_startproc
-    .cfi_same_value r14
-    .if THUMB
-        .cfi_def_cfa_register r7
-    .else
-        .cfi_def_cfa_register r11
-    .endif
+    .cfi_def_cfa r13, 0
     \FunctionName:
 .endm
 
@@ -408,6 +415,23 @@ Environment:
     str     %sp, [%sp]                          @ Save SVC stack pointer.
     clrex                                       @ Clear exclusive monitors.
 
+    CFI_OFFSET(r0, TRAP_R0)
+    CFI_OFFSET(r1, TRAP_R1)
+    CFI_OFFSET(r2, TRAP_R2)
+    CFI_OFFSET(r3, TRAP_R3)
+    CFI_OFFSET(r4, TRAP_R4)
+    CFI_OFFSET(r5, TRAP_R5)
+    CFI_OFFSET(r6, TRAP_R6)
+    CFI_OFFSET(r7, TRAP_R7)
+    CFI_OFFSET(r8, TRAP_R8)
+    CFI_OFFSET(r9, TRAP_R9)
+    CFI_OFFSET(r10, TRAP_R10)
+    CFI_OFFSET(r11, TRAP_R11)
+    CFI_OFFSET(r12, TRAP_R12)
+    CFI_OFFSET(sp, TRAP_SVCSP)                 @ Assume it came from SVC mode.
+    CFI_OFFSET(lr, TRAP_SVCLR)
+    CFI_OFFSET(pc, TRAP_PC)
+
 .endm
 
 ##
@@ -438,6 +462,23 @@ Environment:
     ldr     %r0, [%sp, #8]                      @ Restore R0.
     add     %sp, %sp, #16                       @ Pop up to R1.
     ldmia   %sp!, {%r1-%r12, %lr}               @ Restore general registers.
+
+    CFI_SAME_VALUE(r0)
+    CFI_SAME_VALUE(r1)
+    CFI_SAME_VALUE(r2)
+    CFI_SAME_VALUE(r3)
+    CFI_SAME_VALUE(r4)
+    CFI_SAME_VALUE(r5)
+    CFI_SAME_VALUE(r6)
+    CFI_SAME_VALUE(r7)
+    CFI_SAME_VALUE(r8)
+    CFI_SAME_VALUE(r9)
+    CFI_SAME_VALUE(r10)
+    CFI_SAME_VALUE(r11)
+    CFI_SAME_VALUE(r12)
+    CFI_OFFSET(sp, 8)
+    CFI_OFFSET(lr, 0)
+
     rfeia   %sp!                                @ Restore PC and CPSR.
 
 .endm

@@ -225,6 +225,12 @@ FUNCTION ArpSoftwareInterruptEntry
 
     stmdb   %sp!, {%r0, %r1}                    @ Save the parameters.
 
+    CFI_OFFSET(r0, 0)
+    CFI_OFFSET(r1, 4)
+    CFI_OFFSET(sp, TRAP_USERSP + 8)
+    CFI_OFFSET(lr, TRAP_USERLR + 8)
+    CFI_OFFSET(pc, TRAP_PC + 8)
+
     ##
     ## Set the exception CPSR to something wild as a hint that this trap frame
     ## is incomplete.
@@ -274,6 +280,11 @@ FUNCTION ArpSoftwareInterruptEntry
     ##
 
     add     %sp, #TRAP_FRAME_SIZE               @ Pop up to PC/Cpsr.
+    CFI_UNDEFINED(r0)
+    CFI_UNDEFINED(r1)
+    CFI_UNDEFINED(sp)
+    CFI_OFFSET(lr, 0)
+    CFI_UNDEFINED(pc)
 
     ##
     ## Clear the remainig volatile register to avoid leaking kernel state.
@@ -291,6 +302,7 @@ FUNCTION ArpSoftwareInterruptEntry
     ##
 
 ArpSoftwareInterruptFastSignal:
+    CFI_UNDEFINED(lr)
     eor     %lr, %lr                            @ Zero SVC link register.
     eor     %r1, %r1                            @ Scrub volatile R1.
     str     %r0, [%sp, #(TRAP_R0 + 8)]          @ Save the return value in R0.
@@ -335,6 +347,24 @@ ArpSoftwareInterruptEntrySlow:
 
     stmdb   %sp!, {%r0, %r1}                     @ Save the parameters.
     str     %sp, [%r2]                           @ Save SP in the trap frame.
+
+    CFI_DEF_CFA_OFFSET(8)
+    CFI_OFFSET(r0, 0)
+    CFI_OFFSET(r1, TRAP_R1)
+    CFI_OFFSET(r2, TRAP_R2)
+    CFI_OFFSET(r3, TRAP_R3)
+    CFI_OFFSET(r4, TRAP_R4)
+    CFI_OFFSET(r5, TRAP_R5)
+    CFI_OFFSET(r6, TRAP_R6)
+    CFI_OFFSET(r7, TRAP_R7)
+    CFI_OFFSET(r8, TRAP_R8)
+    CFI_OFFSET(r9, TRAP_R9)
+    CFI_OFFSET(r10, TRAP_R10)
+    CFI_OFFSET(r11, TRAP_R11)
+    CFI_OFFSET(r12, TRAP_R12)
+    CFI_OFFSET(sp, TRAP_USERSP)
+    CFI_OFFSET(lr, TRAP_USERLR)
+    CFI_OFFSET(pc, TRAP_PC)
 
     ##
     ## Just like in the fast case, R0 and R1 are preserved as the first two
@@ -385,6 +415,7 @@ ArpSoftwareInterruptEntrySlowEnd:
     ##
 
     add     %sp, %sp, #12
+    CFI_ADJUST_CFA_OFFSET(-12)
 
     ##
     ## Restore the user mode stack and link registers.
@@ -398,6 +429,25 @@ ArpSoftwareInterruptEntrySlowEnd:
     ldr     %r0, [%sp, #(TRAP_R0 - 4)]          @ Restore R0.
     add     %sp, %sp, #16                       @ Pop up to R1.
     ldmia   %sp!, {%r1-%r12, %lr}               @ Restore general registers.
+
+    CFI_DEF_CFA_OFFSET(0)
+    CFI_SAME_VALUE(r0)
+    CFI_SAME_VALUE(r1)
+    CFI_SAME_VALUE(r2)
+    CFI_SAME_VALUE(r3)
+    CFI_SAME_VALUE(r4)
+    CFI_SAME_VALUE(r5)
+    CFI_SAME_VALUE(r6)
+    CFI_SAME_VALUE(r7)
+    CFI_SAME_VALUE(r8)
+    CFI_SAME_VALUE(r9)
+    CFI_SAME_VALUE(r10)
+    CFI_SAME_VALUE(r11)
+    CFI_SAME_VALUE(r12)
+    CFI_UNDEFINED(sp)
+    CFI_SAME_VALUE(lr)
+    CFI_OFFSET(pc, 0)
+
     rfeia   %sp!                                @ Restore PC and CPSR.
 
 END_FUNCTION ArpSoftwareInterruptEntry
@@ -584,7 +634,7 @@ END_FUNCTION ArpFiqEntry
 ## dispatch routine.
 ##
 
-ArpCommonInterruptEntry:
+FUNCTION ArpCommonInterruptEntry
 
     ##
     ## Save state and create a trap frame.
@@ -600,14 +650,21 @@ ArpCommonInterruptEntry:
 
     mov     %r0, %sp
     mov     %r4, %sp
+
+    CFI_DEF_CFA(r4, 0)
+
     and     %r5, %r4, #0xFFFFFFF0
     mov     %sp, %r5
     bl      KeDispatchException
     mov     %sp, %r4
+
+    CFI_DEF_CFA(sp, 0)
 
     ##
     ## Restore state and return.
     ##
 
     ARM_EXIT_INTERRUPT
+
+END_FUNCTION ArpCommonInterruptEntry
 

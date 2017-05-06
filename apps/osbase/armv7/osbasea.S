@@ -142,10 +142,29 @@ Return Value:
 --*/
 
 FUNCTION OspSignalHandler
+    CFI_DEF_CFA_OFFSET(SIGNAL_PARAMETERS_SIZE + SIGNAL_CONTEXT_SIZE)
+    CFI_OFFSET(r0, TRAP_R0)
+    CFI_OFFSET(r1, TRAP_R1)
+    CFI_OFFSET(r2, TRAP_R2)
+    CFI_OFFSET(r3, TRAP_R3)
+    CFI_OFFSET(r4, TRAP_R4)
+    CFI_OFFSET(r5, TRAP_R5)
+    CFI_OFFSET(r6, TRAP_R6)
+    CFI_OFFSET(r7, TRAP_R7)
+    CFI_OFFSET(r8, TRAP_R8)
+    CFI_OFFSET(r9, TRAP_R9)
+    CFI_OFFSET(r10, TRAP_R10)
+    CFI_OFFSET(r11, TRAP_R11)
+    CFI_OFFSET(r12, TRAP_R12)
+    CFI_OFFSET(sp, TRAP_USERSP)
+    CFI_OFFSET(lr, TRAP_USERLR)
+    CFI_OFFSET(pc, TRAP_PC)
+
     mov     %r0, %sp            @ Get the signal parameters.
     add     %r1, %sp, #SIGNAL_PARAMETERS_SIZE @ Get the signal context.
     bl      OspProcessSignal    @ The parameters are already set up. Just call.
     add     %sp, #SIGNAL_PARAMETERS_SIZE    @ Pop the signal parameters.
+    CFI_ADJUST_CFA_OFFSET(-SIGNAL_PARAMETERS_SIZE)
     mov     %r1, %sp            @ Pass a pointer to the signal context.
     mov     %r0, #SystemCallRestoreContext  @ Set up the system call number.
     bl      OspSystemCallFull   @ Execute the system call to restore.
@@ -211,6 +230,7 @@ Return Value:
 --*/
 
 FUNCTION OspImArchResolvePltEntry
+    CFI_OFFSET(lr, 0)
 
     ##
     ## Push the original arguments, and an extra register to keep the stack
@@ -218,6 +238,7 @@ FUNCTION OspImArchResolvePltEntry
     ##
 
     stmdb   %sp!, {%r0-%r4}         @ Save the original arguments.
+    CFI_ADJUST_CFA_OFFSET(20)
 
     ##
     ## Upon entry to the resolver:
@@ -233,6 +254,8 @@ FUNCTION OspImArchResolvePltEntry
     bl      OspImResolvePltEntry    @ Resolve the relocation.
     mov     %ip, %r0                @ Save function in IP.
     ldmia   %sp!, {%r0-%r4,%lr}     @ Pop registers and previously pushed lr.
+    CFI_ADJUST_CFA_OFFSET(-24)
+    CFI_SAME_VALUE(lr)
     bx      %ip                     @ Jump to the function.
 
 END_FUNCTION OspImArchResolvePltEntry

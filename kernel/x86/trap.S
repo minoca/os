@@ -94,10 +94,12 @@ Return Value:
 FUNCTION(ArBreakExceptionHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     pushl   %ebx                    # Push a pointer to it as a parameter.
     call    KeDispatchBreakPointTrap  # Call the main exception handler.
     addl    $0x4, %esp              # Pop the parameter.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
 
@@ -174,10 +176,12 @@ Return Value:
 FUNCTION(ArSingleStepExceptionHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     pushl   %ebx                    # Push a pointer to it as a parameter.
     call    KeDispatchSingleStepTrap  # Call the main exception handler.
     addl    $0x4, %esp              # Pop the parameter.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
 
@@ -223,10 +227,12 @@ Return Value:
 FUNCTION(KdDebugServiceHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     pushl   %ebx                    # Push a pointer to the trap frame.
     call    KeDispatchDebugServiceTrap  # Call the main exception handler.
     addl    $0x4, %esp              # Pop the parameter.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
 
@@ -265,10 +271,12 @@ Return Value:
 FUNCTION(ArDivideByZeroExceptionHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     pushl   %ebx                    # Push a pointer to it as a parameter.
     call    KeDispatchDivideByZeroTrap  # Call the main exception handler.
     addl    $0x4, %esp              # Pop the parameters.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
 
@@ -308,10 +316,12 @@ Return Value:
 FUNCTION(ArFpuAccessExceptionHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     pushl   %ebx                    # Push a pointer to it as a parameter.
     call    KeDispatchFpuAccessTrap # Call the main exception handler.
     addl    $0x4, %esp              # Pop the parameters.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
 
@@ -383,10 +393,12 @@ Return Value:
 
 FUNCTION(ArProtectionFaultHandlerAsm)
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     pushl   %ebx                    # Push a pointer to it as a parameter.
     call    KeDispatchProtectionFault # Call the main handler.
     addl    $0x4, %esp              # Pop the parameter.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp
     iret                            # Return from the exception.
 
@@ -425,10 +437,12 @@ Return Value:
 FUNCTION(ArMathFaultHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     pushl   %ebx                    # Push a pointer to it as a parameter.
     call    KeDispatchMathFault     # Call the main handler.
     addl    $0x4, %esp              # Pop the parameter.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop dummy error code.
     iret                            # Return from the exception.
 
@@ -486,6 +500,7 @@ FUNCTION(ArTrapSystemCallHandlerAsm)
     pushl   %ebx                    # Push return address supplied by sysenter.
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     orl     $IA32_EFLAG_TF, TRAP_EFLAGS(%ebx) # Set the trap flag.
     jmp     ArSystemCallHandlerAfterTrapSave  # Go to the regular path.
 
@@ -527,6 +542,7 @@ Return Value:
 FUNCTION(ArSystemCallHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
 
 ArSystemCallHandlerAfterTrapSave:
     mov     TRAP_ECX(%ebx), %ecx    # Get ecx, containing the call number.
@@ -551,8 +567,10 @@ ArSystemCallHandlerAfterTrapSave:
     pushl   %ebx                    # Push a pointer to the trap frame.
     pushl   %edx                    # Push system call parameter.
     pushl   %ecx                    # Push system call number.
+    CFI_ADJUST_CFA_OFFSET(20)       # Tell the debugger.
     call    KeSystemCallHandler     # Call the main exception handler.
     addl    $0xC, %esp              # Pop the parameters.
+    CFI_ADJUST_CFA_OFFSET(-12)      # Tell the debugger.
     movl    %eax, TRAP_EAX(%ebx)    # Save the return value in the trap frame.
 
     ##
@@ -566,16 +584,20 @@ ArSystemCallHandlerAfterTrapSave:
 
     ##
     ## Push the trap frame as the first parameter. The system call number and
-    ## system call paramter were saved on the stack earlier for this call.
+    ## system call parameter were saved on the stack earlier for this call.
     ##
 
     pushl   %ebx                    # Push trap frame.
+    CFI_ADJUST_CFA_OFFSET(4)        # Notify about the push.
     call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
     addl    $0x4, %esp              # Pop the trap frame.
+    CFI_ADJUST_CFA_OFFSET(-4)       # Notify about the pop.
 
 ArSystemCallHandlerExit:
     addl    $0x8, %esp              # Pop the system call number and parameter.
+    CFI_ADJUST_CFA_OFFSET(-8)       # Notify about the pop.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $0x4, %esp              # Pop the error code.
     iret                            # Return from the exception.
 
@@ -629,6 +651,15 @@ FUNCTION(ArSysenterHandlerAsm)
     subl    $(TRAP_FRAME_SIZE - 4), %esp  # Allocate the rest of the trap frame.
     movl    %ebx, TRAP_EIP(%esp)    # EBX contains the return address.
     movl    %esp, %ebx              # Save the trap frame in EBX.
+
+    ##
+    ## There's a trap frame at ebx, which is nice since it won't require
+    ## maintenance over all these upcoming push/pops of the stack.
+    ##
+
+    CFI_DEF_CFA(%ebx, 0)
+    CFI_OFFSET(%eip, TRAP_EIP)
+    CFI_OFFSET(%esp, TRAP_ESP)
 
     ##
     ## Move user DS (rather than user CS) into the trap frame to indicate
@@ -756,6 +787,7 @@ ArSysenterHandlerFastRestore:
     addl    $0x8, %esp              # Pop the system call number and parameter.
 
 ArSysenterHandlerExit:
+    CFI_DEF_CFA(%esp, 0)            # The trap frame is at ESP, EBX is gone.
 
     ##
     ## Restore some portions of the pseudo trap frame. Do not zero EAX as it
@@ -801,15 +833,19 @@ Return Value:
 
 FUNCTION(ArpPageFaultHandlerAsm)
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     movl    %cr2, %ecx              # Get the faulting address.
     xor     %edx, %edx              # Zero edx.
     movl    %edx, %cr2              # Clear CR2.
     sti                             # Re-enable interrupts.
     pushl   %ebx                    # Push a pointer to to the trap frame.
     pushl   %ecx                    # Push CR2.
+    CFI_ADJUST_CFA_OFFSET(8)        # Tell the debugger.
     call    KeDispatchPageFault     # Call the main exception handler.
     addl    $8, %esp                # Pop the parameters.
+    CFI_ADJUST_CFA_OFFSET(-8)       # Pop them in the debugger.
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
 
@@ -849,8 +885,10 @@ Return Value:
 FUNCTION(HlSpuriousInterruptHandlerAsm)
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     addl    $1, HlSpuriousInterruptCount      # Count interrupts
     call    ArRestoreTrapFrame      # Restore the trap frame
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop the error code.
     iret                            # Return from the exception.
 
@@ -1191,12 +1229,19 @@ END_FUNCTION(ArGenerateTrapFrame)
 ## (distance >= 0x100).
 ##
 
-KeInterruptEntry:
+FUNCTION(KeInterruptEntry)
     call    ArGenerateTrapFrame     # Create a local trap frame.
+    CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     pushl   %ebx                    # Push a pointer to it as a parameter.
+    CFI_ADJUST_CFA_OFFSET(4)
     call    KeDispatchInterrupt     # Dispatch the interrupt.
     addl    $4, %esp                # Pop the parameters.
+    CFI_ADJUST_CFA_OFFSET(-4)
     call    ArRestoreTrapFrame      # Restore state.
+    CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $4, %esp                # Pop the error code.
+    CFI_OFFSET(%eip, 0)             # The return address is right there.
     iret                            # Return from the exception.
+
+END_FUNCTION(KeInterruptEntry)
 

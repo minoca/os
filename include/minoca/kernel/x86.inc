@@ -173,6 +173,7 @@ Environment:
 
 #define SystemCallRestoreContext 1
 #define SIGNAL_PARAMETERS_SIZE 24
+#define SIGNAL_CONTEXT_SIZE 32
 
 ##
 ## -------------------------------------------------------------------- Macros
@@ -215,6 +216,8 @@ Environment:
     .func _Name ; \
     .type _Name, %function ; \
     .cfi_startproc ; \
+    .cfi_def_cfa %esp, 4 ; \
+    .cfi_offset %eip, -4 ; \
     .global _Name ; \
     _Name:
 
@@ -254,3 +257,48 @@ Environment:
 
 #endif
 
+##
+## This macro sets the call frame information so that the debugger can unwind
+## a trap frame. It assumes the CFA register is esp, and sets the CFA to the
+## base of the trap frame just to make things easier.
+##
+
+#define CFI_TRAP_FRAME_PUSHED           \
+    .cfi_def_cfa_offset 0 ;             \
+    .cfi_offset %eax, TRAP_EAX ;        \
+    .cfi_offset %ebx, TRAP_EBX ;        \
+    .cfi_offset %ecx, TRAP_ECX ;        \
+    .cfi_offset %edx, TRAP_EDX ;        \
+    .cfi_offset %esi, TRAP_ESI ;        \
+    .cfi_offset %edi, TRAP_EDI ;        \
+    .cfi_offset %ebp, TRAP_EBP ;        \
+    .cfi_offset %eip, TRAP_EIP ;        \
+    .cfi_offset %esp, TRAP_ESP ;        \
+    .cfi_offset %eflags, TRAP_EFLAGS
+
+##
+## This macro sets teh call frame information just after a trap frame was
+## restored. It indicates to the debugger that most registers are now in their
+## proper place. It assumes the CFA register is esp+0.
+##
+
+#define CFI_TRAP_FRAME_POPPED \
+    .cfi_same_value %eax ; \
+    .cfi_same_value %ebx ; \
+    .cfi_same_value %ecx ; \
+    .cfi_same_value %edx ; \
+    .cfi_same_value %esi ; \
+    .cfi_same_value %edi ; \
+    .cfi_same_value %ebp ; \
+    .cfi_offset %eip, 4
+
+##
+## Define .cfi directives, macroed so they can be excised if unneeded.
+##
+
+#define CFI_DEF_CFA(_Register, _Offset) .cfi_def_cfa _Register, _Offset
+#define CFI_DEF_CFA_OFFSET(_Offset) .cfi_def_cfa_offset _Offset
+#define CFI_ADJUST_CFA_OFFSET(_Amount) .cfi_adjust_cfa_offset _Amount
+#define CFI_OFFSET(_Register, _Offset) .cfi_offset _Register, _Offset
+#define CFI_UNDEFINED(_Register) .cfi_undefined _Register
+#define CFI_SAME_VALUE(_Register) .cfi_same_value _Register

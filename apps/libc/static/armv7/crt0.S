@@ -67,6 +67,7 @@ Return Value:
 --*/
 
 EXPORTED_FUNCTION _start
+    CFI_UNDEFINED(lr)
 
     ##
     ## Call out to initialize the C Runtime library.
