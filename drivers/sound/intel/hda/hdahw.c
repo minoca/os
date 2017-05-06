@@ -705,7 +705,7 @@ Return Value:
     // down the I/O by needing to allocate buffers.
     //
 
-    BufferDescriptorListSize = HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT *
+    BufferDescriptorListSize = HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_DEFAULT *
                                sizeof(HDA_BUFFER_DESCRIPTOR_LIST_ENTRY);
 
     ASSERT(IS_ALIGNED(BufferDescriptorListSize,
@@ -879,7 +879,7 @@ Return Value:
     // for each.
     //
 
-    DescriptorListSize = HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT *
+    DescriptorListSize = HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_DEFAULT *
                          sizeof(HDA_BUFFER_DESCRIPTOR_LIST_ENTRY);
 
     DescriptorCount = Controller->InputStreamCount +
@@ -2146,7 +2146,8 @@ Return Value:
                        HdaStreamRegisterFormat,
                        Format);
 
-    ASSERT(Buffer->FragmentCount <= HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT);
+    ASSERT(Buffer->FragmentCount <=
+           HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_DEFAULT);
 
     HDA_STREAM_WRITE16(Controller,
                        StreamIndex,

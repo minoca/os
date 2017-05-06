@@ -411,6 +411,9 @@ Members:
     FunctionTable - Stores a pointer to the function table the library uses to
         call back into the controller.
 
+    MinFragmentCount - Stores the minimum number of allowed DMA buffer
+        fragments.
+
     MaxFragmentCount - Stores the maximum number of allowed DMA buffer
         fragments.
 
@@ -434,6 +437,7 @@ typedef struct _SOUND_CONTROLLER_INFORMATION {
     PDEVICE OsDevice;
     ULONG Flags;
     PSOUND_FUNCTION_TABLE FunctionTable;
+    UINTN MinFragmentCount;
     UINTN MaxFragmentCount;
     UINTN MinFragmentSize;
     UINTN MaxFragmentSize;

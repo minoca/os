@@ -1021,7 +1021,12 @@ Return Value:
         Registration.OsDevice = Controller->OsDevice;
         Registration.Flags = SOUND_CONTROLLER_FLAG_NON_CACHED_BUFFERS;
         Registration.FunctionTable = &HdaSoundFunctionTable;
-        Registration.MaxFragmentCount = HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT;
+        Registration.MinFragmentCount =
+                                HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_MINIMUM;
+
+        Registration.MaxFragmentCount =
+                                HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_DEFAULT;
+
         Registration.MinFragmentSize = HDA_DMA_BUFFER_ALIGNMENT;
         Registration.MaxFragmentSize = MAX_ULONG;
         Registration.MaxBufferSize = MAX_ULONG;

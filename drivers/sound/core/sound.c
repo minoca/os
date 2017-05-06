@@ -235,6 +235,7 @@ Return Value:
     if ((Registration->DeviceCount == 0) ||
         (Registration->Devices == NULL) ||
         (Registration->OsDevice == NULL) ||
+        (Registration->MinFragmentCount < SOUND_FRAGMENT_COUNT_MINIMUM) ||
         (Registration->FunctionTable->GetSetInformation == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
@@ -1417,7 +1418,10 @@ Return Value:
                               SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_MASK) >>
                              SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_SHIFT);
 
-        if (FragmentCount > Handle->Controller->Host.MaxFragmentCount) {
+        if (FragmentCount < Handle->Controller->Host.MinFragmentCount) {
+            FragmentCount = Handle->Controller->Host.MinFragmentCount;
+
+        } else if (FragmentCount > Handle->Controller->Host.MaxFragmentCount) {
             FragmentCount = Handle->Controller->Host.MaxFragmentCount;
         }
 
@@ -2574,20 +2578,35 @@ Return Value:
 
 {
 
+    PSOUND_IO_BUFFER Buffer;
+    PSOUND_CONTROLLER Controller;
     PSOUND_DEVICE SoundDevice;
     ULONG SoundFlags;
 
-    Handle->Buffer.BytesCompleted = 0;
-    Handle->Buffer.FragmentsCompleted = 0;
-    Handle->Buffer.FragmentSize = SOUND_FRAGMENT_SIZE_DEFAULT;
-    Handle->Buffer.FragmentShift =
-                            RtlCountTrailingZeros(Handle->Buffer.FragmentSize);
+    Buffer = &(Handle->Buffer);
+    Controller = Handle->Controller;
+    Buffer->BytesCompleted = 0;
+    Buffer->FragmentsCompleted = 0;
+    Buffer->FragmentCount = SOUND_FRAGMENT_COUNT_DEFAULT;
+    if (Buffer->FragmentCount < Controller->Host.MinFragmentCount) {
+        Buffer->FragmentCount = Controller->Host.MinFragmentCount;
 
-    Handle->Buffer.FragmentCount = SOUND_FRAGMENT_COUNT_DEFAULT;
-    Handle->Buffer.Size = Handle->Buffer.FragmentSize *
-                             Handle->Buffer.FragmentCount;
+    } else if (Buffer->FragmentCount > Controller->Host.MaxFragmentCount) {
+        Buffer->FragmentCount = Controller->Host.MaxFragmentCount;
+    }
 
-    ASSERT(Handle->Buffer.Size < Handle->Controller->Host.MaxBufferSize);
+    Buffer->FragmentSize = SOUND_FRAGMENT_SIZE_DEFAULT;
+    if (Buffer->FragmentSize < Controller->Host.MinFragmentSize) {
+        Buffer->FragmentSize = Controller->Host.MinFragmentSize;
+
+    } else if (Buffer->FragmentSize > Controller->Host.MaxFragmentSize) {
+        Buffer->FragmentSize = Controller->Host.MaxFragmentSize;
+    }
+
+    Buffer->FragmentShift = RtlCountTrailingZeros(Handle->Buffer.FragmentSize);
+    Buffer->Size = Buffer->FragmentSize * Buffer->FragmentCount;
+
+    ASSERT(Buffer->Size < Controller->Host.MaxBufferSize);
 
     SoundDevice = Handle->Device;
     if (SoundDevice != NULL) {

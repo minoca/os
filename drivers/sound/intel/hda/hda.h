@@ -81,9 +81,9 @@ Author:
 // This macro returns the first buffer descriptor list entry for a given stream.
 //
 
-#define HDA_GET_STREAM_BDL(_Controller, _StreamIndex)  \
-    ((_Controller)->BufferDescriptorLists +                         \
-     ((_StreamIndex) * HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT))
+#define HDA_GET_STREAM_BDL(_Controller, _StreamIndex)                   \
+    ((_Controller)->BufferDescriptorLists +                             \
+     ((_StreamIndex) * HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_DEFAULT))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -127,13 +127,19 @@ Author:
 #define HDA_PCI_MSI_FLAG_RESOURCES_ALLOCATED  0x00000008
 
 //
+// Define the minimum number of allowed buffer descriptor list entries.
+//
+
+#define HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_MINIMUM 2
+
+//
 // Define the default number of entries in a buffer descriptor list. The buffer
 // descriptor lists can be between 2 and 256 entries in length, but need to be
 // aligned to 128 bytes. As 8 entries can fit in 128 bytes, set that as the
 // default.
 //
 
-#define HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT 8
+#define HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_DEFAULT 8
 
 //
 // Define the set of function group flags.

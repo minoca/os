@@ -66,10 +66,16 @@ Author:
 #define SOUND_FRAGMENT_SIZE_DEFAULT _2KB
 
 //
-// Define the default fragment count, in bytes.
+// Define the default fragment count.
 //
 
 #define SOUND_FRAGMENT_COUNT_DEFAULT 2
+
+//
+// Define the minimum number of fragments allowed.
+//
+
+#define SOUND_FRAGMENT_COUNT_MINIMUM 2
 
 //
 // Define the default sample rate, in Hz.
