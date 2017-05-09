@@ -3431,7 +3431,7 @@ Return Value:
     RestartAllowed = FALSE;
     SignalHandler = OsSignalHandler;
     if (SignalHandler != NULL) {
-        RestartAllowed = SignalHandler(Parameters);
+        RestartAllowed = SignalHandler(Parameters, Context);
     }
 
     //

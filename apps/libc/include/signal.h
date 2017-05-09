@@ -587,7 +587,7 @@ Members:
 
     sa_sigaction - Stores a pointer to a function to be called to handle the
         signal. It takes three parameters: the signal number, a pointer to the
-        signal information, and an unused context pointer.
+        signal information, and a pointer to the signal context.
 
     sa_mask - Stores the mask of signals to add to the mask of blocked signals
         when this handler is called.

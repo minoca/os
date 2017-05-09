@@ -74,7 +74,8 @@ Environment:
 
 BOOL
 ClpHandleSignal (
-    PSIGNAL_PARAMETERS SignalInformation
+    PSIGNAL_PARAMETERS SignalInformation,
+    PSIGNAL_CONTEXT Context
     );
 
 int
@@ -1808,7 +1809,8 @@ Return Value:
 
 BOOL
 ClpHandleSignal (
-    PSIGNAL_PARAMETERS SignalInformation
+    PSIGNAL_PARAMETERS SignalInformation,
+    PSIGNAL_CONTEXT Context
     )
 
 /*++
@@ -1821,6 +1823,9 @@ Routine Description:
 Arguments:
 
     SignalInformation - Supplies a pointer to the signal information.
+
+    Context - Supplies a pointer to the signal context, including the machine
+        state before the signal was applied.
 
 Return Value:
 
@@ -1908,7 +1913,7 @@ Return Value:
             HandlerInformation.si_fd =
                           (int)(UINTN)SignalInformation->FromU.Poll.Descriptor;
 
-            Action->sa_sigaction(Signal, &HandlerInformation, NULL);
+            Action->sa_sigaction(Signal, &HandlerInformation, Context);
 
         } else {
             Action->sa_handler(Signal);

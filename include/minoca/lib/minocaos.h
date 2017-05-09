@@ -98,7 +98,8 @@ typedef enum _OS_X86_PROCESSOR_FEATURE {
 typedef
 BOOL
 (*PSIGNAL_HANDLER_ROUTINE) (
-    PSIGNAL_PARAMETERS SignalInformation
+    PSIGNAL_PARAMETERS SignalInformation,
+    PSIGNAL_CONTEXT Context
     );
 
 /*++
@@ -113,6 +114,9 @@ Arguments:
     SignalInformation - Supplies a pointer to the signal information. This
         pointer may be stack allocated, and should not be referenced once the
         handler has returned.
+
+    Context - Supplies a pointer to the signal context, including the machine
+        state before the signal was applied.
 
 Return Value:
 
