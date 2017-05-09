@@ -395,6 +395,8 @@ Members:
 
     StreamNumber - Stores the stream allocation by the device.
 
+    StreamFifoSize - Stores the size of the stream's FIFO, in bytes.
+
     SoundDevice - Stores the sound core library device information. This must
         be the last element as the sound device structure is variable in size,
         as it stores an array of supported rates at the end.
@@ -411,6 +413,7 @@ typedef struct _HDA_DEVICE {
     SOUND_DEVICE_STATE State;
     UCHAR StreamIndex;
     UCHAR StreamNumber;
+    USHORT StreamFifoSize;
     SOUND_DEVICE SoundDevice;
 } HDA_DEVICE, *PHDA_DEVICE;
 

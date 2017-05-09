@@ -1708,6 +1708,16 @@ Return Value:
                              Device->StreamNumber);
 
         //
+        // Record the FIFO size now that the stream has been initialized. If
+        // the FIFO size is dynamic, it should update immediately after the
+        // format is changed and remain static until the format changes again.
+        //
+
+        Device->StreamFifoSize = HDA_STREAM_READ16(Controller,
+                                                   Device->StreamIndex,
+                                                   HdaStreamRegisterFifoSize);
+
+        //
         // Save the sound buffer in the device handle.
         //
 
@@ -1792,8 +1802,21 @@ Return Value:
                                    Device->StreamIndex,
                                    HdaStreamRegisterLinkPositionInBuffer);
 
-        if (Offset == Device->Buffer->Size) {
-            Offset = 0;
+        //
+        // For output devices, the fragment completion interrupt is fired as
+        // soon as the last of the fragment has been loaded into the FIFO.
+        // Sound core really wants a report when the fragment is complete, so
+        // fudge the numbers and add a FIFO length. Don't do this for input
+        // devices, as those don't interrupt until all of the data has made it
+        // out of the FIFO.
+        //
+
+        if (Device->SoundDevice.Type == SoundDeviceOutput) {
+            Offset += Device->StreamFifoSize;
+        }
+
+        if (Offset >= Device->Buffer->Size) {
+            Offset = Offset - Device->Buffer->Size;
         }
 
         SoundUpdateBufferState(Device->Buffer,
