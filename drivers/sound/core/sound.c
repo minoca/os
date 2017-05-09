@@ -2522,12 +2522,10 @@ Return Value:
 {
 
     UINTN BytesCompleted;
-    volatile UINTN *DynamicOffset;
     ULONG Events;
     UINTN OldOffset;
     BOOL Set;
     UINTN SnappedOffset;
-    UINTN StaticOffset;
 
     //
     // Pick the correct events based on the device type.
@@ -2539,10 +2537,8 @@ Return Value:
     }
 
     //
-    // One of the buffer offsets may be in flux, the other should not be
-    // changing. That is, if the sound core is the caller then it should have
-    // some synchronization around the core offset not changing during this
-    // call.
+    // If the sound controller is updating the state, then there is always more
+    // data to read or empty space to write into; always signal the event.
     //
 
     if (SoundCore == FALSE) {
@@ -2561,37 +2557,40 @@ Return Value:
         }
 
         //
-        // It's assumed that the controller has some synchronization to
-        // protected this update.
+        // It's assumed that the controller has some synchronization to protect
+        // this update.
         //
 
         Buffer->BytesCompleted += BytesCompleted;
         Buffer->ControllerOffset = Offset;
-        DynamicOffset = &(Buffer->CoreOffset);
+        IoSetIoObjectState(Buffer->IoState, Events, TRUE);
+
+    //
+    // The sound controller offset may be changing. Try to unsignal the event
+    // if the offsets are equal, which signifies an empty input queue and a
+    // full output queue.
+    //
 
     } else {
         Buffer->CoreOffset = Offset;
-        DynamicOffset = &(Buffer->ControllerOffset);
+
+        //
+        // The buffer is empty if the offsets are equal.
+        //
+
+        do {
+            SnappedOffset = Buffer->ControllerOffset;
+            if (SnappedOffset == Offset) {
+                Set = FALSE;
+
+            } else {
+                Set = TRUE;
+            }
+
+            IoSetIoObjectState(Buffer->IoState, Events, Set);
+
+        } while (SnappedOffset != Buffer->ControllerOffset);
     }
-
-    StaticOffset = Offset;
-
-    //
-    // The buffer is empty if the offsets are equal.
-    //
-
-    do {
-        SnappedOffset = *DynamicOffset;
-        if (SnappedOffset == StaticOffset) {
-            Set = FALSE;
-
-        } else {
-            Set = TRUE;
-        }
-
-        IoSetIoObjectState(Buffer->IoState, Events, Set);
-
-    } while (SnappedOffset != *DynamicOffset);
 
     return;
 }
