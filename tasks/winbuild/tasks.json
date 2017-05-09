@@ -700,6 +700,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/tiff-4.0.7"
         },
         {
+            "name": "Make gperftools",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gperftools-2.5"
+        },
+        {
             "name": "Run Cross Compile X",
             "type": "runtask",
             "parameter": "Cross Compile X"

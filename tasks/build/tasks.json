@@ -1479,6 +1479,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/fceux-2.2.3"
         },
         {
+            "name": "Make gperftools",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gperftools-2.5"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
