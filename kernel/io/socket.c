@@ -2116,7 +2116,7 @@ Return Value:
         Socket->Domain = Parameters->Domain;
         Socket->Type = Parameters->Type;
         if (Socket->IoState == NULL) {
-            Socket->IoState = IoCreateIoObjectState(FALSE);
+            Socket->IoState = IoCreateIoObjectState(FALSE, FALSE);
             if (Socket->IoState == NULL) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
                 goto CreateSocketEnd;
@@ -2388,7 +2388,7 @@ Return Value:
 
     ASSERT(Socket->IoState != NULL);
 
-    IoDestroyIoObjectState(Socket->IoState);
+    IoDestroyIoObjectState(Socket->IoState, FALSE);
     Socket->IoState = NULL;
     if (Socket->Domain == NetDomainLocal) {
         IopDestroyUnixSocket(Socket);

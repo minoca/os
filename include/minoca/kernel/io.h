@@ -863,6 +863,13 @@ Author:
 #define LOOKUP_FLAG_NO_PAGE_CACHE 0x00000001
 
 //
+// Set this flag if the file's I/O state should be allocated from non-paged
+// pool. This is useful if the I/O state needs to be signaled from a DPC.
+//
+
+#define LOOKUP_FLAG_NON_PAGED_IO_STATE 0x00000002
+
+//
 // Define the version number for the I/O cache statistics.
 //
 
@@ -7823,7 +7830,8 @@ Return Value:
 KERNEL_API
 PIO_OBJECT_STATE
 IoCreateIoObjectState (
-    BOOL HighPriority
+    BOOL HighPriority,
+    BOOL NonPaged
     );
 
 /*++
@@ -7838,6 +7846,10 @@ Arguments:
     HighPriority - Supplies a boolean indicating whether or not the I/O object
         state should be prepared for high priority events.
 
+    NonPaged - Supplies a boolean indicating whether or not the I/O object
+        state should be allocated from non-paged pool. Default is paged pool
+        (FALSE).
+
 Return Value:
 
     Returns a pointer to the new state structure on success.
@@ -7849,7 +7861,8 @@ Return Value:
 KERNEL_API
 VOID
 IoDestroyIoObjectState (
-    PIO_OBJECT_STATE State
+    PIO_OBJECT_STATE State,
+    BOOL NonPaged
     );
 
 /*++
@@ -7861,6 +7874,9 @@ Routine Description:
 Arguments:
 
     State - Supplies a pointer to the I/O object state to destroy.
+
+    NonPaged - Supplies a boolean indicating whether or not the I/O object
+        was allocated from non-paged pool. Default is paged pool (FALSE).
 
 Return Value:
 

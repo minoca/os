@@ -786,7 +786,7 @@ Return Value:
         goto TcpCreateSocketEnd;
     }
 
-    IoState = IoCreateIoObjectState(TRUE);
+    IoState = IoCreateIoObjectState(TRUE, FALSE);
     if (IoState == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto TcpCreateSocketEnd;
@@ -853,7 +853,7 @@ TcpCreateSocketEnd:
         }
 
         if (IoState != NULL) {
-            IoDestroyIoObjectState(IoState);
+            IoDestroyIoObjectState(IoState, FALSE);
         }
     }
 

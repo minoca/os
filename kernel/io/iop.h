@@ -222,6 +222,13 @@ Author:
 #define FILE_OBJECT_FLAG_HARD_FLUSH_REQUIRED 0x00000080
 
 //
+// This flag is set if the file object's I/O state needs to be allocated from
+// non-paged pool.
+//
+
+#define FILE_OBJECT_FLAG_NON_PAGED_IO_STATE 0x00000100
+
+//
 // The resource allocation work is currently assigned to the system work queue.
 //
 

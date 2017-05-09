@@ -525,7 +525,7 @@ Return Value:
         // socket so that the bind routines can be invoked.
         //
 
-        NetSocket->KernelSocket.IoState = IoCreateIoObjectState(FALSE);
+        NetSocket->KernelSocket.IoState = IoCreateIoObjectState(FALSE, FALSE);
         if (NetSocket->KernelSocket.IoState == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto RawCreateSocketEnd;

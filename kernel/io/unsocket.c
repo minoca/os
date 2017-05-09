@@ -447,7 +447,7 @@ Return Value:
     RtlZeroMemory(Socket, sizeof(UNIX_SOCKET));
     Socket->KernelSocket.Protocol = Protocol;
     Socket->KernelSocket.ReferenceCount = 1;
-    Socket->KernelSocket.IoState = IoCreateIoObjectState(FALSE);
+    Socket->KernelSocket.IoState = IoCreateIoObjectState(FALSE, FALSE);
     if (Socket->KernelSocket.IoState == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateUnixSocketEnd;
@@ -480,7 +480,7 @@ CreateUnixSocketEnd:
             }
 
             if (Socket->KernelSocket.IoState != NULL) {
-                IoDestroyIoObjectState(Socket->KernelSocket.IoState);
+                IoDestroyIoObjectState(Socket->KernelSocket.IoState, FALSE);
             }
 
             MmFreePagedPool(Socket);

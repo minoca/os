@@ -362,7 +362,8 @@ WaitForIoObjectStateEnd:
 KERNEL_API
 PIO_OBJECT_STATE
 IoCreateIoObjectState (
-    BOOL HighPriority
+    BOOL HighPriority,
+    BOOL NonPaged
     )
 
 /*++
@@ -376,6 +377,10 @@ Arguments:
 
     HighPriority - Supplies a boolean indicating whether or not the I/O object
         state should be prepared for high priority events.
+
+    NonPaged - Supplies a boolean indicating whether or not the I/O object
+        state should be allocated from non-paged pool. Default is paged pool
+        (FALSE).
 
 Return Value:
 
@@ -395,8 +400,14 @@ Return Value:
     //
 
     Status = STATUS_INSUFFICIENT_RESOURCES;
-    NewState = MmAllocatePagedPool(sizeof(IO_OBJECT_STATE),
-                                   FILE_OBJECT_ALLOCATION_TAG);
+    if (NonPaged != FALSE) {
+        NewState = MmAllocateNonPagedPool(sizeof(IO_OBJECT_STATE),
+                                          FILE_OBJECT_ALLOCATION_TAG);
+
+    } else {
+        NewState = MmAllocatePagedPool(sizeof(IO_OBJECT_STATE),
+                                       FILE_OBJECT_ALLOCATION_TAG);
+    }
 
     if (NewState == NULL) {
         goto CreateIoObjectStateEnd;
@@ -440,7 +451,7 @@ Return Value:
 CreateIoObjectStateEnd:
     if (!KSUCCESS(Status)) {
         if (NewState != NULL) {
-            IoDestroyIoObjectState(NewState);
+            IoDestroyIoObjectState(NewState, NonPaged);
             NewState = NULL;
         }
     }
@@ -451,7 +462,8 @@ CreateIoObjectStateEnd:
 KERNEL_API
 VOID
 IoDestroyIoObjectState (
-    PIO_OBJECT_STATE State
+    PIO_OBJECT_STATE State,
+    BOOL NonPaged
     )
 
 /*++
@@ -463,6 +475,9 @@ Routine Description:
 Arguments:
 
     State - Supplies a pointer to the I/O object state to destroy.
+
+    NonPaged - Supplies a boolean indicating whether or not the I/O object
+        was allocated from non-paged pool. Default is paged pool (FALSE).
 
 Return Value:
 
@@ -496,7 +511,13 @@ Return Value:
         KeDestroyEvent(State->ErrorEvent);
     }
 
-    MmFreePagedPool(State);
+    if (NonPaged != FALSE) {
+        MmFreeNonPagedPool(State);
+
+    } else {
+        MmFreePagedPool(State);
+    }
+
     return;
 }
 
@@ -756,6 +777,7 @@ Return Value:
     BOOL Created;
     BOOL LockHeld;
     PFILE_OBJECT NewObject;
+    BOOL NonPagedIoState;
     PFILE_OBJECT Object;
     KSTATUS Status;
 
@@ -765,6 +787,7 @@ Return Value:
     Created = FALSE;
     LockHeld = FALSE;
     NewObject = NULL;
+    NonPagedIoState = FALSE;
     Object = NULL;
     while (TRUE) {
 
@@ -806,7 +829,13 @@ Return Value:
                 }
 
                 if ((Flags & FILE_OBJECT_FLAG_EXTERNAL_IO_STATE) == 0) {
-                    NewObject->IoState = IoCreateIoObjectState(FALSE);
+                    if ((Flags & FILE_OBJECT_FLAG_NON_PAGED_IO_STATE) != 0) {
+                        NonPagedIoState = TRUE;
+                    }
+
+                    NewObject->IoState = IoCreateIoObjectState(FALSE,
+                                                               NonPagedIoState);
+
                     if (NewObject->IoState == NULL) {
                         Status = STATUS_INSUFFICIENT_RESOURCES;
                         goto CreateOrLookupFileObjectEnd;
@@ -949,7 +978,7 @@ CreateOrLookupFileObjectEnd:
         }
 
         if (NewObject->IoState != NULL) {
-            IoDestroyIoObjectState(NewObject->IoState);
+            IoDestroyIoObjectState(NewObject->IoState, NonPagedIoState);
         }
 
         if (NewObject->ReadyEvent != NULL) {
@@ -1036,6 +1065,7 @@ Return Value:
     IRP_CLOSE CloseIrp;
     PDEVICE Device;
     IRP_MINOR_CODE MinorCode;
+    BOOL NonPagedIoState;
     ULONG OldCount;
     KSTATUS Status;
 
@@ -1244,7 +1274,12 @@ Return Value:
         if (((Object->Flags & FILE_OBJECT_FLAG_EXTERNAL_IO_STATE) == 0) &&
             (Object->IoState != NULL)) {
 
-            IoDestroyIoObjectState(Object->IoState);
+            NonPagedIoState = FALSE;
+            if ((Object->Flags & FILE_OBJECT_FLAG_NON_PAGED_IO_STATE) != 0) {
+                NonPagedIoState = TRUE;
+            }
+
+            IoDestroyIoObjectState(Object->IoState, NonPagedIoState);
         }
 
         if (Object->ReadyEvent != NULL) {

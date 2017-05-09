@@ -4324,6 +4324,10 @@ Return Value:
         *Flags |= FILE_OBJECT_FLAG_NO_PAGE_CACHE;
     }
 
+    if ((Request.Flags & LOOKUP_FLAG_NON_PAGED_IO_STATE) != 0) {
+        *Flags |= FILE_OBJECT_FLAG_NON_PAGED_IO_STATE;
+    }
+
     *MapFlags = Request.MapFlags;
     return Status;
 }
