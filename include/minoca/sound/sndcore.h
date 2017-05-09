@@ -52,7 +52,8 @@ Author:
 // Define the set of controller wide flags.
 //
 
-#define SOUND_CONTROLLER_FLAG_NON_CACHED_BUFFERS 0x00000001
+#define SOUND_CONTROLLER_FLAG_NON_CACHED_DMA_BUFFER  0x00000001
+#define SOUND_CONTROLLER_FLAG_NON_PAGED_SOUND_BUFFER 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions

@@ -391,9 +391,9 @@ Members:
 
     State - Stores the current state of the device.
 
-    Descriptor - Stores the descriptor index in use by the device.
+    StreamIndex - Stores the stream index in use by the device.
 
-    Stream - Stores the stream allocation by the device.
+    StreamNumber - Stores the stream allocation by the device.
 
     SoundDevice - Stores the sound core library device information. This must
         be the last element as the sound device structure is variable in size,
@@ -726,6 +726,27 @@ Arguments:
 Return Value:
 
     Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+HdaInterruptServiceDpc (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the HDA dispatch level interrupt service.
+
+Arguments:
+
+    Parameter - Supplies the context, in this case the controller structure.
+
+Return Value:
+
+    None.
 
 --*/
 

@@ -944,6 +944,7 @@ Return Value:
         Connect.LineNumber = Controller->InterruptLine;
         Connect.Vector = Controller->InterruptVector;
         Connect.InterruptServiceRoutine = HdaInterruptService;
+        Connect.DispatchServiceRoutine = HdaInterruptServiceDpc;
         Connect.LowLevelServiceRoutine = HdaInterruptServiceWorker;
         Connect.Context = Controller;
         Connect.Interrupt = &(Controller->InterruptHandle);
@@ -1019,7 +1020,9 @@ Return Value:
         Registration.Version = SOUND_CONTROLLER_INFORMATION_VERSION;
         Registration.Context = Controller;
         Registration.OsDevice = Controller->OsDevice;
-        Registration.Flags = SOUND_CONTROLLER_FLAG_NON_CACHED_BUFFERS;
+        Registration.Flags = SOUND_CONTROLLER_FLAG_NON_CACHED_DMA_BUFFER |
+                             SOUND_CONTROLLER_FLAG_NON_PAGED_SOUND_BUFFER;
+
         Registration.FunctionTable = &HdaSoundFunctionTable;
         Registration.MinFragmentCount =
                                 HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_MINIMUM;

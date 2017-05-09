@@ -406,6 +406,7 @@ Return Value:
     PCSTR Format;
     ULONG FoundTypeIndex;
     ULONG ItemsScanned;
+    ULONG LookupFlags;
     ULONG MapFlags;
     IO_OBJECT_TYPE ObjectType;
     FILE_PERMISSIONS Permissions;
@@ -415,6 +416,7 @@ Return Value:
     SOUND_DEVICE_TYPE Type;
     ULONG TypeIndex;
 
+    LookupFlags = 0;
     MapFlags = 0;
 
     //
@@ -439,9 +441,20 @@ Return Value:
     //
 
     if ((Controller->Host.Flags &
-         SOUND_CONTROLLER_FLAG_NON_CACHED_BUFFERS) != 0) {
+         SOUND_CONTROLLER_FLAG_NON_CACHED_DMA_BUFFER) != 0) {
 
         MapFlags |= MAP_FLAG_CACHE_DISABLE;
+    }
+
+    //
+    // If the controller needs non-paged sound buffer state, then make sure
+    // a non-paged I/O state is created for the file.
+    //
+
+    if ((Controller->Host.Flags &
+         SOUND_CONTROLLER_FLAG_NON_PAGED_SOUND_BUFFER) != 0) {
+
+        LookupFlags |= LOOKUP_FLAG_NON_PAGED_IO_STATE;
     }
 
     //
@@ -554,6 +567,7 @@ LookupDeviceEnd:
         Properties->Permissions = Permissions;
         Properties->Size = 0;
         Lookup->MapFlags = MapFlags;
+        Lookup->Flags = LookupFlags;
     }
 
     return Status;
@@ -658,8 +672,21 @@ Return Value:
         }
     }
 
-    NewHandle = MmAllocatePagedPool(sizeof(SOUND_DEVICE_HANDLE),
-                                    SOUND_CORE_ALLOCATION_TAG);
+    //
+    // If the controller needs to the buffer to be non-paged, allocate the
+    // whole handle as non-paged, since the buffer is embedded in the handle.
+    //
+
+    if ((Controller->Host.Flags &
+         SOUND_CONTROLLER_FLAG_NON_PAGED_SOUND_BUFFER) != 0) {
+
+        NewHandle = MmAllocateNonPagedPool(sizeof(SOUND_DEVICE_HANDLE),
+                                           SOUND_CORE_ALLOCATION_TAG);
+
+    } else {
+        NewHandle = MmAllocatePagedPool(sizeof(SOUND_DEVICE_HANDLE),
+                                        SOUND_CORE_ALLOCATION_TAG);
+    }
 
     if (NewHandle == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -722,6 +749,7 @@ Return Value:
 
 {
 
+    BOOL NonPaged;
     ULONG OldFlags;
 
     SoundpResetDevice(Handle);
@@ -734,12 +762,25 @@ Return Value:
 
     ASSERT(Handle->Buffer.IoBuffer == NULL);
 
+    NonPaged = FALSE;
+    if ((Handle->Controller->Host.Flags &
+         SOUND_CONTROLLER_FLAG_NON_PAGED_SOUND_BUFFER) != 0) {
+
+        NonPaged = TRUE;
+    }
+
     SoundpControllerReleaseReference(Handle->Controller);
     if (Handle->Lock != NULL) {
         KeDestroyQueuedLock(Handle->Lock);
     }
 
-    MmFreePagedPool(Handle);
+    if (NonPaged != FALSE) {
+        MmFreeNonPagedPool(Handle);
+
+    } else {
+        MmFreePagedPool(Handle);
+    }
+
     return;
 }
 

@@ -507,6 +507,56 @@ Return Value:
 }
 
 INTERRUPT_STATUS
+HdaInterruptServiceDpc (
+    PVOID Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the HDA dispatch level interrupt service.
+
+Arguments:
+
+    Parameter - Supplies the context, in this case the controller structure.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PHDA_CONTROLLER Controller;
+    PHDA_DEVICE Device;
+    ULONG Index;
+    ULONG Pending;
+
+    Controller = (PHDA_CONTROLLER)Parameter;
+    Pending = RtlAtomicAnd32(&(Controller->PendingSoftwareInterrupts),
+                             ~HDA_SOFTWARE_INTERRUPT_STREAM);
+
+    if ((Pending & HDA_SOFTWARE_INTERRUPT_STREAM) == 0) {
+        return InterruptStatusNotClaimed;
+    }
+
+    for (Index = 0; Index < Controller->StreamCount; Index += 1) {
+        Device = Controller->StreamDevices[Index];
+        if (Device == NULL) {
+            continue;
+        }
+
+        if (Device->PendingStatus != 0) {
+            HdapProcessDeviceStatus(Controller, Device);
+        }
+    }
+
+    return InterruptStatusClaimed;
+}
+
+INTERRUPT_STATUS
 HdaInterruptServiceWorker (
     PVOID Parameter
     )
@@ -531,29 +581,16 @@ Return Value:
 {
 
     PHDA_CONTROLLER Controller;
-    PHDA_DEVICE Device;
-    ULONG Index;
     ULONG Pending;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     Controller = (PHDA_CONTROLLER)Parameter;
-    Pending = RtlAtomicExchange32(&(Controller->PendingSoftwareInterrupts), 0);
-    if (Pending == 0) {
+    Pending = RtlAtomicAnd32(&(Controller->PendingSoftwareInterrupts),
+                             HDA_SOFTWARE_INTERRUPT_STREAM);
+
+    if ((Pending & ~HDA_SOFTWARE_INTERRUPT_STREAM) == 0) {
         return InterruptStatusNotClaimed;
-    }
-
-    if ((Pending & HDA_SOFTWARE_INTERRUPT_STREAM) != 0) {
-        for (Index = 0; Index < Controller->StreamCount; Index += 1) {
-            Device = Controller->StreamDevices[Index];
-            if (Device == NULL) {
-                continue;
-            }
-
-            if (Device->PendingStatus != 0) {
-                HdapProcessDeviceStatus(Controller, Device);
-            }
-        }
     }
 
     if ((Pending & HDA_SOFTWARE_INTERRUPT_RESPONSE_BUFFER) != 0) {
@@ -689,8 +726,8 @@ Return Value:
     //
 
     AllocationSize = Controller->StreamCount * sizeof(PHDA_DEVICE);
-    Controller->StreamDevices = MmAllocatePagedPool(AllocationSize,
-                                                    HDA_ALLOCATION_TAG);
+    Controller->StreamDevices = MmAllocateNonPagedPool(AllocationSize,
+                                                       HDA_ALLOCATION_TAG);
 
     if (Controller->StreamDevices == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -809,7 +846,7 @@ Return Value:
     }
 
     if (Controller->StreamDevices != NULL) {
-        MmFreePagedPool((PVOID)Controller->StreamDevices);
+        MmFreeNonPagedPool((PVOID)Controller->StreamDevices);
         Controller->StreamDevices = NULL;
     }
 

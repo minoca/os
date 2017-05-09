@@ -1026,7 +1026,7 @@ Return Value:
     RateCount = RtlCountSetBits32(SupportedRates);
     RatesSize = RateCount * sizeof(ULONG);
     AllocationSize = sizeof(HDA_DEVICE) + RatesSize;
-    HdaDevice = MmAllocatePagedPool(AllocationSize, HDA_ALLOCATION_TAG);
+    HdaDevice = MmAllocateNonPagedPool(AllocationSize, HDA_ALLOCATION_TAG);
     if (HdaDevice == NULL) {
         return NULL;
     }
@@ -1193,7 +1193,7 @@ Return Value:
     //
 
     HdaDevice = PARENT_STRUCTURE(SoundDevice, HDA_DEVICE, SoundDevice);
-    MmFreePagedPool(HdaDevice);
+    MmFreeNonPagedPool(HdaDevice);
     return;
 }
 
