@@ -1261,7 +1261,7 @@ Return Value:
     AllocationSize = sizeof(PTHREAD) +
                      (PTHREAD_KEYS_MAX * sizeof(PTHREAD_KEY_DATA));
 
-    Thread = malloc(AllocationSize);
+    Thread = OsHeapAllocate(AllocationSize, PTHREAD_ALLOCATION_TAG);
     if (Thread == NULL) {
         return;
     }

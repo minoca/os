@@ -62,6 +62,8 @@ Author:
 
 #define PTHREAD_FLAG_DETACHED 0x00000001
 
+#define PTHREAD_ALLOCATION_TAG 0x72687450
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //

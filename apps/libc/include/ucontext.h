@@ -48,6 +48,24 @@ extern "C" {
 
 #define NGREG 17
 
+#define REG_DS 0
+#define REG_ES 1
+#define REG_FS 2
+#define REG_GS 3
+#define REG_SS 4
+#define REG_EAX 5
+#define REG_EBX 6
+#define REG_ECX 7
+#define REG_EDX 8
+#define REG_ESI 9
+#define REG_EDI 10
+#define REG_EBP 11
+#define REG_ERR 12
+#define REG_EIP 13
+#define REG_CS 14
+#define REG_EFL 15
+#define REG_ESP 16
+
 //
 // See the FPU_CONTEXT structure for the register definitions.
 //
@@ -76,6 +94,26 @@ extern "C" {
 //
 
 #define NGREG 20
+
+#define REG_R13 1
+#define REG_R14 2
+#define REG_R0 3
+
+#define REG_R1 5
+#define REG_R2 6
+#define REG_R3 7
+#define REG_R4 8
+#define REG_R5 9
+#define REG_R6 10
+#define REG_R7 11
+#define REG_R8 12
+#define REG_R9 13
+#define REG_R10 14
+#define REG_R11 15
+#define REG_R12 16
+
+#define REG_R15 18
+#define REG_CPSR 19
 
 //
 // See the FPU_CONTEXT structure for the register definitions.
