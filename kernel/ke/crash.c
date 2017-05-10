@@ -148,7 +148,7 @@ Return Value:
     Status = STATUS_UNSUCCESSFUL;
     if (KSUCCESS(Status)) {
         KdDisconnect();
-        Status = HlResetSystem(SystemResetWarm);
+        Status = HlResetSystem(SystemResetWarm, NULL, 0);
         KdConnect();
         RtlDebugPrint("System reset unsuccessful: %d\n", Status);
     }

@@ -208,6 +208,18 @@ Return Value:
         goto DriverEntryEnd;
     }
 
+    //
+    // Add shutdown, reboot, and system state transition support.
+    //
+
+    Status = AcpipInitializeSystemStateTransitions();
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("ACPI: Warning: InitSystemStateTransitions: %d\n",
+                      Status);
+
+        Status = STATUS_SUCCESS;
+    }
+
 DriverEntryEnd:
     if (!KSUCCESS(Status)) {
         AcpipUnmapFixedRegisters();

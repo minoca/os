@@ -956,7 +956,7 @@ Return Value:
     //
 
     if ((Fadt != NULL) &&
-        ((Fadt->Flags & FADT_HARDWARE_REDUCED_ACPI) != 0)) {
+        ((Fadt->Flags & FADT_FLAG_HARDWARE_REDUCED_ACPI) != 0)) {
 
         return STATUS_NO_ELIGIBLE_DEVICES;
     }

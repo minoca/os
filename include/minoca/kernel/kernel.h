@@ -43,6 +43,7 @@ Author:
 #include <minoca/kernel/ob.h>
 #include <minoca/kernel/ksignals.h>
 #include <minoca/kernel/ps.h>
+#include <minoca/kernel/hmod.h>
 #include <minoca/kernel/ke.h>
 #include <minoca/kernel/hl.h>
 #include <minoca/kernel/acpi.h>

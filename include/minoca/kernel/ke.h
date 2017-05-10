@@ -249,14 +249,6 @@ typedef enum _KE_INFORMATION_TYPE {
     KeInformationBannerThread,
 } KE_INFORMATION_TYPE, *PKE_INFORMATION_TYPE;
 
-typedef enum _SYSTEM_RESET_TYPE {
-    SystemResetInvalid,
-    SystemResetShutdown,
-    SystemResetWarm,
-    SystemResetCold,
-    SystemResetTypeCount
-} SYSTEM_RESET_TYPE, *PSYSTEM_RESET_TYPE;
-
 typedef enum _SYSTEM_FIRMWARE_TYPE {
     SystemFirmwareInvalid,
     SystemFirmwareUnknown,

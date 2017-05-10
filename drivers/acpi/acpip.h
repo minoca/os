@@ -57,6 +57,15 @@ Author:
 #define ACPI_METHOD__CST 0x5453435F // '_CST'
 #define ACPI_METHOD__OSC 0x43534F5F // '_OSC'
 #define ACPI_METHOD__PDC 0x4344505F // '_PDC'
+#define ACPI_METHOD__TTS 0x5354545F // '_TTS'
+#define ACPI_METHOD__PTS 0x5354505F // '_PTS'
+
+#define ACPI_OBJECT__S0 0x5F30535F // '_S0_'
+#define ACPI_OBJECT__S1 0x5F31535F // '_S1_'
+#define ACPI_OBJECT__S2 0x5F32535F // '_S2_'
+#define ACPI_OBJECT__S3 0x5F33535F // '_S3_'
+#define ACPI_OBJECT__S4 0x5F34535F // '_S4_'
+#define ACPI_OBJECT__S5 0x5F35535F // '_S5_'
 
 //
 // Define recognized PCI bus object EISA identifiers.
@@ -607,3 +616,26 @@ Return Value:
     Status code.
 
 --*/
+
+KSTATUS
+AcpipInitializeSystemStateTransitions (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for reboot and system power state
+    transitions.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+

@@ -3165,7 +3165,7 @@ Return Value:
     }
 
     KdpDisconnect();
-    Status = HlResetSystem(ResetType);
+    Status = HlResetSystem(ResetType, NULL, 0);
     KdpConnect(NULL);
     KdpInternalPrint("Reset system failed with status %d\n", Status);
     KdpInitializeBreakNotification(Exception, TrapFrame, &KdTxPacket);

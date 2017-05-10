@@ -66,6 +66,7 @@ AcpipReadFixedRegister (
     PVOID *MappedAddressB,
     PULONG MappedSizeA,
     PULONG MappedSizeB,
+    UINTN Offset,
     PULONG Value
     );
 
@@ -80,6 +81,7 @@ AcpipWriteFixedRegister (
     PVOID *MappedAddressB,
     PULONG MappedSizeA,
     PULONG MappedSizeB,
+    UINTN Offset,
     ULONG Value
     );
 
@@ -88,6 +90,7 @@ AcpipReadGenericAddressFixedRegister (
     PVOID *MappedAddress,
     PULONG MappedSize,
     PGENERIC_ADDRESS GenericAddress,
+    UINTN Offset,
     PULONG Value
     );
 
@@ -96,6 +99,7 @@ AcpipWriteGenericAddressFixedRegister (
     PVOID *MappedAddress,
     PULONG MappedSize,
     PGENERIC_ADDRESS GenericAddress,
+    UINTN Offset,
     ULONG Value
     );
 
@@ -176,6 +180,7 @@ Return Value:
                                     &AcpiPm1bControlRegister,
                                     &AcpiPm1aControlRegisterSize,
                                     &AcpiPm1bControlRegisterSize,
+                                    0,
                                     Value);
 
     return Status;
@@ -221,6 +226,7 @@ Return Value:
                                      &AcpiPm1bControlRegister,
                                      &AcpiPm1aControlRegisterSize,
                                      &AcpiPm1bControlRegisterSize,
+                                     0,
                                      Value);
 
     return Status;
@@ -266,6 +272,7 @@ Return Value:
                                     NULL,
                                     &AcpiPm2ControlRegisterSize,
                                     NULL,
+                                    0,
                                     Value);
 
     return Status;
@@ -311,6 +318,7 @@ Return Value:
                                      NULL,
                                      &AcpiPm2ControlRegisterSize,
                                      NULL,
+                                     0,
                                      Value);
 
     return Status;
@@ -349,13 +357,14 @@ Return Value:
 
     Status = AcpipReadFixedRegister(Fadt->Pm1aEventBlock,
                                     Fadt->Pm1bEventBlock,
-                                    Fadt->Pm1EventLength,
+                                    Fadt->Pm1EventLength / 2,
                                     FIELD_OFFSET(FADT, XPm1aEventBlock),
                                     FIELD_OFFSET(FADT, XPm1bEventBlock),
                                     &AcpiPm1aEventRegister,
                                     &AcpiPm1bEventRegister,
                                     &AcpiPm1aEventRegisterSize,
                                     &AcpiPm1bEventRegisterSize,
+                                    0,
                                     Value);
 
     return Status;
@@ -394,13 +403,110 @@ Return Value:
 
     Status = AcpipWriteFixedRegister(Fadt->Pm1aEventBlock,
                                      Fadt->Pm1bEventBlock,
-                                     Fadt->Pm1EventLength,
+                                     Fadt->Pm1EventLength / 2,
                                      FIELD_OFFSET(FADT, XPm1aEventBlock),
                                      FIELD_OFFSET(FADT, XPm1bEventBlock),
                                      &AcpiPm1aEventRegister,
                                      &AcpiPm1bEventRegister,
                                      &AcpiPm1aEventRegisterSize,
                                      &AcpiPm1bEventRegisterSize,
+                                     0,
+                                     Value);
+
+    return Status;
+}
+
+KSTATUS
+AcpipReadPm1EnableRegister (
+    PULONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the PM1 enable register.
+
+Arguments:
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PFADT Fadt;
+    ULONG HalfLength;
+    KSTATUS Status;
+
+    Fadt = AcpiFadtTable;
+    if (Fadt == NULL) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    HalfLength = Fadt->Pm1EventLength / 2;
+    Status = AcpipReadFixedRegister(Fadt->Pm1aEventBlock,
+                                    Fadt->Pm1bEventBlock,
+                                    HalfLength,
+                                    FIELD_OFFSET(FADT, XPm1aEventBlock),
+                                    FIELD_OFFSET(FADT, XPm1bEventBlock),
+                                    &AcpiPm1aEventRegister,
+                                    &AcpiPm1bEventRegister,
+                                    &AcpiPm1aEventRegisterSize,
+                                    &AcpiPm1bEventRegisterSize,
+                                    HalfLength,
+                                    Value);
+
+    return Status;
+}
+
+KSTATUS
+AcpipWritePm1EnableRegister (
+    ULONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes to the PM1 enable register.
+
+Arguments:
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PFADT Fadt;
+    ULONG HalfLength;
+    KSTATUS Status;
+
+    Fadt = AcpiFadtTable;
+    if (Fadt == NULL) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    HalfLength = Fadt->Pm1EventLength / 2;
+    Status = AcpipWriteFixedRegister(Fadt->Pm1aEventBlock,
+                                     Fadt->Pm1bEventBlock,
+                                     HalfLength,
+                                     FIELD_OFFSET(FADT, XPm1aEventBlock),
+                                     FIELD_OFFSET(FADT, XPm1bEventBlock),
+                                     &AcpiPm1aEventRegister,
+                                     &AcpiPm1bEventRegister,
+                                     &AcpiPm1aEventRegisterSize,
+                                     &AcpiPm1bEventRegisterSize,
+                                     HalfLength,
                                      Value);
 
     return Status;
@@ -725,6 +831,7 @@ AcpipReadFixedRegister (
     PVOID *MappedAddressB,
     PULONG MappedSizeA,
     PULONG MappedSizeB,
+    UINTN Offset,
     PULONG Value
     )
 
@@ -768,6 +875,8 @@ Arguments:
     MappedSizeB - Supplies a pointer that on input contains the size of the
         virtual mapping for this address. If this routine maps the register,
         it will fill in the size here.
+
+    Offset - Supplies the offset in bytes from the register base to read.
 
     Value - Supplies a pointer where the value will be returned on success.
 
@@ -813,6 +922,7 @@ Return Value:
         Status = AcpipReadGenericAddressFixedRegister(MappedAddressA,
                                                       MappedSizeA,
                                                       GenericAddressA,
+                                                      Offset,
                                                       &ValueA);
 
         if (!KSUCCESS(Status)) {
@@ -823,6 +933,7 @@ Return Value:
             Status = AcpipReadGenericAddressFixedRegister(MappedAddressB,
                                                           MappedSizeB,
                                                           GenericAddressB,
+                                                          Offset,
                                                           &ValueB);
 
             if (!KSUCCESS(Status)) {
@@ -846,25 +957,25 @@ Return Value:
 
     switch (AddressLength) {
     case 1:
-        ValueA = HlIoPortInByte(AddressA);
+        ValueA = HlIoPortInByte(AddressA + Offset);
         if (AddressB != 0) {
-            ValueB = HlIoPortInByte(AddressB);
+            ValueB = HlIoPortInByte(AddressB + Offset);
         }
 
         break;
 
     case 2:
-        ValueA = HlIoPortInShort(AddressA);
+        ValueA = HlIoPortInShort(AddressA + Offset);
         if (AddressB != 0) {
-            ValueB = HlIoPortInShort(AddressB);
+            ValueB = HlIoPortInShort(AddressB + Offset);
         }
 
         break;
 
     case 4:
-        ValueA = HlIoPortInLong(AddressA);
+        ValueA = HlIoPortInLong(AddressA + Offset);
         if (AddressB != 0) {
-            ValueB = HlIoPortInLong(AddressB);
+            ValueB = HlIoPortInLong(AddressB + Offset);
         }
 
         break;
@@ -891,6 +1002,7 @@ AcpipWriteFixedRegister (
     PVOID *MappedAddressB,
     PULONG MappedSizeA,
     PULONG MappedSizeB,
+    UINTN Offset,
     ULONG Value
     )
 
@@ -935,6 +1047,8 @@ Arguments:
         virtual mapping for this address. If this routine maps the register,
         it will fill in the size here.
 
+    Offset - Supplies the offset in bytes to write to.
+
     Value - Supplies the value to write.
 
 Return Value:
@@ -974,6 +1088,7 @@ Return Value:
         Status = AcpipWriteGenericAddressFixedRegister(MappedAddressA,
                                                        MappedSizeA,
                                                        GenericAddressA,
+                                                       Offset,
                                                        Value);
 
         if (!KSUCCESS(Status)) {
@@ -984,6 +1099,7 @@ Return Value:
             Status = AcpipWriteGenericAddressFixedRegister(MappedAddressB,
                                                            MappedSizeB,
                                                            GenericAddressB,
+                                                           Offset,
                                                            Value);
 
             if (!KSUCCESS(Status)) {
@@ -1006,25 +1122,25 @@ Return Value:
 
     switch (AddressLength) {
     case 1:
-        HlIoPortOutByte(AddressA, (UCHAR)Value);
+        HlIoPortOutByte(AddressA + Offset, (UCHAR)Value);
         if (AddressB != 0) {
-            HlIoPortOutByte(AddressB, Value);
+            HlIoPortOutByte(AddressB + Offset, Value);
         }
 
         break;
 
     case 2:
-        HlIoPortOutShort(AddressA, (USHORT)Value);
+        HlIoPortOutShort(AddressA + Offset, (USHORT)Value);
         if (AddressB != 0) {
-            HlIoPortOutShort(AddressB, (USHORT)Value);
+            HlIoPortOutShort(AddressB + Offset, (USHORT)Value);
         }
 
         break;
 
     case 4:
-        HlIoPortOutLong(AddressA, Value);
+        HlIoPortOutLong(AddressA + Offset, Value);
         if (AddressB != 0) {
-            HlIoPortOutLong(AddressB, Value);
+            HlIoPortOutLong(AddressB + Offset, Value);
         }
 
         break;
@@ -1044,6 +1160,7 @@ AcpipReadGenericAddressFixedRegister (
     PVOID *MappedAddress,
     PULONG MappedSize,
     PGENERIC_ADDRESS GenericAddress,
+    UINTN Offset,
     PULONG Value
     )
 
@@ -1067,6 +1184,8 @@ Arguments:
     GenericAddress - Supplies a pointer to the generic address detailing the
         location of the register.
 
+    Offset - Supplies an offset in bytes to read from.
+
     Value - Supplies a pointer where the value will be returned on success.
 
 Return Value:
@@ -1079,6 +1198,7 @@ Return Value:
 
     USHORT AccessSize;
     USHORT IoPortAddress;
+    ULONG PageSize;
 
     //
     // Deal with odd offsets if needed.
@@ -1088,6 +1208,9 @@ Return Value:
 
     AccessSize = GenericAddress->AccessSize;
     if (AccessSize == 0) {
+        if (GenericAddress->Address == 0) {
+            return STATUS_NOT_SUPPORTED;
+        }
 
         ASSERT(GenericAddress->RegisterBitWidth != 0);
 
@@ -1097,8 +1220,12 @@ Return Value:
     switch (GenericAddress->AddressSpaceId) {
     case AddressSpaceMemory:
         if (*MappedAddress == NULL) {
+            PageSize = MmPageSize();
+
+            ASSERT(Offset + AccessSize <= PageSize);
+
             *MappedAddress = MmMapPhysicalAddress(GenericAddress->Address,
-                                                  GenericAddress->AccessSize,
+                                                  PageSize,
                                                   TRUE,
                                                   FALSE,
                                                   TRUE);
@@ -1107,20 +1234,20 @@ Return Value:
                 return STATUS_INSUFFICIENT_RESOURCES;
             }
 
-            *MappedSize = GenericAddress->AccessSize;
+            *MappedSize = PageSize;
         }
 
         switch (AccessSize) {
         case 1:
-            *Value = HlReadRegister8(*MappedAddress);
+            *Value = HlReadRegister8(*MappedAddress + Offset);
             break;
 
         case 2:
-            *Value = HlReadRegister16(*MappedAddress);
+            *Value = HlReadRegister16(*MappedAddress + Offset);
             break;
 
         case 4:
-            *Value = HlReadRegister32(*MappedAddress);
+            *Value = HlReadRegister32(*MappedAddress + Offset);
             break;
 
         default:
@@ -1136,15 +1263,15 @@ Return Value:
         IoPortAddress = (USHORT)(GenericAddress->Address);
         switch (AccessSize) {
         case 1:
-            *Value = HlIoPortInByte(IoPortAddress);
+            *Value = HlIoPortInByte(IoPortAddress + Offset);
             break;
 
         case 2:
-            *Value = HlIoPortInShort(IoPortAddress);
+            *Value = HlIoPortInShort(IoPortAddress + Offset);
             break;
 
         case 4:
-            *Value = HlIoPortInLong(IoPortAddress);
+            *Value = HlIoPortInLong(IoPortAddress + Offset);
             break;
 
         default:
@@ -1175,6 +1302,7 @@ AcpipWriteGenericAddressFixedRegister (
     PVOID *MappedAddress,
     PULONG MappedSize,
     PGENERIC_ADDRESS GenericAddress,
+    UINTN Offset,
     ULONG Value
     )
 
@@ -1198,6 +1326,8 @@ Arguments:
     GenericAddress - Supplies a pointer to the generic address detailing the
         location of the register.
 
+    Offset - Supplies the offset in bytes to write to.
+
     Value - Supplies the value to write.
 
 Return Value:
@@ -1210,6 +1340,7 @@ Return Value:
 
     USHORT AccessSize;
     USHORT IoPortAddress;
+    ULONG PageSize;
 
     //
     // Deal with odd offsets if needed.
@@ -1226,15 +1357,19 @@ Return Value:
 
     } else {
 
-        ASSERT(GenericAddress->RegisterBitWidth ==
+        ASSERT(GenericAddress->RegisterBitWidth >=
                GenericAddress->AccessSize * BITS_PER_BYTE);
     }
 
     switch (GenericAddress->AddressSpaceId) {
     case AddressSpaceMemory:
         if (*MappedAddress == NULL) {
+            PageSize = MmPageSize();
+
+            ASSERT(Offset + GenericAddress->AccessSize <= PageSize);
+
             *MappedAddress = MmMapPhysicalAddress(GenericAddress->Address,
-                                                  GenericAddress->AccessSize,
+                                                  PageSize,
                                                   TRUE,
                                                   FALSE,
                                                   TRUE);
@@ -1243,20 +1378,20 @@ Return Value:
                 return STATUS_INSUFFICIENT_RESOURCES;
             }
 
-            *MappedSize = GenericAddress->AccessSize;
+            *MappedSize = PageSize;
         }
 
         switch (AccessSize) {
         case 1:
-            HlWriteRegister8(*MappedAddress, (UCHAR)Value);
+            HlWriteRegister8(*MappedAddress + Offset, (UCHAR)Value);
             break;
 
         case 2:
-            HlWriteRegister16(*MappedAddress, (USHORT)Value);
+            HlWriteRegister16(*MappedAddress + Offset, (USHORT)Value);
             break;
 
         case 4:
-            HlWriteRegister32(*MappedAddress, Value);
+            HlWriteRegister32(*MappedAddress + Offset, Value);
             break;
 
         default:
@@ -1272,15 +1407,15 @@ Return Value:
         IoPortAddress = (USHORT)(GenericAddress->Address);
         switch (AccessSize) {
         case 1:
-            HlIoPortOutByte(IoPortAddress, (UCHAR)Value);
+            HlIoPortOutByte(IoPortAddress + Offset, (UCHAR)Value);
             break;
 
         case 2:
-            HlIoPortOutShort(IoPortAddress, (USHORT)Value);
+            HlIoPortOutShort(IoPortAddress + Offset, (USHORT)Value);
             break;
 
         case 4:
-            HlIoPortOutLong(IoPortAddress, Value);
+            HlIoPortOutLong(IoPortAddress + Offset, Value);
             break;
 
         default:

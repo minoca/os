@@ -234,6 +234,11 @@ Return Value:
             goto InitializeEnd;
         }
 
+        Status = HlpInitializeRebootModules();
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
         RtlDebugPrint("Processor %d alive. 0x%x\n",
                       ProcessorNumber,
                       KeGetCurrentProcessorBlock());

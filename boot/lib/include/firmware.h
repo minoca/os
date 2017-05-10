@@ -595,7 +595,9 @@ Return Value:
 
 KSTATUS
 FwResetSystem (
-    SYSTEM_RESET_TYPE ResetType
+    SYSTEM_RESET_TYPE ResetType,
+    PVOID Data,
+    UINTN Size
     );
 
 /*++
@@ -609,15 +611,20 @@ Arguments:
     ResetType - Supplies the desired reset type. If the desired reset type is
         not supported, a cold reset will be attempted.
 
+    Data - Supplies a pointer to platform-specific reboot data.
+
+    Size - Supplies the size of the platform-specific data in bytes.
+
 Return Value:
 
     Does not return on success, the system is reset.
 
     STATUS_INVALID_PARAMETER if an invalid reset type was supplied.
 
-    STATUS_NOT_SUPPORTED if the system cannot be reset.
+    STATUS_NO_INTERFACE if there are no appropriate reboot capababilities
+    registered with the system.
 
-    STATUS_UNSUCCESSFUL if the system did not reset.
+    Other status codes on other failures.
 
 --*/
 

@@ -270,7 +270,7 @@ typedef enum _MADT_ENTRY_TYPE {
 // Set if ACPI hardware is not available.
 //
 
-#define FADT_HARDWARE_REDUCED_ACPI 0x00100000
+#define FADT_FLAG_HARDWARE_REDUCED_ACPI 0x00100000
 
 //
 // Define IA boot flags in the FADT.
@@ -316,6 +316,7 @@ typedef enum _MADT_ENTRY_TYPE {
 //
 
 #define FADT_PM1_CONTROL_SLEEP_TYPE_SHIFT 10
+#define FADT_PM1_CONTROL_SLEEP_TYPE 0x00001C00
 
 //
 // Define PM2 Control register bit definitions.

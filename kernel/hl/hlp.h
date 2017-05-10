@@ -34,7 +34,7 @@ Author:
 // microseconds before moving on.
 //
 
-#define RESET_SYSTEM_STALL (5 * MICROSECONDS_PER_SECOND)
+#define RESET_SYSTEM_STALL (100 * MICROSECONDS_PER_MILLISECOND)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -47,6 +47,49 @@ Author:
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+KSTATUS
+HlpInitializeRebootModules (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the reboot modules support.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+HlpRebootModuleRegisterHardware (
+    PREBOOT_MODULE_DESCRIPTION Description
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to register a new reboot module with the system.
+
+Arguments:
+
+    Description - Supplies a pointer to a structure describing the new
+        reboot module.
+
+Return Value:
+
+    Status code.
+
+--*/
 
 KSTATUS
 HlpArchResetSystem (

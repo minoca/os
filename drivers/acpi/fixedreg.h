@@ -167,6 +167,48 @@ Return Value:
 
 --*/
 
+KSTATUS
+AcpipReadPm1EnableRegister (
+    PULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads the PM1 enable register.
+
+Arguments:
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+AcpipWritePm1EnableRegister (
+    ULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes to the PM1 enable register.
+
+Arguments:
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 VOID
 AcpipAcquireGlobalLock (
     VOID

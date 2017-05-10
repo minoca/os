@@ -224,7 +224,7 @@ Return Value:
     }
 
     KdDisconnect();
-    Status = HlResetSystem(ResetType);
+    Status = HlResetSystem(ResetType, NULL, 0);
     KdConnect();
     RtlDebugPrint("System reset unsuccessful: %d\n", Status);
     return Status;

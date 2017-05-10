@@ -262,6 +262,19 @@ Author:
 #define HL_CACHE_FLAG_INVALIDATE 0x00000002
 
 //
+// Define the reboot module table version.
+//
+
+#define REBOOT_MODULE_DESCRIPTION_VERSION 1
+
+//
+// Set this flag if the reboot controller needs to be called at low run level.
+// If clear, this routine will be called at or above dispatch.
+//
+
+#define REBOOT_MODULE_LOW_LEVEL 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -277,6 +290,7 @@ typedef enum _HARDWARE_MODULE_TYPE {
     HardwareModuleCalendarTimer,
     HardwareModuleCacheController,
     HardwareModuleDebugUsbHostController,
+    HardwareModuleReboot,
     HardwareModuleMaxTypes,
 } HARDWARE_MODULE_TYPE, *PHARDWARE_MODULE_TYPE;
 
@@ -329,6 +343,14 @@ typedef enum _INTERRUPT_CAUSE {
     InterruptCauseLineFired,
     InterruptCauseSpuriousInterrupt
 } INTERRUPT_CAUSE, *PINTERRUPT_CAUSE;
+
+typedef enum _SYSTEM_RESET_TYPE {
+    SystemResetInvalid,
+    SystemResetShutdown,
+    SystemResetWarm,
+    SystemResetCold,
+    SystemResetTypeCount
+} SYSTEM_RESET_TYPE, *PSYSTEM_RESET_TYPE;
 
 /*++
 
@@ -1878,6 +1900,14 @@ Members:
 
     Initialize - Stores a pointer to a function used to initialize the unit.
 
+    Flush - Stores a pointer to a function used to flush a single cache line.
+
+    FlushRegion - Stores a pointer to a function used to flush a region of
+        the cache.
+
+    GetProperties - Stores a pointer to a function used to query the cache
+        controller.
+
 --*/
 
 typedef struct _CACHE_CONTROLLER_FUNCTION_TABLE {
@@ -1886,6 +1916,95 @@ typedef struct _CACHE_CONTROLLER_FUNCTION_TABLE {
     PCACHE_CONTROLLER_FLUSH_REGION FlushRegion;
     PCACHE_CONTROLLER_GET_PROPERTIES GetProperties;
 } CACHE_CONTROLLER_FUNCTION_TABLE, *PCACHE_CONTROLLER_FUNCTION_TABLE;
+
+//
+// System reset functions
+//
+
+typedef
+KSTATUS
+(*PREBOOT_PREPARE) (
+    PVOID Context,
+    SYSTEM_RESET_TYPE ResetType
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prepares the system for a reboot or system power transition.
+    This function is called at low level when possible. During emergency reboot
+    situations, this function may not be called.
+
+Arguments:
+
+    Context - Supplies the pointer to the reboot controller's context, provided
+        by the hardware module upon initialization.
+
+    ResetType - Supplies the reset type that is going to occur.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    Other status codes on failure.
+
+--*/
+
+typedef
+KSTATUS
+(*PREBOOT_SYSTEM) (
+    PVOID Context,
+    SYSTEM_RESET_TYPE ResetType,
+    PVOID Data,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine shuts down or reboots the entire system.
+
+Arguments:
+
+    Context - Supplies the pointer to the reboot controller's context, provided
+        by the hardware module upon initialization.
+
+    ResetType - Supplies the reset type.
+
+    Data - Supplies an optional pointer's worth of platform-specific data.
+
+    Size - Supplies the size of the platform-specific data.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    Other status codes on failure.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure describes the API of a reboot hardware module.
+
+Members:
+
+    Prepare - Supplies a pointer to a function used to prepare the system for
+        a reboot or system power transition when done gracefully. During an
+        emergency reboot this function may not be called.
+
+    Reboot - Supplies a pointer to a function used to reboot the system.
+
+--*/
+
+typedef struct _REBOOT_MODULE_FUNCTION_TABLE {
+    PREBOOT_PREPARE Prepare;
+    PREBOOT_SYSTEM Reboot;
+} REBOOT_MODULE_FUNCTION_TABLE, *PREBOOT_MODULE_FUNCTION_TABLE;
 
 //
 // Registration structures.
@@ -2067,7 +2186,7 @@ typedef struct _CALENDAR_TIMER_DESCRIPTION {
 
 Structure Description:
 
-    This structure is used to describe a cache controller timer to the system.
+    This structure is used to describe a cache controller to the system.
     It is passed from the hardware module to the kernel.
 
 Members:
@@ -2098,6 +2217,41 @@ typedef struct _CACHE_CONTROLLER_DESCRIPTION {
     ULONG Identifier;
     ULONG PropertiesVersion;
 } CACHE_CONTROLLER_DESCRIPTION, *PCACHE_CONTROLLER_DESCRIPTION;
+
+/*++
+
+Structure Description:
+
+    This structure is used to describe a reboot controller to the system.
+    It is passed from the hardware module to the kernel.
+
+Members:
+
+    TableVersion - Stores the version of the cache controller description table
+        as understood by the hardware module. Set this to
+        REBOOT_MODULE_DESCRIPTION_VERSION.
+
+    FunctionTable - Stores the table of pointers to the hardware module's
+        functions.
+
+    Context - Stores a pointer's worth of data specific to this cache
+        controller instance. This pointer will be passed back to the hardware
+        module on each call.
+
+    Identifier - Stores the unique identifier of the reboot controller.
+
+    Properties - Stores a bitfield of flags describing the reboot controller.
+        See REBOOT_MODULE_* definitions.
+
+--*/
+
+typedef struct _REBOOT_MODULE_DESCRIPTION {
+    ULONG TableVersion;
+    REBOOT_MODULE_FUNCTION_TABLE FunctionTable;
+    PVOID Context;
+    ULONG Identifier;
+    ULONG Properties;
+} REBOOT_MODULE_DESCRIPTION, *PREBOOT_MODULE_DESCRIPTION;
 
 //
 // Hardware module prototypes.

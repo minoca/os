@@ -49,6 +49,7 @@ OBJS = acpidrv.o    \
        oprgnos.o    \
        proc.o       \
        resdesc.o    \
+       reset.o      \
 
 ARMV7_OBJS = armv7/procarch.o   \
 

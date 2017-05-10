@@ -147,6 +147,10 @@ Return Value:
         Status = HlpDebugUsbHostRegisterHardware(Description);
         break;
 
+    case HardwareModuleReboot:
+        Status = HlpRebootModuleRegisterHardware(Description);
+        break;
+
     default:
 
         ASSERT(FALSE);

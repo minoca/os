@@ -51,7 +51,8 @@ function build() {
         "oprgn.c",
         "oprgnos.c",
         "proc.c",
-        "resdesc.c"
+        "resdesc.c",
+        "reset.c"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
