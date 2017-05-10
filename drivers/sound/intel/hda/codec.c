@@ -1055,7 +1055,7 @@ Return Value:
     SoundDevice->StructureSize = sizeof(SOUND_DEVICE) + RatesSize;
     SoundDevice->Context = HdaDevice;
     WidgetType = HDA_GET_WIDGET_TYPE(Widget);
-    Capabilities = 0;
+    Capabilities = SOUND_CAPABILITY_MMAP | SOUND_CAPABILITY_MANUAL_ENABLE;
     if (WidgetType == HDA_AUDIO_WIDGET_TYPE_INPUT) {
         SoundDevice->Type = SoundDeviceInput;
         if  ((Widget->WidgetCapabilities & HDA_AUDIO_WIDGET_DIGITAL) != 0) {

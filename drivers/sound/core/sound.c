@@ -299,16 +299,6 @@ Return Value:
                       Registration->Devices[Index]->StructureSize);
 
         SoundDevice->Flags &= SOUND_DEVICE_FLAG_PUBLIC_MASK;
-
-        //
-        // There is nothing preventing a device from supporting mmap or being
-        // manually started (rather than automatically started via read/write).
-        // Set them on all devices.
-        //
-
-        SoundDevice->Capabilities |= SOUND_CAPABILITY_MMAP |
-                                     SOUND_CAPABILITY_MANUAL_ENABLE;
-
         SoundDevice = (PVOID)SoundDevice + SoundDevice->StructureSize;
     }
 
