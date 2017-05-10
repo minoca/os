@@ -268,15 +268,7 @@ Return Value:
         goto SoundAllocateDmaBufferEnd;
     }
 
-    //
-    // Zero the entire I/O buffer so that any unused portions produce no sound
-    // even if they are played by the hardware.
-    //
-
-    Status = MmZeroIoBuffer(IoBuffer, 0, Size);
-    if (!KSUCCESS(Status)) {
-        goto SoundAllocateDmaBufferEnd;
-    }
+    Status = STATUS_SUCCESS;
 
 SoundAllocateDmaBufferEnd:
     if (!KSUCCESS(Status)) {
@@ -287,7 +279,7 @@ SoundAllocateDmaBufferEnd:
     }
 
     *NewIoBuffer = IoBuffer;
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 VOID

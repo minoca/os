@@ -1796,37 +1796,63 @@ Return Value:
 
     PSOUND_ALLOCATE_DMA_BUFFER AllocateDmaBuffer;
     UINTN BufferSize;
+    PIO_BUFFER IoBuffer;
     KSTATUS Status;
 
+    IoBuffer = NULL;
     Status = STATUS_SUCCESS;
+    BufferSize = FragmentSize * FragmentCount;
     AllocateDmaBuffer = Controller->Host.FunctionTable->AllocateDmaBuffer;
     if (AllocateDmaBuffer != NULL) {
         Status = AllocateDmaBuffer(Controller->Host.Context,
                                    Device->Context,
                                    FragmentSize,
                                    FragmentCount,
-                                   NewIoBuffer);
+                                   &IoBuffer);
+
+        if (!KSUCCESS(Status)) {
+            goto AllocateIoBufferEnd;
+        }
 
     } else if ((Device->Capabilities & SOUND_CAPABILITY_MMAP) != 0) {
-        BufferSize = FragmentSize * FragmentCount;
-        *NewIoBuffer = MmAllocateNonPagedIoBuffer(0,
-                                                  MAX_ULONGLONG,
-                                                  0,
-                                                  BufferSize,
-                                                  0);
+        IoBuffer = MmAllocateNonPagedIoBuffer(0,
+                                              MAX_ULONGLONG,
+                                              0,
+                                              BufferSize,
+                                              0);
 
-        if (*NewIoBuffer == NULL) {
+        if (IoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto AllocateIoBufferEnd;
         }
 
     } else {
-        BufferSize = FragmentSize * FragmentCount;
-        *NewIoBuffer = MmAllocatePagedIoBuffer(BufferSize, 0);
-        if (*NewIoBuffer == NULL) {
+        IoBuffer = MmAllocatePagedIoBuffer(BufferSize, 0);
+        if (IoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto AllocateIoBufferEnd;
         }
     }
 
+    //
+    // Zero the entire I/O buffer so that any unused portions produce no sound
+    // even if they are played by the hardware.
+    //
+
+    Status = MmZeroIoBuffer(IoBuffer, 0, BufferSize);
+    if (!KSUCCESS(Status)) {
+        goto AllocateIoBufferEnd;
+    }
+
+AllocateIoBufferEnd:
+    if (!KSUCCESS(Status)) {
+        if (IoBuffer != NULL) {
+            SoundpFreeIoBuffer(Controller, Device, IoBuffer);
+            IoBuffer = NULL;
+        }
+    }
+
+    *NewIoBuffer = IoBuffer;
     return Status;
 }
 

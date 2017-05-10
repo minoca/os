@@ -129,7 +129,7 @@ PDRIVER HdaDriver = NULL;
 UUID HdaPciMsiInterfaceUuid = UUID_PCI_MESSAGE_SIGNALED_INTERRUPTS;
 
 //
-// Define the set of enable HD Audio debug flags.
+// Define the set of enabled HD Audio debug flags.
 //
 
 ULONG HdaDebugFlags = 0x0;
