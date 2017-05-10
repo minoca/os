@@ -499,29 +499,6 @@ typedef struct _BCM2709_MAILBOX_BOARD_SERIAL_NUMBER {
 
 Structure Description:
 
-    This structure defines the data necessary to get a BCM2709's clock rate.
-
-Members:
-
-    Header - Stores a header that defines the total size of the messages being
-        sent to and received from the mailbox.
-
-    ClockRate - Stores a message getting the clock rate.
-
-    EndTag - Stores the tag to denote the end of the mailbox message.
-
---*/
-
-typedef struct _EFI_BCM2709_GET_CLOCK_RATE {
-    BCM2709_MAILBOX_HEADER Header;
-    BCM2709_MAILBOX_GET_CLOCK_RATE ClockRate;
-    UINT32 EndTag;
-} EFI_BCM2709_GET_CLOCK_RATE, *PEFI_BCM2709_GET_CLOCK_RATE;
-
-/*++
-
-Structure Description:
-
     This structure defines a BCM2709 timer.
 
 Members:
