@@ -1522,7 +1522,7 @@ END_FUNCTION ArGetCacheTypeRegister
 ##
 
 
-EfipCommonInterruptEntry:
+FUNCTION EfipCommonInterruptEntry
 
     ##
     ## Save state and create a trap frame.
@@ -1543,4 +1543,6 @@ EfipCommonInterruptEntry:
     ##
 
     ARM_EXIT_INTERRUPT
+
+END_FUNCTION EfipCommonInterruptEntry
 

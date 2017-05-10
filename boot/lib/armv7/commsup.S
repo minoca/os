@@ -1447,7 +1447,7 @@ END_FUNCTION ArSetUnprivilegedWriteTranslateRegister
 ## dispatch routine.
 ##
 
-BopCommonInterruptEntry:
+FUNCTION BopCommonInterruptEntry
 
     ##
     ## Save state and create a trap frame.
@@ -1468,4 +1468,6 @@ BopCommonInterruptEntry:
     ##
 
     ARM_EXIT_INTERRUPT
+
+END_FUNCTION BopCommonInterruptEntry
 
