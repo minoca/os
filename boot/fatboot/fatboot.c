@@ -308,7 +308,7 @@ Return Value:
     BoBootDriveNumber = BootDriveNumber;
     BoBootPartitionStart = PartitionOffset;
     BoFat12FatRegion = NULL;
-    BopPrintString(0, 0, "FATBoot");
+    BopPrintString(0, 0, "VBR");
 
     //
     // Read the boot sector to validate that this is a FAT drive and find out
@@ -604,13 +604,13 @@ Return Value:
     //
 
     MainFunction = BOOT_MANAGER_ADDRESS;
-    BopPrintString(0, 0, "Launch ");
+    BopPrintString(0, 0, "Launch");
     ReturnValue = MainFunction(TopOfStack,
                                StackSize,
                                PartitionOffset,
                                BootDriveNumber);
 
-    BopPrintString(0, 4, "Return ");
+    BopPrintString(0, 4, "Return");
     BopPrintHexInteger(7, 4, ReturnValue);
     Status = STATUS_DRIVER_FUNCTION_MISSING;
 
