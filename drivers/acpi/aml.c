@@ -1059,6 +1059,21 @@ Return Value:
     }
 
     //
+    // If it's an empty function, just set the return value to zero.
+    //
+
+    if (AmlCodeSize == 0) {
+        if (Context->ReturnValue != NULL) {
+            AcpipObjectReleaseReference(Context->ReturnValue);
+        }
+
+        Context->ReturnValue = &AcpiZero;
+        AcpipObjectAddReference(Context->ReturnValue);
+        Status = STATUS_SUCCESS;
+        goto PushMethodOnExecutionContextEnd;
+    }
+
+    //
     // Allocate space for the new method.
     //
 
