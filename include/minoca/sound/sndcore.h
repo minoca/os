@@ -362,6 +362,55 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PSOUND_COPY_BUFFER_DATA) (
+    PVOID ControllerContext,
+    PVOID DeviceContext,
+    PIO_BUFFER Destination,
+    UINTN DestinationOffset,
+    PIO_BUFFER Source,
+    UINTN SourceOffset,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine copies sound data from one I/O buffer to another. This gives
+    the sound controller an opportunity to do any conversions if its audio
+    format does not conform to one of sound core's formats. One of the two
+    buffers will be the buffer supplied to the sound controller when the
+    device was put in the initialized state. Which one it is depends on the
+    direction of the sound.
+
+Arguments:
+
+    ControllerContext - Supplies a pointer to the sound controller's context.
+
+    DeviceContext - Supplies a pointer to the sound controller's device context.
+
+    Destination - Supplies a pointer to the destination I/O buffer that is to
+        be copied into.
+
+    DestinationOffset - Supplies the offset into the destination I/O buffer
+        where the copy should begin.
+
+    Source - Supplies a pointer to the source I/O buffer whose contexts will be
+        copied to the destination.
+
+    SourceOffset - Supplies the offset into the source I/O buffer where the
+        copy should begin.
+
+    Size - Supplies the size of the copy, in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -386,6 +435,7 @@ typedef struct _SOUND_FUNCTION_TABLE {
     PSOUND_ALLOCATE_DMA_BUFFER AllocateDmaBuffer;
     PSOUND_FREE_DMA_BUFFER FreeDmaBuffer;
     PSOUND_GET_SET_INFORMATION GetSetInformation;
+    PSOUND_COPY_BUFFER_DATA CopyBufferData;
 } SOUND_FUNCTION_TABLE, *PSOUND_FUNCTION_TABLE;
 
 /*++

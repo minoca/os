@@ -141,7 +141,8 @@ ULONG HdaDebugFlags = 0x0;
 SOUND_FUNCTION_TABLE HdaSoundFunctionTable = {
     HdaSoundAllocateDmaBuffer,
     HdaSoundFreeDmaBuffer,
-    HdaSoundGetSetInformation
+    HdaSoundGetSetInformation,
+    NULL
 };
 
 //

@@ -48,6 +48,13 @@ Environment:
 #define SOUND_MAX_DEVICE_NAME_SIZE 20
 
 //
+// Define the total number of sound format sizes listed.
+//
+
+#define SOUND_FORMAT_SIZE_COUNT \
+    (sizeof(SoundFormatSampleSize) / sizeof(SoundFormatSampleSize[0]))
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -69,6 +76,16 @@ SoundpFreeIoBuffer (
     PSOUND_CONTROLLER Controller,
     PSOUND_DEVICE Device,
     PIO_BUFFER IoBuffer
+    );
+
+KSTATUS
+SoundpCopyBufferData (
+    PSOUND_DEVICE_HANDLE Handle,
+    PIO_BUFFER Destination,
+    UINTN DestinationOffset,
+    PIO_BUFFER Source,
+    UINTN SourceOffset,
+    UINTN Size
     );
 
 KSTATUS
@@ -145,6 +162,30 @@ PCSTR SoundGenericDeviceNames[SoundDeviceTypeCount] = {
 PCSTR SoundSpecificDeviceFormats[SoundDeviceTypeCount] = {
     "input%d",
     "output%d"
+};
+
+//
+// Stores the size of samples for each format, in bytes. The indices are
+// based on the SOUND_FORMAT_* bit indices.
+//
+
+ULONG SoundFormatSampleSize[] = {
+    1,
+    1,
+    2,
+    2,
+    2,
+    2,
+    4,
+    4,
+    4,
+    4,
+    1,
+    1,
+    4,
+    4,
+    3,
+    4,
 };
 
 //
@@ -750,7 +791,21 @@ Return Value:
         ASSERT((OldFlags & SOUND_DEVICE_FLAG_INTERNAL_BUSY) != 0);
     }
 
-    ASSERT(Handle->Buffer.IoBuffer == NULL);
+    //
+    // The buffer is typically freed in reset, but if reset fails, still
+    // release the buffer resources.
+    //
+
+    if (Handle->Buffer.IoBuffer != NULL) {
+
+        ASSERT(Handle->Device != NULL);
+
+        SoundpFreeIoBuffer(Handle->Controller,
+                           Handle->Device,
+                           Handle->Buffer.IoBuffer);
+
+        Handle->Buffer.IoBuffer = NULL;
+    }
 
     NonPaged = FALSE;
     if ((Handle->Controller->Host.Flags &
@@ -1058,11 +1113,12 @@ Return Value:
             }
 
             *CyclicOffset = CoreOffset;
-            Status = MmCopyIoBuffer(DestinationBuffer,
-                                    DestinationOffset,
-                                    SourceBuffer,
-                                    SourceOffset,
-                                    BytesAvailable);
+            Status = SoundpCopyBufferData(Handle,
+                                          DestinationBuffer,
+                                          DestinationOffset,
+                                          SourceBuffer,
+                                          SourceOffset,
+                                          BytesAvailable);
 
             if (!KSUCCESS(Status)) {
                 goto PerformIoEnd;
@@ -1085,11 +1141,12 @@ Return Value:
             }
 
             *CyclicOffset = CoreOffset;
-            Status = MmCopyIoBuffer(DestinationBuffer,
-                                    DestinationOffset,
-                                    SourceBuffer,
-                                    SourceOffset,
-                                    BytesAvailable);
+            Status = SoundpCopyBufferData(Handle,
+                                          DestinationBuffer,
+                                          DestinationOffset,
+                                          SourceBuffer,
+                                          SourceOffset,
+                                          BytesAvailable);
 
             if (!KSUCCESS(Status)) {
                 goto PerformIoEnd;
@@ -1891,6 +1948,78 @@ Return Value:
 }
 
 KSTATUS
+SoundpCopyBufferData (
+    PSOUND_DEVICE_HANDLE Handle,
+    PIO_BUFFER Destination,
+    UINTN DestinationOffset,
+    PIO_BUFFER Source,
+    UINTN SourceOffset,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine copies sound data from one I/O buffer to another. This gives
+    the sound controller an opportunity to do any conversions if its audio
+    format does not conform to one of sound core's formats. One of the two
+    buffers will be the buffer supplied to the sound controller when the
+    device was put in the initialized state. Which one it is depends on the
+    direction of the audio.
+
+Arguments:
+
+    Handle - Supplies a pointer to a handle to the device to which to copy
+        to/from.
+
+    Destination - Supplies a pointer to the destination I/O buffer that is to
+        be copied into.
+
+    DestinationOffset - Supplies the offset into the destination I/O buffer
+        where the copy should begin.
+
+    Source - Supplies a pointer to the source I/O buffer whose contexts will be
+        copied to the destination.
+
+    SourceOffset - Supplies the offset into the source I/O buffer where the
+        copy should begin.
+
+    Size - Supplies the size of the copy, in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PSOUND_COPY_BUFFER_DATA CopyBufferData;
+    KSTATUS Status;
+
+    CopyBufferData = Handle->Controller->Host.FunctionTable->CopyBufferData;
+    if (CopyBufferData != NULL) {
+        Status = CopyBufferData(Handle->Controller->Host.Context,
+                                Handle->Device->Context,
+                                Destination,
+                                DestinationOffset,
+                                Source,
+                                SourceOffset,
+                                Size);
+
+    } else {
+        Status = MmCopyIoBuffer(Destination,
+                                DestinationOffset,
+                                Source,
+                                SourceOffset,
+                                Size);
+    }
+
+    return Status;
+}
+
+KSTATUS
 SoundpInitializeDevice (
     PSOUND_DEVICE_HANDLE Handle
     )
@@ -1916,6 +2045,7 @@ Return Value:
 
     PSOUND_CONTROLLER Controller;
     PSOUND_GET_SET_INFORMATION GetSetInformation;
+    ULONG Index;
     SOUND_DEVICE_STATE_INFORMATION Information;
     UINTN Size;
     KSTATUS Status;
@@ -1937,8 +2067,21 @@ Return Value:
 
         ASSERT(Handle->Device->Type == SoundDeviceOutput);
 
+        Index = RtlCountTrailingZeros32(Handle->Format);
+        if (Index >= SOUND_FORMAT_SIZE_COUNT) {
+
+            //
+            // The developer should add the proper size for the new format.
+            //
+
+            ASSERT(FALSE);
+
+            Index = 0;
+        }
+
         Handle->Buffer.CoreOffset = 0;
-        Handle->Buffer.ControllerOffset = Handle->Buffer.Size - 1;
+        Handle->Buffer.ControllerOffset = Handle->Buffer.Size -
+                                          SoundFormatSampleSize[Index];
     }
 
     //
@@ -2002,30 +2145,24 @@ Return Value:
     UINTN Size;
     KSTATUS Status;
 
-    if (Handle->State == SoundDeviceStateUninitialized) {
-        return STATUS_SUCCESS;
-    }
-
     Status = STATUS_SUCCESS;
     KeAcquireQueuedLock(Handle->Lock);
-    if (Handle->State == SoundDeviceStateUninitialized) {
-        goto UninitializeDeviceEnd;
-    }
+    if (Handle->State != SoundDeviceStateUninitialized) {
+        Information.Version = SOUND_DEVICE_STATE_INFORMATION_VERSION;
+        Information.State = SoundDeviceStateUninitialized;
+        Controller = Handle->Controller;
+        Size = sizeof(SOUND_DEVICE_STATE_INFORMATION);
+        GetSetInformation = Controller->Host.FunctionTable->GetSetInformation;
+        Status = GetSetInformation(Controller->Host.Context,
+                                   Handle->Device->Context,
+                                   SoundDeviceInformationState,
+                                   &Information,
+                                   &Size,
+                                   TRUE);
 
-    Information.Version = SOUND_DEVICE_STATE_INFORMATION_VERSION;
-    Information.State = SoundDeviceStateUninitialized;
-    Controller = Handle->Controller;
-    Size = sizeof(SOUND_DEVICE_STATE_INFORMATION);
-    GetSetInformation = Controller->Host.FunctionTable->GetSetInformation;
-    Status = GetSetInformation(Controller->Host.Context,
-                               Handle->Device->Context,
-                               SoundDeviceInformationState,
-                               &Information,
-                               &Size,
-                               TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto UninitializeDeviceEnd;
+        if (!KSUCCESS(Status)) {
+            goto UninitializeDeviceEnd;
+        }
     }
 
     //
