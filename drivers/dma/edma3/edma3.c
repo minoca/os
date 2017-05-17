@@ -416,6 +416,7 @@ DMA_INFORMATION EdmaInformationTemplate = {
     DMA_INFORMATION_VERSION,
     UUID_EDMA_CONTROLLER,
     0,
+    0,
     NULL,
     0,
     EDMA_CHANNEL_COUNT,

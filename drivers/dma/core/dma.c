@@ -592,7 +592,10 @@ Return Value:
     if ((Transfer->Allocation == NULL) ||
         (Transfer->Allocation->Allocation >= Controller->ChannelCount) ||
         (Transfer->Memory == NULL) ||
-        (Transfer->CompletionCallback == NULL)) {
+        (Transfer->CompletionCallback == NULL) ||
+        (((Transfer->Flags & DMA_TRANSFER_CONTINUOUS) != 0) &&
+         ((Controller->Host.Information.Capabilities &
+           DMA_CAPABILITY_CONTINUOUS_MODE) == 0))) {
 
         return STATUS_INVALID_PARAMETER;
     }

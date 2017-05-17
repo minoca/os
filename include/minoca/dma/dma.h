@@ -50,11 +50,26 @@ Author:
 #define DMA_TRANSFER_ADVANCE_DEVICE 0x00000001
 
 //
+// Set this flag to initiate a continuous DMA transfer that will run until it
+// is canceled, looping back to the beginning of the provided memory regions.
+// The interrupt rate, if required, can be specified with a non-zero interrupt
+// period in the DMA transfer.
+//
+
+#define DMA_TRANSFER_CONTINUOUS 0x00000002
+
+//
 // Define the current version of the DMA information table.
 //
 
 #define DMA_INFORMATION_VERSION 1
 #define DMA_INFORMATION_MAX_VERSION 0x00001000
+
+//
+// Define the capabilities that can be advertised by a DMA controller.
+//
+
+#define DMA_CAPABILITY_CONTINUOUS_MODE 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -115,6 +130,9 @@ Members:
         controller. Changes in these revisions are not significant enough to
         change the configuration and information structures.
 
+    Capabilities - Stores a bitmask of DMA controller capabilities. See
+        DMA_CAPABILITY_* for definnitions.
+
     ExtendedInfo - Stores a pointer to controller-specific extended information,
         the format of which depends on the UUID.
 
@@ -134,6 +152,7 @@ typedef struct _DMA_INFORMATION {
     ULONG Version;
     UUID ControllerUuid;
     ULONG ControllerRevision;
+    ULONG Capabilities;
     PVOID ExtendedInfo;
     UINTN ExtendedInfoSize;
     ULONG ChannelCount;
@@ -195,6 +214,10 @@ Members:
     Status - Stores the final status code of the transfer, as returned by the
         DMA controller.
 
+    InterruptPeriod - Stores the number of bytes after which a continuous DMA
+        transfer will interrupt. If this is zero, the continuous transfer will
+        interrupt after 'Size' bytes have been transferred.
+
 --*/
 
 struct _DMA_TRANSFER {
@@ -216,6 +239,7 @@ struct _DMA_TRANSFER {
     ULONG Flags;
     UINTN Completed;
     KSTATUS Status;
+    ULONG InterruptPeriod;
 };
 
 typedef
