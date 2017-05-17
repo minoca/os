@@ -40,6 +40,7 @@ function build() {
         "intr.c",
         "mailbox.c",
         "memmap.c",
+        "pwm.c",
         "sd.c",
         "serial.c",
         "timer.c",

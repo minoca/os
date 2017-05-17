@@ -30,7 +30,7 @@ Environment:
 //
 
 [0004]                          Signature : "BCM2"
-[0004]                       Table Length : 000000D8
+[0004]                       Table Length : 000000DC
 [0001]                           Revision : 01
 [0001]                           Checksum : 00
 [0006]                             Oem ID : "Minoca"
@@ -98,6 +98,12 @@ Environment:
 //
 
                                    UINT32 : 00000000
+
+//
+// PWM clock frequency.
+//
+
+                                   UINT32 : 1DCD6500
 
 //
 // Mailbox physical address.

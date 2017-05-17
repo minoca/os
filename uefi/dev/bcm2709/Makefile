@@ -36,6 +36,7 @@ OBJS = gpio.o     \
        intr.o     \
        mailbox.o  \
        memmap.o   \
+       pwm.o      \
        sd.o       \
        serial.o   \
        timer.o    \

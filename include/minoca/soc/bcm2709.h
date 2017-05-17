@@ -50,6 +50,7 @@ Author:
 #define BCM2709_MAILBOX_OFFSET      0x0000B880
 #define BCM2709_PRM_OFFSET          0x00100000
 #define BCM2709_PRM_SIZE            0x1000
+#define BCM2709_CLOCK_OFFSET        0x00101000
 #define BCM2709_GPIO_OFFSET         0x00200000
 #define BCM2709_UART_OFFSET         0x00201000
 #define BCM2709_EMMC_OFFSET         0x00300000
@@ -170,7 +171,7 @@ Author:
 #define BCM2709_CLOCK_TIMER_INTERRUPT 64
 
 //
-// Define the channel used to get and set video information by property.
+// Define the channel used to get and set information by property.
 //
 
 #define BCM2709_MAILBOX_PROPERTIES_CHANNEL 8
@@ -213,9 +214,19 @@ Author:
 // Define the tag value for getting the clock rate.
 //
 
+#define BCM2709_MAILBOX_TAG_GET_CLOCK_STATE    0x00030001
+#define BCM2709_MAILBOX_TAG_SET_CLOCK_STATE    0x00038001
 #define BCM2709_MAILBOX_TAG_GET_CLOCK_RATE     0x00030002
 #define BCM2709_MAILBOX_TAG_SET_CLOCK_RATE     0x00038002
 #define BCM2709_MAILBOX_TAG_GET_CLOCK_MAX_RATE 0x00030004
+#define BCM2709_MAILBOX_TAG_GET_CLOCK_MIN_RATE 0x00030007
+
+//
+// Define The bits for the clock state.
+//
+
+#define BCM2709_MAILBOX_CLOCK_STATE_ON          0x00000001
+#define BCM2709_MAILBOX_CLOCK_STATE_NOT_PRESENT 0x00000002
 
 //
 // Define the tag values for various video information.
@@ -454,6 +465,13 @@ Author:
 #define BCM2709_GPIO_FUNCTION_SELECT_REGISTER_BYTE_WIDTH 0x4
 
 //
+// Define the default headphone jack left and right channel pins.
+//
+
+#define BCM2709_GPIO_HEADPHONE_JACK_LEFT 40
+#define BCM2709_GPIO_HEADPHONE_JACK_RIGHT 45
+
+//
 // Define the default UART transmit and receive pins.
 //
 
@@ -585,6 +603,48 @@ Author:
 #define BCM2709_PCM_GRAY_FLUSH                      0x00000004
 #define BCM2709_PCM_GRAY_CLEAR                      0x00000002
 #define BCM2709_PCM_GRAY_ENABLE                     0x00000001
+
+//
+// Define the clock manager password.
+//
+
+#define BCM2709_CLOCK_PASSWORD 0x5A000000
+
+//
+// Define the bits for the clock manager clock control registers.
+//
+
+#define BCM2709_CLOCK_CONTROL_MASH_MASK         0x00000600
+#define BCM2709_CLOCK_CONTROL_MASH_SHIFT        9
+#define BCM2709_CLOCK_CONTROL_FLIP              0x00000100
+#define BCM2709_CLOCK_CONTROL_BUSY              0x00000080
+#define BCM2709_CLOCK_CONTROL_KILL              0x00000020
+#define BCM2709_CLOCK_CONTROL_ENABLE            0x00000010
+#define BCM2709_CLOCK_CONTROL_SOURCE_MASK       0x0000000F
+#define BCM2709_CLOCK_CONTROL_SOURCE_SHIFT      0
+#define BCM2709_CLOCK_CONTROL_SOURCE_GROUND     0x0
+#define BCM2709_CLOCK_CONTROL_SOURCE_OSCILLATOR 0x1
+#define BCM2709_CLOCK_CONTROL_SOURCE_DEBUG_0    0x2
+#define BCM2709_CLOCK_CONTROL_SOURCE_DEBUG_1    0x3
+#define BCM2709_CLOCK_CONTROL_SOURCE_PLLA       0x4
+#define BCM2709_CLOCK_CONTROL_SOURCE_PLLC       0x5
+#define BCM2709_CLOCK_CONTROL_SOURCE_PLLD       0x6
+#define BCM2709_CLOCK_CONTROL_SOURCE_HDMI       0x7
+
+//
+// Define the bits for the clock manager divisor registers.
+//
+
+#define BCM2709_CLOCK_DIVISOR_INTEGER_MASK   0x00FFF000
+#define BCM2709_CLOCK_DIVISOR_INTEGER_SHIFT  12
+#define BCM2709_CLOCK_DIVISOR_FRACTION_MASK  0x00000FFF
+#define BCM2709_CLOCK_DIVISOR_FRACTION_SHIFT 0
+
+//
+// Define the denominator of the fractional divisor.
+//
+
+#define BCM2709_CLOCK_DIVISOR_FRACTION_DENOMINATOR 1024
 
 //
 // Define the mask used to convert VC bus addresses to ARM core addresses.
@@ -867,6 +927,15 @@ typedef enum _BCM2709_PCM_REGISTER {
     Bcm2709PcmInterruptStatus = 0x1C,
     Bcm2709PcmGrayModeControl = 0x20
 } BCM2709_PCM_REGISTER, *PBCM2709_PCM_REGISTER;
+
+//
+// Define the clock manager register offsets, in bytes.
+//
+
+typedef enum _BCM2709_CLOCK_REGISTER {
+    Bcm2709ClockPwmControl = 0xA0,
+    Bcm2709ClockPwmDivisor = 0xA4
+} BCM2709_CLOCK_REGISTER, *PBCM2709_CLOCK_REGISTER;
 
 //
 // -------------------------------------------------------------------- Globals

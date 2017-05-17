@@ -46,6 +46,7 @@ Author:
 #define BCM2709_ARM_TIMER_BASE BCM2709_GET_BASE(BCM2709_ARM_TIMER_OFFSET)
 #define BCM2709_MAILBOX_BASE BCM2709_GET_BASE(BCM2709_MAILBOX_OFFSET)
 #define BCM2709_PRM_BASE BCM2709_GET_BASE(BCM2709_PRM_OFFSET)
+#define BCM2709_CLOCK_BASE BCM2709_GET_BASE(BCM2709_CLOCK_OFFSET)
 #define BCM2709_GPIO_BASE BCM2709_GET_BASE(BCM2709_GPIO_OFFSET)
 #define BCM2709_UART_BASE BCM2709_GET_BASE(BCM2709_UART_OFFSET)
 #define BCM2709_EMMC_BASE BCM2709_GET_BASE(BCM2709_EMMC_OFFSET)
@@ -930,6 +931,29 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+EFI_STATUS
+EfipBcm2709PwmInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the PWM controller making sure that it is exposed
+    on GPIO pins 40 and 45. This allows audio to be generated using PWM and it
+    will go out the headphone jack.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    EFI status code.
 
 --*/
 

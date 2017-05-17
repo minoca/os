@@ -141,6 +141,30 @@ typedef struct _BCM2709_MAILBOX_POWER {
 
 Structure Description:
 
+    This structure defines the gets or sets a clock state message for the
+    BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    ClockId - Stores the identification number for the clock.
+
+    State - Stores the the clock state. See BCM2709_MAILBOX_CLOCK_STATE_* for
+        definitions.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_CLOCK_STATE {
+    BCM2709_MAILBOX_TAG TagHeader;
+    ULONG ClockId;
+    ULONG State;
+} BCM2709_MAILBOX_CLOCK_STATE, *PBCM2709_MAILBOX_CLOCK_STATE;
+
+/*++
+
+Structure Description:
+
     This structure defines the get clock rate message for the BCM2709 mailbox.
 
 Members:

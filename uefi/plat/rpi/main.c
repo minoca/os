@@ -151,6 +151,12 @@ Return Value:
         if (EFI_ERROR(Status)) {
             return Status;
         }
+
+    } else if (Phase == 2) {
+        Status = EfipBcm2709PwmInitialize();
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
     }
 
     return EFI_SUCCESS;

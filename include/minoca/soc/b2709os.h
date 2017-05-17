@@ -89,6 +89,9 @@ Members:
     SystemTimerGsiBase - Stores the Global System Interrupt base of the 4
         contiguous system timer interrupts.
 
+    PwmClockFrequency - Stores the frequency of the Pulse Width Modulation
+        clock.
+
     MailboxPhysicalAddress - Stores the physical address of the BCM2709 Mailbox
         register base.
 
@@ -109,6 +112,7 @@ typedef struct _BCM2709_TABLE {
     ULONGLONG SystemTimerPhysicalAddress;
     ULONGLONG SystemTimerFrequency;
     ULONG SystemTimerGsiBase;
+    ULONG PwmClockFrequency;
     ULONGLONG MailboxPhysicalAddress;
     ULONGLONG CpuLocalPhysicalAddress;
     // ProcessorStructures[n].

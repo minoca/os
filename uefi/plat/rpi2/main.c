@@ -115,6 +115,11 @@ EfipBcm2836InitializeUart (
     );
 
 EFI_STATUS
+EfipBcm2836InitializePwm (
+    VOID
+    );
+
+EFI_STATUS
 EfipBcm2836InitializeArmClock (
     VOID
     );
@@ -181,7 +186,7 @@ EFI_BCM2709_GET_CLOCK_RATE EfiRpi2GetClockTemplate = {
         {
             BCM2709_MAILBOX_TAG_GET_CLOCK_MAX_RATE,
             sizeof(UINT32) * 2,
-            sizeof(UINT32) * 2
+            sizeof(UINT32)
         },
 
         BCM2709_MAILBOX_CLOCK_ID_ARM,
@@ -326,6 +331,11 @@ Return Value:
         }
 
         Status = EfipBcm2836InitializeCoreTimerClock();
+        if (EFI_ERROR(Status)) {
+            goto PlatformInitializeEnd;
+        }
+
+        Status = EfipBcm2709PwmInitialize();
         if (EFI_ERROR(Status)) {
             goto PlatformInitializeEnd;
         }
