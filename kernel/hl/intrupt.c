@@ -313,6 +313,15 @@ Return Value:
         goto CreateInterruptControllerEnd;
     }
 
+    //
+    // Now that it's all ready to go, initialize the controller.
+    //
+
+    Status = HlpInterruptInitializeController(Controller);
+    if (!KSUCCESS(Status)) {
+        goto CreateInterruptControllerEnd;
+    }
+
     ResultingInformation->Controller = Controller;
     ResultingInformation->StartingGsi = Gsi;
     ResultingInformation->LineCount = LineCount;
