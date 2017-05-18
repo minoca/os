@@ -49,19 +49,19 @@ Environment:
 [0001]                 ACPI Disable Value : 00
 [0001]                     S4BIOS Command : 00
 [0001]                    P-State Control : 00
-[0004]           PM1A Event Block Address : 00000001
+[0004]           PM1A Event Block Address : 00000000
 [0004]           PM1B Event Block Address : 00000000
-[0004]         PM1A Control Block Address : 00000001
+[0004]         PM1A Control Block Address : 00000000
 [0004]         PM1B Control Block Address : 00000000
-[0004]          PM2 Control Block Address : 00000001
-[0004]             PM Timer Block Address : 00000001
-[0004]                 GPE0 Block Address : 00000001
+[0004]          PM2 Control Block Address : 00000000
+[0004]             PM Timer Block Address : 00000000
+[0004]                 GPE0 Block Address : 00000000
 [0004]                 GPE1 Block Address : 00000000
-[0001]             PM1 Event Block Length : 04
-[0001]           PM1 Control Block Length : 02
-[0001]           PM2 Control Block Length : 01
-[0001]              PM Timer Block Length : 04
-[0001]                  GPE0 Block Length : 08
+[0001]             PM1 Event Block Length : 00
+[0001]           PM1 Control Block Length : 00
+[0001]           PM2 Control Block Length : 00
+[0001]              PM Timer Block Length : 00
+[0001]                  GPE0 Block Length : 00
 [0001]                  GPE1 Block Length : 00
 [0001]                   GPE1 Base Offset : 00
 [0001]                       _CST Support : 00
