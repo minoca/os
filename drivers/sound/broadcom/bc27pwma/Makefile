@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2017 Minoca Corp. All rights reserved.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,15 +9,15 @@
 #
 #   Module Name:
 #
-#       Sound
+#       Broadcom 2709 PWM Audio
 #
 #   Abstract:
 #
-#       This directory contains drivers related to sound input and output.
+#       This module implements Broadcom 2709 PWM Audio support.
 #
 #   Author:
 #
-#       Chris Stevens 29-Mar-2017
+#       Chris Stevens 2-May-2017
 #
 #   Environment:
 #
@@ -25,11 +25,16 @@
 #
 ################################################################################
 
-SOUND_DRIVERS = broadcom \
-                intel    \
+BINARY = bc27pwma.drv
 
-DIRS = core             \
-       $(SOUND_DRIVERS) \
+BINARYTYPE = driver
+
+BINPLACE = bin
+
+OBJS = pwma.o     \
+
+DYNLIBS = $(BINROOT)/kernel              \
+          $(BINROOT)/sound.drv           \
 
 include $(SRCROOT)/os/minoca.mk
 

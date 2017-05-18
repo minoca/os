@@ -33,6 +33,7 @@ DAPL0050=pl050.drv
 DBCM0D40=sdbm2709.drv
 DBCM0000=dmab2709.drv
 DBCM0001=bc27gpio.drv
+DBCM0002=bc27pwma.drv
 DDEVREMCHLD=devrem.drv
 DDEVREMROOT=devrem.drv
 DDWC0000=dwhci.drv

@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2017 Minoca Corp. All rights reserved.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,15 +9,15 @@
 #
 #   Module Name:
 #
-#       Sound
+#       Broadcom Sound
 #
 #   Abstract:
 #
-#       This directory contains drivers related to sound input and output.
+#       This directory contains sound drivers for Broadcom devices.
 #
 #   Author:
 #
-#       Chris Stevens 29-Mar-2017
+#       Chris Stevens 2-May-2017
 #
 #   Environment:
 #
@@ -25,11 +25,7 @@
 #
 ################################################################################
 
-SOUND_DRIVERS = broadcom \
-                intel    \
-
-DIRS = core             \
-       $(SOUND_DRIVERS) \
+DIRS = bc27pwma \
 
 include $(SRCROOT)/os/minoca.mk
 

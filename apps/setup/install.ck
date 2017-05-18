@@ -461,6 +461,7 @@ if (plat == "install-armv6") {
         "am3usb.drv",
         "ata.drv",
         "bc27gpio.drv",
+        "bc27pwma.drv",
         "bootmefi.efi",
         "dev2drv.set",
         "devmap.set",
@@ -585,6 +586,7 @@ if (plat == "install-armv7") {
         "bbonefw",
         "bbonemlo",
         "bc27gpio.drv",
+        "bc27pwma.drv",
         "bootmefi.efi",
         "dev2drv.set",
         "devmap.set",
@@ -1122,6 +1124,7 @@ if (plat == "raspberrypi") {
         "dmab2709.drv",
         "sdbm2709.drv",
         "bc27gpio.drv",
+        "bc27pwma.drv",
     ];
 
     DriverDb["BootDrivers"] += [
@@ -1196,6 +1199,7 @@ if (plat == "raspberrypi2") {
         "dmab2709.drv",
         "sdbm2709.drv",
         "bc27gpio.drv",
+        "bc27pwma.drv",
     ];
 
     DriverDb["BootDrivers"] += [

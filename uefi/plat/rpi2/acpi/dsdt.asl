@@ -183,7 +183,31 @@ DefinitionBlock (
                             0x00001000)
 
                 Interrupt(, Level, ActiveHigh,) {62}
-                FixedDMA(11, 11, Width32Bit, )
+                FixedDMA(11, 0, Width32Bit, )
+            })
+        }
+
+        Device(BPWM) {
+            Name(_HID, EISAID("BCM0002"))
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x3F20C000,
+                            0x3F20CFFF,
+                            0x00000000,
+                            0x00001000)
+
+                //
+                // PWM owns request line 5, but also must use channel 5.
+                //
+
+                FixedDMA(5, 5, Width32Bit, )
             })
         }
     }

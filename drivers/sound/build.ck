@@ -33,7 +33,9 @@ function build() {
     var soundDrivers;
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        soundDrivers = ["drivers/sound/core:sound"];
+        soundDrivers = [
+            "drivers/sound/broadcom/bc27pwma:bc27pwma"
+        ];
 
     } else if (arch == "x86") {
         soundDrivers = [
