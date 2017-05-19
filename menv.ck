@@ -464,7 +464,7 @@ Return Value:
     mconfig.debug ?= "dbg";
     mconfig.variant = getenv("VARIANT");
     mconfig.variant ?= mconfig.build_variant;
-    mconfig.release_level = "SystemReleaseDevelopment";
+    mconfig.release_level = "SystemReleaseFinal";
     mconfig.cflags = initListFromEnvironment("CFLAGS",
                                              ["-O2", "-Wall", "-Werror"]);
 
