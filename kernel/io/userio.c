@@ -1813,6 +1813,7 @@ Return Value:
     PIO_ASYNC_STATE AsyncState;
     BOOL Blocking;
     UINTN CopyOutSize;
+    KSTATUS CopyOutStatus;
     PSYSTEM_CALL_FILE_CONTROL FileControl;
     PFILE_OBJECT FileObject;
     ULONG Flags;
@@ -1895,6 +1896,7 @@ Return Value:
     case FileControlCommandGetFlags:
         LocalParameters.Flags = Flags;
         CopyOutSize = sizeof(ULONG);
+        Status = STATUS_SUCCESS;
         break;
 
     case FileControlCommandSetFlags:
@@ -1943,6 +1945,7 @@ Return Value:
 
         LocalParameters.Flags = Flags;
         CopyOutSize = sizeof(ULONG);
+        Status = STATUS_SUCCESS;
         break;
 
     case FileControlCommandSetStatus:
@@ -2186,7 +2189,7 @@ Return Value:
                                     &(LocalParameters.FilePath.PathSize));
 
         IO_PATH_POINT_RELEASE_REFERENCE(&RootPathPoint);
-        if (KSUCCESS(Status)) {
+        if (KSUCCESS(Status) || (Status == STATUS_BUFFER_TOO_SMALL)) {
             CopyOutSize = sizeof(FILE_PATH);
         }
 
@@ -2199,11 +2202,15 @@ Return Value:
 
 SysFileControlEnd:
     if (CopyOutSize != 0) {
-        Status = STATUS_INVALID_PARAMETER;
+        CopyOutStatus = STATUS_INVALID_PARAMETER;
         if (FileControl->Parameters != NULL) {
-            Status = MmCopyToUserMode(FileControl->Parameters,
-                                      &LocalParameters,
-                                      CopyOutSize);
+            CopyOutStatus = MmCopyToUserMode(FileControl->Parameters,
+                                             &LocalParameters,
+                                             CopyOutSize);
+        }
+
+        if (!KSUCCESS(CopyOutStatus)) {
+            Status = CopyOutStatus;
         }
     }
 
