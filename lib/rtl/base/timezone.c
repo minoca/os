@@ -3003,7 +3003,7 @@ Return Value:
     }
 
     Result = Destination;
-    RemainingSize = DestinationSize;
+    RemainingSize = DestinationSize - 1;
     while (RemainingSize != 0) {
 
         //
@@ -3039,6 +3039,7 @@ Return Value:
         }
     }
 
+    *Result = '\0';
     return;
 }
 

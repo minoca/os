@@ -158,7 +158,7 @@ ClpStructTmToCalendarTime (
     struct tm *StructTm
     );
 
-INT
+VOID
 ClpInitializeTimeZoneData (
     VOID
     );
@@ -1299,10 +1299,7 @@ Return Value:
     SYSTEM_TIME SystemTime;
 
     ClpConvertUnixTimeToSystemTime(&SystemTime, *TimeValue);
-    if (ClpInitializeTimeZoneData() != 0) {
-        return NULL;
-    }
-
+    ClpInitializeTimeZoneData();
     Status = RtlSystemTimeToLocalCalendarTime(&SystemTime, &CalendarTime);
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
@@ -1399,10 +1396,7 @@ Return Value:
     SYSTEM_TIME SystemTime;
 
     ClpStructTmToCalendarTime(&CalendarTime, Time);
-    if (ClpInitializeTimeZoneData() != 0) {
-        return -1;
-    }
-
+    ClpInitializeTimeZoneData();
     Status = RtlLocalCalendarTimeToSystemTime(&CalendarTime, &SystemTime);
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
@@ -1518,10 +1512,7 @@ Return Value:
     UINTN Result;
 
     ClpStructTmToCalendarTime(&CalendarTime, (struct tm *)Time);
-    if (ClpInitializeTimeZoneData() != 0) {
-        return 0;
-    }
-
+    ClpInitializeTimeZoneData();
     Result = RtlFormatDate(Buffer, BufferSize, (PSTR)Format, &CalendarTime);
     if (Result != 0) {
         return Result - 1;
@@ -1575,10 +1566,7 @@ Return Value:
     ULONG Result;
 
     ClpStructTmToCalendarTime(&CalendarTime, (struct tm *)Time);
-    if (ClpInitializeTimeZoneData() != 0) {
-        return 0;
-    }
-
+    ClpInitializeTimeZoneData();
     Result = RtlFormatDateWide(Buffer,
                                BufferSize,
                                (PWSTR)Format,
@@ -1668,10 +1656,7 @@ Return Value:
     CALENDAR_TIME CalendarTime;
     PSTR Result;
 
-    if (ClpInitializeTimeZoneData() != 0) {
-        return NULL;
-    }
-
+    ClpInitializeTimeZoneData();
     Result = RtlScanDate((PSTR)Buffer, (PSTR)Format, &CalendarTime);
     if (Result == NULL) {
         return NULL;
@@ -2402,11 +2387,7 @@ Return Value:
 
 {
 
-    INT Error;
-
-    Error = errno;
     ClpInitializeTimeZoneData();
-    errno = Error;
     return;
 }
 
@@ -3141,7 +3122,7 @@ Return Value:
     return;
 }
 
-INT
+VOID
 ClpInitializeTimeZoneData (
     VOID
     )
@@ -3159,10 +3140,7 @@ Arguments:
 
 Return Value:
 
-    0 on success.
-
-    Returns an error number on failure. The errno variable will also be set to
-    this value.
+    None.
 
 --*/
 
@@ -3170,6 +3148,7 @@ Return Value:
 
     PCSTR DaylightName;
     LONG DaylightOffset;
+    INT Errno;
     KSTATUS KStatus;
     PVOID OldData;
     ULONG OldDataSize;
@@ -3184,6 +3163,7 @@ Return Value:
     PSTR ZoneName;
     PSTR ZonePath;
 
+    Errno = errno;
     OldData = NULL;
     ZoneData = NULL;
     ZoneName = NULL;
@@ -3199,25 +3179,32 @@ Return Value:
 
             ClPreviousTzVariable = strdup(Variable);
             if (ClPreviousTzVariable == NULL) {
-                return errno;
+                goto InitializeTimeZoneDataEnd;
             }
 
             Variable = ClPreviousTzVariable;
 
             //
-            // If the variable starts with a colon, it is the OS-specific
-            // format. If the value after the colon starts with a slash, then
-            // it is assumed to be a path. Otherwise, it is assumed to be a
-            // zone name (ie America/Los_Angeles).
+            // If the variable starts with a colon or has a slash and no comma,
+            // then use the OS-specific format (non-POSIX). This specifies
+            // either a path to a timezone file to use (if it starts with a
+            // slash) or a time zone name.
             //
 
-            if (*Variable == ':') {
-                if (Variable[1] == '/') {
-                    ZonePath = Variable + 1;
+            if ((*Variable == ':') ||
+                ((strchr(Variable, '/') != NULL) &&
+                 (strchr(Variable, ',') == NULL))) {
+
+                if (*Variable == ':') {
+                    Variable += 1;
+                }
+
+                if (*Variable == '/') {
+                    ZonePath = Variable;
 
                 } else {
                     ZonePath = _PATH_TZALMANAC;
-                    ZoneName = Variable + 1;
+                    ZoneName = Variable;
                 }
 
             } else {
@@ -3231,11 +3218,11 @@ Return Value:
             }
 
         //
-        // The TZ variable is set but has not changed.
+        // Fast path: The TZ variable is set but has not changed.
         //
 
         } else {
-            return 0;
+            return;
         }
 
     //
@@ -3250,7 +3237,7 @@ Return Value:
         //
 
         if (ClTimeZonePath != NULL) {
-            return 0;
+            return;
         }
 
         //
@@ -3284,12 +3271,12 @@ Return Value:
 
         ZoneFile = open(ZonePath, O_RDONLY);
         if (ZoneFile < 0) {
-            return errno;
+            goto InitializeTimeZoneDataEnd;
         }
 
         if (fstat(ZoneFile, &Stat) != 0) {
             close(ZoneFile);
-            return errno;
+            goto InitializeTimeZoneDataEnd;
         }
 
         ZoneDataSize = Stat.st_size;
@@ -3302,7 +3289,7 @@ Return Value:
 
         close(ZoneFile);
         if (ZoneData == MAP_FAILED) {
-            return errno;
+            goto InitializeTimeZoneDataEnd;
         }
 
         if (ClTimeZonePath != NULL) {
@@ -3331,8 +3318,7 @@ Return Value:
     }
 
     if (!KSUCCESS(KStatus)) {
-        Status = ClConvertKstatusToErrorNumber(KStatus);
-        errno = Status;
+        Status = -1;
         goto InitializeTimeZoneDataEnd;
     }
 
@@ -3368,7 +3354,8 @@ InitializeTimeZoneDataEnd:
         }
     }
 
-    return Status;
+    errno = Errno;
+    return;
 }
 
 INT
