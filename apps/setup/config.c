@@ -1213,9 +1213,7 @@ Return Value:
         StackIndex -= 1;
     }
 
-    CkDictGet(Vm, StackIndex);
-    if (CkIsNull(Vm, -1)) {
-        CkStackPop(Vm);
+    if (!CkDictGet(Vm, StackIndex)) {
         return FALSE;
     }
 

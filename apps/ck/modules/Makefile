@@ -27,6 +27,7 @@
 
 DIRS = app       \
        bundle    \
+       json      \
        os        \
 
 include $(SRCROOT)/os/minoca.mk

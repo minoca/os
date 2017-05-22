@@ -73,6 +73,7 @@ function build() {
     foreignModules = [
         "app",
         "bundle",
+        "json",
         "os"
     ];
 

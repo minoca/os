@@ -1209,7 +1209,7 @@ Return Value:
 }
 
 CK_API
-VOID
+BOOL
 CkDictGet (
     PCK_VM Vm,
     INTN StackIndex
@@ -1219,10 +1219,10 @@ CkDictGet (
 
 Routine Description:
 
-    This routine pops a key value off the stack, and uses it to get the
-    corresponding value for the dictionary stored at the given stack index.
-    The resulting value is pushed onto the stack. If no value exists for the
-    given key, then null is pushed.
+    This routine pops a key off the stack, and uses it to get the corresponding
+    value for the dictionary stored at the given stack index. The resulting
+    value is pushed onto the stack. If no value exists for the given key, then
+    nothing is pushed.
 
 Arguments:
 
@@ -1234,9 +1234,9 @@ Arguments:
 
 Return Value:
 
-    Returns the integer value.
+    TRUE if there was a value for that key.
 
-    0 if the value at the stack is not an integer.
+    FALSE if the dictionary has no contents for that value.
 
 --*/
 
@@ -1254,17 +1254,16 @@ Return Value:
     DictValue = CkpGetStackIndex(Vm, StackIndex);
     Key = CK_POP(Fiber);
     if (!CK_IS_DICT(*DictValue)) {
-        CK_PUSH(Fiber, CkNullValue);
-        return;
+        return FALSE;
     }
 
     Value = CkpDictGet(CK_AS_DICT(*DictValue), Key);
     if (CK_IS_UNDEFINED(Value)) {
-        Value = CkNullValue;
+        return FALSE;
     }
 
     CK_PUSH(Fiber, Value);
-    return;
+    return TRUE;
 }
 
 CK_API
@@ -1278,7 +1277,7 @@ CkDictSet (
 
 Routine Description:
 
-    This routine pops a key and then a value off the stack, then sets that
+    This routine pops a value and then a key off the stack, then sets that
     key-value pair in the dictionary at the given stack index.
 
 Arguments:
@@ -1304,16 +1303,65 @@ Return Value:
 
     Fiber = Vm->Fiber;
 
-    CK_ASSERT(CK_CAN_POP(Fiber, 1));
+    CK_ASSERT(CK_CAN_POP(Fiber, 2));
 
     DictValue = CkpGetStackIndex(Vm, StackIndex);
-    Key = Fiber->StackTop - 1;
-    Value = Fiber->StackTop - 2;
+    Key = Fiber->StackTop - 2;
+    Value = Fiber->StackTop - 1;
     if (CK_IS_DICT(*DictValue)) {
         CkpDictSet(Vm, CK_AS_DICT(*DictValue), *Key, *Value);
     }
 
     Fiber->StackTop -= 2;
+    return;
+}
+
+CK_API
+VOID
+CkDictRemove (
+    PCK_VM Vm,
+    INTN StackIndex
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pops a key off the stack, and removes that key and
+    corresponding value from the dictionary. No error is raised if the key
+    did not previously exist in the dictionary.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    StackIndex - Supplies the stack index of the dictionary (before anything is
+        popped off). Negative values reference stack indices from the end of
+        the stack.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_VALUE DictValue;
+    PCK_FIBER Fiber;
+    PCK_VALUE Key;
+
+    Fiber = Vm->Fiber;
+
+    CK_ASSERT(CK_CAN_POP(Fiber, 1));
+
+    DictValue = CkpGetStackIndex(Vm, StackIndex);
+    Key = Fiber->StackTop - 1;
+    if (CK_IS_DICT(*DictValue)) {
+        CkpDictRemove(Vm, CK_AS_DICT(*DictValue), *Key);
+    }
+
+    Fiber->StackTop -= 1;
     return;
 }
 
@@ -1372,7 +1420,7 @@ Routine Description:
 
     This routine advances a dictionary iterator at the top of the stack. It
     pushes the next key and then the next value onto the stack, if there are
-    more elements in the dictionary. Callers should pull a null values onto
+    more elements in the dictionary. Callers should push a null value onto
     the stack as the initial iterator before calling this routine for the first
     time. Callers are responsible for popping the value, key, and potentially
     finished iterator off the stack. Callers should not modify a dictionary

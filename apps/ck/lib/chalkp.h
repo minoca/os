@@ -168,12 +168,6 @@ Author:
 #define CK_MAX_METHOD_SIGNATURE (CK_MAX_NAME + 8)
 
 //
-// Define the maximum UTF-8 value that can be encoded.
-//
-
-#define CK_MAX_UTF8 0x10FFFF
-
-//
 // Define the maximum value for an integer.
 //
 

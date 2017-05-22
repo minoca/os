@@ -1205,7 +1205,7 @@ Return Value:
         Current += 1;
     }
 
-    if (Value >= CK_INT_MAX) {
+    if (Value > CK_INT_MAX) {
         CkpCompileError(Compiler, Token, "Integer too large");
     }
 

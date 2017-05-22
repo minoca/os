@@ -83,6 +83,12 @@ CkpDictSetPrimitive (
     );
 
 BOOL
+CkpDictRemovePrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpDictSlice (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -174,6 +180,7 @@ CkpHashObject (
 CK_PRIMITIVE_DESCRIPTION CkDictPrimitives[] = {
     {"get@1", 1, CkpDictGetPrimitive},
     {"set@2", 2, CkpDictSetPrimitive},
+    {"remove@1", 1, CkpDictRemovePrimitive},
     {"__get@1", 1, CkpDictSlice},
     {"__set@2", 2, CkpDictSliceAssign},
     {"__slice@1", 1, CkpDictSlice},
@@ -578,6 +585,43 @@ Return Value:
 
     Dict = CK_AS_DICT(Arguments[0]);
     CkpDictSet(Vm, Dict, Arguments[1], Arguments[2]);
+    return TRUE;
+}
+
+BOOL
+CkpDictRemovePrimitive (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes the given key and value from the dictionary. The
+    original value at that entry is returned, or null if no value was set for
+    the given key.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    PCK_DICT Dict;
+
+    Dict = CK_AS_DICT(Arguments[0]);
+    Arguments[0] = CkpDictRemove(Vm, Dict, Arguments[1]);
     return TRUE;
 }
 

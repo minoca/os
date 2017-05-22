@@ -849,23 +849,24 @@ Return Value:
     }
 
     if (Character <= 0x7FF) {
-        Bytes[0] = 0xC0 | ((Character & 0x7C0) >> 6);
+        Bytes[0] = 0xC0 | (Character >> 6);
         Bytes[1] = 0x80 | (Character & 0x3F);
         return 2;
     }
 
     if (Character <= 0xFFFF) {
-        Bytes[0] = 0xE0 | ((Character & 0xF000) >> 12);
-        Bytes[1] = 0x80 | ((Character & 0xFC0) >> 6);
+        Bytes[0] = 0xE0 | (Character >> 12);
+        Bytes[1] = 0x80 | ((Character >> 6) & 0x3F);
         Bytes[2] = 0x80 | (Character & 0x3F);
         return 3;
     }
 
     if (Character <= CK_MAX_UTF8) {
-        Bytes[0] = 0xF0 | ((Character & 0x1C0000) >> 18);
-        Bytes[1] = 0x80 | ((Character & 0x3F00) >> 12);
-        Bytes[2] = 0x80 | ((Character & 0xFC0) >> 6);
+        Bytes[0] = 0xF0 | (Character >> 18);
+        Bytes[1] = 0x80 | ((Character >> 12) & 0x3F);
+        Bytes[2] = 0x80 | ((Character >> 6) & 0x3F);
         Bytes[3] = 0x80 | (Character & 0x3F);
+        return 4;
     }
 
     return 0;
