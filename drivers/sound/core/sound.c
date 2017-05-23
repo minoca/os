@@ -933,6 +933,15 @@ Return Value:
     }
 
     //
+    // If the handle is non-blocking, then set the timeout to 0. This overrides
+    // the behavior of the I/O handle's open flags.
+    //
+
+    if ((Handle->Flags & SOUND_DEVICE_HANDLE_FLAG_NON_BLOCKING) != 0) {
+        TimeoutInMilliseconds = 0;
+    }
+
+    //
     // If the device isn't already in the running state, then check to make
     // sure it is initialized.
     //
@@ -1702,6 +1711,10 @@ Return Value:
 
         Status = SoundpSetVolume(Handle, IntegerUlong);
         IntegerUlong = Handle->Volume;
+        break;
+
+    case SoundSetNonBlock:
+        RtlAtomicOr32(&(Handle->Flags), SOUND_DEVICE_HANDLE_FLAG_NON_BLOCKING);
         break;
 
     default:

@@ -104,6 +104,12 @@ Author:
     (50 << SOUND_VOLUME_LEFT_CHANNEL_SHIFT);
 
 //
+// Define the bits for the sound device handle flags.
+//
+
+#define SOUND_DEVICE_HANDLE_FLAG_NON_BLOCKING 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -151,6 +157,9 @@ Members:
 
     Buffer - Stores the sound buffer information for this handle.
 
+    Flags - Stores a bitmask of sound device handle flags. See
+        SOUND_DEVICE_HANDLE_FLAG_* for definitions.
+
     Format - Stores the current stream format for the device. See
         SOUND_FORMAT_* for definitions.
 
@@ -171,6 +180,7 @@ struct _SOUND_DEVICE_HANDLE {
     PQUEUED_LOCK Lock;
     SOUND_DEVICE_STATE State;
     SOUND_IO_BUFFER Buffer;
+    volatile ULONG Flags;
     ULONG Format;
     ULONG ChannelCount;
     ULONG SampleRate;
