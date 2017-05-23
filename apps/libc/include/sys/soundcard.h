@@ -147,6 +147,15 @@ extern "C" {
 #define SNDCTL_DSP_CHANNELS 0x5013
 
 //
+// This ioctl forces the sound device into non-blocking mode, ignoring the
+// file descriptor's O_NONBLOCK file mode flag's state. Using fcntl to
+// manipulate O_NONBLOCK is preferred over this ioctl. There is no way to move
+// the device handle out of non-blocking mode once this is set.
+//
+
+#define SNDCTL_DSP_NONBLOCK 0x5015
+
+//
 // This ioctl sets the desired sample format for the device. It takes a bitmask
 // of size int that should contain one of the AFMT_* format values. On return,
 // the ioctl will pass back the actual sample format for the device. It may
