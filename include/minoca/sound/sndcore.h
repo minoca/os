@@ -63,7 +63,8 @@ typedef struct _SOUND_CONTROLLER SOUND_CONTROLLER, *PSOUND_CONTROLLER;
 typedef struct _SOUND_DEVICE_HANDLE SOUND_DEVICE_HANDLE, *PSOUND_DEVICE_HANDLE;
 
 typedef enum _SOUND_DEVICE_INFORMATION_TYPE {
-    SoundDeviceInformationState
+    SoundDeviceInformationState,
+    SoundDeviceInformationVolume,
 } SOUND_DEVICE_INFORMATION_TYPE, *PSOUND_DEVICE_INFORMATION_TYPE;
 
 typedef enum _SOUND_DEVICE_STATE {

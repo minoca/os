@@ -360,6 +360,7 @@ Return Value:
     PHDA_CONTROLLER Controller;
     PHDA_DEVICE HdaDevice;
     KSTATUS Status;
+    ULONG Volume;
 
     Controller = (PHDA_CONTROLLER)ControllerContext;
     HdaDevice = (PHDA_DEVICE)DeviceContext;
@@ -377,6 +378,23 @@ Return Value:
         }
 
         Status = HdapSetDeviceState(Controller, HdaDevice, Data);
+        break;
+
+    case SoundDeviceInformationVolume:
+        if (Set == FALSE) {
+            Status = STATUS_NOT_SUPPORTED;
+            goto SoundGetSetInformationEnd;
+        }
+
+        if (*DataSize < sizeof(ULONG)) {
+            *DataSize = sizeof(ULONG);
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto SoundGetSetInformationEnd;
+        }
+
+        Volume = *(PULONG)Data;
+        HdapSetDeviceVolume(HdaDevice, Volume);
+        Status = STATUS_SUCCESS;
         break;
 
     default:

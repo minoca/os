@@ -93,6 +93,24 @@ extern "C" {
 #define SNDCTL_DSP_GETOSPACE 0x5009
 
 //
+// This ioctl gets the audio output volume. The returned volume is an integer
+// encoded with one value for each of 2 channels where
+// Volume = (RightVolume << 8) | LeftVolume. The valid values for each channel
+// frange from 0 to 100.
+//
+
+#define SNDCTL_DSP_GETPLAYVOL 0x500C
+
+//
+// This ioctl gets the audio input volume. The returned volume is an integer
+// encoded with one value value for each of 2 channels where
+// Volume = (RightVolume << 8) | LeftVolume. The valid values for each channel
+// frange from 0 to 100.
+//
+
+#define SNDCTL_DSP_GETRECVOL 0x500F
+
+//
 // This ioctl aborts any current sound recording on the device. This may or may
 // not reset the device to a state in which its format, rate, and channel count
 // can be changed.
@@ -146,6 +164,24 @@ extern "C" {
 //
 
 #define SNDCTL_DSP_SETFRAGMENT 0x5018
+
+//
+// This ioctl sets the audio output volume. The provided volume is an integer
+// encoded with one value value for each of 2 channels where
+// Volume = (RightVolume << 8) | LeftVolume. The valid values for each channel
+// frange from 0 to 100.
+//
+
+#define SNDCTL_DSP_SETPLAYVOL 0x501A
+
+//
+// This ioctl sets the audio input volume. The provided volume is an integer
+// encoded with one value value for each of 2 channels where
+// Volume = (RightVolume << 8) | LeftVolume. The valid values for each channel
+// frange from 0 to 100.
+//
+
+#define SNDCTL_DSP_SETRECVOL 0x501C
 
 //
 // This ioctl sets the sampling rate in Hz. The sound device will select the

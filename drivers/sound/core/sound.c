@@ -103,6 +103,12 @@ SoundpStartDevice (
     PSOUND_DEVICE_HANDLE Handle
     );
 
+KSTATUS
+SoundpSetVolume (
+    PSOUND_DEVICE_HANDLE Handle,
+    ULONG Volume
+    );
+
 VOID
 SoundpControllerAddReference (
     PSOUND_CONTROLLER Controller
@@ -1393,6 +1399,7 @@ Return Value:
             break;
         }
 
+        CopyOutBuffer = &Position;
         if (Handle->Device->Type == SoundDeviceInput) {
             if (RequestCode == SoundGetCurrentOutputPosition) {
                 RtlZeroMemory(&Position, sizeof(Position));
@@ -1435,7 +1442,6 @@ Return Value:
                                 TRUE);
 
         KeReleaseQueuedLock(Handle->Lock);
-        CopyOutBuffer = &Position;
         break;
 
     case SoundGetInputQueueSize:
@@ -1449,6 +1455,7 @@ Return Value:
         ASSERT(Handle->Buffer.FragmentSize <= MAX_LONG);
         ASSERT(Handle->Buffer.FragmentCount <= MAX_LONG);
 
+        CopyOutBuffer = &QueueInformation;
         if (Handle->Device->Type == SoundDeviceInput) {
             if (RequestCode == SoundGetOutputQueueSize) {
                 RtlZeroMemory(&QueueInformation, sizeof(QueueInformation));
@@ -1478,7 +1485,6 @@ Return Value:
 
         QueueInformation.FragmentSize = (LONG)Handle->Buffer.FragmentSize;
         QueueInformation.FragmentCount = (LONG)Handle->Buffer.FragmentCount;
-        CopyOutBuffer = &QueueInformation;
         break;
 
     case SoundSetBufferSizeHint:
@@ -1637,6 +1643,60 @@ Return Value:
         }
 
         CopyOutBuffer = &IntegerUlong;
+        break;
+
+    case SoundGetOutputVolume:
+    case SoundGetInputVolume:
+        IntegerUlong = Handle->Volume;
+        if (Handle->Device->Type == SoundDeviceInput) {
+            if (RequestCode == SoundGetOutputVolume) {
+                IntegerUlong = 0;
+            }
+
+        } else {
+            if (RequestCode == SoundGetInputVolume) {
+                IntegerUlong = 0;
+            }
+        }
+
+        CopyOutBuffer = &IntegerUlong;
+        CopySize = sizeof(ULONG);
+        break;
+
+    case SoundSetOutputVolume:
+    case SoundSetInputVolume:
+        CopySize = sizeof(ULONG);
+        if (RequestBufferSize < CopySize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (FromKernelMode != FALSE) {
+            IntegerUlong = *((PULONG)RequestBuffer);
+
+        } else {
+            Status = MmCopyFromUserMode(&IntegerUlong, RequestBuffer, CopySize);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        CopyOutBuffer = &IntegerUlong;
+        if (Handle->Device->Type == SoundDeviceInput) {
+            if (RequestCode == SoundSetOutputVolume) {
+                IntegerUlong = 0;
+                break;
+            }
+
+        } else {
+            if (RequestCode == SoundSetInputVolume) {
+                IntegerUlong = 0;
+                break;
+            }
+        }
+
+        Status = SoundpSetVolume(Handle, IntegerUlong);
+        IntegerUlong = Handle->Volume;
         break;
 
     default:
@@ -2263,6 +2323,86 @@ Return Value:
     }
 
 StartDeviceEnd:
+    KeReleaseQueuedLock(Handle->Lock);
+    return Status;
+}
+
+KSTATUS
+SoundpSetVolume (
+    PSOUND_DEVICE_HANDLE Handle,
+    ULONG Volume
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the volume for the given sound core device. It calls
+    down to the lower level sound controller in case it needs to modify start
+    or hardware settings.
+
+Arguments:
+
+    Handle - Supplies a pointer to the handle of the sound device whose volume
+        is to be changed.
+
+    Volume - Supplies the volume to set. See SOUND_VOLUME_* for definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PSOUND_CONTROLLER Controller;
+    PSOUND_GET_SET_INFORMATION GetSetInformation;
+    ULONG LeftVolume;
+    ULONG RightVolume;
+    UINTN Size;
+    ULONG Status;
+
+    LeftVolume = (Volume & SOUND_VOLUME_LEFT_CHANNEL_MASK) >>
+                 SOUND_VOLUME_LEFT_CHANNEL_SHIFT;
+
+    if (LeftVolume > SOUND_VOLUME_MAXIMUM) {
+        LeftVolume = SOUND_VOLUME_MAXIMUM;
+    }
+
+    RightVolume = (Volume & SOUND_VOLUME_RIGHT_CHANNEL_MASK) >>
+                  SOUND_VOLUME_RIGHT_CHANNEL_SHIFT;
+
+    if (RightVolume > SOUND_VOLUME_MAXIMUM) {
+        RightVolume = SOUND_VOLUME_MAXIMUM;
+    }
+
+    Volume = (LeftVolume << SOUND_VOLUME_LEFT_CHANNEL_SHIFT) |
+             (RightVolume << SOUND_VOLUME_RIGHT_CHANNEL_SHIFT);
+
+    //
+    // Synchronize attempts to change the hardware's volume. This prevents each
+    // controller's driver from having to implement protection for this call.
+    //
+
+    KeAcquireQueuedLock(Handle->Lock);
+    Size = sizeof(ULONG);
+    Controller = Handle->Controller;
+    GetSetInformation = Controller->Host.FunctionTable->GetSetInformation;
+    Status = GetSetInformation(Controller->Host.Context,
+                               Handle->Device->Context,
+                               SoundDeviceInformationVolume,
+                               &Volume,
+                               &Size,
+                               TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto SetVolumeEnd;
+    }
+
+    Handle->Volume = Volume;
+
+SetVolumeEnd:
     KeReleaseQueuedLock(Handle->Lock);
     return Status;
 }

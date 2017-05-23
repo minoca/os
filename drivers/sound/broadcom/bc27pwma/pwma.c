@@ -373,6 +373,12 @@ Bcm27PwmapSetDeviceState (
     PSOUND_DEVICE_STATE_INFORMATION State
     );
 
+VOID
+Bcm27PwmapSetVolume (
+    PBCM27_PWMA_DEVICE_INTERNAL Device,
+    ULONG Volume
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1054,6 +1060,7 @@ Return Value:
     PBCM27_PWMA_CONTROLLER Controller;
     PBCM27_PWMA_DEVICE_INTERNAL Device;
     KSTATUS Status;
+    ULONG Volume;
 
     Controller = (PBCM27_PWMA_CONTROLLER)ControllerContext;
     Device = (PBCM27_PWMA_DEVICE_INTERNAL)DeviceContext;
@@ -1071,6 +1078,23 @@ Return Value:
         }
 
         Status = Bcm27PwmapSetDeviceState(Controller, Device, Data);
+        break;
+
+    case SoundDeviceInformationVolume:
+        if (Set == FALSE) {
+            Status = STATUS_NOT_SUPPORTED;
+            goto SoundGetSetInformationEnd;
+        }
+
+        if (*DataSize < sizeof(ULONG)) {
+            *DataSize = sizeof(ULONG);
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto SoundGetSetInformationEnd;
+        }
+
+        Volume = *(PULONG)Data;
+        Bcm27PwmapSetVolume(Device, Volume);
+        Status = STATUS_SUCCESS;
         break;
 
     default:
@@ -1830,7 +1854,6 @@ Return Value:
     ULONG Index;
     ULONG Range;
     KSTATUS Status;
-    ULONG Volume;
 
     if (State->Version < SOUND_DEVICE_STATE_INFORMATION_VERSION) {
         return STATUS_VERSION_MISMATCH;
@@ -1907,20 +1930,7 @@ Return Value:
         // 128 to save a divide for each sample.
         //
 
-        Volume = (State->U.Initialize.Volume &
-                  SOUND_VOLUME_LEFT_CHANNEL_MASK) >>
-                 SOUND_VOLUME_LEFT_CHANNEL_SHIFT;
-
-        Volume <<= BCM27_PWMA_MAX_VOLUME_SHIFT;
-        Volume /= SOUND_VOLUME_MAXIMUM;
-        Device->Volume[0] = (UCHAR)Volume;
-        Volume = (State->U.Initialize.Volume &
-                  SOUND_VOLUME_RIGHT_CHANNEL_MASK) >>
-                 SOUND_VOLUME_RIGHT_CHANNEL_SHIFT;
-
-        Volume <<= BCM27_PWMA_MAX_VOLUME_SHIFT;
-        Volume /= SOUND_VOLUME_MAXIMUM;
-        Device->Volume[1] = (UCHAR)Volume;
+        Bcm27PwmapSetVolume(Device, State->U.Initialize.Volume);
 
         //
         // Initialize the DMA transfer. Some of the transfer data is constant
@@ -2015,5 +2025,54 @@ Return Value:
     }
 
     return Status;
+}
+
+VOID
+Bcm27PwmapSetVolume (
+    PBCM27_PWMA_DEVICE_INTERNAL Device,
+    ULONG Volume
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the given PWMA device's volume. It takes a sound core
+    encoded volume - left and right channel values between 0 and 100) and
+    converts them to left and right channel values between 0 and 128. Having
+    a power of 2 maximum saves a divide when applying the volume in realtime
+    to each of the samples.
+
+Arguments:
+
+    Device - Supplies a pointer to the PWMA device for which to set the volume.
+
+    Volume - Supplies the sound core encoded volume. See SOUND_VOLUME_* for
+        definitions.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG LeftVolume;
+    ULONG RightVolume;
+
+    LeftVolume = (Volume & SOUND_VOLUME_LEFT_CHANNEL_MASK) >>
+                 SOUND_VOLUME_LEFT_CHANNEL_SHIFT;
+
+    LeftVolume <<= BCM27_PWMA_MAX_VOLUME_SHIFT;
+    LeftVolume /= SOUND_VOLUME_MAXIMUM;
+    Device->Volume[0] = (UCHAR)LeftVolume;
+    RightVolume = (Volume & SOUND_VOLUME_RIGHT_CHANNEL_MASK) >>
+                  SOUND_VOLUME_RIGHT_CHANNEL_SHIFT;
+
+    RightVolume <<= BCM27_PWMA_MAX_VOLUME_SHIFT;
+    RightVolume /= SOUND_VOLUME_MAXIMUM;
+    Device->Volume[1] = (UCHAR)RightVolume;
+    return;
 }
 
