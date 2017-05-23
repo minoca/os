@@ -54,6 +54,12 @@ Environment:
 #define BCM27_PWMA_ALLOCATION_TAG 0x416D7750 // 'AmwP'
 
 //
+// Define the minimum number of channels supported by PWM audio.
+//
+
+#define BCM27_PWMA_MIN_CHANNEL_COUNT 1
+
+//
 // Define the maximum number of channels supported by PWM audio.
 //
 
@@ -414,6 +420,7 @@ BCM27_PWMA_DEVICE Bcm27PwmAudioDeviceTemplate = {
          SOUND_CAPABILITY_OUTPUT |
          SOUND_CAPABILITY_INTERFACE_ANALOG_OUT),
         SOUND_FORMAT_16_BIT_SIGNED_LITTLE_ENDIAN,
+        BCM27_PWMA_MIN_CHANNEL_COUNT,
         BCM27_PWMA_MAX_CHANNEL_COUNT,
         BCM27_PWMA_SAMPLE_RATE_COUNT,
         sizeof(SOUND_DEVICE),
