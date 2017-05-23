@@ -383,6 +383,9 @@ Members:
 
     MatchFinderData - Stores the match finder state.
 
+    Processed - Stores the number of input bytes that have been completely
+        processed so far.
+
     Optimal - Stores the match prices.
 
     FastPosition - Stores a quicker log lookup table for calcuating the
@@ -467,6 +470,7 @@ typedef struct _LZMA_ENCODER {
     LZ_STATUS Result;
     LZMA_RANGE_ENCODER RangeEncoder;
     LZ_MATCH_FINDER MatchFinderData;
+    ULONGLONG Processed;
     LZMA_OPTIMAL Optimal[LZMA_OPTIMAL_COUNT];
     UCHAR FastPosition[1 << LZMA_DICT_LOG_BITS];
     ULONG ProbabilityPrices[LZMA_BIT_MODEL_TOTAL >> LZMA_MOVE_REDUCING_BITS];

@@ -324,7 +324,57 @@ CkGetStackSize (
 
 Routine Description:
 
-    This routine gets the current stack size.
+    This routine returns the number of elements currently on the stack for the
+    current frame.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    Returns the number of stack slots occupied by the current frame.
+
+--*/
+
+{
+
+    PCK_FIBER Fiber;
+    PCK_CALL_FRAME Frame;
+
+    Fiber = Vm->Fiber;
+    if (Fiber == NULL) {
+        return 0;
+    }
+
+    //
+    // If there's a call frame, return the the number of stack slots occupied
+    // by the current frame.
+    //
+
+    if (Fiber->FrameCount != 0) {
+        Frame = &(Fiber->Frames[Fiber->FrameCount - 1]);
+        return Fiber->StackTop - Frame->StackStart;
+    }
+
+    //
+    // If there's no call frame, return the direct usage.
+    //
+
+    return Fiber->StackTop - Fiber->Stack;
+}
+
+CK_API
+UINTN
+CkGetStackRemaining (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of free slots remaining on the stack.
 
 Arguments:
 
@@ -2009,7 +2059,7 @@ Return Value:
     Class = CK_AS_CLASS(*ClassValue);
     NameValue = *(Fiber->StackTop - 1);
     ClosureValue = *(Fiber->StackTop - 2);
-    if ((!CK_IS_STRING(NameValue)) || (!CK_IS_STRING(ClosureValue))) {
+    if ((!CK_IS_STRING(NameValue)) || (!CK_IS_CLOSURE(ClosureValue))) {
         goto BindMethodEnd;
     }
 
@@ -2061,7 +2111,7 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    FieldIndex - Supplies the field index of the intance to get.
+    FieldIndex - Supplies the field index of the instance to get.
 
 Return Value:
 
@@ -2794,6 +2844,9 @@ Return Value:
 
     Instance = CK_AS_INSTANCE(Value);
     FieldIndex += Frame->Closure->Class->SuperFieldCount;
+
+    CK_ASSERT(FieldIndex < Frame->Closure->Class->FieldCount);
+
     return &(Instance->Fields[FieldIndex]);
 }
 

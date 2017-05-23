@@ -812,7 +812,30 @@ CkGetStackSize (
 
 Routine Description:
 
-    This routine gets the current stack size.
+    This routine returns the number of elements currently on the stack for the
+    current frame.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    Returns the number of stack slots occupied by the current frame.
+
+--*/
+
+CK_API
+UINTN
+CkGetStackRemaining (
+    PCK_VM Vm
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of free slots remaining on the stack.
 
 Arguments:
 
@@ -1719,7 +1742,7 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
-    FieldIndex - Supplies the field index of the intance to get.
+    FieldIndex - Supplies the field index of the instance to get.
 
 Return Value:
 

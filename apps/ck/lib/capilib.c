@@ -215,11 +215,7 @@ Return Value:
 
 {
 
-    if (ModuleIndex < 0) {
-        ModuleIndex += CkGetStackSize(Vm);
-
-        CK_ASSERT(ModuleIndex >= 0);
-    }
+    CK_ASSERT(ModuleIndex >= 0);
 
     while (Variables->Name != NULL) {
         switch (Variables->Type) {

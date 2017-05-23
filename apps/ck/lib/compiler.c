@@ -2232,7 +2232,7 @@ Return Value:
     //
 
     if ((Compiler->Flags & CK_COMPILE_PRINT_EXPRESSIONS) != 0) {
-        CkpEmitMethodCall(Compiler, 1, "print@1", 7);
+        CkpEmitMethodCall(Compiler, 1, "repr@1", 6);
     }
 
     CkpEmitOp(Compiler, CkOpPop);

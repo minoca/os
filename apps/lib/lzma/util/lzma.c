@@ -204,7 +204,7 @@ struct option LzmaLongOptions[] = {
     {NULL, 0, 0, 0},
 };
 
-PCSTR LzStatusStrings[] = {
+PCSTR LzStatusStrings[LzErrorCount] = {
     "Success",
     "Stream complete",
     "Corrupt data",

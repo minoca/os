@@ -1547,6 +1547,7 @@ Return Value:
             break;
         }
 
+        Finder->System->UncompressedSize += Size;
         Finder->System->UncompressedCrc32 =
                              LzpComputeCrc32(Finder->System->UncompressedCrc32,
                                              Destination,

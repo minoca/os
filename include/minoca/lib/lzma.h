@@ -67,6 +67,7 @@ typedef enum _LZ_STATUS {
     LzErrorWrite,
     LzErrorProgress,
     LzErrorMagic,
+    LzErrorCount
 } LZ_STATUS, *PLZ_STATUS;
 
 //
@@ -230,7 +231,7 @@ struct _LZ_CONTEXT {
     PLZ_PERFORM_IO Write;
     PVOID ReadContext;
     PVOID WriteContext;
-    PVOID Input;
+    PCVOID Input;
     UINTN InputSize;
     PVOID Output;
     UINTN OutputSize;

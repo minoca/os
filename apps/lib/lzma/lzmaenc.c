@@ -540,7 +540,7 @@ Return Value:
     if (Context->UncompressedSize == 0) {
         if ((Flush != LzNoFlush) && (Context->Read == NULL)) {
             Context->Reallocate(Encoder->MatchFinderData.BufferBase, 0);
-            Encoder->MatchFinderData.BufferBase = Context->Input;
+            Encoder->MatchFinderData.BufferBase = (PUCHAR)(Context->Input);
             Encoder->MatchFinderData.DirectInputRemaining = Context->InputSize;
             Encoder->MatchFinderData.DirectInput = TRUE;
         }
@@ -604,9 +604,7 @@ Return Value:
         }
 
         if (Encoder->MatchFinderData.StreamEndWasReached != FALSE) {
-            Status = LzpLzmaEncoderFlush(Encoder,
-                                         (ULONG)(Context->UncompressedSize));
-
+            Status = LzpLzmaEncoderFlush(Encoder, (ULONG)(Encoder->Processed));
             if (Status != LzSuccess) {
                 goto EncodeEnd;
             }
@@ -1553,6 +1551,7 @@ Return Value:
         Encoder->AlignEncoder[Index] = LZMA_INITIAL_PROBABILITY;
     }
 
+    Encoder->Processed = 0;
     Encoder->OptimumEndIndex = 0;
     Encoder->OptimumCurrentIndex = 0;
     Encoder->AdditionalOffset = 0;
@@ -1813,7 +1812,7 @@ Return Value:
     }
 
     Range = &(Encoder->RangeEncoder);
-    CurrentPosition32 = (ULONG)(Range->System->UncompressedSize);
+    CurrentPosition32 = (ULONG)(Encoder->Processed);
     StartPosition32 = CurrentPosition32;
 
     //
@@ -1822,7 +1821,7 @@ Return Value:
     // repeat.
     //
 
-    if (Range->System->UncompressedSize == 0) {
+    if (Encoder->Processed == 0) {
         if (Encoder->MatchFinder.GetCount(Encoder->MatchFinderContext) == 0) {
             goto LzmaEncodeEnd;
         }
@@ -2093,14 +2092,14 @@ Return Value:
             //
 
             } else if (Processed >= (1 << 24)) {
-                Range->System->UncompressedSize += Processed;
+                Encoder->Processed += Processed;
                 StartPosition32 = CurrentPosition32;
             }
         }
     }
 
 LzmaEncodeEnd:
-    Range->System->UncompressedSize += CurrentPosition32 - StartPosition32;
+    Encoder->Processed += CurrentPosition32 - StartPosition32;
     return LzpLzmaEncoderGetError(Encoder);
 }
 

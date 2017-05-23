@@ -172,6 +172,12 @@ CkpStringSlice (
     );
 
 BOOL
+CkpStringSliceCharacters (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpStringToString (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -181,6 +187,22 @@ BOOL
 CkpStringRepresentation (
     PCK_VM Vm,
     PCK_VALUE Arguments
+    );
+
+CK_VALUE
+CkpStringCreateFromCharacterRange (
+    PCK_VM Vm,
+    PCK_STRING Source,
+    UINTN Start,
+    UINTN Count
+    );
+
+CK_VALUE
+CkpStringSliceBytes (
+    PCK_VM Vm,
+    PCK_STRING Source,
+    UINTN Start,
+    UINTN Count
     );
 
 //
@@ -205,6 +227,7 @@ CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[] = {
     {"rsplit@2", 2, CkpStringRightSplit},
     {"replace@3", 3, CkpStringReplace},
     {"compare@1", 1, CkpStringCompare},
+    {"sliceChars@1", 1, CkpStringSliceCharacters},
     {"__add@1", 1, CkpStringAdd},
     {"__mul@1", 1, CkpStringMultiply},
     {"__slice@1", 1, CkpStringSlice},
@@ -271,85 +294,6 @@ Return Value:
 
     CkpStringHash(String);
     CK_OBJECT_VALUE(Value, String);
-    return Value;
-}
-
-CK_VALUE
-CkpStringCreateFromRange (
-    PCK_VM Vm,
-    PCK_STRING Source,
-    UINTN Start,
-    UINTN Count
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a new string object based on a portion of another
-    string.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Source - Supplies a pointer to the source string.
-
-    Start - Supplies the starting index to slice from.
-
-    Count - Supplies the number of characters to slice.
-
-Return Value:
-
-    Returns the new string value on success.
-
-    CK_NULL_VALUE on allocation failure.
-
---*/
-
-{
-
-    INT Character;
-    UINTN CurrentIndex;
-    PUCHAR From;
-    UINTN Index;
-    UINTN Length;
-    PCK_STRING NewString;
-    UINTN SourceLength;
-    PUCHAR To;
-    CK_VALUE Value;
-
-    CK_ASSERT(Source->Header.Type == CkObjectString);
-
-    From = (PUCHAR)(Source->Value);
-    SourceLength = Source->Length;
-    Length = 0;
-    for (Index = 0; Index < Count; Index += 1) {
-        CurrentIndex = Start + Index;
-
-        CK_ASSERT(CurrentIndex < SourceLength);
-
-        Length += CkpUtf8DecodeSize(From[CurrentIndex]);
-    }
-
-    NewString = CkpStringAllocate(Vm, Length);
-    if (NewString == NULL) {
-        return CK_NULL_VALUE;
-    }
-
-    To = (PUCHAR)(NewString->Value);
-    for (Index = 0; Index < Count; Index += 1) {
-        CurrentIndex = Start + Index;
-        Character = CkpUtf8Decode(From + CurrentIndex,
-                                  SourceLength - CurrentIndex);
-
-        if (Character != -1) {
-            To += CkpUtf8Encode(Character, To);
-        }
-    }
-
-    CkpStringHash(NewString);
-    CK_OBJECT_VALUE(Value, NewString);
     return Value;
 }
 
@@ -1213,7 +1157,7 @@ Return Value:
         return FALSE;
     }
 
-    CK_INT_VALUE(Arguments[0], String->Value[Index]);
+    CK_INT_VALUE(Arguments[0], (UCHAR)(String->Value[Index]));
     return TRUE;
 }
 
@@ -2435,12 +2379,34 @@ Return Value:
 
 {
 
+    PCK_STRING Left;
+    PCK_STRING Result;
+    PCK_STRING Right;
+
     if (!CK_IS_STRING(Arguments[1])) {
         CkpRuntimeError(Vm, "TypeError", "Expected a string");
         return FALSE;
     }
 
-    Arguments[0] = CkpStringFormat(Vm, "@@", Arguments[0], Arguments[1]);
+    Left = CK_AS_STRING(Arguments[0]);
+    Right = CK_AS_STRING(Arguments[1]);
+    if (Left->Length == 0) {
+        Arguments[0] = Arguments[1];
+        return TRUE;
+
+    } else if (Right->Length == 0) {
+        return TRUE;
+    }
+
+    Result = CkpStringAllocate(Vm, Left->Length + Right->Length);
+    if (Result == NULL) {
+        return FALSE;
+    }
+
+    CkCopy((PSTR)(Result->Value), Left->Value, Left->Length);
+    CkCopy((PSTR)(Result->Value + Left->Length), Right->Value, Right->Length);
+    CkpStringHash(Result);
+    CK_OBJECT_VALUE(Arguments[0], Result);
     return TRUE;
 }
 
@@ -2576,7 +2542,70 @@ Return Value:
         }
     }
 
-    Arguments[0] = CkpStringCreateFromRange(Vm, String, Start, Count);
+    Arguments[0] = CkpStringSliceBytes(Vm, String, Start, Count);
+    return TRUE;
+}
+
+BOOL
+CkpStringSliceCharacters (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a substring slice of a given string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    UINTN Count;
+    INTN Start;
+    PCK_STRING String;
+
+    String = CK_AS_STRING(Arguments[0]);
+    if (CK_IS_INTEGER(Arguments[1])) {
+        Start = CK_AS_INTEGER(Arguments[1]);
+        if (Start < 0) {
+            Start += String->Length;
+        }
+
+        if ((Start < 0) || (Start >= String->Length)) {
+            CkpRuntimeError(Vm, "IndexError", "String index out of range");
+            return FALSE;
+        }
+
+        Count = 1;
+
+    } else {
+        if (!CK_IS_RANGE(Arguments[1])) {
+            CkpRuntimeError(Vm, "TypeError", "Expected an integer or range");
+            return FALSE;
+        }
+
+        Count = String->Length;
+        Start = CkpGetRange(Vm, CK_AS_RANGE(Arguments[1]), &Count);
+        if (Start == MAX_UINTN) {
+            return FALSE;
+        }
+    }
+
+    Arguments[0] = CkpStringCreateFromCharacterRange(Vm, String, Start, Count);
     return TRUE;
 }
 
@@ -2643,10 +2672,10 @@ Return Value:
 
     PSTR Destination;
     CHAR Digit;
-    PCSTR End;
+    PCUCHAR End;
     UINTN Length;
     PCK_STRING Result;
-    PCSTR Source;
+    PCUCHAR Source;
     PCK_STRING SourceString;
 
     SourceString = CK_AS_STRING(Arguments[0]);
@@ -2655,7 +2684,7 @@ Return Value:
     // Figure out how long the string is.
     //
 
-    Source = SourceString->Value;
+    Source = (PCUCHAR)(SourceString->Value);
     End = Source + SourceString->Length;
     Length = 2;
     while (Source < End) {
@@ -2683,7 +2712,7 @@ Return Value:
     }
 
     Destination = (PSTR)(Result->Value);
-    Source = SourceString->Value;
+    Source = (PCUCHAR)(SourceString->Value);
     *Destination = '"';
     Destination += 1;
     while (Source < End) {
@@ -2737,5 +2766,145 @@ Return Value:
     CkpStringHash(Result);
     CK_OBJECT_VALUE(Arguments[0], Result);
     return TRUE;
+}
+
+CK_VALUE
+CkpStringCreateFromCharacterRange (
+    PCK_VM Vm,
+    PCK_STRING Source,
+    UINTN Start,
+    UINTN Count
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new string object based on a portion of another
+    string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Source - Supplies a pointer to the source string.
+
+    Start - Supplies the starting index to slice from.
+
+    Count - Supplies the number of characters to slice.
+
+Return Value:
+
+    Returns the new string value on success.
+
+    CK_NULL_VALUE on allocation failure.
+
+--*/
+
+{
+
+    INT Character;
+    UINTN CurrentIndex;
+    PUCHAR From;
+    UINTN Index;
+    UINTN Length;
+    PCK_STRING NewString;
+    UINTN SourceLength;
+    PUCHAR To;
+    CK_VALUE Value;
+
+    CK_ASSERT(Source->Header.Type == CkObjectString);
+
+    //
+    // Reuse the old string if the whole thing is being copied.
+    //
+
+    if ((Start == 0) && (Count >= Source->Length)) {
+        CK_OBJECT_VALUE(Value, Source);
+        return Value;
+    }
+
+    From = (PUCHAR)(Source->Value);
+    SourceLength = Source->Length;
+    Length = 0;
+    for (Index = 0; Index < Count; Index += 1) {
+        CurrentIndex = Start + Index;
+
+        CK_ASSERT(CurrentIndex < SourceLength);
+
+        Length += CkpUtf8DecodeSize(From[CurrentIndex]);
+    }
+
+    NewString = CkpStringAllocate(Vm, Length);
+    if (NewString == NULL) {
+        return CK_NULL_VALUE;
+    }
+
+    To = (PUCHAR)(NewString->Value);
+    for (Index = 0; Index < Count; Index += 1) {
+        CurrentIndex = Start + Index;
+        Character = CkpUtf8Decode(From + CurrentIndex,
+                                  SourceLength - CurrentIndex);
+
+        if (Character != -1) {
+            To += CkpUtf8Encode(Character, To);
+        }
+    }
+
+    CkpStringHash(NewString);
+    CK_OBJECT_VALUE(Value, NewString);
+    return Value;
+}
+
+CK_VALUE
+CkpStringSliceBytes (
+    PCK_VM Vm,
+    PCK_STRING Source,
+    UINTN Start,
+    UINTN Count
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new string object based on a portion of another
+    string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Source - Supplies a pointer to the source string.
+
+    Start - Supplies the starting byte index to slice from.
+
+    Count - Supplies the number of bytes to slice.
+
+Return Value:
+
+    Returns the new string value on success.
+
+    CK_NULL_VALUE on allocation failure.
+
+--*/
+
+{
+
+    CK_VALUE Value;
+
+    CK_ASSERT(Source->Header.Type == CkObjectString);
+    CK_ASSERT((Start <= Source->Length) && (Start + Count <= Source->Length));
+
+    //
+    // Reuse the old string if the whole thing is being copied.
+    //
+
+    if ((Start == 0) && (Count >= Source->Length)) {
+        CK_OBJECT_VALUE(Value, Source);
+        return Value;
+    }
+
+    return CkpStringCreate(Vm, Source->Value + Start, Count);
 }
 

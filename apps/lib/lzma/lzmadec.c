@@ -632,7 +632,7 @@ Return Value:
             InPosition = Decoder->InputPosition;
 
         } else {
-            InBuffer = Context->Input;
+            InBuffer = (PUCHAR)(Context->Input);
             InBufferSize = Context->InputSize;
             InSize = Context->InputSize;
             InPosition = 0;
@@ -845,6 +845,10 @@ Return Value:
             Status = LzErrorInvalidParameter;
             if (Flush == LzNoFlush) {
                 return Status;
+            }
+
+            if (CompletionStatus == LzCompletionMoreInputRequired) {
+                Status = LzErrorInputEof;
             }
 
             goto DecodeEnd;
@@ -2999,7 +3003,7 @@ Return Value:
         InPosition = Decoder->InputPosition;
 
     } else {
-        Input = Context->Input;
+        Input = (PUCHAR)(Context->Input);
         InBufferSize = 0;
         InPosition = 0;
         InSize = Context->InputSize;

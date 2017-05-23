@@ -39,6 +39,12 @@ Environment:
 //
 
 class Core {
+    static function repr(value) {
+        if (value != null) {
+            Core._write(value.__repr() + "\n");
+        }
+    }
+
     static function print(value) {
         Core._write(value.__str() + "\n");
     }

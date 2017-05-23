@@ -1700,39 +1700,6 @@ Return Value:
 --*/
 
 CK_VALUE
-CkpStringCreateFromRange (
-    PCK_VM Vm,
-    PCK_STRING Source,
-    UINTN Start,
-    UINTN Count
-    );
-
-/*++
-
-Routine Description:
-
-    This routine creates a new string object based on a portion of another
-    string.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-    Source - Supplies a pointer to the source string.
-
-    Start - Supplies the starting index to slice from.
-
-    Count - Supplies the number of characters to slice.
-
-Return Value:
-
-    Returns the new string value on success.
-
-    CK_NULL_VALUE on allocation failure.
-
---*/
-
-CK_VALUE
 CkpStringCreateFromInteger (
     PCK_VM Vm,
     CK_INTEGER Integer
