@@ -1328,7 +1328,9 @@ Return Value:
             }
         }
 
-        if (IntegerUlong <= Handle->Device->MaxChannelCount) {
+        if ((IntegerUlong >= SoundDevice->MinChannelCount) &&
+            (IntegerUlong <= SoundDevice->MaxChannelCount)) {
+
             Handle->ChannelCount = IntegerUlong;
         }
 
@@ -1352,12 +1354,15 @@ Return Value:
             }
         }
 
+        ChannelCount = Handle->ChannelCount;
         if ((IntegerUlong == 1) &&
-            (Handle->Device->MaxChannelCount >= SOUND_STEREO_CHANNEL_COUNT)) {
+            (SoundDevice->MaxChannelCount >= SOUND_STEREO_CHANNEL_COUNT)) {
 
             ChannelCount = SOUND_STEREO_CHANNEL_COUNT;
 
-        } else {
+        } else if ((IntegerUlong == 0) &&
+                   (SoundDevice->MinChannelCount <= SOUND_MONO_CHANNEL_COUNT)) {
+
             ChannelCount = SOUND_MONO_CHANNEL_COUNT;
             IntegerUlong = 0;
         }

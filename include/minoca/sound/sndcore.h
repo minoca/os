@@ -231,8 +231,9 @@ Members:
     Formats - Stores a bitmask of supported formats. See SOUND_FORMAT_* for
         definitions.
 
-    MaxChannelCount - Stores the maximum number of channels the device
-        supports.
+    MinChannelCount - Stores the minimum number of channels the device supports.
+
+    MaxChannelCount - Stores the maximum number of channels the device supports.
 
     RateCount - Stores the number of supported rates.
 
@@ -250,6 +251,7 @@ typedef struct _SOUND_DEVICE {
     volatile ULONG Flags;
     ULONG Capabilities;
     ULONG Formats;
+    ULONG MinChannelCount;
     ULONG MaxChannelCount;
     ULONG RateCount;
     UINTN RatesOffset;

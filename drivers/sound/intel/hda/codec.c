@@ -1125,6 +1125,7 @@ Return Value:
 
     SoundDevice->Capabilities = Capabilities;
     SoundDevice->Formats = Formats;
+    SoundDevice->MinChannelCount = 1;
     SoundDevice->MaxChannelCount = MaxChannelCount;
     SoundDevice->RateCount = RateCount;
     SoundDevice->RatesOffset = sizeof(SOUND_DEVICE);
