@@ -79,7 +79,7 @@ get_latests() {
 
 prune_stale_builds() {
     # The + number at the end is one greater than the number of builds to keep.
-    stale=`run_ssh_cmd "ls $NIGHTLIES | grep 201 | sort -r | tail --lines=+$KEEPCOUNT"`
+    stale=`run_ssh_cmd "ls $NIGHTLIES | grep 201 | sort -r | tail -n+$KEEPCOUNT"`
 
     # Don't blow away the latest build from any particular architecture. ARMv6
     # for instance might be way behind.
