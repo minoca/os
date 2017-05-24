@@ -116,6 +116,12 @@ Author:
 #define SOUND_ENABLE_OUTPUT 0x00000002
 
 //
+// Define the maximum timing policy with the least latency requirements.
+//
+
+#define SOUND_TIMING_POLICY_MAX 10
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

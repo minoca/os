@@ -148,6 +148,13 @@ SoundpUpdateBufferState (
     );
 
 VOID
+SoundpSetBufferSize (
+    PSOUND_DEVICE_HANDLE Handle,
+    UINTN FragmentCount,
+    UINTN FragmentSize
+    );
+
+VOID
 SoundpSetHandleDefaults (
     PSOUND_DEVICE_HANDLE Handle
     );
@@ -1258,8 +1265,10 @@ Return Value:
     UINTN CoreOffset;
     UINTN FragmentCount;
     UINTN FragmentsCompleted;
+    ULONG FragmentShift;
     UINTN FragmentSize;
     ULONG IntegerUlong;
+    BOOL LockHeld;
     ULONG OldFlags;
     SOUND_POSITION_INFORMATION Position;
     SOUND_QUEUE_INFORMATION QueueInformation;
@@ -1501,6 +1510,82 @@ Return Value:
         QueueInformation.FragmentCount = (LONG)Handle->Buffer.FragmentCount;
         break;
 
+    case SoundSetTimingPolicy:
+        CopySize = sizeof(ULONG);
+        if (RequestBufferSize < CopySize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (FromKernelMode != FALSE) {
+            IntegerUlong = *((PULONG)RequestBuffer);
+
+        } else {
+            Status = MmCopyFromUserMode(&IntegerUlong, RequestBuffer, CopySize);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        if (IntegerUlong > SOUND_TIMING_POLICY_MAX) {
+            IntegerUlong = SOUND_TIMING_POLICY_MAX;
+        }
+
+        if (IntegerUlong <= (SOUND_TIMING_POLICY_MAX / 2)) {
+            FragmentShift = (SOUND_TIMING_POLICY_MAX / 2) - IntegerUlong;
+
+            ASSERT(SOUND_FRAGMENT_SIZE_DEFAULT_SHIFT > FragmentShift);
+
+            FragmentShift = SOUND_FRAGMENT_SIZE_DEFAULT_SHIFT - FragmentShift;
+
+        } else {
+            FragmentShift = IntegerUlong - (SOUND_TIMING_POLICY_MAX / 2);
+            FragmentShift += SOUND_FRAGMENT_SIZE_DEFAULT_SHIFT;
+        }
+
+        FragmentSize = 1 << FragmentShift;
+
+        //
+        // The fragment count and size can only be changed before the device
+        // is initialized.
+        //
+
+        LockHeld = FALSE;
+        if (Handle->State < SoundDeviceStateInitialized) {
+            KeAcquireQueuedLock(Handle->Lock);
+            LockHeld = TRUE;
+            SoundpSetBufferSize(Handle,
+                                Handle->Buffer.FragmentCount,
+                                FragmentSize);
+        }
+
+        if (Handle->Buffer.FragmentShift <= SOUND_FRAGMENT_SIZE_DEFAULT_SHIFT) {
+            IntegerUlong = SOUND_FRAGMENT_SIZE_DEFAULT_SHIFT -
+                           Handle->Buffer.FragmentShift;
+
+            IntegerUlong = (SOUND_TIMING_POLICY_MAX / 2) - IntegerUlong;
+            if (IntegerUlong > (SOUND_TIMING_POLICY_MAX / 2)) {
+                IntegerUlong = 0;
+            }
+
+        } else {
+            IntegerUlong = Handle->Buffer.FragmentShift -
+                           SOUND_FRAGMENT_SIZE_DEFAULT_SHIFT;
+
+            IntegerUlong += (SOUND_TIMING_POLICY_MAX / 2);
+            if (IntegerUlong > SOUND_TIMING_POLICY_MAX) {
+                IntegerUlong = SOUND_TIMING_POLICY_MAX;
+            }
+        }
+
+        if (LockHeld != FALSE) {
+            KeReleaseQueuedLock(Handle->Lock);
+            LockHeld = FALSE;
+        }
+
+        CopyOutBuffer = &IntegerUlong;
+        break;
+
     case SoundSetBufferSizeHint:
         CopySize = sizeof(ULONG);
         if (RequestBufferSize < CopySize) {
@@ -1518,50 +1603,39 @@ Return Value:
             }
         }
 
-        FragmentCount = (IntegerUlong &
-                         SOUND_BUFFER_SIZE_HINT_FRAGMENT_COUNT_MASK) >>
-                        SOUND_BUFFER_SIZE_HINT_FRAGMENT_COUNT_SHIFT;
-
-        FragmentSize = 1 << ((IntegerUlong &
-                              SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_MASK) >>
-                             SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_SHIFT);
-
-        if (FragmentCount < Handle->Controller->Host.MinFragmentCount) {
-            FragmentCount = Handle->Controller->Host.MinFragmentCount;
-
-        } else if (FragmentCount > Handle->Controller->Host.MaxFragmentCount) {
-            FragmentCount = Handle->Controller->Host.MaxFragmentCount;
-        }
-
-        if (FragmentSize > Handle->Controller->Host.MaxFragmentSize) {
-            FragmentSize = Handle->Controller->Host.MaxFragmentSize;
-
-        } else if (FragmentSize < Handle->Controller->Host.MinFragmentSize) {
-            FragmentSize = Handle->Controller->Host.MinFragmentSize;
-        }
-
         //
         // The fragment count and size can only be changed before the device
         // is initialized.
         //
 
-        if ((Handle->State < SoundDeviceStateInitialized) &&
-            ((FragmentSize * FragmentCount) <
-             Handle->Controller->Host.MaxBufferSize)) {
+        LockHeld = FALSE;
+        if (Handle->State < SoundDeviceStateInitialized) {
+            FragmentCount = (IntegerUlong &
+                             SOUND_BUFFER_SIZE_HINT_FRAGMENT_COUNT_MASK) >>
+                            SOUND_BUFFER_SIZE_HINT_FRAGMENT_COUNT_SHIFT;
 
-            BufferSize = FragmentCount * FragmentSize;
+            FragmentSize = 1 << ((IntegerUlong &
+                                  SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_MASK) >>
+                                 SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_SHIFT);
+
             KeAcquireQueuedLock(Handle->Lock);
-            if (Handle->State < SoundDeviceStateInitialized) {
-                Handle->Buffer.Size = BufferSize;
-                Handle->Buffer.FragmentCount = FragmentCount;
-                Handle->Buffer.FragmentSize = FragmentSize;
-                Handle->Buffer.FragmentShift =
-                                           RtlCountTrailingZeros(FragmentSize);
-            }
-
-            KeReleaseQueuedLock(Handle->Lock);
+            LockHeld = TRUE;
+            SoundpSetBufferSize(Handle, FragmentCount, FragmentSize);
         }
 
+        IntegerUlong = ((Handle->Buffer.FragmentCount <<
+                         SOUND_BUFFER_SIZE_HINT_FRAGMENT_COUNT_SHIFT) &
+                        SOUND_BUFFER_SIZE_HINT_FRAGMENT_COUNT_MASK) |
+                       ((Handle->Buffer.FragmentShift <<
+                         SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_SHIFT) &
+                        SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_MASK);
+
+        if (LockHeld != FALSE) {
+            KeReleaseQueuedLock(Handle->Lock);
+            LockHeld = FALSE;
+        }
+
+        CopyOutBuffer = &IntegerUlong;
         break;
 
     case SoundStopInput:
@@ -2907,6 +2981,77 @@ Return Value:
 }
 
 VOID
+SoundpSetBufferSize (
+    PSOUND_DEVICE_HANDLE Handle,
+    UINTN FragmentCount,
+    UINTN FragmentSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to set the buffer size for the given handle. It
+    assumes that the caller has the appropriate protection - either
+    initializing the handle or holds the handle's lock.
+
+Arguments:
+
+    Handle - Supplies a pointer to the sound device handle.
+
+    FragmentCount - Supplies the desired number of fragments.
+
+    FragmentSize - Supplies the desired fragment size, in bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN BufferSize;
+
+    if (Handle->State < SoundDeviceStateInitialized) {
+        if (FragmentCount < Handle->Controller->Host.MinFragmentCount) {
+            FragmentCount = Handle->Controller->Host.MinFragmentCount;
+
+        } else if (FragmentCount > Handle->Controller->Host.MaxFragmentCount) {
+            FragmentCount = Handle->Controller->Host.MaxFragmentCount;
+        }
+
+        if (FragmentSize > Handle->Controller->Host.MaxFragmentSize) {
+            FragmentSize = Handle->Controller->Host.MaxFragmentSize;
+
+        } else if (FragmentSize < Handle->Controller->Host.MinFragmentSize) {
+            FragmentSize = Handle->Controller->Host.MinFragmentSize;
+        }
+
+        //
+        // If this fails, something isn't quite right. The driver's maximum
+        // fragment count and maximumg fragment size multiply to a value larger
+        // than the maximum buffer size.
+        //
+
+        BufferSize = FragmentSize * FragmentCount;
+        if (BufferSize > Handle->Controller->Host.MaxBufferSize) {
+
+            ASSERT(BufferSize <= Handle->Controller->Host.MaxBufferSize);
+
+            return;
+        }
+
+        Handle->Buffer.Size = BufferSize;
+        Handle->Buffer.FragmentCount = FragmentCount;
+        Handle->Buffer.FragmentSize = FragmentSize;
+        Handle->Buffer.FragmentShift = RtlCountTrailingZeros(FragmentSize);
+    }
+
+    return;
+}
+
+VOID
 SoundpSetHandleDefaults (
     PSOUND_DEVICE_HANDLE Handle
     )
@@ -2919,7 +3064,7 @@ Routine Description:
 
 Arguments:
 
-    Handle - Supplies a handle to the sound device.
+    Handle - Supplies a pointer to the sound device handle.
 
 Return Value:
 
@@ -2930,34 +3075,15 @@ Return Value:
 {
 
     PSOUND_IO_BUFFER Buffer;
-    PSOUND_CONTROLLER Controller;
     PSOUND_DEVICE SoundDevice;
     ULONG SoundFlags;
 
     Buffer = &(Handle->Buffer);
-    Controller = Handle->Controller;
     Buffer->BytesCompleted = 0;
     Buffer->FragmentsCompleted = 0;
-    Buffer->FragmentCount = SOUND_FRAGMENT_COUNT_DEFAULT;
-    if (Buffer->FragmentCount < Controller->Host.MinFragmentCount) {
-        Buffer->FragmentCount = Controller->Host.MinFragmentCount;
-
-    } else if (Buffer->FragmentCount > Controller->Host.MaxFragmentCount) {
-        Buffer->FragmentCount = Controller->Host.MaxFragmentCount;
-    }
-
-    Buffer->FragmentSize = SOUND_FRAGMENT_SIZE_DEFAULT;
-    if (Buffer->FragmentSize < Controller->Host.MinFragmentSize) {
-        Buffer->FragmentSize = Controller->Host.MinFragmentSize;
-
-    } else if (Buffer->FragmentSize > Controller->Host.MaxFragmentSize) {
-        Buffer->FragmentSize = Controller->Host.MaxFragmentSize;
-    }
-
-    Buffer->FragmentShift = RtlCountTrailingZeros(Handle->Buffer.FragmentSize);
-    Buffer->Size = Buffer->FragmentSize * Buffer->FragmentCount;
-
-    ASSERT(Buffer->Size < Controller->Host.MaxBufferSize);
+    SoundpSetBufferSize(Handle,
+                        SOUND_FRAGMENT_COUNT_DEFAULT,
+                        SOUND_FRAGMENT_SIZE_DEFAULT);
 
     SoundDevice = Handle->Device;
     if (SoundDevice != NULL) {
