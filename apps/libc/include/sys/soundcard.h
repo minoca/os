@@ -156,6 +156,17 @@ extern "C" {
 #define SNDCTL_DSP_NONBLOCK 0x5015
 
 //
+// This ioctl sets the "timing policy" for the devices. This really dictates
+// the size and number of fragments use for the device's buffer. It is thought
+// of as a simpler version of SNDCTL_DSP_SETFRAGMENT. The accepted values range
+// from 0 (small fragments for low latency, with the caveat that this will
+// generate more interrupts and CPU activity) and 10 (large fragments, no
+// latency requirements). 5 is the default.
+//
+
+#define SNDCTL_DSP_POLICY 0x5016
+
+//
 // This ioctl sets the desired sample format for the device. It takes a bitmask
 // of size int that should contain one of the AFMT_* format values. On return,
 // the ioctl will pass back the actual sample format for the device. It may

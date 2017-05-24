@@ -66,6 +66,12 @@ Author:
 #define SOUND_FRAGMENT_SIZE_DEFAULT _2KB
 
 //
+// Define the default fragment size shift.
+//
+
+#define SOUND_FRAGMENT_SIZE_DEFAULT_SHIFT 11
+
+//
 // Define the default fragment count.
 //
 
