@@ -131,27 +131,7 @@ requests
 jsonpatch"
 
 pip install --target="$DEST/usr/lib/python2.7/site-packages" $PYPACKAGES
-
-##
-## Hard-code in a root password so that the system can be SSHed to.
-## TODO: Remove this once everything's working.
-##
-
-chpasswd --root="$DEST" <<_EOF
-root:minoca
-_EOF
-
-##
-## Shove an SSH key in there too for testing.
-## TODO: Remove this once everything's working.
-##
-
 mkdir -p "$DEST/root/.ssh"
-cat >"$DEST/root/.ssh/authorized_keys" <<_EOF
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCvSrbnIgUQW/gZP1wDhjI4c+s0HnGjVzkdT5Kk2mKYBdCF0YZ4Du6FUtHVR9EFh696piC3Qx0FKk4YddE1qotv6GxOJWo7rZdWt4Nm8i5mgV4MX9dhZ/SxYJGFKfBucyhIDO7ZCP61WiNPTw7lB4bt9Nl6qJlCTDTnlBsn+6XcJboJyjj6TWpHOtwi/8VItTiTxQ7M6A4aHwgePRixcsBo8VYFyYP8cl0p/N3BIPTRtkY+vqcZIkE0kZKbMgI/U3L4vWOJ5/NzWKY428YrY2wCKQF7QBsvqR/z9kM5TWYoC6w1rm9bbvr/Y4MmxqQlDrMifU18vwDMaU/wy8yskDSKRlw87Oz1dTxmmm1uSDeAjBTrb1nI1C6jGgKYucgXnv03OXYncQbBzvIrJl8XbE9REzFDC5k3GyxChIXMlyze2EqJcMyqHMyLZLQXfl0i0cvE76BqlCGDMWum19L/gtoZxmMNdeuYk00mqyoP16o2SeA2upaR9/VOo+Wel7D0D/uELC7zFySUeVzBofRCiZ6Kg7JceoqZ11thVgQX0305byBqFT9lFGmdT3CFAMMw8gUKAUJqolVCmiITUuQdL6iWakgqEEp0+Yfiz5VLcwsDIcyUHjTuHAgKQ0deHI9hS/d+Z9xKnZUnWTtEDJT3+brg2v9UE2ThXif+io3DiXXNvQ== Evan Packet
-_EOF
-
-chmod 600 "$DEST/root/.ssh/authorized_keys"
 chmod 700 "$DEST/root/.ssh"
 
 ##
