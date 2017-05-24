@@ -48,7 +48,7 @@ function build() {
     lib = {
         "label": "lzma_static",
         "output": "lzma",
-        "inputs": commonSources + ["apps/lib/lzma:lzma"]
+        "inputs": commonSources + ["apps/lib/lzma:liblzma"]
     };
 
     objs = compiledSources(lib);
@@ -63,7 +63,7 @@ function build() {
     lib = {
         "label": "build_lzma_static",
         "output": "lzma",
-        "inputs": commonSources + ["apps/lib/lzma:build_lzma"],
+        "inputs": commonSources + ["apps/lib/lzma:build_liblzma"],
         "build": true,
         "prefix": "build"
     };

@@ -50,6 +50,8 @@ function build() {
         "apps/ck:chalk",
         "apps/debug:debug",
         "apps/efiboot:efiboot",
+        "apps/lib/lzma/util:lzma",
+        "apps/lib/lzma/util:build_lzma",
         "apps/mingen:bootstrap_stamp",
         "apps/mount:mount",
         "apps/netcon:netcon",

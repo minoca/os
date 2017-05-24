@@ -47,7 +47,7 @@ function build() {
     ];
 
     includes = [
-        "$Sapps/libc/include"
+        "$S/apps/libc/include"
     ];
 
     sourcesConfig = {
