@@ -48,11 +48,10 @@ Environment:
 #define SOUND_MAX_DEVICE_NAME_SIZE 20
 
 //
-// Define the total number of sound format sizes listed.
+// Define the minimum allowed low water signal threshold, in bytes.
 //
 
-#define SOUND_FORMAT_SIZE_COUNT \
-    (sizeof(SoundFormatSampleSize) / sizeof(SoundFormatSampleSize[0]))
+#define SOUND_CORE_LOW_TRESHOLD_MINIMUM 1
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -144,6 +143,7 @@ SoundpUpdateBufferState (
     PSOUND_IO_BUFFER Buffer,
     SOUND_DEVICE_TYPE Type,
     UINTN Offset,
+    UINTN BytesAvailable,
     BOOL SoundCore
     );
 
@@ -175,30 +175,6 @@ PCSTR SoundGenericDeviceNames[SoundDeviceTypeCount] = {
 PCSTR SoundSpecificDeviceFormats[SoundDeviceTypeCount] = {
     "input%d",
     "output%d"
-};
-
-//
-// Stores the size of samples for each format, in bytes. The indices are
-// based on the SOUND_FORMAT_* bit indices.
-//
-
-ULONG SoundFormatSampleSize[] = {
-    1,
-    1,
-    2,
-    2,
-    2,
-    2,
-    4,
-    4,
-    4,
-    4,
-    1,
-    1,
-    4,
-    4,
-    3,
-    4,
 };
 
 //
@@ -290,7 +266,12 @@ Return Value:
         (Registration->Devices == NULL) ||
         (Registration->OsDevice == NULL) ||
         (Registration->MinFragmentCount < SOUND_FRAGMENT_COUNT_MINIMUM) ||
-        (Registration->FunctionTable->GetSetInformation == NULL)) {
+        (Registration->FunctionTable->GetSetInformation == NULL) ||
+        (POWER_OF_2(Registration->MinFragmentCount) == FALSE) ||
+        (POWER_OF_2(Registration->MaxFragmentCount) == FALSE) ||
+        (POWER_OF_2(Registration->MinFragmentSize) == FALSE) ||
+        (POWER_OF_2(Registration->MaxFragmentSize) == FALSE) ||
+        (POWER_OF_2(Registration->MaxBufferSize) == FALSE)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto CreateControllerEnd;
@@ -912,7 +893,8 @@ Return Value:
 
     UINTN BytesAvailable;
     UINTN BytesRemaining;
-    UINTN ControllerOffset;
+    UINTN BytesThisRound;
+    UINTN CopySize;
     UINTN CoreOffset;
     ULONGLONG CurrentTime;
     UINTN CyclicBufferSize;
@@ -1135,47 +1117,31 @@ Return Value:
 
         KeAcquireQueuedLock(Handle->Lock);
         LockHeld = TRUE;
-        CoreOffset = Handle->Buffer.CoreOffset;
-        ControllerOffset = Handle->Buffer.ControllerOffset;
 
         //
-        // If the core offset is greater than the controller offset, then two
-        // I/O's are required. Do the first portion from the core offset to the
-        // end of the cyclic buffer.
+        // Immediately consume all of the available bytes. If there are more
+        // than necessary, they get put back when the buffer state is updated.
         //
 
-        if (CoreOffset > ControllerOffset) {
-            BytesAvailable = CyclicBufferSize - CoreOffset;
-            if (BytesAvailable > BytesRemaining) {
-                BytesAvailable = BytesRemaining;
-            }
-
-            *CyclicOffset = CoreOffset;
-            Status = SoundpCopyBufferData(Handle,
-                                          DestinationBuffer,
-                                          DestinationOffset,
-                                          SourceBuffer,
-                                          SourceOffset,
-                                          BytesAvailable);
-
-            if (!KSUCCESS(Status)) {
-                goto PerformIoEnd;
-            }
-
-            *LinearOffset += BytesAvailable;
-            BytesRemaining -= BytesAvailable;
-            CoreOffset = 0;
+        BytesAvailable = 0;
+        BytesThisRound = RtlAtomicExchange(&(Handle->Buffer.BytesAvailable), 0);
+        if (BytesThisRound > BytesRemaining) {
+            BytesAvailable = BytesThisRound - BytesRemaining;
+            BytesThisRound = BytesRemaining;
         }
 
+        ASSERT(BytesThisRound <= CyclicBufferSize);
+
         //
-        // If the core offset is less than the controller offset, then perform
-        // the rest of the I/O.
+        // Copy from the core offset to the end of the buffer until there are
+        // no bytes remaining for this round.
         //
 
-        if ((BytesRemaining != 0) && (CoreOffset < ControllerOffset)) {
-            BytesAvailable = ControllerOffset - CoreOffset;
-            if (BytesAvailable > BytesRemaining) {
-                BytesAvailable = BytesRemaining;
+        CoreOffset = Handle->Buffer.CoreOffset;
+        while (BytesThisRound != 0) {
+            CopySize = CyclicBufferSize - CoreOffset;
+            if (CopySize > BytesThisRound) {
+                CopySize = BytesThisRound;
             }
 
             *CyclicOffset = CoreOffset;
@@ -1184,23 +1150,26 @@ Return Value:
                                           DestinationOffset,
                                           SourceBuffer,
                                           SourceOffset,
-                                          BytesAvailable);
+                                          CopySize);
 
             if (!KSUCCESS(Status)) {
                 goto PerformIoEnd;
             }
 
-            *LinearOffset += BytesAvailable;
-            BytesRemaining -= BytesAvailable;
-            CoreOffset += BytesAvailable;
-            if (CoreOffset == CyclicBufferSize) {
-                CoreOffset = 0;
-            }
+            BytesThisRound -= CopySize;
+            BytesRemaining -= CopySize;
+            *LinearOffset += CopySize;
+
+            ASSERT(POWER_OF_2(CyclicBufferSize) != FALSE);
+
+            CoreOffset += CopySize;
+            CoreOffset = REMAINDER(CoreOffset, CyclicBufferSize);
         }
 
         SoundpUpdateBufferState(&(Handle->Buffer),
                                 Handle->Device->Type,
                                 CoreOffset,
+                                BytesAvailable,
                                 TRUE);
 
         KeReleaseQueuedLock(Handle->Lock);
@@ -1272,13 +1241,11 @@ Return Value:
 
 {
 
-    UINTN BufferSize;
     ULONG ChannelCount;
     ULONG ClearFlags;
     UINTN ControllerOffset;
     PVOID CopyOutBuffer;
     UINTN CopySize;
-    UINTN CoreOffset;
     UINTN FragmentCount;
     UINTN FragmentsCompleted;
     ULONG FragmentShift;
@@ -1472,12 +1439,15 @@ Return Value:
         //
         // This IOCTL is used in conjunction with mmap. As user mode will not
         // make any official reads/writes, use this as an opportunity to move
-        // the core's offset forward to match the controller offset.
+        // the core's offset forward to match the controller offset, eating
+        // through all of the available bytes.
         //
 
+        RtlAtomicExchange(&(Handle->Buffer.BytesAvailable), 0);
         SoundpUpdateBufferState(&(Handle->Buffer),
                                 Handle->Device->Type,
                                 ControllerOffset,
+                                0,
                                 TRUE);
 
         KeReleaseQueuedLock(Handle->Lock);
@@ -1508,17 +1478,7 @@ Return Value:
             }
         }
 
-        BufferSize = Handle->Buffer.Size;
-        CoreOffset = Handle->Buffer.CoreOffset;
-        ControllerOffset = Handle->Buffer.ControllerOffset;
-        if (ControllerOffset >= CoreOffset) {
-            QueueInformation.BytesAvailable = ControllerOffset - CoreOffset;
-
-        } else {
-            QueueInformation.BytesAvailable = (BufferSize - CoreOffset);
-            QueueInformation.BytesAvailable += ControllerOffset;
-        }
-
+        QueueInformation.BytesAvailable = Handle->Buffer.BytesAvailable;
         QueueInformation.FragmentsAvailable = QueueInformation.BytesAvailable >>
                                               Handle->Buffer.FragmentShift;
 
@@ -1807,6 +1767,43 @@ Return Value:
         RtlAtomicOr32(&(Handle->Flags), SOUND_DEVICE_HANDLE_FLAG_NON_BLOCKING);
         break;
 
+    case SoundSetLowThreshold:
+        CopySize = sizeof(ULONG);
+        if (RequestBufferSize < CopySize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (FromKernelMode != FALSE) {
+            IntegerUlong = *((PULONG)RequestBuffer);
+
+        } else {
+            Status = MmCopyFromUserMode(&IntegerUlong, RequestBuffer, CopySize);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        if (IntegerUlong < SOUND_CORE_LOW_TRESHOLD_MINIMUM) {
+            IntegerUlong = SOUND_CORE_LOW_TRESHOLD_MINIMUM;
+        }
+
+        //
+        // Synchronize with the buffer size changing. It's bad if the low
+        // water mark is greater than the buffer size.
+        //
+
+        KeAcquireQueuedLock(Handle->Lock);
+        if (IntegerUlong > Handle->Buffer.Size) {
+            IntegerUlong = Handle->Buffer.Size;
+        }
+
+        Handle->Buffer.LowThreshold = IntegerUlong;
+        KeReleaseQueuedLock(Handle->Lock);
+        CopyOutBuffer = &(Handle->Buffer.LowThreshold);
+        RtlAtomicOr32(&(Handle->Flags), SOUND_DEVICE_HANDLE_FLAG_LOW_WATER_SET);
+        break;
+
     default:
         Status = STATUS_NOT_SUPPORTED;
         break;
@@ -1966,7 +1963,25 @@ Return Value:
 
 {
 
-    SoundpUpdateBufferState(Buffer, Type, Offset, FALSE);
+    UINTN BytesCompleted;
+    UINTN OldOffset;
+
+    //
+    // Update the buffer's total bytes completed by the hardware before
+    // updating the controller offset. It's assumed the controller has some
+    // synchronization to protect this update.
+    //
+
+    OldOffset = Buffer->ControllerOffset;
+    if (OldOffset < Offset) {
+        BytesCompleted = Offset - OldOffset;
+
+    } else {
+        BytesCompleted = (Buffer->Size - OldOffset) + Offset;
+    }
+
+    Buffer->BytesCompleted += BytesCompleted;
+    SoundpUpdateBufferState(Buffer, Type, Offset, BytesCompleted, FALSE);
     return;
 }
 
@@ -2218,44 +2233,12 @@ Return Value:
 
     PSOUND_CONTROLLER Controller;
     PSOUND_GET_SET_INFORMATION GetSetInformation;
-    ULONG Index;
     SOUND_DEVICE_STATE_INFORMATION Information;
     UINTN Size;
     KSTATUS Status;
 
     ASSERT(KeIsQueuedLockHeld(Handle->Lock) != FALSE);
     ASSERT(Handle->State < SoundDeviceStateInitialized);
-
-    //
-    // Initialize the buffer offsets so that they appear empty/full. On input,
-    // the sound core library is the consumer of written bytes. On output, it
-    // is the consumer of read bytes. Equal offsets indicate an empty buffer.
-    //
-
-    if (Handle->Device->Type == SoundDeviceInput) {
-        Handle->Buffer.CoreOffset = 0;
-        Handle->Buffer.ControllerOffset = 0;
-
-    } else {
-
-        ASSERT(Handle->Device->Type == SoundDeviceOutput);
-
-        Index = RtlCountTrailingZeros32(Handle->Format);
-        if (Index >= SOUND_FORMAT_SIZE_COUNT) {
-
-            //
-            // The developer should add the proper size for the new format.
-            //
-
-            ASSERT(FALSE);
-
-            Index = 0;
-        }
-
-        Handle->Buffer.CoreOffset = 0;
-        Handle->Buffer.ControllerOffset = Handle->Buffer.Size -
-                                          SoundFormatSampleSize[Index];
-    }
 
     //
     // Initialize the sound controller device.
@@ -2283,6 +2266,19 @@ Return Value:
     }
 
     Handle->State = SoundDeviceStateInitialized;
+
+    //
+    // If this is an output stream, signal that it is ready for writes into
+    // the whole buffer.
+    //
+
+    if (Handle->Device->Type == SoundDeviceOutput) {
+        SoundpUpdateBufferState(&(Handle->Buffer),
+                                Handle->Device->Type,
+                                0,
+                                Handle->Buffer.Size,
+                                TRUE);
+    }
 
 InitializeDeviceEnd:
     return Status;
@@ -2894,6 +2890,7 @@ SoundpUpdateBufferState (
     PSOUND_IO_BUFFER Buffer,
     SOUND_DEVICE_TYPE Type,
     UINTN Offset,
+    UINTN BytesAvailable,
     BOOL SoundCore
     )
 
@@ -2916,6 +2913,9 @@ Arguments:
     Offset - Supplies the sound core or controller's updated offset within the
         I/O buffer.
 
+    BytesAvailable - Supplies the number of bytes available that need to be
+        added to the buffer's count.
+
     SoundCore - Supplies a boolean indicating whether or not the offset is for
         the sound core (TRUE) of the sound controller (FALSE).
 
@@ -2927,11 +2927,52 @@ Return Value:
 
 {
 
-    UINTN BytesCompleted;
+    UINTN CompareBytes;
     ULONG Events;
-    UINTN OldOffset;
+    UINTN NewBytes;
+    UINTN OldBytes;
     BOOL Set;
-    UINTN SnappedOffset;
+
+    if (SoundCore == FALSE) {
+        Buffer->ControllerOffset = Offset;
+
+    } else {
+        Buffer->CoreOffset = Offset;
+    }
+
+    //
+    // If bytes became available, add them to the available bytes. If the count
+    // of available bytes is greater than the buffer size, that means sound
+    // core is behind. Readjust the available bytes such that the missed bytes
+    // are no longer available. These bytes may be coming from sound core, if
+    // sound core "over consumed" when it atomically zero'd the available
+    // bytes.
+    //
+
+    if (BytesAvailable != 0) {
+        OldBytes = Buffer->BytesAvailable;
+        do {
+            NewBytes = OldBytes + BytesAvailable;
+            if (NewBytes > Buffer->Size) {
+                NewBytes = REMAINDER(NewBytes, Buffer->Size);
+
+                //
+                // If the core is behind by multiple whole buffers, report that
+                // the last one is available.
+                //
+
+                if (NewBytes == 0) {
+                    NewBytes = Buffer->Size;
+                }
+            }
+
+            CompareBytes = OldBytes;
+            OldBytes = RtlAtomicCompareExchange(&(Buffer->BytesAvailable),
+                                                NewBytes,
+                                                CompareBytes);
+
+        } while (OldBytes != CompareBytes);
+    }
 
     //
     // Pick the correct events based on the device type.
@@ -2943,60 +2984,21 @@ Return Value:
     }
 
     //
-    // If the sound controller is updating the state, then there is always more
-    // data to read or empty space to write into; always signal the event.
+    // As long as there are more than the low threshold of bytes available,
+    // signal the event. Do this in a loop as sound core and the controller
+    // can race to set the object state.
     //
 
-    if (SoundCore == FALSE) {
-
-        //
-        // Update the buffer's total bytes completed by the hardware before
-        // updating the controller offset.
-        //
-
-        OldOffset = Buffer->ControllerOffset;
-        if (OldOffset < Offset) {
-            BytesCompleted = Offset - OldOffset;
-
-        } else {
-            BytesCompleted = (Buffer->Size - OldOffset) + Offset;
+    do {
+        Set = FALSE;
+        OldBytes = Buffer->BytesAvailable;
+        if (OldBytes >= Buffer->LowThreshold) {
+            Set = TRUE;
         }
 
-        //
-        // It's assumed that the controller has some synchronization to protect
-        // this update.
-        //
+        IoSetIoObjectState(Buffer->IoState, Events, Set);
 
-        Buffer->BytesCompleted += BytesCompleted;
-        Buffer->ControllerOffset = Offset;
-        IoSetIoObjectState(Buffer->IoState, Events, TRUE);
-
-    //
-    // The sound controller offset may be changing. Try to unsignal the event
-    // if the offsets are equal, which signifies an empty input queue and a
-    // full output queue.
-    //
-
-    } else {
-        Buffer->CoreOffset = Offset;
-
-        //
-        // The buffer is empty if the offsets are equal.
-        //
-
-        do {
-            SnappedOffset = Buffer->ControllerOffset;
-            if (SnappedOffset == Offset) {
-                Set = FALSE;
-
-            } else {
-                Set = TRUE;
-            }
-
-            IoSetIoObjectState(Buffer->IoState, Events, Set);
-
-        } while (SnappedOffset != Buffer->ControllerOffset);
-    }
+    } while (OldBytes != Buffer->BytesAvailable);
 
     return;
 }
@@ -3033,8 +3035,21 @@ Return Value:
 {
 
     UINTN BufferSize;
+    UINTN Shift;
 
     if (Handle->State < SoundDeviceStateInitialized) {
+
+        //
+        // Find the closest power of 2 fragment count that is less than the
+        // supplied value.
+        //
+
+        if (FragmentCount != 0) {
+            Shift = RtlCountLeadingZeros(FragmentCount);
+            Shift = (sizeof(FragmentCount) * BITS_PER_BYTE) - 1 - Shift;
+            FragmentCount = 1 << Shift;
+        }
+
         if (FragmentCount < Handle->Controller->Host.MinFragmentCount) {
             FragmentCount = Handle->Controller->Host.MinFragmentCount;
 
@@ -3063,10 +3078,24 @@ Return Value:
             return;
         }
 
+        ASSERT(POWER_OF_2(FragmentCount) != FALSE);
+        ASSERT(POWER_OF_2(FragmentSize) != FALSE);
+        ASSERT(POWER_OF_2(BufferSize) != FALSE);
+
         Handle->Buffer.Size = BufferSize;
         Handle->Buffer.FragmentCount = FragmentCount;
         Handle->Buffer.FragmentSize = FragmentSize;
         Handle->Buffer.FragmentShift = RtlCountTrailingZeros(FragmentSize);
+
+        //
+        // If the low water mark was not manually set, adjust it to the
+        // fragment size. If it was set, assume the handle owner got it right
+        // for their latency needs.
+        //
+
+        if ((Handle->Flags & SOUND_DEVICE_HANDLE_FLAG_LOW_WATER_SET) == 0) {
+            Handle->Buffer.LowThreshold = FragmentSize;
+        }
     }
 
     return;
@@ -3095,17 +3124,24 @@ Return Value:
 
 {
 
-    PSOUND_IO_BUFFER Buffer;
     PSOUND_DEVICE SoundDevice;
     ULONG SoundFlags;
 
-    Buffer = &(Handle->Buffer);
-    Buffer->BytesCompleted = 0;
-    Buffer->FragmentsCompleted = 0;
+    Handle->Buffer.CoreOffset = 0;
+    Handle->Buffer.ControllerOffset = 0;
+    Handle->Buffer.BytesAvailable = 0;
+    Handle->Buffer.BytesCompleted = 0;
+    Handle->Buffer.FragmentsCompleted = 0;
     SoundpSetBufferSize(Handle,
                         SOUND_FRAGMENT_COUNT_DEFAULT,
                         SOUND_FRAGMENT_SIZE_DEFAULT);
 
+    //
+    // By default, the low byte signal threshold is equal to a fragment size.
+    //
+
+    Handle->Buffer.LowThreshold = Handle->Buffer.FragmentSize;
+    RtlAtomicAnd32(&(Handle->Flags), ~SOUND_DEVICE_HANDLE_FLAG_LOW_WATER_SET);
     SoundDevice = Handle->Device;
     if (SoundDevice != NULL) {
         Handle->Format = 1 << RtlCountTrailingZeros32(SoundDevice->Formats);

@@ -113,7 +113,8 @@ Author:
 // Define the bits for the sound device handle flags.
 //
 
-#define SOUND_DEVICE_HANDLE_FLAG_NON_BLOCKING 0x00000001
+#define SOUND_DEVICE_HANDLE_FLAG_NON_BLOCKING  0x00000001
+#define SOUND_DEVICE_HANDLE_FLAG_LOW_WATER_SET 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions

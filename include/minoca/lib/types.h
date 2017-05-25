@@ -348,7 +348,7 @@ typedef struct _KSPIN_LOCK {
     (ALIGN_RANGE_DOWN((_Value), (_Size)) == (_Value))
 
 //
-// The REMAINDER macro returns remainder of the Value when aligned down
+// The REMAINDER macro returns the remainder of the Value when aligned down
 // to the granularity of the given Size.
 //
 

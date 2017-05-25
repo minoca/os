@@ -90,16 +90,22 @@ Members:
 
     IoBuffer - Stores a pointer to the raw I/O buffer that stores the data.
 
-    Size - Stores the total size of the buffer, in bytes.
+    Size - Stores the total size of the buffer, in bytes. This must be a power
+        of 2.
 
     FragmentSize - Stores the size of each sound fragment. This is not to be
-        confused with an I/O buffer fragment size.
+        confused with an I/O buffer fragment size. This must be a power of 2.
 
     FragmentShift - Stores the number of bits to shift to convert from bytes to
         fragments. This means that the fragment size must be a power of 2.
 
     FragmentCount - Stores the number of fragments in the sound buffer. This is
-        not to be confused with the I/O buffer fragment count.
+        not to be confused with the I/O buffer fragment count. This must be a
+        power of 2.
+
+    LowThreshold - Stores the low water mark bytes threshold. The buffer's I/O
+        state will only be signaled once this many bytes are available to read
+        or are free to write into.
 
     IoState - Stores a pointer to the I/O state to signal when data is
         available to consume.
@@ -117,6 +123,10 @@ Members:
         worry about the buffer being full, it should just keep reading/writing.
         It's up the sound core to keep up.
 
+    BytesAvailable - Stores the number of bytes available in the buffer to
+        read from or write into. Even as the controller offset continues to
+        move, this should never be more than the buffer size.
+
     BytesCompleted - Stores the total number of bytes that have been processed
         by the device since its last reset.
 
@@ -131,9 +141,11 @@ typedef struct _SOUND_IO_BUFFER {
     UINTN FragmentSize;
     UINTN FragmentShift;
     UINTN FragmentCount;
+    UINTN LowThreshold;
     PIO_OBJECT_STATE IoState;
     volatile UINTN CoreOffset;
     volatile UINTN ControllerOffset;
+    volatile UINTN BytesAvailable;
     volatile UINTN BytesCompleted;
     volatile UINTN FragmentsCompleted;
 } SOUND_IO_BUFFER, *PSOUND_IO_BUFFER;
@@ -472,16 +484,19 @@ Members:
         call back into the controller.
 
     MinFragmentCount - Stores the minimum number of allowed DMA buffer
-        fragments.
+        fragments. This must be a power of 2.
 
     MaxFragmentCount - Stores the maximum number of allowed DMA buffer
-        fragments.
+        fragments. This must be a power of 2.
 
     MinFragmentSize - Stores the minimum allowed size of a DMA buffer fragment.
+        This must be a power of 2.
 
     MaxFragmentSize - Stores the maximum allowed size of a DMA buffer fragment.
+        This must be a power of 2.
 
-    MaxBufferSize - Stores the maximum allowed DMA buffer size, in bytes.
+    MaxBufferSize - Stores the maximum allowed DMA buffer size, in bytes. This
+        must be a power of 2.
 
     DeviceCount - Stores the number of sound devices advertised by the
         controller.
