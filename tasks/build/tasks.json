@@ -771,7 +771,7 @@
         {
             "name": "Make samba",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/samba-4.6.2"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/samba-4.6.4"
         },
         {
             "name": "Make file",
