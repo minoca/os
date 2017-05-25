@@ -147,6 +147,14 @@ extern "C" {
 #define SNDCTL_DSP_CHANNELS 0x5013
 
 //
+// This ioctl sets the low water mark, in bytes, that is required to be reached
+// before an input device will signal that bytes are ready to read or before
+// an output device will signal that empty bytes are available to write into.
+//
+
+#define SNDCTL_DSP_LOW_WATER 0x5014
+
+//
 // This ioctl forces the sound device into non-blocking mode, ignoring the
 // file descriptor's O_NONBLOCK file mode flag's state. Using fcntl to
 // manipulate O_NONBLOCK is preferred over this ioctl. There is no way to move

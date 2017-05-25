@@ -142,6 +142,18 @@ Author:
 #define HDA_BUFFER_DESCRIPTOR_LIST_ENTRY_COUNT_DEFAULT 8
 
 //
+// Define maximum allowed sound buffer fragment size. This must be a power of 2.
+//
+
+#define HDA_SOUND_BUFFER_MAX_FRAGMENT_SIZE 0x40000000
+
+//
+// Define maximum allowed sound buffer size. This must be a power of 2.
+//
+
+#define HDA_SOUND_BUFFER_MAX_SIZE 0x80000000
+
+//
 // Define the set of function group flags.
 //
 

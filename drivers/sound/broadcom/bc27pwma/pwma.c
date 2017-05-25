@@ -81,10 +81,22 @@ Environment:
 #define BCM27_PWMA_FRAGMENT_COUNT_MAX 256
 
 //
-// Define the minimum fragment size, in bytes.
+// Define the minimum fragment size, in bytes. This must be a power of 2.
 //
 
 #define BCM27_PWMA_FRAGMENT_SIZE_MIN 256
+
+//
+// Define the maximum fragment size, in bytes. This must be a power of 2.
+//
+
+#define BCM27_PWMA_FRAGMENT_SIZE_MAX 0x40000000
+
+//
+// Define the maximum buffer size, in bytes. This must be a power of 2.
+//
+
+#define BCM27_PWMA_BUFFER_SIZE_MAX 0x80000000
 
 //
 // Define the mask and value for the upper byte of the physical addresses that
@@ -1573,8 +1585,8 @@ Return Value:
         Registration.MinFragmentCount = BCM27_PWMA_FRAGMENT_COUNT_MIN;
         Registration.MaxFragmentCount = BCM27_PWMA_FRAGMENT_COUNT_MAX;
         Registration.MinFragmentSize = BCM27_PWMA_FRAGMENT_SIZE_MIN;
-        Registration.MaxFragmentSize = MAX_ULONG;
-        Registration.MaxBufferSize = MAX_ULONG;
+        Registration.MaxFragmentSize = BCM27_PWMA_FRAGMENT_SIZE_MAX;
+        Registration.MaxBufferSize = BCM27_PWMA_BUFFER_SIZE_MAX;
         Registration.DeviceCount = 1;
         SoundDevice = &(Controller->Device.Public.SoundDevice);
         Registration.Devices = &SoundDevice;
@@ -1812,9 +1824,15 @@ Return Value:
 
     Device = Transfer->UserContext;
     Device->BufferPosition += Device->Buffer->FragmentSize;
-    if (Device->BufferPosition >= Device->Buffer->Size) {
-        Device->BufferPosition -= Device->Buffer->Size;
-    }
+
+    //
+    // The buffer size should be a power of 2, so just mask off the size.
+    //
+
+    ASSERT(POWER_OF_2(Device->Buffer->Size) != FALSE);
+
+    Device->BufferPosition = REMAINDER(Device->BufferPosition,
+                                       Device->Buffer->Size);
 
     SoundUpdateBufferState(Device->Buffer,
                            SoundDeviceOutput,
@@ -1989,7 +2007,6 @@ Return Value:
 
         DmaConfig |= BCM2709_PWM_DMA_CONFIG_ENABLE;
         BCM27_WRITE_PWMA(Controller, Bcm2709PwmDmaConfig, DmaConfig);
-        IoSetIoObjectState(Device->Buffer->IoState, POLL_EVENT_OUT, TRUE);
         break;
 
     //

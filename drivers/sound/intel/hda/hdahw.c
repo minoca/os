@@ -1732,15 +1732,6 @@ Return Value:
         //
 
         Device->Buffer = State->U.Initialize.Buffer;
-
-        //
-        // If this is an output stream, signal that it is ready for writes.
-        //
-
-        if (Device->SoundDevice.Type == SoundDeviceOutput) {
-            IoSetIoObjectState(Device->Buffer->IoState, POLL_EVENT_OUT, TRUE);
-        }
-
         break;
 
     //
@@ -1815,20 +1806,36 @@ Return Value:
         //
         // For output devices, the fragment completion interrupt is fired as
         // soon as the last of the fragment has been loaded into the FIFO.
-        // Sound core really wants a report when the fragment is complete, so
-        // fudge the numbers and add a FIFO length. Don't do this for input
-        // devices, as those don't interrupt until all of the data has made it
-        // out of the FIFO.
+        // Sound core really wants a report when the fragment is complete and
+        // wants the offset to reflect that. Adding the FIFO length was tried,
+        // but isn't enough in practice. Sometimes the offset is still short of
+        // a fragment boundary by a few bytes. It's unclear when the interrupt
+        // actually fires. The audio is already in the FIFO, so consider it
+        // played rather than waiting around for the link position to change.
+        // If higher precision is needed, then some extra work could be
+        // scheduled to report exactly when the link position moves to the next
+        // fragment. To make sound core happy, align the offset to the nearest
+        // fragment.
         //
 
-        if (Device->SoundDevice.Type == SoundDeviceOutput) {
-            Offset += Device->StreamFifoSize;
+        ASSERT(POWER_OF_2(Device->Buffer->FragmentSize) != FALSE);
+
+        if (REMAINDER(Offset, Device->Buffer->FragmentSize) <
+            (Device->Buffer->FragmentSize / 2)) {
+
+            Offset = ALIGN_RANGE_DOWN(Offset, Device->Buffer->FragmentSize);
+
+        } else {
+            Offset = ALIGN_RANGE_UP(Offset, Device->Buffer->FragmentSize);
         }
 
-        if (Offset >= Device->Buffer->Size) {
-            Offset = Offset - Device->Buffer->Size;
-        }
+        //
+        // The buffer size should be a power of 2, so just mask off the size.
+        //
 
+        ASSERT(POWER_OF_2(Device->Buffer->Size) != FALSE);
+
+        Offset = REMAINDER(Offset, Device->Buffer->Size);
         SoundUpdateBufferState(Device->Buffer,
                                Device->SoundDevice.Type,
                                Offset);
