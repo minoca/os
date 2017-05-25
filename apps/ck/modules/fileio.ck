@@ -195,7 +195,7 @@ class FileIo is RawIoBase {
                 _fd = open(name, access | flags, 0666);
 
             } except OsError as e {
-                Core.raise(IoError(e.args));
+                this._raiseIoError(e);
             }
 
         } else {
@@ -322,7 +322,7 @@ class FileIo is RawIoBase {
                     break;
                 }
 
-                Core.raise(IoError(e.args));
+                this._raiseIoError(e);
             }
 
             break;
@@ -383,7 +383,7 @@ class FileIo is RawIoBase {
                     }
                 }
 
-                Core.raise(IoError(e.args));
+                this._raiseIoError(e);
             }
         }
 
@@ -436,7 +436,7 @@ class FileIo is RawIoBase {
                     break;
                 }
 
-                Core.raise(IoError(e.args));
+                this._raiseIoError(e);
             }
 
             break;
@@ -738,7 +738,7 @@ class FileIo is RawIoBase {
             ftruncate(_fd, size);
 
         } except OsError as e {
-            Core.raise(IoError(e.args));
+            this._raiseIoError(e);
         }
 
         return size;
@@ -807,7 +807,7 @@ class FileIo is RawIoBase {
                 _fd = -1;
 
             } except OsError as e {
-                Core.raise(IoError(e.args));
+                this._raiseIoError(e);
             }
         }
 
@@ -885,6 +885,36 @@ class FileIo is RawIoBase {
     {
 
         Core.raise(ValueError("File not open for " + mode));
+    }
+
+    function
+    _raiseIoError (
+        oserror
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine raises an I/O error from an OS error.
+
+    Arguments:
+
+        oserror - Supplies the OS error.
+
+    Return Value:
+
+        None.
+
+    --*/
+
+    {
+
+        var ioerror = IoError(oserror.args);
+
+        ioerror.errno = oserror.errno;
+        Core.raise(ioerror);
+        return;
     }
 }
 

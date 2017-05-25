@@ -14,11 +14,11 @@ Module Name:
 Abstract:
 
     This module is a build script that can created a single executable version
-    of the mingen application.
+    of the santa application.
 
 Author:
 
-    Evan Green 30-Jan-2017
+    Evan Green 24-May-2017
 
 Environment:
 
@@ -32,10 +32,10 @@ Environment:
 
 from app import argv;
 from bundle import create;
+
+import santa;
+
 import io;
-import make;
-import mingen;
-import ninja;
 import os;
 
 //
@@ -86,7 +86,7 @@ Return Value:
 
     var ignoredModules = [null, "__main", "app", "bundle"];
     var modules;
-    var command = "from mingen import main;"
+    var command = "from santa import main;"
                   "from os import exit;"
                   "exit(main());";
 

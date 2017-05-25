@@ -701,6 +701,10 @@ class BufferedIo is BufferedIoBase {
             return result;
         }
 
+        if (!(data is String)) {
+            Core.raise(TypeError("Expected a string"));
+        }
+
         _writeBuffers.append(data);
         _writeSize += length;
         if (_writeSize > _bufferSize) {

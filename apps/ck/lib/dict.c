@@ -1156,7 +1156,7 @@ Return Value:
     PCK_DICT_ENTRY NewEntries;
     PCK_DICT_ENTRY OldEntry;
 
-    CK_ASSERT(NewCapacity > Dict->Count);
+    CK_ASSERT(NewCapacity >= Dict->Count);
 
     NewEntries = CkAllocate(Vm, NewCapacity * sizeof(CK_DICT_ENTRY));
     if (NewEntries == NULL) {

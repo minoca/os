@@ -9,16 +9,17 @@ Copyright (c) 2017 Minoca Corp.
 
 Module Name:
 
-    mkbundle.ck
+    config.ck
 
 Abstract:
 
-    This module is a build script that can created a single executable version
-    of the mingen application.
+    This module contains the global configuration data for the Santa package
+    manager. Users can access this directly via the "config" variable within
+    this package.
 
 Author:
 
-    Evan Green 30-Jan-2017
+    Evan Green 24-May-2017
 
 Environment:
 
@@ -30,13 +31,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-from app import argv;
-from bundle import create;
-import io;
-import make;
-import mingen;
-import ninja;
-import os;
+from santa.lib.santaconfig import SantaConfig;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -59,55 +54,58 @@ import os;
 //
 
 //
+// The master configuration.
+//
+
+var config = SantaConfig();
+
+//
+// Only initialize the configuration once.
+//
+
+var _configInitialized = false;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
+//
+// --------------------------------------------------------- Internal Functions
+//
+
 function
-main (
+loadConfig (
+    configpath,
+    override
     )
 
 /*++
 
 Routine Description:
 
-    This routine implements the entry point into the create bundle application.
+    This routine loads the application configuration.
 
 Arguments:
 
-    None.
+    configpath - Supplies an optional path to use for the configuration file,
+        rather than the defaults.
+
+    override - Supplies the override dictionary of configuration options.
 
 Return Value:
 
-    0 always, or an exception is raised.
+    None.
 
 --*/
 
 {
 
-    var ignoredModules = [null, "__main", "app", "bundle"];
-    var modules;
-    var command = "from mingen import main;"
-                  "from os import exit;"
-                  "exit(main());";
-
-    if (argv.length() != 2) {
-        Core.raise(ValueError("Usage: %s output_file" % [argv[0]]));
+    if (_configInitialized) {
+        return;
     }
 
-    modules = [];
-    for (key in Core.modules()) {
-        if (!ignoredModules.contains(key)) {
-            modules.append(Core.modules()[key]);
-        }
-    }
-
-    create(argv[1], modules, command);
-    return 0;
+    config.__init(configpath, override);
+    _configInitialized = true;
+    return;
 }
-
-main();
-
-//
-// --------------------------------------------------------- Internal Functions
-//
 
