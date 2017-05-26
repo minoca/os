@@ -3179,6 +3179,7 @@ Return Value:
 
             ClPreviousTzVariable = strdup(Variable);
             if (ClPreviousTzVariable == NULL) {
+                Status = -1;
                 goto InitializeTimeZoneDataEnd;
             }
 
