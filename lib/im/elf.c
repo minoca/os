@@ -506,6 +506,7 @@ Return Value:
         goto GetImageSizeEnd;
     }
 
+    Image->Format = ImageElfNative;
     switch (ElfHeader->Machine) {
     case ELF_MACHINE_ARM:
         Image->Machine = ImageMachineTypeArm32;
@@ -1036,6 +1037,8 @@ Return Value:
     ELF_ADDR SegmentEnd;
     KSTATUS Status;
 
+    ASSERT(Image->Format == ImageElfNative);
+
     ElfHeader = Image->LoadedImageBuffer;
     Image->Size = ImageBuffer->Size;
     LoadingImage = ImAllocateMemory(sizeof(ELF_LOADING_IMAGE),
@@ -1202,6 +1205,7 @@ Return Value:
     UINTN SegmentIndex;
 
     ASSERT((Image->ImportCount == 0) || (Image->Imports != NULL));
+    ASSERT(Image->Format == ImageElfNative);
 
     ImpElfFreeContext(Image);
 
@@ -1565,7 +1569,8 @@ Return Value:
     while (CurrentEntry != ListHead) {
         CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
 
-        ASSERT((CurrentImage->LoadFlags & IMAGE_LOAD_FLAG_LOAD_ONLY) == 0);
+        ASSERT((CurrentImage->Format == ImageElfNative) &&
+               ((CurrentImage->LoadFlags & IMAGE_LOAD_FLAG_LOAD_ONLY) == 0));
 
         if ((CurrentImage->Flags & IMAGE_FLAG_IMPORTS_LOADED) == 0) {
             Status = ImpElfLoadImportsForImage(ListHead, CurrentImage);
@@ -1657,6 +1662,9 @@ Return Value:
     CurrentEntry = ListHead->Previous;
     while (CurrentEntry != ListHead) {
         CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+
+        ASSERT(CurrentImage->Format == ImageElfNative);
+
         if ((CurrentImage->Flags & IMAGE_FLAG_RELOCATED) == 0) {
             Status = ImpElfRelocateImage(CurrentImage);
             if (!KSUCCESS(Status)) {
@@ -1804,6 +1812,8 @@ Return Value:
     ELF_SYMBOL_TYPE SymbolType;
     ELF_ADDR Value;
 
+    ASSERT(Image->Format == ImageElfNative);
+
     ElfSymbol = ImpElfGetSymbolInScope(Image, Skip, SymbolName, &FoundImage);
     if (ElfSymbol == NULL) {
         return STATUS_NOT_FOUND;
@@ -1879,6 +1889,8 @@ Return Value:
     ELF_WORD SymbolIndex;
     PSTR SymbolName;
     ELF_ADDR Value;
+
+    ASSERT(Image->Format == ImageElfNative);
 
     //
     // If the address is not within the bounds of the image, then it should not
@@ -2038,6 +2050,8 @@ Return Value:
     BOOL Result;
 
     FunctionAddress = NULL;
+
+    ASSERT(Image->Format == ImageElfNative);
 
     //
     // On ARM, what's passed in is a PLT index. Convert that to an offset based

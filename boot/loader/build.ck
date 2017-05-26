@@ -144,7 +144,7 @@ function build() {
     commonLibs = [
         "kernel/kd:kdboot",
         "kernel/hl:hlboot",
-        "lib/im:im",
+        "lib/im:imn",
         "lib/bconflib:bconf",
         "kernel/kd/kdusb:kdnousb"
     ];

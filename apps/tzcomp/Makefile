@@ -67,10 +67,10 @@ postbuild: $(BINROOT)/skel/usr/share/tz/tzdata $(BINROOT)/skel/etc/tz
 $(BINROOT)/skel/usr/share/tz/tzdata: $(TZ_FILES) | $(BINARY)
 	@echo Compiling time zone almanac
 	@mkdir -p $(BINROOT)/skel/usr/share/tz
-	./$(BINARY) $(TZ_FILES) -o $@ -y $(TZ_CUTOFF_YEAR)
+	@./$(BINARY) $(TZ_FILES) -o $@ -y $(TZ_CUTOFF_YEAR)
 
 $(BINROOT)/skel/etc/tz: $(TZ_FILES) | $(BINARY)
 	@echo Compiling default time zone: $(TZ_DEFAULT)
 	@mkdir -p $(BINROOT)/skel/etc
-	./$(BINARY) $(TZ_FILES) -o $@ -z $(TZ_DEFAULT) -y $(TZ_CUTOFF_YEAR)
+	@./$(BINARY) $(TZ_FILES) -o $@ -z $(TZ_DEFAULT) -y $(TZ_CUTOFF_YEAR)
 

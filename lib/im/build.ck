@@ -26,37 +26,59 @@ Environment:
 
 --*/
 
-from menv import staticLibrary;
+from menv import mconfig, staticLibrary;
 
 function build() {
+    var arch = mconfig.arch;
     var buildLib;
     var entries;
     var lib;
-    var sources;
+    var nativeLib;
+    var nativeSources;
+    var universalSources;
 
-    sources = [
+    universalSources = [
         "elf.c",
         "elf64.c",
         "elfcomm.c",
         "image.c",
+        "imuniv.c",
         "pe.c"
     ];
 
+    nativeSources = [
+        ":elfcomm.o",
+        "imnative.c",
+    ];
+
+    if ((arch == "armv6") || (arch == "armv7") || (arch == "x86")) {
+        nativeSources += [":elf.o"];
+
+    } else if (arch == "x64") {
+        nativeSources += [":elf64.o"];
+    }
+
     lib = {
-        "label": "im",
-        "inputs": sources,
+        "label": "imu",
+        "inputs": universalSources,
+    };
+
+    nativeLib = {
+        "label": "imn",
+        "inputs": nativeSources
     };
 
     buildLib = {
-        "label": "build_im",
-        "output": "im",
-        "inputs": sources,
+        "label": "build_imu",
+        "output": "imu",
+        "inputs": universalSources,
         "build": true,
         "prefix": "build"
     };
 
     entries = staticLibrary(lib);
     entries += staticLibrary(buildLib);
+    entries += staticLibrary(nativeLib);
     return entries;
 }
 

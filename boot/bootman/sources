@@ -36,7 +36,7 @@ OBJS     = bootman.o  \
 
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/boot/basertlb.a      \
              $(OBJROOT)/os/lib/rtl/kmode/krtl.a              \
-             $(OBJROOT)/os/lib/im/im.a                       \
+             $(OBJROOT)/os/lib/im/imu.a                      \
              $(OBJROOT)/os/lib/fatlib/fat.a                  \
              $(OBJROOT)/os/lib/basevid/basevid.a             \
              $(OBJROOT)/os/lib/bconflib/bconflib.a           \

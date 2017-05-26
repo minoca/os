@@ -47,6 +47,8 @@ Author:
 #define ELF_WORD_SIZE_SHIFT ELF64_WORD_SIZE_SHIFT
 #define ELF_WORD_SIZE_MASK ELF64_WORD_SIZE_MASK
 
+#define ImageElfNative ImageElf64
+
 //
 // Define integer types
 //
@@ -121,6 +123,8 @@ Author:
 
 #define ELF_WORD_SIZE_SHIFT ELF32_WORD_SIZE_SHIFT
 #define ELF_WORD_SIZE_MASK ELF32_WORD_SIZE_MASK
+
+#define ImageElfNative ImageElf32
 
 //
 // Define integer types

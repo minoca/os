@@ -55,7 +55,7 @@ TARGETLIBS = $(OBJROOT)/os/kernel/kd/boot/kdboot.a         \
              $(OBJROOT)/os/kernel/kd/kdusb/kdusb.a         \
              $(OBJROOT)/os/lib/rtl/base/boot/basertlb.a    \
              $(OBJROOT)/os/lib/rtl/kmode/krtl.a            \
-             $(OBJROOT)/os/lib/im/im.a                     \
+             $(OBJROOT)/os/lib/im/native/imn.a             \
              $(OBJROOT)/os/lib/fatlib/fat.a                \
              $(OBJROOT)/os/lib/basevid/basevid.a           \
              $(OBJROOT)/os/lib/bconflib/bconflib.a         \

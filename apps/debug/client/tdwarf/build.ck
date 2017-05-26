@@ -47,7 +47,7 @@ function build() {
     ];
 
     buildLibs = [
-        "lib/im:build_im",
+        "lib/im:build_imu",
         "lib/rtl/base:build_basertl",
         "lib/rtl/rtlc:build_rtlc",
     ];

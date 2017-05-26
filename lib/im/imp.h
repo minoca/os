@@ -28,6 +28,7 @@ Author:
 #define RTL_API __DLLEXPORT
 
 #include <minoca/kernel/driver.h>
+#include "immux.h"
 
 //
 // ---------------------------------------------------------------- Definitions

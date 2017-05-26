@@ -56,7 +56,7 @@ TARGETLIBS = $(OBJROOT)/$(THISDIR)/acpi/acpi.a           \
              $(OBJROOT)/$(THISDIR)/ob/ob.a               \
              $(OBJROOT)/os/lib/rtl/base/basertl.a        \
              $(OBJROOT)/os/lib/rtl/kmode/krtl.a          \
-             $(OBJROOT)/os/lib/im/im.a                   \
+             $(OBJROOT)/os/lib/im/native/imn.a           \
              $(OBJROOT)/os/lib/basevid/basevid.a         \
              $(OBJROOT)/os/lib/termlib/termlib.a         \
              $(OBJROOT)/$(THISDIR)/kd/kd.a               \
@@ -67,7 +67,7 @@ TARGETLIBS = $(OBJROOT)/$(THISDIR)/acpi/acpi.a           \
              $(OBJROOT)/$(THISDIR)/hl/hl.a               \
              $(OBJROOT)/$(THISDIR)/mm/mm.a               \
              $(OBJROOT)/$(THISDIR)/sp/sp.a               \
-             $(ARCHLIB)                                 \
+             $(ARCHLIB)                                  \
 
 OBJS = init.o
 

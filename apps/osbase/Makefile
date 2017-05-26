@@ -71,7 +71,7 @@ EXTRA_SRC_DIRS = x86 x64 armv7
 
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/basertl.a        \
              $(OBJROOT)/os/lib/rtl/base/wide/basertlw.a  \
-             $(OBJROOT)/os/lib/im/im.a                   \
+             $(OBJROOT)/os/lib/im/native/imn.a           \
              $(OBJROOT)/os/apps/osbase/urtl/urtl.a       \
              $(OBJROOT)/os/lib/crypto/crypto.a           \
 

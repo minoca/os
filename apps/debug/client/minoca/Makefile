@@ -36,7 +36,7 @@ INCLUDES += $(SRCDIR)/..;                        \
             $(SRCROOT)/os/lib/im;                \
             $(SRCROOT)/os/apps/libc/include;
 
-TARGETLIBS = $(OBJROOT)/os/lib/im/im.a                  \
+TARGETLIBS = $(OBJROOT)/os/lib/im/imu.a          \
 
 DYNLIBS = -lminocaos
 

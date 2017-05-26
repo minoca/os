@@ -13,7 +13,7 @@
 #
 #   Abstract:
 #
-#       This directory build the Image Library for the build environment.
+#       This directory builds the Image Library for the build environment.
 #
 #   Author:
 #
@@ -25,7 +25,7 @@
 #
 ################################################################################
 
-BINARY = im.a
+BINARY = imu.a
 
 BINARYTYPE = library
 

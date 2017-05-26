@@ -96,7 +96,7 @@ function build() {
     libs = [
         "lib/rtl/base:basertl",
         "lib/rtl/base:basertlw",
-        "lib/im:im",
+        "lib/im:imn",
         "apps/osbase/urtl:urtl",
         "lib/crypto:crypto"
     ];

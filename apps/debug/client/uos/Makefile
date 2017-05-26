@@ -37,7 +37,7 @@ BUILD = yes
 INCLUDES += $(SRCDIR)/..;                                 \
             $(SRCROOT)/os/lib/im;                         \
 
-TARGETLIBS = $(OBJROOT)/os/lib/im/build/im.a              \
+TARGETLIBS = $(OBJROOT)/os/lib/im/build/imu.a             \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a   \
              $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a      \
 

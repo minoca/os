@@ -373,15 +373,16 @@ Return Value:
             }
 
             if (EfiSystemTable->StdErr != NULL) {
-                EfiSystemTable->StdErr->OutputString(EfiSystemTable->StdErr,
-                                                     L"Found nothing to boot.");
+                EfiSystemTable->StdErr->OutputString(
+                                                EfiSystemTable->StdErr,
+                                                L"Found nothing to boot.\r\n");
             }
 
             //
             // Hmm... eventually do something more intelligent here.
             //
 
-            RtlDebugPrint("Nothing to boot, hanging...\n");
+            RtlDebugPrint("Nothing to boot, hanging...\r\n");
             while (TRUE) {
                 NOTHING;
             }

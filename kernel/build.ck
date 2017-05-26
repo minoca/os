@@ -88,7 +88,7 @@ function build() {
         "kernel/ob:ob",
         "lib/rtl/base:basertl",
         "lib/rtl/kmode:krtl",
-        "lib/im:im",
+        "lib/im:imn",
         "lib/basevid:basevid",
         "lib/termlib:termlib",
         "kernel/kd:kd",
