@@ -61,7 +61,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlDebugBreak)
+PROTECTED_FUNCTION(RtlDebugBreak)
     int $3                          # Debugger break.
     ret
 
@@ -93,7 +93,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlDebugService)
+PROTECTED_FUNCTION(RtlDebugService)
     int     $0x21                   # Request debug service.
     ret                             #
 
@@ -131,7 +131,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicCompareExchange64)
+PROTECTED_FUNCTION(RtlAtomicCompareExchange64)
     movq    %rdx, %rax              # Move CompareValue into rax.
 
     ##
@@ -171,7 +171,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicExchange32)
+PROTECTED_FUNCTION(RtlAtomicExchange32)
     xorq    %rax, %rax              # Clear the high part of rax for safety.
     movl    %esi, %eax              # Move the exchange value to eax.
     lock xchgl %eax, (%rdi)         # Exchange what's in *edi with eax.
@@ -210,7 +210,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicExchange64)
+PROTECTED_FUNCTION(RtlAtomicExchange64)
     movq    %rsi, %rax              # Move exchange value to eax.
     lock xchgq %rax, (%rdi)         # Exchange what's in *rdi with rax.
     ret                             # Return. Result is already in rax.
@@ -249,7 +249,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicCompareExchange32)
+PROTECTED_FUNCTION(RtlAtomicCompareExchange32)
     xorq    %rax, %rax              # Zero out the high part of rax, for safety.
     movl    %edx, %eax              # Move CompareValue into eax.
 
@@ -289,7 +289,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicAdd64)
+PROTECTED_FUNCTION(RtlAtomicAdd64)
 RtlAtomicAdd64Loop:
     movq    (%rdi), %rcx            # Read the value.
     movq    %rcx, %rax              # Move the value to rax as compare value.
@@ -326,7 +326,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicAdd32)
+PROTECTED_FUNCTION(RtlAtomicAdd32)
 RtlAtomicAdd32Loop:
     xorq    %rcx, %rcx              # Zero out high part of rcx.
     movl    (%rdi), %ecx            # Read the value.
@@ -364,7 +364,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicOr32)
+PROTECTED_FUNCTION(RtlAtomicOr32)
 RtlAtomicOr32Loop:
     xorq    %rcx, %rcx              # Zero out high part of rcx.
     movl    (%rdi), %ecx            # Read the value.
@@ -402,7 +402,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicOr64)
+PROTECTED_FUNCTION(RtlAtomicOr64)
 RtlAtomicOr64Loop:
     movq    (%rdi), %rcx            # Read the value.
     movq    %rcx, %rax              # Move the value to rax as compare value.
@@ -439,7 +439,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicAnd32)
+PROTECTED_FUNCTION(RtlAtomicAnd32)
 RtlAtomicAnd32Loop:
     xorq    %rcx, %rcx              # Zero out high part of rcx.
     movl    (%rdi), %ecx            # Read the value.
@@ -477,7 +477,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicXor32)
+PROTECTED_FUNCTION(RtlAtomicXor32)
 RtlAtomicXor32Loop:
     xorq    %rcx, %rcx              # Zero out high part of rcx.
     movl    (%rdi), %ecx            # Read the value.
@@ -514,7 +514,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlMemoryBarrier)
+PROTECTED_FUNCTION(RtlMemoryBarrier)
     lock orq $0, (%esp)
     ret
 

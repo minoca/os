@@ -5644,8 +5644,8 @@ Return Value:
                                    &BytesRead);
 
             if (Result != 0) {
-                DbgOut("Error reading virtual memory, only read %ld bytes, type "
-                       "is %d bytes!\n",
+                DbgOut("Error reading virtual memory, only read %ld bytes, "
+                       "type is %d bytes!\n",
                        TypeSize,
                        BytesRead);
 
@@ -7236,6 +7236,10 @@ Return Value:
 
         break;
 
+    case MACHINE_TYPE_X64:
+        Language = MachineLanguageX64;
+        break;
+
     default:
         DbgOut("Error: Unknown machine type %d.\n", Context->MachineType);
         Result = EINVAL;
@@ -7369,7 +7373,9 @@ Return Value:
         // For x86 disassembly, print out the bytes of the actual instruction.
         //
 
-        if (Language == MachineLanguageX86) {
+        if ((Language == MachineLanguageX86) ||
+            (Language == MachineLanguageX64)) {
+
             DbgOut("\t; ");
             for (CurrentInstructionByte = 0;
                  CurrentInstructionByte < Disassembly.BinaryLength;

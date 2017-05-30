@@ -63,6 +63,7 @@ Environment:
 //
 // Definition for the TRAP_FRAME structure and the exception stack directly
 // above it.
+// TODO: Fix this!
 //
 
 #define TRAP_DS             0
@@ -89,7 +90,7 @@ Environment:
 #define TRAP_ERRORCODE      144
 #define TRAP_RIP            152
 #define TRAP_CS             160
-#define TRAP_EFLAGS         168
+#define TRAP_RFLAGS         168
 #define TRAP_RSP            176
 
 #define TRAP_FRAME_SIZE     184
@@ -132,12 +133,13 @@ Environment:
     mov     $GDT_PROCESSOR, %ax ;  \
     mov     %ax, %fs ;             \
 
-#if defined(__WINNT__)
+#if defined(__WINNT__) || defined(__CYGWIN__)
 
 #define FUNCTION(_Name) \
-    .def _Name; .scl 2; .type 32; .endef ; \
-    .global _Name ; \
-    _Name:
+    _Name: \
+    .def _##_Name; .scl 2; .type 32; .endef ; \
+    .global _##_Name ; \
+    _##_Name:
 
 #define PROTECTED_FUNCTION(_Name) FUNCTION(_Name)
 #define EXPORTED_FUNCTION(_Name) FUNCTION(_Name)
@@ -155,6 +157,8 @@ Environment:
     .func _Name ; \
     .type _Name, %function ; \
     .cfi_startproc ; \
+    .cfi_def_cfa %rsp, 8 ; \
+    .cfi_offset %rip, -8 ; \
     .global _Name ; \
     _Name:
 
@@ -184,8 +188,8 @@ Environment:
 #else
 
 #define FUNCTION(_Name) \
-    .global _##_Name ; \
-    _##_Name:
+    .global _Name ; \
+    _Name:
 
 #define PROTECTED_FUNCTION(_Name) FUNCTION(_Name)
 #define EXPORTED_FUNCTION(_Name) FUNCTION(_Name)
@@ -193,4 +197,15 @@ Environment:
 #define END_FUNCTION(_Name)
 
 #endif
+
+##
+## Define .cfi directives, macroed so they can be excised if unneeded.
+##
+
+#define CFI_DEF_CFA(_Register, _Offset) .cfi_def_cfa _Register, _Offset
+#define CFI_DEF_CFA_OFFSET(_Offset) .cfi_def_cfa_offset _Offset
+#define CFI_ADJUST_CFA_OFFSET(_Amount) .cfi_adjust_cfa_offset _Amount
+#define CFI_OFFSET(_Register, _Offset) .cfi_offset _Register, _Offset
+#define CFI_UNDEFINED(_Register) .cfi_undefined _Register
+#define CFI_SAME_VALUE(_Register) .cfi_same_value _Register
 

@@ -123,6 +123,7 @@ Return Value:
     BOOL Result;
     KSTATUS Status;
     ULONG TextSize;
+    ULONGLONG TextVirtualAddress;
 
     Failures = 0;
     FileBuffer = NULL;
@@ -202,7 +203,7 @@ Return Value:
     Result = ImGetImageSection(&ImageBuffer,
                                ".text",
                                (PVOID *)&InstructionStream,
-                               NULL,
+                               &TextVirtualAddress,
                                &TextSize,
                                NULL);
 
@@ -224,6 +225,11 @@ Return Value:
         LanguageString = "x86";
         break;
 
+    case ImageMachineTypeX64:
+        Language = MachineLanguageX64;
+        LanguageString = "x64";
+        break;
+
     case ImageMachineTypeArm32:
         Language = MachineLanguageArm;
         LanguageString = "ARM";
@@ -243,9 +249,10 @@ Return Value:
     }
 
     if (PrintDisassembly != FALSE) {
-        printf("Disassembling %s (%s), %d bytes.\n",
+        printf("Disassembling %s (%s), VA 0x%llx, 0x%x bytes.\n",
                Filename,
                LanguageString,
+               TextVirtualAddress,
                TextSize);
     }
 
@@ -263,10 +270,10 @@ Return Value:
         //
 
         if (PrintDisassembly != FALSE) {
-            printf("\n%04x: ", BytesDisassembled);
+            printf("\n%08x: ", TextVirtualAddress + BytesDisassembled);
         }
 
-        Result = DbgDisassemble((UINTN)CurrentInstruction,
+        Result = DbgDisassemble(TextVirtualAddress + BytesDisassembled,
                                 CurrentInstruction,
                                 DisassemblyBuffer,
                                 sizeof(DisassemblyBuffer),
@@ -464,7 +471,9 @@ Return Value:
         // Print the binary contents for x86 disassembly.
         //
 
-        if (Language == MachineLanguageX86) {
+        if ((Language == MachineLanguageX86) ||
+            (Language == MachineLanguageX64)) {
+
             if (Disassembly.BinaryLength == 0) {
                 printf("Error: got a zero length instruction\n");
                 Failures += 1;

@@ -90,6 +90,7 @@ Return Value:
 EXPORTED_FUNCTION(_setjmp)
 END_FUNCTION(_setjmp)
 EXPORTED_FUNCTION(setjmp)
+    int     $3                  # TODO: Check this, it's never been run!
     movq    (%rsp), %rcx        # Load the return address.
 
     ##
@@ -155,6 +156,7 @@ Return Value:
 --*/
 
 EXPORTED_FUNCTION(sigsetjmp)
+    int     $3                  # TODO: Check this, it's never been run!
     movq    (%rsp), %rcx        # Load the return address.
 
     ##
@@ -223,6 +225,7 @@ Return Value:
 --*/
 
 FUNCTION(ClpLongJump)
+    int     $3                  # TODO: Check this, it's never been run!
     movq    JUMP_BUFFER_R15(%rdi), %r15
     movq    JUMP_BUFFER_R14(%rdi), %r14
     movq    JUMP_BUFFER_R13(%rdi), %r13

@@ -33,7 +33,9 @@ typedef enum _MACHINE_LANGUAGE {
     MachineLanguageInvalid,
     MachineLanguageX86,
     MachineLanguageArm,
-    MachineLanguageThumb2
+    MachineLanguageThumb2,
+    MachineLanguageX64,
+    MachineLanguageCount
 } MACHINE_LANGUAGE, *PMACHINE_LANGUAGE;
 
 /*++
@@ -143,7 +145,8 @@ DbgpX86Disassemble (
     PBYTE InstructionStream,
     PSTR Buffer,
     ULONG BufferLength,
-    PDISASSEMBLED_INSTRUCTION Disassembly
+    PDISASSEMBLED_INSTRUCTION Disassembly,
+    MACHINE_LANGUAGE Language
     );
 
 /*++
@@ -168,6 +171,8 @@ Arguments:
 
     Disassembly - Supplies a pointer to the structure that will receive
         information about the instruction.
+
+    Language - Supplies the type of machine langage being decoded.
 
 Return Value:
 

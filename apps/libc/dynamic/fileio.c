@@ -3013,7 +3013,7 @@ Return Value:
     Descriptor = &(Descriptors[0]);
     for (PollIndex = 0; PollIndex < ArrayIndex; PollIndex += 1) {
         Events = Descriptor->ReturnedEvents;
-        DescriptorIndex = (INT)(Descriptor->Handle);
+        DescriptorIndex = (UINTN)(Descriptor->Handle);
 
         ASSERT(DescriptorIndex < DescriptorCount);
 

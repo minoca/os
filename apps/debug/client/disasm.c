@@ -101,11 +101,13 @@ Return Value:
 
     switch (Language) {
     case MachineLanguageX86:
+    case MachineLanguageX64:
         Result = DbgpX86Disassemble(InstructionPointer,
                                     InstructionStream,
                                     Buffer,
                                     BufferLength,
-                                    Disassembly);
+                                    Disassembly,
+                                    Language);
 
         break;
 

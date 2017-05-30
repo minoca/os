@@ -600,7 +600,15 @@ struct _FPU_CONTEXT {
     UCHAR Xmm5[16];
     UCHAR Xmm6[16];
     UCHAR Xmm7[16];
-    UCHAR Padding[224];
+    UCHAR Xmm8[16];
+    UCHAR Xmm9[16];
+    UCHAR Xmm10[16];
+    UCHAR Xmm11[16];
+    UCHAR Xmm12[16];
+    UCHAR Xmm13[16];
+    UCHAR Xmm14[16];
+    UCHAR Xmm15[16];
+    UCHAR Padding[96];
 } PACKED ALIGNED64;
 
 /*++

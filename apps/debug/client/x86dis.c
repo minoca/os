@@ -37,6 +37,47 @@ Environment:
 #include <assert.h>
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// Define macros to get at the pieces of the ModRM byte. This also adds the
+// extra bit extended by the REX byte, which if not present is a no-op, as it
+// will be zero.
+//
+
+#define X86_MODRM_MOD(_ModRm) (((_ModRm) & X86_MOD_MASK) >> X86_MOD_SHIFT)
+#define X86_MODRM_REG(_Instruction, _ModRm) \
+    ((((_ModRm) & X86_REG_MASK) >> X86_REG_SHIFT) | \
+     (((_Instruction)->Rex & X64_REX_R) << 1))
+
+#define X86_MODRM_RM(_Instruction, _ModRm) \
+    ((((_ModRm) & X86_RM_MASK) >> X86_RM_SHIFT) | \
+     (((_Instruction)->Rex & X64_REX_B) << 3))
+
+//
+// Define macros to get the fields of the Scale-Index-Base byte, extending
+// index and base with the REX bits.
+//
+
+#define X86_SIB_BASE(_Instruction) \
+    ((((_Instruction)->Sib & X86_BASE_MASK) >> X86_BASE_SHIFT) | \
+     (((_Instruction)->Rex & X64_REX_B) << 3))
+
+#define X86_SIB_INDEX(_Instruction) \
+    ((((_Instruction)->Sib & X86_INDEX_MASK) >> X86_INDEX_SHIFT) | \
+     (((_Instruction)->Rex & X64_REX_X) << 2))
+
+#define X86_SIB_SCALE(_Instruction) \
+    (1 << (((_Instruction)->Sib & X86_SCALE_MASK) >> X86_SCALE_SHIFT))
+
+//
+// This macro un-extends a register, just getting the 3-bit value.
+//
+
+#define X86_BASIC_REG(_Reg) ((_Reg) & 0x7)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -49,6 +90,9 @@ Environment:
 #define X86_WIDTH_LONG 'l'
 #define X86_WIDTH_LONGLONG 'q'
 #define X86_FLOATING_POINT_REGISTER 'f'
+#define X86_CONTROL_REGISTER 'C'
+#define X86_DEBUG_REGISTER 'D'
+#define X86_SEGMENT_REGISTER 'S'
 
 //
 // Define the internal bitfields of the ModR/M and SIB byte.
@@ -68,28 +112,53 @@ Environment:
 #define X86_BASE_SHIFT 0
 
 //
+// Define the X64 REX bits.
+//
+
+//
+// This bit indicates a 64-bit operand size.
+//
+
+#define X64_REX_W 0x08
+
+//
+// This bit is an extension to the ModRM reg field.
+//
+
+#define X64_REX_R 0x04
+
+//
+// This bit is an extension to the SIB index field.
+//
+
+#define X64_REX_X 0x02
+
+//
+// This bit is an extension to the ModRM rm field, or SIB base field.
+//
+
+#define X64_REX_B 0x01
+
+//
 // Define some of the prefixes that can come at the beginning of an instruction.
 //
 
-#define X86_MAX_PREFIXES 4
+#define X86_MAX_PREFIXES 5
 #define X86_OPERAND_OVERRIDE 0x66
 #define X86_ADDRESS_OVERRIDE 0x67
 #define X86_ESCAPE_OPCODE 0x0F
 #define X86_PREFIX_LOCK 0xF0
-#define X86_PREFIX_REP1 0xF2
-#define X86_PREFIX_REP2 0xF3
+#define X86_PREFIX_REPN 0xF2
+#define X86_PREFIX_REP 0xF3
 #define X86_PREFIX_CS 0x2E
 #define X86_PREFIX_DS 0x3E
 #define X86_PREFIX_ES 0x26
+#define X86_PREFIX_FS 0x64
+#define X86_PREFIX_GS 0x65
 #define X86_PREFIX_SS 0x36
 
-//
-// This mask/value combination covers the FS prefix, GS prefix, Operand
-// override, and Address override.
-//
-
-#define X86_PREFIX_FS_GS_OVERRIDE_MASK 0xFC
-#define X86_PREFIX_FS_GS_OVERRIDE_VALUE 0x64
+#define X64_REX_MASK 0xF0
+#define X64_REX_VALUE 0x40
 
 //
 // For opcode groups with fewer than the maximum number of possible opcodes,
@@ -97,7 +166,6 @@ Environment:
 //
 
 #define X86_GROUP_4_INSTRUCTION_COUNT 2
-#define X86_GROUP_5_INSTRUCTION_COUNT 7
 #define X86_GROUP_6_INSTRUCTION_COUNT 6
 #define X86_GROUP_8_FIRST_INSTRUCTION 4
 #define X86_GROUP_9_ONLY_VALID_INSTRUCTION 1
@@ -107,9 +175,7 @@ Environment:
 // Define the sizes of the register name arrays.
 //
 
-#define X86_DEBUG_REGISTER_COUNT 8
-#define X86_SEGMENT_REGISTER_COUNT 6
-#define X86_REGISTER_NAME_COUNT 8
+#define X86_REGISTER_NAME_COUNT 16
 
 //
 // Define the size of the working buffers.
@@ -226,6 +292,12 @@ Structure Description:
 
 Members:
 
+    Language - Stores the machine language type being decoded. Valid values are
+        x86 and x64.
+
+    InstructionPointer - Stores the current instruction pointer, used for
+        computing the operand address of RIP-relative addresses.
+
     Prefix - Stores up to 4 prefix bytes, which is the maximum number of
         allowed prefixes in x86 instructions.
 
@@ -250,6 +322,8 @@ Members:
         2-0 describe the base register, both of which are encoded like the Reg
         field for general registers.
 
+    Rex - Stores the REX byte for 64-bit register extension.
+
     Displacement - Stores the displacement of the instruction operand.
 
     Immediate - Stores the immediate value that may or may not be encoded in the
@@ -272,35 +346,59 @@ Members:
     Definition - Stores a the instruction decoding information,
         including the instruction mnemonic.
 
+    Lock - Stores a lock string or an empty string, depending on whether or not
+        the lock prefix was supplied.
+
+    Rep - Stores a rep string or an empty string depending on whether or not
+        the rep prefix was supplied.
+
+    SegmentPrefix - Stores the segment prefix string, or an empty string if
+        there is no segment prefix.
+
 --*/
 
 typedef struct _X86_INSTRUCTION {
+    MACHINE_LANGUAGE Language;
+    ULONGLONG InstructionPointer;
     BYTE Prefix[X86_MAX_PREFIXES];
     BYTE Opcode;
     BYTE Opcode2;
     BYTE ModRm;
     BYTE Sib;
-    ULONG Displacement;
-    ULONG Immediate;
+    BYTE Rex;
+    ULONGLONG Displacement;
+    ULONGLONG Immediate;
     ULONG Length;
     ULONG DisplacementSize;
     ULONG ImmediateSize;
     BOOL OperandOverride;
     BOOL AddressOverride;
     X86_INSTRUCTION_DEFINITION Definition;
+    PCSTR Lock;
+    PCSTR Rep;
+    PCSTR SegmentPrefix;
 } X86_INSTRUCTION, *PX86_INSTRUCTION;
 
 typedef enum _X86_REGISTER_VALUE {
-    X86RegisterValueEax,
-    X86RegisterValueEcx,
-    X86RegisterValueEdx,
-    X86RegisterValueEbx,
-    X86RegisterValueEsp,
-    X86RegisterValueEbp,
-    X86RegisterValueEsi,
-    X86RegisterValueEdi,
+    X86RegisterValueAx,
+    X86RegisterValueCx,
+    X86RegisterValueDx,
+    X86RegisterValueBx,
+    X86RegisterValueSp,
+    X86RegisterValueBp,
+    X86RegisterValueSi,
+    X86RegisterValueDi,
+    X86RegisterValueR8,
+    X86RegisterValueR9,
+    X86RegisterValueR10,
+    X86RegisterValueR11,
+    X86RegisterValueR12,
+    X86RegisterValueR13,
+    X86RegisterValueR14,
+    X86RegisterValueR15,
     X86RegisterValueScaleIndexBase,
     X86RegisterValueDisplacement32,
+    X86RegisterValueRipRelative
 } X86_REGISTER_VALUE, *PX86_REGISTER_VALUE;
 
 typedef enum _X86_MOD_VALUE {
@@ -315,15 +413,9 @@ typedef enum _X86_MOD_VALUE {
 //
 
 //
-// Define working buffers. Note that this makes the disassembly code not thread
-// safe.
-//
-
-CHAR DbgX86DisassemblyBuffer[X86_WORKING_BUFFER_SIZE];
-CHAR DbgX86OperandBuffer[X86_WORKING_BUFFER_SIZE];
-
-//
-// Define the x86 instruction encodings.
+// Define the x86 instruction encodings. A 6 after the width character of the
+// opcode format indicates that the default operand size is 64 bits in long
+// mode.
 //
 
 X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
@@ -332,7 +424,7 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"add", "Gb", "Eb", 0},                     /* 02 */
     {"add", "Gv", "Ev", 0},                     /* 03 */
     {"add", "!bal", "Ib", 0},                   /* 04 */
-    {"add", "!rax", "Iz", 0},                   /* 05 */
+    {"add", "!r0", "Iz", 0},                    /* 05 */
     {"push", "!wes", "", 0},                    /* 06 */
     {"pop", "!wes", "", 0},                     /* 07 */
     {"or", "Eb", "Gb", 0},                      /* 08 */
@@ -340,7 +432,7 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"or", "Gb", "Eb", 0},                      /* 0A */
     {"or", "Gv", "Ev", 0},                      /* 0B */
     {"or", "!bal", "Ib", 0},                    /* 0C */
-    {"or", "!rax", "Iz", 0},                    /* 0D */
+    {"or", "!r0", "Iz", 0},                     /* 0D */
     {"push", "!wcs", "", 0},                    /* 0E */
     {"2BYTE", "", "", X86_INVALID_GROUP},       /* 0F */ /* Two Byte Opcodes */
     {"adc", "Eb", "Gb", 0},                     /* 10 */
@@ -348,7 +440,7 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"adc", "Gb", "Eb", 0},                     /* 12 */
     {"adc", "Gv", "Ev", 0},                     /* 13 */
     {"adc", "!bal", "Ib", 0},                   /* 14 */
-    {"adc", "!rax", "Iz", 0},                   /* 15 */
+    {"adc", "!r0", "Iz", 0},                    /* 15 */
     {"push", "!wss", "", 0},                    /* 16 */
     {"pop", "!wss", "", 0},                     /* 17 */
     {"sbb", "Eb", "Gb", 0},                     /* 18 */
@@ -356,7 +448,7 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"sbb", "Gb", "Eb", 0},                     /* 1A */
     {"sbb", "Gv", "Ev", 0},                     /* 1B */
     {"sbb", "!bal", "Ib", 0},                   /* 1C */
-    {"sbb", "!rax", "Iz", 0},                   /* 1D */
+    {"sbb", "!r0", "Iz", 0},                    /* 1D */
     {"push", "!wds", "", 0},                    /* 1E */
     {"pop", "!wds", "", 0},                     /* 1F */
     {"and", "Eb", "Gb", 0},                     /* 20 */
@@ -364,7 +456,7 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"and", "Gb", "Eb", 0},                     /* 22 */
     {"and", "Gv", "Ev", 0},                     /* 23 */
     {"and", "!bal", "Ib", 0},                   /* 24 */
-    {"and", "!rax", "Iz", 0},                   /* 25 */
+    {"and", "!r0", "Iz", 0},                    /* 25 */
     {"ES:", "", "", X86_INVALID_GROUP},         /* 26 */ /* ES prefix */
     {"daa", "", "", 0},                         /* 27 */
     {"sub", "Eb", "Gb", 0},                     /* 28 */
@@ -372,7 +464,7 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"sub", "Gb", "Eb", 0},                     /* 2A */
     {"sub", "Gv", "Ev", 0},                     /* 2B */
     {"sub", "!bal", "Ib", 0},                   /* 2C */
-    {"sub", "!rax", "Iz", 0},                   /* 2D */
+    {"sub", "!r0", "Iz", 0},                    /* 2D */
     {"CS:", "", "", X86_INVALID_GROUP},         /* 2E */ /* CS prefix */
     {"das", "", "", 0},                         /* 2F */
     {"xor", "Eb", "Gb", 0},                     /* 30 */
@@ -380,7 +472,7 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"xor", "Gb", "Eb", 0},                     /* 32 */
     {"xor", "Gv", "Ev", 0},                     /* 33 */
     {"xor", "!bal", "Ib", 0},                   /* 34 */
-    {"xor", "!rax", "Iz", 0},                   /* 35 */
+    {"xor", "!r0", "Iz", 0},                    /* 35 */
     {"SS:", "", "", X86_INVALID_GROUP},         /* 36 */ /* SS prefix */
     {"aaa", "", "", 0},                         /* 37 */
     {"cmp", "Eb", "Gb", 0},                     /* 38 */
@@ -388,45 +480,45 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"cmp", "Gb", "Eb", 0},                     /* 3A */
     {"cmp", "Gv", "Ev", 0},                     /* 3B */
     {"cmp", "!bal", "Ib", 0},                   /* 3C */
-    {"cmp", "!rax", "Iz", 0},                   /* 3D */
+    {"cmp", "!r0", "Iz", 0},                    /* 3D */
     {"DS:", "", "", X86_INVALID_GROUP},         /* 3E */ /* DS prefix */
     {"aas", "", "", 0},                         /* 3F */
-    {"inc", "!eax", "", 0},                     /* 40 */
-    {"inc", "!ecx", "", 0},                     /* 41 */
-    {"inc", "!edx", "", 0},                     /* 42 */
-    {"inc", "!ebx", "", 0},                     /* 43 */
-    {"inc", "!esp", "", 0},                     /* 44 */
-    {"inc", "!ebp", "", 0},                     /* 45 */
-    {"inc", "!esi", "", 0},                     /* 46 */
-    {"inc", "!edi", "", 0},                     /* 47 */
-    {"dec", "!eax", "", 0},                     /* 48 */
-    {"dec", "!ecx", "", 0},                     /* 49 */
-    {"dec", "!edx", "", 0},                     /* 4A */
-    {"dec", "!ebx", "", 0},                     /* 4B */
-    {"dec", "!esp", "", 0},                     /* 4C */
-    {"dec", "!ebp", "", 0},                     /* 4D */
-    {"dec", "!esi", "", 0},                     /* 4E */
-    {"dec", "!edi", "", 0},                     /* 4F */
-    {"push", "!rax", "", 0},                    /* 50 */
-    {"push", "!rcx", "", 0},                    /* 51 */
-    {"push", "!rdx", "", 0},                    /* 52 */
-    {"push", "!rbx", "", 0},                    /* 53 */
-    {"push", "!rsp", "", 0},                    /* 54 */
-    {"push", "!rbp", "", 0},                    /* 55 */
-    {"push", "!rsi", "", 0},                    /* 56 */
-    {"push", "!rdi", "", 0},                    /* 57 */
-    {"pop", "!rax", "", 0},                     /* 58 */
-    {"pop", "!rcx", "", 0},                     /* 59 */
-    {"pop", "!rdx", "", 0},                     /* 5A */
-    {"pop", "!rbx", "", 0},                     /* 5B */
-    {"pop", "!rsp", "", 0},                     /* 5C */
-    {"pop", "!rbp", "", 0},                     /* 5D */
-    {"pop", "!rsi", "", 0},                     /* 5E */
-    {"pop", "!rdi", "", 0},                     /* 5F */
+    {"inc", "!eeax", "", 0},                    /* 40 */
+    {"inc", "!eecx", "", 0},                    /* 41 */
+    {"inc", "!eedx", "", 0},                    /* 42 */
+    {"inc", "!eebx", "", 0},                    /* 43 */
+    {"inc", "!eesp", "", 0},                    /* 44 */
+    {"inc", "!eebp", "", 0},                    /* 45 */
+    {"inc", "!eesi", "", 0},                    /* 46 */
+    {"inc", "!eedi", "", 0},                    /* 47 */
+    {"dec", "!eeax", "", 0},                    /* 48 */
+    {"dec", "!eecx", "", 0},                    /* 49 */
+    {"dec", "!eedx", "", 0},                    /* 4A */
+    {"dec", "!eebx", "", 0},                    /* 4B */
+    {"dec", "!eesp", "", 0},                    /* 4C */
+    {"dec", "!eebp", "", 0},                    /* 4D */
+    {"dec", "!eesi", "", 0},                    /* 4E */
+    {"dec", "!eedi", "", 0},                    /* 4F */
+    {"push", "!r06", "", 0},                    /* 50 */
+    {"push", "!r16", "", 0},                    /* 51 */
+    {"push", "!r26", "", 0},                    /* 52 */
+    {"push", "!r36", "", 0},                    /* 53 */
+    {"push", "!r46", "", 0},                    /* 54 */
+    {"push", "!r56", "", 0},                    /* 55 */
+    {"push", "!r66", "", 0},                    /* 56 */
+    {"push", "!r76", "", 0},                    /* 57 */
+    {"pop", "!r06", "", 0},                     /* 58 */
+    {"pop", "!r16", "", 0},                     /* 59 */
+    {"pop", "!r26", "", 0},                     /* 5A */
+    {"pop", "!r36", "", 0},                     /* 5B */
+    {"pop", "!r46", "", 0},                     /* 5C */
+    {"pop", "!r56", "", 0},                     /* 5D */
+    {"pop", "!r66", "", 0},                     /* 5E */
+    {"pop", "!r76", "", 0},                     /* 5F */
     {"pushad", "", "", 0},                      /* 60 */
     {"popad", "", "", 0},                       /* 61 */
     {"bound", "Gv", "Ma", 0},                   /* 62 */
-    {"arpl", "Ew", "Gw", 0},                    /* 63 */
+    {"movsxd", "Gv", "Ed", 0},                  /* 63 */ /* Was arpl in 286+ */
     {"FS:", "", "", X86_INVALID_GROUP},         /* 64 */ /* FS prefix */
     {"GS:", "", "", X86_INVALID_GROUP},         /* 65 */ /* GS prefix */
     {"OPSIZE:", "", "", X86_INVALID_GROUP},     /* 66 */ /* Operand override */
@@ -468,17 +560,17 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"mov", "Gb", "Eb", 0},                     /* 8A */
     {"mov", "Gv", "Ev", 0},                     /* 8B */
     {"mov", "Ev", "Sw", 0},                     /* 8C */
-    {"lea", "Gv", "Ml", 0},                     /* 8D */
+    {"lea", "Gv", "M", 0},                      /* 8D */
     {"mov", "Sw", "Ev", 0},                     /* 8E */
-    {"pop", "Ev", "", 10},                      /* 8F */ /* Group 10 */
+    {"pop", "Ev6", "", 0x1A},                   /* 8F */ /* Group 0x1A */
     {"nop", "", "", 0},                         /* 90 */ /* nop */
-    {"xchg", "!rcx", "!rax", 0},                /* 91 */
-    {"xchg", "!rdx", "!rax", 0},                /* 92 */
-    {"xchg", "!rbx", "!rax", 0},                /* 93 */
-    {"xchg", "!rsp", "!rax", 0},                /* 94 */
-    {"xchg", "!rbp", "!rax", 0},                /* 95 */
-    {"xchg", "!rsi", "!rax", 0},                /* 96 */
-    {"xchg", "!rdi", "!rax", 0},                /* 97 */
+    {"xchg", "!r1", "!r0", 0},                  /* 91 */
+    {"xchg", "!r2", "!r0", 0},                  /* 92 */
+    {"xchg", "!r3", "!r0", 0},                  /* 93 */
+    {"xchg", "!r4", "!r0", 0},                  /* 94 */
+    {"xchg", "!r5", "!r0", 0},                  /* 95 */
+    {"xchg", "!r6", "!r0", 0},                  /* 96 */
+    {"xchg", "!r7", "!r0", 0},                  /* 97 */
     {"cwde", "", "", 0},                        /* 98 */
     {"cdq", "", "", 0},                         /* 99 */
     {"call", "Ap", "", 0},                      /* 9A */
@@ -488,55 +580,55 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"sahf", "", "", 0},                        /* 9E */
     {"lafh", "", "", 0},                        /* 9F */
     {"mov", "!bal", "Ob", 0},                   /* A0 */
-    {"mov", "!rax", "Ov", 0},                   /* A1 */
+    {"mov", "!r0", "Ov", 0},                    /* A1 */
     {"mov", "Ob", "!bal", 0},                   /* A2 */
-    {"mov", "Ov", "!rax", 0},                   /* A3 */
+    {"mov", "Ov", "!r0", 0},                    /* A3 */
     {"movs", "Yb", "Xb", 0},                    /* A4 */
     {"movs", "Yv", "Xv", 0},                    /* A5 */
     {"cmps", "Yb", "Xb", 0},                    /* A6 */
     {"cmps", "Yv", "Xv", 0},                    /* A7 */
     {"test", "!bal", "Ib", 0},                  /* A8 */
-    {"test", "!rax", "Iz", 0},                  /* A9 */
+    {"test", "!r0", "Iz", 0},                   /* A9 */
     {"stos", "Yb", "!bal", 0},                  /* AA */
-    {"stos", "Yv", "!rax", 0},                  /* AB */
+    {"stos", "Yv", "!r0", 0},                   /* AB */
     {"lods", "!bal", "Xb", 0},                  /* AC */
-    {"lods", "!rax", "Xv", 0},                  /* AD */
+    {"lods", "!r0", "Xv", 0},                   /* AD */
     {"scas", "Yb", "!bal", 0},                  /* AE */
-    {"scas", "Yv", "!rax", 0},                  /* AF */
-    {"mov", "!bal", "Ib", 0},                   /* B0 */
-    {"mov", "!bcl", "Ib", 0},                   /* B1 */
-    {"mov", "!bdl", "Ib", 0},                   /* B2 */
-    {"mov", "!bbl", "Ib", 0},                   /* B3 */
-    {"mov", "!bah", "Ib", 0},                   /* B4 */
-    {"mov", "!bch", "Ib", 0},                   /* B5 */
-    {"mov", "!bdh", "Ib", 0},                   /* B6 */
-    {"mov", "!bbh", "Ib", 0},                   /* B7 */
-    {"mov", "!rax", "Iv", 0},                   /* B8 */
-    {"mov", "!rcx", "Iv", 0},                   /* B9 */
-    {"mov", "!rdx", "Iv", 0},                   /* BA */
-    {"mov", "!rbx", "Iv", 0},                   /* BB */
-    {"mov", "!rsp", "Iv", 0},                   /* BC */
-    {"mov", "!rbp", "Iv", 0},                   /* BD */
-    {"mov", "!rsi", "Iv", 0},                   /* BE */
-    {"mov", "!rdi", "Iv", 0},                   /* BF */
+    {"scas", "Yv", "!r0", 0},                   /* AF */
+    {"mov", "!b0", "Ib", 0},                    /* B0 */
+    {"mov", "!b1", "Ib", 0},                    /* B1 */
+    {"mov", "!b2", "Ib", 0},                    /* B2 */
+    {"mov", "!b3", "Ib", 0},                    /* B3 */
+    {"mov", "!b4", "Ib", 0},                    /* B4 */
+    {"mov", "!b5", "Ib", 0},                    /* B5 */
+    {"mov", "!b6", "Ib", 0},                    /* B6 */
+    {"mov", "!b7", "Ib", 0},                    /* B7 */
+    {"mov", "!r0", "Iv", 0},                    /* B8 */
+    {"mov", "!r1", "Iv", 0},                    /* B9 */
+    {"mov", "!r2", "Iv", 0},                    /* BA */
+    {"mov", "!r3", "Iv", 0},                    /* BB */
+    {"mov", "!r4", "Iv", 0},                    /* BC */
+    {"mov", "!r5", "Iv", 0},                    /* BD */
+    {"mov", "!r6", "Iv", 0},                    /* BE */
+    {"mov", "!r7", "Iv", 0},                    /* BF */
     {"GRP2", "Eb", "Ib", 2},                    /* C0 */ /* Group 2 */
     {"GRP2", "Ev", "Ib", 2},                    /* C1 */ /* Group 2 */
     {"ret", "Iw", "", 0},                       /* C2 */
     {"ret", "", "", 0},                         /* C3 */
     {"les", "Gz", "Mp", 0},                     /* C4 */
     {"lds", "Gz", "Mp", 0},                     /* C5 */
-    {"mov", "Eb", "Ib", 12},                    /* C6 */ /* Group 12 */
-    {"mov", "Ev", "Iz", 12},                    /* C7 */ /* Group 12 */
+    {"mov", "Eb", "Ib", 11},                    /* C6 */ /* Group 11 */
+    {"mov", "Ev", "Iz", 11},                    /* C7 */ /* Group 11 */
     {"enter", "Iw", "Ib", 0},                   /* C8 */
     {"leave", "", "", 0},                       /* C9 */
     {"retf", "Iw", "", 0},                      /* CA */
     {"retf", "", "", 0},                        /* CB */
-    {"int", "!b3", "", 0},                      /* CC */ /* Int 3 */
+    {"int", "!e3", "", 0},                      /* CC */ /* Int 3 */
     {"int", "Ib", "", 0},                       /* CD */
     {"into", "", "", 0},                        /* CE */
     {"iret", "", "", 0},                        /* CF */
-    {"GRP2", "Eb", "!b1", 2},                   /* D0 */ /* Group 2, arg2 = 1 */
-    {"GRP2", "Ev", "!b1", 2},                   /* D1 */ /* Group 2, arg2 = 1 */
+    {"GRP2", "Eb", "!e1", 2},                   /* D0 */ /* Group 2, arg2 = 1 */
+    {"GRP2", "Ev", "!e1", 2},                   /* D1 */ /* Group 2, arg2 = 1 */
     {"GRP2", "Eb", "!bcl", 2},                  /* D2 */ /* Group 2 */
     {"GRP2", "Ev", "!bcl", 2},                  /* D3 */ /* Group 2 */
     {"aam", "Ib", "", 0},                       /* D4 */
@@ -554,21 +646,21 @@ X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
     {"loopnz", "Jb", "", 0},                    /* E0 */
     {"loopz", "Jb", "", 0},                     /* E1 */
     {"loop", "Jb", "", 0},                      /* E2 */
-    {"jecx", "Jb", "", 0},                      /* E3 */
+    {"jcxz", "Jb", "", 0},                      /* E3 */
     {"in ", "!bal", "Ib", 0},                   /* E4 */
-    {"in ", "!eax", "Iv", 0},                   /* E5 */
+    {"in ", "!eeax", "Iv", 0},                  /* E5 */
     {"out", "Ib", "!bal", 0},                   /* E6 */
-    {"out", "Ib", "!eax", 0},                   /* E7 */
-    {"call", "Jz", "", 0},                      /* E8 */
-    {"jmp", "Jz", "", 0},                       /* E9 */
+    {"out", "Ib", "!eeax", 0},                  /* E7 */
+    {"call", "Jz6", "", 0},                     /* E8 */
+    {"jmp", "Jz6", "", 0},                      /* E9 */
     {"jmp", "Ap", "", 0},                       /* EA */
     {"jmp", "Jb", "", 0},                       /* EB */
     {"in ", "!bal", "!wdx", 0},                 /* EC */
-    {"in ", "!eax", "!wdx", 0},                 /* ED */
+    {"in ", "!eeax", "!wdx", 0},                /* ED */
     {"out", "!wdx", "!bal", 0},                 /* EE */
-    {"out", "!wdx", "!eax", 0},                 /* EF */
+    {"out", "!wdx", "!eeax", 0},                /* EF */
     {"LOCK:", "", "", 0},                       /* F0 */ /* Lock prefix */
-    {"int", "!b1", "", 0},                      /* F1 */ /* Int 1 */
+    {"int", "!e1", "", 0},                      /* F1 */ /* Int 1 */
     {"REPNE:", "", "", 0},                      /* F2 */ /* Repne prefix */
     {"REP:", "", "", 0},                        /* F3 */ /* Rep prefix */
     {"hlt", "", "", 0},                         /* F4 */
@@ -602,10 +694,10 @@ X86_SPARSE_INSTRUCTION_DEFINITION DbgX86TwoByteInstructions[] = {
     {0, 0x12, {"umov", "Gb", "Eb", 0}},         /* 12 */
     {0, 0x13, {"umov", "Gv", "Ev", 0}},         /* 13 */
 
-    {0, 0x20, {"mov", "Rd", "Cd", 0}},          /* 20 */
-    {0, 0x21, {"mov", "Rd", "Dd", 0}},          /* 21 */
-    {0, 0x22, {"mov", "Cd", "Rd", 0}},          /* 22 */
-    {0, 0x23, {"mov", "Dd", "Rd", 0}},          /* 23 */
+    {0, 0x20, {"mov", "Ry", "Cy", 0}},          /* 20 */
+    {0, 0x21, {"mov", "Ry", "Dy", 0}},          /* 21 */
+    {0, 0x22, {"mov", "Cy", "Ry", 0}},          /* 22 */
+    {0, 0x23, {"mov", "Dy", "Ry", 0}},          /* 23 */
 
     {0, 0x30, {"wrmsr", "", "", 0}},            /* 30 */
     {0, 0x31, {"rdtsc", "", "", 0}},            /* 31 */
@@ -692,7 +784,7 @@ X86_SPARSE_INSTRUCTION_DEFINITION DbgX86TwoByteInstructions[] = {
     {0, 0xB6, {"movzx", "Gv", "Eb", 0}},        /* B6 */
     {0, 0xB7, {"movxz", "Gv", "Ew", 0}},        /* B7 */
     {0, 0xB8, {"jmpe", "Jz", "", 0}},           /* B8 */
-    {0, 0xB9, {"ud2", "", "", 11}},             /* B9 */ /* Group 11 */
+    {0, 0xB9, {"ud2", "", "", 11}},             /* B9 */ /* Group 10 */
     {0, 0xBA, {"GRP8", "Ev", "Ib", 8}},         /* BA */ /* Group 8 */
     {0, 0xBB, {"btc", "Ev", "Gv", 0}},          /* BB */
     {0, 0xBC, {"bsf", "Gv", "Ev", 0}},          /* BC */
@@ -706,14 +798,14 @@ X86_SPARSE_INSTRUCTION_DEFINITION DbgX86TwoByteInstructions[] = {
     {0, 0xC0, {"xadd", "Eb", "Gb", 0}},         /* C0 */
     {0, 0xC1, {"xadd", "Ev", "Gv", 0}},         /* C1 */
     {0, 0xC7, {"GRP9", "", "", 9}},             /* C7 */  /* Group 9 */
-    {0, 0xC8, {"bswap", "!leax", "", 0}},       /* C8 */
-    {0, 0xC9, {"bswap", "!lecx", "", 0}},       /* C9 */
-    {0, 0xCA, {"bswap", "!ledx", "", 0}},       /* CA */
-    {0, 0xCB, {"bswap", "!lebx", "", 0}},       /* CB */
-    {0, 0xCC, {"bswap", "!lesp", "", 0}},       /* CC */
-    {0, 0xCD, {"bswap", "!lebp", "", 0}},       /* CD */
-    {0, 0xCE, {"bswap", "!lesi", "", 0}},       /* CE */
-    {0, 0xCF, {"bswap", "!ledi", "", 0}},       /* CF */
+    {0, 0xC8, {"bswap", "!r0", "", 0}},         /* C8 */
+    {0, 0xC9, {"bswap", "!r1", "", 0}},         /* C9 */
+    {0, 0xCA, {"bswap", "!r2", "", 0}},         /* CA */
+    {0, 0xCB, {"bswap", "!r3", "", 0}},         /* CB */
+    {0, 0xCC, {"bswap", "!r4", "", 0}},         /* CC */
+    {0, 0xCD, {"bswap", "!r5", "", 0}},         /* CD */
+    {0, 0xCE, {"bswap", "!r6", "", 0}},         /* CE */
+    {0, 0xCF, {"bswap", "!r7", "", 0}},         /* CF */
 
     {0, 0xFF, {"ud", "", "", 0}},               /* FF */
     {0x66, 0xFF, {"ud", "", "", 0}},            /* FF */
@@ -755,10 +847,10 @@ X86_INSTRUCTION_DEFINITION DbgX86Group3Instructions[8] = {
     {"test", "Ev", "Ib", 0},                    /* 01 */
     {"not", "", "", 0},                         /* 02 */
     {"neg", "", "", 0},                         /* 03 */
-    {"mul", "", "!rax", 0},                     /* 04 */
-    {"mul", "", "!rax", 0},                     /* 05 */
-    {"div", "", "!rax", 0},                     /* 06 */
-    {"div", "", "!rax", 0},                     /* 07 */
+    {"mul", "", "!r0", 0},                      /* 04 */
+    {"mul", "", "!r0", 0},                      /* 05 */
+    {"div", "", "!r0", 0},                      /* 06 */
+    {"div", "", "!r0", 0},                      /* 07 */
 };
 
 X86_INSTRUCTION_DEFINITION DbgX86Group3AInstructions[8] = {
@@ -766,10 +858,10 @@ X86_INSTRUCTION_DEFINITION DbgX86Group3AInstructions[8] = {
     {"test", "Ev", "Iz", 0},                    /* 01 */
     {"not", "", "", 0},                         /* 02 */
     {"neg", "", "", 0},                         /* 03 */
-    {"mul", "", "!rax", 0},                     /* 04 */
-    {"mul", "", "!rax", 0},                     /* 05 */
-    {"div", "", "!rax", 0},                     /* 06 */
-    {"div", "", "!rax", 0},                     /* 07 */
+    {"mul", "", "!r0", 0},                      /* 04 */
+    {"mul", "", "!r0", 0},                      /* 05 */
+    {"div", "", "!r0", 0},                      /* 06 */
+    {"div", "", "!r0", 0},                      /* 07 */
 };
 
 X86_INSTRUCTION_DEFINITION
@@ -779,16 +871,15 @@ X86_INSTRUCTION_DEFINITION
     {"dec", "Eb", "", 0},                       /* 01 */
 };
 
-X86_INSTRUCTION_DEFINITION
-                    DbgX86Group5Instructions[X86_GROUP_5_INSTRUCTION_COUNT] = {
-
+X86_INSTRUCTION_DEFINITION DbgX86Group5Instructions[8] = {
     {"inc", "Ev", "", 0},                       /* 00 */
     {"dec", "Ev", "", 0},                       /* 01 */
-    {"call", "Ev", "", 0},                      /* 02 */
+    {"call", "Ev6", "", 0},                     /* 02 */
     {"call", "Mp", "", 0},                      /* 03 */
-    {"jmp", "Ev", "", 0},                       /* 04 */
+    {"jmp", "Ev6", "", 0},                      /* 04 */
     {"jmp", "Mp", "", 0},                       /* 05 */
-    {"push", "Ev", "", 0},                      /* 06 */
+    {"push", "Ev6", "", 0},                     /* 06 */
+    {"(bad)", "", "", 0},                       /* 07 */
 };
 
 X86_INSTRUCTION_DEFINITION
@@ -810,7 +901,7 @@ X86_INSTRUCTION_DEFINITION DbgX86Group7Instructions[8] = {
     {"smsw", "Mw", "", 0},                      /* 04 */
     {"", "", "", X86_INVALID_GROUP},            /* 05 */
     {"lmsw", "Mw", "", 0},                      /* 06 */
-    {"invlpg", "Ml", "", 0},                    /* 07 */
+    {"invlpg", "M", "", 0},                     /* 07 */
 };
 
 X86_INSTRUCTION_DEFINITION DbgX86Group8Instructions[8] = {
@@ -1093,7 +1184,26 @@ PSTR DbgX87DFE0Instructions[X87_DF_E0_COUNT] = {
 // Define the register name constants.
 //
 
-PSTR DbgX86DebugRegisterNames[X86_DEBUG_REGISTER_COUNT] = {
+PSTR DbgX86ControlRegisterNames[X86_REGISTER_NAME_COUNT] = {
+    "cr0",
+    "cr1",
+    "cr2",
+    "cr3",
+    "cr4",
+    "cr5",
+    "cr6",
+    "cr7",
+    "cr8",
+    "cr9",
+    "cr10",
+    "cr11",
+    "cr12",
+    "cr13",
+    "cr14",
+    "cr15"
+};
+
+PSTR DbgX86DebugRegisterNames[X86_REGISTER_NAME_COUNT] = {
     "dr0",
     "dr1",
     "dr2",
@@ -1101,27 +1211,78 @@ PSTR DbgX86DebugRegisterNames[X86_DEBUG_REGISTER_COUNT] = {
     "dr4",
     "dr5",
     "dr6",
-    "dr7"
+    "dr7",
+    "dr8",
+    "dr9",
+    "dr10",
+    "dr11",
+    "dr12",
+    "dr13",
+    "dr14",
+    "dr15"
 };
 
-PSTR DbgX86SegmentRegisterNames[X86_SEGMENT_REGISTER_COUNT] = {
+PSTR DbgX86SegmentRegisterNames[X86_REGISTER_NAME_COUNT] = {
     "es",
     "cs",
     "ss",
     "ds",
     "fs",
-    "gs"
+    "gs",
+    "ERR",
+    "ERR",
+    "es",
+    "cs",
+    "ss",
+    "ds",
+    "fs",
+    "gs",
+    "ERR",
+    "ERR"
 };
 
-PSTR DbgX86RegisterNames8Bit[X86_REGISTER_NAME_COUNT] = {
-    "al",
-    "cl",
-    "dl",
-    "bl",
-    "ah",
-    "ch",
-    "dh",
-    "bh",
+//
+// The 8 bit registers have different names in long mode. The first array here
+// is for 32-bit mode, the second is for long mode.
+//
+
+PSTR DbgX86RegisterNames8Bit[2][X86_REGISTER_NAME_COUNT] = {
+    {
+        "al",
+        "cl",
+        "dl",
+        "bl",
+        "ah",
+        "ch",
+        "dh",
+        "bh",
+        "r8b",
+        "r9b",
+        "r10b",
+        "r11b",
+        "r12b",
+        "r13b",
+        "r14b",
+        "r15b"
+    },
+    {
+        "al",
+        "cl",
+        "dl",
+        "bl",
+        "spl",
+        "bpl",
+        "sil",
+        "dil",
+        "r8b",
+        "r9b",
+        "r10b",
+        "r11b",
+        "r12b",
+        "r13b",
+        "r14b",
+        "r15b"
+    }
 };
 
 PSTR DbgX86RegisterNames16Bit[X86_REGISTER_NAME_COUNT] = {
@@ -1132,7 +1293,15 @@ PSTR DbgX86RegisterNames16Bit[X86_REGISTER_NAME_COUNT] = {
     "sp",
     "bp",
     "si",
-    "di"
+    "di",
+    "r8w",
+    "r9w",
+    "r10w",
+    "r11w",
+    "r12w",
+    "r13w",
+    "r14w",
+    "r15w"
 };
 
 PSTR DbgX86RegisterNames32Bit[X86_REGISTER_NAME_COUNT] = {
@@ -1143,7 +1312,34 @@ PSTR DbgX86RegisterNames32Bit[X86_REGISTER_NAME_COUNT] = {
     "esp",
     "ebp",
     "esi",
-    "edi"
+    "edi",
+    "r8d",
+    "r9d",
+    "r10d",
+    "r11d",
+    "r12d",
+    "r13d",
+    "r14d",
+    "r15d"
+};
+
+PSTR DbgX86RegisterNames64Bit[X86_REGISTER_NAME_COUNT] = {
+    "rax",
+    "rcx",
+    "rdx",
+    "rbx",
+    "rsp",
+    "rbp",
+    "rsi",
+    "rdi",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14",
+    "r15"
 };
 
 PSTR DbgX87RegisterNames[X86_REGISTER_NAME_COUNT] = {
@@ -1155,6 +1351,71 @@ PSTR DbgX87RegisterNames[X86_REGISTER_NAME_COUNT] = {
     "st(5)",
     "st(6)",
     "st(7)",
+    "ERR",
+    "ERR",
+    "ERR",
+    "ERR",
+    "ERR",
+    "ERR",
+    "ERR",
+    "ERR"
+};
+
+PSTR DbgX86MmxRegisterNames[X86_REGISTER_NAME_COUNT] = {
+    "mmx0",
+    "mmx1",
+    "mmx2",
+    "mmx3",
+    "mmx4",
+    "mmx5",
+    "mmx6",
+    "mmx7",
+    "mmx8",
+    "mmx9",
+    "mmx10",
+    "mmx11",
+    "mmx12",
+    "mmx13",
+    "mmx14",
+    "mmx15"
+};
+
+PSTR DbgX86XmmRegisterNames[X86_REGISTER_NAME_COUNT] = {
+    "xmm0",
+    "xmm1",
+    "xmm2",
+    "xmm3",
+    "xmm4",
+    "xmm5",
+    "xmm6",
+    "xmm7",
+    "xmm8",
+    "xmm9",
+    "xmm10",
+    "xmm11",
+    "xmm12",
+    "xmm13",
+    "xmm14",
+    "xmm15"
+};
+
+PSTR DbgX86YmmRegisterNames[X86_REGISTER_NAME_COUNT] = {
+    "ymm0",
+    "ymm1",
+    "ymm2",
+    "ymm3",
+    "ymm4",
+    "ymm5",
+    "ymm6",
+    "ymm7",
+    "ymm8",
+    "ymm9",
+    "ymm10",
+    "ymm11",
+    "ymm12",
+    "ymm13",
+    "ymm14",
+    "ymm15"
 };
 
 //
@@ -1194,30 +1455,17 @@ DbgpX86GetInstructionParameters (
     );
 
 PSTR
-DbgpX86GetControlRegister (
-    BYTE ModRm
-    );
-
-PSTR
-DbgpX86GetDebugRegister (
-    BYTE ModRm
-    );
-
-PSTR
-DbgpX86GetSegmentRegister (
-    BYTE ModRm
-    );
-
-PSTR
-DbgpX86GetGenericRegister (
+DbgpX86RegisterName (
+    PX86_INSTRUCTION Instruction,
     X86_REGISTER_VALUE RegisterNumber,
     CHAR Type
     );
 
-VOID
+INT
 DbgpX86GetDisplacement (
     PX86_INSTRUCTION Instruction,
     PSTR Buffer,
+    ULONG BufferLength,
     PLONGLONG DisplacementValue
     );
 
@@ -1241,7 +1489,8 @@ DbgpX86Disassemble (
     PBYTE InstructionStream,
     PSTR Buffer,
     ULONG BufferLength,
-    PDISASSEMBLED_INSTRUCTION Disassembly
+    PDISASSEMBLED_INSTRUCTION Disassembly,
+    MACHINE_LANGUAGE Language
     )
 
 /*++
@@ -1267,6 +1516,8 @@ Arguments:
     Disassembly - Supplies a pointer to the structure that will receive
         information about the instruction.
 
+    Language - Supplies the type of machine langage being decoded.
+
 Return Value:
 
     TRUE on success.
@@ -1280,9 +1531,11 @@ Return Value:
     ULONGLONG Address;
     BOOL AddressValid;
     X86_INSTRUCTION Instruction;
+    INT Length;
     PSTR Mnemonic;
     BOOL Result;
     PSTR ThirdOperandFormat;
+    CHAR WorkingBuffer[X86_WORKING_BUFFER_SIZE];
 
     if ((Disassembly == NULL) || (Buffer == NULL)) {
         return FALSE;
@@ -1290,6 +1543,9 @@ Return Value:
 
     memset(Buffer, 0, BufferLength);
     memset(Disassembly, 0, sizeof(DISASSEMBLED_INSTRUCTION));
+    memset(&Instruction, 0, sizeof(X86_INSTRUCTION));
+    Instruction.Language = Language;
+    Instruction.InstructionPointer = InstructionPointer;
 
     //
     // Dissect the instruction into more managable components.
@@ -1317,25 +1573,37 @@ Return Value:
     // free spot.
     //
 
+    Length = snprintf(Buffer,
+                      BufferLength,
+                      "%s%s%s",
+                      Instruction.Lock,
+                      Instruction.Rep,
+                      Mnemonic);
+
+    if (Length < 0) {
+        Result = FALSE;
+        goto DisassembleEnd;
+    }
+
     Disassembly->Mnemonic = Buffer;
-    strcpy(Disassembly->Mnemonic, Mnemonic);
-    Buffer += strlen(Mnemonic) + 1;
-    BufferLength -= (strlen(Mnemonic) + 1);
+    Buffer += Length + 1;
+    BufferLength -= Length + 1;
 
     //
     // Get the destination operand.
     //
 
+    WorkingBuffer[0] = '\0';
     Result = DbgpX86PrintOperand(InstructionPointer,
                                  &Instruction,
                                  Instruction.Definition.Target,
-                                 DbgX86DisassemblyBuffer,
-                                 X86_WORKING_BUFFER_SIZE,
+                                 WorkingBuffer,
+                                 sizeof(WorkingBuffer),
                                  &Address,
                                  &AddressValid);
 
     if ((Result == FALSE) ||
-        (strlen(DbgX86DisassemblyBuffer) >= BufferLength)) {
+        (strlen(WorkingBuffer) >= BufferLength)) {
 
         Result = FALSE;
         goto DisassembleEnd;
@@ -1356,25 +1624,24 @@ Return Value:
     //
 
     Disassembly->DestinationOperand = Buffer;
-    strcpy(Disassembly->DestinationOperand, DbgX86DisassemblyBuffer);
-    Buffer += strlen(DbgX86DisassemblyBuffer) + 1;
-    BufferLength -= (strlen(DbgX86DisassemblyBuffer) + 1);
+    strncpy(Disassembly->DestinationOperand, WorkingBuffer, BufferLength);
+    Buffer += strlen(WorkingBuffer) + 1;
+    BufferLength -= strlen(WorkingBuffer) + 1;
 
     //
     // Get the source operand.
     //
 
+    WorkingBuffer[0] = '\0';
     Result = DbgpX86PrintOperand(InstructionPointer,
                                  &Instruction,
                                  Instruction.Definition.Source,
-                                 DbgX86DisassemblyBuffer,
-                                 X86_WORKING_BUFFER_SIZE,
+                                 WorkingBuffer,
+                                 sizeof(WorkingBuffer),
                                  &Address,
                                  &AddressValid);
 
-    if ((Result == FALSE) ||
-        (strlen(DbgX86DisassemblyBuffer) >= BufferLength)) {
-
+    if ((Result == FALSE) || (strlen(WorkingBuffer) >= BufferLength)) {
         Result = FALSE;
         goto DisassembleEnd;
     }
@@ -1393,11 +1660,11 @@ Return Value:
     // Copy the operand into the buffer, and advance the buffer.
     //
 
-    if (*DbgX86DisassemblyBuffer != '\0') {
+    if (WorkingBuffer[0] != '\0') {
         Disassembly->SourceOperand = Buffer;
-        strcpy(Disassembly->SourceOperand, DbgX86DisassemblyBuffer);
-        Buffer += strlen(DbgX86DisassemblyBuffer) + 1;
-        BufferLength -= (strlen(DbgX86DisassemblyBuffer) - 1);
+        strncpy(Disassembly->SourceOperand, WorkingBuffer, BufferLength);
+        Buffer += strlen(WorkingBuffer) + 1;
+        BufferLength -= strlen(WorkingBuffer) + 1;
     }
 
     //
@@ -1425,23 +1692,22 @@ Return Value:
     }
 
     if (ThirdOperandFormat != NULL) {
+        WorkingBuffer[0] = '\0';
         Result = DbgpX86PrintOperand(InstructionPointer,
                                      &Instruction,
                                      ThirdOperandFormat,
-                                     DbgX86DisassemblyBuffer,
-                                     X86_WORKING_BUFFER_SIZE,
+                                     WorkingBuffer,
+                                     sizeof(WorkingBuffer),
                                      &Address,
                                      &AddressValid);
 
-        if ((Result == FALSE) ||
-            (strlen(DbgX86DisassemblyBuffer) > BufferLength)) {
-
+        if ((Result == FALSE) || (strlen(WorkingBuffer) > BufferLength)) {
             Result = FALSE;
             goto DisassembleEnd;
         }
 
         Disassembly->ThirdOperand = Buffer;
-        strcpy(Disassembly->ThirdOperand, DbgX86DisassemblyBuffer);
+        strncpy(Disassembly->ThirdOperand, WorkingBuffer, BufferLength);
     }
 
 DisassembleEnd:
@@ -1507,10 +1773,10 @@ Return Value:
     BYTE BaseValue;
     PSTR Index;
     BYTE IndexValue;
+    INT Length;
     X86_MOD_VALUE Mod;
-    X86_REGISTER_VALUE Register;
     PSTR RegisterString;
-    X86_REGISTER_VALUE Rm;
+    UCHAR Rm;
     ULONG Scale;
     CHAR Type;
     CHAR Width;
@@ -1525,15 +1791,14 @@ Return Value:
     // Start by doing some parameter checking.
     //
 
-    if ((Operand == NULL) || BufferLength == 0) {
+    if ((Operand == NULL) || (BufferLength == 0)) {
         return FALSE;
     }
 
-    strcpy(Operand, "");
-    strcpy(DbgX86OperandBuffer, "");
+    Operand[0] = '\0';
     *Address = 0ULL;
     *AddressValid = FALSE;
-    if (strlen(OperandFormat) < 2) {
+    if (*OperandFormat == '\0') {
         return TRUE;
     }
 
@@ -1546,43 +1811,108 @@ Return Value:
 
     if (Width == 'd') {
         Width = X86_WIDTH_LONG;
-    }
+
+    } else if ((Width == '\0') || (Width == 's')) {
+        Width = X86_WIDTH_LONG;
+        if (Instruction->Language == MachineLanguageX64) {
+            Width = X86_WIDTH_LONGLONG;
+        }
 
     //
     // If the width is variable, it is probably a dword unless an override is
     // specified.
     //
 
-    if ((Width == 'v') || (Width == 'z')) {
-        Width = X86_WIDTH_LONG;
-        if ((Instruction->OperandOverride == TRUE) ||
-            (Instruction->AddressOverride == TRUE)) {
+    } else if ((Width == 'v') || (Width == 'z')) {
 
-            Width = X86_WIDTH_WORD;
+        //
+        // A few instructions default to 64-bits in long mode.
+        //
+
+        if ((Instruction->Language == MachineLanguageX64) &&
+            (OperandFormat[2] == '6')) {
+
+            Width = X86_WIDTH_LONGLONG;
+            if (Instruction->OperandOverride != FALSE) {
+                Width = X86_WIDTH_WORD;
+            }
+
+        } else if ((Instruction->Rex & X64_REX_W) != 0) {
+            if (Width == 'v') {
+                Width = X86_WIDTH_LONGLONG;
+
+            } else {
+                Width = X86_WIDTH_LONG;
+            }
+
+        } else {
+            Width = X86_WIDTH_LONG;
+            if ((Instruction->OperandOverride == TRUE) ||
+                (Instruction->AddressOverride == TRUE)) {
+
+                Width = X86_WIDTH_WORD;
+            }
+        }
+
+    } else if (Width == 'y') {
+        Width = X86_WIDTH_LONG;
+        if (Instruction->Language == MachineLanguageX64) {
+            Width = X86_WIDTH_LONGLONG;
         }
     }
 
     switch (Type) {
 
     //
-    // The ! encoding indicates that a register is hardcoded. Unless an override
-    // is set, append an e to the beginning of the hardcoded register (to make
-    // ax into eax).
+    // The ! encoding indicates that a register is hardcoded.
     //
 
     case '!':
-        if ((Width == 'r') || (Width == 'e')) {
-            if ((Instruction->ImmediateSize == 0) &&
-                (Instruction->OperandOverride == FALSE)) {
 
-                strcat(Operand, "e");
+        //
+        // If the width is 'e', then it's a hardcoded string.
+        //
 
-            } else if (Instruction->ImmediateSize == 4) {
-                strcat(Operand, "e");
+        if (Width == 'e') {
+            strncpy(Operand, OperandFormat + 2, BufferLength);
+
+        //
+        // An r indicates a register corresponding to the current mode. These
+        // encode a register number as an ASCII number.
+        //
+
+        } else if ((OperandFormat[2] >= '0') && (OperandFormat[2] <= '7')) {
+            if (Width == 'r') {
+                if (Instruction->OperandOverride != FALSE) {
+                    Width = X86_WIDTH_WORD;
+
+                } else if ((Instruction->Language == MachineLanguageX64) &&
+                           (OperandFormat[3] == '6')) {
+
+                    Width = X86_WIDTH_LONGLONG;
+
+                } else {
+                    Width = X86_WIDTH_LONG;
+                    if ((Instruction->Rex & X64_REX_W) != 0) {
+                        Width = X86_WIDTH_LONGLONG;
+                    }
+                }
             }
+
+            Rm = OperandFormat[2] - '0';
+            Rm = X86_MODRM_RM(Instruction, Rm);
+            strncpy(Operand,
+                    DbgpX86RegisterName(Instruction, Rm, Width),
+                    BufferLength);
+
+        //
+        // Otherwise it's something like wcs or bal, with a width and register.
+        //
+
+        } else {
+            strncpy(Operand, OperandFormat + 2, BufferLength);
         }
 
-        strcat(Operand, OperandFormat + 2);
         break;
 
     //
@@ -1591,33 +1921,31 @@ Return Value:
     //
 
     case 'A':
-        sprintf(DbgX86OperandBuffer, "[0x%x]", Instruction->Immediate);
-        strcat(Operand, DbgX86OperandBuffer);
+        snprintf(Operand,
+                 BufferLength,
+                 "%s[0x%llx]",
+                 Instruction->SegmentPrefix,
+                 Instruction->Immediate);
+
         *Address = Instruction->Immediate;
         *AddressValid = TRUE;
         break;
 
     //
     // C - Reg field of mod R/M byte selects a control register.
+    // D - Reg field of mod R/M byte selects a debug register.
+    // S - Reg field of ModR/M byte selects a segment register.
     //
 
     case 'C':
-        sprintf(DbgX86OperandBuffer,
-                "%s",
-                DbgpX86GetControlRegister(Instruction->ModRm));
-
-        strcat(Operand, DbgX86OperandBuffer);
-        break;
-
-    //
-    // D - Reg field of mod R/M byte selects a debug register.
-    //
-
     case 'D':
-        sprintf(DbgX86OperandBuffer, "%s",
-                DbgpX86GetDebugRegister(Instruction->ModRm));
+    case 'S':
+        RegisterString = DbgpX86RegisterName(
+                          Instruction,
+                          X86_MODRM_REG(Instruction, Instruction->ModRm),
+                          Type);
 
-        strcat(Operand, DbgX86OperandBuffer);
+        strncpy(Operand, RegisterString, BufferLength);
         break;
 
     //
@@ -1631,32 +1959,29 @@ Return Value:
 
     case 'E':
     case 'M':
-        Mod = (Instruction->ModRm & X86_MOD_MASK) >> X86_MOD_SHIFT;
-        Rm = (Instruction->ModRm & X86_RM_MASK) >> X86_RM_SHIFT;
+        Mod = X86_MODRM_MOD(Instruction->ModRm);
+        Rm = X86_MODRM_RM(Instruction, Instruction->ModRm);
         if (Mod == X86ModValueRegister) {
             if (Type == 'M') {
                 return FALSE;
             }
 
-            RegisterString = DbgpX86GetGenericRegister(Rm, Width);
+            RegisterString = DbgpX86RegisterName(Instruction, Rm, Width);
 
         } else {
 
             //
             // An R/M value of 4 actually indicates an SIB byte is present, not
-            // ESP.
+            // ESP. The REX extension bit doesn't matter here.
             //
 
-            if (Rm == X86RegisterValueEsp) {
+            if (X86_BASIC_REG(Rm) == X86RegisterValueSp) {
                 Rm = X86RegisterValueScaleIndexBase;
-                BaseValue = (Instruction->Sib & X86_BASE_MASK) >>
-                                                                X86_BASE_SHIFT;
-
-                IndexValue = (Instruction->Sib & X86_INDEX_MASK) >>
-                                                               X86_INDEX_SHIFT;
-
-                Base = DbgpX86GetGenericRegister(BaseValue, X86_WIDTH_LONG);
-                Index = DbgpX86GetGenericRegister(IndexValue, X86_WIDTH_LONG);
+                BaseValue = X86_SIB_BASE(Instruction);
+                IndexValue = X86_SIB_INDEX(Instruction);
+                Scale = X86_SIB_SCALE(Instruction);
+                Base = DbgpX86RegisterName(Instruction, BaseValue, Width);
+                Index = DbgpX86RegisterName(Instruction, IndexValue, Width);
 
                 //
                 // A base value of 5 (ebp) indicates that the base field is not
@@ -1664,40 +1989,31 @@ Return Value:
                 // specifies the size of the displacement.
                 //
 
-                if (BaseValue == X86RegisterValueEbp) {
+                if (X86_BASIC_REG(BaseValue) == X86RegisterValueBp) {
                     Base = "";
-                    sprintf(DbgX86OperandBuffer,
-                            "0x%x",
-                            Instruction->Displacement);
+                    Length = snprintf(Operand,
+                                      BufferLength,
+                                      "0x%llx",
+                                      Instruction->Displacement);
 
-                    strcat(Operand, DbgX86OperandBuffer);
-                }
+                    if (Length <= 0) {
+                        return FALSE;
+                    }
 
-                //
-                // Raise the scale to 2^(Scale).
-                //
-
-                Scale = (Instruction->Sib & X86_SCALE_MASK) >> X86_SCALE_SHIFT;
-                if (Scale == 0) {
-                    Scale = 1;
-
-                } else if (Scale == 1) {
-                    Scale = 2;
-
-                } else if (Scale == 2) {
-                    Scale = 4;
-
-                } else if (Scale == 3) {
-                    Scale = 8;
+                    Operand += Length;
+                    BufferLength -= Length;
                 }
 
             } else if ((Mod == X86ModValueNoDisplacement) &&
-                       (Rm == X86RegisterValueEbp)) {
+                       (X86_BASIC_REG(Rm) == X86RegisterValueBp)) {
 
                 Rm = X86RegisterValueDisplacement32;
+                if (Instruction->Language == MachineLanguageX64) {
+                    Rm = X86RegisterValueRipRelative;
+                }
 
             } else {
-                RegisterString = DbgpX86GetGenericRegister(Rm, X86_WIDTH_LONG);
+                RegisterString = DbgpX86RegisterName(Instruction, Rm, Width);
             }
         }
 
@@ -1706,15 +2022,25 @@ Return Value:
         //
 
         if (Mod == X86ModValueRegister) {
-            strcat(Operand, RegisterString);
+            strncpy(Operand, RegisterString, BufferLength);
 
         //
         // The operand is an address with a scale/index/base.
         //
 
         } else if (Rm == X86RegisterValueScaleIndexBase) {
-            sprintf(DbgX86OperandBuffer, "[%s", Base);
-            strcat(Operand, DbgX86OperandBuffer);
+            Length = snprintf(Operand,
+                              BufferLength,
+                              "%s[%s",
+                              Instruction->SegmentPrefix,
+                              Base);
+
+            if ((Length <= 0) || (BufferLength - Length <= 3)) {
+                return FALSE;
+            }
+
+            Operand += Length;
+            BufferLength -= Length;
 
             //
             // An index of 4 indicates that the index and scale fields are not
@@ -1723,24 +2049,49 @@ Return Value:
 
             if (IndexValue != 4) {
                 if (*Base != '\0') {
-                    strcat(Operand, "+");
+                    *Operand = '+';
+                    Operand += 1;
+                    BufferLength -= 1;
                 }
 
-                sprintf(DbgX86OperandBuffer, "%s*%d", Index, Scale);
-                strcat(Operand, DbgX86OperandBuffer);
+                Length = snprintf(Operand, BufferLength, "%s*%d", Index, Scale);
+                if (Length <= 0) {
+                    return FALSE;
+                }
+
+                Operand += Length;
+                BufferLength -= Length;
             }
 
-            DbgpX86GetDisplacement(Instruction, DbgX86OperandBuffer, NULL);
-            strcat(Operand, DbgX86OperandBuffer);
-            strcat(Operand, "]");
+            Length = DbgpX86GetDisplacement(Instruction,
+                                            Operand,
+                                            BufferLength,
+                                            NULL);
+
+            if ((Length < 0) || (BufferLength - Length <= 2)) {
+                return FALSE;
+            }
+
+            Operand[Length] = ']';
+            Operand += Length + 1;
+            BufferLength -= Length + 1;
+            *Operand = '\0';
 
         //
         // The operand is a 32-bit address.
         //
 
         } else if (Rm == X86RegisterValueDisplacement32) {
-            sprintf(DbgX86OperandBuffer, "[0x%x]", Instruction->Displacement);
-            strcat(Operand, DbgX86OperandBuffer);
+            Length = snprintf(Operand,
+                              BufferLength,
+                              "%s[0x%llx]",
+                              Instruction->SegmentPrefix,
+                              Instruction->Displacement);
+
+            if (Length <= 0) {
+                return FALSE;
+            }
+
             *Address = Instruction->Displacement;
             *AddressValid = TRUE;
 
@@ -1750,30 +2101,64 @@ Return Value:
         //
 
         } else {
-            sprintf(DbgX86OperandBuffer, "[%s", RegisterString);
-            strcat(Operand, DbgX86OperandBuffer);
-            DbgpX86GetDisplacement(Instruction, DbgX86OperandBuffer, NULL);
-            strcat(Operand, DbgX86OperandBuffer);
-            strcat(Operand, "]");
+
+            //
+            // The register could be RIP in the long-mode-only RIP-relative
+            // addressing.
+            //
+
+            if (Rm == X86RegisterValueRipRelative) {
+                RegisterString = "rip";
+                if (Instruction->AddressOverride != FALSE) {
+                    RegisterString = "eip";
+                }
+
+                *Address = Instruction->InstructionPointer +
+                           Instruction->Length +
+                           (LONG)(Instruction->Displacement);
+
+                *AddressValid = TRUE;
+            }
+
+            Length = snprintf(Operand,
+                              BufferLength,
+                              "%s[%s",
+                              Instruction->SegmentPrefix,
+                              RegisterString);
+
+            if (Length <= 0) {
+                return FALSE;
+            }
+
+            Operand += Length;
+            BufferLength -= Length;
+            Length = DbgpX86GetDisplacement(Instruction,
+                                            Operand,
+                                            BufferLength,
+                                            NULL);
+
+            if ((Length < 0) || (BufferLength - Length <= 2)) {
+                return FALSE;
+            }
+
+            Operand[Length] = ']';
+            Operand += Length + 1;
+            BufferLength -= Length + 1;
+            *Operand = '\0';
         }
 
     break;
-
-    //
-    // F - EFLAGS register.
-    //
-
-    case 'F':
-        strcat(Operand, "eflags");
-        break;
 
     //
     // G - Reg field of Mod R/M byte selects a general register.
     //
 
     case 'G':
-        Register = (Instruction->ModRm & X86_REG_MASK) >> X86_REG_SHIFT;
-        strcat(Operand, DbgpX86GetGenericRegister(Register, Width));
+        Rm = X86_MODRM_REG(Instruction, Instruction->ModRm);
+        strncpy(Operand,
+                DbgpX86RegisterName(Instruction, Rm, Width),
+                BufferLength);
+
         break;
 
     //
@@ -1784,8 +2169,7 @@ Return Value:
 
     case 'I':
     case 'O':
-        sprintf(DbgX86OperandBuffer, "0x%x", Instruction->Immediate);
-        strcat(Operand, DbgX86OperandBuffer);
+        snprintf(Operand, BufferLength, "0x%llx", Instruction->Immediate);
         break;
 
     //
@@ -1795,12 +2179,17 @@ Return Value:
 
     case 'J':
         DbgpX86GetDisplacement(Instruction,
-                               DbgX86OperandBuffer,
+                               Operand,
+                               BufferLength,
                                (PLONGLONG)Address);
 
         *Address += (InstructionPointer + Instruction->Length);
-        sprintf(DbgX86OperandBuffer, "[0x%llx]", *Address);
-        strcat(Operand, DbgX86OperandBuffer);
+        snprintf(Operand,
+                 BufferLength,
+                 "%s[0x%llx]",
+                 Instruction->SegmentPrefix,
+                 *Address);
+
         *AddressValid = TRUE;
         break;
 
@@ -1810,21 +2199,16 @@ Return Value:
     //
 
     case 'R':
-        Mod = (Instruction->ModRm & X86_MOD_MASK) >> X86_MOD_SHIFT;
-        Rm = (Instruction->ModRm & X86_RM_MASK) >> X86_RM_SHIFT;
+        Mod = X86_MODRM_MOD(Instruction->ModRm);
+        Rm = X86_MODRM_RM(Instruction, Instruction->ModRm);
         if (Mod != X86ModValueRegister) {
             return FALSE;
         }
 
-        strcat(Operand, DbgpX86GetGenericRegister(Rm, Width));
-        break;
+        strncpy(Operand,
+                DbgpX86RegisterName(Instruction, Rm, Width),
+                BufferLength);
 
-    //
-    // S - Reg field of ModR/M byte selects a segment register.
-    //
-
-    case 'S':
-        strcat(Operand, DbgpX86GetSegmentRegister(Instruction->ModRm));
         break;
 
     //
@@ -1832,7 +2216,11 @@ Return Value:
     //
 
     case 'X':
-        strcat(Operand, "DS:[esi]");
+        RegisterString = DbgpX86RegisterName(Instruction,
+                                             X86RegisterValueSi,
+                                             X86_WIDTH_LONG);
+
+        snprintf(Operand, BufferLength, "ds:[%s]", RegisterString);
         break;
 
     //
@@ -1840,7 +2228,11 @@ Return Value:
     //
 
     case 'Y':
-        strcat(Operand, "ES:[edi]");
+        RegisterString = DbgpX86RegisterName(Instruction,
+                                             X86RegisterValueDi,
+                                             X86_WIDTH_LONG);
+
+        snprintf(Operand, BufferLength, "ds:[%s]", RegisterString);
         break;
 
     default:
@@ -1907,14 +2299,10 @@ Return Value:
         return DbgX86Group4Instructions[RegByte].Mnemonic;
 
     case 5:
-        if (RegByte >= X86_GROUP_5_INSTRUCTION_COUNT) {
-            return "(bad)";
-        }
-
         return DbgX86Group5Instructions[RegByte].Mnemonic;
 
-    case 10:
-    case 12:
+    case 0x1A:
+    case 11:
         if (RegByte != 0) {
             return "(bad)";
         }
@@ -1923,6 +2311,9 @@ Return Value:
 
     case 15:
         return DbgX86Group15Instructions[RegByte].Mnemonic;
+
+    default:
+        break;
     }
 
     return NULL;
@@ -1962,13 +2353,13 @@ Return Value:
     ULONG AlternateIndex;
     ULONG Base;
     PBYTE Beginning;
-    PBYTE CurrentPrefix;
     ULONG DisplacementSize;
     ULONG Group;
     ULONG ImmediateSize;
     ULONG Mod;
     BOOL ModRmExists;
     UCHAR Opcode3;
+    INT PrefixIndex;
     BYTE RegByte;
     BOOL Result;
     BOOL SibExists;
@@ -1979,10 +2370,8 @@ Return Value:
         return FALSE;
     }
 
-    CurrentPrefix = &(Instruction->Prefix[0]);
     Beginning = InstructionStream;
     Result = TRUE;
-    memset(Instruction, 0, sizeof(X86_INSTRUCTION));
 
     //
     // Begin by handling any prefixes. The prefixes are: F0 (LOCK), F2 (REP),
@@ -1990,35 +2379,86 @@ Return Value:
     // 66 (Operand-size override), 67 (Address-size override)).
     //
 
-    while ((*InstructionStream == X86_PREFIX_LOCK) ||
-           (*InstructionStream == X86_PREFIX_REP1) ||
-           (*InstructionStream == X86_PREFIX_REP2) ||
-           ((*InstructionStream & X86_PREFIX_FS_GS_OVERRIDE_MASK) ==
-            X86_PREFIX_FS_GS_OVERRIDE_VALUE) ||
-           (*InstructionStream == X86_PREFIX_CS) ||
-           (*InstructionStream == X86_PREFIX_DS) ||
-           (*InstructionStream == X86_PREFIX_ES) ||
-           (*InstructionStream == X86_PREFIX_SS)) {
+    Instruction->Lock = "";
+    Instruction->Rep = "";
+    Instruction->SegmentPrefix = "";
+    for (PrefixIndex = 0; PrefixIndex < X86_MAX_PREFIXES; PrefixIndex += 1) {
+        switch (*InstructionStream) {
+        case X86_PREFIX_LOCK:
+            Instruction->Lock = "lock ";
+            break;
 
-        if (*InstructionStream == X86_OPERAND_OVERRIDE) {
+        case X86_PREFIX_REPN:
+            Instruction->Rep = "repne ";
+            break;
+
+        case X86_PREFIX_REP:
+            Instruction->Rep = "rep ";
+            break;
+
+        case X86_PREFIX_CS:
+            if (Instruction->Language != MachineLanguageX64) {
+                Instruction->SegmentPrefix = "cs:";
+            }
+
+            break;
+
+        case X86_PREFIX_DS:
+            if (Instruction->Language != MachineLanguageX64) {
+                Instruction->SegmentPrefix = "ds:";
+            }
+
+            break;
+
+        case X86_PREFIX_ES:
+            Instruction->SegmentPrefix = "es:";
+            break;
+
+        case X86_PREFIX_FS:
+            Instruction->SegmentPrefix = "fs:";
+            break;
+
+        case X86_PREFIX_GS:
+            Instruction->SegmentPrefix = "gs:";
+            break;
+
+        case X86_PREFIX_SS:
+            Instruction->SegmentPrefix = "ss:";
+            break;
+
+        case X86_OPERAND_OVERRIDE:
             Instruction->OperandOverride = TRUE;
+            break;
 
-        } else if (*InstructionStream == X86_ADDRESS_OVERRIDE) {
+        case X86_ADDRESS_OVERRIDE:
             Instruction->AddressOverride = TRUE;
-        }
+            break;
 
-        *CurrentPrefix = *InstructionStream;
-        CurrentPrefix += 1;
-        InstructionStream += 1;
-        Instruction->Length += 1;
-
-        //
-        // No more than 4 prefixes are allowed in one instruction.
-        //
-
-        if (Instruction->Length == X86_MAX_PREFIXES) {
+        default:
+            PrefixIndex = X86_MAX_PREFIXES;
             break;
         }
+
+        if (PrefixIndex == X86_MAX_PREFIXES) {
+            break;
+        }
+
+        Instruction->Prefix[PrefixIndex] = *InstructionStream;
+        InstructionStream += 1;
+        Instruction->Length += 1;
+    }
+
+    //
+    // Grab the REX prefix for x64, which has to go right before the
+    // instruction opcode.
+    //
+
+    if ((Instruction->Language == MachineLanguageX64) &&
+        ((*InstructionStream & X64_REX_MASK) == X64_REX_VALUE)) {
+
+        Instruction->Rex = *InstructionStream;
+        InstructionStream += 1;
+        Instruction->Length += 1;
     }
 
     Instruction->Opcode = *InstructionStream;
@@ -2054,7 +2494,7 @@ Return Value:
     Group = Instruction->Definition.Group;
     if ((Group != 0) && (Group != X86_INVALID_GROUP)) {
         RegByte = (*InstructionStream & X86_REG_MASK) >> X86_REG_SHIFT;
-        switch (Instruction->Definition.Group) {
+        switch (Group) {
         case 1:
         case 2:
             break;
@@ -2072,7 +2512,10 @@ Return Value:
             break;
 
         case 4:
+            break;
+
         case 5:
+            Instruction->Definition = DbgX86Group5Instructions[RegByte];
             break;
 
         case 6:
@@ -2132,8 +2575,8 @@ Return Value:
             Instruction->Definition = DbgX86Group9Instructions[RegByte];
             break;
 
-        case 10:
-        case 12:
+        case 0x1A:
+        case 11:
         case 0x87:
             break;
 
@@ -2189,8 +2632,8 @@ Return Value:
         //
 
         Base = (Instruction->Sib & X86_BASE_MASK) >> X86_BASE_SHIFT;
-        Mod = (Instruction->ModRm & X86_MOD_MASK) >> X86_MOD_SHIFT;
-        if (Base == X86RegisterValueEbp) {
+        Mod = X86_MODRM_MOD(Instruction->ModRm);
+        if (Base == X86RegisterValueBp) {
             if (Mod == X86ModValueDisplacement8) {
                 DisplacementSize = 1;
 
@@ -2346,7 +2789,7 @@ Return Value:
         case 'R':
             *ModRmExists = TRUE;
             ModRm = *InstructionStream;
-            Mod = (ModRm & X86_MOD_MASK) >> X86_MOD_SHIFT;
+            Mod = X86_MODRM_MOD(ModRm);
             RmValue = (ModRm & X86_RM_MASK) >> X86_RM_SHIFT;
             if (Mod != X86ModValueRegister) {
 
@@ -2355,7 +2798,7 @@ Return Value:
                 // not ESP.
                 //
 
-                if (RmValue == X86RegisterValueEsp) {
+                if (RmValue == X86RegisterValueSp) {
                     RmValue = X86RegisterValueScaleIndexBase;
                     *SibExists = TRUE;
                 }
@@ -2366,7 +2809,7 @@ Return Value:
                 //
 
                 if ((Mod == X86ModValueNoDisplacement) &&
-                    (RmValue == X86RegisterValueEbp)) {
+                    (RmValue == X86RegisterValueBp)) {
 
                     RmValue = X86RegisterValueDisplacement32;
                     *DisplacementSize = 4;
@@ -2427,9 +2870,19 @@ Return Value:
 
             case 'v':
             case 'z':
-                *ImmediateSize = 4;
-                if (Instruction->OperandOverride == TRUE) {
-                    *ImmediateSize = 2;
+                if ((Instruction->Rex & X64_REX_W) != 0) {
+                    if (Width == 'v') {
+                        *ImmediateSize = 8;
+
+                    } else {
+                        *ImmediateSize = 4;
+                    }
+
+                } else {
+                    *ImmediateSize = 4;
+                    if (Instruction->OperandOverride == TRUE) {
+                        *ImmediateSize = 2;
+                    }
                 }
 
                 break;
@@ -2471,8 +2924,15 @@ Return Value:
             case 'v':
             case 'z':
                 *DisplacementSize = 4;
-                if (Instruction->AddressOverride == TRUE) {
-                    *DisplacementSize = 2;
+                if ((Instruction->Rex & X64_REX_W) != 0) {
+                    if (Width == 'v') {
+                        *DisplacementSize = 8;
+                    }
+
+                } else {
+                    if (Instruction->AddressOverride == TRUE) {
+                        *DisplacementSize = 2;
+                    }
                 }
 
                 break;
@@ -2525,123 +2985,8 @@ Return Value:
 }
 
 PSTR
-DbgpX86GetControlRegister (
-    BYTE ModRm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine reads the REG bits of a ModR/M byte and returns a string
-    representing the control register in those bits.
-
-Arguments:
-
-    ModRm - Supplies the ModR/M byte of the instruction. Only bits 5:3 are used.
-
-Return Value:
-
-    The control register specifed, in string form.
-
---*/
-
-{
-
-    BYTE RegisterNumber;
-
-    RegisterNumber = (ModRm & X86_REG_MASK) >> X86_REG_SHIFT;
-    switch (RegisterNumber) {
-    case 0:
-        return "cr0";
-        break;
-
-    case 2:
-        return "cr2";
-        break;
-
-    case 3:
-        return "cr3";
-        break;
-
-    case 4:
-        return "cr4";
-        break;
-    }
-
-    return "ERR";
-}
-
-PSTR
-DbgpX86GetDebugRegister (
-    BYTE ModRm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine reads the REG bits of a ModR/M byte and returns a string
-    representing the debug register in those bits.
-
-Arguments:
-
-    ModRm - Supplies the ModR/M byte of the instruction. Only bits 5:3 are used.
-
-Return Value:
-
-    The debug register specifed, in string form.
-
---*/
-
-{
-
-    BYTE RegisterNumber;
-
-    RegisterNumber = (ModRm & X86_REG_MASK) >> X86_REG_SHIFT;
-    if (RegisterNumber >= X86_DEBUG_REGISTER_COUNT) {
-        return "ERR";
-    }
-
-    return DbgX86DebugRegisterNames[RegisterNumber];
-}
-
-PSTR
-DbgpX86GetSegmentRegister (
-    BYTE ModRm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine reads the REG bits of a ModR/M byte and returns a string
-    representing the segment register in those bits.
-
-Arguments:
-
-    ModRm - Supplies the ModR/M byte of the instruction. Only bits 5:3 are used.
-
-Return Value:
-
-    The segment register specifed, in string form.
-
---*/
-
-{
-
-    BYTE RegisterNumber;
-
-    RegisterNumber = (ModRm & X86_REG_MASK) >> X86_REG_SHIFT;
-    if (RegisterNumber >= X86_SEGMENT_REGISTER_COUNT) {
-        return "ER";
-    }
-
-    return DbgX86SegmentRegisterNames[RegisterNumber];
-}
-
-PSTR
-DbgpX86GetGenericRegister (
+DbgpX86RegisterName (
+    PX86_INSTRUCTION Instruction,
     X86_REGISTER_VALUE RegisterNumber,
     CHAR Type
     )
@@ -2656,6 +3001,8 @@ Routine Description:
 
 Arguments:
 
+    Instruction - Supplies the remaining register context.
+
     RegisterNumber - Supplies which register to print out, as specified by the
         REG bits of the ModR/M byte.
 
@@ -2669,13 +3016,12 @@ Return Value:
 
 {
 
-    if (RegisterNumber >= X86_REGISTER_NAME_COUNT) {
-        return "ERR";
-    }
+    BOOL LongNames;
 
     switch (Type) {
     case X86_WIDTH_BYTE:
-        return DbgX86RegisterNames8Bit[RegisterNumber];
+        LongNames = Instruction->Rex != 0;
+        return DbgX86RegisterNames8Bit[LongNames][RegisterNumber];
 
     case X86_WIDTH_WORD:
         return DbgX86RegisterNames16Bit[RegisterNumber];
@@ -2683,21 +3029,35 @@ Return Value:
     case X86_WIDTH_LONG:
         return DbgX86RegisterNames32Bit[RegisterNumber];
 
+    case X86_WIDTH_LONGLONG:
+        return DbgX86RegisterNames64Bit[RegisterNumber];
+
     case X86_FLOATING_POINT_REGISTER:
         return DbgX87RegisterNames[RegisterNumber];
 
+    case X86_CONTROL_REGISTER:
+        return DbgX86ControlRegisterNames[RegisterNumber];
+
+    case X86_DEBUG_REGISTER:
+        return DbgX86DebugRegisterNames[RegisterNumber];
+
+    case X86_SEGMENT_REGISTER:
+        return DbgX86SegmentRegisterNames[RegisterNumber];
+
     default:
-
-        assert(FALSE);
-
-        return "ERR";
+        break;
     }
+
+    assert(FALSE);
+
+    return "ERR";
 }
 
-VOID
+INT
 DbgpX86GetDisplacement (
     PX86_INSTRUCTION Instruction,
     PSTR Buffer,
+    ULONG BufferLength,
     PLONGLONG DisplacementValue
     )
 
@@ -2715,31 +3075,35 @@ Arguments:
     Buffer - Supplies a pointer to the output buffer the displacement will be
         printed to.
 
+    BufferLength - Supplies the length of the buffer in bytes.
+
     DisplacementValue - Supplies a pointer to the variable that will receive the
         numerical displacement value. This can be NULL.
 
 Return Value:
 
-    The instruction displacement field, in string form.
+    Returns the length of the buffer consumed, not including the null
+    terminator.
 
 --*/
 
 {
 
-    LONG Displacement;
+    LONGLONG Displacement;
+    INT Length;
 
-    if ((Buffer == NULL) || (Instruction == NULL)) {
-        return;
+    if ((BufferLength < 1) || (Instruction == NULL)) {
+        return 0;
     }
 
-    strcpy(Buffer, "");
+    Buffer[0] = '\0';
     if (Instruction->Displacement == 0) {
-        return;
+        return 0;
     }
 
     switch (Instruction->DisplacementSize) {
     case 1:
-        Displacement = (CHAR)Instruction->Displacement;
+        Displacement = (SCHAR)Instruction->Displacement;
         break;
 
     case 2:
@@ -2750,20 +3114,26 @@ Return Value:
         Displacement = (LONG)Instruction->Displacement;
         break;
 
+    case 8:
+        Displacement = (LONGLONG)Instruction->Displacement;
+        break;
+
     default:
-        return;
+        return 0;
     }
 
     if (Displacement < 0) {
-        sprintf(Buffer, "-0x%x", -Displacement);
+        Length = snprintf(Buffer, BufferLength, "-0x%llx", -Displacement);
 
     } else {
-        sprintf(Buffer, "+0x%x", Displacement);
+        Length = snprintf(Buffer, BufferLength, "+0x%llx", Displacement);
     }
 
     if (DisplacementValue != NULL) {
         *DisplacementValue = Displacement;
     }
+
+    return Length;
 }
 
 PX86_INSTRUCTION_DEFINITION
@@ -2885,7 +3255,7 @@ Return Value:
     BYTE Opcode2;
 
     ModRm = Instruction->ModRm;
-    Mod = (ModRm & X86_MOD_MASK) >> X86_MOD_SHIFT;
+    Mod = X86_MODRM_MOD(Instruction->ModRm);
     Opcode = Instruction->Opcode - X87_ESCAPE_OFFSET;
     Opcode2 = (ModRm & X86_REG_MASK) >> X86_REG_SHIFT;
 

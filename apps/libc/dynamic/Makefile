@@ -205,7 +205,9 @@ EXTRA_SRC_DIRS = x86 x64 armv7 math pthread
 
 DYNLIBS = $(BINROOT)/libminocaos.so.1           \
 
-TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/intrins/intrins.a        \
+ifneq ($(ARCH),x64)
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/intrins/intrins.a
+endif
 
 DIRS = wincsup pthread
 

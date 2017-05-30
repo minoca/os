@@ -72,6 +72,7 @@ Return Value:
 --*/
 
 EXPORTED_FUNCTION(getcontext)
+    int     $3                      # TODO: Check this, it's never been run!
     movq    %rdi, %rax              # Get the context.
     addq    $SIGNAL_CONTEXT_SIZE, %rax  # Get to the TRAP_FRAME part.
     movq    %rcx, TRAP_RCX(%rax)    # Save rcx.
@@ -108,9 +109,9 @@ EXPORTED_FUNCTION(getcontext)
     movq    %rcx, TRAP_RIP(%rax)    # Save the instruction pointer.
     pushfq                          # Push eflags.
     popq    %rcx                    # Get eflags.
-    movq    %rcx, TRAP_EFLAGS(%rax) # Save eflags.
+    movq    %rcx, TRAP_RFLAGS(%rax) # Save eflags.
     leaq    4(%rsp), %rcx           # Get the stack pointer (w/o return addr).
-    movq    %rcx, TRAP_ESP(%rax)    # Save that as rsp.
+    movq    %rcx, TRAP_RSP(%rax)    # Save that as rsp.
     movq    %rsp, %rsi              # Set stack pointer as second arg.
     call    ClpGetContext           # Call the C helper.
     ret                             # Return whatever the C routine returned.
@@ -145,6 +146,7 @@ Return Value:
 --*/
 
 EXPORTED_FUNCTION(setcontext)
+    int     $3                      # TODO: Check this, it's never been run!
     pushq   %rdi                    # Save the argument.
     call    ClpSetContext           # Call the C helper.
     popq    %rcx                    # Restore the argument.
@@ -172,7 +174,7 @@ EXPORTED_FUNCTION(setcontext)
     movq    TRAP_RSI(%rcx), %rsi    # Restore rsi.
     movq    TRAP_RDX(%rcx), %rdx    # Restore rdx.
     movq    TRAP_RBX(%rcx), %rbx    # Restore rbx.
-    movq    TRAP_EFLAGS(%rcx), %rax # Get eflags.
+    movq    TRAP_RFLAGS(%rcx), %rax # Get eflags.
     pushq   %rax                    # Push eflags.
     popfq                           # Pop eflags off the stack.
     movq    TRAP_RAX(%rcx), %rax    # Restore rax as return value.
@@ -219,6 +221,7 @@ Return Value:
 --*/
 
 FUNCTION(ClpContextStart)
+    int     $3                      # TODO: Check this, it's never been run!
     popq    %rax                    # Get the function to call.
     popq    %rdi                    # Pop argument 1.
     popq    %rsi                    # Pop argument 2.

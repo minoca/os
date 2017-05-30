@@ -68,7 +68,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlCopyMemory)
+PROTECTED_FUNCTION(RtlCopyMemory)
 
     ##
     ## It just so happens that the destination is already in rdi, source in
@@ -109,7 +109,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlZeroMemory)
+PROTECTED_FUNCTION(RtlZeroMemory)
 
     ##
     ## The buffer address is already in rdi. Move the count to rcx, clear eax,
@@ -154,7 +154,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlSetMemory)
+PROTECTED_FUNCTION(RtlSetMemory)
 
     ##
     ## The buffer address is already in rdi. Move the byte to rax and the count
@@ -201,7 +201,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlCompareMemory)
+PROTECTED_FUNCTION(RtlCompareMemory)
 
     ##
     ## The first buffer pointer is already in rdi, the second is already in
