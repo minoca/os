@@ -78,6 +78,19 @@ Environment:
 #define X86_BASIC_REG(_Reg) ((_Reg) & 0x7)
 
 //
+// This macro creates a fake REX prefix from a VEX byte.
+//
+
+#define X64_VEX_TO_REX(_Vex, _VexMap) \
+    (X64_REX_VALUE | ((~(_Vex) >> 5) & 0x7) | (((_VexMap) >> 4) & X64_REX_W))
+
+//
+// This macro gets the V register out of the VEX byte.
+//
+
+#define X64_VEX_V(_Vex) ((~(_Vex) >> 3) & 0x0F)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -89,6 +102,9 @@ Environment:
 #define X86_WIDTH_WORD 'w'
 #define X86_WIDTH_LONG 'l'
 #define X86_WIDTH_LONGLONG 'q'
+#define X86_WIDTH_OWORD 'o'
+#define X86_WIDTH_YWORD 'y'
+#define X86_WIDTH_ZWORD 'z'
 #define X86_FLOATING_POINT_REGISTER 'f'
 #define X86_CONTROL_REGISTER 'C'
 #define X86_DEBUG_REGISTER 'D'
@@ -140,6 +156,18 @@ Environment:
 #define X64_REX_B 0x01
 
 //
+// This bit is set to indicate 256 bit registers are in use.
+//
+
+#define X64_VEX_L 0x04
+
+//
+// This bit is called W/E, and is often the equivalent of the REX W bit.
+//
+
+#define X64_VEX_W 0x80
+
+//
 // Define some of the prefixes that can come at the beginning of an instruction.
 //
 
@@ -160,15 +188,12 @@ Environment:
 #define X64_REX_MASK 0xF0
 #define X64_REX_VALUE 0x40
 
-//
-// For opcode groups with fewer than the maximum number of possible opcodes,
-// define how many opcodes each group does have.
-//
+#define X64_XOP 0x8F
+#define X64_VEX3 0xC4
+#define X64_VEX2 0xC5
 
-#define X86_GROUP_4_INSTRUCTION_COUNT 2
-#define X86_GROUP_6_INSTRUCTION_COUNT 6
-#define X86_GROUP_8_FIRST_INSTRUCTION 4
-#define X86_GROUP_9_ONLY_VALID_INSTRUCTION 1
+#define X64_VEX2_MAP_SELECT 0x61
+
 #define X86_INVALID_GROUP 99
 
 //
@@ -182,17 +207,6 @@ Environment:
 //
 
 #define X86_WORKING_BUFFER_SIZE 100
-
-//
-// Define the multiplication and shift opcodes that have 3 operands.
-//
-
-#define X86_OPCODE1_IMUL1 0x69
-#define X86_OPCODE1_IMUL2 0x6B
-#define X86_OPCODE2_SHLD1 0xA4
-#define X86_OPCODE2_SHLD2 0xA5
-#define X86_OPCODE2_SHRD1 0xAC
-#define X86_OPCODE2_SHRD2 0xAD
 
 //
 // Define some x87 floating point support definitions, constants used in
@@ -217,13 +231,13 @@ Environment:
 #define X87_DF_E0_COUNT 3
 
 #define X87_REGISTER_TARGET "Rf"
-#define X87_ST0_TARGET "! st"
+#define X87_ST0_TARGET "!est"
 #define X87_FLD_MNEMONIC "fld"
 #define X87_FXCH_MNEMONIC "fxch"
 #define X87_NOP_MNEMONIC "fnop"
 #define X87_FSTP1_MNEMONIC "fstp1"
 #define X87_FUCOMPP_MNEMONIC "fucompp"
-#define X87_DF_E0_TARGET "! ax"
+#define X87_DF_E0_TARGET "!eax"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -246,6 +260,8 @@ Members:
     Source - Stores a pointer to a string describing the source operand's
         encoding.
 
+    Third - Stores a pointer to a string describing the third operand.
+
     Group - Stores the opcode group number. Some instructions require furthur
         decoding, the group number indicates that.
 
@@ -255,8 +271,28 @@ typedef struct _X86_INSTRUCTION_DEFINITION {
     PSTR Mnemonic;
     PSTR Target;
     PSTR Source;
+    PSTR Third;
     INT Group;
 } X86_INSTRUCTION_DEFINITION, *PX86_INSTRUCTION_DEFINITION;
+
+/*++
+
+Structure Description:
+
+    This structure provides the mnemonic switch for an opcode group.
+
+Members:
+
+    Group - Stores the group number.
+
+    Mnemonics - Stores the mnemonics for each opcode in the group.
+
+--*/
+
+typedef struct _X86_OPCODE_GROUP {
+    INT Group;
+    PSTR Mnemonics[8];
+} X86_OPCODE_GROUP, *PX86_OPCODE_GROUP;
 
 /*++
 
@@ -324,6 +360,12 @@ Members:
 
     Rex - Stores the REX byte for 64-bit register extension.
 
+    Vex - Stores the VEX byte (the last byte of the VEX prefix) if there is one.
+
+    VexMap - Stores the second to last byte of the VEX prefix, which includes
+        the map select and ~RXB bits. For a two-byte VEX prefix, a specific
+        value is inferred, which is set here.
+
     Displacement - Stores the displacement of the instruction operand.
 
     Immediate - Stores the immediate value that may or may not be encoded in the
@@ -366,6 +408,8 @@ typedef struct _X86_INSTRUCTION {
     BYTE ModRm;
     BYTE Sib;
     BYTE Rex;
+    BYTE Vex;
+    BYTE VexMap;
     ULONGLONG Displacement;
     ULONGLONG Immediate;
     ULONG Length;
@@ -419,549 +463,813 @@ typedef enum _X86_MOD_VALUE {
 //
 
 X86_INSTRUCTION_DEFINITION DbgX86Instructions[256] = {
-    {"add", "Eb", "Gb", 0},                     /* 00 */
-    {"add", "Ev", "Gv", 0},                     /* 01 */
-    {"add", "Gb", "Eb", 0},                     /* 02 */
-    {"add", "Gv", "Ev", 0},                     /* 03 */
-    {"add", "!bal", "Ib", 0},                   /* 04 */
-    {"add", "!r0", "Iz", 0},                    /* 05 */
-    {"push", "!wes", "", 0},                    /* 06 */
-    {"pop", "!wes", "", 0},                     /* 07 */
-    {"or", "Eb", "Gb", 0},                      /* 08 */
-    {"or", "Ev", "Gv", 0},                      /* 09 */
-    {"or", "Gb", "Eb", 0},                      /* 0A */
-    {"or", "Gv", "Ev", 0},                      /* 0B */
-    {"or", "!bal", "Ib", 0},                    /* 0C */
-    {"or", "!r0", "Iz", 0},                     /* 0D */
-    {"push", "!wcs", "", 0},                    /* 0E */
-    {"2BYTE", "", "", X86_INVALID_GROUP},       /* 0F */ /* Two Byte Opcodes */
-    {"adc", "Eb", "Gb", 0},                     /* 10 */
-    {"adc", "Ev", "Gv", 0},                     /* 11 */
-    {"adc", "Gb", "Eb", 0},                     /* 12 */
-    {"adc", "Gv", "Ev", 0},                     /* 13 */
-    {"adc", "!bal", "Ib", 0},                   /* 14 */
-    {"adc", "!r0", "Iz", 0},                    /* 15 */
-    {"push", "!wss", "", 0},                    /* 16 */
-    {"pop", "!wss", "", 0},                     /* 17 */
-    {"sbb", "Eb", "Gb", 0},                     /* 18 */
-    {"sbb", "Ev", "Gv", 0},                     /* 19 */
-    {"sbb", "Gb", "Eb", 0},                     /* 1A */
-    {"sbb", "Gv", "Ev", 0},                     /* 1B */
-    {"sbb", "!bal", "Ib", 0},                   /* 1C */
-    {"sbb", "!r0", "Iz", 0},                    /* 1D */
-    {"push", "!wds", "", 0},                    /* 1E */
-    {"pop", "!wds", "", 0},                     /* 1F */
-    {"and", "Eb", "Gb", 0},                     /* 20 */
-    {"and", "Ev", "Gv", 0},                     /* 21 */
-    {"and", "Gb", "Eb", 0},                     /* 22 */
-    {"and", "Gv", "Ev", 0},                     /* 23 */
-    {"and", "!bal", "Ib", 0},                   /* 24 */
-    {"and", "!r0", "Iz", 0},                    /* 25 */
-    {"ES:", "", "", X86_INVALID_GROUP},         /* 26 */ /* ES prefix */
-    {"daa", "", "", 0},                         /* 27 */
-    {"sub", "Eb", "Gb", 0},                     /* 28 */
-    {"sub", "Ev", "Gv", 0},                     /* 29 */
-    {"sub", "Gb", "Eb", 0},                     /* 2A */
-    {"sub", "Gv", "Ev", 0},                     /* 2B */
-    {"sub", "!bal", "Ib", 0},                   /* 2C */
-    {"sub", "!r0", "Iz", 0},                    /* 2D */
-    {"CS:", "", "", X86_INVALID_GROUP},         /* 2E */ /* CS prefix */
-    {"das", "", "", 0},                         /* 2F */
-    {"xor", "Eb", "Gb", 0},                     /* 30 */
-    {"xor", "Ev", "Gv", 0},                     /* 31 */
-    {"xor", "Gb", "Eb", 0},                     /* 32 */
-    {"xor", "Gv", "Ev", 0},                     /* 33 */
-    {"xor", "!bal", "Ib", 0},                   /* 34 */
-    {"xor", "!r0", "Iz", 0},                    /* 35 */
-    {"SS:", "", "", X86_INVALID_GROUP},         /* 36 */ /* SS prefix */
-    {"aaa", "", "", 0},                         /* 37 */
-    {"cmp", "Eb", "Gb", 0},                     /* 38 */
-    {"cmp", "Ev", "Gv", 0},                     /* 39 */
-    {"cmp", "Gb", "Eb", 0},                     /* 3A */
-    {"cmp", "Gv", "Ev", 0},                     /* 3B */
-    {"cmp", "!bal", "Ib", 0},                   /* 3C */
-    {"cmp", "!r0", "Iz", 0},                    /* 3D */
-    {"DS:", "", "", X86_INVALID_GROUP},         /* 3E */ /* DS prefix */
-    {"aas", "", "", 0},                         /* 3F */
-    {"inc", "!eeax", "", 0},                    /* 40 */
-    {"inc", "!eecx", "", 0},                    /* 41 */
-    {"inc", "!eedx", "", 0},                    /* 42 */
-    {"inc", "!eebx", "", 0},                    /* 43 */
-    {"inc", "!eesp", "", 0},                    /* 44 */
-    {"inc", "!eebp", "", 0},                    /* 45 */
-    {"inc", "!eesi", "", 0},                    /* 46 */
-    {"inc", "!eedi", "", 0},                    /* 47 */
-    {"dec", "!eeax", "", 0},                    /* 48 */
-    {"dec", "!eecx", "", 0},                    /* 49 */
-    {"dec", "!eedx", "", 0},                    /* 4A */
-    {"dec", "!eebx", "", 0},                    /* 4B */
-    {"dec", "!eesp", "", 0},                    /* 4C */
-    {"dec", "!eebp", "", 0},                    /* 4D */
-    {"dec", "!eesi", "", 0},                    /* 4E */
-    {"dec", "!eedi", "", 0},                    /* 4F */
-    {"push", "!r06", "", 0},                    /* 50 */
-    {"push", "!r16", "", 0},                    /* 51 */
-    {"push", "!r26", "", 0},                    /* 52 */
-    {"push", "!r36", "", 0},                    /* 53 */
-    {"push", "!r46", "", 0},                    /* 54 */
-    {"push", "!r56", "", 0},                    /* 55 */
-    {"push", "!r66", "", 0},                    /* 56 */
-    {"push", "!r76", "", 0},                    /* 57 */
-    {"pop", "!r06", "", 0},                     /* 58 */
-    {"pop", "!r16", "", 0},                     /* 59 */
-    {"pop", "!r26", "", 0},                     /* 5A */
-    {"pop", "!r36", "", 0},                     /* 5B */
-    {"pop", "!r46", "", 0},                     /* 5C */
-    {"pop", "!r56", "", 0},                     /* 5D */
-    {"pop", "!r66", "", 0},                     /* 5E */
-    {"pop", "!r76", "", 0},                     /* 5F */
-    {"pushad", "", "", 0},                      /* 60 */
-    {"popad", "", "", 0},                       /* 61 */
-    {"bound", "Gv", "Ma", 0},                   /* 62 */
-    {"movsxd", "Gv", "Ed", 0},                  /* 63 */ /* Was arpl in 286+ */
-    {"FS:", "", "", X86_INVALID_GROUP},         /* 64 */ /* FS prefix */
-    {"GS:", "", "", X86_INVALID_GROUP},         /* 65 */ /* GS prefix */
-    {"OPSIZE:", "", "", X86_INVALID_GROUP},     /* 66 */ /* Operand override */
-    {"ADSIZE:", "", "", X86_INVALID_GROUP},     /* 67 */ /* Address override */
-    {"push", "Iz", "", 0},                      /* 68 */
-    {"imul", "Gv", "Ev", 0},                    /* 69 */ /* Also has Iz */
-    {"push", "Ib", "", 0},                      /* 6A */
-    {"imul", "Gv", "Ev", 0},                    /* 6B */ /* Also has Ib */
-    {"ins", "Yb", "!wdx", 0},                   /* 6C */
-    {"ins", "Yz", "!wdx", 0},                   /* 6D */
-    {"outs", "!wdx", "Xb", 0},                  /* 6E */
-    {"outs", "!wdx", "Xz", 0},                  /* 6F */
-    {"jo ", "Jb", "", 0},                       /* 70 */
-    {"jno", "Jb", "", 0},                       /* 71 */
-    {"jb ", "Jb", "", 0},                       /* 72 */
-    {"jnb", "Jb", "", 0},                       /* 73 */
-    {"jz ", "Jb", "", 0},                       /* 74 */
-    {"jnz", "Jb", "", 0},                       /* 75 */
-    {"jbe", "Jb", "", 0},                       /* 76 */
-    {"jnbe", "Jb", "", 0},                      /* 77 */
-    {"js ", "Jb", "", 0},                       /* 78 */
-    {"jns", "Jb", "", 0},                       /* 79 */
-    {"jp ", "Jb", "", 0},                       /* 7A */
-    {"jnp", "Jb", "", 0},                       /* 7B */
-    {"jl ", "Jb", "", 0},                       /* 7C */
-    {"jnl", "Jb", "", 0},                       /* 7D */
-    {"jle", "Jb", "", 0},                       /* 7E */
-    {"jnle", "Jb", "", 0},                      /* 7F */
-    {"GRP1", "Eb", "Ib", 1},                    /* 80 */ /* Group 1 opcodes. */
-    {"GRP1", "Ev", "Iz", 1},                    /* 81 */ /* Reg of ModR/M */
-    {"GRP1", "Eb", "Ib", 1},                    /* 82 */ /* extends opcode.*/
-    {"GRP1", "Ev", "Ib", 1},                    /* 83 */
-    {"test", "Eb", "Gb", 0},                    /* 84 */
-    {"test", "Ev", "Gv", 0},                    /* 85 */
-    {"xchg", "Eb", "Eb", 0},                    /* 86 */
-    {"xchg", "Ev", "Gv", 0},                    /* 87 */
-    {"mov", "Eb", "Gb", 0},                     /* 88 */
-    {"mov", "Ev", "Gv", 0},                     /* 89 */
-    {"mov", "Gb", "Eb", 0},                     /* 8A */
-    {"mov", "Gv", "Ev", 0},                     /* 8B */
-    {"mov", "Ev", "Sw", 0},                     /* 8C */
-    {"lea", "Gv", "M", 0},                      /* 8D */
-    {"mov", "Sw", "Ev", 0},                     /* 8E */
-    {"pop", "Ev6", "", 0x1A},                   /* 8F */ /* Group 0x1A */
-    {"nop", "", "", 0},                         /* 90 */ /* nop */
-    {"xchg", "!r1", "!r0", 0},                  /* 91 */
-    {"xchg", "!r2", "!r0", 0},                  /* 92 */
-    {"xchg", "!r3", "!r0", 0},                  /* 93 */
-    {"xchg", "!r4", "!r0", 0},                  /* 94 */
-    {"xchg", "!r5", "!r0", 0},                  /* 95 */
-    {"xchg", "!r6", "!r0", 0},                  /* 96 */
-    {"xchg", "!r7", "!r0", 0},                  /* 97 */
-    {"cwde", "", "", 0},                        /* 98 */
-    {"cdq", "", "", 0},                         /* 99 */
-    {"call", "Ap", "", 0},                      /* 9A */
-    {"fwait", "", "", 0},                       /* 9B */
-    {"pushf", "", "", 0},                       /* 9C */ /* arg1 = Fv */
-    {"popf", "", "", 0},                        /* 9D */ /* arg1 = Fv */
-    {"sahf", "", "", 0},                        /* 9E */
-    {"lafh", "", "", 0},                        /* 9F */
-    {"mov", "!bal", "Ob", 0},                   /* A0 */
-    {"mov", "!r0", "Ov", 0},                    /* A1 */
-    {"mov", "Ob", "!bal", 0},                   /* A2 */
-    {"mov", "Ov", "!r0", 0},                    /* A3 */
-    {"movs", "Yb", "Xb", 0},                    /* A4 */
-    {"movs", "Yv", "Xv", 0},                    /* A5 */
-    {"cmps", "Yb", "Xb", 0},                    /* A6 */
-    {"cmps", "Yv", "Xv", 0},                    /* A7 */
-    {"test", "!bal", "Ib", 0},                  /* A8 */
-    {"test", "!r0", "Iz", 0},                   /* A9 */
-    {"stos", "Yb", "!bal", 0},                  /* AA */
-    {"stos", "Yv", "!r0", 0},                   /* AB */
-    {"lods", "!bal", "Xb", 0},                  /* AC */
-    {"lods", "!r0", "Xv", 0},                   /* AD */
-    {"scas", "Yb", "!bal", 0},                  /* AE */
-    {"scas", "Yv", "!r0", 0},                   /* AF */
-    {"mov", "!b0", "Ib", 0},                    /* B0 */
-    {"mov", "!b1", "Ib", 0},                    /* B1 */
-    {"mov", "!b2", "Ib", 0},                    /* B2 */
-    {"mov", "!b3", "Ib", 0},                    /* B3 */
-    {"mov", "!b4", "Ib", 0},                    /* B4 */
-    {"mov", "!b5", "Ib", 0},                    /* B5 */
-    {"mov", "!b6", "Ib", 0},                    /* B6 */
-    {"mov", "!b7", "Ib", 0},                    /* B7 */
-    {"mov", "!r0", "Iv", 0},                    /* B8 */
-    {"mov", "!r1", "Iv", 0},                    /* B9 */
-    {"mov", "!r2", "Iv", 0},                    /* BA */
-    {"mov", "!r3", "Iv", 0},                    /* BB */
-    {"mov", "!r4", "Iv", 0},                    /* BC */
-    {"mov", "!r5", "Iv", 0},                    /* BD */
-    {"mov", "!r6", "Iv", 0},                    /* BE */
-    {"mov", "!r7", "Iv", 0},                    /* BF */
-    {"GRP2", "Eb", "Ib", 2},                    /* C0 */ /* Group 2 */
-    {"GRP2", "Ev", "Ib", 2},                    /* C1 */ /* Group 2 */
-    {"ret", "Iw", "", 0},                       /* C2 */
-    {"ret", "", "", 0},                         /* C3 */
-    {"les", "Gz", "Mp", 0},                     /* C4 */
-    {"lds", "Gz", "Mp", 0},                     /* C5 */
-    {"mov", "Eb", "Ib", 11},                    /* C6 */ /* Group 11 */
-    {"mov", "Ev", "Iz", 11},                    /* C7 */ /* Group 11 */
-    {"enter", "Iw", "Ib", 0},                   /* C8 */
-    {"leave", "", "", 0},                       /* C9 */
-    {"retf", "Iw", "", 0},                      /* CA */
-    {"retf", "", "", 0},                        /* CB */
-    {"int", "!e3", "", 0},                      /* CC */ /* Int 3 */
-    {"int", "Ib", "", 0},                       /* CD */
-    {"into", "", "", 0},                        /* CE */
-    {"iret", "", "", 0},                        /* CF */
-    {"GRP2", "Eb", "!e1", 2},                   /* D0 */ /* Group 2, arg2 = 1 */
-    {"GRP2", "Ev", "!e1", 2},                   /* D1 */ /* Group 2, arg2 = 1 */
-    {"GRP2", "Eb", "!bcl", 2},                  /* D2 */ /* Group 2 */
-    {"GRP2", "Ev", "!bcl", 2},                  /* D3 */ /* Group 2 */
-    {"aam", "Ib", "", 0},                       /* D4 */
-    {"aad", "Ib", "", 0},                       /* D5 */
-    {"setalc", "", "", 0},                      /* D6 */
-    {"xlat", "", "", 0},                        /* D7 */
-    {"ESC0", "Ev", "", 0x87},                   /* D8 */ /* x87 Floating Pt */
-    {"ESC1", "Ev", "", 0x87},                   /* D9 */
-    {"ESC2", "Ev", "", 0x87},                   /* DA */
-    {"ESC3", "Ev", "", 0x87},                   /* DB */
-    {"ESC4", "Ev", "", 0x87},                   /* DC */
-    {"ESC5", "Ev", "", 0x87},                   /* DD */
-    {"ESC6", "Ev", "", 0x87},                   /* DE */
-    {"ESC7", "Ev", "", 0x87},                   /* DF */
-    {"loopnz", "Jb", "", 0},                    /* E0 */
-    {"loopz", "Jb", "", 0},                     /* E1 */
-    {"loop", "Jb", "", 0},                      /* E2 */
-    {"jcxz", "Jb", "", 0},                      /* E3 */
-    {"in ", "!bal", "Ib", 0},                   /* E4 */
-    {"in ", "!eeax", "Iv", 0},                  /* E5 */
-    {"out", "Ib", "!bal", 0},                   /* E6 */
-    {"out", "Ib", "!eeax", 0},                  /* E7 */
-    {"call", "Jz6", "", 0},                     /* E8 */
-    {"jmp", "Jz6", "", 0},                      /* E9 */
-    {"jmp", "Ap", "", 0},                       /* EA */
-    {"jmp", "Jb", "", 0},                       /* EB */
-    {"in ", "!bal", "!wdx", 0},                 /* EC */
-    {"in ", "!eeax", "!wdx", 0},                /* ED */
-    {"out", "!wdx", "!bal", 0},                 /* EE */
-    {"out", "!wdx", "!eeax", 0},                /* EF */
-    {"LOCK:", "", "", 0},                       /* F0 */ /* Lock prefix */
-    {"int", "!e1", "", 0},                      /* F1 */ /* Int 1 */
-    {"REPNE:", "", "", 0},                      /* F2 */ /* Repne prefix */
-    {"REP:", "", "", 0},                        /* F3 */ /* Rep prefix */
-    {"hlt", "", "", 0},                         /* F4 */
-    {"cmc", "", "", 0},                         /* F5 */
-    {"GRP3", "Eb", "", 3},                      /* F6 */ /* Group 3 */
-    {"GRP3", "Ev", "", 0x3A},                   /* F7 */ /* Group 3A */
-    {"clc", "", "", 0},                         /* F8 */
-    {"stc", "", "", 0},                         /* F9 */
-    {"cli", "", "", 0},                         /* FA */
-    {"sti", "", "", 0},                         /* FB */
-    {"cld", "", "", 0},                         /* FC */
-    {"std", "", "", 0},                         /* FD */
-    {"GRP4", "Eb", "", 4},                      /* FE */ /* Group 4 */
-    {"GRP5", "Ev", "", 5},                      /* FF */ /* Group 5 */
+    {"add", "Eb", "Gb", "", 0},                 /* 00 */
+    {"add", "Ev", "Gv", "", 0},                 /* 01 */
+    {"add", "Gb", "Eb", "", 0},                 /* 02 */
+    {"add", "Gv", "Ev", "", 0},                 /* 03 */
+    {"add", "!bal", "Ib", "", 0},               /* 04 */
+    {"add", "!r0", "Iz", "", 0},                /* 05 */
+    {"push", "!wes", "", "", 0},                /* 06 */
+    {"pop", "!wes", "", "", 0},                 /* 07 */
+    {"or", "Eb", "Gb", "", 0},                  /* 08 */
+    {"or", "Ev", "Gv", "", 0},                  /* 09 */
+    {"or", "Gb", "Eb", "", 0},                  /* 0A */
+    {"or", "Gv", "Ev", "", 0},                  /* 0B */
+    {"or", "!bal", "Ib", "", 0},                /* 0C */
+    {"or", "!r0", "Iz", "", 0},                 /* 0D */
+    {"push", "!wcs", "", "", 0},                /* 0E */
+    {"2BYTE", "", "", "", X86_INVALID_GROUP},   /* 0F */ /* Two Byte Opcodes */
+    {"adc", "Eb", "Gb", "", 0},                 /* 10 */
+    {"adc", "Ev", "Gv", "", 0},                 /* 11 */
+    {"adc", "Gb", "Eb", "", 0},                 /* 12 */
+    {"adc", "Gv", "Ev", "", 0},                 /* 13 */
+    {"adc", "!bal", "Ib", "", 0},               /* 14 */
+    {"adc", "!r0", "Iz", "", 0},                /* 15 */
+    {"push", "!wss", "", "", 0},                /* 16 */
+    {"pop", "!wss", "", "", 0},                 /* 17 */
+    {"sbb", "Eb", "Gb", "", 0},                 /* 18 */
+    {"sbb", "Ev", "Gv", "", 0},                 /* 19 */
+    {"sbb", "Gb", "Eb", "", 0},                 /* 1A */
+    {"sbb", "Gv", "Ev", "", 0},                 /* 1B */
+    {"sbb", "!bal", "Ib", "", 0},               /* 1C */
+    {"sbb", "!r0", "Iz", "", 0},                /* 1D */
+    {"push", "!wds", "", "", 0},                /* 1E */
+    {"pop", "!wds", "", "", 0},                 /* 1F */
+    {"and", "Eb", "Gb", "", 0},                 /* 20 */
+    {"and", "Ev", "Gv", "", 0},                 /* 21 */
+    {"and", "Gb", "Eb", "", 0},                 /* 22 */
+    {"and", "Gv", "Ev", "", 0},                 /* 23 */
+    {"and", "!bal", "Ib", "", 0},               /* 24 */
+    {"and", "!r0", "Iz", "", 0},                /* 25 */
+    {"ES:", "", "", "", X86_INVALID_GROUP},     /* 26 */ /* ES prefix */
+    {"daa", "", "", "", 0},                     /* 27 */
+    {"sub", "Eb", "Gb", "", 0},                 /* 28 */
+    {"sub", "Ev", "Gv", "", 0},                 /* 29 */
+    {"sub", "Gb", "Eb", "", 0},                 /* 2A */
+    {"sub", "Gv", "Ev", "", 0},                 /* 2B */
+    {"sub", "!bal", "Ib", "", 0},               /* 2C */
+    {"sub", "!r0", "Iz", "", 0},                /* 2D */
+    {"CS:", "", "", "", X86_INVALID_GROUP},     /* 2E */ /* CS prefix */
+    {"das", "", "", "", 0},                     /* 2F */
+    {"xor", "Eb", "Gb", "", 0},                 /* 30 */
+    {"xor", "Ev", "Gv", "", 0},                 /* 31 */
+    {"xor", "Gb", "Eb", "", 0},                 /* 32 */
+    {"xor", "Gv", "Ev", "", 0},                 /* 33 */
+    {"xor", "!bal", "Ib", "", 0},               /* 34 */
+    {"xor", "!r0", "Iz", "", 0},                /* 35 */
+    {"SS:", "", "", "", X86_INVALID_GROUP},     /* 36 */ /* SS prefix */
+    {"aaa", "", "", "", 0},                     /* 37 */
+    {"cmp", "Eb", "Gb", "", 0},                 /* 38 */
+    {"cmp", "Ev", "Gv", "", 0},                 /* 39 */
+    {"cmp", "Gb", "Eb", "", 0},                 /* 3A */
+    {"cmp", "Gv", "Ev", "", 0},                 /* 3B */
+    {"cmp", "!bal", "Ib", "", 0},               /* 3C */
+    {"cmp", "!r0", "Iz", "", 0},                /* 3D */
+    {"DS:", "", "", "", X86_INVALID_GROUP},     /* 3E */ /* DS prefix */
+    {"aas", "", "", "", 0},                     /* 3F */
+    {"inc", "!r0", "", "", 0},                  /* 40 */
+    {"inc", "!r1", "", "", 0},                  /* 41 */
+    {"inc", "!r2", "", "", 0},                  /* 42 */
+    {"inc", "!r3", "", "", 0},                  /* 43 */
+    {"inc", "!r4", "", "", 0},                  /* 44 */
+    {"inc", "!r5", "", "", 0},                  /* 45 */
+    {"inc", "!r6", "", "", 0},                  /* 46 */
+    {"inc", "!r7", "", "", 0},                  /* 47 */
+    {"dec", "!r0", "", "", 0},                  /* 48 */
+    {"dec", "!r1", "", "", 0},                  /* 49 */
+    {"dec", "!r2", "", "", 0},                  /* 4A */
+    {"dec", "!r3", "", "", 0},                  /* 4B */
+    {"dec", "!r4", "", "", 0},                  /* 4C */
+    {"dec", "!r5", "", "", 0},                  /* 4D */
+    {"dec", "!r6", "", "", 0},                  /* 4E */
+    {"dec", "!r7", "", "", 0},                  /* 4F */
+    {"push", "!r06", "", "", 0},                /* 50 */
+    {"push", "!r16", "", "", 0},                /* 51 */
+    {"push", "!r26", "", "", 0},                /* 52 */
+    {"push", "!r36", "", "", 0},                /* 53 */
+    {"push", "!r46", "", "", 0},                /* 54 */
+    {"push", "!r56", "", "", 0},                /* 55 */
+    {"push", "!r66", "", "", 0},                /* 56 */
+    {"push", "!r76", "", "", 0},                /* 57 */
+    {"pop", "!r06", "", "", 0},                 /* 58 */
+    {"pop", "!r16", "", "", 0},                 /* 59 */
+    {"pop", "!r26", "", "", 0},                 /* 5A */
+    {"pop", "!r36", "", "", 0},                 /* 5B */
+    {"pop", "!r46", "", "", 0},                 /* 5C */
+    {"pop", "!r56", "", "", 0},                 /* 5D */
+    {"pop", "!r66", "", "", 0},                 /* 5E */
+    {"pop", "!r76", "", "", 0},                 /* 5F */
+    {"pushad", "", "", "", 0},                  /* 60 */
+    {"popad", "", "", "", 0},                   /* 61 */
+    {"bound", "Gv", "Ma", "", 0},               /* 62 */
+    {"movsxd", "Gv", "Ed", "", 0},              /* 63 */ /* Was arpl in 286+ */
+    {"FS:", "", "", "", X86_INVALID_GROUP},     /* 64 */ /* FS prefix */
+    {"GS:", "", "", "", X86_INVALID_GROUP},     /* 65 */ /* GS prefix */
+    {"OPSIZE:", "", "", "", X86_INVALID_GROUP}, /* 66 */ /* Operand override */
+    {"ADSIZE:", "", "", "", X86_INVALID_GROUP}, /* 67 */ /* Address override */
+    {"push", "Iz", "", "", 0},                  /* 68 */
+    {"imul", "Gv", "Ev", "Iz", 0},              /* 69 */
+    {"push", "Ib", "", "", 0},                  /* 6A */
+    {"imul", "Gv", "Ev", "Ib", 0},              /* 6B */
+    {"ins", "Yb", "!wdx", "", 0},               /* 6C */
+    {"ins", "Yz", "!wdx", "", 0},               /* 6D */
+    {"outs", "!wdx", "Xb", "", 0},              /* 6E */
+    {"outs", "!wdx", "Xz", "", 0},              /* 6F */
+    {"jo ", "Jb", "", "", 0},                   /* 70 */
+    {"jno", "Jb", "", "", 0},                   /* 71 */
+    {"jb ", "Jb", "", "", 0},                   /* 72 */
+    {"jnb", "Jb", "", "", 0},                   /* 73 */
+    {"jz ", "Jb", "", "", 0},                   /* 74 */
+    {"jnz", "Jb", "", "", 0},                   /* 75 */
+    {"jbe", "Jb", "", "", 0},                   /* 76 */
+    {"jnbe", "Jb", "", "", 0},                  /* 77 */
+    {"js ", "Jb", "", "", 0},                   /* 78 */
+    {"jns", "Jb", "", "", 0},                   /* 79 */
+    {"jp ", "Jb", "", "", 0},                   /* 7A */
+    {"jnp", "Jb", "", "", 0},                   /* 7B */
+    {"jl ", "Jb", "", "", 0},                   /* 7C */
+    {"jnl", "Jb", "", "", 0},                   /* 7D */
+    {"jle", "Jb", "", "", 0},                   /* 7E */
+    {"jnle", "Jb", "", "", 0},                  /* 7F */
+    {"GRP1", "Eb", "Ib", "", 1},                /* 80 */ /* Group 1 opcodes. */
+    {"GRP1", "Ev", "Iz", "", 1},                /* 81 */ /* Reg of ModR/M */
+    {"GRP1", "Eb", "Ib", "", 1},                /* 82 */ /* extends opcode.*/
+    {"GRP1", "Ev", "Ib", "", 1},                /* 83 */
+    {"test", "Eb", "Gb", "", 0},                /* 84 */
+    {"test", "Ev", "Gv", "", 0},                /* 85 */
+    {"xchg", "Eb", "Eb", "", 0},                /* 86 */
+    {"xchg", "Ev", "Gv", "", 0},                /* 87 */
+    {"mov", "Eb", "Gb", "", 0},                 /* 88 */
+    {"mov", "Ev", "Gv", "", 0},                 /* 89 */
+    {"mov", "Gb", "Eb", "", 0},                 /* 8A */
+    {"mov", "Gv", "Ev", "", 0},                 /* 8B */
+    {"mov", "Ev", "Sw", "", 0},                 /* 8C */
+    {"lea", "Gv", "M", "", 0},                  /* 8D */
+    {"mov", "Sw", "Ev", "", 0},                 /* 8E */
+    {"pop", "Ev6", "", "", 0},                  /* 8F */
+    {"nop", "", "", "", 0},                     /* 90 */
+    {"xchg", "!r1", "!r0", "", 0},              /* 91 */
+    {"xchg", "!r2", "!r0", "", 0},              /* 92 */
+    {"xchg", "!r3", "!r0", "", 0},              /* 93 */
+    {"xchg", "!r4", "!r0", "", 0},              /* 94 */
+    {"xchg", "!r5", "!r0", "", 0},              /* 95 */
+    {"xchg", "!r6", "!r0", "", 0},              /* 96 */
+    {"xchg", "!r7", "!r0", "", 0},              /* 97 */
+    {"cwde", "", "", "", 0},                    /* 98 */
+    {"cdq", "", "", "", 0},                     /* 99 */
+    {"call", "Ap", "", "", 0},                  /* 9A */
+    {"fwait", "", "", "", 0},                   /* 9B */
+    {"pushf", "", "", "", 0},                   /* 9C */ /* arg1 = Fv */
+    {"popf", "", "", "", 0},                    /* 9D */ /* arg1 = Fv */
+    {"sahf", "", "", "", 0},                    /* 9E */
+    {"lafh", "", "", "", 0},                    /* 9F */
+    {"mov", "!bal", "Ob", "", 0},               /* A0 */
+    {"mov", "!r0", "Ov", "", 0},                /* A1 */
+    {"mov", "Ob", "!bal", "", 0},               /* A2 */
+    {"mov", "Ov", "!r0", "", 0},                /* A3 */
+    {"movs", "Yb", "Xb", "", 0},                /* A4 */
+    {"movs", "Yv", "Xv", "", 0},                /* A5 */
+    {"cmps", "Yb", "Xb", "", 0},                /* A6 */
+    {"cmps", "Yv", "Xv", "", 0},                /* A7 */
+    {"test", "!bal", "Ib", "", 0},              /* A8 */
+    {"test", "!r0", "Iz", "", 0},               /* A9 */
+    {"stos", "Yb", "!bal", "", 0},              /* AA */
+    {"stos", "Yv", "!r0", "", 0},               /* AB */
+    {"lods", "!bal", "Xb", "", 0},              /* AC */
+    {"lods", "!r0", "Xv", "", 0},               /* AD */
+    {"scas", "Yb", "!bal", "", 0},              /* AE */
+    {"scas", "Yv", "!r0", "", 0},               /* AF */
+    {"mov", "!b0", "Ib", "", 0},                /* B0 */
+    {"mov", "!b1", "Ib", "", 0},                /* B1 */
+    {"mov", "!b2", "Ib", "", 0},                /* B2 */
+    {"mov", "!b3", "Ib", "", 0},                /* B3 */
+    {"mov", "!b4", "Ib", "", 0},                /* B4 */
+    {"mov", "!b5", "Ib", "", 0},                /* B5 */
+    {"mov", "!b6", "Ib", "", 0},                /* B6 */
+    {"mov", "!b7", "Ib", "", 0},                /* B7 */
+    {"mov", "!r0", "Iv", "", 0},                /* B8 */
+    {"mov", "!r1", "Iv", "", 0},                /* B9 */
+    {"mov", "!r2", "Iv", "", 0},                /* BA */
+    {"mov", "!r3", "Iv", "", 0},                /* BB */
+    {"mov", "!r4", "Iv", "", 0},                /* BC */
+    {"mov", "!r5", "Iv", "", 0},                /* BD */
+    {"mov", "!r6", "Iv", "", 0},                /* BE */
+    {"mov", "!r7", "Iv", "", 0},                /* BF */
+    {"GRP2", "Eb", "Ib", "", 2},                /* C0 */ /* Group 2 */
+    {"GRP2", "Ev", "Ib", "", 2},                /* C1 */ /* Group 2 */
+    {"ret", "Iw", "", "", 0},                   /* C2 */
+    {"ret", "", "", "", 0},                     /* C3 */
+    {"les", "Gz", "Mp", "", 0},                 /* C4 */
+    {"lds", "Gz", "Mp", "", 0},                 /* C5 */
+    {"mov", "Eb", "Ib", "", 11},                /* C6 */ /* Group 11 */
+    {"mov", "Ev", "Iz", "", 11},                /* C7 */ /* Group 11 */
+    {"enter", "Iw", "Ib", "", 0},               /* C8 */
+    {"leave", "", "", "", 0},                   /* C9 */
+    {"retf", "Iw", "", "", 0},                  /* CA */
+    {"retf", "", "", "", 0},                    /* CB */
+    {"int", "!e3", "", "", 0},                  /* CC */
+    {"int", "Ib", "", "", 0},                   /* CD */
+    {"into", "", "", "", 0},                    /* CE */
+    {"iret", "", "", "", 0},                    /* CF */
+    {"GRP2", "Eb", "!e1", "", 2},               /* D0 */ /* Group 2, arg2 = 1 */
+    {"GRP2", "Ev", "!e1", "", 2},               /* D1 */ /* Group 2, arg2 = 1 */
+    {"GRP2", "Eb", "!bcl", "", 2},              /* D2 */ /* Group 2 */
+    {"GRP2", "Ev", "!bcl", "", 2},              /* D3 */ /* Group 2 */
+    {"aam", "Ib", "", "", 0},                   /* D4 */
+    {"aad", "Ib", "", "", 0},                   /* D5 */
+    {"setalc", "", "", "", 0},                  /* D6 */
+    {"xlat", "", "", "", 0},                    /* D7 */
+    {"ESC0", "Ev", "", "", 0x87},               /* D8 */ /* x87 Floating Pt */
+    {"ESC1", "Ev", "", "", 0x87},               /* D9 */
+    {"ESC2", "Ev", "", "", 0x87},               /* DA */
+    {"ESC3", "Ev", "", "", 0x87},               /* DB */
+    {"ESC4", "Ev", "", "", 0x87},               /* DC */
+    {"ESC5", "Ev", "", "", 0x87},               /* DD */
+    {"ESC6", "Ev", "", "", 0x87},               /* DE */
+    {"ESC7", "Ev", "", "", 0x87},               /* DF */
+    {"loopnz", "Jb", "", "", 0},                /* E0 */
+    {"loopz", "Jb", "", "", 0},                 /* E1 */
+    {"loop", "Jb", "", "", 0},                  /* E2 */
+    {"jcxz", "Jb", "", "", 0},                  /* E3 */
+    {"in ", "!bal", "Ib", "", 0},               /* E4 */
+    {"in ", "!eeax", "Iv", "", 0},              /* E5 */
+    {"out", "Ib", "!bal", "", 0},               /* E6 */
+    {"out", "Ib", "!eeax", "", 0},              /* E7 */
+    {"call", "Jz6", "", "", 0},                 /* E8 */
+    {"jmp", "Jz6", "", "", 0},                  /* E9 */
+    {"jmp", "Ap", "", "", 0},                   /* EA */
+    {"jmp", "Jb", "", "", 0},                   /* EB */
+    {"in ", "!bal", "!wdx", "", 0},             /* EC */
+    {"in ", "!eeax", "!wdx", "", 0},            /* ED */
+    {"out", "!wdx", "!bal", "", 0},             /* EE */
+    {"out", "!wdx", "!eeax", "", 0},            /* EF */
+    {"LOCK:", "", "", "", 0},                   /* F0 */ /* Lock prefix */
+    {"int", "!e1", "", "", 0},                  /* F1 */ /* Int 1 */
+    {"REPNE:", "", "", "", 0},                  /* F2 */ /* Repne prefix */
+    {"REP:", "", "", "", 0},                    /* F3 */ /* Rep prefix */
+    {"hlt", "", "", "", 0},                     /* F4 */
+    {"cmc", "", "", "", 0},                     /* F5 */
+    {"GRP3", "Eb", "", "", 3},                  /* F6 */ /* Group 3 */
+    {"GRP3", "Ev", "", "", 3},                  /* F7 */ /* Group 3 */
+    {"clc", "", "", "", 0},                     /* F8 */
+    {"stc", "", "", "", 0},                     /* F9 */
+    {"cli", "", "", "", 0},                     /* FA */
+    {"sti", "", "", "", 0},                     /* FB */
+    {"cld", "", "", "", 0},                     /* FC */
+    {"std", "", "", "", 0},                     /* FD */
+    {"GRP4", "Eb", "", "", 4},                  /* FE */ /* Group 4 */
+    {"GRP5", "Ev", "", "", 5},                  /* FF */ /* Group 5 */
 };
 
 X86_SPARSE_INSTRUCTION_DEFINITION DbgX86TwoByteInstructions[] = {
-    {0, 0x0, {"GRP6", "", "", 6}},              /* 00 */ /* Group 6 */
-    {0, 0x1, {"GRP7", "", "", 7}},              /* 01 */ /* Group 7 */
-    {0, 0x2, {"lar", "Gv", "Ew", 0}},           /* 02 */
-    {0, 0x3, {"lsl", "Gv", "Ew", 0}},           /* 03 */
-    {0, 0x5, {"loadall/syscall", "", "", 0}},   /* 05 */
-    {0, 0x6, {"clts", "", "", 0}},              /* 06 */
-    {0, 0x7, {"loadall/sysret", "", "", 0}},    /* 07 */
-    {0, 0x8, {"invd", "", "", 0}},              /* 08 */
-    {0, 0x9, {"wbinvd", "", "", 0}},            /* 09 */
-    {0, 0xB, {"ud1", "", "", 0}},               /* 0B */
+    {0, 0x0, {"GRP6", "Ev", "", "", 6}},        /* Group 6 */
+    {0, 0x1, {"GRP7", "Ev", "", "", 7}},        /* Group 7 */
+    {0, 0x2, {"lar", "Gv", "Ew", "", 0}},
+    {0, 0x3, {"lsl", "Gv", "Ew", "", 0}},
+    {0, 0x5, {"syscall", "", "", "", 0}},
+    {0, 0x6, {"clts", "", "", "", 0}},
+    {0, 0x7, {"sysret", "", "", "", 0}},
+    {0, 0x8, {"invd", "", "", "", 0}},
+    {0, 0x9, {"wbinvd", "", "", "", 0}},
+    {0, 0xA, {"cl1invmb", "", "", "", 0}},
+    {0, 0xB, {"ud1", "", "", "", 0}},
 
-    {0, 0x10, {"umov", "Eb", "Gb", 0}},         /* 10 */
-    {0, 0x11, {"umov", "Ev", "Gv", 0}},         /* 11 */
-    {0, 0x12, {"umov", "Gb", "Eb", 0}},         /* 12 */
-    {0, 0x13, {"umov", "Gv", "Ev", 0}},         /* 13 */
+    {0, 0x10, {"movups", "Vx", "Wx", "", 0}},
+    {0, 0x11, {"movups", "Wx", "Vx", "", 0}},
+    {0, 0x12, {"movlps", "Vo", "Ho", "Mo.q", 0}},
+    {0, 0x13, {"movlps", "Mo.q", "Vo", "", 0}},
+    {0, 0x14, {"unpcklps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x15, {"unpckhps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x16, {"movhps", "Vo", "Ho", "Uo", 0}},
+    {0, 0x17, {"movhps", "Mo.q", "Vo", "", 0}},
+    {0, 0x18, {"GRP16", "M", "", "", 16}},      /* Group 16 */
+    {0, 0x19, {"GRP16", "M", "", "", 16}},
+    {0, 0x1A, {"GRP16", "M", "", "", 16}},
+    {0, 0x1B, {"GRP16", "M", "", "", 16}},
+    {0, 0x1C, {"GRP16", "M", "", "", 16}},
+    {0, 0x1D, {"GRP16", "M", "", "", 16}},
+    {0, 0x1E, {"GRP16", "M", "", "", 16}},
+    {0, 0x1F, {"GRP16", "M", "", "", 16}},
 
-    {0, 0x20, {"mov", "Ry", "Cy", 0}},          /* 20 */
-    {0, 0x21, {"mov", "Ry", "Dy", 0}},          /* 21 */
-    {0, 0x22, {"mov", "Cy", "Ry", 0}},          /* 22 */
-    {0, 0x23, {"mov", "Dy", "Ry", 0}},          /* 23 */
+    {0x66, 0x10, {"movupd", "Vx", "Wx", "", 0}},
+    {0x66, 0x11, {"movupd", "Wx", "Vx", "", 0}},
+    {0x66, 0x12, {"movlpd", "Vo", "Ho", "Mo.q", 0}},
+    {0x66, 0x13, {"movlpd", "Mo.q", "Vo", "", 0}},
+    {0x66, 0x14, {"unpcklpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x15, {"unpckhpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x16, {"movhpd", "Vo", "Ho", "Mo.q", 0}},
+    {0x66, 0x17, {"movhpd", "Mo.q", "Vo", "", 0}},
+    {0x66, 0x18, {"GRP16", "M", "", "", 16}},
+    {0x66, 0x19, {"GRP16", "M", "", "", 16}},
+    {0x66, 0x1A, {"GRP16", "M", "", "", 16}},
+    {0x66, 0x1B, {"GRP16", "M", "", "", 16}},
+    {0x66, 0x1C, {"GRP16", "M", "", "", 16}},
+    {0x66, 0x1D, {"GRP16", "M", "", "", 16}},
+    {0x66, 0x1E, {"GRP16", "M", "", "", 16}},
+    {0x66, 0x1F, {"GRP16", "M", "", "", 16}},
 
-    {0, 0x30, {"wrmsr", "", "", 0}},            /* 30 */
-    {0, 0x31, {"rdtsc", "", "", 0}},            /* 31 */
-    {0, 0x32, {"rdmsr", "", "", 0}},            /* 32 */
-    {0, 0x33, {"rdpmc", "", "", 0}},            /* 33 */
-    {0, 0x34, {"sysenter", "", "", 0}},         /* 34 */
-    {0, 0x35, {"sysexit", "", "", 0}},          /* 35 */
-    {0, 0x37, {"getsec", "", "", 0}},           /* 37 */
+    {0xF3, 0x10, {"movss", "Vo", "Mo.d", "", 0}},
+    {0xF3, 0x11, {"movss", "Mo.d", "Vo", "", 0}},
+    {0xF3, 0x12, {"movsldup", "Vx", "Wx", "", 0}},
+    {0xF3, 0x16, {"movshdup", "Vx", "Wx", "", 0}},
+    {0xF3, 0x18, {"GRP16", "M", "", "", 16}},
+    {0xF3, 0x19, {"GRP16", "M", "", "", 16}},
+    {0xF3, 0x1A, {"GRP16", "M", "", "", 16}},
+    {0xF3, 0x1B, {"GRP16", "M", "", "", 16}},
+    {0xF3, 0x1C, {"GRP16", "M", "", "", 16}},
+    {0xF3, 0x1D, {"GRP16", "M", "", "", 16}},
+    {0xF3, 0x1E, {"GRP16", "M", "", "", 16}},
+    {0xF3, 0x1F, {"GRP16", "M", "", "", 16}},
 
-    {0, 0x40, {"cmovo", "Gv", "Ev", 0}},        /* 40 */
-    {0, 0x41, {"cmovno", "Gv", "Ev", 0}},       /* 41 */
-    {0, 0x42, {"cmovb", "Gv", "Ev", 0}},        /* 42 */
-    {0, 0x43, {"cmovnb", "Gv", "Ev", 0}},       /* 43 */
-    {0, 0x44, {"cmovz", "Gv", "Ev", 0}},        /* 44 */
-    {0, 0x45, {"cmovnz", "Gv", "Ev", 0}},       /* 45 */
-    {0, 0x46, {"cmovbe", "Gv", "Ev", 0}},       /* 46 */
-    {0, 0x47, {"cmovnbe", "Gv", "Ev", 0}},      /* 47 */
-    {0, 0x48, {"cmovs", "Gv", "Ev", 0}},        /* 48 */
-    {0, 0x49, {"cmovns", "Gv", "Ev", 0}},       /* 49 */
-    {0, 0x4A, {"cmovp", "Gv", "Ev", 0}},        /* 4A */
-    {0, 0x4B, {"cmovnp", "Gv", "Ev", 0}},       /* 4B */
-    {0, 0x4C, {"cmovl", "Gv", "Ev", 0}},        /* 4C */
-    {0, 0x4D, {"cmovnl", "Gv", "Ev", 0}},       /* 4D */
-    {0, 0x4E, {"cmovle", "Gv", "Ev", 0}},       /* 4E */
-    {0, 0x4F, {"cmovnle", "Gv", "Ev", 0}},      /* 4F */
+    {0xF2, 0x10, {"movsd", "Vo", "Mo.d", "", 0}},
+    {0xF2, 0x11, {"movsd", "Mo.d", "Vo", "", 0}},
+    {0xF2, 0x12, {"movddup", "Vx", "Wx", "", 0}},
+    {0xF2, 0x18, {"GRP16", "M", "", "", 16}},
+    {0xF2, 0x19, {"GRP16", "M", "", "", 16}},
+    {0xF2, 0x1A, {"GRP16", "M", "", "", 16}},
+    {0xF2, 0x1B, {"GRP16", "M", "", "", 16}},
+    {0xF2, 0x1C, {"GRP16", "M", "", "", 16}},
+    {0xF2, 0x1D, {"GRP16", "M", "", "", 16}},
+    {0xF2, 0x1E, {"GRP16", "M", "", "", 16}},
+    {0xF2, 0x1F, {"GRP16", "M", "", "", 16}},
 
-    {0, 0x80, {"jo ", "Jz", "", 0}},            /* 80 */
-    {0, 0x81, {"jno", "Jz", "", 0}},            /* 81 */
-    {0, 0x82, {"jb ", "Jz", "", 0}},            /* 82 */
-    {0, 0x83, {"jnb", "Jz", "", 0}},            /* 83 */
-    {0, 0x84, {"jz ", "Jz", "", 0}},            /* 84 */
-    {0, 0x85, {"jnz", "Jz", "", 0}},            /* 85 */
-    {0, 0x86, {"jbe", "Jz", "", 0}},            /* 86 */
-    {0, 0x87, {"jnbe", "Jz", "", 0}},           /* 87 */
-    {0, 0x88, {"js ", "Jz", "", 0}},            /* 88 */
-    {0, 0x89, {"jns", "Jz", "", 0}},            /* 89 */
-    {0, 0x8A, {"jp", "Jz", "", 0}},             /* 8A */
-    {0, 0x8B, {"jnp", "Jz", "", 0}},            /* 8B */
-    {0, 0x8C, {"jl ", "Jz", "", 0}},            /* 8C */
-    {0, 0x8D, {"jnl", "Jz", "", 0}},            /* 8D */
-    {0, 0x8E, {"jle", "Jz", "", 0}},            /* 8E */
-    {0, 0x8F, {"jnle", "Jz", "", 0}},           /* 8F */
+    {0, 0x20, {"mov", "Ry6", "Cy", "", 0}},
+    {0, 0x21, {"mov", "Ry6", "Dy", "", 0}},
+    {0, 0x22, {"mov", "Cy", "Ry6", "", 0}},
+    {0, 0x23, {"mov", "Dy", "Ry6", "", 0}},
+    {0, 0x24, {"mov", "Ry6", "Ty", "", 0}},
+    {0, 0x26, {"mov", "Ty", "Ry6", "", 0}},
+    {0, 0x28, {"movaps", "Vx", "Wx", "", 0}},
+    {0, 0x29, {"movaps", "Wx", "Vx", "", 0}},
+    {0, 0x2A, {"cvtpi2ps", "Vo", "Mq", "", 0}},
+    {0, 0x2B, {"movntps", "Mx", "Vx", "", 0}},
+    {0, 0x2C, {"cvttps2pi", "Pq", "Wo.q", "", 0}},
+    {0, 0x2D, {"cvtps2pi", "Pq", "Wo.q", "", 0}},
+    {0, 0x2E, {"ucomiss", "Vo", "Wo.d", "", 0}},
+    {0, 0x2F, {"comiss", "Vo", "Wo.d", "", 0}},
 
-    {0, 0x90, {"seto", "Eb", "", 0}},           /* 90 */
-    {0, 0x91, {"setno", "Eb", "", 0}},          /* 91 */
-    {0, 0x92, {"setb", "Eb", "", 0}},           /* 92 */
-    {0, 0x93, {"setnb", "Eb", "", 0}},          /* 93 */
-    {0, 0x94, {"setz", "Eb", "", 0}},           /* 94 */
-    {0, 0x95, {"setnz", "Eb", "", 0}},          /* 95 */
-    {0, 0x96, {"setbe", "Eb", "", 0}},          /* 96 */
-    {0, 0x97, {"setnbe", "Eb", "", 0}},         /* 97 */
-    {0, 0x98, {"sets", "Eb", "", 0}},           /* 98 */
-    {0, 0x99, {"setns", "Eb", "", 0}},          /* 99 */
-    {0, 0x9A, {"setp", "Eb", "", 0}},           /* 9A */
-    {0, 0x9B, {"setnp", "Eb", "", 0}},          /* 9B */
-    {0, 0x9C, {"setl", "Eb", "", 0}},           /* 9C */
-    {0, 0x9D, {"setnl", "Eb", "", 0}},          /* 9D */
-    {0, 0x9E, {"setle", "Eb", "", 0}},          /* 9E */
-    {0, 0x9F, {"setnle", "Eb", "", 0}},         /* 9F */
+    {0xF0, 0x20, {"mov", "Rd", "!ecr8", "", 0}},
+    {0xF0, 0x22, {"mov", "!ecr8", "Rd", "", 0}},
 
-    {0, 0xA0, {"push", "!wfs", "", 0}},         /* A0 */
-    {0, 0xA1, {"pop", "!wfs", "", 0}},          /* A1 */
-    {0, 0xA2, {"cpuid", "", "", 0}},            /* A2 */
-    {0, 0xA3, {"bt ", "Ev", "Gv", 0}},          /* A3 */
-    {0, 0xA4, {"shld", "Ev", "Gv", 0}},         /* A4 */ /* also has Ib */
-    {0, 0xA5, {"shld", "Ev", "Gv", 0}},         /* A5 */ /* also has !bcl */
-    {0, 0xA6, {"cmpxchg", "", "", 0}},          /* A6 */
-    {0, 0xA7, {"cmpxchg", "", "", 0}},          /* A7 */
-    {0, 0xA8, {"push", "!wgs", "", 0}},         /* A8 */
-    {0, 0xA9, {"pop", "!gs", "", 0}},           /* A9 */
-    {0, 0xAA, {"rsm", "", "", 0}},              /* AA */
-    {0, 0xAB, {"bts", "Ev", "Gv", 0}},          /* AB */
-    {0, 0xAC, {"shrd", "Ev", "Gv", 0}},         /* AC */ /* Also has Ib */
-    {0, 0xAD, {"shrd", "Ev", "Gv", 0}},         /* AD */ /* Also has !bcl */
-    {0, 0xAE, {"GRP15", "", "", 15}},           /* AE */ /* Group 15 */
-    {0, 0xAF, {"imul", "Gv", "Ev", 0}},         /* AF */
+    {0x66, 0x28, {"movapd", "Vx", "Wx", "", 0}},
+    {0x66, 0x29, {"movapd", "Wx", "Vx", "", 0}},
+    {0x66, 0x2A, {"cvtpi2pd", "Vo", "Mq", "", 0}},
+    {0x66, 0x2B, {"movntpd", "Mx", "Vx", "", 0}},
+    {0x66, 0x2C, {"cvttpd2pi", "Pq", "Wo", "", 0}},
+    {0x66, 0x2D, {"cvtpd2pi", "Pq", "Wo", "", 0}},
+    {0x66, 0x2E, {"ucomisd", "Vo", "Wo.q", "", 0}},
+    {0x66, 0x2F, {"comisd", "Vo", "Wo.q", "", 0}},
 
-    {0, 0xB0, {"cmpxchg", "Eb", "Gb", 0}},      /* B0 */
-    {0, 0xB1, {"cmpxchg", "Ev", "Gv", 0}},      /* B1 */
-    {0, 0xB2, {"lss", "Gz", "Mp", 0}},          /* B2 */
-    {0, 0xB3, {"btr", "Ev", "Gv", 0}},          /* B3 */
-    {0, 0xB4, {"lfs", "Gz", "Mp", 0}},          /* B4 */
-    {0, 0xB5, {"lgs", "Gz", "Mp", 0}},          /* B5 */
-    {0, 0xB6, {"movzx", "Gv", "Eb", 0}},        /* B6 */
-    {0, 0xB7, {"movxz", "Gv", "Ew", 0}},        /* B7 */
-    {0, 0xB8, {"jmpe", "Jz", "", 0}},           /* B8 */
-    {0, 0xB9, {"ud2", "", "", 11}},             /* B9 */ /* Group 10 */
-    {0, 0xBA, {"GRP8", "Ev", "Ib", 8}},         /* BA */ /* Group 8 */
-    {0, 0xBB, {"btc", "Ev", "Gv", 0}},          /* BB */
-    {0, 0xBC, {"bsf", "Gv", "Ev", 0}},          /* BC */
-    {0, 0xBD, {"bsr", "Gv", "Ev", 0}},          /* BD */
-    {0, 0xBE, {"movsx", "Gv", "Eb", 0}},        /* BE */
-    {0, 0xBF, {"movsx", "Gv", "Ew", 0}},        /* BF */
+    {0xF3, 0x2A, {"cvtsi2ss", "Vo", "Ho", "Ey", 0}},
+    {0xF3, 0x2B, {"movntss", "Md", "Vo", "", 0}},
+    {0xF3, 0x2C, {"cvttss2si", "Gy", "Wo.d", "", 0}},
+    {0xF3, 0x2D, {"cvtss2si", "Gy", "Wo.d", "", 0}},
 
-    {0xF3, 0xB8, {"popcnt", "Gv", "Ev", 0}},    /* B8 */
-    {0xF3, 0xBD, {"lzcnt", "Gv", "Ev", 0}},     /* BD */
+    {0xF2, 0x2A, {"cvtsi2sd", "Vo", "Ho", "Ey", 0}},
+    {0xF2, 0x2B, {"movntsd", "Md", "Vo", "", 0}},
+    {0xF2, 0x2C, {"cvttsd2si", "Gy", "Wo.q", "", 0}},
+    {0xF2, 0x2D, {"cvtsd2si", "Gy", "Wo.q", "", 0}},
 
-    {0, 0xC0, {"xadd", "Eb", "Gb", 0}},         /* C0 */
-    {0, 0xC1, {"xadd", "Ev", "Gv", 0}},         /* C1 */
-    {0, 0xC7, {"GRP9", "", "", 9}},             /* C7 */  /* Group 9 */
-    {0, 0xC8, {"bswap", "!r0", "", 0}},         /* C8 */
-    {0, 0xC9, {"bswap", "!r1", "", 0}},         /* C9 */
-    {0, 0xCA, {"bswap", "!r2", "", 0}},         /* CA */
-    {0, 0xCB, {"bswap", "!r3", "", 0}},         /* CB */
-    {0, 0xCC, {"bswap", "!r4", "", 0}},         /* CC */
-    {0, 0xCD, {"bswap", "!r5", "", 0}},         /* CD */
-    {0, 0xCE, {"bswap", "!r6", "", 0}},         /* CE */
-    {0, 0xCF, {"bswap", "!r7", "", 0}},         /* CF */
+    {0, 0x30, {"wrmsr", "", "", "", 0}},
+    {0, 0x31, {"rdtsc", "", "", "", 0}},
+    {0, 0x32, {"rdmsr", "", "", "", 0}},
+    {0, 0x33, {"rdpmc", "", "", "", 0}},
+    {0, 0x34, {"sysenter", "", "", "", 0}},
+    {0, 0x35, {"sysexit", "", "", "", 0}},
+    {0, 0x37, {"getsec", "", "", "", 0}},
 
-    {0, 0xFF, {"ud", "", "", 0}},               /* FF */
-    {0x66, 0xFF, {"ud", "", "", 0}},            /* FF */
+    {0, 0x40, {"cmovo", "Gv", "Ev", "", 0}},
+    {0, 0x41, {"cmovno", "Gv", "Ev", "", 0}},
+    {0, 0x42, {"cmovb", "Gv", "Ev", "", 0}},
+    {0, 0x43, {"cmovnb", "Gv", "Ev", "", 0}},
+    {0, 0x44, {"cmovz", "Gv", "Ev", "", 0}},
+    {0, 0x45, {"cmovnz", "Gv", "Ev", "", 0}},
+    {0, 0x46, {"cmovbe", "Gv", "Ev", "", 0}},
+    {0, 0x47, {"cmovnbe", "Gv", "Ev", "", 0}},
+    {0, 0x48, {"cmovs", "Gv", "Ev", "", 0}},
+    {0, 0x49, {"cmovns", "Gv", "Ev", "", 0}},
+    {0, 0x4A, {"cmovp", "Gv", "Ev", "", 0}},
+    {0, 0x4B, {"cmovnp", "Gv", "Ev", "", 0}},
+    {0, 0x4C, {"cmovl", "Gv", "Ev", "", 0}},
+    {0, 0x4D, {"cmovnl", "Gv", "Ev", "", 0}},
+    {0, 0x4E, {"cmovle", "Gv", "Ev", "", 0}},
+    {0, 0x4F, {"cmovnle", "Gv", "Ev", "", 0}},
 
-    {0, 0x0, {"", "", "", 0}},                  /* 00 */
-    {0, 0x0, {"", "", "", 0}},                  /* 00 */
-    {0, 0x0, {"", "", "", 0}},                  /* 00 */
-    {0, 0x0, {"", "", "", 0}},                  /* 00 */
-    {0, 0x0, {"", "", "", 0}},                  /* 00 */
-    {0, 0x0, {"", "", "", 0}},                  /* 00 */
-    {0, 0x0, {"", "", "", 0}},                  /* 00 */
-    {0, 0x0, {"", "", "", 0}},                  /* 00 */
+    {0, 0x50, {"movmskps", "Gy", "Ux", "", 0}},
+    {0, 0x51, {"sqrtps", "Vx", "Wx", "", 0}},
+    {0, 0x52, {"rsqrtps", "Vx", "Wx", "", 0}},
+    {0, 0x53, {"rcpps", "Vx", "Wx", "", 0}},
+    {0, 0x54, {"andps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x55, {"andnps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x56, {"orps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x57, {"xorps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x58, {"addps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x59, {"mulps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x5A, {"cvtps2pd", "Vo", "Wo.q", "", 0}},
+    {0, 0x5B, {"cvtdq2ps", "Vx", "Wx", "", 0}},
+    {0, 0x5C, {"subps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x5D, {"minps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x5E, {"divps", "Vx", "Hx", "Wx", 0}},
+    {0, 0x5F, {"maxps", "Vx", "Hx", "Wx", 0}},
+
+    {0x66, 0x50, {"movmskpd", "Gy", "Ux", "", 0}},
+    {0x66, 0x51, {"sqrtpd", "Vx", "Wx", "", 0}},
+    {0x66, 0x54, {"andpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x55, {"andnpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x56, {"orpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x57, {"xorpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x58, {"addpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x59, {"mulpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x5A, {"cvtpd2ps", "Vo", "Wo", "", 0}},
+    {0x66, 0x5B, {"cvtps2dq", "Vx", "Wx", "", 0}},
+    {0x66, 0x5C, {"subpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x5D, {"minpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x5E, {"divpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x5F, {"maxpd", "Vx", "Hx", "Wx", 0}},
+
+    {0xF3, 0x51, {"sqrtss", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x52, {"rsqrtss", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x53, {"rcpss", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x58, {"addss", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x59, {"mulss", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x5A, {"cvtss2sd", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x5B, {"cvttps2dq", "Vx", "Wx", "", 0}},
+    {0xF3, 0x5C, {"subss", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x5D, {"minss", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x5E, {"divss", "Vo", "Ho", "Wo.d", 0}},
+    {0xF3, 0x5F, {"maxss", "Vo", "Ho", "Wo.d", 0}},
+
+    {0xF2, 0x51, {"sqrtsd", "Vo", "Ho", "Wo.q", 0}},
+    {0xF2, 0x58, {"addsd", "Vo", "Ho", "Wo.q", 0}},
+    {0xF2, 0x59, {"mulsd", "Vo", "Ho", "Wo.q", 0}},
+    {0xF2, 0x5A, {"cvtsd2ss", "Vo", "Ho", "Wo.q", 0}},
+    {0xF2, 0x5C, {"subsd", "Vo", "Ho", "Wo.q", 0}},
+    {0xF2, 0x5D, {"minsd", "Vo", "Ho", "Wo.q", 0}},
+    {0xF2, 0x5E, {"divsd", "Vo", "Ho", "Wo.q", 0}},
+    {0xF2, 0x5F, {"maxsd", "Vo", "Ho", "Wo.q", 0}},
+
+    {0, 0x60, {"punpcklbw", "Pq", "Qd", "", 0}},
+    {0, 0x61, {"punpcklwd", "Pq", "Qd", "", 0}},
+    {0, 0x62, {"punpckldq", "Pq", "Qd", "", 0}},
+    {0, 0x63, {"packsswb", "Pq", "Qq", "", 0}},
+    {0, 0x64, {"pcmpgtb", "Pq", "Qq", "", 0}},
+    {0, 0x65, {"pcmpgtw", "Pq", "Qq", "", 0}},
+    {0, 0x66, {"pcmpgtd", "Pq", "Qq", "", 0}},
+    {0, 0x67, {"packuswb", "Pq", "Qq", "", 0}},
+    {0, 0x68, {"punpckhbw", "Pq", "Qq", "", 0}},
+    {0, 0x69, {"punpckhwd", "Pq", "Qq", "", 0}},
+    {0, 0x6A, {"punpckhdq", "Pq", "Qq", "", 0}},
+    {0, 0x6B, {"packssdw", "Pq", "Qq", "", 0}},
+    {0, 0x6E, {"movd", "Pq", "Ey", "", 0}},
+    {0, 0x6F, {"movq", "Pq", "Qq", "", 0}},
+
+    {0x66, 0x60, {"unpcklbw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x61, {"punpcklwd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x62, {"punpckldq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x63, {"packsswb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x64, {"pcmpgtb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x65, {"pcmpgtw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x66, {"pcmpgtd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x67, {"packuswb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x68, {"punpckhbw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x69, {"punpckhwd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x6A, {"punpckhdq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x6B, {"packssdw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x6C, {"punpckl-qdq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x6D, {"punpckh-qdq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x6E, {"movd", "Vo", "Ey", "", 0}},
+    {0x66, 0x6F, {"movdqa", "Vx", "Wx", "", 0}},
+
+    {0xF3, 0x6F, {"movdqu", "Vx", "Wx", "", 0}},
+
+    {0, 0x70, {"pshufw", "Pq", "Qq", "Ib", 0}},
+    {0, 0x71, {"GRP12", "Nb", "Iq", "", 12}},
+    {0, 0x72, {"GRP13", "Nb", "Iq", "", 13}},
+    {0, 0x73, {"GRP14", "Nb", "Iq", "", 14}},
+    {0, 0x74, {"pcmpeqb", "Pq", "Qq", "", 0}},
+    {0, 0x75, {"pcmpeqw", "Pq", "Qq", "", 0}},
+    {0, 0x76, {"pcmpeqd", "Pq", "Qq", "", 0}},
+    {0, 0x77, {"emms", "", "", "", 0}},
+    {0, 0x78, {"vmread", "Ey", "Gy", "", 0}},
+    {0, 0x79, {"vmwrite", "Gy", "Ey", "", 0}},
+    {0, 0x7E, {"movd", "Ey", "Pq", "", 0}},
+    {0, 0x7F, {"movq", "Qq", "Pq", "", 0}},
+
+    {0x66, 0x70, {"pshufd", "Vx", "Wx", "Ib", 0}},
+    {0x66, 0x71, {"GRP12", "Nb", "Iq", "", 12}},
+    {0x66, 0x72, {"GRP13", "Nb", "Iq", "", 13}},
+    {0x66, 0x73, {"GRP14", "Nb", "Iq", "", 14}},
+    {0x66, 0x74, {"pcmpeqb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x75, {"pcmpeqw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x76, {"pcmpeqd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x7C, {"haddpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x7D, {"hsubpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0x7E, {"movd", "Ey", "Vo", "", 0}},
+    {0x66, 0x7F, {"movdqa", "Wx", "Vx", "", 0}},
+
+    {0xF3, 0x70, {"pshufhw", "Vx", "Wx", "Ib", 0}},
+    {0xF3, 0x71, {"GRP12", "Nb", "Iq", "", 12}},
+    {0xF3, 0x72, {"GRP13", "Nb", "Iq", "", 13}},
+    {0xF3, 0x73, {"GRP14", "Nb", "Iq", "", 14}},
+    {0xF3, 0x7E, {"movq", "Vo", "Wo.q", "", 0}},
+    {0xF3, 0x7F, {"movdqu", "Wx", "Vx", "", 0}},
+
+    {0xF2, 0x70, {"pshuflw", "Vx", "Wx", "Ib", 0}},
+    {0xF2, 0x71, {"GRP12", "Nb", "Iq", "", 12}},
+    {0xF2, 0x72, {"GRP13", "Nb", "Iq", "", 13}},
+    {0xF2, 0x73, {"GRP14", "Nb", "Iq", "", 14}},
+    {0xF2, 0x7C, {"haddps", "Vx", "Hx", "Wx", 0}},
+    {0xF2, 0x7D, {"hsubps", "Vx", "Hx", "Wx", 0}},
+
+    {0, 0x80, {"jo ", "Jz", "", "", 0}},
+    {0, 0x81, {"jno", "Jz", "", "", 0}},
+    {0, 0x82, {"jb ", "Jz", "", "", 0}},
+    {0, 0x83, {"jnb", "Jz", "", "", 0}},
+    {0, 0x84, {"jz ", "Jz", "", "", 0}},
+    {0, 0x85, {"jnz", "Jz", "", "", 0}},
+    {0, 0x86, {"jbe", "Jz", "", "", 0}},
+    {0, 0x87, {"jnbe", "Jz", "", "", 0}},
+    {0, 0x88, {"js ", "Jz", "", "", 0}},
+    {0, 0x89, {"jns", "Jz", "", "", 0}},
+    {0, 0x8A, {"jp", "Jz", "", "", 0}},
+    {0, 0x8B, {"jnp", "Jz", "", "", 0}},
+    {0, 0x8C, {"jl ", "Jz", "", "", 0}},
+    {0, 0x8D, {"jnl", "Jz", "", "", 0}},
+    {0, 0x8E, {"jle", "Jz", "", "", 0}},
+    {0, 0x8F, {"jnle", "Jz", "", "", 0}},
+
+    {0, 0x90, {"seto", "Eb", "", "", 0}},
+    {0, 0x91, {"setno", "Eb", "", "", 0}},
+    {0, 0x92, {"setb", "Eb", "", "", 0}},
+    {0, 0x93, {"setnb", "Eb", "", "", 0}},
+    {0, 0x94, {"setz", "Eb", "", "", 0}},
+    {0, 0x95, {"setnz", "Eb", "", "", 0}},
+    {0, 0x96, {"setbe", "Eb", "", "", 0}},
+    {0, 0x97, {"setnbe", "Eb", "", "", 0}},
+    {0, 0x98, {"sets", "Eb", "", "", 0}},
+    {0, 0x99, {"setns", "Eb", "", "", 0}},
+    {0, 0x9A, {"setp", "Eb", "", "", 0}},
+    {0, 0x9B, {"setnp", "Eb", "", "", 0}},
+    {0, 0x9C, {"setl", "Eb", "", "", 0}},
+    {0, 0x9D, {"setnl", "Eb", "", "", 0}},
+    {0, 0x9E, {"setle", "Eb", "", "", 0}},
+    {0, 0x9F, {"setnle", "Eb", "", "", 0}},
+
+    {0, 0xA0, {"push", "!wfs", "", "", 0}},
+    {0, 0xA1, {"pop", "!wfs", "", "", 0}},
+    {0, 0xA2, {"cpuid", "", "", "", 0}},
+    {0, 0xA3, {"bt ", "Ev", "Gv", "", 0}},
+    {0, 0xA4, {"shld", "Ev", "Gv", "Ib", 0}},
+    {0, 0xA5, {"shld", "Ev", "Gv", "!b1", 0}},
+    {0, 0xA6, {"cmpxchg", "", "", "", 0}},
+    {0, 0xA7, {"cmpxchg", "", "", "", 0}},
+    {0, 0xA8, {"push", "!wgs", "", "", 0}},
+    {0, 0xA9, {"pop", "!gs", "", "", 0}},
+    {0, 0xAA, {"rsm", "", "", "", 0}},
+    {0, 0xAB, {"bts", "Ev", "Gv", "", 0}},
+    {0, 0xAC, {"shrd", "Ev", "Gv", "Ib", 0}},
+    {0, 0xAD, {"shrd", "Ev", "Gv", "!b1", 0}},
+    {0, 0xAE, {"GRP15", "M", "", "", 15}},       /* Group 15 */
+    {0, 0xAF, {"imul", "Gv", "Ev", "", 0}},
+
+    {0, 0xB0, {"cmpxchg", "Eb", "Gb", "", 0}},
+    {0, 0xB1, {"cmpxchg", "Ev", "Gv", "", 0}},
+    {0, 0xB2, {"lss", "Gz", "Mp", "", 0}},
+    {0, 0xB3, {"btr", "Ev", "Gv", "", 0}},
+    {0, 0xB4, {"lfs", "Gz", "Mp", "", 0}},
+    {0, 0xB5, {"lgs", "Gz", "Mp", "", 0}},
+    {0, 0xB6, {"movzx", "Gv", "Eb", "", 0}},
+    {0, 0xB7, {"movxz", "Gv", "Ew", "", 0}},
+    {0, 0xB8, {"jmpe", "Jz", "", "", 0}},
+    {0, 0xB9, {"ud2", "", "", "", 0}},          /* Group 10 */
+    {0, 0xBA, {"GRP8", "Ev", "Ib", "", 8}},     /* Group 8 */
+    {0, 0xBB, {"btc", "Ev", "Gv", "", 0}},
+    {0, 0xBC, {"bsf", "Gv", "Ev", "", 0}},
+    {0, 0xBD, {"bsr", "Gv", "Ev", "", 0}},
+    {0, 0xBE, {"movsx", "Gv", "Eb", "", 0}},
+    {0, 0xBF, {"movsx", "Gv", "Ew", "", 0}},
+
+    {0xF3, 0xB8, {"popcnt", "Gv", "Ev", "", 0}},
+    {0xF3, 0xBD, {"lzcnt", "Gv", "Ev", "", 0}},
+
+    {0, 0xC0, {"xadd", "Eb", "Gb", "", 0}},
+    {0, 0xC1, {"xadd", "Ev", "Gv", "", 0}},
+    {0, 0xC2, {"cmpccps", "Vx", "Hx", "Wx", 0}},/* Also has Ib */
+    {0, 0xC3, {"movnti", "My", "Gy", "", 0}},
+    {0, 0xC4, {"pinsrw", "Pq", "Mw", "Ib", 0}},
+    {0, 0xC5, {"pextrw", "Gy", "Nq", "Ib", 0}},
+    {0, 0xC6, {"shufps", "Vx", "Hx", "Wx", 0}}, /* Also has Ib */
+    {0, 0xC7, {"GRP9", "M", "", "", 9}},        /* Group 9 */
+    {0, 0xC8, {"bswap", "!r0", "", "", 0}},
+    {0, 0xC9, {"bswap", "!r1", "", "", 0}},
+    {0, 0xCA, {"bswap", "!r2", "", "", 0}},
+    {0, 0xCB, {"bswap", "!r3", "", "", 0}},
+    {0, 0xCC, {"bswap", "!r4", "", "", 0}},
+    {0, 0xCD, {"bswap", "!r5", "", "", 0}},
+    {0, 0xCE, {"bswap", "!r6", "", "", 0}},
+    {0, 0xCF, {"bswap", "!r7", "", "", 0}},
+
+    {0x66, 0xC0, {"xadd", "Eb", "Gb", "", 0}},
+    {0x66, 0xC1, {"xadd", "Ev", "Gv", "", 0}},
+    {0x66, 0xC2, {"cmpccpd", "Vx", "Hx", "Wx", 0}},    /* Also has Ib */
+    {0x66, 0xC4, {"pinsrw", "Vo", "Ho", "Mw", 0}},     /* Also has Ib */
+    {0x66, 0xC5, {"pextrw", "Gy", "Uo", "Ib", 0}},
+    {0x66, 0xC6, {"shufpd", "Vx", "Hx", "Wx", 0}},     /* Also has Ib */
+    {0x66, 0xC7, {"GRP9", "M", "", "", 9}},      /* Group 9 */
+
+    {0xF3, 0xC0, {"xadd", "Eb", "Gb", "", 0}},
+    {0xF3, 0xC1, {"xadd", "Ev", "Gv", "", 0}},
+    {0xF3, 0xC2, {"cmpccss", "Vo", "Ho", "Wo.d", 0}},  /* Also has Ib */
+    {0xF3, 0xC7, {"GRP9", "M", "", "", 9}},      /* Group 9 */
+
+    {0xF2, 0xC0, {"xadd", "Eb", "Gb", "", 0}},
+    {0xF2, 0xC1, {"xadd", "Ev", "Gv", "", 0}},
+    {0xF2, 0xC2, {"cmpccss", "Vo", "Ho", "Wo.d", 0}},  /* Also has Ib */
+    {0xF2, 0xC7, {"GRP9", "M", "", "", 9}},      /* Group 9 */
+
+    {0, 0xD1, {"psrlw", "Pq", "Qq", "", 0}},
+    {0, 0xD2, {"psrld", "Pq", "Qq", "", 0}},
+    {0, 0xD3, {"psrlq", "Pq", "Qq", "", 0}},
+    {0, 0xD4, {"paddq", "Pq", "Qq", "", 0}},
+    {0, 0xD5, {"pmullw", "Pq", "Qq", "", 0}},
+    {0, 0xD7, {"pmovmskb", "Gy", "Nq", "", 0}},
+    {0, 0xD8, {"psubusb", "Pq", "Qq", "", 0}},
+    {0, 0xD9, {"psubusw", "Pq", "Qq", "", 0}},
+    {0, 0xDA, {"pminub", "Pq", "Qq", "", 0}},
+    {0, 0xDB, {"pand", "Pq", "Qq", "", 0}},
+    {0, 0xDC, {"paddusb", "Pq", "Qq", "", 0}},
+    {0, 0xDD, {"paddusw", "Pq", "Qq", "", 0}},
+    {0, 0xDE, {"pmaxub", "Pq", "Qq", "", 0}},
+    {0, 0xDF, {"pandn", "Pq", "Qq", "", 0}},
+
+    {0x66, 0xD0, {"addsubpd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xD1, {"psrlw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xD2, {"psrld", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xD3, {"psrlq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xD4, {"paddq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xD5, {"pmullw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xD6, {"pmovq", "Wo.q", "Vo", "", 0}},
+    {0x66, 0xD7, {"pmovmskb", "Gy", "Ux", "", 0}},
+    {0x66, 0xD8, {"psubusb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xD9, {"psubusw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xDA, {"pminub", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xDB, {"pand", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xDC, {"paddusb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xDD, {"paddusw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xDE, {"pmaxub", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xDF, {"pandn", "Vx", "Hx", "Wx", 0}},
+
+    {0xF3, 0xD6, {"movq2dq", "Vo", "Nq", "", 0}},
+
+    {0xF2, 0xD0, {"addsubps", "Vx", "Hx", "Wx", 0}},
+    {0xF2, 0xD6, {"movdq2q", "Pq", "Uq", "", 0}},
+
+    {0, 0xE0, {"pavgb", "Pq", "Qq", "", 0}},
+    {0, 0xE1, {"psraw", "Pq", "Qq", "", 0}},
+    {0, 0xE2, {"psrad", "Pq", "Qq", "", 0}},
+    {0, 0xE3, {"pavgw", "Pq", "Qq", "", 0}},
+    {0, 0xE4, {"pmulhuw", "Pq", "Qq", "", 0}},
+    {0, 0xE5, {"pmulhw", "Pq", "Qq", "", 0}},
+    {0, 0xE7, {"movntq", "Mq", "Pq", "", 0}},
+    {0, 0xE8, {"psubsb", "Pq", "Qq", "", 0}},
+    {0, 0xE9, {"psubsw", "Pq", "Qq", "", 0}},
+    {0, 0xEA, {"pminsw", "Pq", "Qq", "", 0}},
+    {0, 0xEB, {"por", "Pq", "Qq", "", 0}},
+    {0, 0xEC, {"paddsb", "Pq", "Qq", "", 0}},
+    {0, 0xED, {"paddsw", "Pq", "Qq", "", 0}},
+    {0, 0xEE, {"pmaxsw", "Mq", "Pq", "", 0}},
+    {0, 0xEF, {"pxor", "Mq", "Pq", "", 0}},
+
+    {0x66, 0xE0, {"pavgb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xE1, {"psraw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xE2, {"psrad", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xE3, {"pavgw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xE4, {"pmulhuw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xE5, {"pmulhw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xE6, {"cvttpd2dq", "Vo", "Wx", "", 0}},
+    {0x66, 0xE7, {"movntdq", "Mx", "Vx", "", 0}},
+    {0x66, 0xE8, {"psubsb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xE9, {"psubsw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xEA, {"pminsw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xEB, {"por", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xEC, {"paddsb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xED, {"paddsw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xEE, {"pmaxsw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xEF, {"pxor", "Vx", "Hx", "Wx", 0}},
+
+    {0xF3, 0xE6, {"cvtdq2pd", "Vo", "Wo.q", "", 0}},
+
+    {0xF2, 0xE6, {"cvtpd2dq", "Vo", "Wx", "", 0}},
+
+    {0, 0xF1, {"psllw", "Pq", "Qq", "", 0}},
+    {0, 0xF2, {"pslld", "Pq", "Qq", "", 0}},
+    {0, 0xF3, {"psllq", "Pq", "Qq", "", 0}},
+    {0, 0xF4, {"pmuludq", "Pq", "Qq", "", 0}},
+    {0, 0xF5, {"pmaddwd", "Pq", "Qq", "", 0}},
+    {0, 0xF6, {"psadbw", "Pq", "Qq", "", 0}},
+    {0, 0xF7, {"maskmovq", "Pq", "Nq", "", 0}},
+    {0, 0xF8, {"psubb", "Pq", "Qq", "", 0}},
+    {0, 0xF9, {"psubw", "Pq", "Qq", "", 0}},
+    {0, 0xFA, {"psubd", "Pq", "Qq", "", 0}},
+    {0, 0xFB, {"psubq", "Pq", "Qq", "", 0}},
+    {0, 0xFC, {"paddb", "Pq", "Qq", "", 0}},
+    {0, 0xFD, {"paddw", "Pq", "Qq", "", 0}},
+    {0, 0xFE, {"paddd", "Pq", "Qq", "", 0}},
+    {0, 0xFF, {"ud", "", "", "", 0}},
+
+    {0x66, 0xF1, {"psllw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xF2, {"pslld", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xF3, {"psllq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xF4, {"pmuludq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xF5, {"pmaddwd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xF6, {"psadbw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xF7, {"maskmovdqq", "Vo", "Uo", "", 0}},
+    {0x66, 0xF8, {"psubb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xF9, {"psubw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xFA, {"psubd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xFB, {"psubq", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xFC, {"paddb", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xFD, {"paddw", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xFE, {"paddd", "Vx", "Hx", "Wx", 0}},
+    {0x66, 0xFF, {"ud", "", "", "", 0}},
+
+    {0xF2, 0xF0, {"lddqu", "Vx", "Mx", "", 0}},
+
+    {0, 0x0, {"", "", "", "", 0}},
 };
 
-X86_INSTRUCTION_DEFINITION DbgX86Group1Instructions[8] = {
-    {"add", "", "", 0},                         /* 00 */
-    {"or ", "", "", 0},                         /* 01 */
-    {"adc", "", "", 0},                         /* 02 */
-    {"sbb", "", "", 0},                         /* 03 */
-    {"and", "", "", 0},                         /* 04 */
-    {"sub", "", "", 0},                         /* 05 */
-    {"xor", "", "", 0},                         /* 06 */
-    {"cmp", "", "", 0},                         /* 07 */
-};
+//
+// Define the opcode groups, terminated by group zero.
+//
 
-X86_INSTRUCTION_DEFINITION DbgX86Group2Instructions[8] = {
-    {"rol", "", "", 0},                         /* 00 */
-    {"ror", "", "", 0},                         /* 01 */
-    {"rcl", "", "", 0},                         /* 02 */
-    {"rcr", "", "", 0},                         /* 03 */
-    {"shl", "", "", 0},                         /* 04 */
-    {"shr", "", "", 0},                         /* 05 */
-    {"sal", "", "", 0},                         /* 06 */
-    {"sar", "", "", 0},                         /* 07 */
-};
+X86_OPCODE_GROUP DbgX86OpcodeGroups[] = {
+    {1, {"add", "or ", "adc", "sbb", "and", "sub", "xor", "cmp"}},
+    {2, {"rol", "ror", "rcl", "rcr", "shl", "shr", "sal", "sar"}},
+    {3, {"test", "test", "not", "neg", "mul", "imul", "div", "idiv"}},
+    {4, {"inc", "dec", "(bad)", "(bad)", "(bad)", "(bad)", "(bad)", "(bad)"}},
+    {5, {"inc", "dec", "call", "call", "jmp", "jmp", "push", "(bad)"}},
+    {6, {"sldt", "str", "lldt", "ltr", "verr", "verw", "jmpe", "(bad)"}},
+    {7, {"sgdt", "sidt", "lgdt", "lidt", "smsw", "rstorssp", "lmsw", "invlpg"}},
+    {8, {"(bad)", "(bad)", "(bad)", "(bad)", "bt", "bts", "btr", "btc"}},
+    {9, {"(bad)", "cmpxchg8b", "xrstors", "xsavec",
+         "xsaves", "(bad)", "vmptrld", "vmptrst"}},
 
-X86_INSTRUCTION_DEFINITION DbgX86Group3Instructions[8] = {
-    {"test", "Ev", "Ib", 0},                    /* 00 */
-    {"test", "Ev", "Ib", 0},                    /* 01 */
-    {"not", "", "", 0},                         /* 02 */
-    {"neg", "", "", 0},                         /* 03 */
-    {"mul", "", "!r0", 0},                      /* 04 */
-    {"mul", "", "!r0", 0},                      /* 05 */
-    {"div", "", "!r0", 0},                      /* 06 */
-    {"div", "", "!r0", 0},                      /* 07 */
-};
+    {10, {"ud2", "ud2", "ud2", "ud2", "ud2", "ud2", "ud2", "ud2"}},
+    {11, {"mov", "(bad)", "(bad)", "(bad)",
+          "(bad)", "(bad)", "(bad)", "xabort"}},
 
-X86_INSTRUCTION_DEFINITION DbgX86Group3AInstructions[8] = {
-    {"test", "Ev", "Iz", 0},                    /* 00 */
-    {"test", "Ev", "Iz", 0},                    /* 01 */
-    {"not", "", "", 0},                         /* 02 */
-    {"neg", "", "", 0},                         /* 03 */
-    {"mul", "", "!r0", 0},                      /* 04 */
-    {"mul", "", "!r0", 0},                      /* 05 */
-    {"div", "", "!r0", 0},                      /* 06 */
-    {"div", "", "!r0", 0},                      /* 07 */
-};
+    {12, {"(bad)", "(bad)", "psrlw", "(bad)",
+          "psraw", "(bad)", "psllw", "(bad)"}},
 
-X86_INSTRUCTION_DEFINITION
-                    DbgX86Group4Instructions[X86_GROUP_4_INSTRUCTION_COUNT] = {
+    {13, {"(bad)", "(bad)", "psrld", "(bad)",
+          "psrad", "(bad)", "pslld", "(bad)"}},
 
-    {"inc", "Eb", "", 0},                       /* 00 */
-    {"dec", "Eb", "", 0},                       /* 01 */
-};
+    {14, {"(bad)", "(bad)", "psrlq", "psrldq",
+          "(bad)", "(bad)", "psllq", "pslldq"}},
 
-X86_INSTRUCTION_DEFINITION DbgX86Group5Instructions[8] = {
-    {"inc", "Ev", "", 0},                       /* 00 */
-    {"dec", "Ev", "", 0},                       /* 01 */
-    {"call", "Ev6", "", 0},                     /* 02 */
-    {"call", "Mp", "", 0},                      /* 03 */
-    {"jmp", "Ev6", "", 0},                      /* 04 */
-    {"jmp", "Mp", "", 0},                       /* 05 */
-    {"push", "Ev6", "", 0},                     /* 06 */
-    {"(bad)", "", "", 0},                       /* 07 */
-};
+    {15, {"fxsave", "fxrstor", "ldmxcsr", "stmxcsr",
+          "xsave", "xrstor", "xsaveopt", "clflush"}},
 
-X86_INSTRUCTION_DEFINITION
-                    DbgX86Group6Instructions[X86_GROUP_6_INSTRUCTION_COUNT] = {
+    {16, {"prefetchnta", "prefetcht0", "prefetcht1", "prefetcht2",
+          "hint", "hint", "hint", "hint"}},
 
-    {"sldt", "Ev", "", 0},                      /* 00 */
-    {"str", "Ev", "", 0},                       /* 01 */
-    {"lldt", "Ev", "", 0},                      /* 02 */
-    {"ltr", "Ev", "", 0},                       /* 03 */
-    {"verr", "Ev", "", 0},                      /* 04 */
-    {"verw", "Ev", 0},                          /* 05 */
-};
+    {17, {"(bad)", "blsr", "blsmsk", "blsi",
+          "(bad)", "(bad)", "(bad)", "(bad)"}},
 
-X86_INSTRUCTION_DEFINITION DbgX86Group7Instructions[8] = {
-    {"sgdt", "Ms", "", 0},                      /* 00 */
-    {"sidt", "Ms", "", 0},                      /* 01 */
-    {"lgdt", "Ms", "", 0},                      /* 02 */
-    {"lidt", "Ms", "", 0},                      /* 03 */
-    {"smsw", "Mw", "", 0},                      /* 04 */
-    {"", "", "", X86_INVALID_GROUP},            /* 05 */
-    {"lmsw", "Mw", "", 0},                      /* 06 */
-    {"invlpg", "M", "", 0},                     /* 07 */
-};
-
-X86_INSTRUCTION_DEFINITION DbgX86Group8Instructions[8] = {
-    {"", "", "", X86_INVALID_GROUP},            /* 00 */
-    {"", "", "", X86_INVALID_GROUP},            /* 01 */
-    {"", "", "", X86_INVALID_GROUP},            /* 02 */
-    {"", "", "", X86_INVALID_GROUP},            /* 03 */
-    {"bt ", "", "", 0},                         /* 04 */
-    {"bts", "", 0},                             /* 05 */
-    {"btr", "", "", 0},                         /* 06 */
-    {"btc", "", "", 0},                         /* 07 */
-};
-
-X86_INSTRUCTION_DEFINITION DbgX86Group9Instructions[8] = {
-    {"", "", "", X86_INVALID_GROUP},            /* 00 */
-    {"cmpxchg", "Mq", "", 0},                   /* 01 */
-};
-
-X86_INSTRUCTION_DEFINITION DbgX86Group15Instructions[8] = {
-    {"fxsave", "M", "", 0},                     /* 00 */
-    {"fxrstor", "M", "", 0},                    /* 01 */
-    {"vldmxcsr", "Md", "", 0},                  /* 02 */
-    {"vstmxcsr", "Md", "", 0},                  /* 03 */
-    {"xsave", "M", "", 0},                      /* 04 */
-    {"xrstor", "M", "", 0},                     /* 05 */
-    {"xsaveopt", "M", "", 0},                   /* 06 */
-    {"clflush", "M", "", 0},                    /* 07 */
+    {0}
 };
 
 X86_SPARSE_INSTRUCTION_DEFINITION DbgX860F01Alternates[] = {
-    {0, 0xC1, {"vmcall", "", "", 0}},
-    {0, 0xC2, {"vmlaunch", "", "", 0}},
-    {0, 0xC3, {"vmresume", "", "", 0}},
-    {0, 0xC4, {"vmxoff", "", "", 0}},
-    {0, 0xC8, {"monitor", "", "", 0}},
-    {0, 0xC9, {"mwait", "", "", 0}},
-    {0, 0xCA, {"clac", "", "", 0}},
-    {0, 0xCB, {"stac", "", "", 0}},
-    {0, 0xCF, {"encls", "", "", 0}},
-    {0, 0xD0, {"xgetbv", "", "", 0}},
-    {0, 0xD1, {"xsetbv", "", "", 0}},
-    {0, 0xD4, {"vmfunc", "", "", 0}},
-    {0, 0xD5, {"xend", "", "", 0}},
-    {0, 0xD6, {"xtest", "", "", 0}},
-    {0, 0xD7, {"enclu", "", "", 0}},
-    {0, 0xD8, {"vmrun", "", "", 0}},
-    {0, 0xD9, {"vmmcall", "", "", 0}},
-    {0, 0xDA, {"vmload", "", "", 0}},
-    {0, 0xDB, {"vmsave", "", "", 0}},
-    {0, 0xDC, {"stgi", "", "", 0}},
-    {0, 0xDD, {"clgi", "", "", 0}},
-    {0, 0xDE, {"skinit", "", "", 0}},
-    {0, 0xDF, {"invlpga", "", "", 0}},
-    {0, 0xEE, {"rdpkru", "", "", 0}},
-    {0, 0xEF, {"wrpkru", "", "", 0}},
-    {0, 0xF8, {"swapgs", "", "", 0}},
-    {0, 0xF9, {"rdtscp", "", "", 0}},
-    {0, 0xFA, {"monitorx", "", "", 0}},
-    {0, 0xFB, {"mwaitx", "", "", 0}},
-    {0, 0xFC, {"clzero", "", "", 0}},
+    {0, 0xC1, {"vmcall", "", "", "", 0}},
+    {0, 0xC2, {"vmlaunch", "", "", "", 0}},
+    {0, 0xC3, {"vmresume", "", "", "", 0}},
+    {0, 0xC4, {"vmxoff", "", "", "", 0}},
+    {0, 0xC8, {"monitor", "", "", "", 0}},
+    {0, 0xC9, {"mwait", "", "", "", 0}},
+    {0, 0xCA, {"clac", "", "", "", 0}},
+    {0, 0xCB, {"stac", "", "", "", 0}},
+    {0, 0xCF, {"encls", "", "", "", 0}},
+    {0, 0xD0, {"xgetbv", "", "", "", 0}},
+    {0, 0xD1, {"xsetbv", "", "", "", 0}},
+    {0, 0xD4, {"vmfunc", "", "", "", 0}},
+    {0, 0xD5, {"xend", "", "", "", 0}},
+    {0, 0xD6, {"xtest", "", "", "", 0}},
+    {0, 0xD7, {"enclu", "", "", "", 0}},
+    {0, 0xD8, {"vmrun", "", "", "", 0}},
+    {0, 0xD9, {"vmmcall", "", "", "", 0}},
+    {0, 0xDA, {"vmload", "", "", "", 0}},
+    {0, 0xDB, {"vmsave", "", "", "", 0}},
+    {0, 0xDC, {"stgi", "", "", "", 0}},
+    {0, 0xDD, {"clgi", "", "", "", 0}},
+    {0, 0xDE, {"skinit", "", "", "", 0}},
+    {0, 0xDF, {"invlpga", "", "", "", 0}},
+    {0, 0xEE, {"rdpkru", "", "", "", 0}},
+    {0, 0xEF, {"wrpkru", "", "", "", 0}},
+    {0, 0xF8, {"swapgs", "", "", "", 0}},
+    {0, 0xF9, {"rdtscp", "", "", "", 0}},
+    {0, 0xFA, {"monitorx", "", "", "", 0}},
+    {0, 0xFB, {"mwaitx", "", "", "", 0}},
+    {0, 0xFC, {"clzero", "", "", "", 0}},
 };
 
 //
@@ -1668,30 +1976,11 @@ Return Value:
     }
 
     //
-    // Handle the MUL, SHLD, and SHRD instructions, which have 3 operands.
+    // Handle the third operand.
     //
 
-    ThirdOperandFormat = NULL;
-    if (Instruction.Opcode == X86_OPCODE1_IMUL1) {
-        ThirdOperandFormat = "Iz";
-
-    } else if (Instruction.Opcode == X86_OPCODE1_IMUL2) {
-        ThirdOperandFormat = "Ib";
-
-    } else if ((Instruction.Opcode == X86_ESCAPE_OPCODE) &&
-               ((Instruction.Opcode2 == X86_OPCODE2_SHLD1) ||
-                (Instruction.Opcode2 == X86_OPCODE2_SHRD1))) {
-
-        ThirdOperandFormat = "Ib";
-
-    } else if ((Instruction.Opcode == X86_ESCAPE_OPCODE) &&
-               ((Instruction.Opcode2 == X86_OPCODE2_SHLD2) ||
-                (Instruction.Opcode2 == X86_OPCODE2_SHRD2))) {
-
-        ThirdOperandFormat = "!bcl";
-    }
-
-    if (ThirdOperandFormat != NULL) {
+    ThirdOperandFormat = Instruction.Definition.Third;
+    if ((ThirdOperandFormat != NULL) && (*ThirdOperandFormat != '\0')) {
         WorkingBuffer[0] = '\0';
         Result = DbgpX86PrintOperand(InstructionPointer,
                                      &Instruction,
@@ -1706,8 +1995,18 @@ Return Value:
             goto DisassembleEnd;
         }
 
-        Disassembly->ThirdOperand = Buffer;
-        strncpy(Disassembly->ThirdOperand, WorkingBuffer, BufferLength);
+        //
+        // If the second operand is empty, take over its slot.
+        //
+
+        if (Disassembly->SourceOperand == NULL) {
+            Disassembly->SourceOperand = Buffer;
+
+        } else {
+            Disassembly->ThirdOperand = Buffer;
+        }
+
+        strncpy(Buffer, WorkingBuffer, BufferLength);
     }
 
 DisassembleEnd:
@@ -1809,21 +2108,36 @@ Return Value:
     // 'd' means dword, which gets translated to long here for simplicity.
     //
 
-    if (Width == 'd') {
+    switch (Width) {
+    case 'd':
         Width = X86_WIDTH_LONG;
+        break;
 
-    } else if ((Width == '\0') || (Width == 's')) {
+    case '\0':
+    case 's':
+    case 'p':
         Width = X86_WIDTH_LONG;
         if (Instruction->Language == MachineLanguageX64) {
             Width = X86_WIDTH_LONGLONG;
         }
+
+        break;
+
+    case 'y':
+        Width = X86_WIDTH_LONG;
+        if ((Instruction->Rex & X64_REX_W) != 0) {
+            Width = X86_WIDTH_LONGLONG;
+        }
+
+        break;
 
     //
     // If the width is variable, it is probably a dword unless an override is
     // specified.
     //
 
-    } else if ((Width == 'v') || (Width == 'z')) {
+    case 'v':
+    case 'z':
 
         //
         // A few instructions default to 64-bits in long mode.
@@ -1854,11 +2168,30 @@ Return Value:
             }
         }
 
-    } else if (Width == 'y') {
-        Width = X86_WIDTH_LONG;
-        if (Instruction->Language == MachineLanguageX64) {
-            Width = X86_WIDTH_LONGLONG;
+        break;
+
+    case 'u':
+        Width = X86_WIDTH_YWORD;
+        if (Instruction->OperandOverride != FALSE) {
+            Width = X86_WIDTH_ZWORD;
         }
+
+        break;
+
+    case 'x':
+        Width = X86_WIDTH_OWORD;
+        if ((Instruction->Vex & X64_VEX_L) != 0) {
+            Width = X86_WIDTH_YWORD;
+        }
+
+        break;
+
+    //
+    // An unknown width specifier.
+    //
+
+    default:
+        break;
     }
 
     switch (Type) {
@@ -1941,11 +2274,37 @@ Return Value:
     case 'D':
     case 'S':
         RegisterString = DbgpX86RegisterName(
-                          Instruction,
-                          X86_MODRM_REG(Instruction, Instruction->ModRm),
-                          Type);
+                                Instruction,
+                                X86_MODRM_REG(Instruction, Instruction->ModRm),
+                                Type);
 
         strncpy(Operand, RegisterString, BufferLength);
+        break;
+
+    //
+    // V - XMM/YMM register specified by ModRM.reg.
+    //
+
+    case 'V':
+        RegisterString = DbgpX86RegisterName(
+                                Instruction,
+                                X86_MODRM_REG(Instruction, Instruction->ModRm),
+                                Width);
+
+        strncpy(Operand, RegisterString, BufferLength);
+        break;
+
+    //
+    // H - XMM/YMM register specified by VEX/VOP.vvvv field, if one is present.
+    //
+
+    case 'H':
+        if (Instruction->VexMap != 0) {
+            Rm = X64_VEX_V(Instruction->Vex);
+            RegisterString = DbgpX86RegisterName(Instruction, Rm, Width);
+            strncpy(Operand, RegisterString, BufferLength);
+        }
+
         break;
 
     //
@@ -1955,10 +2314,12 @@ Return Value:
     // values: a base register, an index register, a scaling factor, and a
     // displacement.
     // M - Mod R/M byte may only refer to memory.
+    // W - XMM/YMM register or memory operand.
     //
 
     case 'E':
     case 'M':
+    case 'W':
         Mod = X86_MODRM_MOD(Instruction->ModRm);
         Rm = X86_MODRM_RM(Instruction, Instruction->ModRm);
         if (Mod == X86ModValueRegister) {
@@ -1969,6 +2330,20 @@ Return Value:
             RegisterString = DbgpX86RegisterName(Instruction, Rm, Width);
 
         } else {
+
+            //
+            // Memory accesses only happen via general registers. Convert larger
+            // memory references into native ones.
+            //
+
+            if ((Width == X86_WIDTH_OWORD) || (Width == X86_WIDTH_YWORD) ||
+                (Width == X86_WIDTH_ZWORD)) {
+
+                Width = X86_WIDTH_LONG;
+                if (Instruction->Language == MachineLanguageX64) {
+                    Width = X86_WIDTH_LONGLONG;
+                }
+            }
 
             //
             // An R/M value of 4 actually indicates an SIB byte is present, not
@@ -2196,9 +2571,11 @@ Return Value:
     //
     // R - R/M field of modR/M byte selects a general register. Mod field should
     // be set to 11.
+    // U - XMM/YMM register specified by ModRM.rm with mod set to 11.
     //
 
     case 'R':
+    case 'U':
         Mod = X86_MODRM_MOD(Instruction->ModRm);
         Rm = X86_MODRM_RM(Instruction, Instruction->ModRm);
         if (Mod != X86ModValueRegister) {
@@ -2267,6 +2644,7 @@ Return Value:
 
 {
 
+    PX86_OPCODE_GROUP OpcodeGroup;
     BYTE RegByte;
 
     if (Instruction == NULL) {
@@ -2277,44 +2655,19 @@ Return Value:
         return Instruction->Definition.Mnemonic;
     }
 
+    assert(Instruction->Definition.Group != X86_INVALID_GROUP);
+
     RegByte = (Instruction->ModRm & X86_REG_MASK) >> X86_REG_SHIFT;
-    switch (Instruction->Definition.Group) {
-    case 1:
-        return DbgX86Group1Instructions[RegByte].Mnemonic;
-
-    case 2:
-        return DbgX86Group2Instructions[RegByte].Mnemonic;
-
-    case 3:
-        return DbgX86Group3Instructions[RegByte].Mnemonic;
-
-    case 0x3A:
-        return DbgX86Group3AInstructions[RegByte].Mnemonic;
-
-    case 4:
-        if (RegByte >= X86_GROUP_4_INSTRUCTION_COUNT) {
-            return NULL;
+    OpcodeGroup = &(DbgX86OpcodeGroups[0]);
+    while (OpcodeGroup->Group != 0) {
+        if (OpcodeGroup->Group == Instruction->Definition.Group) {
+            return OpcodeGroup->Mnemonics[RegByte];
         }
 
-        return DbgX86Group4Instructions[RegByte].Mnemonic;
-
-    case 5:
-        return DbgX86Group5Instructions[RegByte].Mnemonic;
-
-    case 0x1A:
-    case 11:
-        if (RegByte != 0) {
-            return "(bad)";
-        }
-
-        return Instruction->Definition.Mnemonic;
-
-    case 15:
-        return DbgX86Group15Instructions[RegByte].Mnemonic;
-
-    default:
-        break;
+        OpcodeGroup += 1;
     }
+
+    assert(FALSE);
 
     return NULL;
 }
@@ -2453,12 +2806,47 @@ Return Value:
     // instruction opcode.
     //
 
-    if ((Instruction->Language == MachineLanguageX64) &&
-        ((*InstructionStream & X64_REX_MASK) == X64_REX_VALUE)) {
+    if (Instruction->Language == MachineLanguageX64) {
+        if ((*InstructionStream & X64_REX_MASK) == X64_REX_VALUE) {
+            Instruction->Rex = *InstructionStream;
+            InstructionStream += 1;
+            Instruction->Length += 1;
 
-        Instruction->Rex = *InstructionStream;
-        InstructionStream += 1;
-        Instruction->Length += 1;
+        //
+        // Look for the 2-byte VEX prefix. Convert it to a 3 byte prefix.
+        //
+
+        } else if (*InstructionStream == X64_VEX2) {
+            InstructionStream += 1;
+            Instruction->Length += 1;
+            Instruction->Vex = *InstructionStream;
+            Instruction->VexMap = X64_VEX2_MAP_SELECT |
+                                  (Instruction->Vex & 0x80);
+
+            Instruction->Vex &= 0x7F;
+            InstructionStream += 1;
+            Instruction->Length += 1;
+            Instruction->Rex = X64_VEX_TO_REX(Instruction->Vex,
+                                              Instruction->VexMap);
+
+        //
+        // Look for the 3 byte VEX/XOP prefix.
+        //
+
+        } else if ((*InstructionStream == X64_VEX3) ||
+                   (*InstructionStream == X64_XOP)) {
+
+            InstructionStream += 1;
+            Instruction->Length += 1;
+            Instruction->VexMap = *InstructionStream;
+            InstructionStream += 1;
+            Instruction->Length += 1;
+            Instruction->Vex = *InstructionStream;
+            InstructionStream += 1;
+            Instruction->Length += 1;
+            Instruction->Rex = X64_VEX_TO_REX(Instruction->Vex,
+                                              Instruction->VexMap);
+        }
     }
 
     Instruction->Opcode = *InstructionStream;
@@ -2495,40 +2883,22 @@ Return Value:
     if ((Group != 0) && (Group != X86_INVALID_GROUP)) {
         RegByte = (*InstructionStream & X86_REG_MASK) >> X86_REG_SHIFT;
         switch (Group) {
-        case 1:
-        case 2:
-            break;
-
         case 3:
-            Instruction->Definition.Source =
-                                      DbgX86Group3Instructions[RegByte].Source;
+            if (RegByte <= 1) {
+                if (Instruction->Opcode == 0xF6) {
+                    Instruction->Definition.Source = "Ib";
 
-            break;
+                } else {
 
-        case 0x3A:
-            Instruction->Definition.Source =
-                                     DbgX86Group3AInstructions[RegByte].Source;
+                    assert(Instruction->Opcode == 0xF7);
 
-            break;
-
-        case 4:
-            break;
-
-        case 5:
-            Instruction->Definition = DbgX86Group5Instructions[RegByte];
-            break;
-
-        case 6:
-            if (RegByte >= X86_GROUP_6_INSTRUCTION_COUNT) {
-                Result = FALSE;
-                goto GetInstructionComponentsEnd;
+                    Instruction->Definition.Source = "Iz";
+                }
             }
 
-            Instruction->Definition = DbgX86Group6Instructions[RegByte];
             break;
 
         case 7:
-            Instruction->Definition = DbgX86Group7Instructions[RegByte];
 
             //
             // There are a bunch of alternate encoding instructions hidden
@@ -2557,37 +2927,7 @@ Return Value:
 
             break;
 
-        case 8:
-            if (RegByte < X86_GROUP_8_FIRST_INSTRUCTION) {
-                Result = FALSE;
-                goto GetInstructionComponentsEnd;
-            }
-
-            Instruction->Definition = DbgX86Group8Instructions[RegByte];
-            break;
-
-        case 9:
-            if (RegByte != X86_GROUP_9_ONLY_VALID_INSTRUCTION) {
-                Result = FALSE;
-                goto GetInstructionComponentsEnd;
-            }
-
-            Instruction->Definition = DbgX86Group9Instructions[RegByte];
-            break;
-
-        case 0x1A:
-        case 11:
-        case 0x87:
-            break;
-
-        case 15:
-            Instruction->Definition = DbgX86Group15Instructions[RegByte];
-            break;
-
         default:
-
-            assert(FALSE);
-
             break;
         }
     }
@@ -2782,11 +3122,15 @@ Return Value:
        // factor, and a displacement.
        // M - Mod R/M byte may only refer to memory.
        // R - Mod R/M byte may only refer to a general register.
+       // W - XMM/YMM register or memory operand.
+       // U - XMM/YMM register specified by ModRM.rm with mod set to 11.
        //
 
         case 'E':
         case 'M':
         case 'R':
+        case 'U':
+        case 'W':
             *ModRmExists = TRUE;
             ModRm = *InstructionStream;
             Mod = X86_MODRM_MOD(ModRm);
@@ -2831,12 +3175,14 @@ Return Value:
 
         //
         // F - Flags register. No additional bytes.
+        // H - XMM or YMM register encoded in VEX/VOP.vvvv.
         // X - Memory addressed by DS:SI pair.
         // Y - Memory addressed by ES:DI pair.
         // ! - Hardcoded register.
         //
 
         case 'F':
+        case 'H':
         case 'X':
         case 'Y':
         case '!':
@@ -2941,6 +3287,9 @@ Return Value:
             break;
 
         default:
+
+            assert(FALSE);
+
             return FALSE;
         }
 
@@ -2950,34 +3299,31 @@ Return Value:
         //
 
         ParseCount += 1;
-        if (Instruction->Definition.Source[0] == '\0') {
-            break;
+        if (ParseCount == 1) {
+            if (Instruction->Definition.Source[0] == '\0') {
+                break;
+            }
+
+            Type = Instruction->Definition.Source[0];
+            Width = Instruction->Definition.Source[1];
+
+        } else {
+            if (Instruction->Definition.Third[0] == '\0') {
+                break;
+            }
+
+            Type = Instruction->Definition.Third[0];
+            Width = Instruction->Definition.Third[1];
         }
 
-        Type = Instruction->Definition.Source[0];
-        Width = Instruction->Definition.Source[1];
-
-    } while (ParseCount < 2);
+    } while (ParseCount < 3);
 
     //
-    // Handle the special instructions that actually have three operands.
+    // Handle the cmpcc instructions that actually have an extra immediate on
+    // them.
     //
 
-    if (Instruction->Opcode == X86_OPCODE1_IMUL1) {
-        *ImmediateSize = 4;
-        if (Instruction->OperandOverride == TRUE) {
-            *ImmediateSize = 2;
-        }
-    }
-
-    if (Instruction->Opcode == X86_OPCODE1_IMUL2) {
-        *ImmediateSize = 1;
-    }
-
-    if ((Instruction->Opcode == X86_ESCAPE_OPCODE) &&
-        ((Instruction->Opcode2 == X86_OPCODE2_SHLD1) ||
-         (Instruction->Opcode2 == X86_OPCODE2_SHRD1))) {
-
+    if (strncmp(Instruction->Definition.Mnemonic, "cmpcc", 5) == 0) {
         *ImmediateSize = 1;
     }
 
@@ -3031,6 +3377,12 @@ Return Value:
 
     case X86_WIDTH_LONGLONG:
         return DbgX86RegisterNames64Bit[RegisterNumber];
+
+    case X86_WIDTH_OWORD:
+        return DbgX86XmmRegisterNames[RegisterNumber];
+
+    case X86_WIDTH_YWORD:
+        return DbgX86YmmRegisterNames[RegisterNumber];
 
     case X86_FLOATING_POINT_REGISTER:
         return DbgX87RegisterNames[RegisterNumber];
@@ -3165,6 +3517,7 @@ Return Value:
     PX86_INSTRUCTION_DEFINITION Definition;
     ULONG InstructionIndex;
     ULONG InstructionLength;
+    UCHAR Prefix;
     ULONG PrefixIndex;
 
     PrefixIndex = 0;
@@ -3178,14 +3531,29 @@ Return Value:
 
     while (Instruction->Prefix[PrefixIndex] != 0) {
         InstructionIndex = 0;
+        Prefix = Instruction->Prefix[PrefixIndex];
         while (InstructionIndex < InstructionLength) {
             if ((DbgX86TwoByteInstructions[InstructionIndex].Prefix ==
-                 Instruction->Prefix[PrefixIndex]) &&
+                 Prefix) &&
                 (DbgX86TwoByteInstructions[InstructionIndex].Opcode ==
                  Instruction->Opcode2)) {
 
                 Definition =
                     &(DbgX86TwoByteInstructions[InstructionIndex].Instruction);
+
+                switch (Prefix) {
+                case X86_PREFIX_REP:
+                case X86_PREFIX_REPN:
+                    Instruction->Rep = "";
+                    break;
+
+                case X86_PREFIX_LOCK:
+                    Instruction->Lock = "";
+                    break;
+
+                default:
+                    break;
+                }
 
                 return Definition;
             }
