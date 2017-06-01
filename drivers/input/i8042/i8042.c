@@ -2071,21 +2071,23 @@ Return Value:
         WRITE_DATA_REGISTER(Device, Parameter);
     }
 
-    Status = I8042pReceiveResponse(Device, &KeyboardResult);
-    if (!KSUCCESS(Status)) {
-        return Status;
-    }
+    while (TRUE) {
+        Status = I8042pReceiveResponse(Device, &KeyboardResult);
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
 
-    if (KeyboardResult == KEYBOARD_STATUS_ACKNOWLEDGE) {
-        return STATUS_SUCCESS;
-    }
+        if (KeyboardResult == KEYBOARD_STATUS_ACKNOWLEDGE) {
+            return STATUS_SUCCESS;
+        }
 
-    if (KeyboardResult == KEYBOARD_STATUS_RESEND) {
-        return STATUS_NOT_READY;
-    }
+        if (KeyboardResult == KEYBOARD_STATUS_RESEND) {
+            return STATUS_NOT_READY;
+        }
 
-    if (KeyboardResult == KEYBOARD_STATUS_OVERRUN) {
-        return STATUS_BUFFER_OVERRUN;
+        if (KeyboardResult == KEYBOARD_STATUS_OVERRUN) {
+            return STATUS_BUFFER_OVERRUN;
+        }
     }
 
     return STATUS_DEVICE_IO_ERROR;
