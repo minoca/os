@@ -30,7 +30,6 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,18 +53,12 @@ CkpOsExit (
     PCK_VM Vm
     );
 
-VOID
-CkpOsListDirectory (
-    PCK_VM Vm
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
 
 CK_VARIABLE_DESCRIPTION CkOsModuleValues[] = {
     {CkTypeFunction, "exit", CkpOsExit, 1},
-    {CkTypeFunction, "listdir", CkpOsListDirectory, 1},
     {CkTypeInvalid, NULL, NULL, 0}
 };
 
@@ -175,88 +168,6 @@ Return Value:
 
     exit(CkGetInteger(Vm, 1));
     CkReturnInteger(Vm, -1LL);
-    return;
-}
-
-VOID
-CkpOsListDirectory (
-    PCK_VM Vm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine lists the contents of the directory specified by the given
-    path. It takes a single argument, the path to the directory to enumerate,
-    and returns a list of relative directory entries, not including . or ..
-    entries.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-Return Value:
-
-    This routine does not return. The process exits.
-
---*/
-
-{
-
-    DIR *Directory;
-    struct dirent *Entry;
-    UINTN Index;
-    PCSTR Path;
-
-    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
-        return;
-    }
-
-    Path = CkGetString(Vm, 1, NULL);
-    if (Path == NULL) {
-        return;
-    }
-
-    Directory = opendir(Path);
-    if (Directory == NULL) {
-        CkpOsRaiseError(Vm);
-        return;
-    }
-
-    Index = 0;
-    CkPushList(Vm);
-    while (TRUE) {
-        errno = 0;
-        Entry = readdir(Directory);
-        if (Entry == NULL) {
-            if (errno != 0) {
-                closedir(Directory);
-                CkpOsRaiseError(Vm);
-                return;
-            }
-
-            break;
-        }
-
-        //
-        // Skip . and .. entries.
-        //
-
-        if (Entry->d_name[0] == '.') {
-            if ((Entry->d_name[1] == '\0') ||
-                ((Entry->d_name[1] == '.') && (Entry->d_name[2] == '\0'))) {
-
-                continue;
-            }
-        }
-
-        CkPushString(Vm, Entry->d_name, strlen(Entry->d_name));
-        CkListSet(Vm, -2, Index);
-        Index += 1;
-    }
-
-    CkStackReplace(Vm, 0);
     return;
 }
 

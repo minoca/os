@@ -252,10 +252,13 @@ Return Value:
         longopts = [longopts];
     }
 
-    if (shortopts[0] == "+") {
-        shortopts = shortopts[1...-1];
-        allOptionsFirst = true;
-    }
+    try {
+        if (shortopts[0] == "+") {
+            shortopts = shortopts[1...-1];
+            allOptionsFirst = true;
+        }
+
+    } except IndexError {}
 
     while (args.length()) {
         if (args[0] == "--") {

@@ -63,6 +63,41 @@ _enumerateModules (
 
 var builtinCommands = [
     ["config", "Get or set configuration parameters"],
+    ["new-realm", "Create a new working environment"],
+    ["del-realm", "Destroy and delete a realm"],
+];
+
+//
+// Other possible containment types not yet implemented:
+// cgroups.
+//
+
+var builtinContainment = [
+    ["none", "No containment"],
+    ["chroot", "Directory containment"],
+];
+
+//
+// Other storage types not yet implemented:
+// romount (returns paths to a read-only mount of the store except during
+// installation).
+//
+
+var builtinStorage = [
+    ["none", "No storage"],
+    ["basic", "Basic package contents store"],
+];
+
+//
+// Other presentation types not yet implemented:
+// hardlink - Create hard links from storage to the final location.
+// symlink - Create symlinks from storage to the final location.
+// overlay - Use overlay file systems of storage directories to create the
+// final environment.
+//
+
+var builtinPresentation = [
+    ["copy", "Copy-based package installation"],
 ];
 
 //
@@ -179,7 +214,87 @@ Arguments:
 
 Return Value:
 
+    Returns a list of commands.
+
+--*/
+
+{
+
+    var commandModule;
+    var module;
+    var result;
+
+    result = [];
+    for (builtin in builtinCommands) {
+        commandModule = builtin[0].replace("-", "_", -1);
+        module = Core.importModule("cmd." + commandModule);
+        module.run();
+        result.append({
+            "value": module.command,
+            "name": builtin[0],
+            "description": builtin[1]
+        });
+    }
+
+    result += _enumerateModules("cmd", "command");
+    return result;
+}
+
+function
+getContainment (
+    name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the containment class associated with the given name.
+
+Arguments:
+
+    name - Supplies the name of the containment class.
+
+Return Value:
+
     None.
+
+--*/
+
+{
+
+    var module;
+    var run;
+
+    try {
+        module = Core.importModule("containment." + name);
+        module.run();
+
+    } except ImportError {
+        Core.print("Error: Unknown containment type %s.");
+        return 2;
+    }
+
+    return module.containment;
+}
+
+function
+enumerateContainmentTypes (
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a list of available containment types.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a list of containment types.
 
 --*/
 
@@ -189,16 +304,173 @@ Return Value:
     var result;
 
     result = [];
-    for (builtin in builtinCommands) {
-        module = Core.importModule("cmd." + builtin[0]);
+    for (builtin in builtinContainment) {
+        module = Core.importModule("containment." + builtin[0]);
+        module.run();
         result.append({
-            "function": module.command,
+            "value": module.containment,
             "name": builtin[0],
             "description": builtin[1]
         });
     }
 
-    result += _enumerateModules("cmd", "command");
+    result += _enumerateModules("containment", "containment");
+    return result;
+}
+
+function
+getStorage (
+    name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the storage class associated with the given name.
+
+Arguments:
+
+    name - Supplies the name of the containment class.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    var module;
+    var run;
+
+    try {
+        module = Core.importModule("storage." + name);
+        module.run();
+
+    } except ImportError {
+        Core.print("Error: Unknown storage type %s.");
+        return 2;
+    }
+
+    return module.storage;
+}
+
+function
+enumerateStorageTypes (
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a list of available storage methods.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a list of storage methods.
+
+--*/
+
+{
+
+    var module;
+    var result;
+
+    result = [];
+    for (builtin in builtinStorage) {
+        module = Core.importModule("storage." + builtin[0]);
+        module.run();
+        result.append({
+            "value": module.storage,
+            "name": builtin[0],
+            "description": builtin[1]
+        });
+    }
+
+    result += _enumerateModules("storage", "storage");
+    return result;
+}
+
+function
+getPresentation (
+    name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the presentation class associated with the given name.
+
+Arguments:
+
+    name - Supplies the name of the containment class.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    var module;
+    var run;
+
+    try {
+        module = Core.importModule("presentation." + name);
+        module.run();
+
+    } except ImportError {
+        Core.print("Error: Unknown presentation type %s.");
+        return 2;
+    }
+
+    return module.presentation;
+}
+
+function
+enumeratePresentationTypes (
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a list of available presentation methods.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a list of storage methods.
+
+--*/
+
+{
+
+    var module;
+    var result;
+
+    result = [];
+    for (builtin in builtinPresentation) {
+        module = Core.importModule("presentation." + builtin[0]);
+        module.run();
+        result.append({
+            "value": module.presentation,
+            "name": builtin[0],
+            "description": builtin[1]
+        });
+    }
+
+    result += _enumerateModules("presentation", "presentation");
     return result;
 }
 
@@ -292,7 +564,7 @@ Return Value:
                 callable = module.__get(functionName);
                 description = module.description;
                 result = {
-                    "function": callable,
+                    "value": callable,
                     "name": name,
                     "description": description
                 };

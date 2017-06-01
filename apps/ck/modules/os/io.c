@@ -32,6 +32,7 @@ Environment:
 
 #define _FILE_OFFSET_BITS 64
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
@@ -91,6 +92,51 @@ CkpOsIsatty (
     );
 
 VOID
+CkpOsPathExists (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsPathLinkExists (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsIsFile (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsIsDirectory (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsIsSymbolicLink (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsUnlink (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsLink (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsSymlink (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsReadlink (
+    PCK_VM Vm
+    );
+
+VOID
 CkpOsFstat (
     PCK_VM Vm
     );
@@ -127,6 +173,21 @@ CkpOsSetenv (
 
 VOID
 CkpOsMkdir (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsListDirectory (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsChdir (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsChroot (
     PCK_VM Vm
     );
 
@@ -175,6 +236,14 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "lseek", CkpOsSeek, 3},
     {CkTypeFunction, "ftruncate", CkpOsFTruncate, 2},
     {CkTypeFunction, "isatty", CkpOsIsatty, 1},
+    {CkTypeFunction, "exists", CkpOsPathExists, 1},
+    {CkTypeFunction, "lexists", CkpOsPathLinkExists, 1},
+    {CkTypeFunction, "isfile", CkpOsIsFile, 1},
+    {CkTypeFunction, "isdir", CkpOsIsDirectory, 1},
+    {CkTypeFunction, "islink", CkpOsIsSymbolicLink, 1},
+    {CkTypeFunction, "unlink", CkpOsUnlink, 1},
+    {CkTypeFunction, "link", CkpOsLink, 2},
+    {CkTypeFunction, "symlink", CkpOsSymlink, 2},
     {CkTypeFunction, "fstat", CkpOsFstat, 1},
     {CkTypeFunction, "stat", CkpOsStat, 1},
     {CkTypeFunction, "getcwd", CkpOsGetcwd, 0},
@@ -183,6 +252,9 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "getenv", CkpOsGetenv, 1},
     {CkTypeFunction, "setenv", CkpOsGetenv, 2},
     {CkTypeFunction, "mkdir", CkpOsMkdir, 2},
+    {CkTypeFunction, "listdir", CkpOsListDirectory, 1},
+    {CkTypeFunction, "chdir", CkpOsChdir, 1},
+    {CkTypeFunction, "chroot", CkpOsChroot, 1},
     {CkTypeInvalid, NULL, NULL, 0}
 };
 
@@ -540,6 +612,400 @@ Return Value:
     }
 
     CkReturnInteger(Vm, Result);
+    return;
+}
+
+VOID
+CkpOsPathExists (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes an in a path an returns whether or not the given path
+    exists. It returns false for broken links and if the caller does not have
+    access to traverse the directory tree.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+    INT Result;
+    struct stat Stat;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Result = 0;
+    Path = CkGetString(Vm, 1, NULL);
+    if (stat(Path, &Stat) == 0) {
+        Result = 1;
+    }
+
+    CkReturnInteger(Vm, Result);
+    return;
+}
+
+VOID
+CkpOsPathLinkExists (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes an in a path an returns whether or not the given path
+    exists, without following symbolic links. It may return false if the caller
+    does not have access to traverse the directory tree.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+    INT Result;
+    struct stat Stat;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Result = 0;
+    Path = CkGetString(Vm, 1, NULL);
+    if (lstat(Path, &Stat) == 0) {
+        Result = 1;
+    }
+
+    CkReturnInteger(Vm, Result);
+    return;
+}
+
+VOID
+CkpOsIsFile (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes an in a path an returns whether or not the given object
+    is a regular file or not. This follows symbolic links.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+    INT Result;
+    struct stat Stat;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Result = 0;
+    Path = CkGetString(Vm, 1, NULL);
+    if (stat(Path, &Stat) == 0) {
+        if (S_ISREG(Stat.st_mode)) {
+            Result = 1;
+        }
+    }
+
+    CkReturnInteger(Vm, Result);
+    return;
+}
+
+VOID
+CkpOsIsDirectory (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes an in a path an returns whether or not the given object
+    is a directory or not. This follows symbolic links.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+    INT Result;
+    struct stat Stat;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Result = 0;
+    Path = CkGetString(Vm, 1, NULL);
+    if (stat(Path, &Stat) == 0) {
+        if (S_ISDIR(Stat.st_mode)) {
+            Result = 1;
+        }
+    }
+
+    CkReturnInteger(Vm, Result);
+    return;
+}
+
+VOID
+CkpOsIsSymbolicLink (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes an in a path an returns whether or not the given object
+    is a symbolic link or not.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+    INT Result;
+    struct stat Stat;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Result = 0;
+    Path = CkGetString(Vm, 1, NULL);
+    if (stat(Path, &Stat) == 0) {
+        if (S_ISLNK(Stat.st_mode)) {
+            Result = 1;
+        }
+    }
+
+    CkReturnInteger(Vm, Result);
+    return;
+}
+
+VOID
+CkpOsUnlink (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unlink (delete) a path.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    if (unlink(Path) != 0) {
+        CkpOsRaiseError(Vm);
+
+    } else {
+        CkReturnInteger(Vm, 0);
+    }
+
+    return;
+}
+
+VOID
+CkpOsLink (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to establish a hard link from one path to another.
+    It takes two arguments: a string containing the existing path, and a string
+    containing the path to link it to. Returns 0 on success, or raises an
+    OSError on failure.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR NewLink;
+    PCSTR Source;
+
+    if (!CkCheckArguments(Vm, 2, CkTypeString, CkTypeString)) {
+        return;
+    }
+
+    Source = CkGetString(Vm, 1, NULL);
+    NewLink = CkGetString(Vm, 2, NULL);
+    if (link(Source, NewLink) != 0) {
+        CkpOsRaiseError(Vm);
+
+    } else {
+        CkReturnInteger(Vm, 0);
+    }
+
+    return;
+}
+
+VOID
+CkpOsSymlink (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to establish a symbolic link from one path to another.
+    It takes two arguments: a string containing the destination the symbolic
+    link points to, and a string containing the location where the symbolic
+    link should be created. Returns 0 on success, or raises an OSError on
+    failure.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR LinkLocation;
+    PCSTR LinkTarget;
+
+    if (!CkCheckArguments(Vm, 2, CkTypeString, CkTypeString)) {
+        return;
+    }
+
+    LinkTarget = CkGetString(Vm, 1, NULL);
+    LinkLocation = CkGetString(Vm, 2, NULL);
+    if (symlink(LinkTarget, LinkLocation) != 0) {
+        CkpOsRaiseError(Vm);
+
+    } else {
+        CkReturnInteger(Vm, 0);
+    }
+
+    return;
+}
+
+VOID
+CkpOsReadlink (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the contents of a symbolic link. It takes a single
+    argument: a string containing the path to a symbolic link. It returns a
+    string containing the contents of the link on success.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR LinkLocation;
+    CHAR LinkTarget[4096];
+    ssize_t Size;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    LinkLocation = CkGetString(Vm, 1, NULL);
+    Size = readlink(LinkLocation, LinkTarget, sizeof(LinkTarget));
+    if (Size < 0) {
+        CkpOsRaiseError(Vm);
+
+    } else {
+        CkReturnString(Vm, LinkTarget, Size);
+    }
+
     return;
 }
 
@@ -951,6 +1417,173 @@ Return Value:
     return;
 }
 
+VOID
+CkpOsListDirectory (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine lists the contents of the directory specified by the given
+    path. It takes a single argument, the path to the directory to enumerate,
+    and returns a list of relative directory entries, not including . or ..
+    entries.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    This routine does not return. The process exits.
+
+--*/
+
+{
+
+    DIR *Directory;
+    struct dirent *Entry;
+    UINTN Index;
+    PCSTR Path;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    if (Path == NULL) {
+        return;
+    }
+
+    Directory = opendir(Path);
+    if (Directory == NULL) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    Index = 0;
+    CkPushList(Vm);
+    while (TRUE) {
+        errno = 0;
+        Entry = readdir(Directory);
+        if (Entry == NULL) {
+            if (errno != 0) {
+                closedir(Directory);
+                CkpOsRaiseError(Vm);
+                return;
+            }
+
+            break;
+        }
+
+        //
+        // Skip . and .. entries.
+        //
+
+        if (Entry->d_name[0] == '.') {
+            if ((Entry->d_name[1] == '\0') ||
+                ((Entry->d_name[1] == '.') && (Entry->d_name[2] == '\0'))) {
+
+                continue;
+            }
+        }
+
+        CkPushString(Vm, Entry->d_name, strlen(Entry->d_name));
+        CkListSet(Vm, -2, Index);
+        Index += 1;
+    }
+
+    CkStackReplace(Vm, 0);
+    return;
+}
+
+VOID
+CkpOsChdir (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine changes the current working directory to the given directory.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+
+    //
+    // The function takes a path.
+    //
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    if (chdir(Path) != 0) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkReturnInteger(Vm, 0);
+    return;
+}
+
+VOID
+CkpOsChroot (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine changes the current root directory to the given directory.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+
+    //
+    // The function takes a path.
+    //
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    if (chroot(Path) != 0) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkReturnInteger(Vm, 0);
+    return;
+}
 //
 // --------------------------------------------------------- Internal Functions
 //

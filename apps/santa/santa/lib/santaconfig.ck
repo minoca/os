@@ -72,12 +72,95 @@ var SANTA_USER_CONFIG_PATH = "~/.santa/santa.conf";
 
 var defaultConfig = {
     "core": {
+
+        //
+        // Define the prefix added to every file path opened by Santa.
+        //
+
         "root": "",
-        "verbose": false,
+
+        //
+        // Set this to true to print more information about what's happening.
+        //
+
+        "verbose": true, //false,
+
+        //
+        // Define the directory where data is stored.
+        //
+
+        "statedir": "/var/lib/santa",
+
+        //
+        // Define locations where Santa extensions might be found.
+        //
+
         "extensions": [
             "/usr/lib/santa/extensions",
             "~/.santa/extensions"
         ],
+    },
+
+    //
+    // Define realm configuration.
+    //
+
+    "realm": {
+
+        //
+        // Set the configuration for the root realm.
+        //
+
+        "root": {
+            "containment": {
+                "type": "none",
+            },
+
+            "storage": {
+                "type": "none",
+            },
+
+            "presentation": {
+                "type": "copy",
+            },
+        },
+
+        //
+        // Set the configuration for any new realm created.
+        //
+
+        "new": {
+            "containment": {
+                "type": "none", //"chroot",
+            },
+
+            "storage": {
+                "type": "none", //"basic",
+            },
+
+            "presentation": {
+                "type": "copy",
+            },
+
+            //
+            // Define the sharing of data between child realms and the root.
+            //
+
+            "sharing": {
+
+                //
+                // Define the sharing style for the storage region.
+                //
+
+                "store": "none", //"mount",
+
+                //
+                // Define the sharing style for the global configuration file.
+                //
+
+                "globalconfig": "copy",
+            }
+        }
     }
 };
 

@@ -1936,11 +1936,18 @@ Return Value:
     Module = CK_AS_MODULE(Arguments[1]);
     for (Index = 0; Index < Module->Variables.Count; Index += 1) {
         String = CK_AS_STRING(Module->VariableNames.List.Data[Index]);
-        CkpDefineModuleVariable(Vm,
-                                CurrentModule,
-                                String->Value,
-                                String->Length,
-                                Module->Variables.Data[Index]);
+
+        //
+        // Import everything that does not start with an underscore.
+        //
+
+        if ((String->Length >= 1) && (String->Value[0] != '_')) {
+            CkpDefineModuleVariable(Vm,
+                                    CurrentModule,
+                                    String->Value,
+                                    String->Length,
+                                    Module->Variables.Data[Index]);
+        }
     }
 
     return TRUE;

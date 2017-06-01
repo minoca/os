@@ -39,6 +39,12 @@ Author:
 #ifdef _WIN32
 
 #define mkdir(_Path, _Permissions) mkdir(_Path)
+#define lstat stat
+#define chroot(_Path) (errno = ENOSYS, (_Path), -1)
+#define link(_Existing, _Target) (errno = ENOSYS, (_Existing), (_Target), -1)
+#define symlink(_Target, _Symlink) (errno = ENOSYS, (_Target), (_Symlink), -1)
+#define readlink(_Symlink, _Buffer, _Size) \
+    (errno = ENOSYS, (_Symlink), -1)
 
 #endif
 
@@ -116,6 +122,10 @@ Author:
 
 #ifndef O_BINARY
 #define O_BINARY 0x0
+#endif
+
+#ifndef S_ISLNK
+#define S_ISLNK(_Mode) 0
 #endif
 
 //

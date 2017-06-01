@@ -36,6 +36,7 @@ import os;
 from os import getcwd;
 
 from santa.config import loadConfig;
+from santa.file import createStandardPaths;
 from santa.modules import enumerateCommands, initModuleSupport, runCommand;
 
 //
@@ -175,6 +176,7 @@ Return Value:
         return 1;
     }
 
+    createStandardPaths();
     command = args[0];
     status = runCommand(command, args);
     return status;

@@ -72,6 +72,7 @@ class FileIo is RawIoBase {
     __init (
         name,
         mode,
+        permissions,
         closefd
         )
 
@@ -90,6 +91,9 @@ class FileIo is RawIoBase {
         mode - Supplies the access mode. Valid values are 'r' for read, 'w' for
             write, or 'a' for append. Add a plus to get simultaneous reading
             and writing.
+
+        permissions - Supplies the permissions to create the file with for
+            creations. Ignored if the file is not created.
 
         closefd - Supplies a boolean indicating whether the file descriptor (if
             passed in via the name parameter) should be closed when the stream
@@ -192,7 +196,7 @@ class FileIo is RawIoBase {
             }
 
             try {
-                _fd = open(name, access | flags, 0666);
+                _fd = open(name, access | flags, permissions);
 
             } except OsError as e {
                 this._raiseIoError(e);

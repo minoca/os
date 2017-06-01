@@ -170,7 +170,6 @@ Return Value:
         } else {
             Core.raise(ValueError("Invalid option '%s'" % name));
         }
-
     }
 
     if (list) {

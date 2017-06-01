@@ -46,6 +46,7 @@ function
 open2 (
     file,
     mode,
+    permissions,
     buffering,
     closefd
     );
@@ -87,13 +88,14 @@ Return Value:
 
 {
 
-    return open2(file, mode, -1, true);
+    return open2(file, mode, 0664, -1, true);
 }
 
 function
 open2 (
     file,
     mode,
+    permissions,
     buffering,
     closefd
     )
@@ -113,11 +115,17 @@ Arguments:
         'w' for write, or 'a' for append. Add a '+' to open the file for both
         reading and writing.
 
+    permissions - Supplies the permissions to create the file with. This is
+        ignored if this file is not created.
+
     buffering - Supplies the buffer size to use. Supply 0 to use no buffering,
         -1 for default buffering, or a positive value to specify the buffer
         size. With default buffering, the resulting file object will be
         buffered unless it is an interactive terminal device, in which case it
         will not be.
+
+    closefd - Supplies a boolean indicating whether or not to close the file
+        descriptor when the file is closed.
 
 Return Value:
 
@@ -130,7 +138,7 @@ Return Value:
     var buffered;
     var raw;
 
-    raw = FileIo(file, mode, closefd);
+    raw = FileIo(file, mode, permissions, closefd);
     if (buffering < 0) {
         if (raw.isatty()) {
             return raw;
