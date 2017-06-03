@@ -114,7 +114,7 @@ ClpDestroyFileStructure (
 
 BOOL
 ClpFileFormatWriteCharacter (
-    CHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     );
 
@@ -3102,7 +3102,7 @@ Return Value:
     StreamContext.CharactersWritten = 0;
     memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
     PrintContext.Context = &StreamContext;
-    PrintContext.U.WriteCharacter = ClpFileFormatWriteCharacter;
+    PrintContext.WriteCharacter = ClpFileFormatWriteCharacter;
     RtlInitializeMultibyteState(&(PrintContext.State),
                                 CharacterEncodingDefault);
 
@@ -3580,7 +3580,7 @@ Return Value:
 
 BOOL
 ClpFileFormatWriteCharacter (
-    CHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     )
 

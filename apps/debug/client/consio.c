@@ -69,7 +69,7 @@ Environment:
 
 BOOL
 DbgrpFormatWriteCharacter (
-    CHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     );
 
@@ -284,7 +284,7 @@ Return Value:
 
     memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
     PrintContext.Context = Context;
-    PrintContext.U.WriteCharacter = DbgrpFormatWriteCharacter;
+    PrintContext.WriteCharacter = DbgrpFormatWriteCharacter;
     RtlInitializeMultibyteState(&(PrintContext.State),
                                 CharacterEncodingDefault);
 
@@ -310,7 +310,7 @@ Return Value:
 
 BOOL
 DbgrpFormatWriteCharacter (
-    CHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     )
 

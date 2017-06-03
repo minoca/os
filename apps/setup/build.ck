@@ -85,7 +85,7 @@ function build() {
         "lib/fatlib:fat",
         "lib/bconflib:bconf",
         "lib/rtl/base:basertl",
-        "apps/osbase/urtl:urtl",
+        "lib/rtl/urtl:urtl",
         "apps/ck/lib:libchalk_static",
         "lib/yy:yy"
     ];
@@ -95,7 +95,7 @@ function build() {
         "lib/fatlib:build_fat",
         "lib/bconflib:build_bconf",
         "lib/rtl/base:build_basertl",
-        "lib/rtl/rtlc:build_rtlc",
+        "lib/rtl/urtl:build_rtlc",
         "apps/ck/lib:build_libchalk_static",
         "lib/yy:build_yy"
     ];

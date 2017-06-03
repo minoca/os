@@ -35,7 +35,8 @@ function build() {
 
     sources = [
         "assert.c",
-        "kprint.c"
+        "kprint.c",
+        "pdouble.c"
     ];
 
     includes = [

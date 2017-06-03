@@ -254,8 +254,8 @@ PROTECTED_FUNCTION(RtlAtomicCompareExchange32)
     movl    %edx, %eax              # Move CompareValue into eax.
 
     ##
-    ## Compare Address (rdi) with eax, exchange with ecx if equal. Return the
-    ## original value in rax.
+    ## Compare Address (rdi) with eax, exchange with esi if equal. Return the
+    ## original value in eax.
     ##
 
     lock cmpxchgl %esi, (%rdi)      # Compare exchange.

@@ -41,7 +41,7 @@ function build() {
     buildLibs = [
         "lib/crypto/ssl:build_ssl",
         "lib/crypto:build_crypto",
-        "lib/rtl/rtlc:build_rtlc",
+        "lib/rtl/urtl:build_rtlc",
         "lib/rtl/base:build_basertl"
     ];
 

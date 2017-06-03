@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2012 Minoca Corp.
+Copyright (c) 2013 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -9,57 +9,72 @@ Copyright (c) 2012 Minoca Corp.
 
 Module Name:
 
-    RTL C
+    User Mode Runtime
 
 Abstract:
 
-    This library contains stub functions to allow the Rtl Library to
-    run on top of a standard C library.
+    This library contains the user-mode specific stubs needed by the core
+    runtime library (the Rtl library).
 
 Author:
 
-    Evan Green 23-Oct-2012
+    Evan Green 20-Feb-2013
 
 Environment:
 
-    Any
+    User
 
 --*/
 
 from menv import staticLibrary;
 
 function build() {
-    var buildLib;
+    var buildRtlc;
     var entries;
     var includes;
     var lib;
+    var rtlc;
+    var rtlcSources;
     var sources;
-
-    sources = [
-        "stubs.c"
-    ];
 
     includes = [
         "$S/lib/rtl"
     ];
 
+    sources = [
+        "assert.c",
+        ":pdouble.o",
+        "uprint.c"
+    ];
+
+    rtlcSources = [
+        "pdouble.c",
+        "rtlc/stubs.c"
+    ];
+
     lib = {
-        "label": "rtlc",
-        "inputs": sources,
+        "label": "urtl",
         "includes": includes,
+        "inputs": sources,
     };
 
-    buildLib = {
-        "label": "build_rtlc",
-        "output": "rtlc",
-        "inputs": sources,
+    rtlc = {
+        "label": "rtlc",
         "includes": includes,
+        "inputs": rtlcSources,
+    };
+
+    buildRtlc = {
+        "label": "build_rtlc",
+        "includes": includes,
+        "inputs": rtlcSources,
         "build": true,
         "prefix": "build"
     };
 
     entries = staticLibrary(lib);
-    entries += staticLibrary(buildLib);
+    entries += staticLibrary(rtlc);
+    entries += staticLibrary(buildRtlc);
     return entries;
 }
 

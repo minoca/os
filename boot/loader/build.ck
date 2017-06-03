@@ -137,8 +137,8 @@ function build() {
         "lib/basevid:basevid",
         "lib/fatlib:fat",
         "kernel/mm:mmboot",
+        "lib/rtl/base:basertlb",
         "lib/rtl/kmode:krtl",
-        "lib/rtl/base:basertlb"
     ];
 
     commonLibs = [

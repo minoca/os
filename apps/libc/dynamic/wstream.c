@@ -51,7 +51,7 @@ Environment:
 
 BOOL
 ClpFileFormatWriteWideCharacter (
-    WCHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     );
 
@@ -941,7 +941,7 @@ Return Value:
 
     memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
     PrintContext.Context = File;
-    PrintContext.U.WriteWideCharacter = ClpFileFormatWriteWideCharacter;
+    PrintContext.WriteCharacter = ClpFileFormatWriteWideCharacter;
     RtlFormatWide(&PrintContext, (PWSTR)Format, Arguments);
     return PrintContext.CharactersWritten;
 }
@@ -1092,7 +1092,7 @@ Return Value:
 
 BOOL
 ClpFileFormatWriteWideCharacter (
-    WCHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     )
 

@@ -167,6 +167,174 @@ extern double RtlNegativePowersOf2[5];
 // -------------------------------------------------------- Function Prototypes
 //
 
+VOID
+RtlpGetDoubleArgument (
+    BOOL LongDouble,
+    va_list *ArgumentList,
+    PDOUBLE_PARTS DoubleParts
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets a double from the argument list. It is used by printf,
+    and is a separate function so that floating point support can be shaved out
+    of the library.
+
+Arguments:
+
+    LongDouble - Supplies a boolean indicating if the argument is a long double
+        or just a regular double.
+
+    ArgumentList - Supplies a pointer to the VA argument list. It's a pointer
+        so that the effect of the va_arg can be felt by the calling function.
+
+    DoubleParts - Supplies a pointer where the double is returned, disguised in
+        a structure so as not to force floating point arguments.
+
+Return Value:
+
+    None.
+
+--*/
+
+BOOL
+RtlpPrintDouble (
+    PPRINT_FORMAT_CONTEXT Context,
+    double Value,
+    PPRINT_FORMAT_PROPERTIES Properties
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a double to the destination given the style
+    properties.
+
+Arguments:
+
+    Context - Supplies a pointer to the initialized context structure.
+
+    DestinationSize - Supplies the size of the destination buffer. If NULL was
+        passed as the Destination argument, then this argument is ignored.
+
+    Value - Supplies a pointer to the value to convert to a string.
+
+    Properties - Supplies the style characteristics to use when printing this
+        integer.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+BOOL
+RtlpPrintString (
+    PPRINT_FORMAT_CONTEXT Context,
+    PSTR String,
+    LONG FieldWidth,
+    LONG Precision,
+    BOOL LeftJustified,
+    BOOL Character
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a string destination buffer given the style properties.
+
+Arguments:
+
+    Context - Supplies a pointer to the initialized context structure.
+
+    String - Supplies a pointer to the string to print.
+
+    FieldWidth - Supplies the width of the string or character field. If the
+        argument doesn't fill up this space, it will be padded with spaces.
+
+    Precision - Supplies the precision of the string (the maximum number of
+        characters to print). Supply -1 to print the whole string.
+
+    LeftJustified - Supplies a flag indicating whether or not the character in
+        the string is to be left justfied.
+
+    Character - Supplies a boolean indicating that this is a character rather
+        than a full string.
+
+Return Value:
+
+    TRUE if all characters were written to the destination.
+
+    FALSE if the destination crapped out before all characters could be written.
+
+--*/
+
+ULONG
+RtlpPrintInteger (
+    PPRINT_FORMAT_CONTEXT Context,
+    ULONGLONG Integer,
+    PPRINT_FORMAT_PROPERTIES Properties
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints an integer to the destination given the style
+    properties.
+
+Arguments:
+
+    Context - Supplies a pointer to the initialized context structure.
+
+    DestinationSize - Supplies the size of the destination buffer. If NULL was
+        passed as the Destination argument, then this argument is ignored.
+
+    Integer - Supplies the integer argument to convert to a string.
+
+    Properties - Supplies the style characteristics to use when printing this
+        integer.
+
+Return Value:
+
+    Returns the length of the final string after the format conversion has
+    completed. The length will be returned even if NULL is passed as the
+    destination.
+
+--*/
+
+BOOL
+RtlpFormatWriteCharacter (
+    PPRINT_FORMAT_CONTEXT Context,
+    INT Character
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes a character to the print format destination.
+
+Arguments:
+
+    Context - Supplies a pointer to the print format context.
+
+    Character - Supplies the character to write.
+
+Return Value:
+
+    TRUE if the character was written.
+
+    FALSE on failure.
+
+--*/
+
 LONG
 RtlpGetDoubleBase10Exponent (
     double Value,

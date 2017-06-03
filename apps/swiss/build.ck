@@ -189,7 +189,7 @@ function build() {
     buildLibs = [
         "lib/termlib:build_termlib",
         "lib/rtl/base:build_basertl",
-        "lib/rtl/rtlc:build_rtlc"
+        "lib/rtl/urtl:build_rtlc"
     ];
 
     buildIncludes = [];

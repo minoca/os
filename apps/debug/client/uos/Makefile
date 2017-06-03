@@ -39,7 +39,7 @@ INCLUDES += $(SRCDIR)/..;                                 \
 
 TARGETLIBS = $(OBJROOT)/os/lib/im/build/imu.a             \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a   \
-             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a      \
+             $(OBJROOT)/os/lib/rtl/urtl/rtlc/build/rtlc.a \
 
 OS ?= $(shell uname -s)
 

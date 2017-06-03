@@ -30,9 +30,12 @@ BINARY = rtlc.a
 
 BINARYTYPE = library
 
-INCLUDES += $(SRCDIR)/..;
+INCLUDES += $(SRCDIR)/..;$(SRCDIR)/../..;
 
-OBJS = stubs.o   \
+VPATH += $(SRCDIR)/..:
+
+OBJS = pdouble.o \
+       stubs.o   \
 
 DIRS = build
 

@@ -49,7 +49,7 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a         \
              $(OBJROOT)/os/lib/fatlib/build/fat.a              \
              $(OBJROOT)/os/lib/bconflib/build/bconflib.a       \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a        \
-             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a           \
+             $(OBJROOT)/os/lib/rtl/urtl/rtlc/build/rtlc.a      \
              $(OBJROOT)/os/lib/yy/build/yy.a                   \
              $(OBJROOT)/os/apps/ck/lib/build/libchalk.a        \
 

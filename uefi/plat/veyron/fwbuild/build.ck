@@ -44,7 +44,7 @@ function build() {
         "lib/crypto/ssl:build_ssl",
         "lib/crypto:build_crypto",
         "lib/rtl/base:build_basertl",
-        "lib/rtl/rtlc:build_rtlc",
+        "lib/rtl/urtl:build_rtlc",
     ];
 
     includes = [

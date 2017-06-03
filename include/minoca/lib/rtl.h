@@ -708,7 +708,7 @@ typedef struct _PRINT_FORMAT_CONTEXT
 typedef
 BOOL
 (*PPRINT_FORMAT_WRITE_CHARACTER) (
-    CHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     );
 
@@ -717,34 +717,6 @@ BOOL
 Routine Description:
 
     This routine writes a character to the output during a printf-style
-    formatting operation.
-
-Arguments:
-
-    Character - Supplies the character to be written.
-
-    Context - Supplies a pointer to the printf-context.
-
-Return Value:
-
-    TRUE on success.
-
-    FALSE on failure.
-
---*/
-
-typedef
-BOOL
-(*PPRINT_FORMAT_WRITE_WIDE_CHARACTER) (
-    WCHAR Character,
-    PPRINT_FORMAT_CONTEXT Context
-    );
-
-/*++
-
-Routine Description:
-
-    This routine writes a wide character to the output during a printf-style
     formatting operation.
 
 Arguments:
@@ -773,9 +745,6 @@ Members:
         character to the destination of the formatted string operation. Usually
         this is a file or string.
 
-    WriteWideCharacter - Stores a pointer to a function used to write a wide
-        character to the destination of the formatted string operation.
-
     Context - Stores a pointer's worth of additional context. This pointer is
         not touched by the format string function, it's generally used inside
         the write character routine.
@@ -793,11 +762,7 @@ Members:
 --*/
 
 struct _PRINT_FORMAT_CONTEXT {
-    union {
-        PPRINT_FORMAT_WRITE_CHARACTER WriteCharacter;
-        PPRINT_FORMAT_WRITE_WIDE_CHARACTER WriteWideCharacter;
-    } U;
-
+    PPRINT_FORMAT_WRITE_CHARACTER WriteCharacter;
     PVOID Context;
     ULONG Limit;
     ULONG CharactersWritten;

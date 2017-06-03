@@ -42,8 +42,8 @@ function build() {
     ];
 
     buildLibs = [
-        "lib/rtl/rtlc:build_rtlc",
-        "lib/rtl/base:build_basertl"
+        "lib/rtl/base:build_basertl",
+        "lib/rtl/urtl:build_rtlc"
     ];
 
     buildApp = {

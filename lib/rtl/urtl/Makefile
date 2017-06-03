@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2012 Minoca Corp.
+#   Copyright (c) 2013 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,34 +9,34 @@
 #
 #   Binary Name:
 #
-#       RTL C (Build)
+#       User Mode Runtime
 #
 #   Abstract:
 #
-#       This library contains stub functions to allow the Rtl Library to
-#       compile in a standard C library on the build machine.
+#       This library contains the user-mode specific stubs needed by the core
+#       runtime library (the Rtl library).
 #
 #   Author:
 #
-#       Evan Green 23-Oct-2012
+#       Evan Green 20-Feb-2013
 #
 #   Environment:
 #
-#       Build
+#       User Mode
 #
 ################################################################################
 
-BINARY = rtlc.a
+BINARY = urtl.a
 
 BINARYTYPE = library
 
-BUILD = yes
+INCLUDES += $(SRCDIR)/..;
 
-INCLUDES += $(SRCDIR)/../..;
+OBJS = assert.o  \
+       pdouble.o \
+       uprint.o  \
 
-VPATH += $(SRCDIR)/..:
-
-OBJS = stubs.o   \
+DIRS = rtlc
 
 include $(SRCROOT)/os/minoca.mk
 

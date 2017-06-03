@@ -28,7 +28,7 @@
 
 DIRS = base    \
        kmode   \
-       rtlc    \
+       urtl    \
 
 TESTDIRS = testrtl
 

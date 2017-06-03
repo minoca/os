@@ -123,7 +123,7 @@ ClpOpen (
 
 BOOL
 ClpAsPrintWriteCharacter (
-    CHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     );
 
@@ -2591,7 +2591,7 @@ Return Value:
     *OutputString = NULL;
     memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
     PrintContext.Context = &AsContext;
-    PrintContext.U.WriteCharacter = ClpAsPrintWriteCharacter;
+    PrintContext.WriteCharacter = ClpAsPrintWriteCharacter;
     RtlInitializeMultibyteState(&(PrintContext.State),
                                 CharacterEncodingDefault);
 
@@ -3526,7 +3526,7 @@ Return Value:
 
 BOOL
 ClpAsPrintWriteCharacter (
-    CHAR Character,
+    INT Character,
     PPRINT_FORMAT_CONTEXT Context
     )
 

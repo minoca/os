@@ -43,7 +43,7 @@ function build() {
 
     buildLibs = [
         "kernel/mm:build_mm",
-        "lib/rtl/rtlc:build_rtlc",
+        "lib/rtl/urtl:build_rtlc",
         "lib/rtl/base:build_basertl"
     ];
 

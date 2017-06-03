@@ -118,11 +118,11 @@ done
 
 sed "$SED_ARG" "$SRCROOT/os/lib/rtl/rtlp.h" > "$DEST/rtl/rtlp.h"
 
-RTLC="$DEST/rtl/rtlc"
+RTLC="$DEST/rtl/urtl/rtlc"
 mkdir -p "$RTLC/"
-RTLC_FILES="stubs.c"
+RTLC_FILES="stubs.c ../pdouble.c"
 for file in $RTLC_FILES; do
-    sed "$SED_ARG" "$LIB/rtl/rtlc/$file" > "$RTLC/$file"
+    sed "$SED_ARG" "$LIB/rtl/urtl/rtlc/$file" > "$RTLC/$file"
 done
 
 WINCSUP="$DEST/libc/wincsup"
