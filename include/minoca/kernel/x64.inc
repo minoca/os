@@ -26,6 +26,12 @@ Environment:
 --*/
 
 //
+// ------------------------------------------------------------------ Includes
+//
+
+#include <minoca/kernel/x86defs.h>
+
+//
 // --------------------------------------------------------------- Definitions
 //
 
@@ -35,28 +41,6 @@ Environment:
 
 #define FALSE 0
 #define TRUE 1
-#define NULL 0
-
-//
-// Kernel constants.
-//
-
-#define KERNEL_CS 0x08
-#define KERNEL_DS 0x10
-#define USER_CS (0x18 | 3)
-#define USER_DS (0x20 | 3)
-#define GDT_PROCESSOR 0x28
-#define GDT_THREAD (0x30 | 3)
-#define KERNEL_TSS 0x38
-#define NMI_TSS 0x48
-#define GDT_ENTRIES 10
-
-#define EXCEPTION_NMI 0x02
-#define EXCEPTION_BREAK 0x03
-#define EXCEPTION_SINGLE_STEP 0x04
-#define EXCEPTION_ACCESS_VIOLATION 0x05
-#define EXCEPTION_ASSERTION_FAILURE 0x07
-#define EXCEPTION_DOUBLE_FAULT 0x0C
 
 #define CONTEXT_SWAP_MAGIC 0x9A8A7A6A5A4A3A2A
 
@@ -120,7 +104,8 @@ Environment:
 //
 
 #define ASSEMBLY_FILE_HEADER \
-    .text
+    .text ; \
+    .code64
 
 //
 // This macro loads DS, ES, and GS with the correct values for the kernel.

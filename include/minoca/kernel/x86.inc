@@ -26,37 +26,14 @@ Environment:
 --*/
 
 ##
+## ------------------------------------------------------------------ Includes
+##
+
+#include <minoca/kernel/x86defs.h>
+
+##
 ## --------------------------------------------------------------- Definitions
 ##
-
-##
-## Processor flags
-##
-
-#define IA32_EFLAG_TF        0x00000100
-#define IA32_EFLAG_IF        0x00000200
-#define IA32_EFLAG_IOPL_MASK 0x00003000
-#define IA32_EFLAG_VM        0x00020000
-#define IA32_EFLAG_VIF       0x00080000
-
-#define SEGMENT_PRIVILEGE_MASK 0x0003
-
-##
-## CR0 flags
-##
-
-#define CR0_PAGING_ENABLE        0x80000000
-#define CR0_CACHE_DISABLE        0x40000000
-#define CR0_NOT_WRITE_THROUGH    0x20000000
-#define CR0_WRITE_PROTECT_ENABLE 0x00010000
-#define CR0_X87_EXCEPTIONS       0x00000020
-#define CR0_TASK_SWITCHED        0x00000008
-#define CR0_EMULATE_FPU          0x00000004
-#define CR0_MONITOR_COPROCESSOR  0x00000002
-#define CR0_PROTECTED_MODE       0x00000001
-
-#define CR0_OR_MASK 0x8001002B
-#define CR0_AND_MASK ~(0x60000004)
 
 ##
 ## Basic constants.
@@ -64,22 +41,6 @@ Environment:
 
 #define FALSE 0
 #define TRUE 1
-#define NULL 0
-
-##
-## Kernel constants.
-##
-
-#define KERNEL_CS        0x08
-#define KERNEL_DS        0x10
-#define USER_CS          (0x18 | 3)
-#define USER_DS          (0x20 | 3)
-#define GDT_PROCESSOR    0x28
-#define GDT_THREAD       (0x30 | 3)
-#define KERNEL_TSS       0x38
-#define DOUBLE_FAULT_TSS 0x40
-#define NMI_TSS          0x48
-#define GDT_ENTRIES      10
 
 #define EXCEPTION_NMI               0x02
 #define EXCEPTION_BREAK             0x03

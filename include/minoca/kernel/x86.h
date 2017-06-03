@@ -23,261 +23,18 @@ Author:
 --*/
 
 //
+// ------------------------------------------------------------------- Includes
+//
+
+#include <minoca/kernel/x86defs.h>
+
+//
 // ---------------------------------------------------------------- Definitions
 //
-
-#define TASK_GATE_TYPE         0x05
-#define CALL_GATE_TYPE         0x0C
-#define INTERRUPT_GATE_TYPE    0x0E
-#define TRAP_GATE_TYPE         0x0F
-
-#define SEGMENT_PRIVILEGE_MASK      0x0003
-#define SEGMENT_PRIVILEGE_KERNEL    0x0000
-#define SEGMENT_PRIVILEGE_USER      0x0003
-
-#define KERNEL_CS           0x08
-#define KERNEL_DS           0x10
-#define USER_CS             (0x18 | SEGMENT_PRIVILEGE_USER)
-#define USER_DS             (0x20 | SEGMENT_PRIVILEGE_USER)
-#define GDT_PROCESSOR       0x28
-#define GDT_THREAD          (0x30 | SEGMENT_PRIVILEGE_USER)
-#define KERNEL_TSS          0x38
-#define DOUBLE_FAULT_TSS    0x40
-#define NMI_TSS             0x48
-#define GDT_ENTRIES         10
-
-#define DEFAULT_GDT_ACCESS      0x80
-#define DEFAULT_GDT_GRANULARITY 0x40
-#define MAX_GDT_LIMIT           0xFFFFF
-#define GDT_SYSTEM_SEGMENT      0x00
-#define GDT_CODE_DATA_SEGMENT   0x10
-#define GDT_TSS_BUSY            0x02
-
-#define IDT_SIZE 0x100
-#define VECTOR_DIVIDE_ERROR         0x00
-#define VECTOR_DEBUG                0x01
-#define VECTOR_NMI                  0x02
-#define VECTOR_BREAKPOINT           0x03
-#define VECTOR_OVERFLOW             0x04
-#define VECTOR_BOUND                0x05
-#define VECTOR_INVALID_OPCODE       0x06
-#define VECTOR_DEVICE_NOT_AVAILABLE 0x07
-#define VECTOR_DOUBLE_FAULT         0x08
-#define VECTOR_SEGMENT_OVERRUN      0x09
-#define VECTOR_INVALID_TSS          0x0A
-#define VECTOR_INVALID_SEGMENT      0x0B
-#define VECTOR_STACK_EXCEPTION      0x0C
-#define VECTOR_PROTECTION_FAULT     0x0D
-#define VECTOR_PAGE_FAULT           0x0E
-#define VECTOR_MATH_FAULT           0x10
-#define VECTOR_ALIGNMENT_CHECK      0x11
-#define VECTOR_MACHINE_CHECK        0x12
-#define VECTOR_SIMD_EXCEPTION       0x13
-#define VECTOR_DEBUG_SERVICE        0x21
-#define VECTOR_SYSTEM_CALL          0x2F
-#define VECTOR_CLOCK_INTERRUPT      0xD0
-#define VECTOR_CLOCK_IPI            0xD1
-#define VECTOR_IPI_INTERRUPT        0xE0
-#define VECTOR_TLB_IPI              0xE1
-#define VECTOR_PROFILER_INTERRUPT   0xF0
-
-#define PROCESSOR_VECTOR_COUNT 0x20
-#define MINIMUM_VECTOR 0x30
-#define MAXIMUM_VECTOR 0xFF
-#define MAXIMUM_DEVICE_VECTOR 0xBF
-#define INTERRUPT_VECTOR_COUNT IDT_SIZE
-#define IO_PORT_COUNT 0x10000
-
-#define IA32_EFLAG_CF 0x00000001
-#define IA32_EFLAG_PF 0x00000004
-#define IA32_EFLAG_AF 0x00000010
-#define IA32_EFLAG_ZF 0x00000040
-#define IA32_EFLAG_SF 0x00000080
-#define IA32_EFLAG_TF 0x00000100
-#define IA32_EFLAG_IF 0x00000200
-#define IA32_EFLAG_DF 0x00000400
-#define IA32_EFLAG_OF 0x00000800
-#define IA32_EFLAG_IOPL_MASK 0x00003000
-#define IA32_EFLAG_IOPL_USER 0x00003000
-#define IA32_EFLAG_IOPL_SHIFT 12
-#define IA32_EFLAG_NT 0x00004000
-#define IA32_EFLAG_RF 0x00010000
-#define IA32_EFLAG_VM 0x00020000
-#define IA32_EFLAG_AC 0x00040000
-#define IA32_EFLAG_VIF 0x00080000
-#define IA32_EFLAG_VIP 0x00100000
-#define IA32_EFLAG_ID 0x00200000
-#define IA32_EFLAG_ALWAYS_0 0xFFC08028
-#define IA32_EFLAG_ALWAYS_1 0x00000002
-
-#define IA32_EFLAG_STATUS \
-    (IA32_EFLAG_CF | IA32_EFLAG_PF | IA32_EFLAG_AF | IA32_EFLAG_ZF | \
-     IA32_EFLAG_SF | IA32_EFLAG_OF)
-
-#define IA32_EFLAG_USER \
-    (IA32_EFLAG_STATUS | IA32_EFLAG_DF | IA32_EFLAG_TF | IA32_EFLAG_RF)
-
-#define CR0_PAGING_ENABLE 0x80000000
-#define CR0_WRITE_PROTECT_ENABLE 0x00010000
-#define CR0_TASK_SWITCHED 0x00000008
-
-#define CR4_OS_XMM_EXCEPTIONS 0x00000400
-#define CR4_OS_FX_SAVE_RESTORE 0x00000200
-#define CR4_PAGE_GLOBAL_ENABLE 0x00000080
-
-#define PAGE_SIZE 4096
-#define PAGE_MASK 0x00000FFF
-#define PAGE_SHIFT 12
-#define PAGE_DIRECTORY_SHIFT 22
-#define PDE_INDEX_MASK 0xFFC00000
-#define PTE_INDEX_MASK 0x003FF000
-
-#define X86_FAULT_FLAG_PROTECTION_VIOLATION 0x00000001
-#define X86_FAULT_ERROR_CODE_WRITE          0x00000002
-
-//
-// Define the location of the legacy keyboard controller. While not strictly
-// architectural, it's pretty close.
-//
-
-#define PC_8042_CONTROL_PORT        0x64
-#define PC_8042_RESET_VALUE         0xFE
-#define PC_8042_INPUT_BUFFER_FULL   0x02
-
-//
-// Define CPUID EAX values.
-//
-
-#define X86_CPUID_IDENTIFICATION 0x00000000
-#define X86_CPUID_BASIC_INFORMATION 0x00000001
-#define X86_CPUID_MWAIT 0x00000005
-#define X86_CPUID_EXTENDED_IDENTIFICATION 0x80000000
-#define X86_CPUID_EXTENDED_INFORMATION 0x80000001
-#define X86_CPUID_ADVANCED_POWER_MANAGEMENT 0x80000007
-
-//
-// Define basic information CPUID bits (eax is 1).
-//
-
-#define X86_CPUID_BASIC_EAX_STEPPING_MASK 0x00000003
-#define X86_CPUID_BASIC_EAX_BASE_MODEL_MASK (0xF << 4)
-#define X86_CPUID_BASIC_EAX_BASE_MODEL_SHIFT 4
-#define X86_CPUID_BASIC_EAX_BASE_FAMILY_MASK (0xF << 8)
-#define X86_CPUID_BASIC_EAX_BASE_FAMILY_SHIFT 8
-#define X86_CPUID_BASIC_EAX_EXTENDED_MODEL_MASK (0xF << 16)
-#define X86_CPUID_BASIC_EAX_EXTENDED_MODEL_SHIFT 16
-#define X86_CPUID_BASIC_EAX_EXTENDED_FAMILY_MASK (0xFF << 20)
-#define X86_CPUID_BASIC_EAX_EXTENDED_FAMILY_SHIFT 20
-
-#define X86_CPUID_BASIC_ECX_MONITOR (1 << 3)
-#define X86_CPUID_BASIC_EDX_SYSENTER (1 << 11)
-#define X86_CPUID_BASIC_EDX_CMOV (1 << 15)
-#define X86_CPUID_BASIC_EDX_FX_SAVE_RESTORE (1 << 24)
-
-//
-// Define known CPU vendors.
-//
-
-#define X86_VENDOR_INTEL 0x756E6547
-#define X86_VENDOR_AMD 0x68747541
-
-//
-// Define monitor/mwait leaf bits.
-//
-
-#define X86_CPUID_MWAIT_ECX_EXTENSIONS_SUPPORTED 0x00000001
-#define X86_CPUID_MWAIT_ECX_INTERRUPT_BREAK 0x00000002
-
-//
-// Define extended information CPUID bits (eax is 0x80000001).
-//
-
-#define X86_CPUID_EXTENDED_INFORMATION_EDX_SYSCALL (1 << 11)
-
-//
-// Define advanced power management CPUID bits (eax 0x80000007).
-//
-
-//
-// This bit is set to indicate that the TSC is invariant across all P-states
-// and C-states
-//
-
-#define X86_CPUID_ADVANCED_POWER_EDX_TSC_INVARIANT (1 << 8)
-
-//
-// Define the required alignment for FPU context.
-//
-
-#define FPU_CONTEXT_ALIGNMENT 64
-
-//
-// Define MSR values.
-//
-
-#define X86_MSR_SYSENTER_CS     0x00000174
-#define X86_MSR_SYSENTER_ESP    0x00000175
-#define X86_MSR_SYSENTER_EIP    0x00000176
-#define X86_MSR_POWER_CONTROL   0x000001FC
-#define X86_MSR_STAR            0xC0000081
-#define X86_MSR_LSTAR           0xC0000082
-#define X86_MSR_FMASK           0xC0000084
-
-#define X86_MSR_POWER_CONTROL_C1E_PROMOTION 0x00000002
-
-//
-// Define the PTE bits.
-
-#define PTE_FLAG_PRESENT        0x00000001
-#define PTE_FLAG_WRITABLE       0x00000002
-#define PTE_FLAG_USER_MODE      0x00000004
-#define PTE_FLAG_WRITE_THROUGH  0x00000008
-#define PTE_FLAG_CACHE_DISABLED 0x00000010
-#define PTE_FLAG_ACCESSED       0x00000020
-#define PTE_FLAG_DIRTY          0x00000040
-#define PTE_FLAG_LARGE_PAGE     0x00000080
-#define PTE_FLAG_GLOBAL         0x00000100
-#define PTE_FLAG_ENTRY_MASK     0xFFFFF000
-#define PTE_FLAG_ENTRY_SHIFT    12
-
-//
-// Define the location of the identity mapped stub. Since x86 doesn't have
-// relative addressing the AP code really is hardwired for this address. This
-// needs to be in the first megabyte since it starts running in real mode, and
-// needs to avoid known BIOS regions.
-//
-
-#define IDENTITY_STUB_ADDRESS 0x00001000
 
 //
 // --------------------------------------------------------------------- Macros
 //
-
-//
-// This macro gets a value at the given offset from the current processor block.
-// _Result should be a ULONG.
-//
-
-#define GET_PROCESSOR_BLOCK_OFFSET(_Result, _Offset) \
-    asm volatile ("mov %%fs:(%1), %0" : "=r" (_Result) : "r" (_Offset))
-
-//
-// This macro determines whether or not the given trap frame is from privileged
-// mode.
-//
-
-#define IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(_TrapFrame) \
-    (((_TrapFrame)->Cs & SEGMENT_PRIVILEGE_MASK) == 0)
-
-//
-// This macro determines whether or not the given trap frame is complete or
-// left mostly uninitialized by the system call handler. The system call
-// handler sets CS to user DS as a hint that the trap frame is incomplete.
-//
-
-#define IS_TRAP_FRAME_COMPLETE(_TrapFrame) \
-    (IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(_TrapFrame) || \
-     ((_TrapFrame)->Cs == USER_CS))
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -427,8 +184,12 @@ typedef enum _GDT_GRANULARITY {
 typedef enum _GDT_SEGMENT_TYPE {
     GdtDataReadOnly = 0x0,
     GdtDataReadWrite = 0x2,
+    GdbSystemLdt = 0x2,
     GdtCodeExecuteOnly = 0x8,
-    Gdt32BitTss = 0x9
+    GdtTss = 0x9,
+    GdtCallGate = 0xC,
+    GdtInterruptGate = 0xD,
+    GdtTrapGate = 0xF,
 } GDT_SEGMENT_TYPE, *PGDT_SEGMENT_TYPE;
 
 /*++
@@ -486,7 +247,7 @@ Members:
 
              D - Operand Size. 0 = 16 bit, 1 = 32 bit.
 
-             0 - Always zero.
+             L - Long mode (64 bit).
 
              A - Available for system use (always zero).
 
