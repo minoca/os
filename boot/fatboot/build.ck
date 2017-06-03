@@ -28,46 +28,59 @@ Environment:
 
 --*/
 
-from menv import executable, flattenedBinary;
+from menv import executable, flattenedBinary, mconfig;
 
 function build() {
+    var arch = mconfig.arch;
+    var config;
     var entries;
     var flattened;
     var image;
-    var linkConfig;
-    var linkLdflags;
     var includes;
     var sources;
+    var sourcesConfig = {};
 
     sources = [
         "vbr.S",
         "fatboot.c",
         "prochw.c",
-        "boot/lib:x86/archsup.o",
-        "boot/lib:pcat/realmode.o",
-        "boot/lib:pcat/realmexe.o"
     ];
+
+    if (arch == "x86") {
+        sources += [
+            "boot/lib:x86/archsup.o",
+            "boot/lib:pcat/realmode.o",
+            "boot/lib:pcat/x86/realmexe.o"
+        ];
+
+    } else if (arch == "x64") {
+        sources += [
+            "boot/lib:x6432/x86/archsup.o",
+            "boot/lib:x6432/pcat/realmode.o",
+            "boot/lib:x6432/pcat/x86/realmexe.o"
+        ];
+    }
 
     includes = [
         "$S/boot/lib/include",
         "$S/boot/lib/pcat"
     ];
 
-    linkLdflags = [
-        "-nostdlib",
-        "-Wl,-zmax-page-size=1",
-        "-static"
-    ];
-
-    linkConfig = {
-        "LDFLAGS": linkLdflags
+    config = {
+        "LDFLAGS": ["-nostdlib", "-Wl,-zmax-page-size=1", "-static"],
     };
+
+    if (arch == "x64") {
+        config["LDFLAGS"] += ["-m32"];
+        sourcesConfig["CPPFLAGS"] = ["-m32"];
+    }
 
     image = {
         "label": "fatboot.elf",
         "inputs": sources,
         "includes": includes,
-        "config": linkConfig,
+        "config": config,
+        "sources_config": sourcesConfig,
         "text_address": "0x7C00",
     };
 

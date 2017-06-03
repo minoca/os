@@ -44,3 +44,14 @@ ARMV6_OBJS = ../armv6/archsup.o  \
              ../armv7/inttable.o \
              ../armv7/prochw.o   \
 
+PCAT_OBJS = fwapi.o      \
+            int10.o      \
+            int13.o      \
+            memory.o     \
+            realmode.o   \
+            reset.o      \
+            rsdp.o       \
+            time.o       \
+
+PCAT_X86_OBJS = x86/realmexe.o \
+

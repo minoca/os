@@ -32,7 +32,7 @@ DIRS = bootman  \
        lib      \
        loader   \
 
-ifeq ($(ARCH), x86)
+ifneq (,$(filter x86 x64,$(ARCH)))
 
 DIRS += fatboot \
         mbr     \

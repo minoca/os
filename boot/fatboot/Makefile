@@ -42,9 +42,20 @@ X86_OBJS = vbr.o                    \
            prochw.o                 \
            archsup.o                \
            realmode.o               \
-           realmexe.o               \
+           x86/realmexe.o           \
+
+X64_OBJS := $(X86_OBJS)
 
 LDFLAGS += -Wl,-zmax-page-size=1 -nodefaultlibs -nostartfiles -nostdlib
+
+##
+## This application is always compiled 32-bit, even with a 64-bit target.
+##
+
+ifeq ($(ARCH),x64)
+EXTRA_CPPFLAGS += -m32
+EXTRA_LDFLAGS += -m32
+endif
 
 TEXT_ADDRESS := 0x7C00
 

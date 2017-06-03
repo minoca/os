@@ -45,9 +45,9 @@ Environment:
 // structure into linear addresses that can be dereferenced in protected mode.
 //
 
-#define VESA_SEGMENTED_TO_LINEAR_ADDRESS(_Address) \
-    (PVOID)((((_Address) & 0xFFFF0000) >> 12) +    \
-            ((_Address) & 0x0000FFFF))
+#define VESA_SEGMENTED_TO_LINEAR_ADDRESS(_Address)      \
+    (PVOID)(UINTN)((((_Address) & 0xFFFF0000) >> 12) +  \
+                   ((_Address) & 0x0000FFFF))
 
 //
 // These macros convert a TrueColor 8-bit RGB 3:3:2 value into its VGA DAC

@@ -691,6 +691,73 @@ FUNCTION(ArSetCurrentPageDirectory)
 END_FUNCTION(ArSetCurrentPageDirectory)
 
 ##
+## VOID
+## ArCpuid (
+##     PULONG Eax,
+##     PULONG Ebx,
+##     PULONG Ecx,
+##     PULONG Edx
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine executes the CPUID instruction to get processor architecture
+    information.
+
+Arguments:
+
+    Eax - Supplies a pointer to the value that EAX should be set to when the
+        CPUID instruction is executed. On output, contains the contents of
+        EAX immediately after the CPUID instruction.
+
+    Ebx - Supplies a pointer to the value that EBX should be set to when the
+        CPUID instruction is executed. On output, contains the contents of
+        EAX immediately after the CPUID instruction.
+
+    Ecx - Supplies a pointer to the value that ECX should be set to when the
+        CPUID instruction is executed. On output, contains the contents of
+        EAX immediately after the CPUID instruction.
+
+    Edx - Supplies a pointer to the value that EDX should be set to when the
+        CPUID instruction is executed. On output, contains the contents of
+        EAX immediately after the CPUID instruction.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION(ArCpuid)
+    push    %ebx                    # Save the non-volatile register.
+    push    %esi                    # Save the non-volatile register.
+    movl    12(%esp), %esi          # Load Eax parameter.
+    movl    (%esi), %eax            # Dereference to load EAX.
+    movl    16(%esp), %esi          # Load Ebx parameter.
+    movl    (%esi), %ebx            # Dereference to load EBX.
+    movl    20(%esp), %esi          # Load Ecx parameter.
+    movl    (%esi), %ecx            # Dereference to load ECX.
+    movl    24(%esp), %esi          # Load Edx parameter.
+    movl    (%esi), %edx            # Dereference to load EDX.
+    cpuid                           # Fire off the CPUID instruction.
+    movl    24(%esp), %esi          # Load Edx parameter.
+    movl    %edx, (%esi)            # Save EDX into there.
+    movl    20(%esp), %esi          # Load Ecx parameter.
+    movl    %ecx, (%esi)            # Save ECX into there.
+    movl    16(%esp), %esi          # Load Ebx parameter.
+    movl    %ebx, (%esi)            # Save EBX into there.
+    movl    12(%esp), %esi          # Load Eax parameter.
+    movl    %eax, (%esi)            # Save EAX into there.
+    pop     %esi                    # Resotre the non-volatile register.
+    pop     %ebx                    # Restore the non-volatile register.
+    ret
+
+END_FUNCTION(ArCpuid)
+
+##
 ## ULONG
 ## ArGetControlRegister0 (
 ##     VOID

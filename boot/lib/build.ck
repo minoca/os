@@ -34,12 +34,16 @@ function build() {
     var commonLib;
     var commonList;
     var commonSources;
+    var commonX86Sources;
     var entries;
     var includes;
     var efiLib;
     var efiSources;
+    var pcat32Lib;
     var pcatLib;
     var pcatSources;
+    var pcat32Sources;
+    var pcatX86Sources;
     var sourcesConfig;
 
     commonSources = [
@@ -55,7 +59,6 @@ function build() {
         "pcat/int10.c",
         "pcat/int13.c",
         "pcat/memory.c",
-        "pcat/realmexe.S",
         "pcat/realmode.c",
         "pcat/reset.c",
         "pcat/rsdp.c",
@@ -83,6 +86,15 @@ function build() {
         "efi/armv7/efiarch.c"
     ];
 
+    commonX86Sources = [
+        "x86/archsup.S",
+        "x86/prochw.c"
+    ];
+
+    pcatX86Sources = [
+        "pcat/x86/realmexe.S",
+    ];
+
     if (arch == "armv7") {
         commonSources += commonArmSources + [
             "armv7/archsup.S"
@@ -98,15 +110,17 @@ function build() {
         efiSources += commonArmEfiSources;
 
     } else if (arch == "x86") {
-        commonSources += [
-            "x86/archsup.S",
-            "x86/prochw.c"
-        ];
-
         efiSources += [
             "efi/x86/efia.S",
             "efi/x86/efiarch.c"
         ];
+
+        commonSources += commonX86Sources;
+        pcatSources += pcatX86Sources;
+
+    } else if (arch == "x64") {
+        pcat32Sources = commonSources + commonX86Sources +
+                        pcatSources + pcatX86Sources;
     }
 
     includes = [
@@ -126,20 +140,6 @@ function build() {
 
     commonList = compiledSources(commonLib);
     entries = commonList[1];
-
-    //
-    // Add the include and dependency for version.c, which uses the kernel's
-    // version.h
-    //
-
-    for (entry in entries) {
-        if (entry["output"] == "version.o") {
-            addConfig(entry, "CPPFLAGS", "-I$O/kernel");
-            entry["implicit"] = ["kernel:version.h"];
-            break;
-        }
-    }
-
     efiLib = {
         "label": "bootefi",
         "inputs": commonList[0] + efiSources,
@@ -152,7 +152,7 @@ function build() {
     // On PC machines, build the BIOS library as well.
     //
 
-    if (arch == "x86") {
+    if ((arch == "x86") || (arch == "x64")) {
         pcatLib = {
             "label": "bootpcat",
             "inputs": commonList[0] + pcatSources,
@@ -161,6 +161,37 @@ function build() {
         };
 
         entries += staticLibrary(pcatLib);
+
+        //
+        // Also build the 32-bit version of the PCAT library in 64-bit mode
+        // for the boot manager (which is 32-bits always).
+        //
+
+        if (arch == "x64") {
+            sourcesConfig = sourcesConfig.copy();
+            sourcesConfig["CPPFLAGS"] = ["-m32"];
+            pcat32Lib = {
+                "label": "bootpcat32",
+                "inputs": pcat32Sources,
+                "sources_config": sourcesConfig,
+                "includes": includes,
+                "prefix": "x6432"
+            };
+
+            entries += staticLibrary(pcat32Lib);
+        }
+    }
+
+    //
+    // Add the include and dependency for version.c, which uses the kernel's
+    // version.h
+    //
+
+    for (entry in entries) {
+        if (entry["output"].endsWith("version.o")) {
+            addConfig(entry, "CPPFLAGS", "-I$O/kernel");
+            entry["implicit"] = ["kernel:version.h"];
+        }
     }
 
     return entries;

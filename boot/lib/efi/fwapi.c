@@ -108,13 +108,13 @@ Return Value:
     //
 
     if (Phase == 0) {
-        BoEfiImageHandle = *((EFI_HANDLE *)(Parameters->EfiImageHandle));
-        BoEfiSystemTable = Parameters->EfiSystemTable;
+        BoEfiImageHandle = *((EFI_HANDLE *)(UINTN)(Parameters->EfiImageHandle));
+        BoEfiSystemTable = (PVOID)(UINTN)(Parameters->EfiSystemTable);
         BoEfiBootServices = BoEfiSystemTable->BootServices;
         BoEfiRuntimeServices = BoEfiSystemTable->RuntimeServices;
         BopEfiArchInitialize(&TopOfStack, &StackSize);
         if (Parameters->StackSize == 0) {
-            Parameters->StackTop = TopOfStack;
+            Parameters->StackTop = (UINTN)TopOfStack;
             Parameters->StackSize = StackSize;
         }
 

@@ -159,11 +159,10 @@ Return Value:
     // boot application (like the boot manager).
     //
 
+    Region = (PVOID)(UINTN)(Parameters->ReservedRegions);
     for (RegionIndex = 0;
          RegionIndex < Parameters->ReservedRegionCount;
          RegionIndex += 1) {
-
-        Region = &(Parameters->ReservedRegions[RegionIndex]);
 
         //
         // Mark these regions as "firmware temporary" so that they can get
@@ -180,6 +179,8 @@ Return Value:
         if (!KSUCCESS(Status)) {
             goto InitializeMemoryEnd;
         }
+
+        Region += 1;
     }
 
     RtlHeapInitialize(&BoHeap,
