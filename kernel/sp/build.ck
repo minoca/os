@@ -49,6 +49,10 @@ function build() {
         archSources = [
             "x86/archprof.c"
         ];
+
+    } else if (arch == "x64") {
+        archSources = [
+        ];
     }
 
     lib = {

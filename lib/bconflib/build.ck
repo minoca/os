@@ -25,10 +25,12 @@ Environment:
 
 --*/
 
-from menv import staticLibrary;
+from menv import mconfig, staticLibrary;
 
 function build() {
+    var arch = mconfig.arch;
     var bconfLib;
+    var bconfLib32;
     var buildBconfLib;
     var entries;
     var sources;
@@ -52,6 +54,17 @@ function build() {
 
     entries = staticLibrary(bconfLib);
     entries += staticLibrary(buildBconfLib);
+    if (arch == "x64") {
+        bconfLib32 = {
+            "label": "bconf32",
+            "inputs": sources,
+            "prefix": "x6432",
+            "sources_config": {"CPPFLAGS": "-m32"}
+        };
+
+        entries += staticLibrary(bconfLib32);
+    }
+
     return entries;
 }
 

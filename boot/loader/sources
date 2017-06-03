@@ -62,11 +62,7 @@ TARGETLIBS = $(OBJROOT)/os/kernel/kd/boot/kdboot.a         \
              $(OBJROOT)/os/kernel/hl/boot/hlboot.a         \
              $(OBJROOT)/os/kernel/mm/boot/mmboot.a         \
 
-ifeq ($(ARCH), armv7)
-TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a
-endif
-
-ifeq ($(ARCH), armv6)
+ifneq (,$(filter armv7 armv6,$(ARCH)))
 TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a
 endif
 

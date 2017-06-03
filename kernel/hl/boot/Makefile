@@ -50,5 +50,9 @@ X86_OBJS = ../x86/archdbg.o  \
            ../x86/regacces.o \
            ../ns16550.o      \
 
+ifeq ($(ARCH),x64)
+DIRS += x6432
+endif
+
 include $(SRCROOT)/os/minoca.mk
 

@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2013 Minoca Corp.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,16 +9,15 @@
 #
 #   Module Name:
 #
-#       Base Video Library
+#       Partition Library (32-bit)
 #
 #   Abstract:
 #
-#       This module implements basic support for video output via a linear
-#       framebuffer.
+#       This module implements support for disk partitions.
 #
 #   Author:
 #
-#       Evan Green 30-Jan-2013
+#       Evan Green 2-Jun-2017
 #
 #   Environment:
 #
@@ -26,16 +25,15 @@
 #
 ################################################################################
 
-BINARY = basevid.a
+BINARY = partlib.a
 
 BINARYTYPE = library
 
-OBJS = fontdata.o \
-       textvid.o  \
+include $(SRCDIR)/../sources
 
-ifeq ($(ARCH),x64)
-DIRS += x6432
-endif
+VPATH += $(SRCDIR)/..:
+
+EXTRA_CPPFLAGS += -m32
 
 include $(SRCROOT)/os/minoca.mk
 

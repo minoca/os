@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2013 Minoca Corp.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,7 +9,7 @@
 #
 #   Module Name:
 #
-#       Base Video Library
+#       Base Video Library (32-bit)
 #
 #   Abstract:
 #
@@ -18,7 +18,7 @@
 #
 #   Author:
 #
-#       Evan Green 30-Jan-2013
+#       Evan Green 2-Jun-2017
 #
 #   Environment:
 #
@@ -33,9 +33,9 @@ BINARYTYPE = library
 OBJS = fontdata.o \
        textvid.o  \
 
-ifeq ($(ARCH),x64)
-DIRS += x6432
-endif
+VPATH += $(SRCDIR)/..:
+
+EXTRA_CPPFLAGS += -m32
 
 include $(SRCROOT)/os/minoca.mk
 

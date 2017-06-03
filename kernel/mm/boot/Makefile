@@ -32,5 +32,9 @@ BINARYTYPE = library
 
 OBJS = ../mdl.o          \
 
+ifeq ($(ARCH),x64)
+DIRS += x6432
+endif
+
 include $(SRCROOT)/os/minoca.mk
 

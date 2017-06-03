@@ -25,14 +25,16 @@ Environment:
 
 --*/
 
-from menv import staticLibrary;
+from menv import mconfig, staticLibrary;
 
 function build() {
+    var arch = mconfig.arch;
     var entries;
     var includes;
     var lib;
     var sources;
     var stubLib;
+    var stubLib32;
     var stubSources;
 
     sources = [
@@ -63,6 +65,18 @@ function build() {
 
     entries = staticLibrary(lib);
     entries += staticLibrary(stubLib);
+    if (arch == "x64") {
+        stubLib32 = {
+            "label": "kdnousb32",
+            "inputs": sources,
+            "includes": includes,
+            "prefix": "x6432",
+            "sources_config": {"CPPFLAGS": ["-m32"]}
+        };
+
+        entries += staticLibrary(stubLib32);
+    }
+
     return entries;
 }
 

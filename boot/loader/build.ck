@@ -32,6 +32,7 @@ from menv import application, mconfig;
 function build() {
     var arch = mconfig.arch;
     var baseLibs;
+    var baseRtl = "lib/rtl/base:basertl";
     var commonArmSources;
     var commonLibs;
     var commonSources;
@@ -107,7 +108,11 @@ function build() {
             "-Wl,--no-wchar-size-warning"
         ];
 
-        efiLibs = ["kernel:archboot"] + efiLibs;
+        efiLibs += [
+            "kernel:archboot",
+        ];
+
+        baseRtl = "lib/rtl/base:basertlb";
 
     } else if (arch == "x86") {
         efiLinkLdflags = linkLdflags;
@@ -118,28 +123,15 @@ function build() {
             "x86/paging.c",
             "x86/kernxfr.S"
         ];
+
+    } else if (arch == "x64") {
+        efiLinkLdflags = linkLdflags;
+        commonSources += [
+            "x86/archsupc.c",
+            "x86/dbgparch.c",
+            "x86/entry.S",
+        ];
     }
-
-    efiLinkConfig = {
-        "LDFLAGS": efiLinkLdflags
-    };
-
-    pcatLinkConfig = {
-        "LDFLAGS": linkLdflags
-    };
-
-    //
-    // These base libraries are relied upon by the boot library and so they
-    // must go after the boot library.
-    //
-
-    baseLibs = [
-        "lib/basevid:basevid",
-        "lib/fatlib:fat",
-        "kernel/mm:mmboot",
-        "lib/rtl/base:basertlb",
-        "lib/rtl/kmode:krtl",
-    ];
 
     commonLibs = [
         "kernel/kd:kdboot",
@@ -148,6 +140,22 @@ function build() {
         "lib/bconflib:bconf",
         "kernel/kd/kdusb:kdnousb"
     ];
+
+    baseLibs = [
+        "lib/basevid:basevid",
+        "lib/fatlib:fat",
+        "kernel/mm:mmboot",
+        baseRtl,
+        "lib/rtl/kmode:krtl",
+    ];
+
+    efiLinkConfig = {
+        "LDFLAGS": efiLinkLdflags
+    };
+
+    pcatLinkConfig = {
+        "LDFLAGS": linkLdflags
+    };
 
     pcatLibs = [
         "boot/lib:bootpcat",
@@ -171,7 +179,7 @@ function build() {
     // On PC machines, build the BIOS loader as well.
     //
 
-    if (arch == "x86") {
+    if ((arch == "x86") || (arch == "x64")) {
         pcatAppLibs = commonLibs + pcatLibs + baseLibs;
         pcatApp = {
             "label": "loader",

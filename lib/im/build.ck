@@ -33,6 +33,7 @@ function build() {
     var buildLib;
     var entries;
     var lib;
+    var lib32;
     var nativeLib;
     var nativeSources;
     var universalSources;
@@ -79,6 +80,17 @@ function build() {
     entries = staticLibrary(lib);
     entries += staticLibrary(buildLib);
     entries += staticLibrary(nativeLib);
+    if (arch == "x64") {
+        lib32 = {
+            "label": "imu32",
+            "inputs": universalSources,
+            "prefix": "x6432",
+            "sources_config": {"CPPFLAGS": ["-m32"]}
+        };
+
+        entries += staticLibrary(lib32);
+    }
+
     return entries;
 }
 

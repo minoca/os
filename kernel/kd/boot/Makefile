@@ -34,19 +34,13 @@ INCLUDES += $(SRCDIR)/..;
 
 VPATH += $(SRCDIR)/..:
 
-OBJS = kdebug.o   \
+include $(SRCDIR)/../sources
 
-ARMV7_OBJS = armv7/kdarch.o        \
-             armv7/kdsup.o         \
-             armv7/kdsupc.o        \
-             boot/armv7/kdatomic.o \
+EXTRA_SRC_DIRS = x86 x64 armv7 armv6 boot/armv7
 
-ARMV6_OBJS = $(ARMV7_OBJS)
-
-X86_OBJS = x86/kdarch.o   \
-           x86/kdsup.o    \
-
-EXTRA_SRC_DIRS = x86 armv7 armv6 boot/armv7
+ifeq ($(ARCH),x64)
+DIRS += x6432
+endif
 
 include $(SRCROOT)/os/minoca.mk
 

@@ -34,6 +34,8 @@ BINPLACE = bin
 
 X86_OBJS = mbr.o
 
+X64_OBJS := $(X86_OBJS)
+
 TEXT_ADDRESS = 0x0600
 
 LDFLAGS += -Wl,-zmax-page-size=1 -nodefaultlibs -nostartfiles -nostdlib

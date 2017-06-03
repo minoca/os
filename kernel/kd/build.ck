@@ -33,6 +33,8 @@ function build() {
     var arch = mconfig.arch;
     var archSources;
     var baseSources;
+    var boot32Lib;
+    var boot32Sources;
     var bootArchSources;
     var bootLib;
     var bootSources;
@@ -62,7 +64,7 @@ function build() {
             ":armv7/kdsupc.o"
         ];
 
-    } else if ((arch == "x86") || (arch == "x64")) {
+    } else if (arch == "x86") {
         archSources = [
             "x86/kdarch.c",
             "x86/kdsup.S"
@@ -71,6 +73,22 @@ function build() {
         bootArchSources = [
             ":x86/kdarch.o",
             ":x86/kdsup.o"
+        ];
+
+    } else if (arch == "x64") {
+        archSources = [
+            "x64/kdarch.c",
+            "x64/kdsup.S"
+        ];
+
+        bootArchSources = [
+            ":x64/kdarch.o",
+            ":x64/kdsup.o"
+        ];
+
+        boot32Sources = baseSources + [
+            "x86/kdarch.c",
+            "x86/kdsup.S"
         ];
     }
 
@@ -86,6 +104,17 @@ function build() {
 
     entries = staticLibrary(lib);
     entries += staticLibrary(bootLib);
+    if (arch == "x64") {
+        boot32Lib = {
+            "label": "kdboot32",
+            "inputs": boot32Sources,
+            "prefix": "x6432",
+            "sources_config": {"CPPFLAGS": ["-m32"]},
+        };
+
+        entries += staticLibrary(boot32Lib);
+    }
+
     return entries;
 }
 

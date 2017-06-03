@@ -37,6 +37,8 @@ function build() {
     var archBootSources;
     var archSources;
     var baseSources;
+    var boot32Sources;
+    var boot32Lib;
     var bootLib;
     var bootSources;
     var entries;
@@ -156,6 +158,17 @@ function build() {
             ":x86/ioport.o",
             ":x86/regacces.o"
         ];
+
+        if (arch == "x64") {
+            boot32Sources = [
+                "boot/hmodapi.c",
+                "dbgdev.c",
+                "ns16550.c",
+                "x86/archdbg.c",
+                "x86/ioport.c",
+                "x86/regacces.c"
+            ];
+        }
     }
 
     lib = {
@@ -170,6 +183,17 @@ function build() {
 
     entries = staticLibrary(lib);
     entries += staticLibrary(bootLib);
+    if (arch == "x64") {
+        boot32Lib = {
+            "label": "hlboot32",
+            "inputs": boot32Sources,
+            "prefix": "x6432",
+            "sources_config": {"CPPFLAGS": ["-m32"]}
+        };
+
+        entries += staticLibrary(boot32Lib);
+    }
+
     return entries;
 }
 

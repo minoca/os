@@ -60,6 +60,10 @@ function build() {
         archSources = [
             "x86/psarch.c"
         ];
+
+    } else if (arch == "x64") {
+        archSources = [
+        ];
     }
 
     lib = {

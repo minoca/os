@@ -34,16 +34,13 @@ function build() {
     var arch = mconfig.arch;
     var archSources;
     var armSources;
-    var armv6Sources;
-    var armv7Sources;
     var baseSources;
     var bootLib;
-    var bootSources;
+    var bootLib32;
     var buildArchSources;
     var buildLib;
     var entries;
     var lib;
-    var x86Sources;
 
     baseSources = [
         "block.c",
@@ -61,10 +58,6 @@ function build() {
         "fault.c"
     ];
 
-    bootSources = [
-        ":mdl.o"
-    ];
-
     armSources = [
         "armv7/archcomc.c",
         "armv7/flush.c",
@@ -72,29 +65,27 @@ function build() {
         "armv7/usermem.S"
     ];
 
-    armv7Sources = armSources + [
-        "armv7/archsupc.c"
-    ];
-
-    armv6Sources = armSources + [
-        "armv6/archsupc.c"
-    ];
-
-    x86Sources = [
-        "x86/archsupc.c",
-        "x86/flush.c",
-        "x86/mapping.c",
-        "x86/usermem.S"
-    ];
-
     if (arch == "armv7") {
-        archSources = armv7Sources;
+        archSources = armSources + [
+            "armv7/archsupc.c"
+        ];
 
     } else if (arch == "armv6") {
-        archSources = armv6Sources;
+        archSources = armSources + [
+            "armv6/archsupc.c"
+        ];
 
     } else if (arch == "x86") {
-        archSources = x86Sources;
+        archSources = [
+            "x86/archsupc.c",
+            "x86/flush.c",
+            "x86/mapping.c",
+            "x86/usermem.S"
+        ];
+
+    } else if (arch == "x64") {
+        archSources = [
+        ];
     }
 
     if (mconfig.build_arch == "armv7") {
@@ -117,7 +108,7 @@ function build() {
 
     bootLib = {
         "label": "mmboot",
-        "inputs": bootSources
+        "inputs": [":mdl.o"]
     };
 
     buildLib = {
@@ -131,6 +122,17 @@ function build() {
     entries = staticLibrary(lib);
     entries += staticLibrary(bootLib);
     entries += staticLibrary(buildLib);
+    if (arch == "x64") {
+        bootLib32 = {
+            "label": "mmboot32",
+            "inputs": ["mdl.c"],
+            "prefix": "x6432",
+            "sources_config": {"CPPFLAGS": ["-m32"]}
+        };
+
+        entries += staticLibrary(bootLib32);
+    }
+
     return entries;
 }
 

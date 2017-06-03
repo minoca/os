@@ -516,7 +516,7 @@ Return Value:
             mconfig.target = "arm-none-minoca";
 
         } else if (mconfig.arch == "x64") {
-            mconfig.target = "x86_64-none-minoca";
+            mconfig.target = "x86_64-pc-minoca";
 
         } else {
             Core.raise(ValueError("Unknown architecture" + mconfig.arch));

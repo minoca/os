@@ -222,8 +222,8 @@ function build() {
             "x64/contexta.S",
             "x64/contextc.c",
             "x64/fenv.S",
-            "x64/fenvc.c",
             "x64/setjmpa.S",
+            "x86/fenvc.c",
         ];
     }
 
@@ -248,9 +248,14 @@ function build() {
         "LDFLAGS": linkLdflags
     };
 
-    libs = [
-        "lib/rtl/base:intrins",
-    ];
+    if (arch == "x64") {
+        libs = [];
+
+    } else {
+        libs = [
+            "lib/rtl/base:intrins",
+        ];
+    }
 
     dynlibs = [
         "apps/osbase:libminocaos"

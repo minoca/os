@@ -1,0 +1,42 @@
+################################################################################
+#
+#   Copyright (c) 2017 Minoca Corp.
+#
+#    This file is licensed under the terms of the GNU General Public License
+#    version 3. Alternative licensing terms are available. Contact
+#    info@minocacorp.com for details. See the LICENSE file at the root of this
+#    project for complete licensing information.
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the common object files for the Kernel Debugger
+#       library.
+#
+#   Author:
+#
+#       Evan Green 2-Jun-2017
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+OBJS = kdebug.o   \
+
+ARMV7_OBJS = armv7/kdarch.o        \
+             armv7/kdsup.o         \
+             armv7/kdsupc.o        \
+             boot/armv7/kdatomic.o \
+
+ARMV6_OBJS = $(ARMV7_OBJS)
+
+X86_OBJS = x86/kdarch.o   \
+           x86/kdsup.o    \
+
+X64_OBJS = x64/kdarch.o   \
+           x64/kdsup.o    \

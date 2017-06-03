@@ -27,7 +27,11 @@
 
 DIRS = efi
 
-ifeq ($(ARCH), x86)
+##
+## PC/AT is compiled for x86 and x64.
+##
+
+ifneq (,$(filter x86 x64,$(ARCH)))
 
 DIRS += pcat
 

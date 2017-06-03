@@ -40,8 +40,8 @@ function build() {
 
     buildLibs = [
         "lib/fatlib:build_fat",
-        "lib/rtl/urtl/rtlc:build_rtlc",
-        "lib/rtl/base:build_basertl"
+        "lib/rtl/base:build_basertl",
+        "lib/rtl/urtl:build_rtlc"
     ];
 
     buildApp = {

@@ -80,6 +80,10 @@ function build() {
             "x86/prochw.c",
             "x86/trap.S"
         ];
+
+    } else if (arch == "x64") {
+        archSources = [
+        ];
     }
 
     kernelLibs = [

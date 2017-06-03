@@ -29,9 +29,12 @@ Environment:
 from menv import mconfig, staticLibrary;
 
 function build() {
+    var arch = mconfig.arch;
     var armv7BootSources;
     var armv7Intrinsics;
     var armv7Sources;
+    var baseRtl32Lib;
+    var baseRtl32Sources;
     var baseRtlLib;
     var bootLib;
     var bootSources;
@@ -114,20 +117,20 @@ function build() {
     // Put together the target sources by architecture.
     //
 
-    bootSources = sources;
-    if (mconfig.arch == "x86") {
+    if (arch == "x86") {
         targetSources = sources + x86Sources;
         intrinsics = x86Intrinsics;
-        bootSources = sources + x86Sources;
 
-    } else if ((mconfig.arch == "armv7") || (mconfig.arch == "armv6")) {
+    } else if ((arch == "armv7") || (arch == "armv6")) {
         targetSources = sources + armv7Sources;
         intrinsics = armv7Intrinsics;
         bootSources = sources + armv7BootSources;
 
-    } else if (mconfig.arch == "x64") {
+    } else if (arch == "x64") {
         targetSources = sources + x64Sources;
         intrinsics = null;
+        bootSources = sources + x64Sources;
+        baseRtl32Sources = sources + x86Sources;
     }
 
     //
@@ -190,14 +193,16 @@ function build() {
     // version except on ARM it contains no ldrex/strex.
     //
 
-    bootLib = {
-        "label": "basertlb",
-        "inputs": bootSources,
-        "prefix": "boot",
-        "includes": includes,
-    };
+    if (bootSources) {
+        bootLib = {
+            "label": "basertlb",
+            "inputs": bootSources,
+            "prefix": "boot",
+            "includes": includes,
+        };
 
-    entries += staticLibrary(bootLib);
+        entries += staticLibrary(bootLib);
+    }
 
     //
     // Compile the wide library support.
@@ -237,6 +242,18 @@ function build() {
     };
 
     entries += staticLibrary(buildBaseRtlLib);
+    if (arch == "x64") {
+        baseRtl32Lib = {
+            "label": "basertl32",
+            "inputs": baseRtl32Sources,
+            "includes": includes,
+            "prefix": "x6432",
+            "sources_config": {"CPPFLAGS": ["-m32"]}
+        };
+
+        entries += staticLibrary(baseRtl32Lib);
+    }
+
     return entries;
 }
 

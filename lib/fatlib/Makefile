@@ -35,6 +35,10 @@ DIRS = build
 
 TESTDIRS = fattest
 
+ifeq ($(ARCH),x64)
+DIRS += x6432
+endif
+
 include $(SRCROOT)/os/minoca.mk
 
 fattest: build

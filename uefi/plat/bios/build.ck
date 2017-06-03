@@ -85,7 +85,7 @@ function build() {
         "uefi/archlib:uefiarch",
         "lib/fatlib:fat",
         "lib/basevid:basevid",
-        "lib/rtl/base:basertlb",
+        "lib/rtl/base:basertl",
         "kernel/kd/kdusb:kdnousb",
         "uefi/core:emptyrd",
     ];
