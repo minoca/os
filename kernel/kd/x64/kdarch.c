@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2012 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -13,11 +13,11 @@ Module Name:
 
 Abstract:
 
-    This module implements x86 architectural support for the kernel debugger.
+    This module implements AMD64 architectural support for the kernel debugger.
 
 Author:
 
-    Evan Green 10-Aug-2012
+    Evan Green 2-Jun-2017
 
 Environment:
 
@@ -32,7 +32,7 @@ Environment:
 #include <minoca/kernel/kernel.h>
 #include <minoca/debug/dbgproto.h>
 #include <minoca/kernel/kdebug.h>
-#include <minoca/kernel/x86.h>
+#include <minoca/kernel/x64.h>
 #include "../kdp.h"
 
 //
@@ -60,7 +60,7 @@ KdpInitializeDebugRegisters (
 // Store the machine architecture.
 //
 
-ULONG KdMachineType = MACHINE_TYPE_X86;
+ULONG KdMachineType = MACHINE_TYPE_X64;
 
 //
 // Store a variable indicating whether freeze request are maskable interrupts
@@ -133,7 +133,7 @@ Return Value:
 
 {
 
-    TrapFrame->Eflags &= ~IA32_EFLAG_TF;
+    TrapFrame->Rflags &= ~IA32_EFLAG_TF;
     return;
 }
 
@@ -172,7 +172,7 @@ Return Value:
 
 {
 
-    TrapFrame->Eflags |= IA32_EFLAG_TF;
+    TrapFrame->Rflags |= IA32_EFLAG_TF;
     return;
 }
 
@@ -257,11 +257,11 @@ Return Value:
     PTRAP_FRAME Registers;
 
     Registers = TrapFrame;
-    if ((Registers->Eflags & IA32_EFLAG_VM) != 0) {
-        return (PVOID)((Registers->Cs << 4) + Registers->Eip);
+    if ((Registers->Rflags & IA32_EFLAG_VM) != 0) {
+        return (PVOID)((Registers->Cs << 4) + Registers->Rip);
     }
 
-    return (PVOID)((PTRAP_FRAME)Registers)->Eip;
+    return (PVOID)(Registers->Rip);
 }
 
 PVOID
@@ -321,19 +321,27 @@ Return Value:
 
 {
 
-    PX86_GENERAL_REGISTERS DebuggerRegisters;
+    PX64_GENERAL_REGISTERS DebuggerRegisters;
 
-    DebuggerRegisters = (PX86_GENERAL_REGISTERS)Registers;
-    DebuggerRegisters->Eax = TrapFrame->Eax;
-    DebuggerRegisters->Ebx = TrapFrame->Ebx;
-    DebuggerRegisters->Ecx = TrapFrame->Ecx;
-    DebuggerRegisters->Edx = TrapFrame->Edx;
-    DebuggerRegisters->Ebp = TrapFrame->Ebp;
-    DebuggerRegisters->Esp = TrapFrame->Esp;
-    DebuggerRegisters->Esi = TrapFrame->Esi;
-    DebuggerRegisters->Edi = TrapFrame->Edi;
-    DebuggerRegisters->Eip = TrapFrame->Eip;
-    DebuggerRegisters->Eflags = TrapFrame->Eflags;
+    DebuggerRegisters = (PX64_GENERAL_REGISTERS)Registers;
+    DebuggerRegisters->Rax = TrapFrame->Rax;
+    DebuggerRegisters->Rbx = TrapFrame->Rbx;
+    DebuggerRegisters->Rcx = TrapFrame->Rcx;
+    DebuggerRegisters->Rdx = TrapFrame->Rdx;
+    DebuggerRegisters->Rbp = TrapFrame->Rbp;
+    DebuggerRegisters->Rsp = TrapFrame->Rsp;
+    DebuggerRegisters->Rsi = TrapFrame->Rsi;
+    DebuggerRegisters->Rdi = TrapFrame->Rdi;
+    DebuggerRegisters->R8 = TrapFrame->R8;
+    DebuggerRegisters->R9 = TrapFrame->R9;
+    DebuggerRegisters->R10 = TrapFrame->R10;
+    DebuggerRegisters->R11 = TrapFrame->R11;
+    DebuggerRegisters->R12 = TrapFrame->R12;
+    DebuggerRegisters->R13 = TrapFrame->R13;
+    DebuggerRegisters->R14 = TrapFrame->R14;
+    DebuggerRegisters->R15 = TrapFrame->R15;
+    DebuggerRegisters->Rip = TrapFrame->Rip;
+    DebuggerRegisters->Rflags = TrapFrame->Rflags;
     DebuggerRegisters->Cs = (USHORT)TrapFrame->Cs;
     DebuggerRegisters->Ds = (USHORT)TrapFrame->Ds;
     DebuggerRegisters->Es = (USHORT)TrapFrame->Es;
@@ -399,19 +407,27 @@ Return Value:
 
 {
 
-    PX86_GENERAL_REGISTERS DebuggerRegisters;
+    PX64_GENERAL_REGISTERS DebuggerRegisters;
 
-    DebuggerRegisters = (PX86_GENERAL_REGISTERS)Registers;
-    TrapFrame->Eax = (ULONG)DebuggerRegisters->Eax;
-    TrapFrame->Ebx = (ULONG)DebuggerRegisters->Ebx;
-    TrapFrame->Ecx = (ULONG)DebuggerRegisters->Ecx;
-    TrapFrame->Edx = (ULONG)DebuggerRegisters->Edx;
-    TrapFrame->Esi = (ULONG)DebuggerRegisters->Esi;
-    TrapFrame->Edi = (ULONG)DebuggerRegisters->Edi;
-    TrapFrame->Esp = (ULONG)DebuggerRegisters->Esp;
-    TrapFrame->Ebp = (ULONG)DebuggerRegisters->Ebp;
-    TrapFrame->Eip = (ULONG)DebuggerRegisters->Eip;
-    TrapFrame->Eflags = (ULONG)DebuggerRegisters->Eflags;
+    DebuggerRegisters = (PX64_GENERAL_REGISTERS)Registers;
+    TrapFrame->Rax = DebuggerRegisters->Rax;
+    TrapFrame->Rbx = DebuggerRegisters->Rbx;
+    TrapFrame->Rcx = DebuggerRegisters->Rcx;
+    TrapFrame->Rdx = DebuggerRegisters->Rdx;
+    TrapFrame->Rsi = DebuggerRegisters->Rsi;
+    TrapFrame->Rdi = DebuggerRegisters->Rdi;
+    TrapFrame->Rsp = DebuggerRegisters->Rsp;
+    TrapFrame->Rbp = DebuggerRegisters->Rbp;
+    TrapFrame->R8 = DebuggerRegisters->R8;
+    TrapFrame->R9 = DebuggerRegisters->R9;
+    TrapFrame->R10 = DebuggerRegisters->R10;
+    TrapFrame->R11 = DebuggerRegisters->R11;
+    TrapFrame->R12 = DebuggerRegisters->R12;
+    TrapFrame->R13 = DebuggerRegisters->R13;
+    TrapFrame->R14 = DebuggerRegisters->R14;
+    TrapFrame->R15 = DebuggerRegisters->R15;
+    TrapFrame->Rip = DebuggerRegisters->Rip;
+    TrapFrame->Rflags = DebuggerRegisters->Rflags;
     TrapFrame->Cs = DebuggerRegisters->Cs;
     TrapFrame->Ds = DebuggerRegisters->Ds;
     TrapFrame->Es = DebuggerRegisters->Es;
@@ -481,7 +497,7 @@ Return Value:
 
     PX86_SPECIAL_REGISTERS IaRegisters;
     TABLE_REGISTER TableRegister;
-    ULONG TrRegister;
+    ULONGLONG TrRegister;
 
     IaRegisters = &(SpecialRegisters->Ia);
     IaRegisters->Cr0 = ArGetControlRegister0();

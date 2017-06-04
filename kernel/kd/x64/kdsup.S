@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2012 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -13,12 +13,12 @@ Module Name:
 
 Abstract:
 
-    This module implements kernel debugger support routines on the x86
+    This module implements kernel debugger support routines on the AMD64
     architecture.
 
 Author:
 
-    Evan Green 21-Sep-2012
+    Evan Green 2-Jun-2017
 
 Environment:
 
@@ -30,7 +30,7 @@ Environment:
 ## ------------------------------------------------------------------ Includes
 ##
 
-#include <minoca/kernel/x86.inc>
+#include <minoca/kernel/x64.inc>
 
 ##
 ## --------------------------------------------------------------- Definitions
@@ -41,14 +41,7 @@ Environment:
 ## ---------------------------------------------------------------------- Code
 ##
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
-
-.text
-.code32
+ASSEMBLY_FILE_HEADER
 
 ##
 ## VOID
@@ -104,13 +97,13 @@ Return Value:
 --*/
 
 FUNCTION(KdpInitializeDebugRegisters)
-    movl    $0, %eax                #
-    movl    %eax, %dr7              # Turn all hardware breakpoints off.
-    movl    %eax, %dr0              # Set 0 to the address of all debug
-    movl    %eax, %dr1              # registers.
-    movl    %eax, %dr2              #
-    movl    %eax, %dr3              #
-    movl    %eax, %dr6              # Reset the status register.
+    xorq    %rax, %rax
+    movq    %rax, %dr7              # Turn all hardware breakpoints off.
+    movq    %rax, %dr0              # Set 0 to the address of all debug
+    movq    %rax, %dr1              # registers.
+    movq    %rax, %dr2              #
+    movq    %rax, %dr3              #
+    movq    %rax, %dr6              # Reset the status register.
     ret                             #
 
 END_FUNCTION(KdpInitializeDebugRegisters)
@@ -148,11 +141,16 @@ Return Value:
 --*/
 
 FUNCTION(KdpAtomicCompareExchange32)
-    movl    12(%esp), %eax          # Move CompareValue into eax.
-    movl    8(%esp), %ecx           # Move ExchangeValue into ecx.
-    movl    4(%esp), %edx           # Move Address into edx.
-    lock cmpxchgl %ecx, (%edx)      # Compare Address to eax, exchange with ecx.
-    ret                             # Return. Result is already in eax.
+    xorq    %rax, %rax              # Zero out the high part of rax, for safety.
+    movl    %edx, %eax              # Move CompareValue into eax.
+
+    ##
+    ## Compare Address (rdi) with eax, exchange with esi if equal. Return the
+    ## original value in eax.
+    ##
+
+    lock cmpxchgl %esi, (%rdi)      # Compare exchange.
+    ret                             # Return value is already in the right spot.
 
 END_FUNCTION(KdpAtomicCompareExchange32)
 
@@ -183,18 +181,14 @@ Return Value:
 --*/
 
 FUNCTION(KdpAtomicAdd32)
-    movl    4(%esp), %edx           # Move Address into edx.
-    movl    8(%esp), %ecx           # Move Increment into ecx.
-    pushl   %ebx                    # Save ebx.
-
 KdpAtomicAdd32Loop:
-    movl    (%edx), %eax            # Get value of Address.
-    movl    %ecx, %ebx              # Move Increment to ebx.
-    add     %eax, %ebx              # Add *Address + Increment, save to ebx.
-    lock cmpxchgl %ebx, (%edx)      # Compare *Address to original, save in ebx.
-    jne     KdpAtomicAdd32Loop      # Try again if the value changed.
-    popl    %ebx                    # Restore ebx and return.
-    ret                             # Original *Address is still in eax.
+    xorq    %rcx, %rcx              # Zero out high part of rcx.
+    movl    (%rdi), %ecx            # Read the value.
+    movl    %ecx, %eax              # move to eax as the compare value.
+    addl    %esi, %ecx              # Add the increment.
+    lock cmpxchgl %ecx, (%rdi)      # Compare *rdi to eax, exchange ecx if ok.
+    jne     KdpAtomicAdd32Loop      # Try again if the compare failed.
+    ret                             # Original *Address is in eax.
 
 END_FUNCTION(KdpAtomicAdd32)
 

@@ -77,6 +77,17 @@ Author:
 // This macro initializes the file descriptor set to be empty.
 //
 
+#if __SIZEOF_LONG__ == 8
+
+#define FD_ZERO(_Set)               \
+    do {                            \
+        (_Set)->fds_bits[0] = 0;    \
+        (_Set)->fds_bits[1] = 0;    \
+                                    \
+    } while (0)
+
+#else
+
 #define FD_ZERO(_Set)               \
     do {                            \
         (_Set)->fds_bits[0] = 0;    \
@@ -85,6 +96,8 @@ Author:
         (_Set)->fds_bits[3] = 0;    \
                                     \
     } while (0)
+
+#endif
 
 //
 // ---------------------------------------------------------------- Definitions

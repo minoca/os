@@ -2262,9 +2262,9 @@ Return Value:
 
                 if (SourceTable[TableIndex].Entry != 0) {
                     MappedCount += 1;
-                    *((PULONG)&(SourceTable[TableIndex])) &= ~PTE_FLAG_WRITABLE;
+                    *((PULONG)&(SourceTable[TableIndex])) &= ~X86_PTE_WRITABLE;
                     *((PULONG)&(DestinationTable[TableIndex])) =
-                       *((PULONG)&(SourceTable[TableIndex])) & ~PTE_FLAG_DIRTY;
+                       *((PULONG)&(SourceTable[TableIndex])) & ~X86_PTE_DIRTY;
 
                 } else {
                     *((PULONG)&(DestinationTable[TableIndex])) = 0;
@@ -2316,9 +2316,9 @@ Return Value:
 
                 if (SourceTable[TableIndex].Entry != 0) {
                     MappedCount += 1;
-                    *((PULONG)&(SourceTable[TableIndex])) &= ~PTE_FLAG_WRITABLE;
+                    *((PULONG)&(SourceTable[TableIndex])) &= ~X86_PTE_WRITABLE;
                     *((PULONG)&(DestinationTable[TableIndex])) =
-                       *((PULONG)&(SourceTable[TableIndex])) & ~PTE_FLAG_DIRTY;
+                       *((PULONG)&(SourceTable[TableIndex])) & ~X86_PTE_DIRTY;
                 }
             }
 

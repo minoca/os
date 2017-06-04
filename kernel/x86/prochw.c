@@ -403,7 +403,7 @@ Return Value:
                              MainTss,
                              sizeof(TSS),
                              GdtByteGranularity,
-                             Gdt32BitTss,
+                             GdtTss,
                              SEGMENT_PRIVILEGE_KERNEL,
                              TRUE);
 
@@ -424,7 +424,7 @@ Return Value:
                              Tss,
                              sizeof(TSS),
                              GdtByteGranularity,
-                             Gdt32BitTss,
+                             GdtTss,
                              SEGMENT_PRIVILEGE_KERNEL,
                              TRUE);
 
@@ -445,7 +445,7 @@ Return Value:
                                Tss,
                                sizeof(TSS),
                                GdtByteGranularity,
-                               Gdt32BitTss,
+                               GdtTss,
                                SEGMENT_PRIVILEGE_KERNEL,
                                TRUE);
 
@@ -941,7 +941,7 @@ Return Value:
     Gdt = ProcessorBlock->Gdt;
     Gdt += TssSegment / sizeof(GDT_ENTRY);
 
-    ASSERT((Gdt->Access & ~GDT_TSS_BUSY) == (DEFAULT_GDT_ACCESS | Gdt32BitTss));
+    ASSERT((Gdt->Access & ~GDT_TSS_BUSY) == (DEFAULT_GDT_ACCESS | GdtTss));
 
     Gdt->Access &= ~GDT_TSS_BUSY;
     return;
@@ -1302,7 +1302,7 @@ Return Value:
                                KernelTss,
                                sizeof(TSS),
                                GdtByteGranularity,
-                               Gdt32BitTss,
+                               GdtTss,
                                SEGMENT_PRIVILEGE_KERNEL,
                                TRUE);
 
@@ -1311,7 +1311,7 @@ Return Value:
                              DoubleFaultTss,
                              sizeof(TSS),
                              GdtByteGranularity,
-                             Gdt32BitTss,
+                             GdtTss,
                              SEGMENT_PRIVILEGE_KERNEL,
                              TRUE);
 
@@ -1327,7 +1327,7 @@ Return Value:
                                NmiTss,
                                sizeof(TSS),
                                GdtByteGranularity,
-                               Gdt32BitTss,
+                               GdtTss,
                                SEGMENT_PRIVILEGE_KERNEL,
                                TRUE);
 

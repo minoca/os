@@ -571,8 +571,9 @@ Return Value:
         (KdInitialized != FALSE)) {
 
         PrintParameters.FormatString = Format;
-        PrintParameters.Arguments = ArgumentList;
+        va_copy(PrintParameters.Arguments, ArgumentList);
         RtlDebugService(EXCEPTION_PRINT, &PrintParameters);
+        va_end(PrintParameters.Arguments);
     }
 
     return;
@@ -2079,11 +2080,11 @@ Return Value:
     case DbgCommandRangeStep:
         RangeStep = (PRANGE_STEP)Packet->Payload;
         KdBreakRange.BreakRangeStart =
-                                    (PVOID)(ULONG)RangeStep->BreakRangeMinimum;
+                                    (PVOID)(UINTN)RangeStep->BreakRangeMinimum;
 
-        KdBreakRange.BreakRangeEnd = (PVOID)(ULONG)RangeStep->BreakRangeMaximum;
-        KdBreakRange.RangeHoleStart = (PVOID)(ULONG)RangeStep->RangeHoleMinimum;
-        KdBreakRange.RangeHoleEnd = (PVOID)(ULONG)RangeStep->RangeHoleMaximum;
+        KdBreakRange.BreakRangeEnd = (PVOID)(UINTN)RangeStep->BreakRangeMaximum;
+        KdBreakRange.RangeHoleStart = (PVOID)(UINTN)RangeStep->RangeHoleMinimum;
+        KdBreakRange.RangeHoleEnd = (PVOID)(UINTN)RangeStep->RangeHoleMaximum;
         KdBreakRange.Enabled = TRUE;
         KdUserRequestedSingleStep = FALSE;
         KdpSetSingleStepMode(Exception, TrapFrame, NULL);
