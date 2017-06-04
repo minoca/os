@@ -241,11 +241,11 @@ Members:
 
              |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
              |     |     |     |     |                       |
-             |  G  |  D  |  0  |  A  | Segment length 19:16  |
+             |  G  |  D  |  L  |  A  | Segment length 19:16  |
 
              G - Granularity. 0 = 1 byte, 1 = 1 KByte.
 
-             D - Operand Size. 0 = 16 bit, 1 = 32 bit.
+             D - Operand Size. 0 = 16/64 bit, 1 = 32 bit.
 
              L - Long mode (64 bit).
 

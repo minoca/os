@@ -30,7 +30,7 @@ include $(SRCDIR)/../../common
 
 BINARY = sddwc.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = sddwc.o       \
 

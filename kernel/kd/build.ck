@@ -27,7 +27,7 @@ Environment:
 
 --*/
 
-from menv import staticLibrary, mconfig;
+from menv import kernelLibrary, mconfig;
 
 function build() {
     var arch = mconfig.arch;
@@ -102,8 +102,8 @@ function build() {
         "inputs": bootSources + bootArchSources,
     };
 
-    entries = staticLibrary(lib);
-    entries += staticLibrary(bootLib);
+    entries = kernelLibrary(lib);
+    entries += kernelLibrary(bootLib);
     if (arch == "x64") {
         boot32Lib = {
             "label": "kdboot32",
@@ -112,7 +112,7 @@ function build() {
             "sources_config": {"CPPFLAGS": ["-m32"]},
         };
 
-        entries += staticLibrary(boot32Lib);
+        entries += kernelLibrary(boot32Lib);
     }
 
     return entries;

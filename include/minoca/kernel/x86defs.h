@@ -35,24 +35,25 @@ Author:
 #define SEGMENT_PRIVILEGE_KERNEL    0x0000
 #define SEGMENT_PRIVILEGE_USER      0x0003
 
-#define KERNEL_CS           0x08
-#define KERNEL_DS           0x10
-#define USER_CS             (0x18 | SEGMENT_PRIVILEGE_USER)
-#define USER_DS             (0x20 | SEGMENT_PRIVILEGE_USER)
-#define GDT_PROCESSOR       0x28
-#define GDT_THREAD          (0x30 | SEGMENT_PRIVILEGE_USER)
-#define KERNEL_TSS          0x38
-#define DOUBLE_FAULT_TSS    0x40
-#define NMI_TSS             0x48
-#define GDT_ENTRIES         10
+#define KERNEL_CS               0x08
+#define KERNEL_DS               0x10
+#define KERNEL64_TRANSITION_CS  0x18
+#define USER_CS                 (0x18 | SEGMENT_PRIVILEGE_USER)
+#define USER_DS                 (0x20 | SEGMENT_PRIVILEGE_USER)
+#define GDT_PROCESSOR           0x28
+#define GDT_THREAD              (0x30 | SEGMENT_PRIVILEGE_USER)
+#define KERNEL_TSS              0x38
+#define DOUBLE_FAULT_TSS        0x40
+#define NMI_TSS                 0x48
+#define GDT_ENTRIES             10
 
 #define DEFAULT_GDT_ACCESS      0x80
-#define DEFAULT_GDT_GRANULARITY 0x40
 #define MAX_GDT_LIMIT           0xFFFFF
 #define GDT_SYSTEM_SEGMENT      0x00
 #define GDT_CODE_DATA_SEGMENT   0x10
 #define GDT_TSS_BUSY            0x02
-#define GDT_ACCESS_LONG_MODE    0x20
+#define GDT_GRANULARITY_64BIT   0x20
+#define GDT_GRANULARITY_32BIT   0x40
 
 #define IDT_SIZE 0x100
 #define VECTOR_DIVIDE_ERROR         0x00

@@ -25,7 +25,8 @@ Environment:
 
 --*/
 
-from menv import application, binplace, executable, flattenedBinary;
+from menv import application, staticApplication, binplace, executable,
+    flattenedBinary;
 
 function build() {
     var elf;
@@ -35,8 +36,6 @@ function build() {
     var flattened;
     var fwbTool;
     var includes;
-    var linkConfig;
-    var linkLdflags;
     var mlo;
     var sources;
     var sourcesConfig;
@@ -64,25 +63,15 @@ function build() {
         "CFLAGS": ["-marm"]
     };
 
-    linkLdflags = [
-        "-nostdlib",
-        "-static"
-    ];
-
-    linkConfig = {
-        "LDFLAGS": linkLdflags
-    };
-
     elf = {
         "label": "omap4mlo.elf",
         "inputs": sources,
         "sources_config": sourcesConfig,
         "includes": includes,
         "text_address": textAddress,
-        "config": linkConfig
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
 
     //
     // Flatten the firmware image and add the TI header.

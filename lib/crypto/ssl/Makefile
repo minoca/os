@@ -27,7 +27,7 @@
 
 BINARY = ssl.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 include $(SRCDIR)/sources
 

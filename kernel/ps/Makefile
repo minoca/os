@@ -29,7 +29,7 @@
 
 BINARY = ps.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = env.o      \
        info.o     \

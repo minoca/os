@@ -27,7 +27,7 @@ Environment:
 
 --*/
 
-from menv import executable, uefiRuntimeFfs;
+from menv import staticApplication, uefiRuntimeFfs;
 
 function build() {
     var elf;
@@ -60,9 +60,7 @@ function build() {
 
     linkLdflags = [
         "-pie",
-        "-nostdlib",
         "-Wl,--no-wchar-size-warning",
-        "-static"
     ];
 
     linkConfig = {
@@ -79,7 +77,7 @@ function build() {
         "config": linkConfig
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
     entries += uefiRuntimeFfs("bbonert");
     return entries;
 }

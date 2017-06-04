@@ -27,7 +27,7 @@ Environment:
 
 --*/
 
-from menv import addConfig, createVersionHeader, mconfig, staticLibrary;
+from menv import addConfig, createVersionHeader, mconfig, kernelLibrary;
 
 function build() {
     var arch = mconfig.arch;
@@ -143,7 +143,7 @@ function build() {
         "inputs": ["emptyrd/emptyrd.S"]
     };
 
-    entries += staticLibrary(lib);
+    entries += kernelLibrary(lib);
 
     //
     // Add the include and dependency for version.c.
@@ -157,7 +157,7 @@ function build() {
         }
     }
 
-    entries += staticLibrary(emptyrdLib);
+    entries += kernelLibrary(emptyrdLib);
     return entries;
 }
 

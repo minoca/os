@@ -28,7 +28,7 @@
 
 BINARY = basevid.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = fontdata.o \
        textvid.o  \

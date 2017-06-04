@@ -28,7 +28,7 @@ Environment:
 
 --*/
 
-from menv import staticLibrary, mconfig;
+from menv import kernelLibrary, mconfig;
 
 function build() {
     var arch = mconfig.arch;
@@ -119,9 +119,9 @@ function build() {
         "prefix": "build"
     };
 
-    entries = staticLibrary(lib);
-    entries += staticLibrary(bootLib);
-    entries += staticLibrary(buildLib);
+    entries = kernelLibrary(lib);
+    entries += kernelLibrary(bootLib);
+    entries += kernelLibrary(buildLib);
     if (arch == "x64") {
         bootLib32 = {
             "label": "mmboot32",
@@ -130,7 +130,7 @@ function build() {
             "sources_config": {"CPPFLAGS": ["-m32"]}
         };
 
-        entries += staticLibrary(bootLib32);
+        entries += kernelLibrary(bootLib32);
     }
 
     return entries;

@@ -402,7 +402,7 @@ Return Value:
                              &(GdtTable[KERNEL_TSS / sizeof(GDT_ENTRY)]),
                              MainTss,
                              sizeof(TSS),
-                             GdtByteGranularity,
+                             GdtByteGranularity | GDT_GRANULARITY_32BIT,
                              GdtTss,
                              SEGMENT_PRIVILEGE_KERNEL,
                              TRUE);
@@ -423,7 +423,7 @@ Return Value:
                              &(GdtTable[DOUBLE_FAULT_TSS / sizeof(GDT_ENTRY)]),
                              Tss,
                              sizeof(TSS),
-                             GdtByteGranularity,
+                             GdtByteGranularity | GDT_GRANULARITY_32BIT,
                              GdtTss,
                              SEGMENT_PRIVILEGE_KERNEL,
                              TRUE);
@@ -444,7 +444,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[NMI_TSS / sizeof(GDT_ENTRY)]),
                                Tss,
                                sizeof(TSS),
-                               GdtByteGranularity,
+                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
                                GdtTss,
                                SEGMENT_PRIVILEGE_KERNEL,
                                TRUE);
@@ -1002,8 +1002,7 @@ Return Value:
     GdtEntry->BaseLow = (ULONG)Base & 0xFFFF;
     GdtEntry->BaseMiddle = ((ULONG)Base >> 16) & 0xFF;
     GdtEntry->Access = DEFAULT_GDT_ACCESS |
-                       ((PrivilegeLevel & 0x3) << 5) |
-                       (Access & 0xF);
+                       ((PrivilegeLevel & 0x3) << 5) | Access;
 
     if (System != FALSE) {
         GdtEntry->Access |= GDT_SYSTEM_SEGMENT;
@@ -1012,10 +1011,7 @@ Return Value:
         GdtEntry->Access |= GDT_CODE_DATA_SEGMENT;
     }
 
-    GdtEntry->Granularity = DEFAULT_GDT_GRANULARITY |
-                            Granularity |
-                            ((Limit >> 16) & 0xF);
-
+    GdtEntry->Granularity = Granularity | ((Limit >> 16) & 0xF);
     GdtEntry->BaseHigh = ((ULONG)Base >> 24) & 0xFF;
     return;
 }
@@ -1221,7 +1217,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[KERNEL_CS / sizeof(GDT_ENTRY)]),
                                NULL,
                                MAX_GDT_LIMIT,
-                               GdtKilobyteGranularity,
+                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
                                GdtCodeExecuteOnly,
                                SEGMENT_PRIVILEGE_KERNEL,
                                FALSE);
@@ -1235,7 +1231,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[KERNEL_DS / sizeof(GDT_ENTRY)]),
                                NULL,
                                MAX_GDT_LIMIT,
-                               GdtKilobyteGranularity,
+                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
                                GdtDataReadWrite,
                                SEGMENT_PRIVILEGE_KERNEL,
                                FALSE);
@@ -1249,7 +1245,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[USER_CS / sizeof(GDT_ENTRY)]),
                                (PVOID)0,
                                (ULONG)KERNEL_VA_START >> PAGE_SHIFT,
-                               GdtKilobyteGranularity,
+                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
                                GdtCodeExecuteOnly,
                                SEGMENT_PRIVILEGE_USER,
                                FALSE);
@@ -1263,7 +1259,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[USER_DS / sizeof(GDT_ENTRY)]),
                                (PVOID)0,
                                (ULONG)KERNEL_VA_START >> PAGE_SHIFT,
-                               GdtKilobyteGranularity,
+                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
                                GdtDataReadWrite,
                                SEGMENT_PRIVILEGE_USER,
                                FALSE);
@@ -1275,7 +1271,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[GDT_PROCESSOR / sizeof(GDT_ENTRY)]),
                                (PVOID)ProcessorBlock,
                                sizeof(PROCESSOR_BLOCK),
-                               GdtByteGranularity,
+                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
                                GdtDataReadWrite,
                                SEGMENT_PRIVILEGE_KERNEL,
                                FALSE);
@@ -1288,7 +1284,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[GDT_THREAD / sizeof(GDT_ENTRY)]),
                                NULL,
                                sizeof(PROCESSOR_BLOCK),
-                               GdtByteGranularity,
+                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
                                GdtDataReadWrite,
                                SEGMENT_PRIVILEGE_USER,
                                FALSE);
@@ -1301,7 +1297,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[KERNEL_TSS / sizeof(GDT_ENTRY)]),
                                KernelTss,
                                sizeof(TSS),
-                               GdtByteGranularity,
+                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
                                GdtTss,
                                SEGMENT_PRIVILEGE_KERNEL,
                                TRUE);
@@ -1310,7 +1306,7 @@ Return Value:
                              &(GdtTable[DOUBLE_FAULT_TSS / sizeof(GDT_ENTRY)]),
                              DoubleFaultTss,
                              sizeof(TSS),
-                             GdtByteGranularity,
+                             GdtByteGranularity | GDT_GRANULARITY_32BIT,
                              GdtTss,
                              SEGMENT_PRIVILEGE_KERNEL,
                              TRUE);
@@ -1326,7 +1322,7 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[NMI_TSS / sizeof(GDT_ENTRY)]),
                                NmiTss,
                                sizeof(TSS),
-                               GdtByteGranularity,
+                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
                                GdtTss,
                                SEGMENT_PRIVILEGE_KERNEL,
                                TRUE);

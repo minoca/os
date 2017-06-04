@@ -38,7 +38,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define BOOT_GDT_ENTRIES 3
+#define BOOT_GDT_ENTRIES 4
 #define BOOT_IDT_SIZE (VECTOR_DEBUG_SERVICE + 1)
 
 #define PIC_BASE_VECTOR 0x30
@@ -369,7 +369,7 @@ Return Value:
     BopCreateSegmentDescriptor(&(GdtTable[KERNEL_CS / sizeof(GDT_ENTRY)]),
                                NULL,
                                MAX_GDT_LIMIT,
-                               GdtKilobyteGranularity,
+                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
                                GdtCodeExecuteOnly,
                                0,
                                FALSE);
@@ -383,10 +383,23 @@ Return Value:
     BopCreateSegmentDescriptor(&(GdtTable[KERNEL_DS / sizeof(GDT_ENTRY)]),
                                NULL,
                                MAX_GDT_LIMIT,
-                               GdtKilobyteGranularity,
+                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
                                GdtDataReadWrite,
                                0,
                                FALSE);
+
+    //
+    // Create a 64-bit transition code segment.
+    //
+
+    BopCreateSegmentDescriptor(
+                       &(GdtTable[KERNEL64_TRANSITION_CS / sizeof(GDT_ENTRY)]),
+                       NULL,
+                       MAX_GDT_LIMIT,
+                       GdtKilobyteGranularity | GDT_GRANULARITY_64BIT,
+                       GdtCodeExecuteOnly,
+                       0,
+                       FALSE);
 
     //
     // Install the new GDT table.
@@ -605,8 +618,7 @@ Return Value:
     GdtEntry->BaseLow = (ULONG)Base & 0xFFFF;
     GdtEntry->BaseMiddle = ((ULONG)Base >> 16) & 0xFF;
     GdtEntry->Access = DEFAULT_GDT_ACCESS |
-                       ((PrivilegeLevel & 0x3) << 5) |
-                       (Access & 0xF);
+                       ((PrivilegeLevel & 0x3) << 5) | Access;
 
     if (System != FALSE) {
         GdtEntry->Access |= GDT_SYSTEM_SEGMENT;
@@ -615,10 +627,7 @@ Return Value:
         GdtEntry->Access |= GDT_CODE_DATA_SEGMENT;
     }
 
-    GdtEntry->Granularity = DEFAULT_GDT_GRANULARITY |
-                            Granularity |
-                            ((Limit >> 16) & 0xF);
-
+    GdtEntry->Granularity = Granularity | ((Limit >> 16) & 0xF);
     GdtEntry->BaseHigh = ((ULONG)Base >> 24) & 0xFF;
     return;
 }

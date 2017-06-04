@@ -40,7 +40,7 @@ TARGETLIBS += $(OBJROOT)/os/boot/lib/efi/bootefi.a \
 
 ENTRY = BoMain
 
-ifneq ($(ARCH), x86)
+ifeq (,$(filter x86 x64,$(ARCH)))
 LDFLAGS += -Wl,--no-wchar-size-warning
 endif
 

@@ -26,28 +26,21 @@ Environment:
 
 --*/
 
-from menv import executable, flattenedBinary;
+from menv import staticApplication, flattenedBinary;
 
 function build() {
     var entries;
     var flattened;
     var image;
     var linkConfig;
-    var linkLdFlags;
     var sources;
 
     sources = [
         "mbr.S"
     ];
 
-    linkLdFlags = [
-        "-nostdlib",
-        "-Wl,-zmax-page-size=1",
-        "-static"
-    ];
-
     linkConfig = {
-        "LDFLAGS": linkLdFlags
+        "LDFLAGS": ["-Wl,-zmax-page-size=1"]
     };
 
     image = {
@@ -57,7 +50,7 @@ function build() {
         "text_address": "0x600",
     };
 
-    entries = executable(image);
+    entries = staticApplication(image);
 
     //
     // Flatten the binary so it can be written directly to disk and loaded by

@@ -247,16 +247,15 @@ EXTRA_CPPFLAGS_FOR_BUILD := $(EXTRA_CPPFLAGS)
 EXTRA_CFLAGS += -fno-builtin -fno-omit-frame-pointer -g -save-temps=obj \
                 -ffunction-sections -fdata-sections -fvisibility=hidden
 
-##
-## TODO: Fix these flags to only apply to code compiled for kernel mode.
-## Usermode doesn't have this restriction.
-##
-
 ifeq ($(ARCH),x64)
-#EXTRA_CFLAGS += -mno-sse -mno-red-zone
+KERNEL_CFLAGS += -mno-sse -mno-red-zone
 endif
 
 EXTRA_CFLAGS_FOR_BUILD := $(EXTRA_CFLAGS)
+
+ifneq (,$(filter klibrary driver staticapp,$(BINARYTYPE)))
+EXTRA_CFLAGS += $(KERNEL_CFLAGS)
+endif
 
 EXTRA_CFLAGS += -fpic
 ifneq ($(OS),$(filter Windows_NT cygwin,$(OS)))
@@ -460,7 +459,7 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
 	@echo Linking - $@
 	@$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(LDFLAGS) $(EXTRA_LDFLAGS) -static -o $@ -Wl,--start-group $^ -Wl,--end-group -Bdynamic $(DYNLIBS)
     endif
-    ifeq ($(BINARYTYPE),library)
+    ifneq (,$(filter library klibrary,$(BINARYTYPE)))
 	@echo Building Library - $@
 	@$(AR) rcs $@ $^ $(TARGETLIBS)
     endif

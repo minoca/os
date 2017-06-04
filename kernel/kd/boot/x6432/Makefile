@@ -28,7 +28,7 @@
 
 BINARY = kdboot.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 INCLUDES += $(SRCDIR)/../..;
 

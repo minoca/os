@@ -29,7 +29,7 @@
 
 BINARY = kd.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 include $(SRCDIR)/sources
 

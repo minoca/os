@@ -30,7 +30,7 @@
 
 BINARY = io.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = arb.o      \
        cachedio.o \

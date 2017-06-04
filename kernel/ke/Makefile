@@ -29,7 +29,7 @@
 
 BINARY = ke.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 ##
 ## Define the kernel version.

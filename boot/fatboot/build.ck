@@ -28,7 +28,7 @@ Environment:
 
 --*/
 
-from menv import executable, flattenedBinary, mconfig;
+from menv import staticApplication, flattenedBinary, mconfig;
 
 function build() {
     var arch = mconfig.arch;
@@ -67,7 +67,7 @@ function build() {
     ];
 
     config = {
-        "LDFLAGS": ["-nostdlib", "-Wl,-zmax-page-size=1", "-static"],
+        "LDFLAGS": ["-Wl,-zmax-page-size=1"],
     };
 
     if (arch == "x64") {
@@ -84,7 +84,7 @@ function build() {
         "text_address": "0x7C00",
     };
 
-    entries = executable(image);
+    entries = staticApplication(image);
 
     //
     // Flatten the binary so it can be written directly to disk and loaded by

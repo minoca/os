@@ -99,6 +99,16 @@ FUNCTION(BmpFwTransferTo64BitApplication)
     pushl   $ProtectedModeReturn    # Push "return" address to protected mode.
 
     ##
+    ## Enable long mode in EFER. Do this before turning paging on so that
+    ## 4-level paging is used rather than 32-bit PAE 3-level paging.
+    ##
+
+    movl    $X86_MSR_EFER, %ecx     # Get EFER as MSR register.
+    rdmsr                           # Read it.
+    orl     $EFER_LONG_MODE_ENABLE, %eax    # Enable long mode.
+    wrmsr                           # Write it.
+
+    ##
     ## Enable paging.
     ##
 
@@ -108,41 +118,49 @@ FUNCTION(BmpFwTransferTo64BitApplication)
     movl    %cr0, %eax              # Read CR0.
     orl     $CR0_OR_MASK, %eax      # OR in the right bits.
     andl    $CR0_AND_MASK, %eax     # AND out the right bits.
+movl    $TestLoaderFunction, %edx # TODO: Remove this once it works!
     movl    %eax, %cr0              # Boom, paging enabled.
 
     ##
-    ## Enable long mode in EFER.
-    ##
-
-    movl    $X86_MSR_EFER, %ecx     # Get EFER as MSR register.
-    rdmsr                           # Read it.
-    orl     $EFER_LONG_MODE_ENABLE, %eax    # Enable long mode.
-    wrmsr                           # Write it.
-
-    ##
-    ## Perform a long jump to get to long mode. USER_CS was commandeered as a
-    ## 64-bit code selector. The next boot application will set up their own
+    ## Perform a long jump to get to long mode. A long mode GDT entry was set
+    ## up for this purpose. The next boot application will set up their own
     ## GDT, so use of this selector is short lived.
     ##
 
-movl    $TestLoaderFunction, %edx
-    ljmp    $USER_CS, $LongModeCode
+    ljmp    $KERNEL64_TRANSITION_CS, $LongModeCode
 
 LongModeCode:
 .code64
 
     ##
-    ## Wow, long mode. Call the next application.
+    ## Wow, long mode. Save the GDT and IDT because who knows what sort of mess
+    ## the next application will get into.
     ##
 
-    callq   *%rdx
+    subq    $32, %rsp               # Make (aligned) space on the stack.
+    sidt    16(%rsp)                # Save the IDT.
+    sgdt    (%rsp)                  # Save the GDT.
+
+    ##
+    ## Off to adventure time with the next boot application.
+    ##
+
+    callq   *%rdx                   # Away we go.
+
+    ##
+    ## Back from the adventure. Restore the old structures.
+    ##
+
+    lgdt    (%rsp)                  # Restore the GDT.
+    lidt    16(%rsp)                # Restore the IDT.
+    addq    $32, %rsp               # Pop that stuff off the stack.
 
     ##
     ## Perform a far return, which pops a return RIP and CS. This will switch
     ## things back to 32-bit mode.
     ##
 
-    retf
+    retfq
 
     ## TODO: Remove this test function
 TestLoaderFunction:
@@ -159,6 +177,17 @@ ProtectedModeReturn:
     movl    %cr0, %ecx              # Get CR0.
     andl    $~CR0_PAGING_ENABLE, %ecx   # Remove paging enable bit.
     movl    %ecx, %cr0              # Save to disable paging.
+
+    ##
+    ## Disable long mode.
+    ##
+
+    movl    %eax, %edi              # Save return value from boot application.
+    movl    $X86_MSR_EFER, %ecx     # Get EFER as MSR register.
+    rdmsr                           # Read it.
+    andl    $~EFER_LONG_MODE_ENABLE, %eax    # Disable long mode.
+    wrmsr                           # Write it.
+    movl    %edi, %eax              # Restore return value to eax.
 
     ##
     ## Restore things and return.

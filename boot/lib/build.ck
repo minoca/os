@@ -25,7 +25,7 @@ Environment:
 
 --*/
 
-from menv import addConfig, compiledSources, mconfig, staticLibrary;
+from menv import addConfig, compiledSources, mconfig, kernelLibrary;
 
 function build() {
     var arch = mconfig.arch;
@@ -146,7 +146,7 @@ function build() {
         "sources_config": sourcesConfig
     };
 
-    entries += staticLibrary(efiLib);
+    entries += kernelLibrary(efiLib);
 
     //
     // On PC machines, build the BIOS library as well.
@@ -160,7 +160,7 @@ function build() {
             "includes": includes
         };
 
-        entries += staticLibrary(pcatLib);
+        entries += kernelLibrary(pcatLib);
 
         //
         // Also build the 32-bit version of the PCAT library in 64-bit mode
@@ -178,7 +178,7 @@ function build() {
                 "prefix": "x6432"
             };
 
-            entries += staticLibrary(pcat32Lib);
+            entries += kernelLibrary(pcat32Lib);
         }
     }
 

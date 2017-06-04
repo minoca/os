@@ -25,7 +25,7 @@ Environment:
 
 --*/
 
-from menv import binplace, executable, uefiFwvol, flattenedBinary;
+from menv import binplace, staticApplication, uefiFwvol, flattenedBinary;
 
 function build() {
     var commonLibs;
@@ -37,7 +37,6 @@ function build() {
     var includes;
     var libs;
     var linkConfig;
-    var link_ldflags;
     var plat = "bbone";
     var platfw;
     var sources;
@@ -72,14 +71,8 @@ function build() {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    link_ldflags = [
-        "-nostdlib",
-        "-Wl,--no-wchar-size-warning",
-        "-static"
-    ];
-
     linkConfig = {
-        "LDFLAGS": link_ldflags
+        "LDFLAGS": ["-Wl,--no-wchar-size-warning"],
     };
 
     commonLibs = [
@@ -110,7 +103,7 @@ function build() {
         "config": linkConfig
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
 
     //
     // Build the firmware volume.

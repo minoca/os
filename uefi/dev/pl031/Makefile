@@ -30,7 +30,7 @@ include $(SRCDIR)/../common
 
 BINARY = pl031.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = pl031.o     \
 

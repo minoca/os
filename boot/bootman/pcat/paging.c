@@ -364,7 +364,7 @@ Return Value:
             ASSERT(NewPage == (UINTN)NewPage);
 
             RtlZeroMemory((PVOID)(UINTN)NewPage, PAGE_SIZE);
-            Table[EntryIndex] = X86_ENTRY_PTE(NewPage) |
+            Table[EntryIndex] = X86_ENTRY_PTE(NewPage >> PAGE_SHIFT) |
                                 X86_PTE_PRESENT |
                                 X86_PTE_WRITABLE;
         }
@@ -372,7 +372,7 @@ Return Value:
         ASSERT(X86_PTE_ENTRY(Table[EntryIndex]) ==
                (UINTN)(X86_PTE_ENTRY(Table[EntryIndex])));
 
-        Table = (PPTE)(UINTN)(X86_PTE_ENTRY(Table[EntryIndex]));
+        Table = (PPTE)(UINTN)(X86_PTE_ENTRY(Table[EntryIndex]) << PAGE_SHIFT);
         Shift -= X64_PTE_BITS;
     }
 

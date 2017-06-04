@@ -25,8 +25,8 @@ Environment:
 
 --*/
 
-from menv import addConfig, binplace, executable, uefiFwvol, flattenedBinary,
-    mconfig, staticLibrary;
+from menv import addConfig, binplace, staticApplication, uefiFwvol,
+    flattenedBinary, mconfig, kernelLibrary;
 
 function build() {
     var commonLibs;
@@ -43,7 +43,6 @@ function build() {
     var libfwTarget;
     var libs;
     var linkConfig;
-    var linkLdflags;
     var msetupFlags;
     var plat = "panda";
     var platfw;
@@ -84,14 +83,8 @@ function build() {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    linkLdflags = [
-        "-nostdlib",
-        "-Wl,--no-wchar-size-warning",
-        "-static"
-    ];
-
     linkConfig = {
-        "LDFLAGS": linkLdflags
+        "LDFLAGS": ["-Wl,--no-wchar-size-warning"]
     };
 
     platfw = plat + "fw";
@@ -126,7 +119,7 @@ function build() {
         "sources_config": sourcesConfig
     };
 
-    entries = staticLibrary(fwLib);
+    entries = kernelLibrary(fwLib);
     elf = {
         "label": platfw + ".elf",
         "inputs": libs + ["uefi/core:emptyrd"],
@@ -136,7 +129,7 @@ function build() {
         "config": linkConfig
     };
 
-    entries += executable(elf);
+    entries += staticApplication(elf);
     usbElf = {
         "label": platfwUsb + ".elf",
         "inputs": ["ramdisk.S"] + libs,
@@ -146,7 +139,7 @@ function build() {
         "config": linkConfig
     };
 
-    entries += executable(usbElf);
+    entries += staticApplication(usbElf);
 
     //
     // Build the firmware volume.

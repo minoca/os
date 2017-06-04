@@ -27,7 +27,7 @@ Environment:
 
 --*/
 
-from menv import application, mconfig;
+from menv import staticApplication, mconfig;
 
 function build() {
     var arch = mconfig.arch;
@@ -73,15 +73,11 @@ function build() {
     ];
 
     sourcesConfig = {
-        "CFLAGS": ["-fshort-wchar"],
+        "CFLAGS": ["-fshort-wchar", "$KERNEL_CFLAGS"],
     };
 
-    linkLdflags = [
-        "-nostdlib",
-        "-pie",
-        "-static"
-    ];
-
+    linkLdflags = ["-pie"];
+    efiLinkLdflags = ["-pie"];
     efiLibs = [
         "boot/lib:bootefi"
     ];
@@ -104,10 +100,7 @@ function build() {
             ];
         }
 
-        efiLinkLdflags = linkLdflags + [
-            "-Wl,--no-wchar-size-warning"
-        ];
-
+        efiLinkLdflags += ["-Wl,--no-wchar-size-warning"];
         efiLibs += [
             "kernel:archboot",
         ];
@@ -115,7 +108,6 @@ function build() {
         baseRtl = "lib/rtl/base:basertlb";
 
     } else if (arch == "x86") {
-        efiLinkLdflags = linkLdflags;
         commonSources += [
             "x86/archsupc.c",
             "x86/dbgparch.c",
@@ -125,7 +117,6 @@ function build() {
         ];
 
     } else if (arch == "x64") {
-        efiLinkLdflags = linkLdflags;
         commonSources += [
             "x86/archsupc.c",
             "x86/dbgparch.c",
@@ -173,7 +164,7 @@ function build() {
         "binplace": "bin"
     };
 
-    entries = application(efiApp);
+    entries = staticApplication(efiApp);
 
     //
     // On PC machines, build the BIOS loader as well.
@@ -192,7 +183,7 @@ function build() {
             "binplace": "bin"
         };
 
-        entries += application(pcatApp);
+        entries += staticApplication(pcatApp);
     }
 
     return entries;

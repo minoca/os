@@ -26,7 +26,7 @@ Environment:
 
 --*/
 
-from menv import binplace, executable, uefiFwvol, flattenedBinary;
+from menv import binplace, staticApplication, uefiFwvol, flattenedBinary;
 
 function build() {
     var commonLibs;
@@ -41,7 +41,6 @@ function build() {
     var includes;
     var libs;
     var linkConfig;
-    var linkLdflags;
     var plat = "veyron";
     var platfw;
     var sources;
@@ -84,15 +83,8 @@ function build() {
     // specific and unaligned place (hence the nmagic).
     //
 
-    linkLdflags = [
-        "-nostdlib",
-        "-Wl,--no-wchar-size-warning",
-        "-static",
-        "-Wl,--nmagic"
-    ];
-
     linkConfig = {
-        "LDFLAGS": linkLdflags
+        "LDFLAGS": ["-Wl,--no-wchar-size-warning", "-Wl,--nmagic"]
     };
 
     commonLibs = [
@@ -125,7 +117,7 @@ function build() {
         "config": linkConfig
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
 
     //
     // Build the firmware volume.

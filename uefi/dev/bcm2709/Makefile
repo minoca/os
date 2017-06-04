@@ -29,7 +29,7 @@ include $(SRCDIR)/../common
 
 BINARY = bcm2709.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = gpio.o     \
        init.o     \

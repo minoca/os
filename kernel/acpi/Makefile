@@ -29,7 +29,7 @@
 
 BINARY = acpi.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = tables.o   \
 

@@ -29,7 +29,7 @@ include $(SRCDIR)/../common
 
 BINARY = omap4.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = clock.o     \
 

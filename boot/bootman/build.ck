@@ -27,7 +27,7 @@ Environment:
 
 --*/
 
-from menv import application, binplace, executable, flattenedBinary, mconfig;
+from menv import binplace, staticApplication, flattenedBinary, mconfig;
 
 function build() {
     var arch = mconfig.arch;
@@ -44,7 +44,7 @@ function build() {
     var includes;
     var linkerScript;
     var pcatApp;
-    var pcatConfig;
+    var pcatConfig = {};
     var pcatLibs;
     var pcatSources;
     var sourcesConfig;
@@ -79,11 +79,7 @@ function build() {
     };
 
     efiConfig = {
-        "LDFLAGS": ["-nostdlib", "-pie", "-static"]
-    };
-
-    pcatConfig = {
-        "LDFLAGS": ["-nostdlib", "-static"]
+        "LDFLAGS": ["-pie"]
     };
 
     efiLibs = [
@@ -133,7 +129,7 @@ function build() {
         "linker_script": linkerScript
     };
 
-    entries = application(efiApp);
+    entries = staticApplication(efiApp);
 
     //
     // Convert the ELF image into an EFI PE image.
@@ -165,7 +161,7 @@ function build() {
     if ((arch == "x86") || (arch == "x64")) {
         if (arch == "x64") {
             x6432 = "32";
-            pcatConfig["LDFLAGS"] += ["-m32"];
+            pcatConfig["LDFLAGS"] = ["-m32"];
             sourcesConfig["CPPFLAGS"] = ["-m32"];
         }
 
@@ -194,7 +190,7 @@ function build() {
             "binplace": "bin"
         };
 
-        entries += executable(pcatApp);
+        entries += staticApplication(pcatApp);
 
         //
         // Flatten the image so the VBR can load it directly into memory.

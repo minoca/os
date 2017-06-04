@@ -29,7 +29,7 @@ include $(SRCDIR)/../common
 
 BINARY = gt.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = gt.o     \
        gta.o    \

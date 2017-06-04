@@ -64,12 +64,6 @@ BmpFwTransferTo64BitApplication (
 //
 
 //
-// Reach around and grab at the GDT.
-//
-
-extern GDT_ENTRY BoGdt[GDT_ENTRIES];
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -132,7 +126,7 @@ Return Value:
 
         Eax = X86_CPUID_EXTENDED_INFORMATION;
         ArCpuid(&Eax, &Ebx, &Ecx, &Edx);
-        if ((Eax & X86_CPUID_EXTENDED_INFORMATION_EDX_LONG_MODE) != 0) {
+        if ((Edx & X86_CPUID_EXTENDED_INFORMATION_EDX_LONG_MODE) != 0) {
             CanDoIt = TRUE;
         }
     }
@@ -142,14 +136,6 @@ Return Value:
         return STATUS_NOT_SUPPORTED;
     }
 
-    //
-    // Commandeer the USER_CS descriptor as a long mode code segment
-    // descriptor. The next boot application will set up their own GDT, so this
-    // is very short lived.
-    //
-
-    BoGdt[USER_CS / sizeof(GDT_ENTRY)] = BoGdt[KERNEL_CS / sizeof(GDT_ENTRY)];
-    BoGdt[USER_CS / sizeof(GDT_ENTRY)].Access |= GDT_ACCESS_LONG_MODE;
     Result = BmpFwTransferTo64BitApplication(
                                            Parameters,
                                            EntryPoint,

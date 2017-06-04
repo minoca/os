@@ -26,7 +26,7 @@ Environment:
 
 --*/
 
-from menv import staticLibrary;
+from menv import kernelLibrary, staticLibrary;
 
 function build() {
     var buildLib;
@@ -57,7 +57,7 @@ function build() {
         "prefix": "build"
     };
 
-    entries = staticLibrary(lib);
+    entries = kernelLibrary(lib);
     entries += staticLibrary(buildLib);
     return entries;
 }

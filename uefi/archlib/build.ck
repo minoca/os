@@ -25,7 +25,7 @@ Environment:
 
 --*/
 
-from menv import mconfig, staticLibrary;
+from menv import mconfig, kernelLibrary;
 
 function build() {
     var arch = mconfig.arch;
@@ -88,7 +88,7 @@ function build() {
         "includes": includes
     };
 
-    entries = staticLibrary(lib);
+    entries = kernelLibrary(lib);
     return entries;
 }
 

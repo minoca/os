@@ -30,7 +30,7 @@ include $(SRCDIR)/../common
 
 BINARY = omapuart.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = omapuart.o     \
 

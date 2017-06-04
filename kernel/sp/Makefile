@@ -28,7 +28,7 @@
 
 BINARY = sp.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = info.o \
        profiler.o \

@@ -25,7 +25,7 @@ Environment:
 
 --*/
 
-from menv import staticLibrary;
+from menv import kernelLibrary;
 
 function build() {
     var entries;
@@ -63,7 +63,7 @@ function build() {
         "includes": includes
     };
 
-    entries = staticLibrary(lib);
+    entries = kernelLibrary(lib);
     return entries;
 }
 

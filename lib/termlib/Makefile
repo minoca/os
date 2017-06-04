@@ -27,7 +27,7 @@
 
 BINARY = termlib.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 include $(SRCDIR)/sources
 

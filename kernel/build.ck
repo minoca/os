@@ -25,7 +25,7 @@ Environment:
 
 --*/
 
-from menv import staticLibrary, copy, driver, createVersionHeader, mconfig;
+from menv import kernelLibrary, copy, driver, createVersionHeader, mconfig;
 
 function build() {
     var arch = mconfig.arch;
@@ -124,7 +124,7 @@ function build() {
 
     entries = driver(kernel);
     if (bootArchSources) {
-        entries += staticLibrary(bootArchLib);
+        entries += kernelLibrary(bootArchLib);
     }
 
     //

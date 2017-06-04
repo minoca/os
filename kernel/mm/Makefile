@@ -30,7 +30,7 @@
 
 BINARY = mm.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = block.o    \
        imgsec.o   \

@@ -27,7 +27,7 @@
 
 BINARY = bconflib.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 include $(SRCDIR)/../sources
 

@@ -29,7 +29,7 @@ include $(SRCDIR)/../common
 
 BINARY = ns16550.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = ns16550.o     \
 

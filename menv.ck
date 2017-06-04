@@ -468,6 +468,7 @@ Return Value:
     mconfig.cflags = initListFromEnvironment("CFLAGS",
                                              ["-O2", "-Wall", "-Werror"]);
 
+    mconfig.kernelCflags = [];
     mconfig.cppflags = initListFromEnvironment("CPPFLAGS", []);
     mconfig.ldflags = initListFromEnvironment("LDFLAGS", []);
     mconfig.asflags = initListFromEnvironment("ASFLAGS", []);
@@ -585,6 +586,9 @@ Return Value:
     if (archVariant == "x86q") {
         mconfig.cppflags += ["-Wa,-momit-lock-prefix=yes", "-march=i586"];
 
+    } else if (archVariant == "x64") {
+        mconfig.kernelCflags = ["-mno-sse", "-mno-red-zone"];
+
     } else if (archVariant == "armv6") {
         mconfig.cflags += ["-march=armv6zk", "-marm", "-mfpu=vfp"];
     }
@@ -624,6 +628,7 @@ Return Value:
         "IASL": mconfig.iasl,
         "SHELL": mconfig.shell,
         "BASE_CFLAGS": mconfig.cflags,
+        "KERNEL_CFLAGS": mconfig.kernelCflags,
         "BASE_CPPFLAGS": mconfig.cppflags,
         "BASE_LDFLAGS": mconfig.ldflags,
         "BASE_ASFLAGS": mconfig.asflags,
@@ -1241,6 +1246,44 @@ Return Value:
 }
 
 function
+staticApplication (
+    params
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a static application suitable for kernel or firmware
+    environments.
+
+Arguments:
+
+    params - Supplies the entry with inputs filled out.
+
+Return Value:
+
+    Returns the list of the application entry.
+
+--*/
+
+{
+
+    if (!(params.get("sources_config") is Dict)) {
+        params.sources_config = {};
+    }
+
+    if (!(params.sources_config.get("CFLAGS") is List)) {
+        params.sources_config.CFLAGS = [];
+    }
+
+    params.sources_config.CFLAGS += ["$KERNEL_CFLAGS"];
+    addConfig(params, "LDFLAGS", "-static");
+    addConfig(params, "LDFLAGS", "-nostdlib");
+    return executable(params);
+}
+
+function
 sharedLibrary (
     params
     )
@@ -1370,6 +1413,42 @@ Return Value:
     }
 
     return entries;
+}
+
+function
+kernelLibrary (
+    params
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a static library compiled suitably for running within
+    the kernel.
+
+Arguments:
+
+    params - Supplies the entry with inputs filled out.
+
+Return Value:
+
+    Returns the list of the application entry.
+
+--*/
+
+{
+
+    if (!(params.get("sources_config") is Dict)) {
+        params.sources_config = {};
+    }
+
+    if (!(params.sources_config.get("CFLAGS") is List)) {
+        params.sources_config.CFLAGS = [];
+    }
+
+    params.sources_config.CFLAGS += ["$KERNEL_CFLAGS"];
+    return staticLibrary(params);
 }
 
 function
@@ -1636,6 +1715,15 @@ Return Value:
         params.entry = "DriverEntry";
     }
 
+    if (!(params.get("sources_config") is Dict)) {
+        params.sources_config = {};
+    }
+
+    if (!(params.sources_config.get("CFLAGS") is List)) {
+        params.sources_config.CFLAGS = [];
+    }
+
+    params.sources_config.CFLAGS += ["$KERNEL_CFLAGS"];
     params.binplace = "bin";
     soname ?= params.get("label");
     if (soname != "kernel") {

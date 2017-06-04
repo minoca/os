@@ -25,7 +25,8 @@ Environment:
 
 --*/
 
-from menv import application, binplace, executable, flattenedBinary;
+from menv import application, staticApplication, binplace, executable,
+    flattenedBinary;
 
 function build() {
     var bbonefwb;
@@ -37,7 +38,6 @@ function build() {
     var flattened;
     var includes;
     var linkConfig;
-    var linkLdflags;
     var sources;
     var textAddress = "0x402F0408";
 
@@ -58,14 +58,8 @@ function build() {
         "$S/uefi/plat/panda/init"
     ];
 
-    linkLdflags = [
-        "-nostdlib",
-        "-static",
-        "-Wl,-zmax-page-size=1"
-    ];
-
     linkConfig = {
-        "LDFLAGS": linkLdflags
+        "LDFLAGS": ["-Wl,-zmax-page-size=1"]
     };
 
     elf = {
@@ -76,7 +70,7 @@ function build() {
         "config": linkConfig
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
 
     //
     // Flatten the firmware image and add the TI header.

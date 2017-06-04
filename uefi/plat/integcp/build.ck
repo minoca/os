@@ -25,7 +25,7 @@ Environment:
 
 --*/
 
-from menv import addConfig, executable, mconfig, uefiFwvol;
+from menv import addConfig, staticApplication, mconfig, uefiFwvol;
 
 function build() {
     var commonLibs;
@@ -36,7 +36,6 @@ function build() {
     var includes;
     var libs;
     var linkConfig;
-    var linkLdflags;
     var msetupFlags;
     var plat = "integ";
     var ramdiskImage;
@@ -68,14 +67,8 @@ function build() {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    linkLdflags = [
-        "-nostdlib",
-        "-Wl,--no-wchar-size-warning",
-        "-static"
-    ];
-
     linkConfig = {
-        "LDFLAGS": linkLdflags
+        "LDFLAGS": ["-Wl,--no-wchar-size-warning"]
     };
 
     commonLibs = [
@@ -105,7 +98,7 @@ function build() {
         "binplace": "bin"
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
 
     //
     // Build the firmware volume.

@@ -28,7 +28,7 @@
 
 BINARY = emptyrd.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 INCLUDES += $(SRCROOT)/os/uefi/include;.;
 

@@ -28,7 +28,7 @@
 
 BINARY = hlboot.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 INCLUDES += $(SRCDIR)/..;
 

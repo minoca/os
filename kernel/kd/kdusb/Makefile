@@ -27,7 +27,7 @@
 
 BINARY = kdusb.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 INCLUDES += $(SRCROOT)/os/drivers/usb/ehci;
 

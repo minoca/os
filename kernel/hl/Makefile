@@ -32,7 +32,7 @@
 
 BINARY = hl.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = cache.o    \
        calendar.o \

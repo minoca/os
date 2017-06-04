@@ -27,7 +27,7 @@
 
 BINARY = armsup.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 ARMV7_OBJS = archsup.o  \
              archsupc.o \

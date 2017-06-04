@@ -278,7 +278,7 @@ Return Value:
     ArpCreateSegmentDescriptor(GdtEntry,
                                NewThreadPointer,
                                MAX_GDT_LIMIT,
-                               GdtKilobyteGranularity,
+                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
                                GdtDataReadWrite,
                                SEGMENT_PRIVILEGE_USER,
                                FALSE);

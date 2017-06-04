@@ -29,7 +29,7 @@
 
 BINARY = ob.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = handles.o   \
        obapi.o

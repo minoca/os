@@ -28,7 +28,7 @@
 
 BINARY = x86sup.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 X86_OBJS = archsup.o   \
            archsupc.o  \

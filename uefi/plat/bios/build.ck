@@ -26,7 +26,7 @@ Environment:
 
 --*/
 
-from menv import executable, uefiFwvol, flattenedBinary;
+from menv import staticApplication, uefiFwvol, flattenedBinary;
 
 function build() {
     var commonLibs;
@@ -37,8 +37,6 @@ function build() {
     var fwVolume;
     var includes;
     var libs;
-    var linkConfig;
-    var linkLdflags;
     var plat = "bios";
     var platfw;
     var sources;
@@ -69,15 +67,6 @@ function build() {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    linkLdflags = [
-        "-nostdlib",
-        "-static"
-    ];
-
-    linkConfig = {
-        "LDFLAGS": linkLdflags
-    };
-
     commonLibs = [
         "uefi/core:ueficore",
         "kernel/kd:kdboot",
@@ -101,10 +90,9 @@ function build() {
         "inputs": sources + libs,
         "sources_config": sourcesConfig,
         "includes": includes,
-        "config": linkConfig
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
 
     //
     // Build the firmware volume.

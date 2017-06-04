@@ -28,7 +28,7 @@
 
 BINARY = basertl.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 INCLUDES += $(SRCDIR)/..;
 

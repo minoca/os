@@ -26,7 +26,7 @@ Environment:
 
 --*/
 
-from menv import executable, uefiRuntimeFfs;
+from menv import staticApplication, uefiRuntimeFfs;
 
 function build() {
     var elf;
@@ -34,7 +34,6 @@ function build() {
     var includes;
     var libs;
     var linkConfig;
-    var linkLdflags;
     var sources;
     var sourcesConfig;
 
@@ -57,15 +56,8 @@ function build() {
         "CFLAGS": ["-fshort-wchar"],
     };
 
-    linkLdflags = [
-        "-pie",
-        "-nostdlib",
-        "-Wl,--no-wchar-size-warning",
-        "-static"
-    ];
-
     linkConfig = {
-        "LDFLAGS": linkLdflags
+        "LDFLAGS": ["-pie", "-Wl,--no-wchar-size-warning"]
     };
 
     elf = {
@@ -78,7 +70,7 @@ function build() {
         "config": linkConfig
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
     entries += uefiRuntimeFfs("integrt");
     return entries;
 }

@@ -28,7 +28,7 @@
 
 BINARY = armboot.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 ARMV6_OBJS = ../../armv7/sstep.o    \
 

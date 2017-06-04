@@ -27,7 +27,7 @@
 
 BINARY = krtl.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 INCLUDES += $(SRCDIR)/../..;
 VPATH += $(SRCDIR)/..:
@@ -36,6 +36,7 @@ EXTRA_CPPFLAGS += -m32
 
 OBJS = assert.o  \
        kprint.o  \
+       pdouble.o \
 
 include $(SRCROOT)/os/minoca.mk
 

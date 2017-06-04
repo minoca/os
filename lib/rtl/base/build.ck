@@ -26,7 +26,7 @@ Environment:
 
 --*/
 
-from menv import mconfig, staticLibrary;
+from menv import mconfig, kernelLibrary, staticLibrary;
 
 function build() {
     var arch = mconfig.arch;
@@ -185,7 +185,7 @@ function build() {
             "prefix": "intrins"
         };
 
-        entries += staticLibrary(intrinsicsLib);
+        entries += kernelLibrary(intrinsicsLib);
     }
 
     //
@@ -201,7 +201,7 @@ function build() {
             "includes": includes,
         };
 
-        entries += staticLibrary(bootLib);
+        entries += kernelLibrary(bootLib);
     }
 
     //
@@ -214,7 +214,7 @@ function build() {
         "includes": includes,
     };
 
-    entries += staticLibrary(wideLib);
+    entries += kernelLibrary(wideLib);
 
     //
     // Compile the main Rtl base library.
@@ -226,7 +226,7 @@ function build() {
         "includes": includes,
     };
 
-    entries += staticLibrary(baseRtlLib);
+    entries += kernelLibrary(baseRtlLib);
 
     //
     // Compile the build version of the Rtl base library.
@@ -251,7 +251,7 @@ function build() {
             "sources_config": {"CPPFLAGS": ["-m32"]}
         };
 
-        entries += staticLibrary(baseRtl32Lib);
+        entries += kernelLibrary(baseRtl32Lib);
     }
 
     return entries;

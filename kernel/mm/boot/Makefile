@@ -28,7 +28,7 @@
 
 BINARY = mmboot.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = ../mdl.o          \
 

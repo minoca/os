@@ -25,7 +25,7 @@ Environment:
 
 --*/
 
-from menv import executable, uefiFwvol, flattenedBinary;
+from menv import staticApplication, uefiFwvol, flattenedBinary;
 
 function build() {
     var commonLibs;
@@ -37,7 +37,6 @@ function build() {
     var includes;
     var libs;
     var linkConfig;
-    var linkLdflags;
     var plat = "rpi";
     var platfw;
     var sources;
@@ -65,14 +64,8 @@ function build() {
         "CFLAGS": ["-fshort-wchar"]
     };
 
-    linkLdflags = [
-        "-nostdlib",
-        "-Wl,--no-wchar-size-warning",
-        "-static"
-    ];
-
     linkConfig = {
-        "LDFLAGS": linkLdflags
+        "LDFLAGS": ["-Wl,--no-wchar-size-warning"]
     };
 
     commonLibs = [
@@ -105,7 +98,7 @@ function build() {
         "text_address": textAddress
     };
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
 
     //
     // Build the firmware volume.

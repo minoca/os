@@ -28,7 +28,7 @@
 
 BINARY = imn.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 VPATH += $(SRCDIR)/..:
 

@@ -28,7 +28,7 @@ Environment:
 
 --*/
 
-from menv import executable, mconfig, uefiRuntimeFfs;
+from menv import staticApplication, mconfig, uefiRuntimeFfs;
 
 function build() {
     var arch = mconfig.arch;
@@ -59,8 +59,7 @@ function build() {
     };
 
     linkConfig = {
-        "LDFLAGS": ["-pie", "-nostdlib", "-nodefaultlibs",
-                    "-nostartfiles", "-static"]
+        "LDFLAGS": ["-pie", "-nodefaultlibs", "-nostartfiles"]
     };
 
     elf = {
@@ -76,7 +75,7 @@ function build() {
         elf["linker_script"] = "$S/uefi/include/link_arm.x";
     }
 
-    entries = executable(elf);
+    entries = staticApplication(elf);
     entries += uefiRuntimeFfs("rtbase");
     return entries;
 }

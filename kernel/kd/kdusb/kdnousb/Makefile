@@ -28,7 +28,7 @@
 
 BINARY = kdnousb.a
 
-BINARYTYPE = library
+BINARYTYPE = klibrary
 
 OBJS = stubs.o   \
 
