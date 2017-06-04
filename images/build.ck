@@ -31,20 +31,32 @@ function buildImage(name, msetupFlags) {
     var entry;
     var installDeps;
 
-    installDeps = [
-        "apps:all_apps",
-        "apps/posix:skel",
-        "apps/tzcomp:tz_files",
-        "kernel:kernel",
-        "kernel:devmap.set",
-        "kernel:dev2drv.set",
-        "kernel:init.set",
-        "kernel:init.sh",
-        "boot:boot_apps",
-        "drivers:drivers",
-        "uefi:platfw",
-        "apps/setup:build_msetup"
-    ];
+    if (mconfig.arch == "x64") {
+        installDeps = [
+            "boot/bootman:bootman.bin",
+            "boot/fatboot:fatboot.bin",
+            "boot/mbr:mbr.bin",
+            "apps/libc/dynamic:libc",
+            "apps/osbase:libminocaos",
+            "apps/setup:build_msetup"
+        ];
+
+    } else {
+        installDeps = [
+            "apps:all_apps",
+            "apps/posix:skel",
+            "apps/tzcomp:tz_files",
+            "kernel:kernel",
+            "kernel:devmap.set",
+            "kernel:dev2drv.set",
+            "kernel:init.set",
+            "kernel:init.sh",
+            "boot:boot_apps",
+            "drivers:drivers",
+            "uefi:platfw",
+            "apps/setup:build_msetup"
+        ];
+    }
 
     entry = {
         "type": "target",
@@ -121,6 +133,14 @@ function build() {
 
             entries += buildImage("pctiny.img", flags);
         }
+
+    } else if (arch == "x64") {
+        flags = commonImageFlags + [
+            "-lpc64",
+            imageSize
+        ];
+
+        entries += buildImage("pc.img", flags);
 
     } else if (arch == "armv7") {
         flags = commonImageFlags + [imageSize];

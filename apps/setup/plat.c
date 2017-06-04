@@ -152,6 +152,15 @@ SETUP_RECIPE SetupRecipes[] = {
     },
 
     {
+        SetupRecipeInstallX64,
+        "install-x64",
+        "x86-64 Install Image Recipe",
+        NULL,
+        SETUP_RECIPE_FLAG_HIDDEN,
+        "x64"
+    },
+
+    {
         SetupRecipeIntegratorCpRamDisk,
         "integrd",
         "Integrator/CP RAM Disk Recipe",
@@ -212,6 +221,19 @@ SETUP_RECIPE SetupRecipes[] = {
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
         "x86"
+    },
+
+    //
+    // TODO: Remove this once x64 compiles enough to match the x86 builds.
+    //
+
+    {
+        SetupRecipePcTiny,
+        "pc64",
+        "Temporary x86-64 PC target",
+        NULL,
+        SETUP_RECIPE_FLAG_HIDDEN,
+        "x64"
     },
 
     {

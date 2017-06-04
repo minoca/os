@@ -247,6 +247,15 @@ EXTRA_CPPFLAGS_FOR_BUILD := $(EXTRA_CPPFLAGS)
 EXTRA_CFLAGS += -fno-builtin -fno-omit-frame-pointer -g -save-temps=obj \
                 -ffunction-sections -fdata-sections -fvisibility=hidden
 
+##
+## TODO: Fix these flags to only apply to code compiled for kernel mode.
+## Usermode doesn't have this restriction.
+##
+
+ifeq ($(ARCH),x64)
+#EXTRA_CFLAGS += -mno-sse -mno-red-zone
+endif
+
 EXTRA_CFLAGS_FOR_BUILD := $(EXTRA_CFLAGS)
 
 EXTRA_CFLAGS += -fpic

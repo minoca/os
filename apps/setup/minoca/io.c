@@ -221,9 +221,9 @@ Return Value:
     memset(IoHandle, 0, sizeof(SETUP_OS_HANDLE));
     IoHandle->Handle = INVALID_HANDLE;
     if (Destination->Path != NULL) {
-        IoHandle->Handle = (HANDLE)open(Destination->Path,
-                                        Flags,
-                                        CreatePermissions);
+        IoHandle->Handle = (HANDLE)(UINTN)open(Destination->Path,
+                                               Flags,
+                                               CreatePermissions);
 
         if (IoHandle->Handle == (HANDLE)-1) {
             free(IoHandle);
@@ -519,7 +519,7 @@ Return Value:
     struct stat Stat;
 
     IoHandle = Handle;
-    Result = fstat((int)(IoHandle->Handle), &Stat);
+    Result = fstat((int)(UINTN)(IoHandle->Handle), &Stat);
     if (Result != 0) {
         return Result;
     }
@@ -571,7 +571,7 @@ Return Value:
     int Result;
 
     IoHandle = Handle;
-    Result = ftruncate((int)(IoHandle->Handle), NewSize);
+    Result = ftruncate((int)(UINTN)(IoHandle->Handle), NewSize);
     if (Result != 0) {
         return Result;
     }

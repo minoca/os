@@ -148,6 +148,7 @@ typedef enum _SETUP_RECIPE_ID {
     SetupRecipeInstallArmv6,
     SetupRecipeInstallArmv7,
     SetupRecipeInstallX86,
+    SetupRecipeInstallX64,
     SetupRecipeIntegratorCpRamDisk,
     SetupRecipePandaBoard,
     SetupRecipePandaBoardUsb,

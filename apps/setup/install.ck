@@ -43,6 +43,9 @@ var EFI_DEFAULT_APP;
 if (arch == "x86") {
     EFI_DEFAULT_APP = "BOOTIA32.EFI";
 
+} else if (arch == "x64") {
+    EFI_DEFAULT_APP = "BOOTX64.EFI";
+
 } else if ((arch == "armv7") || (arch == "armv6")) {
     EFI_DEFAULT_APP = "BOOTARM.EFI";
 }
@@ -120,7 +123,7 @@ var DriverFiles = [
     "videocon.drv",
 ];
 
-if (arch == "x86") {
+if ((arch == "x86") || (arch == "x64")) {
     DriverFiles += [
         "ahci.drv",
         "ata.drv",
@@ -153,7 +156,7 @@ var BootDrivers = [
     "videocon.drv",
 ];
 
-if (arch == "x86") {
+if ((arch == "x86") || (arch == "x64")) {
     BootDrivers += [
         "ahci.drv",
         "ata.drv",
@@ -186,6 +189,19 @@ var SystemFilesX86Pcat = [
     "bootman.bin",
     "loader",
 ];
+
+//
+// TODO: Remove this once the whole world compiles for x64.
+//
+
+if (arch == "x64") {
+    DriverFiles = [];
+    BootDrivers = [];
+    SystemConfigFiles = [];
+    SystemFiles = [
+        "libminocaos.so.1"
+    ];
+}
 
 //
 // Copy commands
@@ -246,6 +262,14 @@ var TotalCopy = [
     UserSkelCopy,
     UserAppsCopy
 ];
+
+//
+// TODO: Remove this once the whole world compiles for x64.
+//
+
+if (arch == "x64") {
+    TotalBootCopy = [];
+}
 
 //
 // Partition descriptions
@@ -699,7 +723,7 @@ if (plat == "install-armv7") {
 // x86 install image
 //
 
-if (plat == "install-x86") {
+if ((plat == "install-x86") || (plat == "install-x64")) {
 
     //
     // List all the files in the bin directory that are ever installed
@@ -764,6 +788,23 @@ if (plat == "install-x86") {
         "usrinput.drv",
         "videocon.drv",
     ];
+
+    //
+    // TODO: Remove this once the whole world compiles for x64.
+    //
+
+    if (plat == "install-x64") {
+        Files = [
+            "bootman.bin",
+            "fatboot.bin",
+            "install.ck",
+            "libc.so.1",
+            "libcrypt.so.1",
+            "libminocaos.so.1",
+            "loader",
+            "mbr.bin",
+        ];
+    }
 
     Files += [
         "skel/"
@@ -934,9 +975,10 @@ if (plat == "panda-usb") {
 
 //
 // PC (BIOS) image
+// TODO: Remove pc64 once x64 compiles enough to match x86.
 //
 
-if (plat == "pc") {
+if ((plat == "pc") || (plat == "pc64")) {
 
     //
     // Copy the firmware to the system partition for recovery if needed.
@@ -1027,7 +1069,6 @@ if (plat == "pc-tiny") {
         "videocon.drv",
         "ata.drv",
         "e100.drv",
-        "e1000.drv",
         "i8042.drv",
     ];
 

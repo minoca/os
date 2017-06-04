@@ -74,6 +74,27 @@ $(BINROOT)/pctiny.img: $(INSTALL_IMAGE)
 endif
 
 ##
+## Build x64 images.
+## TODO: Set platform back to pc and add pcefi once x64 compiles to match x86.
+##
+
+ifeq (x64, $(ARCH)$(VARIANT))
+
+IMAGES += $(BINROOT)/pc.img \
+
+$(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
+	@echo Building - $(notdir $@)
+	@mkdir -p $(BINROOT)/apps
+	@cd $(BINROOT) && $(MSETUP) -ql install-x64 -i.. -d $@ $(MSETUP_IMAGE_SIZE)
+
+$(BINROOT)/pc.img: $(INSTALL_IMAGE)
+	@echo Building - $(notdir $@)
+	@cd $(BINROOT) && $(MSETUP) -ql pc64 -i $< $(MSETUP_DEBUG) -d $@ \
+	    $(MSETUP_IMAGE_SIZE)
+
+endif
+
+##
 ## Build x86 Quark images. Debugging is currently disabled on Galileo since the
 ## headphones UART is used for the console.
 ##
