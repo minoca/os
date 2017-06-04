@@ -293,7 +293,9 @@ Return Value:
     //
 
     RtlZeroMemory(&BoLoaderModuleBuffer, sizeof(BoLoaderModuleBuffer));
-    LoaderModuleNameLength = RtlStringLength(Parameters->ApplicationName) + 1;
+    LoaderModuleNameLength =
+              RtlStringLength((PVOID)(UINTN)(Parameters->ApplicationName)) + 1;
+
     if (LoaderModuleNameLength > LOADER_BINARY_NAME_MAX_SIZE) {
         LoaderModuleNameLength = LOADER_BINARY_NAME_MAX_SIZE;
     }
@@ -303,10 +305,12 @@ Return Value:
                                   (ANYSIZE_ARRAY * sizeof(CHAR));
 
     RtlStringCopy(LoaderModule->BinaryName,
-                  Parameters->ApplicationName,
+                  (PVOID)(UINTN)(Parameters->ApplicationName),
                   LoaderModuleNameLength);
 
-    LoaderModule->LowestAddress = Parameters->ApplicationLowestAddress;
+    LoaderModule->LowestAddress =
+                          (PVOID)(UINTN)(Parameters->ApplicationLowestAddress);
+
     LoaderModule->Size = Parameters->ApplicationSize;
     BoProductName = LOADER_NAME;
     if ((BoForceDebug != FALSE) ||
@@ -358,10 +362,10 @@ Return Value:
     //
 
     AlignedLoaderStart = (PVOID)(UINTN)ALIGN_RANGE_DOWN(
-                                 (UINTN)(Parameters->ApplicationLowestAddress),
-                                 PageSize);
+                                          Parameters->ApplicationLowestAddress,
+                                          PageSize);
 
-    PageOffset = (UINTN)(Parameters->ApplicationLowestAddress) -
+    PageOffset = Parameters->ApplicationLowestAddress -
                  (UINTN)AlignedLoaderStart;
 
     AlignedLoaderSize = ALIGN_RANGE_UP(Parameters->ApplicationSize + PageOffset,
@@ -400,9 +404,9 @@ Return Value:
     // global).
     //
 
-    StackBottom = (UINTN)Parameters->StackTop - Parameters->StackSize;
+    StackBottom = Parameters->StackTop - Parameters->StackSize;
     StackOutsideImage = TRUE;
-    if ((StackBottom >= (UINTN)Parameters->ApplicationLowestAddress) &&
+    if ((StackBottom >= Parameters->ApplicationLowestAddress) &&
         (Parameters->StackTop <
          Parameters->ApplicationLowestAddress + Parameters->ApplicationSize)) {
 
@@ -411,9 +415,7 @@ Return Value:
 
     if (StackOutsideImage != FALSE) {
         RoundedStackMinimum = ALIGN_RANGE_DOWN(StackBottom, PageSize);
-        RoundedStackMaximum = ALIGN_RANGE_UP((UINTN)Parameters->StackTop,
-                                             PageSize);
-
+        RoundedStackMaximum = ALIGN_RANGE_UP(Parameters->StackTop, PageSize);
         Status = BoMapPhysicalAddress((PVOID)&RoundedStackMinimum,
                                       RoundedStackMinimum,
                                       RoundedStackMaximum - RoundedStackMinimum,
@@ -1243,7 +1245,7 @@ Return Value:
         // the RSDT.
         //
 
-        RsdtTable = (PRSDT)RsdpTable->RsdtAddress;
+        RsdtTable = (PRSDT)(UINTN)RsdpTable->RsdtAddress;
         RsdtTableCount = (RsdtTable->Header.Length -
                           sizeof(DESCRIPTION_HEADER)) / sizeof(ULONG);
 
@@ -1266,9 +1268,9 @@ Return Value:
         //
 
         for (TableIndex = 0; TableIndex < RsdtTableCount; TableIndex += 1) {
-            FadtTable = (PFADT)RsdtTableEntry[TableIndex];
+            FadtTable = (PFADT)(UINTN)RsdtTableEntry[TableIndex];
             if (FadtTable->Header.Signature == FADT_SIGNATURE) {
-                DsdtTable = (PDESCRIPTION_HEADER)FadtTable->DsdtAddress;
+                DsdtTable = (PDESCRIPTION_HEADER)(UINTN)FadtTable->DsdtAddress;
                 if ((DsdtTable != NULL) &&
                     (DsdtTable->Signature == DSDT_SIGNATURE)) {
 
@@ -1424,7 +1426,7 @@ Return Value:
 
         RtlCopyMemory(NewTable, SmbiosTable, sizeof(SMBIOS_ENTRY_POINT));
         RtlCopyMemory(NewTable + sizeof(SMBIOS_ENTRY_POINT),
-                      (PVOID)(SmbiosTable->StructureTableAddress),
+                      (PVOID)(UINTN)(SmbiosTable->StructureTableAddress),
                       SmbiosTable->StructureTableLength);
 
         TableEntry[TableDirectory->TableCount] = NewTable;
@@ -1861,7 +1863,9 @@ Return Value:
     RtlZeroMemory(BootConfiguration, sizeof(BOOT_CONFIGURATION_CONTEXT));
     BootConfiguration->AllocateFunction = BoAllocateMemory;
     BootConfiguration->FreeFunction = BoFreeMemory;
-    BootConfiguration->FileData = Parameters->BootConfigurationFile;
+    BootConfiguration->FileData =
+                             (PVOID)(UINTN)(Parameters->BootConfigurationFile);
+
     BootConfiguration->FileDataSize = Parameters->BootConfigurationFileSize;
     Status = BcInitializeContext(BootConfiguration);
     if (!KSUCCESS(Status)) {

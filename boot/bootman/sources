@@ -34,6 +34,26 @@ BINPLACE = bin
 OBJS     = bootman.o  \
            bootim.o   \
 
+##
+## The boot manager is a 32-bit fish in a 64-bit pond. All of its libraries
+## need to be specially compiled 32-bit versions.
+##
+
+ifeq ($(ARCH),x64)
+
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/boot/x6432/basertlb.a      \
+             $(OBJROOT)/os/lib/rtl/kmode/x6432/krtl.a              \
+             $(OBJROOT)/os/lib/im/x6432/imu.a                      \
+             $(OBJROOT)/os/lib/fatlib/x6432/fat.a                  \
+             $(OBJROOT)/os/lib/basevid/x6432/basevid.a             \
+             $(OBJROOT)/os/lib/bconflib/x6432/bconflib.a           \
+             $(OBJROOT)/os/kernel/kd/boot/x6432/kdboot.a           \
+             $(OBJROOT)/os/kernel/kd/kdusb/kdnousb/x6432/kdnousb.a \
+             $(OBJROOT)/os/kernel/hl/boot/x6432/hlboot.a           \
+             $(OBJROOT)/os/kernel/mm/boot/x6432/mmboot.a           \
+
+else
+
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/boot/basertlb.a      \
              $(OBJROOT)/os/lib/rtl/kmode/krtl.a              \
              $(OBJROOT)/os/lib/im/imu.a                      \
@@ -44,6 +64,8 @@ TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/boot/basertlb.a      \
              $(OBJROOT)/os/kernel/kd/kdusb/kdnousb/kdnousb.a \
              $(OBJROOT)/os/kernel/hl/boot/hlboot.a           \
              $(OBJROOT)/os/kernel/mm/boot/mmboot.a           \
+
+endif
 
 EXTRA_SRC_DIRS = x86
 

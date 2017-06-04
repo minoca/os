@@ -112,6 +112,7 @@ Return Value:
 
 {
 
+    PCSTR ApplicationName;
     INT ApplicationReturn;
     UINTN BaseDifference;
     BOOT_CONFIGURATION_CONTEXT BootConfigurationContext;
@@ -165,7 +166,8 @@ Return Value:
     //
 
     RtlZeroMemory(&BmModuleBuffer, sizeof(BmModuleBuffer));
-    ModuleNameLength = RtlStringLength(Parameters->ApplicationName) + 1;
+    ApplicationName = (PVOID)(UINTN)(Parameters->ApplicationName);
+    ModuleNameLength = RtlStringLength(ApplicationName) + 1;
     if (ModuleNameLength > BOOT_MANAGER_BINARY_NAME_MAX_SIZE) {
         ModuleNameLength = BOOT_MANAGER_BINARY_NAME_MAX_SIZE;
     }
@@ -173,11 +175,10 @@ Return Value:
     DebugModule->StructureSize = sizeof(DEBUG_MODULE) + ModuleNameLength -
                                  (ANYSIZE_ARRAY * sizeof(CHAR));
 
-    RtlStringCopy(DebugModule->BinaryName,
-                  Parameters->ApplicationName,
-                  ModuleNameLength);
+    RtlStringCopy(DebugModule->BinaryName, ApplicationName, ModuleNameLength);
+    DebugModule->LowestAddress =
+                          (PVOID)(UINTN)(Parameters->ApplicationLowestAddress);
 
-    DebugModule->LowestAddress = Parameters->ApplicationLowestAddress;
     DebugModule->Size = Parameters->ApplicationSize;
     BoProductName = BOOT_MANAGER_NAME;
     if (BmDebug != FALSE) {
@@ -297,7 +298,9 @@ Return Value:
     Step += 1;
     RtlZeroMemory(LoaderParameters, sizeof(BOOT_INITIALIZATION_BLOCK));
     LoaderParameters->Version = BOOT_INITIALIZATION_BLOCK_VERSION;
-    LoaderParameters->BootConfigurationFile = BootConfigurationContext.FileData;
+    LoaderParameters->BootConfigurationFile =
+                                    (UINTN)(BootConfigurationContext.FileData);
+
     LoaderParameters->BootConfigurationFileSize =
                                          BootConfigurationContext.FileDataSize;
 
@@ -308,27 +311,33 @@ Return Value:
     LoaderParameters->Flags = Parameters->Flags |
                               BOOT_INITIALIZATION_FLAG_SCREEN_CLEAR;
 
+    if (LoaderImage->Format == ImageElf64) {
+        LoaderParameters->Flags |= BOOT_INITIALIZATION_FLAG_64BIT;
+    }
+
     BaseDifference = LoaderImage->BaseDifference;
 
     //
     // Set the file name and base address of the loader.
     //
 
-    LoaderParameters->ApplicationName =
-                  RtlStringFindCharacterRight(LoaderName, '/', LoaderNameSize);
+    ApplicationName = RtlStringFindCharacterRight(LoaderName,
+                                                  '/',
+                                                  LoaderNameSize);
 
-    if (LoaderParameters->ApplicationName == NULL) {
-        LoaderParameters->ApplicationName = LoaderName;
+    if (ApplicationName == NULL) {
+        ApplicationName = LoaderName;
 
     } else {
-        LoaderParameters->ApplicationName += 1;
+        ApplicationName += 1;
     }
 
+    LoaderParameters->ApplicationName = (UINTN)ApplicationName;
     LoaderParameters->ApplicationLowestAddress =
-                          LoaderImage->PreferredLowestAddress + BaseDifference;
+                   (UINTN)LoaderImage->PreferredLowestAddress + BaseDifference;
 
     LoaderParameters->ApplicationSize = LoaderImage->Size;
-    LoaderParameters->ApplicationArguments = BootEntry->LoaderArguments;
+    LoaderParameters->ApplicationArguments = (UINTN)BootEntry->LoaderArguments;
     Status = BmpFwInitializeBootBlock(LoaderParameters, OsDevice);
     if (!KSUCCESS(Status)) {
         goto MainEnd;
@@ -372,8 +381,8 @@ Return Value:
     //
 
     if (LoaderParameters != NULL) {
-        if (LoaderParameters->ReservedRegions != NULL) {
-            BoFreeMemory(LoaderParameters->ReservedRegions);
+        if (LoaderParameters->ReservedRegions != (UINTN)NULL) {
+            BoFreeMemory((PVOID)(UINTN)(LoaderParameters->ReservedRegions));
         }
 
         BoFreeMemory(LoaderParameters);

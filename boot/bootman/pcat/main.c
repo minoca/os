@@ -127,14 +127,14 @@ Return Value:
     PageSize = MmPageSize();
     RtlZeroMemory(&BmBootBlock, sizeof(BOOT_INITIALIZATION_BLOCK));
     BmBootBlock.Version = BOOT_INITIALIZATION_BLOCK_VERSION;
-    BmBootBlock.StackTop = TopOfStack;
+    BmBootBlock.StackTop = (UINTN)TopOfStack;
     BmBootBlock.StackSize = StackSize;
     BmBootBlock.PartitionOffset = PartitionOffset;
     BmBootBlock.DriveNumber = BootDriveNumber;
-    BmBootBlock.ApplicationName = "bootman";
-    BmBootBlock.ApplicationLowestAddress = &__executable_start;
+    BmBootBlock.ApplicationName = (UINTN)"bootman";
+    BmBootBlock.ApplicationLowestAddress = (UINTN)&__executable_start;
     BmBootBlock.ApplicationSize = (UINTN)&_end - (UINTN)&__executable_start;
-    BmBootBlock.ApplicationArguments = "";
+    BmBootBlock.ApplicationArguments = (UINTN)"";
 
     //
     // Initialize the reserved regions for the image itself and the stack.
@@ -155,7 +155,7 @@ Return Value:
                             BmBootRegions[1].Address;
 
     BmBootRegions[1].Flags = 0;
-    BmBootBlock.ReservedRegions = BmBootRegions;
+    BmBootBlock.ReservedRegions = (UINTN)BmBootRegions;
     BmBootBlock.ReservedRegionCount = BOOT_MANAGER_RESERVED_REGION_COUNT;
 
     //

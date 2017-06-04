@@ -73,6 +73,11 @@ typedef struct _BOOT_BLOCK_DESCRIPTOR_CONTEXT {
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+KSTATUS
+BmpFwCreatePageTables (
+    PBOOT_INITIALIZATION_BLOCK Parameters
+    );
+
 VOID
 BmpFwBootBlockDescriptorIterationRoutine (
     PMEMORY_DESCRIPTOR_LIST DescriptorList,
@@ -150,6 +155,17 @@ Return Value:
     Context.RegionCount = 0;
 
     //
+    // Allocate page tables if transferring to a 64-bit application.
+    //
+
+    if ((Parameters->Flags & BOOT_INITIALIZATION_FLAG_64BIT) != 0) {
+        Status = BmpFwCreatePageTables(Parameters);
+        if (!KSUCCESS(Status)) {
+            goto FwInitializeBootBlockEnd;
+        }
+    }
+
+    //
     // Loop through the descriptors again and mark all the regions used by this
     // and previous boot applications.
     //
@@ -158,7 +174,7 @@ Return Value:
                 BmpFwBootBlockDescriptorIterationRoutine,
                 &Context);
 
-    Parameters->ReservedRegions = Context.RegionArray;
+    Parameters->ReservedRegions = (UINTN)(Context.RegionArray);
     Parameters->ReservedRegionCount = Context.RegionCount;
     FwpPcatGetDiskInformation(OsVolume->DiskHandle,
                               &(Parameters->DriveNumber),
@@ -174,40 +190,6 @@ FwInitializeBootBlockEnd:
     }
 
     return Status;
-}
-
-INT
-BmpFwTransferToBootApplication (
-    PBOOT_INITIALIZATION_BLOCK Parameters,
-    PBOOT_APPLICATION_ENTRY EntryPoint
-    )
-
-/*++
-
-Routine Description:
-
-    This routine transfers control to another boot application.
-
-Arguments:
-
-    Parameters - Supplies a pointer to the initialization block.
-
-    EntryPoint - Supplies tne address of the entry point routine of the new
-        application.
-
-Return Value:
-
-    Returns the integer return value from the application. Often does not
-    return on success.
-
---*/
-
-{
-
-    INT Result;
-
-    Result = EntryPoint(Parameters);
-    return Result;
 }
 
 //

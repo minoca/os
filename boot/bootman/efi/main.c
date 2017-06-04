@@ -110,19 +110,20 @@ Return Value:
 
     RtlZeroMemory(&BmBootBlock, sizeof(BOOT_INITIALIZATION_BLOCK));
     BmBootBlock.Version = BOOT_INITIALIZATION_BLOCK_VERSION;
-    BmBootBlock.EfiImageHandle = &ImageHandle;
-    BmBootBlock.EfiSystemTable = SystemTable;
-    BmBootBlock.ApplicationName = "bootmefi.efi";
+    BmBootBlock.EfiImageHandle = (UINTN)&ImageHandle;
+    BmBootBlock.EfiSystemTable = (UINTN)SystemTable;
+    BmBootBlock.ApplicationName = (UINTN)"bootmefi.efi";
     BmpEfiGetLoadedImageProtocol(ImageHandle,
                                  SystemTable,
                                  &LoadedImage);
 
-    BmBootBlock.ApplicationArguments = "";
+    BmBootBlock.ApplicationArguments = (UINTN)"";
     if (LoadedImage != NULL) {
-        BmBootBlock.ApplicationLowestAddress = LoadedImage->ImageBase;
+        BmBootBlock.ApplicationLowestAddress = (UINTN)LoadedImage->ImageBase;
         BmBootBlock.ApplicationSize = LoadedImage->ImageSize;
         if (LoadedImage->LoadOptionsSize != 0) {
-            BmBootBlock.ApplicationArguments = LoadedImage->LoadOptions;
+            BmBootBlock.ApplicationArguments =
+                                             (UINTN)(LoadedImage->LoadOptions);
         }
     }
 

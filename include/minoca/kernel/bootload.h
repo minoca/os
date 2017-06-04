@@ -33,7 +33,7 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define BOOT_INITIALIZATION_BLOCK_VERSION 3
+#define BOOT_INITIALIZATION_BLOCK_VERSION 4
 
 #define KERNEL_INITIALIZATION_BLOCK_VERSION 4
 
@@ -42,6 +42,7 @@ Author:
 //
 
 #define BOOT_INITIALIZATION_FLAG_SCREEN_CLEAR 0x00000001
+#define BOOT_INITIALIZATION_FLAG_64BIT 0x00000002
 
 //
 // Define the initial size of the memory allocation to hand to the hardware
@@ -87,29 +88,31 @@ Structure Description:
     This structure stores the information passed between the boot manager and
     OS loader or other boot application. Future versions of this structure must
     be backwards compatible as newer boot managers may pass control over to
-    older OS loaders.
+    older OS loaders. Pointers here are saved as 64-bit values because this
+    structure may be passed from a 32-bit boot manager to a 64-bit OS loader.
 
 Members:
 
     Version - Stores the version number of the loader initialization block.
         Set to BOOT_INITIALIZATION_BLOCK_VERSION.
 
-    BootConfigurationFile - Stores a pointer to a buffer containing the
-        contents of the boot configuration file.
-
     BootConfigurationFileSize - Stores the size of the boot configuration file
         buffer in bytes.
 
-    BootEntryId - Stores the identifier of the selected boot entry.
+    BootConfigurationFile - Stores a pointer to a buffer containing the
+        contents of the boot configuration file.
 
     BootEntryFlags - Stores the flags associated with this boot entry. See
         BOOT_ENTRY_FLAG_* definitions.
 
-    ReservedRegions - Stores a pointer to an array of reserved regions of
-        memeory that may or may not be in the firmware memory map.
+    BootEntryId - Stores the identifier of the selected boot entry.
 
     ReservedRegionCount - Stores the number of reserved region structures in
         the array.
+
+    ReservedRegions - Stores a pointer to an array of reserved regions of
+        memeory that may or may not be in the firmware memory map. This array
+        is of type BOOT_RESERVED_REGION.
 
     StackTop - Stores a pointer to the top of the stack.
 
@@ -126,9 +129,6 @@ Members:
         disk to the OS partition if the firmware doesn't support partitions
         natively.
 
-    DriveNumber - Stores the drive number of the OS partition for legacy PC/AT
-        systems.
-
     ApplicationName - Stores a pointer to a string containing the file name of
         the application being launched.
 
@@ -141,6 +141,13 @@ Members:
     ApplicationArguments - Stores a pointer to a null terminated string
         containing the command-line-esque arguments to the application.
 
+    PageDirectory - Stores the address of the top level page table in use.
+
+    PageTables - Stores the address of the page table self map.
+
+    DriveNumber - Stores the drive number of the OS partition for legacy PC/AT
+        systems.
+
     Flags - Stores flags describing the environment state. See
         BOOT_INITIALIZATION_FLAG_* definitions.
 
@@ -148,22 +155,24 @@ Members:
 
 typedef struct _BOOT_INITIALIZATION_BLOCK {
     ULONG Version;
-    PVOID BootConfigurationFile;
     ULONG BootConfigurationFileSize;
-    ULONG BootEntryId;
+    ULONGLONG BootConfigurationFile;
     ULONGLONG BootEntryFlags;
-    PBOOT_RESERVED_REGION ReservedRegions;
+    ULONG BootEntryId;
     ULONG ReservedRegionCount;
-    PVOID StackTop;
-    UINTN StackSize;
-    PVOID EfiImageHandle;
-    PVOID EfiSystemTable;
+    ULONGLONG ReservedRegions;
+    ULONGLONG StackTop;
+    ULONGLONG StackSize;
+    ULONGLONG EfiImageHandle;
+    ULONGLONG EfiSystemTable;
     ULONGLONG PartitionOffset;
+    ULONGLONG ApplicationName;
+    ULONGLONG ApplicationLowestAddress;
+    ULONGLONG ApplicationSize;
+    ULONGLONG ApplicationArguments;
+    ULONGLONG PageDirectory;
+    ULONGLONG PageTables;
     ULONG DriveNumber;
-    PCSTR ApplicationName;
-    PVOID ApplicationLowestAddress;
-    UINTN ApplicationSize;
-    PCSTR ApplicationArguments;
     ULONG Flags;
 } BOOT_INITIALIZATION_BLOCK, *PBOOT_INITIALIZATION_BLOCK;
 

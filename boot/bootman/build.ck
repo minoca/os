@@ -31,15 +31,12 @@ from menv import application, binplace, executable, flattenedBinary, mconfig;
 
 function build() {
     var arch = mconfig.arch;
-    var baseLibs;
+    var baseRtl = "lib/rtl/base:basertl";
     var bootmanPe;
-    var commonLibs;
     var commonSources;
     var efiApp;
-    var efiAppLibs;
+    var efiConfig;
     var efiLibs;
-    var efiLinkConfig;
-    var efiLinkLdflags;
     var efiSources;
     var elfconvConfig;
     var entries;
@@ -47,12 +44,11 @@ function build() {
     var includes;
     var linkerScript;
     var pcatApp;
-    var pcatAppLibs;
+    var pcatConfig;
     var pcatLibs;
-    var pcatLinkConfig;
-    var pcatLinkLdflags;
     var pcatSources;
     var sourcesConfig;
+    var x6432 = "";
 
     commonSources = [
         "bootman.c",
@@ -65,6 +61,7 @@ function build() {
         ":bootim.o",
         "pcat/bootxfr.c",
         "pcat/main.c",
+        "pcat/paging.c"
     ];
 
     efiSources = [
@@ -81,74 +78,57 @@ function build() {
         "CFLAGS": ["-fshort-wchar"],
     };
 
-    efiLinkLdflags = [
-        "-nostdlib",
-        "-pie",
-        "-static",
-    ];
+    efiConfig = {
+        "LDFLAGS": ["-nostdlib", "-pie", "-static"]
+    };
 
-    pcatLinkLdflags = [
-        "-nostdlib",
-        "-static"
-    ];
+    pcatConfig = {
+        "LDFLAGS": ["-nostdlib", "-static"]
+    };
 
     efiLibs = [
-        "boot/lib:bootefi",
-    ];
-
-    if ((arch == "armv7") || (arch == "armv6")) {
-        linkerScript = "$S/uefi/include/link_arm.x";
-        efiLinkLdflags += [
-            "-Wl,--no-wchar-size-warning"
-        ];
-
-        efiLibs = ["kernel:archboot"] + efiLibs;
-
-    } else if (arch == "x86") {
-        linkerScript = "$S/uefi/include/link_x86.x";
-    }
-
-    efiLinkConfig = {
-        "LDFLAGS": efiLinkLdflags
-    };
-
-    pcatLinkConfig = {
-        "LDFLAGS": pcatLinkLdflags
-    };
-
-    //
-    // These base libraries are relied upon by the boot library and so they
-    // must go after the boot library.
-    //
-
-    baseLibs = [
-        "lib/basevid:basevid",
-        "lib/fatlib:fat",
-        "kernel/mm:mmboot",
-        "lib/rtl/kmode:krtl",
-        "lib/rtl/base:basertlb"
-    ];
-
-    commonLibs = [
         "kernel/kd:kdboot",
         "kernel/hl:hlboot",
         "lib/im:imu",
         "lib/bconflib:bconf",
-        "kernel/kd/kdusb:kdnousb"
+        "kernel/kd/kdusb:kdnousb",
+        "boot/lib:bootefi",
+        "lib/basevid:basevid",
+        "lib/fatlib:fat",
+        "kernel/mm:mmboot"
     ];
 
-    pcatLibs = [
-        "boot/lib:bootpcat",
-        "lib/partlib:partlib"
+    if ((arch == "armv7") || (arch == "armv6")) {
+        linkerScript = "$S/uefi/include/link_arm.x";
+        efiConfig["LDFLAGS"] += ["-Wl,--no-wchar-size-warning"];
+        baseRtl = "lib/rtl/base:basertlb";
+        efiLibs += ["kernel:archboot"];
+
+    } else if (arch == "x86") {
+        linkerScript = "$S/uefi/include/link_x86.x";
+        pcatSources += [
+            "pcat/x86/xferc.c"
+        ];
+
+    } else if (arch == "x64") {
+        linkerScript = "$S/uefi/include/link_x64.x";
+        pcatSources += [
+            "pcat/x64/xfera.S",
+            "pcat/x64/xferc.c"
+        ];
+    }
+
+    efiLibs += [
+        baseRtl,
+        "lib/rtl/kmode:krtl"
     ];
 
-    efiAppLibs = commonLibs + efiLibs + baseLibs;
     efiApp = {
         "label": "bootmefi.elf",
-        "inputs": commonSources + efiSources + efiAppLibs,
+        "inputs": commonSources + efiSources + efiLibs,
         "sources_config": sourcesConfig,
         "includes": includes,
-        "config": efiLinkConfig,
+        "config": efiConfig,
         "entry": "BmEfiApplicationMain",
         "linker_script": linkerScript
     };
@@ -176,17 +156,40 @@ function build() {
     entries += binplace(bootmanPe);
 
     //
-    // On PC machines, build the BIOS library as well.
+    // On PC machines, build the BIOS version as well. The boot manager is
+    // 32-bits even on 64-bit machines so that both 32 and 64-bit OS loaders
+    // can be launched. This means that on x64 all the libraries need to be
+    // recompiled as 32-bit libraries.
     //
 
-    if (arch == "x86") {
-        pcatAppLibs = commonLibs + pcatLibs + baseLibs;
+    if ((arch == "x86") || (arch == "x64")) {
+        if (arch == "x64") {
+            x6432 = "32";
+            pcatConfig["LDFLAGS"] += ["-m32"];
+            sourcesConfig["CPPFLAGS"] = ["-m32"];
+        }
+
+        pcatLibs = [
+            "kernel/kd:kdboot" + x6432,
+            "kernel/hl:hlboot" + x6432,
+            "lib/im:imu" + x6432,
+            "lib/bconflib:bconf" + x6432,
+            "kernel/kd/kdusb:kdnousb" + x6432,
+            "boot/lib:bootpcat" + x6432,
+            "lib/partlib:partlib" + x6432,
+            "lib/basevid:basevid" + x6432,
+            "lib/fatlib:fat" + x6432,
+            "kernel/mm:mmboot" + x6432,
+            "lib/rtl/base:basertl" + x6432,
+            "lib/rtl/kmode:krtl" + x6432
+        ];
+
         pcatApp = {
             "label": "bootman.elf",
-            "inputs": pcatSources + pcatAppLibs,
+            "inputs": pcatSources + pcatLibs,
             "sources_config": sourcesConfig,
             "includes": includes,
-            "config": pcatLinkConfig,
+            "config": pcatConfig,
             "text_address": "0x100000",
             "binplace": "bin"
         };

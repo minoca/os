@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -9,16 +9,16 @@ Copyright (c) 2014 Minoca Corp.
 
 Module Name:
 
-    bootxfr.c
+    xferc.c
 
 Abstract:
 
-    This module implements support for transition between the boot manager and
-    another boot application.
+    This module implements the trampoline that transfers control to another
+    32-bit boot application.
 
 Author:
 
-    Evan Green 24-Feb-2014
+    Evan Green 31-May-2017
 
 Environment:
 
@@ -31,11 +31,13 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include <minoca/uefi/uefi.h>
 #include "firmware.h"
 #include "bootlib.h"
-#include "efisup.h"
-#include "bootman.h"
+#include "../../bootman.h"
+
+//
+// --------------------------------------------------------------------- Macros
+//
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -56,46 +58,6 @@ Environment:
 //
 // ------------------------------------------------------------------ Functions
 //
-
-KSTATUS
-BmpFwInitializeBootBlock (
-    PBOOT_INITIALIZATION_BLOCK Parameters,
-    PBOOT_VOLUME OsVolume
-    )
-
-/*++
-
-Routine Description:
-
-    This routine initializes the boot initialization block that is passed when
-    control is handed off to the next boot application.
-
-Arguments:
-
-    Parameters - Supplies a pointer to the boot initialization block.
-
-    OsVolume - Supplies a pointer to the open volume containing the application
-        to be launched.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    //
-    // All memory regions are reflected in the firmware memory map, so there's
-    // no need to set up the reserved region array. Save pointers to what EFI
-    // passed this application. Note that the image handle type is a pointer to
-    // and EFI image handle, in case EFI ever changes the size of an EFI_HANDLE.
-    //
-
-    Parameters->EfiImageHandle = (UINTN)&BoEfiImageHandle;
-    Parameters->EfiSystemTable = (UINTN)BoEfiSystemTable;
-    return STATUS_SUCCESS;
-}
 
 INT
 BmpFwTransferToBootApplication (
@@ -127,9 +89,15 @@ Return Value:
 
     INT Result;
 
-    BopEfiRestoreFirmwareContext();
+    if ((Parameters->Flags & BOOT_INITIALIZATION_FLAG_64BIT) != 0) {
+        FwPrintString(0,
+                      0,
+                      "Cannot launch 64-bit loader with 32-bit boot manager");
+
+        return STATUS_NOT_CONFIGURED;
+    }
+
     Result = EntryPoint(Parameters);
-    BopEfiRestoreApplicationContext();
     return Result;
 }
 
