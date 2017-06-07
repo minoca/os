@@ -2297,7 +2297,7 @@ CALENDAR_TEST TestCalendarCase[] = {
 DATE_FORMAT_TEST TestDateFormatCase[] = {
     {
      {1968, 9, 26, 17, 23, 58, 59, 6, 299, 1, -7 * 3600, "PDT"},
-     198,
+     197,
      EXHAUSTIVE_DATE_FORMAT,
      "Sat Saturday Oct October Sat Oct 26 17:23:58 1968 19 26 10/26/68 26 "
      "1968-10-26 68 1968 Oct 17 05 300 10 23 PM pm 05:23:58 PM 17:23 58 "
@@ -2305,7 +2305,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
     },
     {
      {2006, 3, 1, 18, 1, 2, 3, 6, 90, 0, -8 * 3600, "PST"},
-     196,
+     195,
      EXHAUSTIVE_DATE_FORMAT,
      "Sat Saturday Apr April Sat Apr  1 18:01:02 2006 20 01 04/01/06  1 "
      "2006-04-01 06 2006 Apr 18 06 091 04 01 PM pm 06:01:02 PM 18:01 02 "
@@ -2313,7 +2313,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
     },
     {
      {5678, 0, 1, 1, 1, 2, 3, 6, 0, 0, -8 * 3600, "PST"},
-     198,
+     197,
      EXHAUSTIVE_DATE_FORMAT,
      "Sat Saturday Jan January Sat Jan  1 01:01:02 5678 56 01 01/01/78  1 "
      "5678-01-01 77 5677 Jan 01 01 001 01 01 AM am 01:01:02 AM 01:01 02 "
@@ -2321,7 +2321,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
     },
     {
      {2010, 0, 1, 1, 1, 2, 3, 5, 0, 0, -8 * 3600, "PST"},
-     196,
+     195,
      EXHAUSTIVE_DATE_FORMAT,
      "Fri Friday Jan January Fri Jan  1 01:01:02 2010 20 01 01/01/10  1 "
      "2010-01-01 09 2009 Jan 01 01 001 01 01 AM am 01:01:02 AM 01:01 02 "
@@ -2329,7 +2329,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
     },
     {
      {2011, 0, 1, 2, 1, 8, 3, 6, 0, 0, -8 * 3600, "PST"},
-     198,
+     197,
      EXHAUSTIVE_DATE_FORMAT,
      "Sat Saturday Jan January Sat Jan  1 02:01:08 2011 20 01 01/01/11  1 "
      "2011-01-01 10 2010 Jan 02 02 001 01 01 AM am 02:01:08 AM 02:01 08 "
@@ -2337,7 +2337,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
     },
     {
      {2012, 0, 1, 2, 13, 16, 37, 0, 0, 0, -8 * 3600, "PST"},
-     196,
+     195,
      EXHAUSTIVE_DATE_FORMAT,
      "Sun Sunday Jan January Sun Jan  1 02:13:16 2012 20 01 01/01/12  1 "
      "2012-01-01 11 2011 Jan 02 02 001 01 13 AM am 02:13:16 AM 02:13 16 "
@@ -2345,7 +2345,7 @@ DATE_FORMAT_TEST TestDateFormatCase[] = {
     },
     {
      {2012, 5, 7, 2, 13, 16, 37, 4, 158, 0, -8 * 3600, "PST"},
-     195,
+     194,
      EXHAUSTIVE_DATE_FORMAT,
      "Thu Thursday Jun June Thu Jun  7 02:13:16 2012 20 07 06/07/12  7 "
      "2012-06-07 12 2012 Jun 02 02 159 06 13 AM am 02:13:16 AM 02:13 16 "
@@ -2509,10 +2509,10 @@ Return Value:
                                    COMPLETE_DATE_FORMAT,
                                    &(CalendarTest->GmtTime));
 
-        if (FormatSize != RtlStringLength(TestTimeBuffer) + 1) {
-            printf("TimeTest: FormatSize %lu, strlen + 1: %d\n",
+        if (FormatSize != RtlStringLength(TestTimeBuffer)) {
+            printf("TimeTest: FormatSize %lu, strlen: %d\n",
                    FormatSize,
-                   RtlStringLength(TestTimeBuffer) + 1);
+                   RtlStringLength(TestTimeBuffer));
 
             Failures += 1;
         }

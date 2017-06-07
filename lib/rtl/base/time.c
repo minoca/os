@@ -406,8 +406,8 @@ Arguments:
 
 Return Value:
 
-    Returns the number of characters written to the output buffer, including
-    the null terminator.
+    Returns the number of characters written to the output buffer, not
+    including the null terminator.
 
 --*/
 
@@ -465,8 +465,6 @@ Return Value:
 
             } else {
                 *String = '\0';
-                String += 1;
-                StringSize -= 1;
                 break;
             }
         }
