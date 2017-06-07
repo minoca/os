@@ -68,10 +68,12 @@ function build() {
         "getopt.ck",
         "io.ck",
         "iobase.ck",
-        "lzfile.ck"
+        "lzfile.ck",
+        "time.ck"
     ];
 
     foreignModules = [
+        "_time",
         "app",
         "bundle",
         "json",

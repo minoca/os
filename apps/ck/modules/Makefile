@@ -25,7 +25,8 @@
 #
 ################################################################################
 
-DIRS = app       \
+DIRS = _time     \
+       app       \
        bundle    \
        lzma      \
        json      \
@@ -39,6 +40,7 @@ CK_MODULES := bufferedio.ck \
               io.ck         \
               iobase.ck     \
               lzfile.ck     \
+              time.ck       \
 
 CK_LIB_PATH := $(BINROOT)/chalk1
 CK_BUILD_LIB_PATH := $(OUTROOT)/tools/lib/chalk1
