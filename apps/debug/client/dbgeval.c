@@ -46,6 +46,17 @@ Environment:
 #include <string.h>
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+#define MALLOC(_x) malloc(_x)
+#define FREE(_x) free(_x)
+
+#define ARM_GENERAL_OFFSET(_Name) FIELD_OFFSET(ARM_GENERAL_REGISTERS, _Name)
+#define X86_GENERAL_OFFSET(_Name) FIELD_OFFSET(X86_GENERAL_REGISTERS, _Name)
+#define X64_GENERAL_OFFSET(_Name) FIELD_OFFSET(X64_GENERAL_REGISTERS, _Name)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -82,6 +93,12 @@ typedef struct _EVALUATION_DATA {
     PSTR String;
 } EVALUATION_DATA, *PEVALUATION_DATA;
 
+typedef struct _REGISTER_NAME {
+    PCSTR Name;
+    ULONG Offset;
+    ULONG Size;
+} REGISTER_NAME, *PREGISTER_NAME;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -111,12 +128,154 @@ EvalGetAddressFromSymbol (
 // -------------------------------------------------------------------- Globals
 //
 
-//
-// --------------------------------------------------------------------- Macros
-//
+REGISTER_NAME DbgArmRegisterLocations[] = {
+    {"r0", ARM_GENERAL_OFFSET(R0), 4},
+    {"r1", ARM_GENERAL_OFFSET(R1), 4},
+    {"r2", ARM_GENERAL_OFFSET(R2), 4},
+    {"r3", ARM_GENERAL_OFFSET(R3), 4},
+    {"r4", ARM_GENERAL_OFFSET(R4), 4},
+    {"r5", ARM_GENERAL_OFFSET(R5), 4},
+    {"r6", ARM_GENERAL_OFFSET(R6), 4},
+    {"r7", ARM_GENERAL_OFFSET(R7), 4},
+    {"r8", ARM_GENERAL_OFFSET(R8), 4},
+    {"r9", ARM_GENERAL_OFFSET(R9), 4},
+    {"r10", ARM_GENERAL_OFFSET(R10), 4},
+    {"sl", ARM_GENERAL_OFFSET(R10), 4},
+    {"r11", ARM_GENERAL_OFFSET(R11Fp), 4},
+    {"fp", ARM_GENERAL_OFFSET(R11Fp), 4},
+    {"r12", ARM_GENERAL_OFFSET(R12Ip), 4},
+    {"ip", ARM_GENERAL_OFFSET(R12Ip), 4},
+    {"r13", ARM_GENERAL_OFFSET(R13Sp), 4},
+    {"sp", ARM_GENERAL_OFFSET(R13Sp), 4},
+    {"r14", ARM_GENERAL_OFFSET(R14Lr), 4},
+    {"lr", ARM_GENERAL_OFFSET(R14Lr), 4},
+    {"r15", ARM_GENERAL_OFFSET(R15Pc), 4},
+    {"pc", ARM_GENERAL_OFFSET(R15Pc), 4},
+    {"cpsr", ARM_GENERAL_OFFSET(Cpsr), 4},
+    {0}
+};
 
-#define MALLOC(_x) malloc(_x)
-#define FREE(_x) free(_x)
+REGISTER_NAME DbgX86RegisterLocations[] = {
+    {"eax", X86_GENERAL_OFFSET(Eax), 4},
+    {"ebx", X86_GENERAL_OFFSET(Ebx), 4},
+    {"ecx", X86_GENERAL_OFFSET(Ecx), 4},
+    {"edx", X86_GENERAL_OFFSET(Edx), 4},
+    {"ebp", X86_GENERAL_OFFSET(Ebp), 4},
+    {"esp", X86_GENERAL_OFFSET(Esp), 4},
+    {"esi", X86_GENERAL_OFFSET(Esi), 4},
+    {"edi", X86_GENERAL_OFFSET(Edi), 4},
+    {"eip", X86_GENERAL_OFFSET(Eip), 4},
+    {"eflags", X86_GENERAL_OFFSET(Eflags), 4},
+    {"ax", X86_GENERAL_OFFSET(Eax), 2},
+    {"bx", X86_GENERAL_OFFSET(Ebx), 2},
+    {"cx", X86_GENERAL_OFFSET(Ecx), 2},
+    {"dx", X86_GENERAL_OFFSET(Edx), 2},
+    {"bp", X86_GENERAL_OFFSET(Ebp), 2},
+    {"sp", X86_GENERAL_OFFSET(Esp), 2},
+    {"si", X86_GENERAL_OFFSET(Esi), 2},
+    {"di", X86_GENERAL_OFFSET(Edi), 2},
+    {"ip", X86_GENERAL_OFFSET(Eip), 2},
+    {"flags", X86_GENERAL_OFFSET(Eflags), 2},
+    {"al", X86_GENERAL_OFFSET(Eax), 1},
+    {"bl", X86_GENERAL_OFFSET(Ebx), 1},
+    {"cl", X86_GENERAL_OFFSET(Ecx), 1},
+    {"dl", X86_GENERAL_OFFSET(Edx), 1},
+    {"ah", X86_GENERAL_OFFSET(Eax) + 1, 1},
+    {"bh", X86_GENERAL_OFFSET(Ebx) + 1, 1},
+    {"ch", X86_GENERAL_OFFSET(Ecx) + 1, 1},
+    {"dh", X86_GENERAL_OFFSET(Edx) + 1, 1},
+    {"cs", X86_GENERAL_OFFSET(Cs), 2},
+    {"ds", X86_GENERAL_OFFSET(Ds), 2},
+    {"es", X86_GENERAL_OFFSET(Es), 2},
+    {"fs", X86_GENERAL_OFFSET(Fs), 2},
+    {"gs", X86_GENERAL_OFFSET(Gs), 2},
+    {"ss", X86_GENERAL_OFFSET(Ss), 2},
+    {0}
+};
+
+REGISTER_NAME DbgX64RegisterLocations[] = {
+    {"rax", X64_GENERAL_OFFSET(Rax), 8},
+    {"rbx", X64_GENERAL_OFFSET(Rbx), 8},
+    {"rcx", X64_GENERAL_OFFSET(Rcx), 8},
+    {"rdx", X64_GENERAL_OFFSET(Rdx), 8},
+    {"rbp", X64_GENERAL_OFFSET(Rbp), 8},
+    {"rsp", X64_GENERAL_OFFSET(Rsp), 8},
+    {"rsi", X64_GENERAL_OFFSET(Rsi), 8},
+    {"rdi", X64_GENERAL_OFFSET(Rdi), 8},
+    {"r8", X64_GENERAL_OFFSET(R8), 8},
+    {"r9", X64_GENERAL_OFFSET(R9), 8},
+    {"r10", X64_GENERAL_OFFSET(R10), 8},
+    {"r11", X64_GENERAL_OFFSET(R11), 8},
+    {"r12", X64_GENERAL_OFFSET(R12), 8},
+    {"r13", X64_GENERAL_OFFSET(R13), 8},
+    {"r14", X64_GENERAL_OFFSET(R14), 8},
+    {"r15", X64_GENERAL_OFFSET(R15), 8},
+    {"rip", X64_GENERAL_OFFSET(Rip), 8},
+    {"rflags", X64_GENERAL_OFFSET(Rflags), 8},
+    {"eax", X64_GENERAL_OFFSET(Rax), 4},
+    {"ebx", X64_GENERAL_OFFSET(Rbx), 4},
+    {"ecx", X64_GENERAL_OFFSET(Rcx), 4},
+    {"edx", X64_GENERAL_OFFSET(Rdx), 4},
+    {"ebp", X64_GENERAL_OFFSET(Rbp), 4},
+    {"esp", X64_GENERAL_OFFSET(Rsp), 4},
+    {"esi", X64_GENERAL_OFFSET(Rsi), 4},
+    {"edi", X64_GENERAL_OFFSET(Rdi), 4},
+    {"r8d", X64_GENERAL_OFFSET(R8), 4},
+    {"r9d", X64_GENERAL_OFFSET(R9), 4},
+    {"r10d", X64_GENERAL_OFFSET(R10), 4},
+    {"r11d", X64_GENERAL_OFFSET(R11), 4},
+    {"r12d", X64_GENERAL_OFFSET(R12), 4},
+    {"r13d", X64_GENERAL_OFFSET(R13), 4},
+    {"r14d", X64_GENERAL_OFFSET(R14), 4},
+    {"r15d", X64_GENERAL_OFFSET(R15), 4},
+    {"eip", X64_GENERAL_OFFSET(Rip), 4},
+    {"eflags", X64_GENERAL_OFFSET(Rflags), 4},
+    {"ax", X64_GENERAL_OFFSET(Rax), 2},
+    {"bx", X64_GENERAL_OFFSET(Rbx), 2},
+    {"cx", X64_GENERAL_OFFSET(Rcx), 2},
+    {"dx", X64_GENERAL_OFFSET(Rdx), 2},
+    {"bp", X64_GENERAL_OFFSET(Rbp), 2},
+    {"sp", X64_GENERAL_OFFSET(Rsp), 2},
+    {"si", X64_GENERAL_OFFSET(Rsi), 2},
+    {"di", X64_GENERAL_OFFSET(Rdi), 2},
+    {"r8w", X64_GENERAL_OFFSET(R8), 2},
+    {"r9w", X64_GENERAL_OFFSET(R9), 2},
+    {"r10w", X64_GENERAL_OFFSET(R10), 2},
+    {"r11w", X64_GENERAL_OFFSET(R11), 2},
+    {"r12w", X64_GENERAL_OFFSET(R12), 2},
+    {"r13w", X64_GENERAL_OFFSET(R13), 2},
+    {"r14w", X64_GENERAL_OFFSET(R14), 2},
+    {"r15w", X64_GENERAL_OFFSET(R15), 2},
+    {"ip", X64_GENERAL_OFFSET(Rip), 2},
+    {"flags", X64_GENERAL_OFFSET(Rflags), 2},
+    {"al", X64_GENERAL_OFFSET(Rax), 1},
+    {"bl", X64_GENERAL_OFFSET(Rbx), 1},
+    {"cl", X64_GENERAL_OFFSET(Rcx), 1},
+    {"dl", X64_GENERAL_OFFSET(Rdx), 1},
+    {"bpl", X64_GENERAL_OFFSET(Rbp), 1},
+    {"spl", X64_GENERAL_OFFSET(Rsp), 1},
+    {"sil", X64_GENERAL_OFFSET(Rsi), 1},
+    {"dil", X64_GENERAL_OFFSET(Rdi), 1},
+    {"r8b", X64_GENERAL_OFFSET(R8), 1},
+    {"r9b", X64_GENERAL_OFFSET(R9), 1},
+    {"r10b", X64_GENERAL_OFFSET(R10), 1},
+    {"r11b", X64_GENERAL_OFFSET(R11), 1},
+    {"r12b", X64_GENERAL_OFFSET(R12), 1},
+    {"r13b", X64_GENERAL_OFFSET(R13), 1},
+    {"r14b", X64_GENERAL_OFFSET(R14), 1},
+    {"r15b", X64_GENERAL_OFFSET(R15), 1},
+    {"ah", X64_GENERAL_OFFSET(Rax) + 1, 1},
+    {"bh", X64_GENERAL_OFFSET(Rbx) + 1, 1},
+    {"ch", X64_GENERAL_OFFSET(Rcx) + 1, 1},
+    {"dh", X64_GENERAL_OFFSET(Rdx) + 1, 1},
+    {"cs", X64_GENERAL_OFFSET(Cs), 2},
+    {"ds", X64_GENERAL_OFFSET(Ds), 2},
+    {"es", X64_GENERAL_OFFSET(Es), 2},
+    {"fs", X64_GENERAL_OFFSET(Fs), 2},
+    {"gs", X64_GENERAL_OFFSET(Gs), 2},
+    {"ss", X64_GENERAL_OFFSET(Ss), 2},
+    {0}
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -391,6 +550,140 @@ EvaluateEnd:
     return Status;
 }
 
+BOOL
+EvalGetRegister (
+    PDEBUGGER_CONTEXT Context,
+    PCSTR Register,
+    PULONGLONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the value of a register by name.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Register - Supplies the name of the register to get.
+
+    Value - Supplies a pointer where the value of the register will be returned.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+{
+
+    PREGISTER_NAME Element;
+    PVOID Source;
+
+    *Value = 0;
+    Element = NULL;
+    Source = &(Context->FrameRegisters);
+    switch (Context->MachineType) {
+    case MACHINE_TYPE_X86:
+        Element = DbgX86RegisterLocations;
+        break;
+
+    case MACHINE_TYPE_ARM:
+        Element = DbgArmRegisterLocations;
+        break;
+
+    case MACHINE_TYPE_X64:
+        Element = DbgX64RegisterLocations;
+        break;
+
+    default:
+        return FALSE;
+    }
+
+    while (Element->Name != NULL) {
+        if (strcasecmp(Register, Element->Name) == 0) {
+            memcpy(Value, Source + Element->Offset, Element->Size);
+            return TRUE;
+        }
+
+        Element += 1;
+    }
+
+    return TRUE;
+}
+
+BOOL
+EvalSetRegister (
+    PDEBUGGER_CONTEXT Context,
+    PCSTR Register,
+    ULONGLONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the value of a register by name.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Register - Supplies the name of the register to get.
+
+    Value - Supplies the value to set in the register.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+{
+
+    PVOID Destination;
+    PREGISTER_NAME Element;
+
+    Element = NULL;
+
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
+
+    Destination = &(Context->CurrentEvent.BreakNotification.Registers);
+    switch (Context->MachineType) {
+    case MACHINE_TYPE_X86:
+        Element = DbgX86RegisterLocations;
+        break;
+
+    case MACHINE_TYPE_ARM:
+        Element = DbgArmRegisterLocations;
+        break;
+
+    case MACHINE_TYPE_X64:
+        Element = DbgX64RegisterLocations;
+        break;
+
+    default:
+        return FALSE;
+    }
+
+    while (Element->Name != NULL) {
+        if (strcasecmp(Register, Element->Name) == 0) {
+            memcpy(Destination + Element->Offset, &Value, Element->Size);
+            return TRUE;
+        }
+
+        Element += 1;
+    }
+
+    return TRUE;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -611,7 +904,6 @@ Return Value:
 
 {
 
-    PARM_GENERAL_REGISTERS ArmRegisters;
     ULONG Base;
     PSTR CurrentPosition;
     UCHAR FirstCharacter;
@@ -619,7 +911,6 @@ Return Value:
     UCHAR SecondCharacter;
     PSTR SymbolEnd;
     UCHAR TerminatorValue;
-    PX86_GENERAL_REGISTERS X86Registers;
 
     Result = 0;
     *Operator = OperatorInvalid;
@@ -722,9 +1013,6 @@ Return Value:
 
         assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
-        X86Registers = &(Context->FrameRegisters.X86);
-        ArmRegisters = &(Context->FrameRegisters.Arm);
-
         //
         // Assume success and set the operator. It will be set back if the
         // lookup fails. terminate the symbol string and attempt to look up the
@@ -734,221 +1022,7 @@ Return Value:
         *Operator = OperatorValue;
         TerminatorValue = *SymbolEnd;
         *SymbolEnd = '\0';
-        switch (Context->MachineType) {
-
-        //
-        // Get x86 registers.
-        //
-
-        case MACHINE_TYPE_X86:
-
-            //
-            // Start with the 32 bit registers.
-            //
-
-            if (strcasecmp(CurrentPosition, "eax") == 0) {
-                *Value = X86Registers->Eax & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "ebx") == 0) {
-                *Value = X86Registers->Ebx & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "ecx") == 0) {
-                *Value = X86Registers->Ecx & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "edx") == 0) {
-                *Value = X86Registers->Edx & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "esi") == 0) {
-                *Value = X86Registers->Esi & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "edi") == 0) {
-                *Value = X86Registers->Edi & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "esp") == 0) {
-                *Value = X86Registers->Esp & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "ebp") == 0) {
-                *Value = X86Registers->Ebp & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "eip") == 0) {
-                *Value = X86Registers->Eip & 0xFFFFFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "eflags") == 0) {
-                *Value = X86Registers->Eflags & 0xFFFFFFFF;
-
-            //
-            // Check the 8 bit registers.
-            //
-
-            } else if (strcasecmp(CurrentPosition, "al") == 0) {
-                *Value = X86Registers->Eax & 0x00FF;
-
-            } else if (strcasecmp(CurrentPosition, "ah") == 0) {
-                *Value = X86Registers->Eax & 0xFF00;
-
-            } else if (strcasecmp(CurrentPosition, "bl") == 0) {
-                *Value = X86Registers->Ebx & 0x00FF;
-
-            } else if (strcasecmp(CurrentPosition, "bh") == 0) {
-                *Value = X86Registers->Ebx & 0xFF00;
-
-            } else if (strcasecmp(CurrentPosition, "cl") == 0) {
-                *Value = X86Registers->Ecx & 0x00FF;
-
-            } else if (strcasecmp(CurrentPosition, "ch") == 0) {
-                *Value = X86Registers->Ecx & 0xFF00;
-
-            } else if (strcasecmp(CurrentPosition, "dl") == 0) {
-                *Value = X86Registers->Edx & 0x00FF;
-
-            } else if (strcasecmp(CurrentPosition, "dh") == 0) {
-                *Value = X86Registers->Edx & 0xFF00;
-
-            //
-            // Finally, check the 16 bit registers.
-            //
-
-            } else if (strcasecmp(CurrentPosition, "ax") == 0) {
-                *Value = X86Registers->Eax & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "bx") == 0) {
-                *Value = X86Registers->Ebx & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "cx") == 0) {
-                *Value = X86Registers->Ecx & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "dx") == 0) {
-                *Value = X86Registers->Edx & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "si") == 0) {
-                *Value = X86Registers->Esi & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "di") == 0) {
-                *Value = X86Registers->Edi & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "sp") == 0) {
-                *Value = X86Registers->Esp & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "bp") == 0) {
-                *Value = X86Registers->Ebp & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "ip") == 0) {
-                *Value = X86Registers->Eip & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "flags") == 0) {
-                *Value = X86Registers->Eflags & 0xFFFF;
-
-            } else if (strcasecmp(CurrentPosition, "cs") == 0) {
-                *Value = X86Registers->Cs;
-
-            } else if (strcasecmp(CurrentPosition, "ds") == 0) {
-                *Value = X86Registers->Ds;
-
-            } else if (strcasecmp(CurrentPosition, "es") == 0) {
-                *Value = X86Registers->Es;
-
-            } else if (strcasecmp(CurrentPosition, "fs") == 0) {
-                *Value = X86Registers->Fs;
-
-            } else if (strcasecmp(CurrentPosition, "gs") == 0) {
-                *Value = X86Registers->Gs;
-
-            } else if (strcasecmp(CurrentPosition, "ss") == 0) {
-                *Value = X86Registers->Ss;
-
-            //
-            // No valid register name could be found. This is a syntax error.
-            //
-
-            } else {
-                *Operator = OperatorInvalid;
-                Result = EINVAL;
-                goto GetNextTokenEnd;
-            }
-
-            break;
-
-        //
-        // Get ARM regisers.
-        //
-
-        case MACHINE_TYPE_ARM:
-            if (strcasecmp(CurrentPosition, "r0") == 0) {
-                *Value = ArmRegisters->R0;
-
-            } else if (strcasecmp(CurrentPosition, "r1") == 0) {
-                *Value = ArmRegisters->R1;
-
-            } else if (strcasecmp(CurrentPosition, "r2") == 0) {
-                *Value = ArmRegisters->R2;
-
-            } else if (strcasecmp(CurrentPosition, "r3") == 0) {
-                *Value = ArmRegisters->R3;
-
-            } else if (strcasecmp(CurrentPosition, "r4") == 0) {
-                *Value = ArmRegisters->R4;
-
-            } else if (strcasecmp(CurrentPosition, "r5") == 0) {
-                *Value = ArmRegisters->R5;
-
-            } else if (strcasecmp(CurrentPosition, "r6") == 0) {
-                *Value = ArmRegisters->R6;
-
-            } else if (strcasecmp(CurrentPosition, "r7") == 0) {
-                *Value = ArmRegisters->R7;
-
-            } else if (strcasecmp(CurrentPosition, "r8") == 0) {
-                *Value = ArmRegisters->R8;
-
-            } else if (strcasecmp(CurrentPosition, "r9") == 0) {
-                *Value = ArmRegisters->R9;
-
-            } else if ((strcasecmp(CurrentPosition, "r10") == 0) ||
-                       (strcasecmp(CurrentPosition, "sl") == 0)) {
-
-                *Value = ArmRegisters->R10;
-
-            } else if ((strcasecmp(CurrentPosition, "r11") == 0) ||
-                       (strcasecmp(CurrentPosition, "fp") == 0)) {
-
-                *Value = ArmRegisters->R11Fp;
-
-            } else if ((strcasecmp(CurrentPosition, "r12") == 0) ||
-                       (strcasecmp(CurrentPosition, "ip") == 0)) {
-
-                *Value = ArmRegisters->R12Ip;
-
-            } else if ((strcasecmp(CurrentPosition, "r13") == 0) ||
-                       (strcasecmp(CurrentPosition, "sp") == 0)) {
-
-                *Value = ArmRegisters->R13Sp;
-
-            } else if ((strcasecmp(CurrentPosition, "r14") == 0) ||
-                       (strcasecmp(CurrentPosition, "lr") == 0)) {
-
-                *Value = ArmRegisters->R14Lr;
-
-            } else if ((strcasecmp(CurrentPosition, "r15") == 0) ||
-                       (strcasecmp(CurrentPosition, "pc") == 0)) {
-
-                *Value = ArmRegisters->R15Pc;
-
-            } else if (strcasecmp(CurrentPosition, "cpsr") == 0) {
-                *Value = ArmRegisters->Cpsr;
-
-            } else {
-                *Operator = OperatorInvalid;
-                Result = EINVAL;
-                goto GetNextTokenEnd;
-            }
-
-            break;
-
-        //
-        // Unknown machine type.
-        //
-
-        default:
+        if (EvalGetRegister(Context, CurrentPosition, Value) == FALSE) {
             *Operator = OperatorInvalid;
             Result = EINVAL;
             goto GetNextTokenEnd;

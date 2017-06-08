@@ -1655,6 +1655,10 @@ Return Value:
 
         break;
 
+    case MACHINE_TYPE_X64:
+        Status = EINVAL;
+        goto StackUnwindEnd;
+
     default:
 
         assert(FALSE);
@@ -1895,6 +1899,10 @@ Return Value:
         PointerSize = sizeof(ULONG);
         break;
 
+    case MACHINE_TYPE_X64:
+        PointerSize = sizeof(ULONGLONG);
+        break;
+
     default:
         PointerSize = 0;
 
@@ -1961,6 +1969,11 @@ Return Value:
 
         break;
 
+    case MACHINE_TYPE_X64:
+        StackValue = Registers->X64.Rsp;
+        FrameValue = Registers->X64.Rbp;
+        break;
+
     default:
 
         assert(FALSE);
@@ -2024,6 +2037,10 @@ Return Value:
         Value = Registers->Arm.R15Pc;
         break;
 
+    case MACHINE_TYPE_X64:
+        Value = Registers->X64.Rip;
+        break;
+
     default:
 
         assert(FALSE);
@@ -2077,6 +2094,10 @@ Return Value:
 
     case MACHINE_TYPE_ARM:
         Registers->Arm.R15Pc = Value;
+        break;
+
+    case MACHINE_TYPE_X64:
+        Registers->X64.Rip = Value;
         break;
 
     default:

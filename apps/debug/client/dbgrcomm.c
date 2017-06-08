@@ -210,6 +210,11 @@ DbgrpLoadFile (
     PULONGLONG Size
     );
 
+VOID
+DbgrpPrintEflags (
+    ULONGLONG Eflags
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -397,6 +402,10 @@ Return Value:
 
     case MACHINE_TYPE_ARM:
         Architecture = "ARM";
+        break;
+
+    case MACHINE_TYPE_X64:
+        Architecture = "x64";
         break;
 
     default:
@@ -621,21 +630,16 @@ Return Value:
 {
 
     PARM_GENERAL_REGISTERS ArmRegisters;
-    ULONG Eflags;
-    ULONG Iopl;
-    ULONGLONG NewValue;
     ULONG Psr;
-    PULONG Register;
     PSTR RegisterString;
     INT Result;
-    PUSHORT ShortRegister;
+    ULONGLONG Value;
     PSTR ValueString;
+    PX64_GENERAL_REGISTERS X64Registers;
     PX86_GENERAL_REGISTERS X86Registers;
 
-    Register = NULL;
     RegisterString = NULL;
     Result = 0;
-    ShortRegister = NULL;
     ValueString = NULL;
     if (ArgumentCount >= 2) {
         RegisterString = Arguments[1];
@@ -647,9 +651,11 @@ Return Value:
     assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
     ArmRegisters = &(Context->CurrentEvent.BreakNotification.Registers.Arm);
+    X64Registers = &(Context->CurrentEvent.BreakNotification.Registers.X64);
     X86Registers = &(Context->CurrentEvent.BreakNotification.Registers.X86);
     if (Context->CurrentFrame != 0) {
         ArmRegisters = &(Context->FrameRegisters.Arm);
+        X64Registers = &(Context->FrameRegisters.X64);
         X86Registers = &(Context->FrameRegisters.X86);
     }
 
@@ -659,151 +665,6 @@ Return Value:
     //
 
     if (RegisterString != NULL) {
-        switch (Context->MachineType) {
-
-        //
-        // Get x86 registers.
-        //
-
-        case MACHINE_TYPE_X86:
-            if (strcasecmp(RegisterString, "eax") == 0) {
-                Register = (PVOID)&(X86Registers->Eax);
-
-            } else if (strcasecmp(RegisterString, "ebx") == 0) {
-                Register = (PVOID)&(X86Registers->Ebx);
-
-            } else if (strcasecmp(RegisterString, "ecx") == 0) {
-                Register = (PVOID)&(X86Registers->Ecx);
-
-            } else if (strcasecmp(RegisterString, "edx") == 0) {
-                Register = (PVOID)&(X86Registers->Edx);
-
-            } else if (strcasecmp(RegisterString, "esi") == 0) {
-                Register = (PVOID)&(X86Registers->Esi);
-
-            } else if (strcasecmp(RegisterString, "edi") == 0) {
-                Register = (PVOID)&(X86Registers->Edi);
-
-            } else if (strcasecmp(RegisterString, "esp") == 0) {
-                Register = (PVOID)&(X86Registers->Esp);
-
-            } else if (strcasecmp(RegisterString, "ebp") == 0) {
-                Register = (PVOID)&(X86Registers->Ebp);
-
-            } else if (strcasecmp(RegisterString, "eip") == 0) {
-                Register = (PVOID)&(X86Registers->Eip);
-
-            } else if (strcasecmp(RegisterString, "eflags") == 0) {
-                Register = (PVOID)&(X86Registers->Eflags);
-
-            } else if (strcasecmp(RegisterString, "cs") == 0) {
-                ShortRegister = &(X86Registers->Cs);
-
-            } else if (strcasecmp(RegisterString, "ds") == 0) {
-                ShortRegister = &(X86Registers->Ds);
-
-            } else if (strcasecmp(RegisterString, "es") == 0) {
-                ShortRegister = &(X86Registers->Es);
-
-            } else if (strcasecmp(RegisterString, "fs") == 0) {
-                ShortRegister = &(X86Registers->Fs);
-
-            } else if (strcasecmp(RegisterString, "gs") == 0) {
-                ShortRegister = &(X86Registers->Gs);
-
-            } else if (strcasecmp(RegisterString, "ss") == 0) {
-                ShortRegister = &(X86Registers->Ss);
-
-            } else {
-                DbgOut("Error: Invalid register \"%s\".\n", RegisterString);
-                goto GetSetRegistersEnd;
-            }
-
-            break;
-
-        //
-        // Get ARM registers.
-        //
-
-        case MACHINE_TYPE_ARM:
-            if (strcasecmp(RegisterString, "r0") == 0) {
-                Register = &(ArmRegisters->R0);
-
-            } else if (strcasecmp(RegisterString, "r1") == 0) {
-                Register = &(ArmRegisters->R1);
-
-            } else if (strcasecmp(RegisterString, "r2") == 0) {
-                Register = &(ArmRegisters->R2);
-
-            } else if (strcasecmp(RegisterString, "r3") == 0) {
-                Register = &(ArmRegisters->R3);
-
-            } else if (strcasecmp(RegisterString, "r4") == 0) {
-                Register = &(ArmRegisters->R4);
-
-            } else if (strcasecmp(RegisterString, "r5") == 0) {
-                Register = &(ArmRegisters->R5);
-
-            } else if (strcasecmp(RegisterString, "r6") == 0) {
-                Register = &(ArmRegisters->R6);
-
-            } else if (strcasecmp(RegisterString, "r7") == 0) {
-                Register = &(ArmRegisters->R7);
-
-            } else if (strcasecmp(RegisterString, "r8") == 0) {
-                Register = &(ArmRegisters->R8);
-
-            } else if (strcasecmp(RegisterString, "r9") == 0) {
-                Register = &(ArmRegisters->R9);
-
-            } else if ((strcasecmp(RegisterString, "r10") == 0) ||
-                       (strcasecmp(RegisterString, "sl") == 0)) {
-
-                Register = &(ArmRegisters->R10);
-
-            } else if ((strcasecmp(RegisterString, "r11") == 0) ||
-                       (strcasecmp(RegisterString, "fp") == 0)) {
-
-                Register = &(ArmRegisters->R11Fp);
-
-            } else if ((strcasecmp(RegisterString, "r12") == 0) ||
-                       (strcasecmp(RegisterString, "ip") == 0)) {
-
-                Register = &(ArmRegisters->R12Ip);
-
-            } else if ((strcasecmp(RegisterString, "r13") == 0) ||
-                       (strcasecmp(RegisterString, "sp") == 0)) {
-
-                Register = &(ArmRegisters->R13Sp);
-
-            } else if ((strcasecmp(RegisterString, "r14") == 0) ||
-                       (strcasecmp(RegisterString, "lr") == 0)) {
-
-                Register = &(ArmRegisters->R14Lr);
-
-            } else if ((strcasecmp(RegisterString, "r15") == 0) ||
-                       (strcasecmp(RegisterString, "pc") == 0)) {
-
-                Register = &(ArmRegisters->R15Pc);
-
-            } else if (strcasecmp(RegisterString, "cpsr") == 0) {
-                Register = &(ArmRegisters->Cpsr);
-
-            } else {
-                DbgOut("Error: Invalid register \"%s\".\n", RegisterString);
-                goto GetSetRegistersEnd;
-            }
-
-            break;
-
-        //
-        // Unknown machine type.
-        //
-
-        default:
-            DbgOut("Error: Unknown machine type %d.\n", Context->MachineType);
-            goto GetSetRegistersEnd;
-        }
 
         //
         // If no other parameter was specified, print out the value of the
@@ -811,7 +672,12 @@ Return Value:
         //
 
         if (ValueString == NULL) {
-            DbgOut("%08x\n", *Register);
+            if (EvalGetRegister(Context, RegisterString, &Value) == FALSE) {
+                DbgOut("Error: Invalid Register \"%s\".\n", RegisterString);
+                goto GetSetRegistersEnd;
+            }
+
+            DbgOut("%0*llx\n", DbgGetTargetPointerSize(Context) * 2, Value);
             goto GetSetRegistersEnd;
 
         //
@@ -825,20 +691,15 @@ Return Value:
                 goto GetSetRegistersEnd;
             }
 
-            Result = DbgEvaluate(Context, ValueString, &NewValue);
+            Result = DbgEvaluate(Context, ValueString, &Value);
             if (Result != 0) {
                 DbgOut("Error: Unable to evaluate \"%s\".\n", ValueString);
                 goto GetSetRegistersEnd;
             }
 
-            if (Register != NULL) {
-                *Register = (ULONG)NewValue;
-
-            } else {
-
-                assert(ShortRegister != NULL);
-
-                *ShortRegister = (USHORT)NewValue;
+            if (EvalSetRegister(Context, RegisterString, Value) == FALSE) {
+                DbgOut("Error: Invalid Register \"%s\".\n", RegisterString);
+                goto GetSetRegistersEnd;
             }
 
             Result = DbgSetRegisters(
@@ -887,79 +748,45 @@ Return Value:
                    X86Registers->Gs,
                    X86Registers->Ss);
 
-            Eflags = (ULONG)X86Registers->Eflags;
-            Iopl = (Eflags & IA32_EFLAG_IOPL_MASK) >> IA32_EFLAG_IOPL_SHIFT;
-            DbgOut("Iopl: %d Flags: ", Iopl);
-            if (((Eflags & IA32_EFLAG_ALWAYS_0) != 0) ||
-                ((Eflags & IA32_EFLAG_ALWAYS_1) != IA32_EFLAG_ALWAYS_1)) {
+            DbgrpPrintEflags(X86Registers->Eflags);
+            DbgOut("\n");
+            break;
 
-                DbgOut("*** WARNING: Invalid Flags!! ***");
-            }
+        case MACHINE_TYPE_X64:
+            DbgOut("rax=%016llx rdx=%016llx rcx=%016llx\n"
+                   "rbx=%016llx rsi=%016llx rdi=%016llx\n"
+                   "r8 =%016llx r9 =%016llx r10=%016llx\n"
+                   "r11=%016llx r12=%016llx r13=%016llx\n"
+                   "r14=%016llx r15=%016llx rbp=%016llx\n"
+                   "rip=%016llx rsp=%016llx\n",
+                   X64Registers->Rax,
+                   X64Registers->Rdx,
+                   X64Registers->Rcx,
+                   X64Registers->Rbx,
+                   X64Registers->Rsi,
+                   X64Registers->Rdi,
+                   X64Registers->R8,
+                   X64Registers->R9,
+                   X64Registers->R10,
+                   X64Registers->R11,
+                   X64Registers->R12,
+                   X64Registers->R13,
+                   X64Registers->R14,
+                   X64Registers->R15,
+                   X64Registers->Rip,
+                   X64Registers->Rsp);
 
-            if ((Eflags & IA32_EFLAG_CF) != 0) {
-                DbgOut("cf ");
-            }
+            DbgOut("cs=%04x ds=%04x es=%04x fs=%04x gs=%04x ss=%04x\n"
+                   "rflags=%016llx ",
+                   X64Registers->Cs,
+                   X64Registers->Ds,
+                   X64Registers->Es,
+                   X64Registers->Fs,
+                   X64Registers->Gs,
+                   X64Registers->Ss,
+                   X64Registers->Rflags);
 
-            if ((Eflags & IA32_EFLAG_PF) != 0) {
-                DbgOut("pf ");
-            }
-
-            if ((Eflags & IA32_EFLAG_AF) != 0) {
-                DbgOut("af ");
-            }
-
-            if ((Eflags & IA32_EFLAG_ZF) != 0) {
-                DbgOut("zf ");
-            }
-
-            if ((Eflags & IA32_EFLAG_SF) != 0) {
-                DbgOut("sf ");
-            }
-
-            if ((Eflags & IA32_EFLAG_TF) != 0) {
-                DbgOut("tf ");
-            }
-
-            if ((Eflags & IA32_EFLAG_IF) != 0) {
-                DbgOut("if ");
-            }
-
-            if ((Eflags & IA32_EFLAG_DF) != 0) {
-                DbgOut("df ");
-            }
-
-            if ((Eflags & IA32_EFLAG_OF) != 0) {
-                DbgOut("of ");
-            }
-
-            if ((Eflags & IA32_EFLAG_NT) != 0) {
-                DbgOut("nt ");
-            }
-
-            if ((Eflags & IA32_EFLAG_RF) != 0) {
-                DbgOut("rf ");
-            }
-
-            if ((Eflags & IA32_EFLAG_VM) != 0) {
-                DbgOut("vm ");
-            }
-
-            if ((Eflags & IA32_EFLAG_AC) != 0) {
-                DbgOut("ac ");
-            }
-
-            if ((Eflags & IA32_EFLAG_VIF) != 0) {
-                DbgOut("vif ");
-            }
-
-            if ((Eflags & IA32_EFLAG_VIP) != 0) {
-                DbgOut("vip ");
-            }
-
-            if ((Eflags & IA32_EFLAG_ID) != 0) {
-                DbgOut("id ");
-            }
-
+            DbgrpPrintEflags(X64Registers->Rflags);
             DbgOut("\n");
             break;
 
@@ -1515,6 +1342,12 @@ Return Value:
                 LocalRegisters.Arm.R11Fp = BasePointer;
             }
 
+            break;
+
+        case MACHINE_TYPE_X64:
+            LocalRegisters.X64.Rip = InstructionPointer;
+            LocalRegisters.X64.Rsp = StackPointer;
+            LocalRegisters.X64.Rbp = BasePointer;
             break;
         }
     }
@@ -6112,7 +5945,9 @@ Return Value:
     ULONG Size;
 
     MemoryAddress = Address;
-    if (Context->MachineType == MACHINE_TYPE_X86) {
+    if ((Context->MachineType == MACHINE_TYPE_X86) ||
+        (Context->MachineType == MACHINE_TYPE_X64)) {
+
         BreakInstruction = X86_BREAK_INSTRUCTION;
         Size = X86_BREAK_INSTRUCTION_LENGTH;
 
@@ -6220,7 +6055,9 @@ Return Value:
     ULONG Size;
 
     MemoryAddress = Address;
-    if (Context->MachineType == MACHINE_TYPE_X86) {
+    if ((Context->MachineType == MACHINE_TYPE_X86) ||
+        (Context->MachineType == MACHINE_TYPE_X64)) {
+
         BreakInstruction = X86_BREAK_INSTRUCTION;
         Size = X86_BREAK_INSTRUCTION_LENGTH;
 
@@ -6368,7 +6205,9 @@ Return Value:
                                 DEBUGGER_BREAK_POINT,
                                 ListEntry);
 
-        if (Context->MachineType == MACHINE_TYPE_X86) {
+        if ((Context->MachineType == MACHINE_TYPE_X86) ||
+            (Context->MachineType == MACHINE_TYPE_X64)) {
+
             Size = X86_BREAK_INSTRUCTION_LENGTH;
 
         } else if (Context->MachineType == MACHINE_TYPE_ARM) {
@@ -6440,7 +6279,9 @@ Return Value:
     //
 
     if (Context->OneTimeBreakValid != FALSE) {
-        if (Context->MachineType == MACHINE_TYPE_X86) {
+        if ((Context->MachineType == MACHINE_TYPE_X86) ||
+            (Context->MachineType == MACHINE_TYPE_X64)) {
+
             Size = X86_BREAK_INSTRUCTION_LENGTH;
 
         } else if (Context->MachineType == MACHINE_TYPE_ARM) {
@@ -6543,6 +6384,25 @@ Return Value:
 
         BreakNotification->InstructionPointer -= Size;
         BreakNotification->Registers.X86.Eip -= Size;
+        for (ByteIndex = sizeof(BreakNotification->InstructionStream) - 1;
+             ByteIndex > 0;
+             ByteIndex -= 1) {
+
+            BreakNotification->InstructionStream[ByteIndex] =
+                           BreakNotification->InstructionStream[ByteIndex - 1];
+        }
+
+        BreakNotification->InstructionStream[0] = (UCHAR)OriginalValue;
+
+    } else if (Context->MachineType == MACHINE_TYPE_X64) {
+        Size = X86_BREAK_INSTRUCTION_LENGTH;
+
+        //
+        // x64 is just like x86.
+        //
+
+        BreakNotification->InstructionPointer -= Size;
+        BreakNotification->Registers.X64.Rip -= Size;
         for (ByteIndex = sizeof(BreakNotification->InstructionStream) - 1;
              ByteIndex > 0;
              ByteIndex -= 1) {
@@ -7904,6 +7764,10 @@ Return Value:
         ImageMachineType = ImageMachineTypeArm32;
         break;
 
+    case MACHINE_TYPE_X64:
+        ImageMachineType = ImageMachineTypeX64;
+        break;
+
     default:
         ImageMachineType = ImageMachineTypeUnknown;
         break;
@@ -8738,5 +8602,105 @@ LoadFileEnd:
     *Contents = Buffer;
     *Size = Stat.st_size;
     return Result;
+}
+
+VOID
+DbgrpPrintEflags (
+    ULONGLONG Eflags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the broken down x86 eflags register.
+
+Arguments:
+
+    Eflags - Supplies the eflags value.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Iopl;
+
+    Iopl = (Eflags & IA32_EFLAG_IOPL_MASK) >> IA32_EFLAG_IOPL_SHIFT;
+    DbgOut("Iopl: %d Flags: ", Iopl);
+    if (((Eflags & IA32_EFLAG_ALWAYS_0) != 0) ||
+        ((Eflags & IA32_EFLAG_ALWAYS_1) != IA32_EFLAG_ALWAYS_1)) {
+
+        DbgOut("*** WARNING: Invalid Flags!! ***");
+    }
+
+    if ((Eflags & IA32_EFLAG_CF) != 0) {
+        DbgOut("cf ");
+    }
+
+    if ((Eflags & IA32_EFLAG_PF) != 0) {
+        DbgOut("pf ");
+    }
+
+    if ((Eflags & IA32_EFLAG_AF) != 0) {
+        DbgOut("af ");
+    }
+
+    if ((Eflags & IA32_EFLAG_ZF) != 0) {
+        DbgOut("zf ");
+    }
+
+    if ((Eflags & IA32_EFLAG_SF) != 0) {
+        DbgOut("sf ");
+    }
+
+    if ((Eflags & IA32_EFLAG_TF) != 0) {
+        DbgOut("tf ");
+    }
+
+    if ((Eflags & IA32_EFLAG_IF) != 0) {
+        DbgOut("if ");
+    }
+
+    if ((Eflags & IA32_EFLAG_DF) != 0) {
+        DbgOut("df ");
+    }
+
+    if ((Eflags & IA32_EFLAG_OF) != 0) {
+        DbgOut("of ");
+    }
+
+    if ((Eflags & IA32_EFLAG_NT) != 0) {
+        DbgOut("nt ");
+    }
+
+    if ((Eflags & IA32_EFLAG_RF) != 0) {
+        DbgOut("rf ");
+    }
+
+    if ((Eflags & IA32_EFLAG_VM) != 0) {
+        DbgOut("vm ");
+    }
+
+    if ((Eflags & IA32_EFLAG_AC) != 0) {
+        DbgOut("ac ");
+    }
+
+    if ((Eflags & IA32_EFLAG_VIF) != 0) {
+        DbgOut("vif ");
+    }
+
+    if ((Eflags & IA32_EFLAG_VIP) != 0) {
+        DbgOut("vip ");
+    }
+
+    if ((Eflags & IA32_EFLAG_ID) != 0) {
+        DbgOut("id ");
+    }
+
+    return;
 }
 

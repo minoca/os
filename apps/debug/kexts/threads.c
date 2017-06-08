@@ -475,6 +475,15 @@ Return Value:
         LocalRegisters.Arm.R13Sp = StackPointer + 4 + (10 * sizeof(ULONG));
         break;
 
+    case MACHINE_TYPE_X64:
+
+        //
+        // TODO: Make !thread work for x64 once context switching is added.
+        //
+
+        DbgOut("TODO: X64 !thread\n");
+        break;
+
     default:
         DbgOut("Error: Unknown machine type %d.\n",
                TargetInformation.MachineType);

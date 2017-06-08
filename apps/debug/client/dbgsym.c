@@ -655,6 +655,19 @@ Return Value:
 
             break;
 
+        case MACHINE_TYPE_X64:
+            DbgGetRegister(Context,
+                           &(Context->FrameRegisters),
+                           Register,
+                           &Value);
+
+            if (DataStreamSize > sizeof(ULONGLONG)) {
+                DataStreamSize = sizeof(ULONGLONG);
+            }
+
+            memcpy(DataStream, &Value, DataStreamSize);
+            break;
+
         //
         // Unknown machine type.
         //
@@ -1086,6 +1099,108 @@ Return Value:
 
         break;
 
+    case MACHINE_TYPE_X64:
+        switch (RegisterNumber) {
+        case X64RegisterRax:
+            Value = Registers->X64.Rax;
+            break;
+
+        case X64RegisterRdx:
+            Value = Registers->X64.Rdx;
+            break;
+
+        case X64RegisterRcx:
+            Value = Registers->X64.Rcx;
+            break;
+
+        case X64RegisterRbx:
+            Value = Registers->X64.Rbx;
+            break;
+
+        case X64RegisterRsi:
+            Value = Registers->X64.Rsi;
+            break;
+
+        case X64RegisterRdi:
+            Value = Registers->X64.Rdi;
+            break;
+
+        case X64RegisterRbp:
+            Value = Registers->X64.Rbp;
+            break;
+
+        case X64RegisterRsp:
+            Value = Registers->X64.Rsp;
+            break;
+
+        case X64RegisterR8:
+            Value = Registers->X64.R8;
+            break;
+
+        case X64RegisterR9:
+            Value = Registers->X64.R9;
+            break;
+
+        case X64RegisterR10:
+            Value = Registers->X64.R10;
+            break;
+
+        case X64RegisterR11:
+            Value = Registers->X64.R11;
+            break;
+
+        case X64RegisterR12:
+            Value = Registers->X64.R12;
+            break;
+
+        case X64RegisterR13:
+            Value = Registers->X64.R13;
+            break;
+
+        case X64RegisterR14:
+            Value = Registers->X64.R14;
+            break;
+
+        case X64RegisterR15:
+            Value = Registers->X64.R15;
+            break;
+
+        case X64RegisterReturnAddress:
+            Value = Registers->X64.Rip;
+            break;
+
+        case X64RegisterRflags:
+            Value = Registers->X64.Rflags;
+            break;
+
+        case X64RegisterCs:
+            Value = Registers->X64.Cs;
+            break;
+
+        case X64RegisterDs:
+            Value = Registers->X64.Ds;
+            break;
+
+        case X64RegisterEs:
+            Value = Registers->X64.Es;
+            break;
+
+        case X64RegisterFs:
+            Value = Registers->X64.Fs;
+            break;
+
+        case X64RegisterGs:
+            Value = Registers->X64.Gs;
+            break;
+
+        default:
+            DbgOut("TODO: Fetch x64 register %d\n", RegisterNumber);
+            Value = 0;
+            break;
+        }
+
+        break;
+
     default:
 
         assert(FALSE);
@@ -1248,6 +1363,107 @@ Return Value:
             assert(FALSE);
 
             Status = EINVAL;
+        }
+
+        break;
+
+    case MACHINE_TYPE_X64:
+        switch (RegisterNumber) {
+        case X64RegisterRax:
+            Registers->X64.Rax = Value;
+            break;
+
+        case X64RegisterRdx:
+            Registers->X64.Rdx = Value;
+            break;
+
+        case X64RegisterRcx:
+            Registers->X64.Rcx = Value;
+            break;
+
+        case X64RegisterRbx:
+            Registers->X64.Rbx = Value;
+            break;
+
+        case X64RegisterRsi:
+            Registers->X64.Rsi = Value;
+            break;
+
+        case X64RegisterRdi:
+            Registers->X64.Rdi = Value;
+            break;
+
+        case X64RegisterRbp:
+            Registers->X64.Rbp = Value;
+            break;
+
+        case X64RegisterRsp:
+            Registers->X64.Rsp = Value;
+            break;
+
+        case X64RegisterR8:
+            Registers->X64.R8 = Value;
+            break;
+
+        case X64RegisterR9:
+            Registers->X64.R9 = Value;
+            break;
+
+        case X64RegisterR10:
+            Registers->X64.R10 = Value;
+            break;
+
+        case X64RegisterR11:
+            Registers->X64.R11 = Value;
+            break;
+
+        case X64RegisterR12:
+            Registers->X64.R12 = Value;
+            break;
+
+        case X64RegisterR13:
+            Registers->X64.R13 = Value;
+            break;
+
+        case X64RegisterR14:
+            Registers->X64.R14 = Value;
+            break;
+
+        case X64RegisterR15:
+            Registers->X64.R15 = Value;
+            break;
+
+        case X64RegisterReturnAddress:
+            Registers->X64.Rip = Value;
+            break;
+
+        case X64RegisterRflags:
+            Registers->X64.Rflags = Value;
+            break;
+
+        case X64RegisterCs:
+            Registers->X64.Cs = Value;
+            break;
+
+        case X64RegisterDs:
+            Registers->X64.Ds = Value;
+            break;
+
+        case X64RegisterEs:
+            Registers->X64.Es = Value;
+            break;
+
+        case X64RegisterFs:
+            Registers->X64.Fs = Value;
+            break;
+
+        case X64RegisterGs:
+            Registers->X64.Gs = Value;
+            break;
+
+        default:
+            DbgOut("TODO: Set x64 register %d\n", RegisterNumber);
+            break;
         }
 
         break;

@@ -2736,3 +2736,60 @@ Return Value:
 
 --*/
 
+BOOL
+EvalGetRegister (
+    PDEBUGGER_CONTEXT Context,
+    PCSTR Register,
+    PULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the value of a register by name.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Register - Supplies the name of the register to get.
+
+    Value - Supplies a pointer where the value of the register will be returned.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+BOOL
+EvalSetRegister (
+    PDEBUGGER_CONTEXT Context,
+    PCSTR Register,
+    ULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the value of a register by name.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Register - Supplies the name of the register to get.
+
+    Value - Supplies the value to set in the register.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/

@@ -774,7 +774,7 @@ Return Value:
 
     Status = OsDebug(DebugCommandSwitchThread,
                      DbgTargetProcessId,
-                     (PVOID)ThreadId,
+                     (PVOID)(UINTN)ThreadId,
                      NULL,
                      0,
                      0);
