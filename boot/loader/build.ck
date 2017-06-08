@@ -118,6 +118,8 @@ function build() {
 
     } else if (arch == "x64") {
         commonSources += [
+            "x64/kernxfr.S",
+            "x64/paging.c",
             "x86/archsupc.c",
             "x86/dbgparch.c",
             "x86/entry.S",

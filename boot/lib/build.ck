@@ -121,6 +121,15 @@ function build() {
     } else if (arch == "x64") {
         pcat32Sources = commonSources + commonX86Sources +
                         pcatSources + pcatX86Sources;
+
+        commonSources += [
+            "x64/archsup.S",
+            "x64/prochw.c"
+        ];
+
+        pcatSources += [
+            "pcat/x64/realmexe.S"
+        ];
     }
 
     includes = [

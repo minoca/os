@@ -137,17 +137,18 @@ Return Value:
     BOOTMAN_MAPPING_CONTEXT Context;
     ULONGLONG Page;
     KSTATUS Status;
+    PPTE Table;
 
     Context.PagesMapped = 0;
     Context.Status = STATUS_SUCCESS;
 
     //
-    // Allocate and initialize a PML4.
+    // Allocate and initialize a PML4, plus a PDPT and PDT for the first 2MB.
     //
 
     if (FwPml4Table == INVALID_PHYSICAL_ADDRESS) {
         Status = FwAllocatePages(&Page,
-                                 PAGE_SIZE,
+                                 PAGE_SIZE * 3,
                                  PAGE_SIZE,
                                  MemoryTypeLoaderTemporary);
 
@@ -158,7 +159,7 @@ Return Value:
         ASSERT(Page == (UINTN)Page);
 
         FwPml4Table = (PVOID)(UINTN)Page;
-        RtlZeroMemory(FwPml4Table, PAGE_SIZE);
+        RtlZeroMemory(FwPml4Table, PAGE_SIZE * 3);
 
         //
         // Just use the highest value as the self map index. This conveniently
@@ -171,6 +172,34 @@ Return Value:
                               X86_ENTRY_PTE((UINTN)FwPml4Table >> PAGE_SHIFT) |
                               X86_PTE_PRESENT |
                               X86_PTE_WRITABLE;
+
+        //
+        // Identity map the first 2MB with a large page, it's just easier that
+        // way.
+        //
+
+        Page += PAGE_SIZE;
+        FwPml4Table[0] = X86_ENTRY_PTE(Page >> PAGE_SHIFT) |
+                         X86_PTE_PRESENT |
+                         X86_PTE_WRITABLE;
+
+        //
+        // Set the PDPT.
+        //
+
+        Table = (PPTE)(UINTN)Page;
+        Page += PAGE_SIZE;
+        Table[0] = X86_ENTRY_PTE(Page >> PAGE_SHIFT) |
+                   X86_PTE_PRESENT |
+                   X86_PTE_WRITABLE;
+
+        //
+        // Set the PD entry as a large 2MB page mapping the first 2MB.
+        //
+
+        Table = (PPTE)(UINTN)Page;
+        Table[0] = X86_ENTRY_PTE(0) |
+                   X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_LARGE;
     }
 
     MmMdIterate(&BoMemoryMap,
@@ -342,6 +371,15 @@ Return Value:
     ULONG Shift;
     KSTATUS Status;
     PPTE Table;
+
+    //
+    // If it's in the first 2MB, don't worry about it, those are mapped with a
+    // large page.
+    //
+
+    if (Address < (2 * _1MB)) {
+        return STATUS_SUCCESS;
+    }
 
     //
     // Walk the page tables, creating any needed pages along the way.

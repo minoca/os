@@ -50,6 +50,8 @@ X86_OBJS = ../x86/archdbg.o  \
            ../x86/regacces.o \
            ../ns16550.o      \
 
+X64_OBJS = $(X86_OBJS)
+
 ifeq ($(ARCH),x64)
 DIRS += x6432
 endif

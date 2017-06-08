@@ -34,6 +34,9 @@ OBJS = ../bootfat.o    \
 X86_OBJS = ../x86/archsup.o  \
            ../x86/prochw.o   \
 
+X64_OBJS = ../x64/archsup.o  \
+           ../x64/prochw.o   \
+
 ARMV7_OBJS = ../armv7/archsup.o     \
              ../armv7/commsup.o     \
              ../armv7/inttable.o    \
@@ -54,4 +57,6 @@ PCAT_OBJS = fwapi.o      \
             time.o       \
 
 PCAT_X86_OBJS = x86/realmexe.o \
+
+PCAT_X64_OBJS = x64/realmexe.o \
 

@@ -41,11 +41,13 @@ OBJS += $(PCAT_OBJS)
 
 X86_OBJS += $(PCAT_X86_OBJS)
 
+X64_OBJS += $(PCAT_X64_OBJS)
+
 ifeq ($(ARCH),x64)
 DIRS += x6432
 endif
 
-EXTRA_SRC_DIRS = x86
+EXTRA_SRC_DIRS = x86 x64
 
 include $(SRCROOT)/os/minoca.mk
 

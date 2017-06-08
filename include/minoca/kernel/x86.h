@@ -176,22 +176,6 @@ typedef struct _TSS {
     USHORT IoMapBase;
 } PACKED TSS, *PTSS;
 
-typedef enum _GDT_GRANULARITY {
-    GdtByteGranularity = 0x00,
-    GdtKilobyteGranularity = 0x80
-} GDT_GRANULARITY, *PGDT_GRANULARITY;
-
-typedef enum _GDT_SEGMENT_TYPE {
-    GdtDataReadOnly = 0x0,
-    GdtDataReadWrite = 0x2,
-    GdbSystemLdt = 0x2,
-    GdtCodeExecuteOnly = 0x8,
-    GdtTss = 0x9,
-    GdtCallGate = 0xC,
-    GdtInterruptGate = 0xD,
-    GdtTrapGate = 0xF,
-} GDT_SEGMENT_TYPE, *PGDT_SEGMENT_TYPE;
-
 /*++
 
 Structure Description:
@@ -1805,10 +1789,8 @@ ArpCreateSegmentDescriptor (
     PGDT_ENTRY GdtEntry,
     PVOID Base,
     ULONG Limit,
-    GDT_GRANULARITY Granularity,
-    GDT_SEGMENT_TYPE Access,
-    UCHAR PrivilegeLevel,
-    BOOL System
+    UCHAR Granularity,
+    UCHAR Access
     );
 
 /*++
@@ -1830,13 +1812,6 @@ Arguments:
         granularity or kilobyte granularity.
 
     Access - Supplies the access permissions on the segment.
-
-    PrivilegeLevel - Supplies the privilege level that this segment requires.
-        Valid values are 0 (most privileged, kernel) to 3 (user mode, least
-        privileged).
-
-    System - Supplies a flag indicating whether this is a system segment (TRUE)
-        or a code/data segment.
 
 Return Value:
 

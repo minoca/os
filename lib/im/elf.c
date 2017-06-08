@@ -3513,9 +3513,11 @@ Return Value:
     BaseDifference = Image->BaseDifference;
     Offset = RelocationEntry->Offset;
     Information = RelocationEntry->Information;
+    AddendNeeded = TRUE;
     Addend = 0;
     if (AddendEntry != FALSE) {
         Addend = RelocationEntry->Addend;
+        AddendNeeded = FALSE;
     }
 
     //
@@ -3555,7 +3557,6 @@ Return Value:
     //
 
     Copy = FALSE;
-    AddendNeeded = TRUE;
     RelocationNeeded = TRUE;
     if (Image->Machine == ImageMachineTypeArm32) {
         switch (RelocationType) {
@@ -3835,6 +3836,112 @@ Return Value:
                    (SymbolImage->TlsOffset != (UINTN)-1));
 
             Address = SymbolImage->TlsOffset - SymbolValue + Addend;
+            break;
+
+        //
+        // Unknown relocation type.
+        //
+
+        default:
+
+            ASSERT(FALSE);
+
+            return FALSE;
+        }
+
+    //
+    // Handle x64 images.
+    //
+
+    } else if (Image->Machine == ImageMachineTypeX64) {
+        switch (RelocationType) {
+
+        //
+        // None is a no-op.
+        //
+
+        case ElfX64RelocationNone:
+            RelocationNeeded = FALSE;
+            break;
+
+        //
+        // Absolute uses only the symbol's value.
+        //
+
+        case ElfX64Relocation64:
+            Address = SymbolValue + Addend;
+            break;
+
+        //
+        // PC32 is Symbol + Addend - Place
+        //
+
+        case ElfX64RelocationPc32:
+
+            //
+            // TODO: Handle non-native sizes.
+            //
+
+            ASSERT(FALSE);
+
+            Address = SymbolValue + Addend - Place;
+            break;
+
+        //
+        // The "copy" relocations copy data from a shared object into the
+        // program's BSS segment. It is used by programs that reference
+        // variables defined in a shared object (like stdin/out/err, environ,
+        // etc). Note that copy can only work if this loader has access to the
+        // source image address. As a clue assert that at least this image's
+        // final address is the same as the address this code is accessing it
+        // at.
+        //
+
+        case ElfX64RelocationCopy:
+
+            ASSERT(Image->PreferredLowestAddress + BaseDifference ==
+                   Image->LoadedImageBuffer);
+
+            //
+            // Find the shared object version, not the executable version.
+            //
+
+            SymbolValue = ImpElfGetSymbolValue(Image,
+                                               &(Symbols[SymbolIndex]),
+                                               &SymbolImage,
+                                               Image);
+
+            if (SymbolValue == ELF_INVALID_ADDRESS) {
+                SymbolValue = 0;
+            }
+
+            Copy = TRUE;
+            AddendNeeded = FALSE;
+            Address = SymbolValue;
+            break;
+
+        //
+        // Global relocations just use the symbol value. Jump slots are entries
+        // in the Procedure Linkage Table (PLT), and also just use the symbol
+        // value.
+        //
+
+        case ElfX64RelocationGlobalData:
+            Address = SymbolValue;
+            AddendNeeded = FALSE;
+            break;
+
+        case ElfX64RelocationJumpSlot:
+            Address = SymbolValue;
+            AddendNeeded = FALSE;
+            break;
+
+        //
+        // Relative relocations just adjust for the new base.
+        //
+
+        case ElfX64RelocationRelative:
+            Address = BaseDifference + Addend;
             break;
 
         //

@@ -41,6 +41,12 @@ X86_OBJS = x86/archsupc.o \
            x86/paging.o   \
            x86/kernxfr.o  \
 
+X64_OBJS = x64/kernxfr.o  \
+           x64/paging.o   \
+           x86/archsupc.o \
+           x86/dbgparch.o \
+           x86/entry.o    \
+
 ARMV7_OBJS = armv7/archsupc.o \
              armv7/dbgparch.o \
              armv7/paging.o   \
@@ -68,5 +74,5 @@ endif
 
 LDFLAGS += -pie -nodefaultlibs -nostartfiles -nostdlib
 
-EXTRA_SRC_DIRS = x86 armv7 armv6
+EXTRA_SRC_DIRS = x86 x64 armv7 armv6
 

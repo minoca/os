@@ -3548,7 +3548,7 @@ Return Value:
             KdNmiHandler(TrapFrame);
         }
 
-    } while (LockValue != ProcessorNumber);
+    } while ((LockValue != ProcessorNumber) && (LockValue != (ULONG)-1));
 
     return;
 }

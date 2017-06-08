@@ -42,20 +42,25 @@ Environment:
 #define FALSE 0
 #define TRUE 1
 
+#define EXCEPTION_NMI               0x02
+#define EXCEPTION_BREAK             0x03
+#define EXCEPTION_SINGLE_STEP       0x04
+#define EXCEPTION_ACCESS_VIOLATION  0x05
+#define EXCEPTION_ASSERTION_FAILURE 0x07
+#define EXCEPTION_DOUBLE_FAULT      0x0C
+
 #define CONTEXT_SWAP_MAGIC 0x9A8A7A6A5A4A3A2A
 
 //
 // Definition for the TRAP_FRAME structure and the exception stack directly
 // above it.
-// TODO: Fix this!
 //
 
 #define TRAP_DS             0
 #define TRAP_ES             4
 #define TRAP_FS             8
 #define TRAP_GS             12
-#define TRAP_SS             16
-
+#define TRAP_PADDING        16
 #define TRAP_RAX            24
 #define TRAP_RBX            32
 #define TRAP_RCX            40
@@ -76,8 +81,13 @@ Environment:
 #define TRAP_CS             160
 #define TRAP_RFLAGS         168
 #define TRAP_RSP            176
+#define TRAP_SS             184
 
-#define TRAP_FRAME_SIZE     184
+#define TRAP_FRAME_SIZE     192
+
+//
+// TODO: Fix these sizes.
+//
 
 #define PROCESSOR_CONTEXT_SIZE 0x60
 #define SIGNAL_CONTEXT_SIZE 28

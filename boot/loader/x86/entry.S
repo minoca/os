@@ -29,8 +29,6 @@ Environment:
 ## ------------------------------------------------------------------ Includes
 ##
 
-#include <minoca/kernel/x86.inc>
-
 ##
 ## ---------------------------------------------------------------------- Code
 ##
@@ -38,11 +36,8 @@ Environment:
 ##
 ## .text specifies that this code belongs in the executable section.
 ##
-## .code32 specifies that this is 32-bit protected mode code.
-##
 
 .text
-.code32
 
 ##
 ## Stick this in the .init section so it ends up at the front of the binary.

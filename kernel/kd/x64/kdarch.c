@@ -497,7 +497,7 @@ Return Value:
 
     PX86_SPECIAL_REGISTERS IaRegisters;
     TABLE_REGISTER TableRegister;
-    ULONGLONG TrRegister;
+    ULONG TrRegister;
 
     IaRegisters = &(SpecialRegisters->Ia);
     IaRegisters->Cr0 = ArGetControlRegister0();
@@ -608,7 +608,7 @@ Return Value:
 
         TableRegister.Limit = New->Gdtr.Limit;
         TableRegister.Base = New->Gdtr.Base;
-        ArLoadGdtr(TableRegister);
+        ArLoadGdtr(&TableRegister);
     }
 
     if (New->Tr != Original->Tr) {

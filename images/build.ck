@@ -33,6 +33,7 @@ function buildImage(name, msetupFlags) {
 
     if (mconfig.arch == "x64") {
         installDeps = [
+            "boot/loader:loader",
             "boot/bootman:bootman.bin",
             "boot/fatboot:fatboot.bin",
             "boot/mbr:mbr.bin",

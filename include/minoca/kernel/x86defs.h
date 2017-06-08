@@ -26,11 +26,6 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define TASK_GATE_TYPE         0x05
-#define CALL_GATE_TYPE         0x0C
-#define INTERRUPT_GATE_TYPE    0x0E
-#define TRAP_GATE_TYPE         0x0F
-
 #define SEGMENT_PRIVILEGE_MASK      0x0003
 #define SEGMENT_PRIVILEGE_KERNEL    0x0000
 #define SEGMENT_PRIVILEGE_USER      0x0003
@@ -47,13 +42,26 @@ Author:
 #define NMI_TSS                 0x48
 #define GDT_ENTRIES             10
 
-#define DEFAULT_GDT_ACCESS      0x80
+#define GATE_ACCESS_PRESENT     0x80
+#define GATE_ACCESS_USER        (SEGMENT_PRIVILEGE_USER << 5)
 #define MAX_GDT_LIMIT           0xFFFFF
 #define GDT_SYSTEM_SEGMENT      0x00
 #define GDT_CODE_DATA_SEGMENT   0x10
 #define GDT_TSS_BUSY            0x02
-#define GDT_GRANULARITY_64BIT   0x20
-#define GDT_GRANULARITY_32BIT   0x40
+
+#define GDT_TYPE_DATA_READ 0x10
+#define GDT_TYPE_DATA_WRITE 0x12
+#define GDT_TYPE_SYSTEM_LDT 0x02
+#define GDT_TYPE_CODE 0x18
+#define GATE_TYPE_TASK 0x05
+#define GDT_TYPE_TSS 0x09
+#define GATE_TYPE_CALL 0x0C
+#define GATE_TYPE_INTERRUPT 0x0E
+#define GATE_TYPE_TRAP 0x0F
+
+#define GDT_GRANULARITY_KILOBYTE 0x80
+#define GDT_GRANULARITY_64BIT    0x20
+#define GDT_GRANULARITY_32BIT    0x40
 
 #define IDT_SIZE 0x100
 #define VECTOR_DIVIDE_ERROR         0x00

@@ -278,10 +278,8 @@ Return Value:
     ArpCreateSegmentDescriptor(GdtEntry,
                                NewThreadPointer,
                                MAX_GDT_LIMIT,
-                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtDataReadWrite,
-                               SEGMENT_PRIVILEGE_USER,
-                               FALSE);
+                               GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
+                               GATE_ACCESS_USER | GDT_TYPE_DATA_WRITE);
 
     if (Thread == KeGetCurrentThread()) {
         Processor = KeGetCurrentProcessorBlock();

@@ -96,8 +96,7 @@ ArpCreateGate (
     PPROCESSOR_GATE Gate,
     PVOID HandlerRoutine,
     USHORT Selector,
-    UCHAR Type,
-    UCHAR Privilege
+    UCHAR Access
     );
 
 VOID
@@ -398,14 +397,11 @@ Return Value:
     //
 
     RtlCopyMemory(MainTss, ProcessorBlock->Tss, sizeof(TSS));
-    ArpCreateSegmentDescriptor(
-                             &(GdtTable[KERNEL_TSS / sizeof(GDT_ENTRY)]),
-                             MainTss,
-                             sizeof(TSS),
-                             GdtByteGranularity | GDT_GRANULARITY_32BIT,
-                             GdtTss,
-                             SEGMENT_PRIVILEGE_KERNEL,
-                             TRUE);
+    ArpCreateSegmentDescriptor(&(GdtTable[KERNEL_TSS / sizeof(GDT_ENTRY)]),
+                               MainTss,
+                               sizeof(TSS),
+                               GDT_GRANULARITY_32BIT,
+                               GDT_TYPE_TSS);
 
     Tss = ProcessorBlock->Tss;
     ProcessorBlock->Tss = MainTss;
@@ -423,10 +419,8 @@ Return Value:
                              &(GdtTable[DOUBLE_FAULT_TSS / sizeof(GDT_ENTRY)]),
                              Tss,
                              sizeof(TSS),
-                             GdtByteGranularity | GDT_GRANULARITY_32BIT,
-                             GdtTss,
-                             SEGMENT_PRIVILEGE_KERNEL,
-                             TRUE);
+                             GDT_GRANULARITY_32BIT,
+                             GDT_TYPE_TSS);
 
     //
     // Initialize the NMI TSS and stack (separate stack needed to avoid
@@ -444,10 +438,8 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[NMI_TSS / sizeof(GDT_ENTRY)]),
                                Tss,
                                sizeof(TSS),
-                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtTss,
-                               SEGMENT_PRIVILEGE_KERNEL,
-                               TRUE);
+                               GDT_GRANULARITY_32BIT,
+                               GDT_TYPE_TSS);
 
     return STATUS_SUCCESS;
 }
@@ -941,7 +933,8 @@ Return Value:
     Gdt = ProcessorBlock->Gdt;
     Gdt += TssSegment / sizeof(GDT_ENTRY);
 
-    ASSERT((Gdt->Access & ~GDT_TSS_BUSY) == (DEFAULT_GDT_ACCESS | GdtTss));
+    ASSERT((Gdt->Access & ~GDT_TSS_BUSY) ==
+           (GATE_ACCESS_PRESENT | GDT_TYPE_TSS));
 
     Gdt->Access &= ~GDT_TSS_BUSY;
     return;
@@ -952,10 +945,8 @@ ArpCreateSegmentDescriptor (
     PGDT_ENTRY GdtEntry,
     PVOID Base,
     ULONG Limit,
-    GDT_GRANULARITY Granularity,
-    GDT_SEGMENT_TYPE Access,
-    UCHAR PrivilegeLevel,
-    BOOL System
+    UCHAR Granularity,
+    UCHAR Access
     )
 
 /*++
@@ -978,13 +969,6 @@ Arguments:
 
     Access - Supplies the access permissions on the segment.
 
-    PrivilegeLevel - Supplies the privilege level that this segment requires.
-        Valid values are 0 (most privileged, kernel) to 3 (user mode, least
-        privileged).
-
-    System - Supplies a flag indicating whether this is a system segment (TRUE)
-        or a code/data segment.
-
 Return Value:
 
     None.
@@ -1001,16 +985,7 @@ Return Value:
     GdtEntry->LimitLow = Limit & 0xFFFF;
     GdtEntry->BaseLow = (ULONG)Base & 0xFFFF;
     GdtEntry->BaseMiddle = ((ULONG)Base >> 16) & 0xFF;
-    GdtEntry->Access = DEFAULT_GDT_ACCESS |
-                       ((PrivilegeLevel & 0x3) << 5) | Access;
-
-    if (System != FALSE) {
-        GdtEntry->Access |= GDT_SYSTEM_SEGMENT;
-
-    } else {
-        GdtEntry->Access |= GDT_CODE_DATA_SEGMENT;
-    }
-
+    GdtEntry->Access = GATE_ACCESS_PRESENT | Access;
     GdtEntry->Granularity = Granularity | ((Limit >> 16) & 0xF);
     GdtEntry->BaseHigh = ((ULONG)Base >> 24) & 0xFF;
     return;
@@ -1056,8 +1031,7 @@ ArpCreateGate (
     PPROCESSOR_GATE Gate,
     PVOID HandlerRoutine,
     USHORT Selector,
-    UCHAR Type,
-    UCHAR Privilege
+    UCHAR Access
     )
 
 /*++
@@ -1076,11 +1050,7 @@ Arguments:
 
     Selector - Supplies the code selector this gate should run in.
 
-    Type - Supplies the type of the gate. Set this to CALL_GATE_TYPE,
-        INTERRUPT_GATE_TYPE, TASK_GATE_TYPE, or TRAP_GATE_TYPE.
-
-    Privilege - Supplies the privilege level this gate should run in. 0 is the
-        most privileged level, and 3 is the least privileged.
+    Access - Supplies the gate access bits, similar to the GDT access bits.
 
 Return Value:
 
@@ -1100,16 +1070,7 @@ Return Value:
     //
 
     Gate->Count = 0;
-
-    //
-    // Access is programmed as follows:
-    //     Bit 7: Present. Set to 1 to indicate that this gate is present.
-    //     Bits 5-6: Privilege level.
-    //     Bit 4: Set to 0 to indicate it's a system gate.
-    //     Bits 3-0: Type.
-    //
-
-    Gate->Access = Type | (Privilege << 5) | (1 << 7);
+    Gate->Access = GATE_ACCESS_PRESENT | Access;
     return;
 }
 
@@ -1217,10 +1178,8 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[KERNEL_CS / sizeof(GDT_ENTRY)]),
                                NULL,
                                MAX_GDT_LIMIT,
-                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtCodeExecuteOnly,
-                               SEGMENT_PRIVILEGE_KERNEL,
-                               FALSE);
+                               GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
+                               GDT_TYPE_CODE);
 
     //
     // Initialize the kernel data segment. Initialize the entry to cover
@@ -1231,10 +1190,8 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[KERNEL_DS / sizeof(GDT_ENTRY)]),
                                NULL,
                                MAX_GDT_LIMIT,
-                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtDataReadWrite,
-                               SEGMENT_PRIVILEGE_KERNEL,
-                               FALSE);
+                               GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
+                               GDT_TYPE_DATA_WRITE);
 
     //
     // Initialize the user mode code segment. Initialize the entry to cover
@@ -1245,10 +1202,8 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[USER_CS / sizeof(GDT_ENTRY)]),
                                (PVOID)0,
                                (ULONG)KERNEL_VA_START >> PAGE_SHIFT,
-                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtCodeExecuteOnly,
-                               SEGMENT_PRIVILEGE_USER,
-                               FALSE);
+                               GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
+                               GATE_ACCESS_USER | GDT_TYPE_CODE);
 
     //
     // Initialize the user mode data segment. Initialize the entry to cover
@@ -1259,10 +1214,8 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[USER_DS / sizeof(GDT_ENTRY)]),
                                (PVOID)0,
                                (ULONG)KERNEL_VA_START >> PAGE_SHIFT,
-                               GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtDataReadWrite,
-                               SEGMENT_PRIVILEGE_USER,
-                               FALSE);
+                               GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
+                               GATE_ACCESS_USER | GDT_TYPE_DATA_WRITE);
 
     //
     // Initialize the processor block segment.
@@ -1271,10 +1224,8 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[GDT_PROCESSOR / sizeof(GDT_ENTRY)]),
                                (PVOID)ProcessorBlock,
                                sizeof(PROCESSOR_BLOCK),
-                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtDataReadWrite,
-                               SEGMENT_PRIVILEGE_KERNEL,
-                               FALSE);
+                               GDT_GRANULARITY_32BIT,
+                               GDT_TYPE_DATA_WRITE);
 
     //
     // Initialize the thread context segment, which can be programmed by
@@ -1284,10 +1235,8 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[GDT_THREAD / sizeof(GDT_ENTRY)]),
                                NULL,
                                sizeof(PROCESSOR_BLOCK),
-                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtDataReadWrite,
-                               SEGMENT_PRIVILEGE_USER,
-                               FALSE);
+                               GDT_GRANULARITY_32BIT,
+                               GATE_ACCESS_USER | GDT_TYPE_DATA_WRITE);
 
     //
     // Initialize the kernel TSS segments. The entry covers only the TSS
@@ -1297,19 +1246,15 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[KERNEL_TSS / sizeof(GDT_ENTRY)]),
                                KernelTss,
                                sizeof(TSS),
-                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtTss,
-                               SEGMENT_PRIVILEGE_KERNEL,
-                               TRUE);
+                               GDT_GRANULARITY_32BIT,
+                               GDT_TYPE_TSS);
 
     ArpCreateSegmentDescriptor(
                              &(GdtTable[DOUBLE_FAULT_TSS / sizeof(GDT_ENTRY)]),
                              DoubleFaultTss,
                              sizeof(TSS),
-                             GdtByteGranularity | GDT_GRANULARITY_32BIT,
-                             GdtTss,
-                             SEGMENT_PRIVILEGE_KERNEL,
-                             TRUE);
+                             GDT_GRANULARITY_32BIT,
+                             GDT_TYPE_TSS);
 
     //
     // NMIs need a TSS so they can have their own stack, which is needed on
@@ -1322,10 +1267,8 @@ Return Value:
     ArpCreateSegmentDescriptor(&(GdtTable[NMI_TSS / sizeof(GDT_ENTRY)]),
                                NmiTss,
                                sizeof(TSS),
-                               GdtByteGranularity | GDT_GRANULARITY_32BIT,
-                               GdtTss,
-                               SEGMENT_PRIVILEGE_KERNEL,
-                               TRUE);
+                               GDT_GRANULARITY_32BIT,
+                               GDT_TYPE_TSS);
 
     //
     // Install the new GDT table.
@@ -1398,8 +1341,7 @@ Return Value:
             ArpCreateGate(IdtTable + IdtIndex,
                           ServiceRoutine,
                           KERNEL_CS,
-                          INTERRUPT_GATE_TYPE,
-                          SEGMENT_PRIVILEGE_KERNEL);
+                          GATE_TYPE_INTERRUPT);
         }
 
         //
@@ -1409,32 +1351,27 @@ Return Value:
         ArpCreateGate(IdtTable + VECTOR_DIVIDE_ERROR,
                       ArDivideByZeroExceptionHandlerAsm,
                       KERNEL_CS,
-                      TRAP_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_USER);
+                      GATE_ACCESS_USER | GATE_TYPE_TRAP);
 
         ArpCreateGate(IdtTable + VECTOR_NMI,
                       NULL,
                       NMI_TSS,
-                      TASK_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_TASK);
 
         ArpCreateGate(IdtTable + VECTOR_BREAKPOINT,
                       ArBreakExceptionHandlerAsm,
                       KERNEL_CS,
-                      INTERRUPT_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_USER);
+                      GATE_ACCESS_USER | GATE_TYPE_INTERRUPT);
 
         ArpCreateGate(IdtTable + VECTOR_DEBUG,
                       ArSingleStepExceptionHandlerAsm,
                       KERNEL_CS,
-                      INTERRUPT_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_INTERRUPT);
 
         ArpCreateGate(IdtTable + VECTOR_DEBUG_SERVICE,
                       KdDebugServiceHandlerAsm,
                       KERNEL_CS,
-                      INTERRUPT_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_INTERRUPT);
 
         //
         // Set up the double fault and general protection fault handlers.
@@ -1443,20 +1380,17 @@ Return Value:
         ArpCreateGate(IdtTable + VECTOR_DOUBLE_FAULT,
                       NULL,
                       DOUBLE_FAULT_TSS,
-                      TASK_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_TASK);
 
         ArpCreateGate(IdtTable + VECTOR_PROTECTION_FAULT,
                       ArProtectionFaultHandlerAsm,
                       KERNEL_CS,
-                      INTERRUPT_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_INTERRUPT);
 
         ArpCreateGate(IdtTable + VECTOR_MATH_FAULT,
                       ArMathFaultHandlerAsm,
                       KERNEL_CS,
-                      INTERRUPT_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_INTERRUPT);
 
         //
         // Set up the system call handler.
@@ -1465,8 +1399,7 @@ Return Value:
         ArpCreateGate(IdtTable + VECTOR_SYSTEM_CALL,
                       ArSystemCallHandlerAsm,
                       KERNEL_CS,
-                      TRAP_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_USER);
+                      GATE_ACCESS_USER | GATE_TYPE_TRAP);
 
         //
         // Set up the spurious interrupt vector.
@@ -1475,8 +1408,7 @@ Return Value:
         ArpCreateGate(IdtTable + VECTOR_SPURIOUS_INTERRUPT,
                       HlSpuriousInterruptHandlerAsm,
                       KERNEL_CS,
-                      INTERRUPT_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_INTERRUPT);
 
         //
         // Set up the page fault handler.
@@ -1485,14 +1417,12 @@ Return Value:
         ArpCreateGate(IdtTable + VECTOR_PAGE_FAULT,
                       ArpPageFaultHandlerAsm,
                       KERNEL_CS,
-                      INTERRUPT_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_INTERRUPT);
 
         ArpCreateGate(IdtTable + VECTOR_STACK_EXCEPTION,
                       ArpPageFaultHandlerAsm,
                       KERNEL_CS,
-                      INTERRUPT_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_INTERRUPT);
 
         //
         // Set up floating point access handlers.
@@ -1501,8 +1431,7 @@ Return Value:
         ArpCreateGate(IdtTable + VECTOR_DEVICE_NOT_AVAILABLE,
                       ArFpuAccessExceptionHandlerAsm,
                       KERNEL_CS,
-                      TRAP_GATE_TYPE,
-                      SEGMENT_PRIVILEGE_KERNEL);
+                      GATE_TYPE_TRAP);
     }
 
     //

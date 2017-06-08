@@ -119,8 +119,7 @@ EfipCreateGate (
     PPROCESSOR_GATE Gate,
     PVOID HandlerRoutine,
     USHORT Selector,
-    UCHAR Type,
-    UCHAR Privilege
+    UCHAR Access
     );
 
 VOID
@@ -128,10 +127,8 @@ EfipCreateSegmentDescriptor (
     PGDT_ENTRY GdtEntry,
     PVOID Base,
     ULONG Limit,
-    GDT_GRANULARITY Granularity,
-    GDT_SEGMENT_TYPE Access,
-    UCHAR PrivilegeLevel,
-    BOOL System
+    UCHAR Granularity,
+    UCHAR Access
     );
 
 //
@@ -337,13 +334,12 @@ Return Value:
     // not a system segment.
     //
 
-    EfipCreateSegmentDescriptor(&(GdtTable[KERNEL_CS / sizeof(GDT_ENTRY)]),
-                                NULL,
-                                MAX_GDT_LIMIT,
-                                GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
-                                GdtCodeExecuteOnly,
-                                0,
-                                FALSE);
+    EfipCreateSegmentDescriptor(
+                              &(GdtTable[KERNEL_CS / sizeof(GDT_ENTRY)]),
+                              NULL,
+                              MAX_GDT_LIMIT,
+                              GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
+                              GDT_TYPE_CODE);
 
     //
     // Initialize the kernel data segment. Initialize the entry to cover
@@ -351,13 +347,12 @@ Return Value:
     // is not a system segment.
     //
 
-    EfipCreateSegmentDescriptor(&(GdtTable[KERNEL_DS / sizeof(GDT_ENTRY)]),
-                                NULL,
-                                MAX_GDT_LIMIT,
-                                GdtKilobyteGranularity | GDT_GRANULARITY_32BIT,
-                                GdtDataReadWrite,
-                                0,
-                                FALSE);
+    EfipCreateSegmentDescriptor(
+                              &(GdtTable[KERNEL_DS / sizeof(GDT_ENTRY)]),
+                              NULL,
+                              MAX_GDT_LIMIT,
+                              GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
+                              GDT_TYPE_DATA_WRITE);
 
     //
     // Install the new GDT table.
@@ -406,32 +401,27 @@ Return Value:
     EfipCreateGate(IdtTable + VECTOR_DIVIDE_ERROR,
                    EfipDivideByZeroExceptionHandlerAsm,
                    KERNEL_CS,
-                   TRAP_GATE_TYPE,
-                   3);
+                   GATE_ACCESS_USER | GATE_TYPE_TRAP);
 
     EfipCreateGate(IdtTable + VECTOR_BREAKPOINT,
                    EfipBreakExceptionHandlerAsm,
                    KERNEL_CS,
-                   INTERRUPT_GATE_TYPE,
-                   3);
+                   GATE_ACCESS_USER | GATE_TYPE_INTERRUPT);
 
     EfipCreateGate(IdtTable + VECTOR_DEBUG,
                    EfipSingleStepExceptionHandlerAsm,
                    KERNEL_CS,
-                   INTERRUPT_GATE_TYPE,
-                   0);
+                   GATE_TYPE_INTERRUPT);
 
     EfipCreateGate(IdtTable + VECTOR_DEBUG_SERVICE,
                    EfipDebugServiceHandlerAsm,
                    KERNEL_CS,
-                   INTERRUPT_GATE_TYPE,
-                   0);
+                   GATE_TYPE_INTERRUPT);
 
     EfipCreateGate(IdtTable + VECTOR_PROTECTION_FAULT,
                    EfipProtectionFaultHandlerAsm,
                    KERNEL_CS,
-                   INTERRUPT_GATE_TYPE,
-                   0);
+                   GATE_TYPE_INTERRUPT);
 
     //
     // Set up the page fault handler.
@@ -440,14 +430,12 @@ Return Value:
     EfipCreateGate(IdtTable + VECTOR_PAGE_FAULT,
                    EfipPageFaultHandlerAsm,
                    KERNEL_CS,
-                   INTERRUPT_GATE_TYPE,
-                   0);
+                   GATE_TYPE_INTERRUPT);
 
     EfipCreateGate(IdtTable + VECTOR_STACK_EXCEPTION,
                    EfipPageFaultHandlerAsm,
                    KERNEL_CS,
-                   INTERRUPT_GATE_TYPE,
-                   0);
+                   GATE_TYPE_INTERRUPT);
 
     //
     // Load the IDT register with our interrupt descriptor table.
@@ -464,8 +452,7 @@ EfipCreateGate (
     PPROCESSOR_GATE Gate,
     PVOID HandlerRoutine,
     USHORT Selector,
-    UCHAR Type,
-    UCHAR Privilege
+    UCHAR Access
     )
 
 /*++
@@ -484,11 +471,7 @@ Arguments:
 
     Selector - Supplies the code selector this gate should run in.
 
-    Type - Supplies the type of the gate. Set this to CALL_GATE_TYPE,
-        INTERRUPT_GATE_TYPE, TASK_GATE_TYPE, or TRAP_GATE_TYPE.
-
-    Privilege - Supplies the privilege level this gate should run in. 0 is the
-        most privileged level, and 3 is the least privileged.
+    Access - Supplies the gate access bits, similar to the GDT access bits.
 
 Return Value:
 
@@ -508,16 +491,7 @@ Return Value:
     //
 
     Gate->Count = 0;
-
-    //
-    // Access is programmed as follows:
-    //     Bit 7: Present. Set to 1 to indicate that this gate is present.
-    //     Bits 5-6: Privilege level.
-    //     Bit 4: Set to 0 to indicate it's a system gate.
-    //     Bits 3-0: Type.
-    //
-
-    Gate->Access = Type | (Privilege << 5) | (1 << 7);
+    Gate->Access = GATE_ACCESS_PRESENT | Access;
     return;
 }
 
@@ -526,10 +500,8 @@ EfipCreateSegmentDescriptor (
     PGDT_ENTRY GdtEntry,
     PVOID Base,
     ULONG Limit,
-    GDT_GRANULARITY Granularity,
-    GDT_SEGMENT_TYPE Access,
-    UCHAR PrivilegeLevel,
-    BOOL System
+    UCHAR Granularity,
+    UCHAR Access
     )
 
 /*++
@@ -552,13 +524,6 @@ Arguments:
 
     Access - Supplies the access permissions on the segment.
 
-    PrivilegeLevel - Supplies the privilege level that this segment requires.
-        Valid values are 0 (most privileged, kernel) to 3 (user mode, least
-        privileged).
-
-    System - Supplies a flag indicating whether this is a system segment (TRUE)
-        or a code/data segment.
-
 Return Value:
 
     None.
@@ -575,16 +540,7 @@ Return Value:
     GdtEntry->LimitLow = Limit & 0xFFFF;
     GdtEntry->BaseLow = (ULONG)Base & 0xFFFF;
     GdtEntry->BaseMiddle = ((ULONG)Base >> 16) & 0xFF;
-    GdtEntry->Access = DEFAULT_GDT_ACCESS |
-                       ((PrivilegeLevel & 0x3) << 5) | Access;
-
-    if (System != FALSE) {
-        GdtEntry->Access |= GDT_SYSTEM_SEGMENT;
-
-    } else {
-        GdtEntry->Access |= GDT_CODE_DATA_SEGMENT;
-    }
-
+    GdtEntry->Access = GATE_ACCESS_PRESENT | Access;
     GdtEntry->Granularity = Granularity | ((Limit >> 16) & 0xF);
     GdtEntry->BaseHigh = ((ULONG)Base >> 24) & 0xFF;
     return;

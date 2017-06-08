@@ -77,6 +77,121 @@ typedef ULONGLONG PTE, *PPTE;
 
 Structure Description:
 
+    This structure defines the format of a task, interrupt, or call gate
+    descriptor. This structure must not be padded, since the hardware relies on
+    this exact format.
+
+Members:
+
+    LowOffset - Stores the lower 16 bits of the gate's destination address.
+
+    Selector - Stores the code segment selector the gate code should run in.
+
+    Ist - Stores the interrupt stack table index specifying the stack to use
+        when taking this interrupt or trap. Set to 0 to not switch stacks.
+
+    Access - Stores various properties of the gate.
+        Bit 7: Present. 1 if the gate is present, 0 if not present.
+        Bits 6-5: DPL. Sets the ring number this handler executes in. Zero is
+            the most privileged ring, 3 is least privileged.
+        Bit 4: Reserved (set to 0).
+        Bits 3-0: The gate type. Set to CALL_GATE_TYPE, INTERRUPT_GATE_TYPE,
+            TASK_GATE_TYPE, or TRAP_GATE_TYPE.
+
+    MidOffset - Stores bits 16-31 of the handler's address.
+
+    HighWord - Stores bits 32-63 of the handler's address.
+
+    Reserved - Stores a reserved word that should be zero.
+
+--*/
+
+typedef struct _PROCESSOR_GATE {
+    USHORT LowOffset;
+    USHORT Selector;
+    BYTE Ist;
+    BYTE Access;
+    USHORT MidOffset;
+    ULONG HighWord;
+    ULONG Reserved;
+} PACKED PROCESSOR_GATE, *PPROCESSOR_GATE;
+
+/*++
+
+Structure Description:
+
+    This structure define a Global Descriptor Table entry. The GDT table sets
+    up the segmentation features of the processor and privilege levels.
+
+Members:
+
+    LimitLow - Stores the lower 16 bits of the descriptor limit.
+
+    BaseLow - Stores the lower 16 bits of the descriptor base.
+
+    BaseMiddle - Stores the next 8 bits of the base.
+
+    Access - Stores the access flags. The access byte has the following format:
+
+             |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+             |     |           |     |                       |
+             |  P  |    DPL    |  S  |         Type          |
+
+             P - Is segment present (1 = Yes)
+
+             DPL - Descriptor privilege level: Ring 0-3. Zero is the highest
+                   privilege, 3 is the lowest (least privileged).
+
+             S - System flag. Set to 0 if it's a system segment, or 1 if it's a
+                 code/data segment.
+
+             Type - Segment type: code segment / data segment. The Type field
+                has the following definition:
+
+                Bit 3 - Set to 1 for Code, or 0 for Data.
+
+                Bit 2 - Expansion direction. Set to 0 for expand-up, or 1 for
+                    expand-down.
+
+                Bit 1 - Write-Enable. Set to 0 for Read Only, or 1 for
+                    Read/Write.
+
+                Bit 0 - Accessed. This bit is set by the processor when memory
+                    in this segment is accessed. It is never cleared by
+                    hardware.
+
+    Granularity - Stores the granularity for the descriptor. The granularity
+        byte has the following format:
+
+             |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+             |     |     |     |     |                       |
+             |  G  |  D  |  L  |  A  | Segment length 19:16  |
+
+             G - Granularity. 0 = 1 byte, 1 = 1 KByte.
+
+             D - Operand Size. 0 = 16/64 bit, 1 = 32 bit.
+
+             L - Long mode (64 bit).
+
+             A - Available for system use (always zero).
+
+    BaseHigh - Stores the high 8 bits of the base address.
+
+--*/
+
+typedef struct _GDT_ENTRY {
+    USHORT LimitLow;
+    USHORT BaseLow;
+    UCHAR BaseMiddle;
+    UCHAR Access;
+    UCHAR Granularity;
+    UCHAR BaseHigh;
+} PACKED GDT_ENTRY, *PGDT_ENTRY;
+
+/*++
+
+Structure Description:
+
     This structure defines the format of the GDTR, IDTR, or TR. This structure
     must be packed since it represents a hardware construct.
 
@@ -166,8 +281,7 @@ struct _TRAP_FRAME {
     ULONG Es;
     ULONG Fs;
     ULONG Gs;
-    ULONG Ss;
-    ULONG ErrorCode;
+    ULONGLONG Padding;
     ULONGLONG Rax;
     ULONGLONG Rbx;
     ULONGLONG Rcx;
@@ -183,10 +297,12 @@ struct _TRAP_FRAME {
     ULONGLONG R13;
     ULONGLONG R14;
     ULONGLONG R15;
+    ULONGLONG ErrorCode;
     ULONGLONG Rip;
-    ULONG Cs;
+    ULONGLONG Cs;
     ULONGLONG Rflags;
     ULONGLONG Rsp;
+    ULONGLONG Ss;
 } PACKED;
 
 //
@@ -243,7 +359,7 @@ Return Value:
 
 VOID
 ArStoreTr (
-    PULONGLONG TssSegment
+    PULONG TssSegment
     );
 
 /*++
@@ -308,7 +424,7 @@ Return Value:
 
 VOID
 ArLoadGdtr (
-    TABLE_REGISTER Gdt
+    PTABLE_REGISTER Gdt
     );
 
 /*++
@@ -351,6 +467,7 @@ Return Value:
 
 PVOID
 ArGetFaultingAddress (
+    VOID
     );
 
 /*++
@@ -390,7 +507,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetCurrentPageDirectory (
     VOID
     );
@@ -413,7 +530,7 @@ Return Value:
 
 VOID
 ArSetCurrentPageDirectory (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++
@@ -471,7 +588,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetControlRegister0 (
     VOID
     );
@@ -494,7 +611,7 @@ Return Value:
 
 VOID
 ArSetControlRegister0 (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++
@@ -513,7 +630,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetControlRegister4 (
     VOID
     );
@@ -536,7 +653,7 @@ Return Value:
 
 VOID
 ArSetControlRegister4 (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++
@@ -555,7 +672,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetDebugRegister0 (
     VOID
     );
@@ -578,7 +695,7 @@ Return Value:
 
 VOID
 ArSetDebugRegister0 (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++
@@ -597,7 +714,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetDebugRegister1 (
     VOID
     );
@@ -620,7 +737,7 @@ Return Value:
 
 VOID
 ArSetDebugRegister1 (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++
@@ -639,7 +756,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetDebugRegister2 (
     VOID
     );
@@ -662,7 +779,7 @@ Return Value:
 
 VOID
 ArSetDebugRegister2 (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++
@@ -681,7 +798,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetDebugRegister3 (
     VOID
     );
@@ -704,7 +821,7 @@ Return Value:
 
 VOID
 ArSetDebugRegister3 (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++
@@ -723,7 +840,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetDebugRegister6 (
     VOID
     );
@@ -746,7 +863,7 @@ Return Value:
 
 VOID
 ArSetDebugRegister6 (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++
@@ -765,7 +882,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+UINTN
 ArGetDebugRegister7 (
     VOID
     );
@@ -788,7 +905,7 @@ Return Value:
 
 VOID
 ArSetDebugRegister7 (
-    ULONGLONG Value
+    UINTN Value
     );
 
 /*++

@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -17,7 +17,7 @@ Abstract:
 
 Author:
 
-    Evan Green 1-Aug-2013
+    Evan Green 6-Jun-2017
 
 Environment:
 
@@ -31,8 +31,7 @@ Environment:
 
 #include <minoca/kernel/kernel.h>
 #include <minoca/kernel/bootload.h>
-#include <minoca/kernel/x86.h>
-#include <minoca/kernel/ioport.h>
+#include <minoca/kernel/x64.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -55,44 +54,32 @@ Environment:
 
 VOID
 BoBreakExceptionHandlerAsm (
-    ULONG ReturnEip,
-    ULONG ReturnCodeSelector,
-    ULONG ReturnEflags
+    VOID
     );
 
 VOID
 BoSingleStepExceptionHandlerAsm (
-    ULONG ReturnEip,
-    ULONG ReturnCodeSelector,
-    ULONG ReturnEflags
+    VOID
     );
 
 VOID
 BoDebugServiceHandlerAsm (
-    ULONG ReturnEip,
-    ULONG ReturnCodeSelector,
-    ULONG ReturnEflags
+    VOID
     );
 
 VOID
 BoDivideByZeroExceptionHandlerAsm (
-    ULONG ReturnEip,
-    ULONG ReturnCodeSelector,
-    ULONG ReturnEflags
+    VOID
     );
 
 VOID
 BoProtectionFaultHandlerAsm (
-    ULONG ReturnEip,
-    ULONG ReturnCodeSelector,
-    ULONG ReturnEflags
+    VOID
     );
 
 VOID
 BoPageFaultHandlerAsm (
-    ULONG ReturnEip,
-    ULONG ReturnCodeSelector,
-    ULONG ReturnEflags
+    VOID
     );
 
 VOID
@@ -119,15 +106,7 @@ BopCreateGate (
     PPROCESSOR_GATE Gate,
     PVOID HandlerRoutine,
     USHORT Selector,
-    UCHAR Access
-    );
-
-VOID
-BopCreateSegmentDescriptor (
-    PGDT_ENTRY GdtEntry,
-    PVOID Base,
-    ULONG Limit,
-    UCHAR Granularity,
+    UCHAR StackIndex,
     UCHAR Access
     );
 
@@ -139,8 +118,52 @@ BopCreateSegmentDescriptor (
 // Store global processor structures.
 //
 
-GDT_ENTRY BoGdt[GDT_ENTRIES];
 PROCESSOR_GATE BoIdt[BOOT_IDT_SIZE];
+
+//
+// Create the GDT, which has the following entries:
+// 0x00 - Null entry, required.
+// 0x08 - KERNEL_CS, flat long mode code segment.
+// 0x10 - KERNEL_DS, flat data segment.
+// 0x18 - KERNEL64_TRANSITION_CS, flat 32-bit code segment.
+//
+
+GDT_ENTRY BoGdt[GDT_ENTRIES] = {
+    {0},
+
+    {
+        MAX_USHORT,
+        0,
+        0,
+        GATE_ACCESS_PRESENT | GDT_TYPE_CODE,
+        GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_64BIT |
+            (MAX_GDT_LIMIT >> 16),
+
+        0
+    },
+
+    {
+        MAX_USHORT,
+        0,
+        0,
+        GATE_ACCESS_PRESENT | GDT_TYPE_DATA_WRITE,
+        GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_64BIT |
+            (MAX_GDT_LIMIT >> 16),
+
+        0
+    },
+
+    {
+        MAX_USHORT,
+        0,
+        0,
+        GATE_ACCESS_PRESENT | GDT_TYPE_CODE,
+        GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT |
+            (MAX_GDT_LIMIT >> 16),
+
+        0
+    }
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -286,10 +309,10 @@ Return Value:
 
 {
 
-    RtlDebugPrint(" *** Page Fault: Faulting Address 0x%08x, "
-                  "Instruction 0x%08x",
+    RtlDebugPrint(" *** Page Fault: Faulting Address 0x%08llx, "
+                  "Instruction 0x%08llx",
                   FaultingAddress,
-                  TrapFrame->Eip);
+                  TrapFrame->Rip);
 
     if ((TrapFrame->ErrorCode & X86_FAULT_FLAG_PROTECTION_VIOLATION) != 0) {
         RtlDebugPrint(", Protection Violation");
@@ -344,58 +367,12 @@ Return Value:
     TABLE_REGISTER Gdt;
 
     //
-    // The first segment descriptor must be unused. Set it to zero.
-    //
-
-    GdtTable[0].LimitLow = 0;
-    GdtTable[0].BaseLow = 0;
-    GdtTable[0].BaseMiddle = 0;
-    GdtTable[0].Access = 0;
-    GdtTable[0].Granularity = 0;
-    GdtTable[0].BaseHigh = 0;
-
-    //
-    // Initialize the kernel code segment. Initialize the entry to cover all
-    // 4GB of memory, with read/write permissions, and only on ring 0. This is
-    // not a system segment.
-    //
-
-    BopCreateSegmentDescriptor(&(GdtTable[KERNEL_CS / sizeof(GDT_ENTRY)]),
-                               NULL,
-                               MAX_GDT_LIMIT,
-                               GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
-                               GDT_TYPE_CODE);
-
-    //
-    // Initialize the kernel data segment. Initialize the entry to cover
-    // all 4GB of memory, with read/write permissions, and only on ring 0. This
-    // is not a system segment.
-    //
-
-    BopCreateSegmentDescriptor(&(GdtTable[KERNEL_DS / sizeof(GDT_ENTRY)]),
-                               NULL,
-                               MAX_GDT_LIMIT,
-                               GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
-                               GDT_TYPE_DATA_WRITE);
-
-    //
-    // Create a 64-bit transition code segment.
-    //
-
-    BopCreateSegmentDescriptor(
-                       &(GdtTable[KERNEL64_TRANSITION_CS / sizeof(GDT_ENTRY)]),
-                       NULL,
-                       MAX_GDT_LIMIT,
-                       GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_64BIT,
-                       GDT_TYPE_CODE);
-
-    //
     // Install the new GDT table.
     //
 
     Gdt.Limit = sizeof(GDT_ENTRY) * BOOT_GDT_ENTRIES;
-    Gdt.Base = (ULONG)GdtTable;
-    ArLoadGdtr(Gdt);
+    Gdt.Base = (UINTN)GdtTable;
+    ArLoadGdtr(&Gdt);
     BoLoadBootDataSegments();
     return;
 }
@@ -436,26 +413,31 @@ Return Value:
     BopCreateGate(IdtTable + VECTOR_DIVIDE_ERROR,
                   BoDivideByZeroExceptionHandlerAsm,
                   KERNEL_CS,
+                  0,
                   GATE_ACCESS_USER | GATE_TYPE_TRAP);
 
     BopCreateGate(IdtTable + VECTOR_BREAKPOINT,
                   BoBreakExceptionHandlerAsm,
                   KERNEL_CS,
+                  0,
                   GATE_ACCESS_USER | GATE_TYPE_INTERRUPT);
 
     BopCreateGate(IdtTable + VECTOR_DEBUG,
                   BoSingleStepExceptionHandlerAsm,
                   KERNEL_CS,
+                  0,
                   GATE_TYPE_INTERRUPT);
 
     BopCreateGate(IdtTable + VECTOR_DEBUG_SERVICE,
                   BoDebugServiceHandlerAsm,
                   KERNEL_CS,
+                  0,
                   GATE_TYPE_INTERRUPT);
 
     BopCreateGate(IdtTable + VECTOR_PROTECTION_FAULT,
                   BoProtectionFaultHandlerAsm,
                   KERNEL_CS,
+                  0,
                   GATE_TYPE_INTERRUPT);
 
     //
@@ -465,19 +447,21 @@ Return Value:
     BopCreateGate(IdtTable + VECTOR_PAGE_FAULT,
                   BoPageFaultHandlerAsm,
                   KERNEL_CS,
+                  0,
                   GATE_TYPE_INTERRUPT);
 
     BopCreateGate(IdtTable + VECTOR_STACK_EXCEPTION,
                   BoPageFaultHandlerAsm,
                   KERNEL_CS,
+                  0,
                   GATE_TYPE_INTERRUPT);
 
     //
     // Load the IDT register with our interrupt descriptor table.
     //
 
-    IdtRegister.Limit = (BOOT_IDT_SIZE * 8) - 1;
-    IdtRegister.Base = (ULONG)IdtTable;
+    IdtRegister.Limit = (BOOT_IDT_SIZE * sizeof(PROCESSOR_GATE)) - 1;
+    IdtRegister.Base = (UINTN)IdtTable;
     ArLoadIdtr(&IdtRegister);
     return;
 }
@@ -487,6 +471,7 @@ BopCreateGate (
     PPROCESSOR_GATE Gate,
     PVOID HandlerRoutine,
     USHORT Selector,
+    UCHAR StackIndex,
     UCHAR Access
     )
 
@@ -506,6 +491,9 @@ Arguments:
 
     Selector - Supplies the code selector this gate should run in.
 
+    StackIndex - Supplies the interrupt stack index to use. Supply to to not
+        switch stacks.
+
     Access - Supplies the gate access bits, similar to the GDT access bits.
 
 Return Value:
@@ -516,72 +504,13 @@ Return Value:
 
 {
 
-    Gate->LowOffset = (USHORT)((ULONG)HandlerRoutine & 0xFFFF);
-    Gate->HighOffset = (USHORT)((ULONG)HandlerRoutine >> 16);
+    Gate->LowOffset = (USHORT)((UINTN)HandlerRoutine & 0xFFFF);
+    Gate->MidOffset = (USHORT)((UINTN)HandlerRoutine >> 16);
+    Gate->HighWord = (ULONG)((UINTN)HandlerRoutine >> 32);
     Gate->Selector = Selector;
-
-    //
-    // Set bit 5-7 of the count to 0. Bits 4-0 are reserved and need to be set
-    // to 0 as well.
-    //
-
-    Gate->Count = 0;
-    Gate->Access = GATE_ACCESS_PRESENT | Access;
-    return;
-}
-
-VOID
-BopCreateSegmentDescriptor (
-    PGDT_ENTRY GdtEntry,
-    PVOID Base,
-    ULONG Limit,
-    UCHAR Granularity,
-    UCHAR Access
-    )
-
-/*++
-
-Routine Description:
-
-    This routine initializes a GDT entry given the parameters.
-
-Arguments:
-
-    GdtEntry - Supplies a pointer to the GDT entry that will be initialized.
-
-    Base - Supplies the base address where this segment begins.
-
-    Limit - Supplies the size of the segment, either in bytes or kilobytes,
-        depending on the Granularity parameter.
-
-    Granularity - Supplies the granularity of the segment. Valid values are byte
-        granularity or kilobyte granularity.
-
-    Access - Supplies the access permissions on the segment.
-
-    PrivilegeLevel - Supplies the privilege level that this segment requires.
-        Valid values are 0 (most privileged, kernel) to 3 (user mode, least
-        privileged).
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    //
-    // If all these magic numbers seem cryptic, see the comment above the
-    // definition for the GDT_ENTRY structure.
-    //
-
-    GdtEntry->LimitLow = Limit & 0xFFFF;
-    GdtEntry->BaseLow = (ULONG)Base & 0xFFFF;
-    GdtEntry->BaseMiddle = ((ULONG)Base >> 16) & 0xFF;
-    GdtEntry->Access = GATE_ACCESS_PRESENT | Access;
-    GdtEntry->Granularity = Granularity | ((Limit >> 16) & 0xF);
-    GdtEntry->BaseHigh = ((ULONG)Base >> 24) & 0xFF;
+    Gate->Ist = StackIndex;
+    Gate->Access = Access | GATE_ACCESS_PRESENT;
+    Gate->Reserved = 0;
     return;
 }
 

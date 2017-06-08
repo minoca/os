@@ -87,7 +87,7 @@ FUNCTION(BmpFwTransferTo64BitApplication)
     pushl   %edi                    # Save EDI, first 64-bit parameter register.
     pushl   %esi                    # Save ESI, volatile in 64-bit land.
     movl    8(%ebp), %edi           # Load the parameters parameter.
-    movl    12(%ebp), %edx          # Load the function pointer.
+    movl    12(%ebp), %esi          # Load the function pointer.
     movl    16(%ebp), %eax          # Load up the page directory.
     movl    %cr3, %ecx              # Get the old CR3.
     pushl   %ecx                    # Save it, probably not necessary.
@@ -118,7 +118,6 @@ FUNCTION(BmpFwTransferTo64BitApplication)
     movl    %cr0, %eax              # Read CR0.
     orl     $CR0_OR_MASK, %eax      # OR in the right bits.
     andl    $CR0_AND_MASK, %eax     # AND out the right bits.
-movl    $TestLoaderFunction, %edx # TODO: Remove this once it works!
     movl    %eax, %cr0              # Boom, paging enabled.
 
     ##
@@ -145,7 +144,7 @@ LongModeCode:
     ## Off to adventure time with the next boot application.
     ##
 
-    callq   *%rdx                   # Away we go.
+    callq   *%rsi                   # Away we go.
 
     ##
     ## Back from the adventure. Restore the old structures.
@@ -161,11 +160,6 @@ LongModeCode:
     ##
 
     retfq
-
-    ## TODO: Remove this test function
-TestLoaderFunction:
-    movq    $0x12345678FEDBCA98, %rax
-    ret
 
 .code32
 ProtectedModeReturn:
