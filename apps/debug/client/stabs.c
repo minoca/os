@@ -4029,6 +4029,9 @@ Return Value:
     if (Symbols->Machine == ImageMachineTypeX86) {
         return X86RegisterEbp;
 
+    } else if (Symbols->Machine == ImageMachineTypeX64) {
+        return X64RegisterRbp;
+
     } else if (Symbols->Machine == ImageMachineTypeArm32) {
         ParseState = Symbols->SymbolContext;
 

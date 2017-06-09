@@ -60,6 +60,7 @@ Author:
 #define IMAGE_FILE_MACHINE_AMD64 0x8664
 #define IMAGE_FILE_MACHINE_ARM 0x1C0
 #define IMAGE_FILE_MACHINE_ARMT 0x1C2
+#define IMAGE_FILE_MACHINE_ARM64    0xAA64
 
 //
 // Data directory definitions.

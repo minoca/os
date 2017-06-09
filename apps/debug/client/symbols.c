@@ -191,21 +191,48 @@ PSTR DbgX64RegisterSymbolNames[] = {
     "st5",
     "st6",
     "st7",
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    "eflags",
+    "mm0",
+    "mm1",
+    "mm2",
+    "mm3",
+    "mm4",
+    "mm5",
+    "mm6",
+    "mm7",
+    "rflags",
     "es",
     "cs",
     "ss",
     "ds",
     "fs",
     "gs",
+    NULL,
+    NULL,
+    "fsbase",
+    "gsbase",
+    NULL,
+    NULL,
+    "tr",
+    "ldtr",
+    "mxcsr",
+    "fcw",
+    "fsw",
+    "xmm16",
+    "xmm17",
+    "xmm18",
+    "xmm19",
+    "xmm20",
+    "xmm21",
+    "xmm22",
+    "xmm23",
+    "xmm24",
+    "xmm25",
+    "xmm26",
+    "xmm27",
+    "xmm28",
+    "xmm29",
+    "xmm30",
+    "xmm31"
 };
 
 PSTR DbgArmRegisterSymbolNames[] = {
@@ -1811,6 +1838,16 @@ Return Value:
 
         if (Register < Count) {
             Name = DbgX86RegisterSymbolNames[Register];
+        }
+
+        break;
+
+    case ImageMachineTypeX64:
+        Count = sizeof(DbgX64RegisterSymbolNames) /
+                sizeof(DbgX64RegisterSymbolNames[0]);
+
+        if (Register < Count) {
+            Name = DbgX64RegisterSymbolNames[Register];
         }
 
         break;

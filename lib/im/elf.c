@@ -2985,7 +2985,9 @@ Return Value:
         if (((Image->Machine == ImageMachineTypeArm32) &&
              (RelocationType == ElfArmRelocationJumpSlot)) ||
             ((Image->Machine == ImageMachineTypeX86) &&
-             (RelocationType == Elf386RelocationJumpSlot))) {
+             (RelocationType == Elf386RelocationJumpSlot)) ||
+            ((Image->Machine == ImageMachineTypeX64) &&
+             (RelocationType == ElfX64RelocationJumpSlot))) {
 
             RelocationPlace = (PELF_ADDR)((PUCHAR)Image->LoadedImageBuffer +
                                (Offset - (UINTN)Image->PreferredLowestAddress));

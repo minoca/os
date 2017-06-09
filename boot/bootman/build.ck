@@ -181,7 +181,7 @@ function build() {
         ];
 
         pcatApp = {
-            "label": "bootman.elf",
+            "label": "bootman",
             "inputs": pcatSources + pcatLibs,
             "sources_config": sourcesConfig,
             "includes": includes,
@@ -198,7 +198,7 @@ function build() {
 
         flattened = {
             "label": "bootman.bin",
-            "inputs": [":bootman.elf"],
+            "inputs": [":bootman"],
             "binplace": "bin",
             "nostrip": true
         };

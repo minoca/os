@@ -111,6 +111,9 @@ Return Value:
         } else if (PeHeaders->FileHeader.Machine == IMAGE_FILE_MACHINE_ARMT) {
             Information->Machine = ImageMachineTypeArm32;
 
+        } else if (PeHeaders->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
+            Information->Machine = ImageMachineTypeX64;
+
         } else {
             Information->Machine = ImageMachineTypeUnknown;
         }
