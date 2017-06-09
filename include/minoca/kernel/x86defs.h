@@ -251,6 +251,7 @@ Author:
 //
 
 #define X86_CPUID_EXTENDED_INFORMATION_EDX_SYSCALL (1 << 11)
+#define X86_CPUID_EXTENDED_INFORMATION_EDX_1GB_PAGES (1 << 26)
 #define X86_CPUID_EXTENDED_INFORMATION_EDX_LONG_MODE (1 << 29)
 
 //
@@ -341,14 +342,8 @@ Author:
      ((_TrapFrame)->Cs == USER_CS))
 
 //
-// This macro extracts the value out of a PTE (or PDE, etc).
+// This macro extracts the address ut of a PTE (or PDE, etc).
 //
 
-#define X86_PTE_ENTRY(_Pte) ((_Pte) >> X86_PTE_ENTRY_SHIFT)
-
-//
-// This macro creates a PTE (or PDE, etc) from a value.
-//
-
-#define X86_ENTRY_PTE(_Value) ((_Value) << X86_PTE_ENTRY_SHIFT)
+#define X86_PTE_ENTRY(_Pte) ((_Pte) & ~(PAGE_MASK | X86_PTE_NX))
 

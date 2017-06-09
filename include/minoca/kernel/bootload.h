@@ -143,8 +143,6 @@ Members:
 
     PageDirectory - Stores the address of the top level page table in use.
 
-    PageTables - Stores the address of the page table self map.
-
     DriveNumber - Stores the drive number of the OS partition for legacy PC/AT
         systems.
 
@@ -171,7 +169,6 @@ typedef struct _BOOT_INITIALIZATION_BLOCK {
     ULONGLONG ApplicationSize;
     ULONGLONG ApplicationArguments;
     ULONGLONG PageDirectory;
-    ULONGLONG PageTables;
     ULONG DriveNumber;
     ULONG Flags;
 } BOOT_INITIALIZATION_BLOCK, *PBOOT_INITIALIZATION_BLOCK;

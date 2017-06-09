@@ -47,49 +47,9 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-/*++
-
-Structure Description:
-
-    This structure defines the iteration context for mapping all the boot
-    manager allocations.
-
-Members:
-
-    PagesMapped - Stores the number of pages that were successfully mapped.
-
-    Status - Stores the overall status code.
-
---*/
-
-typedef struct _BOOTMAN_MAPPING_CONTEXT {
-    UINTN PagesMapped;
-    KSTATUS Status;
-} BOOTMAN_MAPPING_CONTEXT, *PBOOTMAN_MAPPING_CONTEXT;
-
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-VOID
-BmpFwBootMappingIterationRoutine (
-    PMEMORY_DESCRIPTOR_LIST DescriptorList,
-    PMEMORY_DESCRIPTOR Descriptor,
-    PVOID Context
-    );
-
-KSTATUS
-BmpFwIdentityMapPages (
-    ULONGLONG Address,
-    UINTN Size,
-    PUINTN PagesMapped
-    );
-
-KSTATUS
-BmpFwIdentityMapPage (
-    ULONGLONG Address,
-    PUINTN PagesMapped
-    );
 
 //
 // -------------------------------------------------------------------- Globals
@@ -100,12 +60,6 @@ BmpFwIdentityMapPage (
 //
 
 PPTE FwPml4Table;
-
-//
-// Define the PML4 self map index.
-//
-
-ULONG FwSelfMapIndex;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -134,21 +88,55 @@ Return Value:
 
 {
 
-    BOOTMAN_MAPPING_CONTEXT Context;
+    ULONG Count;
+    ULONG Eax;
+    ULONG Ebx;
+    ULONG Ecx;
+    ULONG Edx;
+    BOOL HugePages;
+    ULONG Index;
     ULONGLONG Page;
+    ULONG PageCount;
     KSTATUS Status;
     PPTE Table;
 
-    Context.PagesMapped = 0;
-    Context.Status = STATUS_SUCCESS;
-
     //
-    // Allocate and initialize a PML4, plus a PDPT and PDT for the first 2MB.
+    // Allocate and initialize a PML4, then like lazy slobs just identity
+    // map the first 8GB and call it a day. The PCAT memory allocation has a
+    // governer in there as well to avoid accidentally allocating pages greater
+    // than that.
     //
 
     if (FwPml4Table == INVALID_PHYSICAL_ADDRESS) {
+
+        //
+        // First find out if the processor supports 1GB pages. This leaf must
+        // be supported because it's the one that determined the machine was
+        // long-mode capable.
+        //
+
+        Eax = X86_CPUID_EXTENDED_INFORMATION;
+        ArCpuid(&Eax, &Ebx, &Ecx, &Edx);
+
+        //
+        // With 1GB pages, just a PML4T and PDPT are needed (4 entries).
+        //
+
+        if ((Edx & X86_CPUID_EXTENDED_INFORMATION_EDX_1GB_PAGES) != 0) {
+            HugePages = TRUE;
+            PageCount = 2;
+
+        //
+        // With only 2MB pages, 4 PDTs are needed too.
+        //
+
+        } else {
+            HugePages = FALSE;
+            PageCount = 2 + 4;
+        }
+
         Status = FwAllocatePages(&Page,
-                                 PAGE_SIZE * 3,
+                                 PageCount * PAGE_SIZE,
                                  PAGE_SIZE,
                                  MemoryTypeLoaderTemporary);
 
@@ -159,60 +147,67 @@ Return Value:
         ASSERT(Page == (UINTN)Page);
 
         FwPml4Table = (PVOID)(UINTN)Page;
-        RtlZeroMemory(FwPml4Table, PAGE_SIZE * 3);
-
-        //
-        // Just use the highest value as the self map index. This conveniently
-        // keeps it out of a range where the self map might collide with real
-        // physical pages.
-        //
-
-        FwSelfMapIndex = X64_PTE_COUNT;
-        FwPml4Table[FwSelfMapIndex] =
-                              X86_ENTRY_PTE((UINTN)FwPml4Table >> PAGE_SHIFT) |
-                              X86_PTE_PRESENT |
-                              X86_PTE_WRITABLE;
-
-        //
-        // Identity map the first 2MB with a large page, it's just easier that
-        // way.
-        //
-
         Page += PAGE_SIZE;
-        FwPml4Table[0] = X86_ENTRY_PTE(Page >> PAGE_SHIFT) |
-                         X86_PTE_PRESENT |
-                         X86_PTE_WRITABLE;
 
         //
-        // Set the PDPT.
+        // Zero out the PML4T and the PDPT. Point the PML4T at the PDPT.
+        //
+
+        RtlZeroMemory(FwPml4Table, PAGE_SIZE * 2);
+        FwPml4Table[0] = Page | X86_PTE_PRESENT | X86_PTE_WRITABLE;
+
+        //
+        // If 1GB pages are supported, just fill in the four entries for the
+        // PDPT.
         //
 
         Table = (PPTE)(UINTN)Page;
         Page += PAGE_SIZE;
-        Table[0] = X86_ENTRY_PTE(Page >> PAGE_SHIFT) |
-                   X86_PTE_PRESENT |
-                   X86_PTE_WRITABLE;
+        if (HugePages != FALSE) {
+            Table[0] = X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_LARGE;
+            Table[1] = (2ULL * _1GB) |
+                       X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_LARGE;
+
+            Table[2] = (4ULL * _1GB) |
+                       X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_LARGE;
+
+            Table[3] = (6ULL * _1GB) |
+                       X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_LARGE;
 
         //
-        // Set the PD entry as a large 2MB page mapping the first 2MB.
+        // 1GB pages are not supported, so map 2MB pages.
         //
 
-        Table = (PPTE)(UINTN)Page;
-        Table[0] = X86_ENTRY_PTE(0) |
-                   X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_LARGE;
-    }
+        } else {
 
-    MmMdIterate(&BoMemoryMap,
-                BmpFwBootMappingIterationRoutine,
-                &Context);
+            //
+            // Fill in the PDPT.
+            //
 
-    if (!KSUCCESS(Context.Status)) {
-        goto FwCreatePageTablesEnd;
+            for (Index = 0; Index < 4; Index += 1) {
+                Table[Index] = Page | X86_PTE_PRESENT | X86_PTE_WRITABLE;
+                Page += PAGE_SIZE;
+            }
+
+            //
+            // Now fill in all the little 2MB pages up to 8GB. 4096 entries in
+            // all. The PDTs are contiguous so this loop spans all 4 of them.
+            //
+
+            Table += X64_PTE_COUNT;
+            Count = (8LL * _1GB) / (2LL * _1MB);
+            Page = 0;
+            for (Index = 0; Index < Count; Index += 1) {
+                Table[Index] =
+                     Page | X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_LARGE;
+
+                Page += 2 * _1MB;
+            }
+        }
     }
 
     Parameters->PageDirectory = (UINTN)FwPml4Table;
-    Parameters->PageTables = ((ULONGLONG)FwSelfMapIndex << X64_PML4E_SHIFT) |
-                             X64_CANONICAL_HIGH;
+    Status = STATUS_SUCCESS;
 
 FwCreatePageTablesEnd:
     return Status;
@@ -221,226 +216,4 @@ FwCreatePageTablesEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
-VOID
-BmpFwBootMappingIterationRoutine (
-    PMEMORY_DESCRIPTOR_LIST DescriptorList,
-    PMEMORY_DESCRIPTOR Descriptor,
-    PVOID Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called once for each descriptor in the memory descriptor
-    list.
-
-Arguments:
-
-    DescriptorList - Supplies a pointer to the descriptor list being iterated
-        over.
-
-    Descriptor - Supplies a pointer to the current descriptor.
-
-    Context - Supplies an optional opaque pointer of context that was provided
-        when the iteration was requested.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PBOOTMAN_MAPPING_CONTEXT IterationContext;
-    UINTN PagesMapped;
-    KSTATUS Status;
-
-    IterationContext = Context;
-    if (!KSUCCESS(IterationContext->Status)) {
-        return;
-    }
-
-    //
-    // Skip all except interesting descriptors.
-    //
-
-    if ((Descriptor->Type == MemoryTypeFirmwareTemporary) ||
-        (Descriptor->Type == MemoryTypeLoaderTemporary) ||
-        (Descriptor->Type == MemoryTypeLoaderPermanent)) {
-
-        PagesMapped = 0;
-        Status = BmpFwIdentityMapPages(Descriptor->BaseAddress,
-                                       Descriptor->Size,
-                                       &PagesMapped);
-
-        IterationContext->PagesMapped += PagesMapped;
-        if (!KSUCCESS(Status)) {
-            IterationContext->Status = Status;
-        }
-    }
-
-    return;
-}
-
-KSTATUS
-BmpFwIdentityMapPages (
-    ULONGLONG Address,
-    UINTN Size,
-    PUINTN PagesMapped
-    )
-
-/*++
-
-Routine Description:
-
-    This routine identity maps a region of memory in preparation for switching
-    64-bit paging on.
-
-Arguments:
-
-    Address - Supplies the address to identity map.
-
-    Size - Supplies the size to map.
-
-    PagesMapped - Supplies a pointer where the number of pages successfully
-        mapped will be incremented. Pages already mapped do not count.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ULONGLONG Current;
-    UINTN Index;
-    UINTN PageCount;
-    KSTATUS Status;
-
-    Current = ALIGN_RANGE_DOWN(Address, PAGE_SIZE);
-    PageCount = (ALIGN_RANGE_UP(Address + Size, PAGE_SIZE) - Current) >>
-                PAGE_SHIFT;
-
-    for (Index = 0; Index < PageCount; Index += 1) {
-        Status = BmpFwIdentityMapPage(Current, PagesMapped);
-        if (!KSUCCESS(Status)) {
-            return Status;
-        }
-
-        Current += PAGE_SIZE;
-    }
-
-    return STATUS_SUCCESS;
-}
-
-KSTATUS
-BmpFwIdentityMapPage (
-    ULONGLONG Address,
-    PUINTN PagesMapped
-    )
-
-/*++
-
-Routine Description:
-
-    This routine identity maps a page of memory in preparation for switching
-    64-bit paging on.
-
-Arguments:
-
-    Address - Supplies the address of the page to identity map.
-
-    PagesMapped - Supplies a pointer whose value will be incremented if a new
-        page was mapped.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ULONG EntryIndex;
-    ULONG Index;
-    ULONGLONG NewPage;
-    ULONG Shift;
-    KSTATUS Status;
-    PPTE Table;
-
-    //
-    // If it's in the first 2MB, don't worry about it, those are mapped with a
-    // large page.
-    //
-
-    if (Address < (2 * _1MB)) {
-        return STATUS_SUCCESS;
-    }
-
-    //
-    // Walk the page tables, creating any needed pages along the way.
-    //
-
-    Table = FwPml4Table;
-    Shift = X64_PML4E_SHIFT;
-    for (Index = 0; Index < X64_PAGE_LEVEL - 1; Index += 1) {
-        EntryIndex = (Address >> Shift) & X64_PT_MASK;
-        if (X86_PTE_ENTRY(Table[EntryIndex]) == 0) {
-            Status = FwAllocatePages(&NewPage,
-                                     PAGE_SIZE,
-                                     PAGE_SIZE,
-                                     MemoryTypeLoaderTemporary);
-
-            if (!KSUCCESS(Status)) {
-                return Status;
-            }
-
-            ASSERT(NewPage == (UINTN)NewPage);
-
-            RtlZeroMemory((PVOID)(UINTN)NewPage, PAGE_SIZE);
-            Table[EntryIndex] = X86_ENTRY_PTE(NewPage >> PAGE_SHIFT) |
-                                X86_PTE_PRESENT |
-                                X86_PTE_WRITABLE;
-        }
-
-        ASSERT(X86_PTE_ENTRY(Table[EntryIndex]) ==
-               (UINTN)(X86_PTE_ENTRY(Table[EntryIndex])));
-
-        Table = (PPTE)(UINTN)(X86_PTE_ENTRY(Table[EntryIndex]) << PAGE_SHIFT);
-        Shift -= X64_PTE_BITS;
-    }
-
-    ASSERT(Shift == PAGE_SHIFT);
-
-    EntryIndex = (Address >> PAGE_SHIFT) & X64_PT_MASK;
-    if ((Table[EntryIndex] & X86_PTE_PRESENT) != 0) {
-        if (X86_PTE_ENTRY(Table[EntryIndex]) != (Address >> PAGE_SHIFT)) {
-
-            //
-            // Some page is already mapped here, and it's not the right one.
-            //
-
-            ASSERT(FALSE);
-
-            return STATUS_MEMORY_CONFLICT;
-        }
-
-        return STATUS_SUCCESS;
-    }
-
-    //
-    // Set the PTE to point at the page itself.
-    //
-
-    Table[EntryIndex] = X86_ENTRY_PTE(Address >> PAGE_SHIFT) |
-                        X86_PTE_PRESENT |
-                        X86_PTE_WRITABLE;
-
-    *PagesMapped += 1;
-    return STATUS_SUCCESS;
-}
 

@@ -129,6 +129,25 @@ Return Value:
     *PageDirectory = PhysicalAddress;
     BoPageDirectory = (PVOID)(UINTN)*PageDirectory;
     RtlZeroMemory(BoPageDirectory, PAGE_SIZE);
+
+    //
+    // Set up the self map.
+    //
+
+    BoPageDirectory[X64_SELF_MAP_INDEX] =
+             PhysicalAddress | X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_NX;
+
+    MmMdInitDescriptor(
+              &KernelSpace,
+              X64_CANONICAL_HIGH | (X64_SELF_MAP_INDEX << X64_PML4E_SHIFT),
+              X64_CANONICAL_HIGH | (X64_SELF_MAP_INDEX + 1) << X64_PML4E_SHIFT,
+              MemoryTypePageTables);
+
+    Status = MmMdAddDescriptorToList(&BoVirtualMap, &KernelSpace);
+    if (!KSUCCESS(Status)) {
+        goto InitializePagingStructuresEnd;
+    }
+
     Status = STATUS_SUCCESS;
 
 InitializePagingStructuresEnd:
@@ -185,9 +204,237 @@ Return Value:
 
 {
 
-    ASSERT(FALSE);
+    UINTN AlignedSize;
+    UINTN CurrentVirtual;
+    ULONG EntryShift;
+    PMEMORY_DESCRIPTOR ExistingDescriptor;
+    BOOL HugePage;
+    ULONG Level;
+    ULONGLONG MappedAddress;
+    UINTN PageCount;
+    ULONG PageOffset;
+    UINTN PagesMapped;
+    PPTE PageTable;
+    ULONG PageTableIndex;
+    MEMORY_TYPE PageTableMemoryType;
+    PHYSICAL_ADDRESS PageTablePhysical;
+    KSTATUS Status;
+    ALLOCATION_STRATEGY Strategy;
+    MEMORY_DESCRIPTOR VirtualSpace;
+    BOOL VirtualSpaceAllocated;
 
-    return STATUS_NOT_IMPLEMENTED;
+    VirtualSpaceAllocated = FALSE;
+    PageCount = 0;
+    PageOffset = (ULONG)((UINTN)PhysicalAddress & PAGE_MASK);
+    Size += PageOffset;
+    if (BoPageDirectory == NULL) {
+        return STATUS_NOT_INITIALIZED;
+    }
+
+    if ((VirtualAddress != NULL) &&
+        (*VirtualAddress != (PVOID)-1) &&
+        (((UINTN)*VirtualAddress & PAGE_MASK) !=
+         ((UINTN)PhysicalAddress & PAGE_MASK))) {
+
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    Strategy = AllocationStrategyAnyAddress;
+    if (MemoryType == MemoryTypeLoaderTemporary) {
+        Strategy = AllocationStrategyHighestAddress;
+    }
+
+    //
+    // Get the requested address, or find a virtual address if one was not
+    // supplied.
+    //
+
+    if ((VirtualAddress == NULL) || (*VirtualAddress == (PVOID)-1)) {
+        AlignedSize = ALIGN_RANGE_UP(Size, PAGE_SIZE);
+        MappedAddress = 0;
+        Status = MmMdAllocateFromMdl(&BoVirtualMap,
+                                     &MappedAddress,
+                                     AlignedSize,
+                                     PAGE_SIZE,
+                                     0,
+                                     MAX_UINTN,
+                                     MemoryType,
+                                     Strategy);
+
+        if (!KSUCCESS(Status)) {
+            Status = STATUS_NO_MEMORY;
+            goto MapPhysicalAddressEnd;
+        }
+
+        if (VirtualAddress != NULL) {
+            *VirtualAddress = (PVOID)MappedAddress;
+        }
+
+    } else {
+        MappedAddress = (UINTN)*VirtualAddress;
+
+        //
+        // Check to see if this region is occupied already, and fail if it is.
+        //
+
+        ExistingDescriptor = MmMdLookupDescriptor(
+                                                &BoVirtualMap,
+                                                (UINTN)*VirtualAddress,
+                                                (UINTN)*VirtualAddress + Size);
+
+        if ((ExistingDescriptor != NULL) &&
+            (ExistingDescriptor->Type != MemoryTypeFree)) {
+
+            Status = STATUS_MEMORY_CONFLICT;
+            goto MapPhysicalAddressEnd;
+        }
+
+        //
+        // Add the descriptor to the virtual memory map to account for its use.
+        //
+
+        MmMdInitDescriptor(&VirtualSpace,
+                           MappedAddress,
+                           MappedAddress + Size,
+                           MemoryType);
+
+        Status = MmMdAddDescriptorToList(&BoVirtualMap, &VirtualSpace);
+        if (!KSUCCESS(Status)) {
+            goto MapPhysicalAddressEnd;
+        }
+    }
+
+    VirtualSpaceAllocated = TRUE;
+    if ((VirtualAddress != NULL) && (*VirtualAddress != NULL)) {
+        *VirtualAddress = (PVOID)((UINTN)*VirtualAddress + PageOffset);
+    }
+
+    //
+    // Ensure the space is big enough.
+    //
+
+    if (MappedAddress + Size < MappedAddress) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto MapPhysicalAddressEnd;
+    }
+
+    CurrentVirtual = (UINTN)MappedAddress;
+    PageCount = ALIGN_RANGE_UP(Size, PAGE_SIZE) / PAGE_SIZE;
+    PagesMapped = 0;
+    HugePage = FALSE;
+    while (PageCount != PagesMapped) {
+
+        //
+        // Get to the lowest level page table, allocating page tables along the
+        // way.
+        //
+
+        PageTable = BoPageDirectory;
+        EntryShift = X64_PML4E_SHIFT;
+        for (Level = 0; Level < X64_PAGE_LEVEL - 1; Level += 1) {
+            PageTableIndex = (CurrentVirtual >> EntryShift) & X64_PT_MASK;
+            PageTable += PageTableIndex;
+            EntryShift -= X64_PTE_BITS;
+            if ((*PageTable & X86_PTE_PRESENT) == 0) {
+
+                //
+                // Check to see if the thing being mapped here could fit in a
+                // 2MB page. If so, stop before the last level page table, and
+                // the code outside the loop will fill in a PDE instead of a
+                // PTE.
+                //
+
+                if ((Level == X64_PAGE_LEVEL - 2) &&
+                    ((PageCount - PagesMapped) >= (_2MB / PAGE_SIZE)) &&
+                    ((CurrentVirtual & (_2MB - 1)) == 0)) {
+
+                    RtlDebugPrint("Using huge page at VA 0x%llx\n",
+                                  CurrentVirtual);
+
+                    HugePage = TRUE;
+                    break;
+                }
+
+                PageTableMemoryType = MemoryTypePageTables;
+                if (CurrentVirtual < (UINTN)KERNEL_VA_START) {
+
+                    ASSERT(MemoryType == MemoryTypeLoaderTemporary);
+
+                    PageTableMemoryType = MemoryTypeBootPageTables;
+                }
+
+                Status = FwAllocatePages(&PageTablePhysical,
+                                         PAGE_SIZE,
+                                         PAGE_SIZE,
+                                         PageTableMemoryType);
+
+                if (!KSUCCESS(Status)) {
+                    goto MapPhysicalAddressEnd;
+                }
+
+                RtlZeroMemory((PVOID)PageTablePhysical, PAGE_SIZE);
+                *PageTable =
+                        PageTablePhysical | X86_PTE_PRESENT | X86_PTE_WRITABLE;
+            }
+
+            PageTable = (PPTE)(X86_PTE_ENTRY(*PageTable));
+        }
+
+        //
+        // Set up the page.
+        //
+
+        PageTableIndex = (CurrentVirtual & X64_PTE_MASK) >> PAGE_SHIFT;
+        PageTable += PageTableIndex;
+        *PageTable = PhysicalAddress | X86_PTE_PRESENT;
+        if ((Attributes & MAP_FLAG_READ_ONLY) == 0) {
+            *PageTable |= X86_PTE_WRITABLE;
+        }
+
+        if ((Attributes & MAP_FLAG_USER_MODE) != 0) {
+            *PageTable |= X86_PTE_USER_MODE;
+        }
+
+        if ((Attributes & MAP_FLAG_WRITE_THROUGH) != 0) {
+            *PageTable |= X86_PTE_WRITE_THROUGH;
+        }
+
+        if ((Attributes & MAP_FLAG_CACHE_DISABLE) != 0) {
+            *PageTable |= X86_PTE_CACHE_DISABLED;
+        }
+
+        if ((Attributes & MAP_FLAG_GLOBAL) != 0) {
+            *PageTable |= X86_PTE_GLOBAL;
+        }
+
+        if ((Attributes & MAP_FLAG_EXECUTE) == 0) {
+            *PageTable |= X86_PTE_NX;
+        }
+
+        if (HugePage != FALSE) {
+            *PageTable |= X86_PTE_LARGE;
+            PagesMapped += _2MB / PAGE_SIZE;
+            PhysicalAddress += _2MB;
+            CurrentVirtual += _2MB;
+            HugePage = FALSE;
+            continue;
+        }
+
+        ASSERT((Attributes & MAP_FLAG_LARGE_PAGE) == 0);
+
+        PagesMapped += 1;
+        PhysicalAddress += PAGE_SIZE;
+        CurrentVirtual += PAGE_SIZE;
+    }
+
+    Status = STATUS_SUCCESS;
+
+MapPhysicalAddressEnd:
+    if ((!KSUCCESS(Status)) && (VirtualSpaceAllocated != FALSE)) {
+        BoUnmapPhysicalAddress((PVOID)MappedAddress, PageCount);
+    }
+
+    return Status;
 }
 
 KSTATUS
@@ -217,9 +464,74 @@ Return Value:
 
 {
 
-    ASSERT(FALSE);
+    UINTN CurrentVirtual;
+    ULONGLONG EndAddress;
+    PPTE PageTable;
+    ULONG PageTableIndex;
+    KSTATUS Status;
+    MEMORY_DESCRIPTOR VirtualSpace;
 
-    return STATUS_NOT_IMPLEMENTED;
+    if (BoPageDirectory == NULL) {
+        return STATUS_NOT_INITIALIZED;
+    }
+
+    EndAddress = (ULONGLONG)(UINTN)VirtualAddress +
+                 ((ULONGLONG)PageCount << PAGE_SHIFT);
+
+    MmMdInitDescriptor(&VirtualSpace,
+                       (UINTN)VirtualAddress,
+                       EndAddress,
+                       MemoryTypeFree);
+
+    Status = MmMdAddDescriptorToList(&BoVirtualMap, &VirtualSpace);
+    CurrentVirtual = (UINTN)VirtualAddress;
+    while (CurrentVirtual < EndAddress) {
+
+        //
+        // Get down to the lowest level page directory.
+        //
+
+        PageTable = BoPageDirectory;
+        PageTableIndex = (CurrentVirtual >> X64_PML4E_SHIFT) & X64_PT_MASK;
+        PageTable += PageTableIndex;
+        if ((*PageTable & X86_PTE_PRESENT) == 0) {
+            CurrentVirtual += PAGE_SIZE;
+            continue;
+        }
+
+        PageTable = (PPTE)(X86_PTE_ENTRY(*PageTable));
+        PageTableIndex = (CurrentVirtual >> X64_PDPE_SHIFT) & X64_PT_MASK;
+        PageTable += PageTableIndex;
+        if ((*PageTable & X86_PTE_PRESENT) == 0) {
+            CurrentVirtual += PAGE_SIZE;
+            continue;
+        }
+
+        PageTable = (PPTE)(X86_PTE_ENTRY(*PageTable));
+        PageTableIndex = (CurrentVirtual >> X64_PDE_SHIFT) & X64_PT_MASK;
+        PageTable += PageTableIndex;
+        if ((*PageTable & X86_PTE_PRESENT) == 0) {
+            CurrentVirtual += PAGE_SIZE;
+            continue;
+        }
+
+        if ((*PageTable & X86_PTE_LARGE) != 0) {
+
+            ASSERT((CurrentVirtual & (_2MB - 1)) == 0);
+            ASSERT((EndAddress - CurrentVirtual) >= _2MB);
+
+            *PageTable = 0;
+            CurrentVirtual += _2MB;
+            continue;
+        }
+
+        PageTable = (PPTE)(X86_PTE_ENTRY(*PageTable));
+        PageTableIndex = (CurrentVirtual >> X64_PTE_SHIFT) & X64_PT_MASK;
+        PageTable[PageTableIndex] = 0;
+        CurrentVirtual += PAGE_SIZE;
+    }
+
+    return Status;
 }
 
 VOID
@@ -253,7 +565,124 @@ Return Value:
 
 {
 
-    ASSERT(FALSE);
+    UINTN CurrentVirtual;
+    ULONGLONG EndAddress;
+    ULONG EntryShift;
+    ULONG Level;
+    ULONG NewAttributesMask;
+    PPTE PageTable;
+    UINTN PageTableIndex;
+
+    NewAttributesMask = (NewAttributes >> MAP_FLAG_PROTECT_SHIFT) &
+                        MAP_FLAG_PROTECT_MASK;
+
+    CurrentVirtual = (UINTN)VirtualAddress;
+    EndAddress = CurrentVirtual + Size;
+    while (CurrentVirtual < EndAddress) {
+
+        //
+        // Get down to the lowest level page table.
+        //
+
+        PageTable = BoPageDirectory;
+        EntryShift = X64_PML4E_SHIFT;
+        for (Level = 0; Level < X64_PAGE_LEVEL - 1; Level += 1) {
+            PageTableIndex = (CurrentVirtual >> EntryShift) & X64_PT_MASK;
+            PageTable += PageTableIndex;
+            EntryShift -= X64_PTE_BITS;
+            if ((*PageTable & X86_PTE_PRESENT) == 0) {
+                PageTable = NULL;
+                break;
+            }
+
+            //
+            // Also stop if a huge page was found. Consider adding some code
+            // to break apart a huge page if only part of it has attributes
+            // being modified.
+            //
+
+            if ((*PageTable & X86_PTE_LARGE) != 0) {
+
+                ASSERT(Level == X64_PAGE_LEVEL - 2);
+
+                if (((EndAddress - CurrentVirtual) < _2MB) ||
+                    ((CurrentVirtual & (_2MB - 1)) != 0)) {
+
+                    RtlDebugPrint("Skipping modification of huge page at "
+                                  "0x%llx because modification is only "
+                                  "0x%llx bytes.\n",
+                                  CurrentVirtual,
+                                  EndAddress - CurrentVirtual);
+
+                    PageTable = NULL;
+                }
+
+                break;
+            }
+
+            PageTable = (PPTE)(X86_PTE_ENTRY(*PageTable));
+        }
+
+        if (PageTable == NULL) {
+            CurrentVirtual += PAGE_SIZE;
+            continue;
+        }
+
+        PageTableIndex = (CurrentVirtual >> X64_PTE_SHIFT) & X64_PT_MASK;
+        PageTable += PageTableIndex;
+
+        //
+        // Look up the entry in the page table.
+        //
+
+        ASSERT((*PageTable & X86_PTE_PRESENT) != 0);
+
+        //
+        // Set the various attributes and set the entry.
+        //
+
+        if ((NewAttributesMask & MAP_FLAG_READ_ONLY) != 0) {
+            *PageTable &= ~X86_PTE_WRITABLE;
+            if ((NewAttributes & MAP_FLAG_READ_ONLY) == 0) {
+                *PageTable |= X86_PTE_WRITABLE;
+            }
+        }
+
+        if ((NewAttributesMask & MAP_FLAG_USER_MODE) != 0) {
+            *PageTable &= ~X86_PTE_USER_MODE;
+            if ((NewAttributes & MAP_FLAG_USER_MODE) != 0) {
+                *PageTable |= X86_PTE_USER_MODE;
+            }
+        }
+
+        if ((NewAttributesMask & MAP_FLAG_WRITE_THROUGH) != 0) {
+            *PageTable &= ~X86_PTE_WRITE_THROUGH;
+            if ((NewAttributes & MAP_FLAG_WRITE_THROUGH) != 0) {
+                *PageTable |= X86_PTE_WRITE_THROUGH;
+            }
+        }
+
+        if ((NewAttributesMask & MAP_FLAG_CACHE_DISABLE) != 0) {
+            *PageTable &= ~X86_PTE_CACHE_DISABLED;
+            if ((NewAttributes & MAP_FLAG_CACHE_DISABLE) != 0) {
+                *PageTable |= X86_PTE_CACHE_DISABLED;
+            }
+        }
+
+        if ((NewAttributesMask & MAP_FLAG_GLOBAL) != 0) {
+            *PageTable &= ~X86_PTE_GLOBAL;
+            if ((NewAttributes & MAP_FLAG_GLOBAL) != 0) {
+                *PageTable |= X86_PTE_GLOBAL;
+            }
+        }
+
+        if ((NewAttributesMask & MAP_FLAG_EXECUTE) != 0) {
+            *PageTable &= ~X86_PTE_NX;
+            if ((NewAttributes & MAP_FLAG_EXECUTE) == 0) {
+                *PageTable |= X86_PTE_NX;
+            }
+        }
+    }
 
     return;
 }
@@ -290,9 +719,14 @@ Return Value:
 
 {
 
-    ASSERT(FALSE);
+    //
+    // The self map location is hardcoded and already set up, so these aren't
+    // needed.
+    //
 
-    return STATUS_NOT_IMPLEMENTED;
+    *PageDirectoryVirtual = NULL;
+    *PageTablesVirtual = NULL;
+    return STATUS_SUCCESS;
 }
 
 KSTATUS
@@ -330,9 +764,45 @@ Return Value:
 
 {
 
-    ASSERT(FALSE);
+    ULONGLONG Address;
+    KSTATUS Status;
+    PPTE Table;
+    ULONG TableIndex;
 
-    return STATUS_NOT_IMPLEMENTED;
+    *PageTableStage = NULL;
+
+    //
+    // "Map" the page table stage, which is really just done to set up a
+    // page table for it.
+    //
+
+    *PageTableStage = (PVOID)-1;
+    Status = BoMapPhysicalAddress(PageTableStage,
+                                  0,
+                                  PAGE_SIZE,
+                                  MAP_FLAG_READ_ONLY,
+                                  MemoryTypeLoaderPermanent);
+
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    //
+    // Manually unmap the page. Don't use the unmap routine because that frees
+    // the region in the MDL, which isn't cool.
+    //
+
+    Address = (UINTN)*PageTableStage;
+    Table = BoPageDirectory;
+    TableIndex = (Address >> X64_PML4E_SHIFT) & X64_PT_MASK;
+    Table = (PPTE)(X86_PTE_ENTRY(Table[TableIndex]));
+    TableIndex = (Address >> X64_PDPE_SHIFT) & X64_PT_MASK;
+    Table = (PPTE)(X86_PTE_ENTRY(Table[TableIndex]));
+    TableIndex = (Address >> X64_PDE_SHIFT) & X64_PT_MASK;
+    Table = (PPTE)(X86_PTE_ENTRY(Table[TableIndex]));
+    TableIndex = (Address >> X64_PTE_SHIFT) & X64_PT_MASK;
+    Table[TableIndex] = 0;
+    return STATUS_SUCCESS;
 }
 
 //

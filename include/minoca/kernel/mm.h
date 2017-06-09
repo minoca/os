@@ -60,8 +60,23 @@ Author:
 #define NON_PAGED_POOL_MAGIC 0x506E6F4E
 #define PAGED_POOL_MAGIC 0x50676150
 
+//
+// Define the kernel address space. For 64-bit mode, leave a page at the end
+// to avoid rollover issues and to keep the space immediately underflowing NULL
+// clear.
+//
+
+#if __SIZEOF_LONG__ == 8
+
+#define KERNEL_VA_START (PVOID)0xFFF8000000000000
+#define KERNEL_VA_END 0xFFFFFFFFFFFFF000
+
+#else
+
 #define KERNEL_VA_START (PVOID)0x80000000
 #define KERNEL_VA_END 0x100000000ULL
+
+#endif
 
 #define INVALID_PHYSICAL_ADDRESS 0
 
@@ -224,11 +239,19 @@ Author:
 
 //
 // Define the native sized user write function.
-// TODO: 64-bit.
 //
+
+#if __SIZEOF_LONG__ == 8
+
+#define MmUserWrite MmUserWrite64
+#define MmUserRead MmUserRead64
+
+#else
 
 #define MmUserWrite MmUserWrite32
 #define MmUserRead MmUserRead32
+
+#endif
 
 //
 // Define the bitmask of flags used to initialize or allocate an I/O buffer.

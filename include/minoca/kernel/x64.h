@@ -47,7 +47,7 @@ Author:
 // and level 4 table.
 //
 
-#define X64_PTE_COUNT 512
+#define X64_PTE_COUNT 512ULL
 
 //
 // Define page address masks.
@@ -63,6 +63,20 @@ Author:
 #define X64_PDPE_MASK (X64_PT_MASK << X64_PDPE_SHIFT)
 #define X64_PML4E_SHIFT 39
 #define X64_PML4E_MASK (X64_PT_MASK << X64_PML4E_SHIFT)
+
+//
+// Define the fixed self map address. This is set up by the boot loader and
+// used directly by the kernel. The advantage is it's a compile-time constant
+// to get to page tables. The disadvantage is that VA can't be used by anything
+// else. But given that there's no physical memory up there and there's oodles
+// of VA space, that seems fine.
+//
+// Don't use the last index as that would put the PML4T at 0xFFFFFFFFFFFFF000.
+// Any kernel underflows from null would hit that page and be awful to debug.
+// Use the second to last index.
+//
+
+#define X64_SELF_MAP_INDEX (X64_PTE_COUNT - 2)
 
 #define X64_CANONICAL_HIGH 0xFFF8000000000000
 #define X64_CANONICAL_LOW  0x0007FFFFFFFFFFFF
