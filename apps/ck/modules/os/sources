@@ -29,9 +29,9 @@ OBJS = entry.o        \
        errno.o        \
        io.o           \
        os.o           \
+       osinfo.o       \
 
 WIN32_OBJS = oswin32.o \
-             wininfo.o \
 
-POSIX_OBJS = osinfo.o \
+POSIX_OBJS =
 

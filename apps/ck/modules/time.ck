@@ -598,6 +598,10 @@ class Time {
 
         var utcTime = Time.fromUtcTimestamp(timestamp, nanoseconds);
 
+        if (zone == null) {
+            zone = localTime;
+        }
+
         return zone.fromUtc(utcTime.replaceZone(zone));
     }
 

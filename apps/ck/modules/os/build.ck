@@ -31,28 +31,24 @@ from apps.ck.modules.build import chalkSharedModule;
 
 function build() {
     var buildOs = mconfig.build_os;
+    var buildConfig = {};
     var buildSources;
     var commonSources;
     var lib;
     var entries;
     var objs;
-    var posixSources;
     var win32Sources;
 
     commonSources = [
         "entry.c",
         "errno.c",
         "io.c",
-        "os.c"
-    ];
-
-    posixSources = [
+        "os.c",
         "osinfo.c"
     ];
 
     win32Sources = [
-        "oswin32.c",
-        "wininfo.c"
+        "oswin32.c"
     ];
 
     //
@@ -62,7 +58,7 @@ function build() {
     lib = {
         "label": "os_static",
         "output": "os",
-        "inputs": commonSources + posixSources
+        "inputs": commonSources
     };
 
     objs = compiledSources(lib);
@@ -82,9 +78,10 @@ function build() {
 
     if (buildOs == "Windows") {
         buildSources = commonSources + win32Sources;
+        buildConfig["DYNLIBS"] = ["-lws2_32"];
 
     } else {
-        buildSources = commonSources + posixSources;
+        buildSources = commonSources;
     }
 
     lib = {
@@ -102,6 +99,7 @@ function build() {
         "output": "os",
         "inputs": objs[0],
         "build": true,
+        "config": buildConfig,
         "prefix": "build"
     };
 

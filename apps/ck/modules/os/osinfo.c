@@ -31,7 +31,6 @@ Environment:
 
 #include <errno.h>
 #include <string.h>
-#include <sys/utsname.h>
 #include <unistd.h>
 
 #include "osp.h"
@@ -63,7 +62,7 @@ CkpOsDomainName (
 //
 
 CK_VARIABLE_DESCRIPTION CkOsInfoModuleValues[] = {
-    {CkTypeInteger, "isUnix", NULL, 1},
+    {CkTypeInteger, "isUnix", NULL, CK_IS_UNIX},
     {CkTypeFunction, "getHostname", CkpOsHostname, 0},
     {CkTypeFunction, "getDomainName", CkpOsDomainName, 0},
     {CkTypeInvalid, NULL, NULL, 0}

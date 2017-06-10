@@ -28,29 +28,27 @@ Author:
 #include <minoca/lib/types.h>
 #include <minoca/lib/chalk.h>
 
+#ifdef _WIN32
+
+#include "oswin32.h"
+
+#else
+
+#include <sys/utsname.h>
+
+#endif
+
 //
 // --------------------------------------------------------------------- Macros
 //
 
 //
-// The windows version of mkdir doesn't have a permissions argument.
-//
-
-#ifdef _WIN32
-
-#define mkdir(_Path, _Permissions) mkdir(_Path)
-#define lstat stat
-#define chroot(_Path) (errno = ENOSYS, (_Path), -1)
-#define link(_Existing, _Target) (errno = ENOSYS, (_Existing), (_Target), -1)
-#define symlink(_Target, _Symlink) (errno = ENOSYS, (_Target), (_Symlink), -1)
-#define readlink(_Symlink, _Buffer, _Size) \
-    (errno = ENOSYS, (_Symlink), -1)
-
-#endif
-
-//
 // ---------------------------------------------------------------- Definitions
 //
+
+#ifndef CK_IS_UNIX
+#define CK_IS_UNIX 1
+#endif
 
 //
 // Define any O_* open flags that might not exist on all systems.
@@ -126,6 +124,18 @@ Author:
 
 #ifndef S_ISLNK
 #define S_ISLNK(_Mode) 0
+#endif
+
+#ifndef S_ISUID
+#define S_ISUID 0
+#endif
+
+#ifndef S_ISGID
+#define S_ISGID 0
+#endif
+
+#ifndef S_ISVTX
+#define S_ISVTX 0
 #endif
 
 //

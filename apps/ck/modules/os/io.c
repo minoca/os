@@ -39,6 +39,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -192,6 +193,21 @@ CkpOsChroot (
     );
 
 VOID
+CkpOsUtimes (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsChmod (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsChown (
+    PCK_VM Vm
+    );
+
+VOID
 CkpOsCreateStatDict (
     PCK_VM Vm,
     struct stat *Stat
@@ -229,6 +245,17 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeInteger, "OS_SEEK_SET", NULL, SEEK_SET},
     {CkTypeInteger, "OS_SEEK_CUR", NULL, SEEK_CUR},
     {CkTypeInteger, "OS_SEEK_END", NULL, SEEK_END},
+    {CkTypeInteger, "S_ISUID", NULL, S_ISUID},
+    {CkTypeInteger, "S_ISGID", NULL, S_ISGID},
+    {CkTypeInteger, "S_ISVTX", NULL, S_ISVTX},
+    {CkTypeInteger, "S_IFBLK", NULL, S_IFBLK},
+    {CkTypeInteger, "S_IFCHR", NULL, S_IFCHR},
+    {CkTypeInteger, "S_IFDIR", NULL, S_IFDIR},
+    {CkTypeInteger, "S_IFIFO", NULL, S_IFIFO},
+    {CkTypeInteger, "S_IFREG", NULL, S_IFREG},
+    {CkTypeInteger, "S_IFLNK", NULL, S_IFLNK},
+    {CkTypeInteger, "S_IFSOCK", NULL, S_IFSOCK},
+    {CkTypeInteger, "S_IFMT", NULL, S_IFMT},
     {CkTypeFunction, "open", CkpOsOpen, 3},
     {CkTypeFunction, "close", CkpOsClose, 1},
     {CkTypeFunction, "read", CkpOsRead, 2},
@@ -255,6 +282,9 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "listdir", CkpOsListDirectory, 1},
     {CkTypeFunction, "chdir", CkpOsChdir, 1},
     {CkTypeFunction, "chroot", CkpOsChroot, 1},
+    {CkTypeFunction, "utimes", CkpOsUtimes, 5},
+    {CkTypeFunction, "chown", CkpOsChown, 3},
+    {CkTypeFunction, "chmod", CkpOsChmod, 2},
     {CkTypeInvalid, NULL, NULL, 0}
 };
 
@@ -1584,6 +1614,172 @@ Return Value:
     CkReturnInteger(Vm, 0);
     return;
 }
+
+VOID
+CkpOsUtimes (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine changes the access and modification times of the given file.
+    The function takes a path, access time, nanoseconds, modification time, and
+    nano seconds. The times are integer timestamps.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CK_INTEGER Access;
+    CK_INTEGER AccessNano;
+    CK_INTEGER Modified;
+    CK_INTEGER ModifiedNano;
+    PCSTR Path;
+    struct timeval Value[2];
+
+    //
+    // The function takes a path.
+    //
+
+    if (!CkCheckArguments(Vm,
+                          5,
+                          CkTypeString,
+                          CkTypeInteger,
+                          CkTypeInteger,
+                          CkTypeInteger,
+                          CkTypeInteger)) {
+
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    Access = CkGetInteger(Vm, 2);
+    AccessNano = CkGetInteger(Vm, 3);
+    Modified = CkGetInteger(Vm, 4);
+    ModifiedNano = CkGetInteger(Vm, 5);
+    Value[0].tv_sec = Access;
+    Value[0].tv_usec = AccessNano / 1000;
+    Value[1].tv_sec = Modified;
+    Value[1].tv_usec = ModifiedNano / 1000;
+    if ((Value[0].tv_sec != Access) || (Value[1].tv_sec != Modified)) {
+        errno = ERANGE;
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    if (utimes(Path, Value) != 0) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkReturnInteger(Vm, 0);
+    return;
+}
+
+VOID
+CkpOsChmod (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine changes the permissions of the given path. It takes in a path
+    string and a new set of permissions.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    mode_t Mode;
+    PCSTR Path;
+
+    //
+    // The function takes a path.
+    //
+
+    if (!CkCheckArguments(Vm, 2, CkTypeString, CkTypeInteger)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    Mode = CkGetInteger(Vm, 2);
+    if (chmod(Path, Mode) != 0) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkReturnInteger(Vm, 0);
+    return;
+}
+
+VOID
+CkpOsChown (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine changes the ownership of the given path. It takes in a path
+    string and a new user and group.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    gid_t Group;
+    PCSTR Path;
+    uid_t User;
+
+    //
+    // The function takes a path.
+    //
+
+    if (!CkCheckArguments(Vm, 3, CkTypeString, CkTypeInteger, CkTypeInteger)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    User = CkGetInteger(Vm, 2);
+    Group = CkGetInteger(Vm, 3);
+    if (chown(Path, User, Group) != 0) {
+        CkpOsRaiseError(Vm);
+        return;
+    }
+
+    CkReturnInteger(Vm, 0);
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

@@ -45,7 +45,7 @@ BINARY := os.dll
 
 OBJS += $(WIN32_OBJS)
 
-DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/chalk.dll
+DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/chalk.dll -lws2_32
 
 else
 
