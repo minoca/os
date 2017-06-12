@@ -58,6 +58,8 @@ Author:
 #define USB_HID_REPORT_ITEM_LOCAL 0x08
 #define USB_HID_REPORT_ITEM_TYPE_MASK 0x0C
 
+#define USB_HID_REPORT_ITEM_TAG_MASK 0xF0
+
 //
 // Define main items.
 //

@@ -105,6 +105,7 @@ DVID_7392&PID_7811=rtlw81xx.drv
 DVID_8619&PID_0650=onering.drv
 DVID_8619&PID_0651=onering.drv
 DVID_8619&PID_0652=onering.drv
+DVID_0E0F&PID_0003_01=usbmouse.drv
 
 Dfull=special.drv
 Dnull=special.drv

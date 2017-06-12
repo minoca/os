@@ -1,0 +1,16 @@
+VMWare should work pretty well out of the box. I'm using a guest OS type of
+Other, Other, but this shouldn't be required. I'm also using SATA (AHCI) as a
+storage type, though IDE should work just as well.
+
+Mouse Support
+To get the mouse up and running, add a USB 2.0 controller in the VMWare
+settings. Then in the .vmx file, add the following to enable the USB mouse:
+
+mouse.vusb.enable = "TRUE"
+
+Sound Support
+You'll need to enable the Intel HD audio virtual device in the guest. Add the
+following to your .vmx file:
+
+sound.virtualDev = "hdaudio"
+

@@ -981,20 +981,17 @@ Return Value:
                 NewItem->ReportId = State->ReportId;
 
                 //
-                // If the logical limits can go below zero, compute the sign
-                // extension bit.
+                // Compute the sign extension bit. Originally this was only
+                // done if the logical minimum was less than zero, but
+                // the VMWare mouse for instance reports a range of 0-32767,
+                // and then returns negative data like 65535.
                 //
 
-                if ((State->Properties.LogicalLimit.Minimum < 0) ||
-                    (State->Properties.LogicalLimit.Maximum < 0)) {
+                if ((NewItem->Properties.BitSize <
+                     (sizeof(ULONG) * BITS_PER_BYTE)) &&
+                    (NewItem->Properties.BitSize > 1)) {
 
-                    if ((NewItem->Properties.BitSize <
-                         (sizeof(ULONG) * BITS_PER_BYTE)) &&
-                        (NewItem->Properties.BitSize > 1)) {
-
-                        NewItem->SignBit = 1 <<
-                                           (NewItem->Properties.BitSize - 1);
-                    }
+                    NewItem->SignBit = 1 << (NewItem->Properties.BitSize - 1);
                 }
 
                 if (Parser->UsageCount != 0) {
@@ -1015,7 +1012,7 @@ Return Value:
                     Parser->UsageLimits.Minimum += 1;
                 }
 
-                switch (Item & USB_HID_REPORT_ITEM_SIZE_MASK) {
+                switch (Item & USB_HID_REPORT_ITEM_TAG_MASK) {
                 case USB_HID_ITEM_INPUT:
                     NewItem->Type = UsbhidDataInput;
                     break;
