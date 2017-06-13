@@ -1417,7 +1417,7 @@ Return Value:
                 printf("%3s ", "\\v");
 
             } else if (!isprint(Character)) {
-                printf("\\%3o ", Character);
+                printf("\\%03o", (UCHAR)Character);
 
             } else {
                 printf("%3c ", Character);
@@ -1430,7 +1430,7 @@ Return Value:
                 printf("%3s ", OdCharacterNames[Character]);
 
             } else if (!isprint(Character)) {
-                printf("\\%3o ", Character);
+                printf("\\%03o", (UCHAR)Character);
 
             } else {
                 printf("%3c ", Character);
