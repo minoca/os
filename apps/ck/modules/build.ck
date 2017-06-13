@@ -64,6 +64,7 @@ function build() {
 
     chalkModules = [
         "bufferedio.ck",
+        "cpio.ck",
         "fileio.ck",
         "getopt.ck",
         "io.ck",

@@ -35,6 +35,7 @@ DIRS = _time     \
 include $(SRCROOT)/os/minoca.mk
 
 CK_MODULES := bufferedio.ck \
+              cpio.ck       \
               fileio.ck     \
               getopt.ck     \
               io.ck         \

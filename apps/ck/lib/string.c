@@ -52,6 +52,12 @@ CkpStringFromCharacter (
     );
 
 BOOL
+CkpStringFromByte (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    );
+
+BOOL
 CkpStringByteAt (
     PCK_VM Vm,
     PCK_VALUE Arguments
@@ -238,6 +244,7 @@ CK_PRIMITIVE_DESCRIPTION CkStringPrimitives[] = {
 
 CK_PRIMITIVE_DESCRIPTION CkStringStaticPrimitives[] = {
     {"fromCharacter@1", 1, CkpStringFromCharacter},
+    {"fromByte@1", 1, CkpStringFromByte},
     {NULL, 0, NULL}
 };
 
@@ -1117,6 +1124,46 @@ Return Value:
     }
 
     Arguments[0] = CkpStringCreateFromCharacter(Vm, CodePoint);
+    return TRUE;
+}
+
+BOOL
+CkpStringFromByte (
+    PCK_VM Vm,
+    PCK_VALUE Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a single byte into a string.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+    Arguments - Supplies the function arguments.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if execution caused a runtime error.
+
+--*/
+
+{
+
+    CK_INTEGER Value;
+
+    if (!CK_IS_INTEGER(Arguments[1])) {
+        CkpRuntimeError(Vm, "TypeError", "Expected an integer");
+        return FALSE;
+    }
+
+    Value = CK_AS_INTEGER(Arguments[1]);
+    Arguments[0] = CkpStringCreate(Vm, (PCSTR)&Value, 1);
     return TRUE;
 }
 
