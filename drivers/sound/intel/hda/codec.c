@@ -221,7 +221,8 @@ PCSTR HdaPathTypeNames[HdaPathTypeCount] = {
 
 KSTATUS
 HdapEnumerateCodecs (
-    PHDA_CONTROLLER Controller
+    PHDA_CONTROLLER Controller,
+    USHORT StateChange
     )
 
 /*++
@@ -235,6 +236,9 @@ Arguments:
 
     Controller - Supplies a pointer to the HD Audio controller.
 
+    StateChange - Supplies the saved state change status register value that
+        indicates which codecs needs to be enumerated.
+
 Return Value:
 
     Status code.
@@ -245,7 +249,6 @@ Return Value:
 
     UCHAR Address;
     PHDA_CODEC Codec;
-    USHORT StateChange;
     KSTATUS Status;
     BOOL Valid;
 
@@ -256,7 +259,6 @@ Return Value:
 
     Codec = NULL;
     KeAcquireQueuedLock(Controller->ControllerLock);
-    StateChange = HDA_READ16(Controller, HdaRegisterStateChangeStatus);
     for (Address = 0; Address < HDA_MAX_CODEC_COUNT; Address += 1) {
 
         //
@@ -400,6 +402,7 @@ Return Value:
 
 {
 
+    ULONG DeviceType;
     ULONG Index;
     PHDA_PATH Path;
     KSTATUS Status;
@@ -430,8 +433,14 @@ Return Value:
 
             ASSERT(Device->SoundDevice.Type == SoundDeviceOutput);
 
-            Value = HDA_PIN_WIDGET_CONTROL_OUT_ENABLE |
-                    HDA_PIN_WIDGET_CONTROL_HEAD_PHONE_ENABLE;
+            DeviceType = (Widget->PinConfiguration &
+                          HDA_CONFIGURATION_DEFAULT_DEVICE_MASK) >>
+                         HDA_CONFIGURATION_DEFAULT_DEVICE_SHIFT;
+
+            Value = HDA_PIN_WIDGET_CONTROL_OUT_ENABLE;
+            if (DeviceType == HDA_DEVICE_HP_OUT) {
+                Value |= HDA_PIN_WIDGET_CONTROL_HEAD_PHONE_ENABLE;
+            }
         }
 
         Status = HdapCodecGetSetVerb(Device->Codec,
@@ -831,6 +840,15 @@ Return Value:
     PSOUND_DEVICE *Devices;
     PHDA_FUNCTION_GROUP Group;
     ULONG GroupIndex;
+    PHDA_DEVICE HdaDevice;
+    PHDA_PATH Path;
+    ULONG PathIndex;
+    PSOUND_DEVICE PrimaryInput;
+    ULONG PrimaryInputPriority;
+    PSOUND_DEVICE PrimaryOutput;
+    ULONG PrimaryOutputPriority;
+    ULONG Priority;
+    ULONG PriorityMask;
     KSTATUS Status;
     PHDA_WIDGET Widget;
     ULONG WidgetIndex;
@@ -864,6 +882,11 @@ Return Value:
         }
     }
 
+    if (DeviceCount == 0) {
+        Status = STATUS_SUCCESS;
+        goto CreateDevicesEnd;
+    }
+
     //
     // Allocate the array of devices.
     //
@@ -883,6 +906,9 @@ Return Value:
     //
 
     DeviceIndex = 0;
+    PriorityMask = HDA_CONFIGURATION_DEFAULT_ASSOCIATION_MASK |
+                   HDA_CONFIGURATION_DEFAULT_SEQUENCE_MASK;
+
     for (CodecIndex = 0; CodecIndex < HDA_MAX_CODEC_COUNT; CodecIndex += 1) {
         Codec = Controller->Codec[CodecIndex];
         if (Codec == NULL) {
@@ -893,6 +919,10 @@ Return Value:
              GroupIndex < Codec->FunctionGroupCount;
              GroupIndex += 1) {
 
+            PrimaryInputPriority = MAX_ULONG;
+            PrimaryOutputPriority = MAX_ULONG;
+            PrimaryInput = NULL;
+            PrimaryOutput = NULL;
             Group = Codec->FunctionGroups[GroupIndex];
             for (WidgetIndex = 0;
                  WidgetIndex < Group->WidgetCount;
@@ -913,6 +943,37 @@ Return Value:
 
                 Devices[DeviceIndex] = Device;
                 DeviceIndex += 1;
+
+                //
+                // Determine if this is the primary device for this function
+                // group.
+                //
+
+                HdaDevice = Device->Context;
+                Path = HdaDevice->Path;
+                PathIndex = Path->Widgets[Path->Length - 1];
+                Widget = &(Group->Widgets[PathIndex]);
+                Priority = Widget->PinConfiguration & PriorityMask;
+                if (Device->Type == SoundDeviceInput) {
+                    if (Priority < PrimaryInputPriority) {
+                        PrimaryInputPriority = Priority;
+                        PrimaryInput = Device;
+                    }
+
+                } else if (Device->Type == SoundDeviceOutput) {
+                    if (Priority < PrimaryOutputPriority) {
+                        PrimaryOutputPriority = Priority;
+                        PrimaryOutput = Device;
+                    }
+                }
+            }
+
+            if (PrimaryInput != NULL) {
+                PrimaryInput->Flags |= SOUND_DEVICE_FLAG_PRIMARY;
+            }
+
+            if (PrimaryOutput != NULL) {
+                PrimaryOutput->Flags |= SOUND_DEVICE_FLAG_PRIMARY;
             }
         }
     }
@@ -1011,6 +1072,7 @@ Return Value:
     ULONG Formats;
     PHDA_DEVICE HdaDevice;
     ULONG MaxChannelCount;
+    ULONG MinChannelCount;
     INT RateCount;
     ULONG RateIndex;
     PULONG Rates;
@@ -1109,23 +1171,35 @@ Return Value:
     }
 
     //
-    // Use the max channel count as the preferred channel count.
+    // Use the maximum channel count as the preferred channel count. If the
+    // maximum channel count is greater than or equal to 2 (stereo or better),
+    // then the minimum channel must unfortunately be 2 as well. Real Intel HD
+    // Audio devices with a maximum channel count of 2 should (and do) support
+    // mono sound, but VirtualBox 5.1.22 (and older) has a bug. In
+    // hdaAddStreamOut, it forces the channel count to 2, disregarding what had
+    // previously been recorded from the write to the stream's format register.
+    // This causes the VirtualBox backend to interpret mono audio as stereo
+    // audio and it gets played twice as fast.
     //
 
     MaxChannelCount = HDA_GET_WIDGET_CHANNEL_COUNT(Widget);
-    if (MaxChannelCount >= 3) {
-        Capabilities |= SOUND_CAPABILITY_CHANNEL_MULTI;
-
-    } else if (MaxChannelCount == 2) {
-        Capabilities |= SOUND_CAPABILITY_CHANNEL_STEREO;
+    if (MaxChannelCount == 1) {
+        MinChannelCount = 1;
+        Capabilities |= SOUND_CAPABILITY_CHANNEL_MONO;
 
     } else {
-        Capabilities |= SOUND_CAPABILITY_CHANNEL_MONO;
+        MinChannelCount = 2;
+        if (MaxChannelCount > 2) {
+            Capabilities |= SOUND_CAPABILITY_CHANNEL_MULTI;
+
+        } else {
+            Capabilities |= SOUND_CAPABILITY_CHANNEL_STEREO;
+        }
     }
 
     SoundDevice->Capabilities = Capabilities;
     SoundDevice->Formats = Formats;
-    SoundDevice->MinChannelCount = 1;
+    SoundDevice->MinChannelCount = MinChannelCount;
     SoundDevice->MaxChannelCount = MaxChannelCount;
     SoundDevice->RateCount = RateCount;
     SoundDevice->RatesOffset = sizeof(SOUND_DEVICE);
@@ -1439,7 +1513,9 @@ Return Value:
     ULONG Index;
 
     for (Index = 0; Index < Codec->FunctionGroupCount; Index += 1) {
-        HdapDestroyFunctionGroup(Codec->FunctionGroups[Index]);
+        if (Codec->FunctionGroups[Index] != NULL) {
+            HdapDestroyFunctionGroup(Codec->FunctionGroups[Index]);
+        }
     }
 
     MmFreePagedPool(Codec);
@@ -1807,13 +1883,15 @@ Return Value:
         break;
     }
 
-    Status = HdapCodecGetParameter(Codec,
-                                   Widget->NodeId,
-                                   TypeCapabilitiesId,
-                                   &(Widget->TypeCapabilities));
+    if (TypeCapabilitiesId != 0) {
+        Status = HdapCodecGetParameter(Codec,
+                                       Widget->NodeId,
+                                       TypeCapabilitiesId,
+                                       &(Widget->TypeCapabilities));
 
-    if (!KSUCCESS(Status)) {
-        goto EnumerateWidgetEnd;
+        if (!KSUCCESS(Status)) {
+            goto EnumerateWidgetEnd;
+        }
     }
 
     //
@@ -2487,16 +2565,17 @@ Return Value:
 
 {
 
-    ULONG Association;
     PLIST_ENTRY CurrentEntry;
     PHDA_PATH CurrentPath;
     ULONG FirstIndex;
     PHDA_FUNCTION_GROUP Group;
     ULONG LastIndex;
     PHDA_WIDGET LastWidget;
-    ULONG MinAssociation;
+    ULONG MinPriority;
     HDA_PATH_TYPE PathType;
     PHDA_PATH PrimaryPath;
+    ULONG Priority;
+    ULONG PriorityMask;
     ULONG WidgetType;
 
     //
@@ -2518,8 +2597,11 @@ Return Value:
         return NULL;
     }
 
+    PriorityMask = HDA_CONFIGURATION_DEFAULT_ASSOCIATION_MASK |
+                   HDA_CONFIGURATION_DEFAULT_SEQUENCE_MASK;
+
     Group = Device->Group;
-    MinAssociation = MAX_ULONG;
+    MinPriority = MAX_ULONG;
     PrimaryPath = NULL;
     CurrentEntry = Group->PathList[PathType].Next;
     while (CurrentEntry != &(Group->PathList[PathType])) {
@@ -2537,12 +2619,9 @@ Return Value:
         }
 
         LastWidget = &(Group->Widgets[LastIndex]);
-        Association = (LastWidget ->PinConfiguration &
-                       HDA_CONFIGURATION_DEFAULT_ASSOCIATION_MASK) >>
-                      HDA_CONFIGURATION_DEFAULT_ASSOCIATION_SHIFT;
-
-        if (Association < MinAssociation) {
-            MinAssociation = Association;
+        Priority = LastWidget->PinConfiguration & PriorityMask;
+        if (Priority < MinPriority) {
+            MinPriority = Priority;
             PrimaryPath = CurrentPath;
         }
     }
@@ -3046,10 +3125,9 @@ Return Value:
     Gain = 0;
     if (Volume == 0) {
         GainMute |= HDA_SET_AMPLIFIER_GAIN_PAYLOAD_MUTE;
-    }
-
-    if ((AmpCapabilities & HDA_AMP_CAPABILITIES_MUTE) != 0) {
-        goto ComputeGainMuteEnd;
+        if ((AmpCapabilities & HDA_AMP_CAPABILITIES_MUTE) != 0) {
+            goto ComputeGainMuteEnd;
+        }
     }
 
     Offset = (AmpCapabilities & HDA_AMP_CAPABILITIES_OFFSET_MASK) >>

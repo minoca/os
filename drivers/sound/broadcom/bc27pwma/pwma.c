@@ -427,7 +427,7 @@ BCM27_PWMA_DEVICE Bcm27PwmAudioDeviceTemplate = {
         sizeof(BCM27_PWMA_DEVICE),
         NULL,
         SoundDeviceOutput,
-        0,
+        SOUND_DEVICE_FLAG_PRIMARY,
         (SOUND_CAPABILITY_CHANNEL_STEREO |
          SOUND_CAPABILITY_OUTPUT |
          SOUND_CAPABILITY_INTERFACE_ANALOG_OUT),

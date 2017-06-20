@@ -99,6 +99,13 @@ Author:
 #define HDA_DEVICE_TIMEOUT 1
 
 //
+// Define how long the stream should wait for resets and disables before timing
+// out, in milliseconds.
+//
+
+#define HDA_STREAM_TIMEOUT 20
+
+//
 // Define how long to wait for a solicited response, in seconds.
 //
 
@@ -196,11 +203,17 @@ Author:
 #define HDA_INVALID_STREAM MAX_UCHAR
 
 //
+// Define the default number of response required to generate an interrupt.
+//
+
+#define HDA_RESPONSE_INTERRUPT_COUNT_DEFAULT 1
+
+//
 // Define the software interrupt bits for the HD controller.
 //
 
 #define HDA_SOFTWARE_INTERRUPT_RESPONSE_BUFFER 0x00000001
-#define HDA_SOFTWARE_INTERRUPT_STREAM      0x00000002
+#define HDA_SOFTWARE_INTERRUPT_STREAM          0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -517,6 +530,9 @@ Members:
     StreamNumbers - Stores a bitmask that indicates which of the 16 stream
         numbers are in use. Stream number 0 is reserved.
 
+    StreamSynchronizationRegister - Stores the stream synchronization register
+        offset. This depends on the controller type.
+
     PciMsiFlags - Stores a bitmask of flags indicating whether or not MSI/MSI-X
         interrupts should be used. See HDA_PCI_MSI_FLAG_* for definitions.
 
@@ -566,6 +582,7 @@ struct _HDA_CONTROLLER {
     UCHAR InputStreamCount;
     UCHAR BidirectionalStreamCount;
     USHORT StreamNumbers;
+    HDA_REGISTER StreamSynchronizationRegister;
     ULONG PciMsiFlags;
     INTERFACE_PCI_MSI PciMsiInterface;
     PHDA_CODEC Codec[HDA_MAX_CODEC_COUNT];
@@ -949,19 +966,23 @@ Return Value:
 
 KSTATUS
 HdapEnumerateCodecs (
-    PHDA_CONTROLLER Controller
+    PHDA_CONTROLLER Controller,
+    USHORT StateChange
     );
 
 /*++
 
 Routine Description:
 
-    This routine enumerates the codecs attached to the given HD Audio device's
-    link.
+    This routine enumerates the codecs attached to the given HD Audio
+    controller's link.
 
 Arguments:
 
-    Device - Supplies a pointer to the HD Audio device.
+    Controller - Supplies a pointer to the HD Audio controller.
+
+    StateChange - Supplies the saved state change status register value that
+        indicates which codecs needs to be enumerated.
 
 Return Value:
 

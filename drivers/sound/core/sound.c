@@ -443,6 +443,10 @@ Return Value:
 
     LookupFlags = 0;
     MapFlags = 0;
+    if (Controller == NULL) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto LookupDeviceEnd;
+    }
 
     //
     // If this is the root lookup, just return a handle to the controller.
@@ -642,6 +646,7 @@ Return Value:
 
 {
 
+    PSOUND_DEVICE Device;
     ULONG DeviceIndex;
     FILE_ID FileId;
     PSOUND_DEVICE_HANDLE NewHandle;
@@ -673,10 +678,21 @@ Return Value:
              DeviceIndex < Controller->Host.DeviceCount;
              DeviceIndex += 1) {
 
-            SoundDevice = Controller->Host.Devices[DeviceIndex];
-            if (SoundDevice->Type == FileId) {
-                break;
+            Device = Controller->Host.Devices[DeviceIndex];
+            if (Device->Type == FileId) {
+                if ((Device->Flags & SOUND_DEVICE_FLAG_PRIMARY) != 0) {
+                    SoundDevice = Device;
+                    break;
+
+                } else if (SoundDevice == NULL) {
+                    SoundDevice = Device;
+                }
             }
+        }
+
+        if (SoundDevice == NULL) {
+            Status = STATUS_NO_SUCH_DEVICE;
+            goto OpenDeviceEnd;
         }
 
     } else {
@@ -1866,6 +1882,11 @@ Return Value:
     ULONG Index;
     PSOUND_DEVICE_INFORMATION Information;
     KSTATUS Status;
+
+    if (Controller == NULL) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto GetSetDeviceInformationEnd;
+    }
 
     Status = STATUS_NOT_HANDLED;
     if (RtlAreUuidsEqual(Uuid, &SoundDeviceInformationUuid) != FALSE) {

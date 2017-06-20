@@ -100,7 +100,7 @@ HdapFreeStream (
     PHDA_DEVICE Device
     );
 
-KSTATUS
+VOID
 HdapResetStream (
     PHDA_CONTROLLER Controller,
     ULONG StreamIndex,
@@ -434,6 +434,7 @@ Return Value:
     PHDA_CONTROLLER Controller;
     PHDA_DEVICE Device;
     UCHAR RirbStatus;
+    ULONG SoftwareInterrupts;
     USHORT StateChange;
     ULONG Status;
     ULONG StreamIndex;
@@ -452,12 +453,8 @@ Return Value:
     // status register.
     //
 
+    SoftwareInterrupts = 0;
     if ((Status & HDA_INTERRUPT_STATUS_CONTROLLER) != 0) {
-
-        //
-        // TODO: Handle Intel HD Audio codec state changes.
-        //
-
         StateChange = HDA_READ16(Controller, HdaRegisterStateChangeStatus);
         if (StateChange != 0) {
             HDA_WRITE16(Controller, HdaRegisterStateChangeStatus, StateChange);
@@ -470,9 +467,7 @@ Return Value:
 
         RirbStatus = HDA_READ8(Controller, HdaRegisterRirbStatus);
         if (RirbStatus != 0) {
-            RtlAtomicOr32(&(Controller->PendingSoftwareInterrupts),
-                          HDA_SOFTWARE_INTERRUPT_RESPONSE_BUFFER);
-
+            SoftwareInterrupts |= HDA_SOFTWARE_INTERRUPT_RESPONSE_BUFFER;
             HDA_WRITE8(Controller, HdaRegisterRirbStatus, RirbStatus);
         }
 
@@ -509,8 +504,12 @@ Return Value:
             StreamIndex += 1;
         }
 
+        SoftwareInterrupts |= HDA_SOFTWARE_INTERRUPT_STREAM;
+    }
+
+    if (SoftwareInterrupts != 0) {
         RtlAtomicOr32(&(Controller->PendingSoftwareInterrupts),
-                      HDA_SOFTWARE_INTERRUPT_STREAM);
+                      SoftwareInterrupts);
     }
 
     return InterruptStatusClaimed;
@@ -702,7 +701,7 @@ Return Value:
     //
 
     MaxAddress = MAX_ULONG;
-    Value = HDA_READ32(Controller, HdaRegisterGlobalCapabilities);
+    Value = HDA_READ16(Controller, HdaRegisterGlobalCapabilities);
     if ((Value & HDA_GLOBAL_CAPABILITIES_64_BIT_ADDRESSES_SUPPORTED) != 0) {
         Controller->Flags |= HDA_CONTROLLER_FLAG_64_BIT_ADDRESSES;
         MaxAddress = MAX_ULONGLONG;
@@ -845,6 +844,7 @@ Return Value:
 
 {
 
+    HdapDestroyCodecs(Controller);
     if (Controller->CommandLock != NULL) {
         KeDestroyQueuedLock(Controller->CommandLock);
         Controller->CommandLock = NULL;
@@ -865,7 +865,6 @@ Return Value:
         Controller->IoBuffer = NULL;
     }
 
-    HdapDestroyCodecs(Controller);
     return;
 }
 
@@ -899,6 +898,7 @@ Return Value:
     ULONG Interrupts;
     PHYSICAL_ADDRESS PhysicalAddress;
     UCHAR SizeEncoding;
+    USHORT StateChange;
     KSTATUS Status;
     ULONGLONG Timeout;
     ULONGLONG TimeoutInterval;
@@ -1002,23 +1002,20 @@ Return Value:
                 HDA_CORB_READ_POINTER_RESET);
 
     //
-    // The reset is complete onces the bit can be read back.
+    // The reset is complete onces the bit can be read back. Some devices don't
+    // operate according to the Intel HD audio specification and never
+    // transition the reset bit to high. As a result, don't treat this as
+    // fatal.
     //
 
-    Status = STATUS_TIMEOUT;
     Timeout = KeGetRecentTimeCounter() + TimeoutInterval;
     do {
         Value = HDA_READ16(Controller, HdaRegisterCorbReadPointer);
         if ((Value & HDA_CORB_READ_POINTER_RESET) != 0) {
-            Status = STATUS_SUCCESS;
             break;
         }
 
     } while (KeGetRecentTimeCounter() < Timeout);
-
-    if (!KSUCCESS(Status)) {
-        goto InitializeControllerEnd;
-    }
 
     //
     // Now clear the reset bit and wait for it to clear.
@@ -1098,8 +1095,31 @@ Return Value:
                 HDA_RIRB_WRITE_POINTER_RESET);
 
     Controller->ResponseReadPointer = 0;
+
+    //
+    // The Intel HD Audio specification does not clearly describe the response
+    // interrupt count, but it dictates how many responses should be received
+    // before an RIRB interrupt is generated. Real hardware works even when
+    // this is left at 0 (256 responses before an interrupt), emulated hardware
+    // does not (e.g. Qemu).
+    //
+
+    HDA_WRITE16(Controller,
+                HdaRegisterResponseInterruptCount,
+                HDA_RESPONSE_INTERRUPT_COUNT_DEFAULT);
+
     Control = HDA_RIRB_CONTROL_DMA_ENABLE | HDA_RIRB_CONTROL_INTERRUPT_ENABLE;
     HDA_WRITE8(Controller, HdaRegisterRirbControl, Control);
+
+    //
+    // Before enabling interrupts, collect and clear the state change status.
+    // It is only needed for enumeration and would be noisy otherwise. The
+    // state change status should be available as soon as the controller comes
+    // out of reset.
+    //
+
+    StateChange = HDA_READ16(Controller, HdaRegisterStateChangeStatus);
+    HDA_WRITE16(Controller, HdaRegisterStateChangeStatus, StateChange);
 
     //
     // Enable interrupts. There is no easy way to clear any spurious interrupts
@@ -1116,7 +1136,7 @@ Return Value:
     // Scan the codecs to determine their capabilities.
     //
 
-    Status = HdapEnumerateCodecs(Controller);
+    Status = HdapEnumerateCodecs(Controller, StateChange);
     if (!KSUCCESS(Status)) {
         goto InitializeControllerEnd;
     }
@@ -1703,13 +1723,9 @@ Return Value:
         // for use by this device.
         //
 
-        Status = HdapResetStream(Controller,
-                                 Device->StreamIndex,
-                                 Device->SoundDevice.Type);
-
-        if (!KSUCCESS(Status)) {
-            break;
-        }
+        HdapResetStream(Controller,
+                        Device->StreamIndex,
+                        Device->SoundDevice.Type);
 
         HdapInitializeStream(Controller,
                              Device->StreamIndex,
@@ -2004,7 +2020,7 @@ Return Value:
     return;
 }
 
-KSTATUS
+VOID
 HdapResetStream (
     PHDA_CONTROLLER Controller,
     ULONG StreamIndex,
@@ -2029,7 +2045,7 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 
@@ -2038,9 +2054,12 @@ Return Value:
     ULONG BdlLowerAddress;
     ULONG BdlUpperAddress;
     ULONG BidirectionalOffset;
-    KSTATUS Status;
     ULONGLONG Timeout;
+    ULONGLONG TimeoutInterval;
     ULONG Value;
+
+    TimeoutInterval = (HlQueryTimeCounterFrequency() * HDA_STREAM_TIMEOUT) /
+                      MILLISECONDS_PER_SECOND;
 
     //
     // When the controller was initialized, the buffer descriptor list was
@@ -2057,12 +2076,11 @@ Return Value:
 
     //
     // Write the stream reset bit in the descriptor and wait for it to set.
+    // Don't fail if it is never read back as one as Qemu does not follow the
+    // specification here.
     //
 
-    Status = STATUS_TIMEOUT;
-    Timeout = KeGetRecentTimeCounter() +
-              (HlQueryTimeCounterFrequency() * HDA_DEVICE_TIMEOUT);
-
+    Timeout = KeGetRecentTimeCounter() + TimeoutInterval;
     HDA_STREAM_WRITE32(Controller,
                        StreamIndex,
                        HdaStreamRegisterControl,
@@ -2074,24 +2092,16 @@ Return Value:
                                   HdaStreamRegisterControl);
 
         if ((Value & HDA_STREAM_CONTROL_RESET) != 0) {
-            Status = STATUS_SUCCESS;
             break;
         }
 
     } while (KeGetRecentTimeCounter() < Timeout);
 
-    if (!KSUCCESS(Status)) {
-        goto ResetStreamEnd;
-    }
-
     //
     // Take the stream out of reset and wait for the reset bit to unset.
     //
 
-    Status = STATUS_TIMEOUT;
-    Timeout = KeGetRecentTimeCounter() +
-              (HlQueryTimeCounterFrequency() * HDA_DEVICE_TIMEOUT);
-
+    Timeout = KeGetRecentTimeCounter() + TimeoutInterval;
     HDA_STREAM_WRITE32(Controller,
                        StreamIndex,
                        HdaStreamRegisterControl,
@@ -2103,15 +2113,10 @@ Return Value:
                                   HdaStreamRegisterControl);
 
         if ((Value & HDA_STREAM_CONTROL_RESET) == 0) {
-            Status = STATUS_SUCCESS;
             break;
         }
 
     } while (KeGetRecentTimeCounter() < Timeout);
-
-    if (!KSUCCESS(Status)) {
-        goto ResetStreamEnd;
-    }
 
     //
     // The bidirectional input/output bit must be set before any other stream
@@ -2133,8 +2138,6 @@ Return Value:
         }
     }
 
-ResetStreamEnd:
-
     //
     // Always restore the buffer descriptor list.
     //
@@ -2149,7 +2152,7 @@ ResetStreamEnd:
                        HdaStreamRegisterBdlUpperBaseAddress,
                        BdlUpperAddress);
 
-    return Status;
+    return;
 }
 
 VOID
@@ -2302,9 +2305,9 @@ Return Value:
     // Enable the stream descriptors DMA engine.
     //
 
-    Sync = HDA_READ32(Controller, HdaRegisterStreamSynchronization);
+    Sync = HDA_READ32(Controller, Controller->StreamSynchronizationRegister);
     Sync |= 1 << StreamIndex;
-    HDA_WRITE32(Controller, HdaRegisterStreamSynchronization, Sync);
+    HDA_WRITE32(Controller, Controller->StreamSynchronizationRegister, Sync);
     RtlMemoryBarrier();
     Control = HDA_STREAM_READ32(Controller,
                                 StreamIndex,
@@ -2319,9 +2322,9 @@ Return Value:
                        HdaStreamRegisterControl,
                        Control);
 
-    Sync = HDA_READ32(Controller, HdaRegisterStreamSynchronization);
+    Sync = HDA_READ32(Controller, Controller->StreamSynchronizationRegister);
     Sync &= ~(1 << StreamIndex);
-    HDA_WRITE32(Controller, HdaRegisterStreamSynchronization, Sync);
+    HDA_WRITE32(Controller, Controller->StreamSynchronizationRegister, Sync);
     KeReleaseQueuedLock(Controller->ControllerLock);
     return;
 }
@@ -2357,15 +2360,16 @@ Return Value:
     ULONG Interrupts;
     ULONG Sync;
     ULONGLONG Timeout;
+    ULONGLONG TimeoutInterval;
 
     //
     // Protect access to the synchronization and interrupt registers.
     //
 
     KeAcquireQueuedLock(Controller->ControllerLock);
-    Sync = HDA_READ32(Controller, HdaRegisterStreamSynchronization);
+    Sync = HDA_READ32(Controller, Controller->StreamSynchronizationRegister);
     Sync |= 1 << StreamIndex;
-    HDA_WRITE32(Controller, HdaRegisterStreamSynchronization, Sync);
+    HDA_WRITE32(Controller, Controller->StreamSynchronizationRegister, Sync);
     Control = HDA_STREAM_READ32(Controller,
                                 StreamIndex,
                                 HdaStreamRegisterControl);
@@ -2384,9 +2388,10 @@ Return Value:
     // add a timeout just to be safe.
     //
 
-    Timeout = KeGetRecentTimeCounter() +
-              (HlQueryTimeCounterFrequency() * HDA_DEVICE_TIMEOUT);
+    TimeoutInterval = (HlQueryTimeCounterFrequency() * HDA_STREAM_TIMEOUT) /
+                      MILLISECONDS_PER_SECOND;
 
+    Timeout = KeGetRecentTimeCounter() + TimeoutInterval;
     do {
         Control = HDA_STREAM_READ32(Controller,
                                     StreamIndex,
@@ -2399,12 +2404,22 @@ Return Value:
     } while (KeGetRecentTimeCounter() < Timeout);
 
     //
+    // Clear the format register. VirtualBox 5.1.2 and below do not stop the
+    // stream properly unless this is cleared.
+    //
+
+    HDA_STREAM_WRITE16(Controller, StreamIndex, HdaStreamRegisterFormat, 0);
+
+    //
     // Disable interrupts for this stream descriptor.
     //
 
     Interrupts = HDA_READ32(Controller, HdaRegisterInterruptControl);
     Interrupts &= ~(1 << StreamIndex);
     HDA_WRITE32(Controller, HdaRegisterInterruptControl, Interrupts);
+    Sync = HDA_READ32(Controller, Controller->StreamSynchronizationRegister);
+    Sync &= ~(1 << StreamIndex);
+    HDA_WRITE32(Controller, Controller->StreamSynchronizationRegister, Sync);
     KeReleaseQueuedLock(Controller->ControllerLock);
     return;
 }

@@ -106,8 +106,8 @@ Author:
 //
 
 #define SOUND_VOLUME_DEFAULT                   \
-    (50 << SOUND_VOLUME_RIGHT_CHANNEL_SHIFT) | \
-    (50 << SOUND_VOLUME_LEFT_CHANNEL_SHIFT);
+    (75 << SOUND_VOLUME_RIGHT_CHANNEL_SHIFT) | \
+    (75 << SOUND_VOLUME_LEFT_CHANNEL_SHIFT);
 
 //
 // Define the bits for the sound device handle flags.

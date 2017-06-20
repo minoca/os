@@ -146,6 +146,16 @@ SOUND_FUNCTION_TABLE HdaSoundFunctionTable = {
 };
 
 //
+// Store the list of legacy Intel devices that use the old stream
+// synchronization register. All are assumed to have an Intel vendor ID of
+// 0x8086.
+//
+
+ULONG HdaLegacyIntelDevices[] = {
+    0x2668, 0x27D8, 0x269A, 0x284B, 0x293E, 0x293F, 0x3A3E, 0x3A6E
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -235,6 +245,12 @@ Return Value:
 {
 
     PHDA_CONTROLLER Controller;
+    ULONG DeviceCount;
+    ULONG DeviceIndex;
+    ULONG DeviceNumber;
+    ULONG ItemsScanned;
+    HDA_REGISTER Register;
+    KSTATUS Status;
 
     Controller = MmAllocateNonPagedPool(sizeof(HDA_CONTROLLER),
                                         HDA_ALLOCATION_TAG);
@@ -244,9 +260,49 @@ Return Value:
     }
 
     RtlZeroMemory(Controller, sizeof(HDA_CONTROLLER));
+
+    //
+    // Check to see if this is one of the older Intel devices that uses the
+    // legacy stream synchronization register.
+    //
+
+    Register = HdaRegisterStreamSynchronization;
+    Status = RtlStringScan(DeviceId,
+                           RtlStringLength(DeviceId) + 1,
+                           "VEN_8086&DEV_%x",
+                           sizeof("VEN_8086&DEV_%x"),
+                           CharacterEncodingDefault,
+                           &ItemsScanned,
+                           &DeviceNumber);
+
+    if (KSUCCESS(Status) && (ItemsScanned == 1)) {
+        DeviceCount = sizeof(HdaLegacyIntelDevices) /
+                      sizeof(HdaLegacyIntelDevices[0]);
+
+        for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
+            if (HdaLegacyIntelDevices[DeviceIndex] == DeviceNumber) {
+                Register = HdaRegisterLegacyStreamSynchronization;
+                break;
+            }
+        }
+    }
+
+    Controller->StreamSynchronizationRegister = Register;
     Controller->OsDevice = DeviceToken;
     Controller->InterruptHandle = INVALID_HANDLE;
-    return IoAttachDriverToDevice(Driver, DeviceToken, Controller);
+    Status = IoAttachDriverToDevice(Driver, DeviceToken, Controller);
+    if (!KSUCCESS(Status)) {
+        goto AddDeviceEnd;
+    }
+
+AddDeviceEnd:
+    if (!KSUCCESS(Status)) {
+        if (Controller != NULL) {
+            MmFreeNonPagedPool(Controller);
+        }
+    }
+
+    return Status;
 }
 
 VOID

@@ -43,10 +43,16 @@ Author:
 #define SOUND_DEVICE_STATE_INFORMATION_VERSION 0x00000001
 
 //
+// Define the set of publicly accessible sound device flags.
+//
+
+#define SOUND_DEVICE_FLAG_PRIMARY 0x00000001
+
+//
 // Define the mask of publicly accessible sound device flags.
 //
 
-#define SOUND_DEVICE_FLAG_PUBLIC_MASK 0x0
+#define SOUND_DEVICE_FLAG_PUBLIC_MASK SOUND_DEVICE_FLAG_PRIMARY
 
 //
 // Define the set of controller wide flags.

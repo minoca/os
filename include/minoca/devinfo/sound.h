@@ -39,7 +39,7 @@ Author:
 // Define sound device information flags.
 //
 
-#define SOUND_DEVICE_FLAG_PRIMARY 0x00000001
+#define SOUND_DEVICE_INFORMATION_FLAG_PRIMARY 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
