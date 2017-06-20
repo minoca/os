@@ -19,13 +19,12 @@ Questions or patches can be submitted to minoca-dev@googlegroups.com. Good luck!
  - Fix a "TODO" in the code
  - Port a new package
  - Implement get{host,net,proto,srv}ent and friends.
- - Retrofit x86 disassembler for x86-64
  - AARCH64 disassembler
  - Implement hardware breakpoints in debugger/Kd
  - Floating point register access in debugger
  - Implement ResourceLimit*
  - Rework kernel device interface database
- - Refactor image library into two: native-only and universal
+ - Serial (UART) device drivers
 
 ### Medium
  - Add TCP_CORK
@@ -34,14 +33,11 @@ Questions or patches can be submitted to minoca-dev@googlegroups.com. Good luck!
  - Implement statvfs
  - Implement pathconf
  - Add ATAPI to ATA driver
- - Add SATA (AHCI) driver
  - Isochronous USB transfers
  - Rework kernel support for user mode debugging/ptrace
  - Network bridge support
  - Virtual network devices
  - Namespaces
- - Basic display controller drivers (unaccelerated)
- - User framebuffer support
  - SD/MMC hardening (error recovery)
  - Crash dumps (application)
  - User mode profiling support
@@ -49,7 +45,6 @@ Questions or patches can be submitted to minoca-dev@googlegroups.com. Good luck!
  - Loopback block devices
  - UART flow control
  - Network/ramdisk boot
- - Add driver for NIC used by VMWare.
  - Add SD driver for PL081 used by Qemu (ARM).
  - NAND flash file system
  - IPv6 kernel support
@@ -64,7 +59,6 @@ Questions or patches can be submitted to minoca-dev@googlegroups.com. Good luck!
  - Audio stack
  - Crash Dumps (kernel)
  - Add support for better FS
- - x86-64 architecture port
  - AARCH64 architecture port
  - CD boot
  - Accelerated graphics
@@ -78,3 +72,4 @@ Below is a list of platforms that might be interesting to port to.
  - PowerPC architecture port
  - MIPS architecture port
  - Asynchronous I/O mechanism
+ - Port D package
