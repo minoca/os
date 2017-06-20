@@ -36,6 +36,8 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
+ARMV7_OBJS += boot/armv7/kdatomic.o \
+
 EXTRA_SRC_DIRS = x86 x64 armv7 armv6 boot/armv7
 
 ifeq ($(ARCH),x64)

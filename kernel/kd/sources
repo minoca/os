@@ -31,7 +31,6 @@ OBJS = kdebug.o   \
 ARMV7_OBJS = armv7/kdarch.o        \
              armv7/kdsup.o         \
              armv7/kdsupc.o        \
-             boot/armv7/kdatomic.o \
 
 ARMV6_OBJS = $(ARMV7_OBJS)
 
@@ -40,3 +39,4 @@ X86_OBJS = x86/kdarch.o   \
 
 X64_OBJS = x64/kdarch.o   \
            x64/kdsup.o    \
+
