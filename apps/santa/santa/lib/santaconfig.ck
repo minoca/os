@@ -83,7 +83,7 @@ var defaultConfig = {
         // Set this to true to print more information about what's happening.
         //
 
-        "verbose": true, //false,
+        "verbose": false,
 
         //
         // Define the directory where data is stored.

@@ -2338,7 +2338,7 @@ class CpioArchive {
         uid - Supplies the user ID to set on the extracted object. Supply -1 to
             use the user ID number in the archive.
 
-        gid - Supplies the gropu ID to set on the extracted object. Supply -1
+        gid - Supplies the group ID to set on the extracted object. Supply -1
             to use the group ID number in the archive.
 
         setPermissions - Supplies a boolean indicating whether to set the
@@ -2396,7 +2396,7 @@ class CpioArchive {
         uid - Supplies the user ID to set on the extracted object. Supply -1 to
             use the user ID number in the archive.
 
-        gid - Supplies the gropu ID to set on the extracted object. Supply -1
+        gid - Supplies the group ID to set on the extracted object. Supply -1
             to use the group ID number in the archive.
 
         setPermissions - Supplies a boolean indicating whether to set the
@@ -2922,7 +2922,7 @@ class CpioArchive {
         uid - Supplies the user ID to set on the extracted object. Supply -1 to
             use the user ID number in the archive.
 
-        gid - Supplies the gropu ID to set on the extracted object. Supply -1
+        gid - Supplies the group ID to set on the extracted object. Supply -1
             to use the group ID number in the archive.
 
     Return Value:

@@ -87,14 +87,14 @@ var usage =
     "       santa config [options] key value [value...]\n"
     "santa config gets or sets an application configuration value.\n"
     "Valid options are:\n"
-    "  -f, --file=file -- Work on the specified config file."
-    "  -j, --json -- Print the result in JSON or read the value as JSON."
-    "  -s, --system -- Work on the system store rather than the user's store."
+    "  -f, --file=file -- Work on the specified config file.\n"
+    "  -j, --json -- Print the result in JSON or read the value as JSON.\n"
+    "  -s, --system -- Work on the system store rather than the user's store.\n"
     "  -u, --user -- Work on the user store instead of the combination of "
-    "all stores"
-    "  -r, --remove -- Remove the given key"
-    "  -a, --add -- Add to the given key instead of replacing it."
-    "  -l, --list -- List all values found in the store.";
+    "all stores\n"
+    "  -r, --remove -- Remove the given key\n"
+    "  -a, --add -- Add to the given key instead of replacing it.\n"
+    "  -l, --list -- List all values found in the store.\n";
 
 //
 // ------------------------------------------------------------------ Functions
