@@ -242,7 +242,7 @@ Rtlw81AddDevice (
 
 Routine Description:
 
-    This routine is called when a device is detected for which the SMSC95xx
+    This routine is called when a device is detected for which the RTLW81xx
     driver acts as the function driver. The driver will attach itself to the
     stack.
 

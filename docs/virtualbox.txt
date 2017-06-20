@@ -5,9 +5,9 @@ needed to be tweaked.
 
 I was testing on a Windows 7 x64 machine running VirtualBox 5.1.8 r111374.
 
-I've selected a machine type of Other, Other/Unknown. I was also able to get
-it working with Linux, Ubuntu (64-bit), but had to change the Storage settings
-(see below).
+I've selected a machine type of Other, Other/Unknown. A machine type of Linux,
+Ubuntu (64-bit) also works; the major difference is that it uses a SATA storage
+controller.
 
 In the System settings for the VM, under the Motherboard tab:
  * Chipset must be set to ICH9. Minoca OS requires an APIC, and the ancient
@@ -15,13 +15,8 @@ In the System settings for the VM, under the Motherboard tab:
  * Enable I/O APIC must be checked. VirtualBox basically forces you to do this
    once you select ICH9.
 
-If you selected Linux, Ubuntu (64-bit), then you'll need to head into the
-settings for Storage:
- * Remove the hard disk from SATA, and add it under IDE. Minoca OS does not yet
-   support SATA.
-
-Networking does not yet work in VirtualBox or VMWare, as we desperately need
-someone to write the AMD PCNet32 LANCE Ethernet driver.
+To enable sound, the Audio Controller must be set to Intel HD Audio in the
+Audio settings. Minoca does not support ICH AC97, which is the default.
 
 Creating a disk:
 Manual Method:
@@ -39,13 +34,13 @@ isNativeSnapshot="no"
 createType="monolithicFlat"
 
 # Extent description
-RW 1048576 FLAT "pc.img" 0
+RW 2097152 FLAT "pc.img" 0
 
 # The Disk Data Base
 #DDB
 
 ddb.adapterType = "lsilogic"
-ddb.geometry.cylinders = "1040"
+ddb.geometry.cylinders = "2080"
 ddb.geometry.heads = "16"
 ddb.geometry.sectors = "63"
 ddb.longContentID = "c102446c4b4b4547bf42db9ac326ee8a"
@@ -60,7 +55,7 @@ ddb.uuid.parentmodification="00000000-0000-0000-0000-000000000000"
 Put the contents of the above template in a file called pc.vmdk in the same
 directory as pc.img (or whichever image you're trying to create a vmdk for).
 
-If your pc.img is not 512MB, change the 1048576 in the line RW 1048576 FLAT ...
+If your pc.img is not 1GB, change the 2097152 in the line RW 2097152 FLAT ...
 to the number of sectors in your disk. The number of sectors is the size of
 the image in bytes divided by 512. Also change ddb.geometry.cylinders to be
 equal to sectors/16/63.

@@ -878,6 +878,7 @@ typedef enum _HDA_REGISTER {
     HdaRegisterInterruptControl = 0x20,
     HdaRegisterInterruptStatus = 0x24,
     HdaRegisterWallClockCounter = 0x30,
+    HdaRegisterLegacyStreamSynchronization = 0x34,
     HdaRegisterStreamSynchronization = 0x38,
     HdaRegisterCorbLowerBaseAddress = 0x40,
     HdaRegisterCorbUpperBaseAddress = 0x44,
