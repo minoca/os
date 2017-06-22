@@ -122,6 +122,18 @@ Author:
 #define SOUND_TIMING_POLICY_MAX 10
 
 //
+// Define the maximum number of device routes.
+//
+
+#define SOUND_ROUTE_COUNT_MAX 128
+
+//
+// Define the size of the device enumeration string buffer.
+//
+
+#define SOUND_ROUTE_NAME_SIZE 2048
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -218,6 +230,43 @@ typedef struct _SOUND_POSITION_INFORMATION {
     LONG FragmentCount;
     LONG Offset;
 } SOUND_POSITION_INFORMATION, *PSOUND_POSITION_INFORMATION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a set of available routes that can be set for a
+    given audio device.
+
+Members:
+
+    DeviceNumber - Stores the device number.
+
+    DeviceControl - Stores the device's control number.
+
+    RouteCount - Stores the number of routes available on the device.
+
+    SequenceNumber - Stores the the sequence number of the list of routes. Zero
+        indicates that the list is static. If it is non-zero, then the list
+        is dynamic and if the sequence number changes on subsequent checks,
+        then the route list has changed.
+
+    RouteIndex - Stores an array of offsets into the routes array for the
+        route names.
+
+    RouteName - Stores an array that contains the actual strings for the route
+        names. All strings are null terminated.
+
+--*/
+
+typedef struct _SOUND_DEVICE_ROUTE_INFORMATION {
+    LONG DeviceNumber;
+    LONG ControlNumber;
+    LONG RouteCount;
+    LONG SequenceNumber;
+    SHORT RouteIndex[SOUND_ROUTE_COUNT_MAX];
+    CHAR RouteName[SOUND_ROUTE_NAME_SIZE];
+} SOUND_DEVICE_ROUTE_INFORMATION, *PSOUND_DEVICE_ROUTE_INFORMATION;
 
 //
 // -------------------------------------------------------------------- Globals

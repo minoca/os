@@ -130,6 +130,12 @@ HdapFindPaths (
     ULONG PathLength
     );
 
+ULONG
+HdapGetPathCount (
+    PHDA_FUNCTION_GROUP Group,
+    PHDA_WIDGET Widget
+    );
+
 PHDA_PATH
 HdapGetPrimaryPath (
     PHDA_DEVICE Device
@@ -213,6 +219,24 @@ PCSTR HdaPathTypeNames[HdaPathTypeCount] = {
     "ADC from Input",
     "DAC to Output",
     "Input to Output"
+};
+
+SOUND_DEVICE_ROUTE_TYPE HdaDeviceTypeToRouteType[] = {
+    SoundDeviceRouteLineOut,
+    SoundDeviceRouteSpeaker,
+    SoundDeviceRouteHeadphone,
+    SoundDeviceRouteCd,
+    SoundDeviceRouteSpdifOut,
+    SoundDeviceRouteDigitalOut,
+    SoundDeviceRouteModemLineSide,
+    SoundDeviceRouteModemHandsetSide,
+    SoundDeviceRouteLineIn,
+    SoundDeviceRouteAux,
+    SoundDeviceRouteMicrophone,
+    SoundDeviceRouteTelephony,
+    SoundDeviceRouteSpdifIn,
+    SoundDeviceRouteDigitalIn,
+    SoundDeviceRouteUnknown
 };
 
 //
@@ -378,6 +402,7 @@ Return Value:
 KSTATUS
 HdapEnableDevice (
     PHDA_DEVICE Device,
+    PHDA_PATH Path,
     USHORT Format
     )
 
@@ -386,11 +411,13 @@ HdapEnableDevice (
 Routine Description:
 
     This routine enables an HDA device in preparation for it to start playing
-    or recording audio. Part of this is making sure it has a path.
+    or recording audio.
 
 Arguments:
 
     Device - Supplies a pointer to the device to enable.
+
+    Path - Supplies a pointer to the HDA path to enable for the device.
 
     Format - Supplies the HDA stream format to be programmed in the device.
 
@@ -404,20 +431,53 @@ Return Value:
 
     ULONG DeviceType;
     ULONG Index;
-    PHDA_PATH Path;
+    PHDA_PATH OldPath;
     KSTATUS Status;
     ULONG Value;
     PHDA_WIDGET Widget;
     ULONG WidgetType;
 
     //
-    // The device should have a path. Enable the input and output pins '
-    // appropriately.
+    // Set the provided path for future use, but mute and disable the old path
+    // first.
     //
+
+    if (Path != Device->Path) {
+        Status = HdapSetDeviceVolume(Device, 0);
+        if (!KSUCCESS(Status)) {
+            goto EnableDeviceEnd;
+        }
+
+        OldPath = Device->Path;
+        Status = STATUS_SUCCESS;
+        for (Index = 0; Index < OldPath->Length; Index += 1) {
+            Widget = &(Device->Group->Widgets[OldPath->Widgets[Index]]);
+            if (HDA_GET_WIDGET_TYPE(Widget) != HDA_AUDIO_WIDGET_TYPE_PIN) {
+                continue;
+            }
+
+            Status = HdapCodecGetSetVerb(Device->Codec,
+                                         Widget->NodeId,
+                                         HdaVerbSetPinWidgetControl,
+                                         0,
+                                         NULL);
+
+            if (!KSUCCESS(Status)) {
+                goto EnableDeviceEnd;
+            }
+        }
+
+        Device->Path = Path;
+    }
 
     Path = Device->Path;
 
     ASSERT(Path != NULL);
+
+    //
+    // Enable the input and output pin's appropriately for each widget in the
+    // path.
+    //
 
     Status = STATUS_SUCCESS;
     for (Index = 0; Index < Path->Length; Index += 1) {
@@ -684,6 +744,8 @@ Return Value:
                 goto SetDeviceVolumeEnd;
             }
 
+            AmpIndex <<= HDA_SET_AMPLIFIER_GAIN_PAYLOAD_INDEX_SHIFT;
+            AmpIndex &= HDA_SET_AMPLIFIER_GAIN_PAYLOAD_INDEX_MASK;
             break;
 
         //
@@ -1069,6 +1131,8 @@ Return Value:
 
     UINTN AllocationSize;
     ULONG Capabilities;
+    PLIST_ENTRY CurrentEntry;
+    PHDA_PATH CurrentPath;
     ULONG Formats;
     PHDA_DEVICE HdaDevice;
     ULONG MaxChannelCount;
@@ -1077,6 +1141,10 @@ Return Value:
     ULONG RateIndex;
     PULONG Rates;
     UINTN RatesSize;
+    ULONG RouteCount;
+    ULONG RouteIndex;
+    PSOUND_DEVICE_ROUTE Routes;
+    UINTN RoutesSize;
     PSOUND_DEVICE SoundDevice;
     KSTATUS Status;
     USHORT SupportedIndex;
@@ -1087,7 +1155,9 @@ Return Value:
     SupportedRates = Widget->SupportedRates;
     RateCount = RtlCountSetBits32(SupportedRates);
     RatesSize = RateCount * sizeof(ULONG);
-    AllocationSize = sizeof(HDA_DEVICE) + RatesSize;
+    RouteCount = HdapGetPathCount(Group, Widget);
+    RoutesSize = RouteCount * sizeof(SOUND_DEVICE_ROUTE);
+    AllocationSize = sizeof(HDA_DEVICE) + RatesSize + RoutesSize;
     HdaDevice = MmAllocateNonPagedPool(AllocationSize, HDA_ALLOCATION_TAG);
     if (HdaDevice == NULL) {
         return NULL;
@@ -1114,7 +1184,7 @@ Return Value:
 
     HdaDevice->State = SoundDeviceStateUninitialized;
     SoundDevice->Version = SOUND_DEVICE_VERSION;
-    SoundDevice->StructureSize = sizeof(SOUND_DEVICE) + RatesSize;
+    SoundDevice->StructureSize = sizeof(SOUND_DEVICE) + RatesSize + RoutesSize;
     SoundDevice->Context = HdaDevice;
     WidgetType = HDA_GET_WIDGET_TYPE(Widget);
     Capabilities = SOUND_CAPABILITY_MMAP | SOUND_CAPABILITY_MANUAL_ENABLE;
@@ -1203,6 +1273,8 @@ Return Value:
     SoundDevice->MaxChannelCount = MaxChannelCount;
     SoundDevice->RateCount = RateCount;
     SoundDevice->RatesOffset = sizeof(SOUND_DEVICE);
+    SoundDevice->RouteCount = RouteCount;
+    SoundDevice->RoutesOffset = sizeof(SOUND_DEVICE) + RatesSize;
     Rates = (PVOID)SoundDevice + SoundDevice->RatesOffset;
     RateIndex = 0;
     SupportedIndex = 0;
@@ -1217,6 +1289,32 @@ Return Value:
     }
 
     ASSERT(RateIndex == RateCount);
+    ASSERT(RouteCount != 0);
+
+    //
+    // Fill out the route information for the device. The primary path should
+    // be stored as the first route.
+    //
+
+    Routes = (PVOID)SoundDevice + SoundDevice->RoutesOffset;
+    RouteIndex = 0;
+    Routes[RouteIndex].Type = HdaDevice->Path->RouteType;
+    Routes[RouteIndex].Context = HdaDevice->Path;
+    RouteIndex += 1;
+    CurrentEntry = Group->PathList[HdaDevice->Path->Type].Next;
+    while (CurrentEntry != &(Group->PathList[HdaDevice->Path->Type])) {
+        CurrentPath = LIST_VALUE(CurrentEntry, HDA_PATH, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if ((CurrentPath != HdaDevice->Path) &&
+            (Widget == &(Group->Widgets[CurrentPath->Widgets[0]]))) {
+
+            ASSERT(RouteIndex < RouteCount);
+
+            Routes[RouteIndex].Type = CurrentPath->RouteType;
+            Routes[RouteIndex].Context = CurrentPath;
+            RouteIndex += 1;
+        }
+    }
 
     Status = STATUS_SUCCESS;
 
@@ -2629,6 +2727,68 @@ Return Value:
     return PrimaryPath;
 }
 
+ULONG
+HdapGetPathCount (
+    PHDA_FUNCTION_GROUP Group,
+    PHDA_WIDGET Widget
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of paths that start from the given widget.
+
+Arguments:
+
+    Group - Supplies a pointer to the function group to which the widget
+        belongs.
+
+    Widget - Supplies a pointer to a widget.
+
+Return Value:
+
+    Returns the number of paths starting from the widget.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PHDA_PATH CurrentPath;
+    ULONG FirstIndex;
+    ULONG PathCount;
+    HDA_PATH_TYPE PathType;
+    ULONG WidgetType;
+
+    WidgetType = HDA_GET_WIDGET_TYPE(Widget);
+    if (WidgetType == HDA_AUDIO_WIDGET_TYPE_INPUT) {
+        PathType = HdaPathAdcFromInput;
+
+    } else if (WidgetType == HDA_AUDIO_WIDGET_TYPE_OUTPUT) {
+        PathType = HdaPathDacToOutput;
+
+    } else if (WidgetType == HDA_AUDIO_WIDGET_TYPE_PIN) {
+        PathType = HdaPathInputToOutput;
+
+    } else {
+        return 0;
+    }
+
+    PathCount = 0;
+    CurrentEntry = Group->PathList[PathType].Next;
+    while (CurrentEntry != &(Group->PathList[PathType])) {
+        CurrentPath = LIST_VALUE(CurrentEntry, HDA_PATH, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        FirstIndex = CurrentPath->Widgets[0];
+        if (Widget == &(Group->Widgets[FirstIndex])) {
+            PathCount += 1;
+        }
+    }
+
+    return PathCount;
+}
+
 KSTATUS
 HdapCreatePath (
     PHDA_CODEC Codec,
@@ -2666,7 +2826,11 @@ Return Value:
 {
 
     UINTN AllocationSize;
+    ULONG DeviceType;
+    ULONG DeviceTypeCount;
     ULONG Index;
+    ULONG LastIndex;
+    PHDA_WIDGET LastWidget;
     PHDA_PATH NewPath;
     KSTATUS Status;
     PHDA_WIDGET Widget;
@@ -2717,6 +2881,29 @@ Return Value:
         RtlCopyMemory(NewPath->Widgets,
                       PathWidgets,
                       PathLength * sizeof(ULONG));
+    }
+
+    //
+    // Store the sound core route type of the path.
+    //
+
+    LastIndex = NewPath->Widgets[NewPath->Length - 1];
+    LastWidget = &(Group->Widgets[LastIndex]);
+
+    ASSERT(HDA_GET_WIDGET_TYPE(LastWidget) == HDA_AUDIO_WIDGET_TYPE_PIN);
+
+    DeviceType = (LastWidget->PinConfiguration &
+                  HDA_CONFIGURATION_DEFAULT_DEVICE_MASK) >>
+                 HDA_CONFIGURATION_DEFAULT_DEVICE_SHIFT;
+
+    DeviceTypeCount = sizeof(HdaDeviceTypeToRouteType) /
+                      sizeof(HdaDeviceTypeToRouteType[0]);
+
+    if (DeviceType >= DeviceTypeCount) {
+        NewPath->RouteType = SoundDeviceRouteUnknown;
+
+    } else {
+        NewPath->RouteType = HdaDeviceTypeToRouteType[DeviceType];
     }
 
     //

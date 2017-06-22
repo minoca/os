@@ -177,6 +177,24 @@ PCSTR SoundSpecificDeviceFormats[SoundDeviceTypeCount] = {
     "output%d"
 };
 
+PCSTR SoundRouteNames[SoundDeviceRouteTypeCount] = {
+    "Unknown",
+    "LineOut",
+    "Speaker",
+    "Headphone",
+    "CD",
+    "SpdifOut",
+    "DigitalOut",
+    "ModemLineSide",
+    "ModemHandsetSide",
+    "LineIn",
+    "AUX",
+    "Microphone",
+    "Telephony",
+    "SpdifIn",
+    "DigitalIn",
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -285,7 +303,7 @@ Return Value:
     TotalDeviceSize = 0;
     for (Index = 0; Index < Registration->DeviceCount; Index += 1) {
         SoundDevice = Registration->Devices[Index];
-        if (SoundDevice->RateCount == 0) {
+        if ((SoundDevice->RateCount == 0) || (SoundDevice->RouteCount == 0)) {
             Status = STATUS_INVALID_PARAMETER;
             goto CreateControllerEnd;
         }
@@ -1241,6 +1259,7 @@ Return Value:
 
 {
 
+    ULONG BytesRemaining;
     ULONG ChannelCount;
     ULONG ClearFlags;
     UINTN ControllerOffset;
@@ -1250,11 +1269,18 @@ Return Value:
     UINTN FragmentsCompleted;
     ULONG FragmentShift;
     UINTN FragmentSize;
+    ULONG Index;
     ULONG IntegerUlong;
     BOOL LockHeld;
+    PCSTR Name;
+    ULONG NameIndex;
+    ULONG NameSize;
     ULONG OldFlags;
     SOUND_POSITION_INFORMATION Position;
     SOUND_QUEUE_INFORMATION QueueInformation;
+    ULONG RouteCount;
+    SOUND_DEVICE_ROUTE_INFORMATION RouteInformation;
+    PSOUND_DEVICE_ROUTE Routes;
     ULONG SetFlags;
     INT Shift;
     PSOUND_DEVICE SoundDevice;
@@ -1804,6 +1830,116 @@ Return Value:
         RtlAtomicOr32(&(Handle->Flags), SOUND_DEVICE_HANDLE_FLAG_LOW_WATER_SET);
         break;
 
+    case SoundGetSupportedOutputRoutes:
+    case SoundGetSupportedInputRoutes:
+        CopySize = sizeof(SOUND_DEVICE_ROUTE_INFORMATION);
+        if (RequestBufferSize < CopySize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        //
+        // Consider increasing the maximum if a device has a lot of routes.
+        // This routine will currently truncate them.
+        //
+
+        RouteCount = SoundDevice->RouteCount;
+        if (RouteCount > SOUND_ROUTE_COUNT_MAX) {
+            RtlDebugPrint("SNDCORE: Truncating route report: %d\n", RouteCount);
+            RouteCount = SOUND_ROUTE_COUNT_MAX;
+        }
+
+        RtlZeroMemory(&RouteInformation, CopySize);
+        RouteInformation.RouteCount = RouteCount;
+        NameIndex = 0;
+        BytesRemaining = SOUND_ROUTE_NAME_SIZE;
+        Routes = (PVOID)SoundDevice + SoundDevice->RoutesOffset;
+        for (Index = 0; Index < RouteCount; Index += 1) {
+            Name = SoundRouteNames[Routes[Index].Type];
+            NameSize = RtlStringLength(Name) + 1;
+            if (NameSize > BytesRemaining) {
+                break;
+            }
+
+            RouteInformation.RouteIndex[Index] = NameIndex;
+            RtlStringCopy(&(RouteInformation.RouteName[NameIndex]),
+                          Name,
+                          NameSize);
+
+            NameIndex += NameSize;
+        }
+
+        CopyOutBuffer = &RouteInformation;
+        break;
+
+    case SoundGetOutputRoute:
+    case SoundGetInputRoute:
+        IntegerUlong = Handle->Route;
+        if (Handle->Device->Type == SoundDeviceInput) {
+            if (RequestCode == SoundGetOutputVolume) {
+                IntegerUlong = 0;
+            }
+
+        } else {
+            if (RequestCode == SoundGetInputVolume) {
+                IntegerUlong = 0;
+            }
+        }
+
+        CopyOutBuffer = &IntegerUlong;
+        CopySize = sizeof(ULONG);
+        break;
+
+    case SoundSetOutputRoute:
+    case SoundSetInputRoute:
+        CopySize = sizeof(ULONG);
+        if (RequestBufferSize < CopySize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            break;
+        }
+
+        CopyOutBuffer = &IntegerUlong;
+        if (Handle->Device->Type == SoundDeviceInput) {
+            if (RequestCode == SoundSetOutputVolume) {
+                IntegerUlong = 0;
+                break;
+            }
+
+        } else {
+            if (RequestCode == SoundSetInputVolume) {
+                IntegerUlong = 0;
+                break;
+            }
+        }
+
+        if (FromKernelMode != FALSE) {
+            IntegerUlong = *((PULONG)RequestBuffer);
+
+        } else {
+            Status = MmCopyFromUserMode(&IntegerUlong, RequestBuffer, CopySize);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+        }
+
+        //
+        // The route can only be set while in the uninitialized state.
+        //
+
+        if ((IntegerUlong < SoundDevice->RouteCount) &&
+            (Handle->State < SoundDeviceStateInitialized)) {
+
+            KeAcquireQueuedLock(Handle->Lock);
+            if (Handle->State < SoundDeviceStateInitialized) {
+                Handle->Route = IntegerUlong;
+            }
+
+            KeReleaseQueuedLock(Handle->Lock);
+        }
+
+        IntegerUlong = Handle->Route;
+        break;
+
     default:
         Status = STATUS_NOT_SUPPORTED;
         break;
@@ -2234,6 +2370,7 @@ Return Value:
     PSOUND_CONTROLLER Controller;
     PSOUND_GET_SET_INFORMATION GetSetInformation;
     SOUND_DEVICE_STATE_INFORMATION Information;
+    PSOUND_DEVICE_ROUTE Routes;
     UINTN Size;
     KSTATUS Status;
 
@@ -2251,6 +2388,8 @@ Return Value:
     Information.U.Initialize.ChannelCount = Handle->ChannelCount;
     Information.U.Initialize.SampleRate = Handle->SampleRate;
     Information.U.Initialize.Volume = Handle->Volume;
+    Routes = (PVOID)Handle->Device + Handle->Device->RoutesOffset;
+    Information.U.Initialize.RouteContext = Routes[Handle->Route].Context;
     Controller = Handle->Controller;
     Size = sizeof(SOUND_DEVICE_STATE_INFORMATION);
     GetSetInformation = Controller->Host.FunctionTable->GetSetInformation;
@@ -3162,6 +3301,7 @@ Return Value:
     }
 
     Handle->Volume = SOUND_VOLUME_DEFAULT;
+    Handle->Route = 0;
     return;
 }
 

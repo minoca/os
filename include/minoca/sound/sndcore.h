@@ -174,6 +174,9 @@ Members:
         control, it should use the left channel volume. See SOUND_VOLUME_* for
         mask definitions.
 
+    RouteContext - Stores an opaque pointer to the sound controller's context
+        for the chosen route.
+
 --*/
 
 typedef struct _SOUND_DEVICE_STATE_INITIALIZE {
@@ -182,6 +185,7 @@ typedef struct _SOUND_DEVICE_STATE_INITIALIZE {
     ULONG ChannelCount;
     ULONG SampleRate;
     ULONG Volume;
+    PVOID RouteContext;
 } SOUND_DEVICE_STATE_INITIALIZE, *PSOUND_DEVICE_STATE_INITIALIZE;
 
 /*++
@@ -218,6 +222,49 @@ typedef enum _SOUND_DEVICE_TYPE {
     SoundDeviceOutput,
     SoundDeviceTypeCount
 } SOUND_DEVICE_TYPE, *PSOUND_DEVICE_TYPE;
+
+typedef enum _SOUND_DEVICE_ROUTE_TYPE {
+    SoundDeviceRouteUnknown,
+    SoundDeviceRouteLineOut,
+    SoundDeviceRouteSpeaker,
+    SoundDeviceRouteHeadphone,
+    SoundDeviceRouteCd,
+    SoundDeviceRouteSpdifOut,
+    SoundDeviceRouteDigitalOut,
+    SoundDeviceRouteModemLineSide,
+    SoundDeviceRouteModemHandsetSide,
+    SoundDeviceRouteLineIn,
+    SoundDeviceRouteAux,
+    SoundDeviceRouteMicrophone,
+    SoundDeviceRouteTelephony,
+    SoundDeviceRouteSpdifIn,
+    SoundDeviceRouteDigitalIn,
+    SoundDeviceRouteTypeCount,
+} SOUND_DEVICE_ROUTE_TYPE, *PSOUND_DEVICE_ROUTE_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structures defines a sound device route. A route represents a path
+    the sound core device can take to reach one external audio devices attached
+    to the sound controller. For instance, if there may be multiple microphones
+    attached to a controller, there should be a route for each.
+
+Members:
+
+    Type - Stores the type of route, dictated by the audio device at the
+        external end of the route.
+
+    Context - Stores an opaque pointer to the sound controller's context for
+        this route.
+
+--*/
+
+typedef struct _SOUND_DEVICE_ROUTE {
+    SOUND_DEVICE_ROUTE_TYPE Type;
+    PVOID Context;
+} SOUND_DEVICE_ROUTE, *PSOUND_DEVICE_ROUTE;
 
 /*++
 
@@ -259,6 +306,11 @@ Members:
         start of the sorted array of supported rates. The rates are stored in
         Hz.
 
+    RouteCount - Stores the number of available routes.
+
+    RoutesOffset - Stores an offset from the beginning of this structure to the
+        start of the array of SOUND_DEVICE_ROUTE structures.
+
 --*/
 
 typedef struct _SOUND_DEVICE {
@@ -273,6 +325,8 @@ typedef struct _SOUND_DEVICE {
     ULONG MaxChannelCount;
     ULONG RateCount;
     UINTN RatesOffset;
+    ULONG RouteCount;
+    UINTN RoutesOffset;
 } SOUND_DEVICE, *PSOUND_DEVICE;
 
 typedef

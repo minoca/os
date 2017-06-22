@@ -179,6 +179,10 @@ Members:
         control, it should use the left channel volume. See SOUND_VOLUME_* for
         mask definitions.
 
+    CurrentRoute - Stores the index of current route for the device. The
+        default is route 0. The route information is stored in the sound
+        device structure.
+
 --*/
 
 struct _SOUND_DEVICE_HANDLE {
@@ -192,6 +196,7 @@ struct _SOUND_DEVICE_HANDLE {
     ULONG ChannelCount;
     ULONG SampleRate;
     ULONG Volume;
+    ULONG Route;
 };
 
 //

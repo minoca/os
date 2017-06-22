@@ -72,6 +72,12 @@ Environment:
 #define BCM27_PWMA_SAMPLE_RATE_COUNT 2
 
 //
+// Define the number of routes.
+//
+
+#define BCM27_PWMA_ROUTE_COUNT 1
+
+//
 // Define the minimum and maximum fragment counts supported by PWM audio. The
 // minimum is 2 and the maximum is 256, which happens to be the maximum number
 // of control blocks supported by the DMA controller.
@@ -168,11 +174,14 @@ Members:
 
     SampelRates - Stores the supported sample rates.
 
+    Route - Stores an array of available routes.
+
 --*/
 
 typedef struct _BCM27_PWMA_DEVICE {
     SOUND_DEVICE SoundDevice;
     ULONG SampleRates[BCM27_PWMA_SAMPLE_RATE_COUNT];
+    SOUND_DEVICE_ROUTE Routes[BCM27_PWMA_ROUTE_COUNT];
 } PACKED BCM27_PWMA_DEVICE, *PBCM27_PWMA_DEVICE;
 
 /*++
@@ -435,12 +444,21 @@ BCM27_PWMA_DEVICE Bcm27PwmAudioDeviceTemplate = {
         BCM27_PWMA_MIN_CHANNEL_COUNT,
         BCM27_PWMA_MAX_CHANNEL_COUNT,
         BCM27_PWMA_SAMPLE_RATE_COUNT,
-        sizeof(SOUND_DEVICE),
+        FIELD_OFFSET(BCM27_PWMA_DEVICE, SampleRates),
+        BCM27_PWMA_ROUTE_COUNT,
+        FIELD_OFFSET(BCM27_PWMA_DEVICE, Routes),
     },
 
     {
         44100, 48000
-    }
+    },
+
+    {
+        {
+            SoundDeviceRouteHeadphone,
+            NULL
+        },
+    },
 };
 
 //
@@ -1928,6 +1946,7 @@ Return Value:
         ASSERT(State->U.Initialize.Format ==
                SOUND_FORMAT_16_BIT_SIGNED_LITTLE_ENDIAN);
 
+        ASSERT(State->U.Initialize.RouteContext == NULL);
         ASSERT(State->U.Initialize.ChannelCount <=
                Device->Public.SoundDevice.MaxChannelCount);
 

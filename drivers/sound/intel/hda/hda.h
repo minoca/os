@@ -241,6 +241,9 @@ Members:
 
     Type - Stores the path type.
 
+    RouteType - Stores the sound device route type of the path. This really
+        describes the connection of the paths last pin widget.
+
     Length - Stores the length of the widget path.
 
     Widgets - Stores an array of widget indices. These are indices into the
@@ -252,6 +255,7 @@ Members:
 typedef struct _HDA_PATH {
     LIST_ENTRY ListEntry;
     HDA_PATH_TYPE Type;
+    SOUND_DEVICE_ROUTE_TYPE RouteType;
     ULONG Length;
     ULONG Widgets[ANYSIZE_ARRAY];
 } HDA_PATH, *PHDA_PATH;
@@ -1015,6 +1019,7 @@ Return Value:
 KSTATUS
 HdapEnableDevice (
     PHDA_DEVICE Device,
+    PHDA_PATH Path,
     USHORT Format
     );
 
@@ -1028,6 +1033,8 @@ Routine Description:
 Arguments:
 
     Device - Supplies a pointer to the device to enable.
+
+    Path - Supplies a pointer to the HDA path to enable for the device.
 
     Format - Supplies the HDA stream format to be programmed in the device.
 

@@ -93,6 +93,22 @@ extern "C" {
 #define SNDCTL_DSP_GETOSPACE 0x5009
 
 //
+// This ioctl enumerates the list of available output routes for a device. The
+// enumerated info includes a list of route names. Use the desired route's
+// index to select that route using SNDCTL_DSP_SET_PLAYTGT.
+//
+
+#define SNDCTL_DSP_GET_PLAYTGT_NAMES 0x500A
+
+//
+// This ioctl returns the index of the currently selected output route for a
+// device. The name of the route associated with the index can be queried using
+// the SNDCTL_DSP_GET_PLAYTGT_NAMES ioctl.
+//
+
+#define SNDCTL_DSP_GET_PLAYTGT 0x500B
+
+//
 // This ioctl gets the audio output volume. The returned volume is an integer
 // encoded with one value for each of 2 channels where
 // Volume = (RightVolume << 8) | LeftVolume. The valid values for each channel
@@ -100,6 +116,22 @@ extern "C" {
 //
 
 #define SNDCTL_DSP_GETPLAYVOL 0x500C
+
+//
+// This ioctl enumerates the list of available input routes for a device. The
+// enumerated info includes a list of route names. Use the desired route's
+// index to select that route using SNDCTL_DSP_SET_RECSRC.
+//
+
+#define SNDCTL_DSP_GET_RECSRC_NAMES 0x500D
+
+//
+// This ioctl returns the index of the currently selected input route for a
+// device. The name of the route associated with the index can be queried using
+// the SNDCTL_DSP_GET_RECSRC_NAMES ioctl.
+//
+
+#define SNDCTL_DSP_GET_RECSRC 0x500E
 
 //
 // This ioctl gets the audio input volume. The returned volume is an integer
@@ -194,6 +226,14 @@ extern "C" {
 #define SNDCTL_DSP_SETFRAGMENT 0x5018
 
 //
+// This ioctl sets the audio output route. Use SNDCTL_DSP_GET_PLAYTGT_NAMES to
+// get the list of supported routes and then supply one of the route indices to
+// this ioctl. It takes an int value.
+//
+
+#define SNDCTL_DSP_SET_PLAYTGT 0x5019
+
+//
 // This ioctl sets the audio output volume. The provided volume is an integer
 // encoded with one value value for each of 2 channels where
 // Volume = (RightVolume << 8) | LeftVolume. The valid values for each channel
@@ -201,6 +241,14 @@ extern "C" {
 //
 
 #define SNDCTL_DSP_SETPLAYVOL 0x501A
+
+//
+// This ioctl sets the audio input route. Use SNDCTL_DSP_GET_RECSRC_NAMES to
+// get the list of supported routes and then supply one of the route indices to
+// this ioctl. It takes an int value.
+//
+
+#define SNDCTL_DSP_SET_RECSRC 0x501B
 
 //
 // This ioctl sets the audio input volume. The provided volume is an integer
@@ -336,6 +384,18 @@ extern "C" {
 #define PCM_ENABLE_OUTPUT 0x00000002
 
 //
+// Define the maximum number of enumerated devices.
+//
+
+#define OSS_ENUM_MAXVALUE 128
+
+//
+// Define the size of the device enumerate string buffer.
+//
+
+#define OSS_ENUM_STRINGSIZE 2048
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -343,9 +403,10 @@ extern "C" {
 
 Structure Description:
 
-    This structure describes the amount of data available to read from an input
-    sound device without blocking and the amount of space available to write to
-    an output sound device without blocking.
+    This structure defines OSS audio buffer information. It describes the
+    amount of data available to read from an input sound device without
+    blocking and the amount of space available to write to an output sound
+    device without blocking.
 
 Members:
 
@@ -373,7 +434,7 @@ typedef struct audio_buf_info {
 
 Structure Description:
 
-    This structure describes the current location of a sound device within its
+    This structure defines the current location of a sound device within its
     buffer and the amount of data processed by the device.
 
 Members:
@@ -393,6 +454,44 @@ typedef struct count_info {
     int blocks;
     int ptr;
 } count_info;
+
+/*++
+
+Structure Description:
+
+    This structure defines a set of enumerated audio devices. It stores a list
+    of label names.
+
+Members:
+
+    dev - Stores the mixer device number.
+
+    ctrl - Stores the mixer control number.
+
+    nvalues - Stores the number of enumerated devices in the string index
+        array.
+
+    version - Stores the the sequence number of the list of devices. Zero
+        indicates that the list is static. If it is non-zero, then the list
+        is dynamic and if the version number changes on subsequent checks, then
+        the device list has changed.
+
+    strindex - Stores an array of offsets into the string array for the device
+        names.
+
+    strings - Stores an array that contains the actual strings. All strings are
+        null terminated.
+
+--*/
+
+typedef struct oss_mixer_enuminfo {
+    int dev;
+    int ctrl;
+    int nvalues;
+    int version;
+    short strindex[OSS_ENUM_MAXVALUE];
+    char strings[OSS_ENUM_STRINGSIZE];
+} oss_mixer_enuminfo;
 
 //
 // -------------------------------------------------------------------- Globals

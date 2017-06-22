@@ -1643,6 +1643,7 @@ Return Value:
 {
 
     USHORT Format;
+    PHDA_PATH Path;
     KSTATUS Status;
 
     if (State->Version < SOUND_DEVICE_STATE_INFORMATION_VERSION) {
@@ -1708,7 +1709,8 @@ Return Value:
         // powered on, enabled, and has the proper format and volume set.
         //
 
-        Status = HdapEnableDevice(Device, Format);
+        Path = (PHDA_PATH)State->U.Initialize.RouteContext;
+        Status = HdapEnableDevice(Device, Path, Format);
         if (!KSUCCESS(Status)) {
             break;
         }
