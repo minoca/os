@@ -83,6 +83,11 @@ E100pReadDeviceMacAddress (
     );
 
 KSTATUS
+E100pDetectMii (
+    PE100_DEVICE Device
+    );
+
+KSTATUS
 E100pPerformEepromIo (
     PE100_DEVICE Device,
     USHORT RegisterOffset,
@@ -162,9 +167,9 @@ UCHAR E100DefaultConfiguration[E100_DEFAULT_CONFIGURATION_COMMAND_LENGTH] = {
     0xF2,
     0x48,
     0x00,
-    0x00,
+    0x40,
     0xF2,
-    0x00,
+    0x80,
     0x3F,
     0x05,
 };
@@ -297,7 +302,7 @@ Return Value:
     switch (InformationType) {
     case NetLinkInformationChecksumOffload:
         if (*DataSize != sizeof(ULONG)) {
-            Status =STATUS_INVALID_PARAMETER;
+            Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
@@ -701,6 +706,15 @@ Return Value:
     //
 
     Status = E100pReadDeviceMacAddress(Device);
+    if (!KSUCCESS(Status)) {
+        goto ResetDeviceEnd;
+    }
+
+    //
+    // Determine if there is a MII present.
+    //
+
+    Status = E100pDetectMii(Device);
     if (!KSUCCESS(Status)) {
         goto ResetDeviceEnd;
     }
@@ -1143,6 +1157,67 @@ Return Value:
                                                (BYTE)(Value >> BITS_PER_BYTE);
 
         Register += 1;
+    }
+
+    return Status;
+}
+
+KSTATUS
+E100pDetectMii (
+    PE100_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not a MII is present by reading the
+    EEPROM's PHY Device Record.
+
+Arguments:
+
+    Device - Supplies a pointer to the device. Whether or not a MII is present
+        will be stored here.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    USHORT Code;
+    USHORT Register;
+    KSTATUS Status;
+    USHORT Value;
+
+    //
+    // MII detection is only necessary on i82557 chips. All newer versions have
+    // a MII. The i82557 may require i82503 mode.
+    //
+
+    if (Device->Revision <= E100_REVISION_82557_C) {
+        Value = 0;
+        Register = E100_EEPROM_PHY_DEVICE_RECORD_OFFSET;
+        Status = E100pPerformEepromIo(Device, Register, &Value, FALSE);
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
+
+        Code = (Value & E100_EEPROM_PHY_DEVICE_RECORD_CODE_MASK) >>
+               E100_EEPROM_PHY_DEVICE_RECORD_CODE_SHIFT;
+
+        if ((Code == E100_EEPROM_PHY_DEVICE_CODE_NO_PHY) ||
+            (Code == E100_EEPROM_PHY_DEVICE_CODE_I82503) ||
+            (Code == E100_EEPROM_PHY_DEVICE_CODE_S80C24)) {
+
+            Device->MiiPresent = FALSE;
+        }
+
+    } else {
+        Device->MiiPresent = TRUE;
+        Status = STATUS_SUCCESS;
     }
 
     return Status;
@@ -1892,7 +1967,18 @@ Return Value:
 
     if (Device->Revision >= E100_REVISION_82558_A) {
         Configuration[3] |= E100_CONFIG_BYTE3_MWI_ENABLE;
-        Configuration[6] &= ~E100_CONFIG_BYTE6_STANDARD_TRANSMIT_COMMAND_BLOCK;
+        Configuration[12] |= E100_CONFIG_BYTE12_LINEAR_PRIORITY_MODE;
+        Configuration[17] = 0;
+    }
+
+    //
+    // If there is no MII present, a few of the configuration bits need be
+    // changed for 503 mode.
+    //
+
+    if (Device->MiiPresent == FALSE) {
+        Configuration[8] &= ~E100_CONFIG_BYTE8_MII_MODE;
+        Configuration[15] |= E100_CONFIG_BYTE15_CRS_OR_CDT;
     }
 
     //
