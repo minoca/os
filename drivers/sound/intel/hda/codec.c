@@ -429,9 +429,14 @@ Return Value:
 
 {
 
+    ULONG ConnectedIndex;
+    PHDA_WIDGET ConnectedWidget;
     ULONG DeviceType;
+    PHDA_FUNCTION_GROUP Group;
     ULONG Index;
+    ULONG ListLength;
     PHDA_PATH OldPath;
+    ULONG SelectorIndex;
     KSTATUS Status;
     ULONG Value;
     PHDA_WIDGET Widget;
@@ -479,38 +484,117 @@ Return Value:
     // path.
     //
 
+    Group = Device->Group;
     Status = STATUS_SUCCESS;
     for (Index = 0; Index < Path->Length; Index += 1) {
-        Widget = &(Device->Group->Widgets[Path->Widgets[Index]]);
-        if (HDA_GET_WIDGET_TYPE(Widget) != HDA_AUDIO_WIDGET_TYPE_PIN) {
-            continue;
-        }
+        Widget = &(Group->Widgets[Path->Widgets[Index]]);
+        WidgetType = HDA_GET_WIDGET_TYPE(Widget);
+        switch (WidgetType) {
+        case HDA_AUDIO_WIDGET_TYPE_PIN:
+            if (Device->SoundDevice.Type == SoundDeviceInput) {
+                Value = HDA_PIN_WIDGET_CONTROL_IN_ENABLE;
 
-        if (Device->SoundDevice.Type == SoundDeviceInput) {
-            Value = HDA_PIN_WIDGET_CONTROL_IN_ENABLE;
+            } else {
 
-        } else {
+                ASSERT(Device->SoundDevice.Type == SoundDeviceOutput);
 
-            ASSERT(Device->SoundDevice.Type == SoundDeviceOutput);
+                DeviceType = (Widget->PinConfiguration &
+                              HDA_CONFIGURATION_DEFAULT_DEVICE_MASK) >>
+                             HDA_CONFIGURATION_DEFAULT_DEVICE_SHIFT;
 
-            DeviceType = (Widget->PinConfiguration &
-                          HDA_CONFIGURATION_DEFAULT_DEVICE_MASK) >>
-                         HDA_CONFIGURATION_DEFAULT_DEVICE_SHIFT;
-
-            Value = HDA_PIN_WIDGET_CONTROL_OUT_ENABLE;
-            if (DeviceType == HDA_DEVICE_HP_OUT) {
-                Value |= HDA_PIN_WIDGET_CONTROL_HEAD_PHONE_ENABLE;
+                Value = HDA_PIN_WIDGET_CONTROL_OUT_ENABLE;
+                if (DeviceType == HDA_DEVICE_HP_OUT) {
+                    Value |= HDA_PIN_WIDGET_CONTROL_HEAD_PHONE_ENABLE;
+                }
             }
-        }
 
-        Status = HdapCodecGetSetVerb(Device->Codec,
-                                     Widget->NodeId,
-                                     HdaVerbSetPinWidgetControl,
-                                     Value,
-                                     NULL);
+            Status = HdapCodecGetSetVerb(Device->Codec,
+                                         Widget->NodeId,
+                                         HdaVerbSetPinWidgetControl,
+                                         Value,
+                                         NULL);
 
-        if (!KSUCCESS(Status)) {
-            goto EnableDeviceEnd;
+            if (!KSUCCESS(Status)) {
+                goto EnableDeviceEnd;
+            }
+
+            //
+            // Pins fall through as they also need to select the correct input.
+            //
+
+        case HDA_AUDIO_WIDGET_TYPE_INPUT:
+        case HDA_AUDIO_WIDGET_TYPE_SELECTOR:
+
+            //
+            // Input and Selector widgets search the next widget in the path
+            // for an index.
+            //
+
+            if ((WidgetType == HDA_AUDIO_WIDGET_TYPE_INPUT) ||
+                (WidgetType == HDA_AUDIO_WIDGET_TYPE_SELECTOR)) {
+
+                ConnectedIndex = Index + 1;
+
+            //
+            // If it's a Pin at the end of an output path, search the previous
+            // widget for an index. If it's a Pin at the end of an input path
+            // or the start of a input/output path, ignore it.
+            //
+
+            } else if ((Index != 0) &&
+                       ((Path->Type == HdaPathDacToOutput) ||
+                        (Path->Type == HdaPathInputToOutput))) {
+
+                ConnectedIndex = Index - 1;
+
+            } else {
+                break;
+            }
+
+            //
+            // If the connect list is of length one, then there is no
+            // Connection Select control.
+            //
+
+            Status = HdapCodecGetParameter(Device->Codec,
+                                           Widget->NodeId,
+                                           HdaParameterConnectionListLength,
+                                           &ListLength);
+
+            if (!KSUCCESS(Status)) {
+                goto EnableDeviceEnd;
+            }
+
+            if (ListLength <= 1) {
+                break;
+            }
+
+            ASSERT(ConnectedIndex < Path->Length);
+
+            ConnectedWidget = &(Group->Widgets[Path->Widgets[ConnectedIndex]]);
+            Status = HdapGetConnectionListIndex(Device->Codec,
+                                                Widget,
+                                                ConnectedWidget,
+                                                &SelectorIndex);
+
+            if (!KSUCCESS(Status)) {
+                goto EnableDeviceEnd;
+            }
+
+            Status = HdapCodecGetSetVerb(Device->Codec,
+                                         Widget->NodeId,
+                                         HdaVerbSetConnectionSelectControl,
+                                         SelectorIndex,
+                                         NULL);
+
+            if (!KSUCCESS(Status)) {
+                goto EnableDeviceEnd;
+            }
+
+            break;
+
+        default:
+            break;
         }
     }
 
@@ -709,11 +793,12 @@ Return Value:
             break;
 
         //
-        // Mixer's may have both input and output amplifiers. Enable both if
-        // they are present. For input amplifiers, pick the correct index for
-        // this path.
+        // Mixers and selectors may have both input and output amplifiers.
+        // Enable both if they are present. For input amplifiers, pick the
+        // correct index for this path.
         //
 
+        case HDA_AUDIO_WIDGET_TYPE_SELECTOR:
         case HDA_AUDIO_WIDGET_TYPE_MIXER:
             if (InputAmp == 0) {
                 break;
