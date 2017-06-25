@@ -14,7 +14,7 @@ Module Name:
 Abstract:
 
     This module implements x86 processor architecture features not
-    implementable in C.
+    implementable in C. This file compiles in both x86 and x64 builds.
 
 Author:
 
@@ -30,7 +30,15 @@ Environment:
 ## ------------------------------------------------------------------ Includes
 ##
 
+#if __SIZEOF_LONG__ == 8
+
+#include <minoca/kernel/x64.inc>
+
+#else
+
 #include <minoca/kernel/x86.inc>
+
+#endif
 
 ##
 ## ---------------------------------------------------------------------- Code
@@ -39,11 +47,8 @@ Environment:
 ##
 ## .text specifies that this code belongs in the executable section.
 ##
-## .code32 specifies that this is 32-bit protected mode code.
-##
 
 .text
-.code32
 
 ##
 ## KERNEL_API
@@ -81,7 +86,7 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION(HlQueryProcessorCounter)
-    rdtsc                       # Store the timestamp counter in EDX:EAX.
+    rdtsc                       # Store the timestamp counter.
     ret                         # And return!
 
 END_FUNCTION(HlQueryProcessorCounter)

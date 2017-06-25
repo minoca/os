@@ -139,7 +139,7 @@ EfipCreateSegmentDescriptor (
 // Store global processor structures.
 //
 
-GDT_ENTRY EfiGdt[GDT_ENTRIES];
+GDT_ENTRY EfiGdt[BOOT_GDT_ENTRIES];
 PROCESSOR_GATE EfiIdt[BOOT_IDT_SIZE];
 PVOID EfiInterruptTable[PROCESSOR_VECTOR_COUNT] = {NULL};
 

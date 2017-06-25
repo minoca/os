@@ -30,17 +30,32 @@ Author:
 #define SEGMENT_PRIVILEGE_KERNEL    0x0000
 #define SEGMENT_PRIVILEGE_USER      0x0003
 
+//
+// Define the GDT entries. The first batch is used by both x86 and x64. The
+// second set is used only by x86. There's a blank entry after the kernel TSS
+// entry because in 64-bit mode it's doubled in size.
+//
+
 #define KERNEL_CS               0x08
 #define KERNEL_DS               0x10
 #define KERNEL64_TRANSITION_CS  0x18
 #define USER_CS                 (0x18 | SEGMENT_PRIVILEGE_USER)
 #define USER_DS                 (0x20 | SEGMENT_PRIVILEGE_USER)
-#define GDT_PROCESSOR           0x28
-#define GDT_THREAD              (0x30 | SEGMENT_PRIVILEGE_USER)
-#define KERNEL_TSS              0x38
-#define DOUBLE_FAULT_TSS        0x40
-#define NMI_TSS                 0x48
-#define GDT_ENTRIES             10
+#define KERNEL_TSS              0x28
+#define X64_GDT_ENTRIES         7
+
+#define GDT_PROCESSOR           0x38
+#define GDT_THREAD              (0x40 | SEGMENT_PRIVILEGE_USER)
+#define DOUBLE_FAULT_TSS        0x48
+#define NMI_TSS                 0x50
+#define X86_GDT_ENTRIES         11
+
+//
+// Define the IST indices.
+//
+
+#define X64_IST_NMI             1
+#define X64_IST_DOUBLE_FAULT    2
 
 #define GATE_ACCESS_PRESENT     0x80
 #define GATE_ACCESS_USER        (SEGMENT_PRIVILEGE_USER << 5)
@@ -303,6 +318,14 @@ Author:
 #define X86_PTE_ENTRY_SHIFT    12
 
 //
+// Define the size of the x64 red zone. This is not used in the kernel, since
+// the exception handlers in the hardware don't honor it. But it is used by
+// user mode, so signal dispatching has to be careful.
+//
+
+#define X64_RED_ZONE 128
+
+//
 // Define the location of the identity mapped stub. Since x86 doesn't have
 // relative addressing the AP code really is hardwired for this address. This
 // needs to be in the first megabyte since it starts running in real mode, and
@@ -320,8 +343,21 @@ Author:
 // _Result should be a ULONG.
 //
 
-#define GET_PROCESSOR_BLOCK_OFFSET(_Result, _Offset) \
-    asm volatile ("mov %%fs:(%1), %0" : "=r" (_Result) : "r" (_Offset))
+#define FS_READ32(_Result, _Offset) \
+    asm volatile ("movl %%fs:(%1), %k0" : "=r" (_Result) : "r" (_Offset))
+
+#define FS_READ64(_Result, _Offset) \
+    asm volatile ("movq %%fs:(%1), %q0" : "=r" (_Result) : "r" (_Offset))
+
+#if __SIZEOF_LONG__ == 8
+
+#define FS_READN(_Result, _Offset) FS_READ64(_Result, _Offset)
+
+#else
+
+#define FS_READN(_Result, _Offset) FS_READ32(_Result, _Offset)
+
+#endif
 
 //
 // This macro determines whether or not the given trap frame is from privileged

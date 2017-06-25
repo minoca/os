@@ -369,7 +369,7 @@ Return Value:
         Descriptor = Table->NextDescriptor;
 
     } else {
-        Descriptor = (ULONG)(*NewHandle);
+        Descriptor = (UINTN)(*NewHandle);
     }
 
     //
@@ -403,7 +403,7 @@ Return Value:
                                        (Flags & HANDLE_FLAG_MASK);
 
     Table->Entries[Descriptor].HandleValue = HandleValue;
-    *NewHandle = (HANDLE)Descriptor;
+    *NewHandle = (HANDLE)(UINTN)Descriptor;
     if (Descriptor > Table->MaxDescriptor) {
         Table->MaxDescriptor = Descriptor;
     }
@@ -447,7 +447,7 @@ Return Value:
            (Table->Process->ThreadCount == 0) ||
            (Table->Process == PsGetCurrentProcess()));
 
-    Descriptor = (ULONG)Handle;
+    Descriptor = (UINTN)Handle;
     OB_ACQUIRE_HANDLE_TABLE_LOCK(Table);
     if (Descriptor >= Table->ArraySize) {
         goto DestroyHandleEnd;
@@ -526,7 +526,7 @@ Return Value:
 
     ASSERT(Handle != INVALID_HANDLE);
 
-    Descriptor = (ULONG)Handle;
+    Descriptor = (UINTN)Handle;
     if (Descriptor >= Table->ArraySize) {
         Status = ObpExpandHandleTable(Table, Descriptor);
         if (!KSUCCESS(Status)) {
@@ -600,7 +600,7 @@ Return Value:
            (Table->Process->ThreadCount == 0) ||
            (Table->Process == PsGetCurrentProcess()));
 
-    Descriptor = (ULONG)Handle;
+    Descriptor = (UINTN)Handle;
     LocalFlags = 0;
     Value = NULL;
     OB_ACQUIRE_HANDLE_TABLE_LOCK(Table);
@@ -615,7 +615,7 @@ Return Value:
 
     Value = Table->Entries[Descriptor].HandleValue;
     if (Table->LookupCallback != NULL) {
-        Table->LookupCallback(Table, (HANDLE)Descriptor, Value);
+        Table->LookupCallback(Table, (HANDLE)(UINTN)Descriptor, Value);
     }
 
 GetHandleValueEnd:
@@ -678,7 +678,7 @@ Return Value:
            (Table->Process == PsGetCurrentProcess()));
 
     Status = STATUS_INVALID_HANDLE;
-    Descriptor = (ULONG)Handle;
+    Descriptor = (UINTN)Handle;
     OB_ACQUIRE_HANDLE_TABLE_LOCK(Table);
     if (Descriptor >= Table->ArraySize) {
         goto GetSetHandleFlagsEnd;
@@ -749,7 +749,7 @@ Return Value:
     }
 
     if ((Table->Entries[Descriptor].Flags & HANDLE_FLAG_ALLOCATED) != 0) {
-        Handle = (HANDLE)Descriptor;
+        Handle = (HANDLE)(UINTN)Descriptor;
     }
 
     Table->MaxDescriptor = Descriptor;
@@ -804,7 +804,7 @@ Return Value:
         }
 
         IterateRoutine(Table,
-                       (HANDLE)Descriptor,
+                       (HANDLE)(UINTN)Descriptor,
                        Table->Entries[Descriptor].Flags & HANDLE_FLAG_MASK,
                        Table->Entries[Descriptor].HandleValue,
                        IterateRoutineContext);

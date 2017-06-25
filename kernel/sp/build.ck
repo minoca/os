@@ -52,6 +52,7 @@ function build() {
 
     } else if (arch == "x64") {
         archSources = [
+            "x64/archprof.c"
         ];
     }
 

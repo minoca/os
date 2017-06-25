@@ -36,6 +36,14 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
+
+//
+// This module includes x86.h, even though it also compiles for x64. It just so
+// happens that the prototypes it uses from x86.h are the same as in x64.h. If
+// a header is added that includes C definitions common to both, include that
+// rather than this.
+//
+
 #include <minoca/kernel/x86.h>
 
 //

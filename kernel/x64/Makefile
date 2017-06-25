@@ -1,6 +1,6 @@
 ################################################################################
 #
-#   Copyright (c) 2013 Minoca Corp.
+#   Copyright (c) 2017 Minoca Corp.
 #
 #    This file is licensed under the terms of the GNU General Public License
 #    version 3. Alternative licensing terms are available. Contact
@@ -9,16 +9,16 @@
 #
 #   Binary Name:
 #
-#       System Profiler
+#       x64
 #
 #   Abstract:
 #
-#       This library contains the System Profiler, which lends insight into the
-#       real-time resource usage of the system.
+#       This library implements AMD64 architecture support routines for the
+#       kernel.
 #
 #   Author:
 #
-#       Chris Stevens 1-Jul-2013
+#       Evan Green 8-Jun-2017
 #
 #   Environment:
 #
@@ -26,22 +26,15 @@
 #
 ################################################################################
 
-BINARY = sp.a
+BINARY = x64sup.a
 
 BINARYTYPE = klibrary
 
-OBJS = info.o \
-       profiler.o \
+X64_OBJS = archsup.o   \
+           archsupc.o  \
+           prochw.o    \
+           trap.o      \
 
-X86_OBJS = x86/archprof.o \
-
-X64_OBJS = x64/archprof.o \
-
-ARMV7_OBJS = armv7/archprof.o \
-
-ARMV6_OBJS = armv7/archprof.o \
-
-EXTRA_SRC_DIRS = x86 x64 armv7
 
 include $(SRCROOT)/os/minoca.mk
 

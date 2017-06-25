@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -9,16 +9,16 @@ Copyright (c) 2013 Minoca Corp.
 
 Module Name:
 
-    archcach.c
+    archsupc.c
 
 Abstract:
 
-    This module implements architecture-specific cache support for the hardware
-    library.
+    This module contains architecture-specific support functions for the kernel
+    memory manager.
 
 Author:
 
-    Chris Stevens 13-Jan-2014
+    Evan Green 11-Jun-2017
 
 Environment:
 
@@ -31,8 +31,8 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include "../hlp.h"
-#include "../cache.h"
+#include <minoca/kernel/x64.h>
+#include "../mmp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -50,35 +50,51 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
+ULONG MmDataCacheLineSize = 1;
+
+extern CHAR MmpUserModeMemoryReturn;
+
 //
 // ------------------------------------------------------------------ Functions
 //
 
-KSTATUS
-HlpArchInitializeCacheControllers (
-    VOID
+BOOL
+MmpCheckUserModeCopyRoutines (
+    PTRAP_FRAME TrapFrame
     )
 
 /*++
 
 Routine Description:
 
-    This routine performs architecture-specific initialization for the cache
-    subsystem.
+    This routine determines if a given fault occurred inside a user mode memory
+    manipulation function, and adjusts the instruction pointer if so.
 
 Arguments:
 
-    None.
+    TrapFrame - Supplies a pointer to the state of the machine when the page
+        fault occurred.
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 
 {
 
-    return STATUS_SUCCESS;
+    PVOID InstructionPointer;
+
+    InstructionPointer = (PVOID)(UINTN)(TrapFrame->Rip);
+    if ((InstructionPointer >= (PVOID)MmpCopyUserModeMemory) &&
+        (InstructionPointer < (PVOID)&MmpUserModeMemoryReturn)) {
+
+        TrapFrame->Rip = (UINTN)&MmpUserModeMemoryReturn;
+        TrapFrame->Rax = FALSE;
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 //

@@ -39,7 +39,16 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
+
+#if __SIZEOF_LONG__ == 8
+
+#include <minoca/kernel/x64.h>
+
+#else
+
 #include <minoca/kernel/x86.h>
+
+#endif
 
 //
 // ---------------------------------------------------------------- Definitions

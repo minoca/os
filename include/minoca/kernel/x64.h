@@ -33,6 +33,25 @@ Author:
 //
 
 //
+// These macros get the various page table components of an address. The
+// levels, from top (highest address bits) to bottom are Page Map Level 4
+// (PML4), Page Directory Pointer (PDP), Page Directory (PD), and Page Table
+// (PT).
+//
+
+#define X64_PML4_INDEX(_VirtualAddress) \
+    (((UINTN)(_VirtualAddress) >> X64_PML4E_SHIFT) & X64_PT_MASK)
+
+#define X64_PDP_INDEX(_VirtualAddress) \
+    (((UINTN)(_VirtualAddress) >> X64_PDPE_SHIFT) & X64_PT_MASK)
+
+#define X64_PD_INDEX(_VirtualAddress) \
+    (((UINTN)(_VirtualAddress) >> X64_PDE_SHIFT) & X64_PT_MASK)
+
+#define X64_PT_INDEX(_VirtualAddress) \
+    (((UINTN)(_VirtualAddress) >> X64_PTE_SHIFT) & X64_PT_MASK)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -86,6 +105,29 @@ Author:
 //
 
 typedef ULONGLONG PTE, *PPTE;
+
+typedef
+VOID
+(*PAR_SAVE_RESTORE_FPU_CONTEXT) (
+    PFPU_CONTEXT Buffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine saves or restores floating point context from the processor.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer where the information will be
+        saved to or loaded from. This buffer must be 16-byte aligned.
+
+Return Value:
+
+    None.
+
+--*/
 
 /*++
 
@@ -206,6 +248,45 @@ typedef struct _GDT_ENTRY {
 
 Structure Description:
 
+    This structure define a 64-bit global descriptor table entry. These are
+    used by the TSS and LDT types.
+
+Members:
+
+    LimitLow - Stores the lower 16 bits of the descriptor limit.
+
+    BaseLow - Stores the lower 16 bits of the descriptor base.
+
+    BaseMiddle - Stores the next 8 bits of the base.
+
+    Access - Stores the access flags. See GATE_ACCESS_* definitions.
+
+    Granularity - Stores the granularity bits for the descriptor. See
+        GDT_GRANULARITY_* definitions.
+
+    BaseHigh - Stores bits 24-31 of the base address.
+
+    BaseHigh32 - Stores bits 32-63 of the base address.
+
+    Reserved - Stores a reserved value that must be zero.
+
+--*/
+
+typedef struct _GDT64_ENTRY {
+    USHORT LimitLow;
+    USHORT BaseLow;
+    UCHAR BaseMiddle;
+    UCHAR Access;
+    UCHAR Granularity;
+    UCHAR BaseHigh;
+    ULONG BaseHigh32;
+    ULONG Reserved;
+} PACKED GDT64_ENTRY, *PGDT64_ENTRY;
+
+/*++
+
+Structure Description:
+
     This structure defines the format of the GDTR, IDTR, or TR. This structure
     must be packed since it represents a hardware construct.
 
@@ -222,6 +303,35 @@ typedef struct _TABLE_REGISTER {
     USHORT Limit;
     ULONGLONG Base;
 } PACKED TABLE_REGISTER, *PTABLE_REGISTER;
+
+/*++
+
+Structure Description:
+
+    This structure defines the x86 Task State Segment. It represents a complete
+    task state as understood by the hardware.
+
+Members:
+
+    Rsp0-2 - Stores the stack pointer to load for each of the privilege levels.
+
+    Ist - Stores the interrupt stack values for RSP, indices 0-7. Technically
+        in the spec Ist[0] is marked as reserved, since IST index zero means
+        "no stack switching".
+
+    IoMapBase - Stores the 16 bit offset from the TSS base to the 8192 byte I/O
+        Bitmap.
+
+--*/
+
+typedef struct _TSS64 {
+    ULONG Reserved0;
+    ULONGLONG Rsp[3];
+    ULONGLONG Ist[8];
+    ULONGLONG Reserved2;
+    USHORT Reserved3;
+    USHORT IoMapBase;
+} PACKED TSS64, *PTSS64;
 
 /*++
 
@@ -319,9 +429,178 @@ struct _TRAP_FRAME {
     ULONGLONG Ss;
 } PACKED;
 
+/*++
+
+Structure Description:
+
+    This structure outlines the register state saved by the kernel when a
+    user mode signal is dispatched. This generally contains 1) control
+    registers which are clobbered by switching to the signal handler, and
+    2) volatile registers.
+
+Members:
+
+    Common - Stores the common signal context information.
+
+    TrapFrame - Stores the general register state.
+
+    FpuContext - Stores the FPU state.
+
+--*/
+
+typedef struct _SIGNAL_CONTEXT_X64 {
+    SIGNAL_CONTEXT Common;
+    TRAP_FRAME TrapFrame;
+    FPU_CONTEXT FpuContext;
+} PACKED SIGNAL_CONTEXT_X64, *PSIGNAL_CONTEXT_X64;
+
+/*++
+
+Structure Description:
+
+    This structure contains the state of the processor, including both the
+    non-volatile general registers and the system registers configured by the
+    kernel. This structure is used in a manner similar to the C library
+    setjmp/longjmp routines, the save context function appears to return
+    twice. It returns once after the saving is complete, and then again with
+    a different return value after restoring. Be careful when modifying this
+    structure, as its offsets are used directly in assembly by the save/restore
+    routines.
+
+Members:
+
+    Rax - Stores the value to return when restoring.
+
+    Rip - Stores the instruction pointer to jump back to on restore. By default
+        this is initialized to the return from whoever called save.
+
+    Cs - Stores the code segment.
+
+    Rflags - Stores the eflags register.
+
+    Rbx - Stores a non-volatile general register.
+
+    Rbp - Stores a non-volatile general register.
+
+    Rsp - Stores the stack pointer. This should be restored after the final
+        page tables are in place to avoid NMIs having an invalid stack.
+
+    R12 - Stores a non-volatile general register.
+
+    R13 - Stores a non-volatile general register.
+
+    R14 - Stores a non-volatile general register.
+
+    R15 - Stores a non-volatile general register.
+
+    Dr7 - Stores a debug register. This should be restored last of the debug
+        registers.
+
+    Dr6 - Stores a debug register.
+
+    Dr0 - Stores a debug register.
+
+    Dr1 - Stores a debug register.
+
+    Dr2 - Stores a debug register.
+
+    Dr3 - Stores a debug register.
+
+    VirtualAddress - Stores the virtual address of this structure member, which
+        is used in case the restore of CR0 that just happened enabled paging
+        suddenly.
+
+    Cr0 - Stores the CR0 control register value.
+
+    Cr2 - Stores the CR2 control register value (faulting address).
+
+    Cr3 - Stores the CR3 control register value (top level page directory).
+
+    Cr4 - Stores the CR4 control register value.
+
+    Fsbase - Stores the FS: base address.
+
+    Gsbase - Stores the GS: base address.
+
+    Tr - Stores the task register (must be restored after the GDT).
+
+    Idt - Stores the interrupt descriptor table. The task register and GDT
+        should be restored before this so that the ISTs are set up if an NMI
+        comes in.
+
+    Gdt - Stores the global descriptor table.
+
+--*/
+
+struct _PROCESSOR_CONTEXT {
+    UINTN Rax;
+    UINTN Rip;
+    UINTN Cs;
+    UINTN Rflags;
+    UINTN Rbx;
+    UINTN Rbp;
+    UINTN Rsp;
+    UINTN R12;
+    UINTN R13;
+    UINTN R14;
+    UINTN R15;
+    UINTN Dr7;
+    UINTN Dr6;
+    UINTN Dr0;
+    UINTN Dr1;
+    UINTN Dr2;
+    UINTN Dr3;
+    UINTN VirtualAddress;
+    UINTN Cr0;
+    UINTN Cr2;
+    UINTN Cr3;
+    UINTN Cr4;
+    UINTN Fsbase;
+    UINTN Gsbase;
+    UINTN Tr;
+    TABLE_REGISTER Idt;
+    TABLE_REGISTER Gdt;
+} PACKED;
+
+/*++
+
+Structure Description:
+
+    This structure defines the architecture specific form of an address space
+    structure.
+
+Members:
+
+    Common - Stores the common address space information.
+
+    Pml4Physical - Stores the physical address of the top level page
+        directory.
+
+    AllocatedPageTables - Stores the total number of active and inactive page
+        table pages allocated on behalf of user mode for this process.
+
+    ActivePageTables - Stores the number of page table pages that are in
+        service for user mode of this process.
+
+--*/
+
+typedef struct _ADDRESS_SPACE_X64 {
+    ADDRESS_SPACE Common;
+    PHYSICAL_ADDRESS Pml4Physical;
+    UINTN AllocatedPageTables;
+    UINTN ActivePageTables;
+} ADDRESS_SPACE_X64, *PADDRESS_SPACE_X64;
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+//
+// Store pointers to functions used to save and restore floating point state.
+//
+
+extern PAR_SAVE_RESTORE_FPU_CONTEXT ArSaveFpuState;
+extern PAR_SAVE_RESTORE_FPU_CONTEXT ArRestoreFpuState;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -1124,8 +1403,8 @@ Return Value:
 
 --*/
 
-VOID
-ArReloadThreadSegment (
+PVOID
+ArReadFsbase (
     VOID
     );
 
@@ -1133,11 +1412,74 @@ ArReloadThreadSegment (
 
 Routine Description:
 
-    This routine reloads the thread segment register.
+    This routine reads the fs: base register.
 
 Arguments:
 
     None.
+
+Return Value:
+
+    Returns the fsbase pointer.
+
+--*/
+
+VOID
+ArWriteFsbase (
+    PVOID Fsbase
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes the fs: base register.
+
+Arguments:
+
+    Fsbase - Supplies the new fsbase value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+PVOID
+ArReadGsbase (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads the gs: base register.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the gsbase pointer.
+
+--*/
+
+VOID
+ArWriteGsbase (
+    PVOID Gsbase
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes the gs: base register.
+
+Arguments:
+
+    Gsbase - Supplies the new gsbase value to write.
 
 Return Value:
 

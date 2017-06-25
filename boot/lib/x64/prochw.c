@@ -128,7 +128,7 @@ PROCESSOR_GATE BoIdt[BOOT_IDT_SIZE];
 // 0x18 - KERNEL64_TRANSITION_CS, flat 32-bit code segment.
 //
 
-GDT_ENTRY BoGdt[GDT_ENTRIES] = {
+GDT_ENTRY BoGdt[BOOT_GDT_ENTRIES] = {
     {0},
 
     {

@@ -31,7 +31,6 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include <minoca/kernel/x86.h>
 #include "../hlp.h"
 #include "../timer.h"
 #include "../clock.h"

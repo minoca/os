@@ -30,7 +30,7 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include <minoca/kernel/x86.h>
+#include <minoca/kernel/x86defs.h>
 #include "../kep.h"
 
 //
@@ -81,7 +81,7 @@ Return Value:
     ULONG RunLevel;
 
     Offset = FIELD_OFFSET(PROCESSOR_BLOCK, RunLevel);
-    GET_PROCESSOR_BLOCK_OFFSET(RunLevel, Offset);
+    FS_READ32(RunLevel, Offset);
     return RunLevel;
 }
 
@@ -110,7 +110,7 @@ Return Value:
 
     PPROCESSOR_BLOCK Block;
 
-    GET_PROCESSOR_BLOCK_OFFSET(Block, 0);
+    FS_READN(Block, 0);
     return Block;
 }
 
@@ -140,7 +140,7 @@ Return Value:
 
     PPROCESSOR_BLOCK Block;
 
-    GET_PROCESSOR_BLOCK_OFFSET(Block, 0);
+    FS_READN(Block, 0);
     return Block;
 }
 
@@ -172,7 +172,7 @@ Return Value:
     ULONG Offset;
 
     Offset = FIELD_OFFSET(PROCESSOR_BLOCK, ProcessorNumber);
-    GET_PROCESSOR_BLOCK_OFFSET(Number, Offset);
+    FS_READ32(Number, Offset);
     return Number;
 }
 
@@ -200,10 +200,10 @@ Return Value:
 {
 
     ULONG Offset;
-    ULONG Thread;
+    UINTN Thread;
 
     Offset = FIELD_OFFSET(PROCESSOR_BLOCK, RunningThread);
-    GET_PROCESSOR_BLOCK_OFFSET(Thread, Offset);
+    FS_READN(Thread, Offset);
     return (PKTHREAD)Thread;
 }
 

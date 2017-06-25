@@ -85,6 +85,10 @@ function build() {
 
     } else if (arch == "x64") {
         archSources = [
+            "x64/archsupc.c",
+            "x64/mapping.c",
+            "x64/usermem.S",
+            "x86/flush.c",
         ];
     }
 

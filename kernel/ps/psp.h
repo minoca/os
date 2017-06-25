@@ -87,7 +87,7 @@ extern PKPROCESS PsKernelProcess;
 // for a newly created thread.
 //
 
-extern ULONGLONG PsInitialThreadPointer;
+extern const ULONGLONG PsInitialThreadPointer;
 
 //
 // Stores the ID for the next thread to be created.

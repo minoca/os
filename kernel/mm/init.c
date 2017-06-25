@@ -410,7 +410,7 @@ Return Value:
 
     VaRequest.Address = NULL;
     VaRequest.Alignment = PageSize;
-    VaRequest.Size = PageSize;
+    VaRequest.Size = SWAP_VA_PAGES * PageSize;
     VaRequest.Min = 0;
     VaRequest.Max = MAX_ADDRESS;
     VaRequest.MemoryType = MemoryTypeReserved;
@@ -465,8 +465,8 @@ Return Value:
     if (StartBlock->SwapPage != NULL) {
         PageSize = MmPageSize();
         MmpFreeAccountingRange(NULL,
-                               StartBlock->SwapPage - PageSize,
-                               3 * PageSize,
+                               StartBlock->SwapPage,
+                               SWAP_VA_PAGES * PageSize,
                                FALSE,
                                0);
 

@@ -78,6 +78,8 @@ Author:
 
 #endif
 
+#define SWAP_VA_PAGES 1
+
 #define INVALID_PHYSICAL_ADDRESS 0
 
 //
@@ -2945,6 +2947,60 @@ BOOL
 MmUserWrite32 (
     PVOID Buffer,
     ULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a 32-bit write to user mode. This is assumed to be
+    naturally aligned.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to write to.
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    TRUE if the write succeeded.
+
+    FALSE if the write failed.
+
+--*/
+
+BOOL
+MmUserRead64 (
+    PVOID Buffer,
+    PULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a 32-bit read from user mode. This is assumed to be
+    naturally aligned.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to read.
+
+    Value - Supplies a pointer where the read value will be returned.
+
+Return Value:
+
+    TRUE if the read succeeded.
+
+    FALSE if the read failed.
+
+--*/
+
+BOOL
+MmUserWrite64 (
+    PVOID Buffer,
+    ULONGLONG Value
     );
 
 /*++

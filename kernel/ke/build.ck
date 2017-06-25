@@ -67,12 +67,23 @@ function build() {
             "armv7/proc.c"
         ];
 
-    } else if ((arch == "x86") || (arch == "x64")) {
+    } else if (arch == "x86") {
         archSources = [
             "x86/archinit.c",
             "x86/ctxswap.S",
             "x86/ctxswapc.c",
             "x86/dispatch.c",
+            "x86/pcexcept.c",
+            "x86/proc.c"
+        ];
+
+    } else if (arch == "x64") {
+        archSources = [
+            "x64/ctxswap.S",
+            "x64/ctxswapc.c",
+            "x64/dispatch.c",
+            "x86/archinit.c",
+            "x86/pcexcept.c",
             "x86/proc.c"
         ];
     }

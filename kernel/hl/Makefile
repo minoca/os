@@ -97,24 +97,30 @@ ARMV6_OBJS = armv6/archcach.o \
              armv7/regacces.o \
              armv7/uartpl11.o \
 
-X86_OBJS = ns16550.o      \
-           x86/apic.o     \
-           x86/apictimr.o \
-           x86/apinit.o   \
-           x86/apstart.o  \
-           x86/archcach.o \
-           x86/archdbg.o  \
-           x86/archintr.o \
-           x86/archsup.o  \
-           x86/archrst.o  \
-           x86/archtimr.o \
-           x86/ioport.o   \
-           x86/pmtimer.o  \
-           x86/regacces.o \
-           x86/rtc.o      \
-           x86/tsc.o      \
+X86_COMMON_OBJS = ns16550.o      \
+                  x86/apic.o     \
+                  x86/apictimr.o \
+                  x86/archcach.o \
+                  x86/archdbg.o  \
+                  x86/archintr.o \
+                  x86/archrst.o  \
+                  x86/archsup.o  \
+                  x86/archtimr.o \
+                  x86/ioport.o   \
+                  x86/pmtimer.o  \
+                  x86/regacces.o \
+                  x86/rtc.o      \
+                  x86/tsc.o      \
 
-EXTRA_SRC_DIRS = x86 armv7 armv6
+X86_OBJS = $(X86_COMMON_OBJS)  \
+           x86/apinit.o        \
+           x86/apstart.o       \
+
+X64_OBJS = $(X86_COMMON_OBJS)  \
+           x64/apinit.o        \
+           x64/apstart.o       \
+
+EXTRA_SRC_DIRS = x86 x64 armv7 armv6
 
 DIRS = boot
 

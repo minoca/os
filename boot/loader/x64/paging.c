@@ -719,12 +719,29 @@ Return Value:
 
 {
 
+    KSTATUS Status;
+
+    //
+    // Map the kernel PML4 to a separate location since it needs to be visible
+    // for syncing with other PML4s.
+    //
+
+    *PageDirectoryVirtual = (PVOID)-1;
+    Status = BoMapPhysicalAddress(PageDirectoryVirtual,
+                                  PageDirectoryPhysical,
+                                  PAGE_SIZE,
+                                  0,
+                                  MemoryTypePageTables);
+
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
     //
     // The self map location is hardcoded and already set up, so these aren't
     // needed.
     //
 
-    *PageDirectoryVirtual = NULL;
     *PageTablesVirtual = NULL;
     return STATUS_SUCCESS;
 }
@@ -779,7 +796,7 @@ Return Value:
     *PageTableStage = (PVOID)-1;
     Status = BoMapPhysicalAddress(PageTableStage,
                                   0,
-                                  PAGE_SIZE,
+                                  SWAP_VA_PAGES * PAGE_SIZE,
                                   MAP_FLAG_READ_ONLY,
                                   MemoryTypeLoaderPermanent);
 

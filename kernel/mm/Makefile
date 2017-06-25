@@ -63,7 +63,12 @@ X86_OBJS = x86/archsupc.o \
            x86/mapping.o  \
            x86/usermem.o  \
 
-EXTRA_SRC_DIRS = x86 armv7 armv6
+X64_OBJS = x64/archsupc.o \
+           x64/mapping.o  \
+           x64/usermem.o  \
+           x86/flush.o    \
+
+EXTRA_SRC_DIRS = x86 x64 armv7 armv6
 
 DIRS = boot
 

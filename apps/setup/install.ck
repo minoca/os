@@ -199,6 +199,7 @@ if (arch == "x64") {
     BootDrivers = [];
     SystemConfigFiles = [];
     SystemFiles = [
+        "kernel",
         "libminocaos.so.1"
     ];
 }
@@ -802,6 +803,7 @@ if ((plat == "install-x86") || (plat == "install-x64")) {
             "libcrypt.so.1",
             "libminocaos.so.1",
             "loader",
+            "kernel",
             "mbr.bin",
         ];
     }

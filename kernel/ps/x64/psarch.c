@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2013 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -18,7 +18,7 @@ Abstract:
 
 Author:
 
-    Evan Green 28-Mar-2013
+    Evan Green 11-Jun-2017
 
 Environment:
 
@@ -31,7 +31,7 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include <minoca/kernel/x86.h>
+#include <minoca/kernel/x64.h>
 #include <minoca/debug/dbgproto.h>
 #include "../psp.h"
 
@@ -51,16 +51,11 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define X86_INT_INSTRUCTION_PREFIX 0xCD
-#define X86_INT_INSTRUCTION_LENGTH 2
-#define X86_CALL_INSTRUCTION_LENGTH 5
-
 //
-// Define an intial value for the thread pointer, which is a valid user mode
-// GDT entry with offset and limit at zero.
+// Define the length of both the int $N instruction and the syscall instruction.
 //
 
-#define X86_INITIAL_THREAD_POINTER 0x00CFF2000000FFFFULL
+#define X86_SYSCALL_INSTRUCTION_LENGTH 2
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -69,12 +64,6 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-KSTATUS
-PspIsSysenterTrapFrame (
-    PTRAP_FRAME TrapFrame,
-    PBOOL FromSysenter
-    );
 
 //
 // -------------------------------------------------------------------- Globals
@@ -85,7 +74,7 @@ PspIsSysenterTrapFrame (
 // for a newly created thread.
 //
 
-const ULONGLONG PsInitialThreadPointer = X86_INITIAL_THREAD_POINTER;
+const ULONGLONG PsInitialThreadPointer = 0;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -188,7 +177,7 @@ Return Value:
 
 {
 
-    PSIGNAL_CONTEXT_X86 Context;
+    PSIGNAL_CONTEXT_X64 Context;
     UINTN ContextSp;
     ULONG Flags;
     PSIGNAL_SET RestoreSignals;
@@ -198,9 +187,14 @@ Return Value:
     PKTHREAD Thread;
 
     Thread = KeGetCurrentThread();
-    ContextSp = ALIGN_RANGE_DOWN(TrapFrame->Esp - sizeof(SIGNAL_CONTEXT_X86),
-                                 FPU_CONTEXT_ALIGNMENT);
 
+    //
+    // TODO: Check signal apply for x64. Alignment? Can signal handling be
+    // all C?
+    //
+
+    ContextSp = TrapFrame->Rsp - X64_RED_ZONE - sizeof(SIGNAL_CONTEXT_X64);
+    ContextSp = ALIGN_RANGE_DOWN(ContextSp, FPU_CONTEXT_ALIGNMENT);
     Context = (PVOID)ContextSp;
     Flags = 0;
     Result = MmUserWrite(&(Context->Common.Next), 0);
@@ -228,7 +222,7 @@ Return Value:
                                TrapFrame,
                                sizeof(TRAP_FRAME));
 
-    TrapFrame->Esp = ContextSp;
+    TrapFrame->Rsp = ContextSp;
     if ((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
         Flags |= SIGNAL_CONTEXT_FLAG_FPU_VALID;
         if ((Thread->FpuFlags & THREAD_FPU_FLAG_OWNER) != 0) {
@@ -246,7 +240,7 @@ Return Value:
     // result.
     //
 
-    SystemCallResult = (INTN)TrapFrame->Eax;
+    SystemCallResult = (INTN)TrapFrame->Rax;
     if ((SystemCallNumber != SystemCallInvalid) &&
         (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) != FALSE) &&
         (IS_SYSTEM_CALL_RESULT_RESTARTABLE(SystemCallResult) != FALSE)) {
@@ -261,8 +255,8 @@ Return Value:
 
         if (IS_SYSTEM_CALL_RESULT_RESTARTABLE_AFTER_SIGNAL(SystemCallResult)) {
             Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
-            MmUserWrite(&(Context->TrapFrame.Ecx), SystemCallNumber);
-            MmUserWrite(&(Context->TrapFrame.Edx), (UINTN)SystemCallParameter);
+            MmUserWrite(&(Context->TrapFrame.Rdi), SystemCallNumber);
+            MmUserWrite(&(Context->TrapFrame.Rsi), (UINTN)SystemCallParameter);
         }
 
         //
@@ -270,17 +264,17 @@ Return Value:
         // restart status to the interrupted status.
         //
 
-        MmUserWrite(&(Context->TrapFrame.Eax), STATUS_INTERRUPTED);
+        MmUserWrite(&(Context->TrapFrame.Rax), STATUS_INTERRUPTED);
     }
 
     Result &= MmUserWrite32(&(Context->Common.Flags), Flags);
-    TrapFrame->Esp -= sizeof(SIGNAL_PARAMETERS);
-    Status |= MmCopyToUserMode((PVOID)(TrapFrame->Esp),
+    TrapFrame->Rsp -= sizeof(SIGNAL_PARAMETERS);
+    Status |= MmCopyToUserMode((PVOID)(TrapFrame->Rsp),
                                SignalParameters,
                                sizeof(SIGNAL_PARAMETERS));
 
     if ((Status != STATUS_SUCCESS) || (Result == FALSE)) {
-        PsHandleUserModeFault((PVOID)(TrapFrame->Esp),
+        PsHandleUserModeFault((PVOID)(TrapFrame->Rsp),
                               FAULT_FLAG_WRITE | FAULT_FLAG_PAGE_NOT_PRESENT,
                               TrapFrame,
                               Thread->OwningProcess);
@@ -290,8 +284,8 @@ Return Value:
                                                 SystemCallParameter);
     }
 
-    TrapFrame->Eip = (ULONG)(Thread->OwningProcess->SignalHandlerRoutine);
-    TrapFrame->Eflags &= ~IA32_EFLAG_TF;
+    TrapFrame->Rip = (UINTN)(Thread->OwningProcess->SignalHandlerRoutine);
+    TrapFrame->Rflags &= ~IA32_EFLAG_TF;
     ADD_SIGNAL(Thread->BlockedSignals, SignalParameters->SignalNumber);
     return;
 }
@@ -323,16 +317,15 @@ Return Value:
 
 {
 
-    PSIGNAL_CONTEXT_X86 Context;
-    ULONG Eflags;
+    PSIGNAL_CONTEXT_X64 Context;
     ULONG Flags;
     TRAP_FRAME Frame;
-    BOOL FromSysenter;
+    UINTN Rflags;
     SIGNAL_SET SignalMask;
     KSTATUS Status;
     PKTHREAD Thread;
 
-    Context = (PSIGNAL_CONTEXT_X86)UserContext;
+    Context = (PSIGNAL_CONTEXT_X64)UserContext;
     Thread = KeGetCurrentThread();
     Status = MmCopyFromUserMode(&Frame,
                                 &(Context->TrapFrame),
@@ -342,7 +335,7 @@ Return Value:
                                  &(Context->Common.Mask),
                                  sizeof(SIGNAL_SET));
 
-    if (!MmUserRead(&(UserContext->Flags), &Flags)) {
+    if (!MmUserRead32(&(UserContext->Flags), &Flags)) {
         Status = STATUS_ACCESS_VIOLATION;
     }
 
@@ -353,11 +346,11 @@ Return Value:
     PsSetSignalMask(&SignalMask, NULL);
 
     //
-    // Sanitize EFLAGS, ES, and DS. Then copy the whole trap frame.
+    // Sanitize RFLAGS, ES, and DS. Then copy the whole trap frame.
     //
 
-    Eflags = TrapFrame->Eflags & ~IA32_EFLAG_USER;
-    Frame.Eflags = (Frame.Eflags & IA32_EFLAG_USER) | Eflags;
+    Rflags = TrapFrame->Rflags & ~IA32_EFLAG_USER;
+    Frame.Rflags = (Frame.Rflags & IA32_EFLAG_USER) | Rflags;
     Frame.Ds = USER_DS;
     Frame.Es = USER_DS;
     RtlCopyMemory(TrapFrame, &Frame, sizeof(TRAP_FRAME));
@@ -381,34 +374,13 @@ Return Value:
 
     //
     // If the signal context indicates that a system call restart is necessary,
-    // then back up EIP so that the system call gets executed again when the
-    // trap frame gets restored.
+    // then back up RIP so that the system call gets executed again when the
+    // trap frame gets restored. Both int $N and syscall instructions are two
+    // bytes long, so there's no need to distinguish.
     //
 
     if ((Flags & SIGNAL_CONTEXT_FLAG_RESTART) != 0) {
-        Status = PspIsSysenterTrapFrame(TrapFrame, &FromSysenter);
-        if (!KSUCCESS(Status)) {
-            goto RestorePreSignalTrapFrameEnd;
-        }
-
-        //
-        // If the saved trap frame was from a full system call (not sysenter),
-        // only back up over the INT instruction. When the signal was applied,
-        // the system call number and parameter were stored in ECX and EDX.
-        //
-
-        if (FromSysenter == FALSE) {
-            TrapFrame->Eip -= X86_INT_INSTRUCTION_LENGTH;
-
-        //
-        // On sysenter trap frames, EIP points to the instruction after the
-        // dummy call to OspSysenter. Back up over that, which will replay
-        // setting up the arguments for sysenter.
-        //
-
-        } else {
-            TrapFrame->Eip -= X86_CALL_INSTRUCTION_LENGTH;
-        }
+        TrapFrame->Rip -= X86_SYSCALL_INSTRUCTION_LENGTH;
     }
 
 RestorePreSignalTrapFrameEnd:
@@ -417,11 +389,11 @@ RestorePreSignalTrapFrameEnd:
     }
 
     //
-    // Preserve EAX by returning it. The system call assembly return path
+    // Preserve RAX by returning it. The system call assembly return path
     // guarantees this.
     //
 
-    return (INTN)TrapFrame->Eax;
+    return (INTN)TrapFrame->Rax;
 }
 
 VOID
@@ -460,62 +432,25 @@ Return Value:
 
 {
 
-    BOOL FromSysenter;
-    KSTATUS Status;
-
     //
-    // On x86, the trap frame holds the system call return value in EAX. Check
+    // On x86, the trap frame holds the system call return value in RAX. Check
     // to see if the system call can be restarted. If not, exit.
     //
 
     if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) ||
-        !IS_SYSTEM_CALL_RESULT_RESTARTABLE_NO_SIGNAL((INTN)TrapFrame->Eax)) {
+        !IS_SYSTEM_CALL_RESULT_RESTARTABLE_NO_SIGNAL((INTN)TrapFrame->Rax)) {
 
         return;
     }
 
     //
-    // Attempt to determine if this trap frame was created by sysenter. If this
-    // fails, then signal the thread and dispatch the new signal. This restart
-    // call is likely already in the middle of dispatching signals and found
-    // there were none.
+    // Back up over the syscall or int $N instruction, and reset the
+    // number/parameter to restart the call.
     //
 
-    Status = PspIsSysenterTrapFrame(TrapFrame, &FromSysenter);
-    if (!KSUCCESS(Status)) {
-        PsSignalThread(KeGetCurrentThread(),
-                       SIGNAL_ACCESS_VIOLATION,
-                       NULL,
-                       TRUE);
-
-        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
-                                                SystemCallNumber,
-                                                SystemCallParameter);
-
-        return;
-    }
-
-    //
-    // If the trap frame was from a full system call (not sysenter), only back
-    // up over the INT instruction. Store the system call number and parameter
-    // in ECX and EDX so that only the INT instruction needs to be replayed.
-    //
-
-    if (FromSysenter == FALSE) {
-        TrapFrame->Ecx = SystemCallNumber;
-        TrapFrame->Edx = (ULONG)(UINTN)SystemCallParameter;
-        TrapFrame->Eip -= X86_INT_INSTRUCTION_LENGTH;
-
-    //
-    // A sysenter trap frame's EIP points to the instruction after the dummy
-    // call to OspSysenter. Back up over that. It will replay enough to gather
-    // the system call number and parameter from the stack.
-    //
-
-    } else {
-        TrapFrame->Eip -= X86_CALL_INSTRUCTION_LENGTH;
-    }
-
+    TrapFrame->Rdi = SystemCallNumber;
+    TrapFrame->Rsi = (UINTN)SystemCallParameter;
+    TrapFrame->Rip -= X86_SYSCALL_INSTRUCTION_LENGTH;
     return;
 }
 
@@ -553,16 +488,13 @@ Return Value:
 
     ULONG CodeSelector;
     ULONG DataSelector;
-    ULONG Eip;
-    ULONG Fs;
+    UINTN Rip;
     PUINTN StackPointer;
     PTRAP_FRAME StackTrapFrame;
     UINTN TrapStackPointer;
     PUINTN UserStackPointer;
 
-    TrapStackPointer = (UINTN)Thread->KernelStack + Thread->KernelStackSize -
-                       sizeof(PVOID);
-
+    TrapStackPointer = (UINTN)Thread->KernelStack + Thread->KernelStackSize;
     StackPointer = (PUINTN)TrapStackPointer;
 
     //
@@ -575,8 +507,8 @@ Return Value:
         ASSERT((TrapFrame == NULL) || (ParameterIsStack == FALSE));
 
         //
-        // Set up the values on the user mode stack. Push the parameter and a
-        // dummy return address.
+        // Set up the values on the user mode stack. Push a dummy return
+        // address.
         //
 
         if (TrapFrame == NULL) {
@@ -592,8 +524,6 @@ Return Value:
                                    sizeof(PVOID);
             }
 
-            MmUserWrite(UserStackPointer, (UINTN)Thread->ThreadParameter);
-            UserStackPointer -= 1;
             MmUserWrite(UserStackPointer, 0);
             TrapStackPointer = (UINTN)UserStackPointer;
         }
@@ -604,30 +534,13 @@ Return Value:
 
         CodeSelector = USER_CS;
         DataSelector = USER_DS;
-        Eip = (UINTN)Thread->ThreadRoutine;
-        Fs = DataSelector;
-
-        //
-        // Make room for SS ESP (in that order), as they're part of the
-        // hardware trap frame when returning to user mode. Don't worry about
-        // filling them out, the restore trap frame function will handle that.
-        //
-
-        StackPointer -= 2;
+        Rip = (UINTN)Thread->ThreadRoutine;
 
     } else {
         CodeSelector = KERNEL_CS;
         DataSelector = KERNEL_DS;
-        Fs = GDT_PROCESSOR;
-        Eip = (UINTN)PspKernelThreadStart;
+        Rip = (UINTN)PspKernelThreadStart;
     }
-
-    //
-    // Make room for Eflags, CS, and EIP, and a dummy error code expected by the
-    // restore trap frame code.
-    //
-
-    StackPointer -= 4;
 
     //
     // Make room for a trap frame to be restored.
@@ -643,7 +556,7 @@ Return Value:
             // Return a process ID of 0 to the child on fork.
             //
 
-            StackTrapFrame->Eax = 0;
+            StackTrapFrame->Rax = 0;
 
         } else {
 
@@ -654,24 +567,24 @@ Return Value:
             //
 
             RtlZeroMemory(StackTrapFrame, sizeof(TRAP_FRAME));
-            StackTrapFrame->Eip = TrapFrame->Eip;
-            StackTrapFrame->Esp = TrapFrame->Esp;
+            StackTrapFrame->Rip = TrapFrame->Rip;
+            StackTrapFrame->Rsp = TrapFrame->Rsp;
         }
 
     } else {
         RtlZeroMemory(StackTrapFrame, sizeof(TRAP_FRAME));
-        StackTrapFrame->Eip = Eip;
-        StackTrapFrame->Esp = TrapStackPointer;
-        StackTrapFrame->Ecx = (UINTN)Thread->ThreadParameter;
+        StackTrapFrame->Rip = Rip;
+        StackTrapFrame->Rsp = TrapStackPointer;
+        StackTrapFrame->Rdi = (UINTN)Thread->ThreadParameter;
     }
 
     StackTrapFrame->Ds = DataSelector;
     StackTrapFrame->Es = DataSelector;
-    StackTrapFrame->Fs = Fs;
-    StackTrapFrame->Gs = GDT_THREAD;
+    StackTrapFrame->Fs = DataSelector;
+    StackTrapFrame->Gs = DataSelector;
     StackTrapFrame->Ss = DataSelector;
     StackTrapFrame->Cs = CodeSelector;
-    StackTrapFrame->Eflags = IA32_EFLAG_ALWAYS_1 | IA32_EFLAG_IF;
+    StackTrapFrame->Rflags = IA32_EFLAG_ALWAYS_1 | IA32_EFLAG_IF;
     Thread->KernelStackPointer = StackPointer;
     return;
 }
@@ -706,27 +619,25 @@ Return Value:
 
     PUINTN UserStackPointer;
 
-    Thread->ThreadPointer = PsInitialThreadPointer;
+    Thread->ThreadPointer = 0;
     UserStackPointer = Thread->ThreadParameter - sizeof(PVOID);
 
     ASSERT(((PVOID)UserStackPointer >= Thread->UserStack) &&
            ((PVOID)UserStackPointer <
             Thread->UserStack + Thread->UserStackSize));
 
-    MmUserWrite(UserStackPointer, (UINTN)(Thread->ThreadParameter));
-    UserStackPointer -= 1;
     MmUserWrite(UserStackPointer, 0);
     RtlZeroMemory(TrapFrame, sizeof(TRAP_FRAME));
     TrapFrame->Cs = USER_CS;
     TrapFrame->Ds = USER_DS;
     TrapFrame->Es = USER_DS;
     TrapFrame->Fs = USER_DS;
-    TrapFrame->Gs = GDT_THREAD;
+    TrapFrame->Gs = USER_DS;
     TrapFrame->Ss = USER_DS;
-    TrapFrame->Eip = (UINTN)Thread->ThreadRoutine;
-    TrapFrame->Eflags = IA32_EFLAG_ALWAYS_1 | IA32_EFLAG_IF;
-    TrapFrame->Esp = (UINTN)UserStackPointer;
-    TrapFrame->Ecx = (UINTN)Thread->ThreadParameter;
+    TrapFrame->Rip = (UINTN)Thread->ThreadRoutine;
+    TrapFrame->Rflags = IA32_EFLAG_ALWAYS_1 | IA32_EFLAG_IF;
+    TrapFrame->Rsp = (UINTN)UserStackPointer;
+    TrapFrame->Rdi = (UINTN)Thread->ThreadParameter;
     if ((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
         Thread->FpuFlags &= ~(THREAD_FPU_FLAG_IN_USE | THREAD_FPU_FLAG_OWNER);
         ArDisableFpu();
@@ -815,57 +726,50 @@ Return Value:
     Break->ProcessorBlock = (UINTN)NULL;
     Break->LoadedModuleCount = Process->ImageCount;
     Break->LoadedModuleSignature = Process->ImageListSignature;
-
-    //
-    // Be careful. A trap frame that resulted from a sysenter (before becoming
-    // complete for signal dispatching) only contains EIP and ESP. The rest is
-    // just garbage from the kernel mode stack, which shouldn't be leaked to
-    // the debugger.
-    //
-
-    Break->InstructionPointer = TrapFrame->Eip;
+    Break->InstructionPointer = TrapFrame->Rip;
     RtlZeroMemory(Break->InstructionStream, sizeof(Break->InstructionStream));
     MmCopyFromUserMode(Break->InstructionStream,
-                       (PVOID)TrapFrame->Eip,
+                       (PVOID)TrapFrame->Rip,
                        sizeof(Break->InstructionStream));
 
-    Break->Registers.X86.Eip = TrapFrame->Eip;
-    Break->Registers.X86.Esp = TrapFrame->Esp;
     if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
         Break->ErrorCode = TrapFrame->ErrorCode;
-        Break->Registers.X86.Eax = TrapFrame->Eax;
-        Break->Registers.X86.Ebx = TrapFrame->Ebx;
-        Break->Registers.X86.Ecx = TrapFrame->Ecx;
-        Break->Registers.X86.Edx = TrapFrame->Edx;
-        Break->Registers.X86.Ebp = TrapFrame->Ebp;
-        Break->Registers.X86.Esi = TrapFrame->Esi;
-        Break->Registers.X86.Edi = TrapFrame->Edi;
-        Break->Registers.X86.Eflags = TrapFrame->Eflags;
-        Break->Registers.X86.Cs = TrapFrame->Cs;
-        Break->Registers.X86.Ds = TrapFrame->Ds;
-        Break->Registers.X86.Es = TrapFrame->Es;
-        Break->Registers.X86.Fs = TrapFrame->Fs;
-        Break->Registers.X86.Gs = TrapFrame->Gs;
-        Break->Registers.X86.Ss = TrapFrame->Ss;
+        Break->Registers.X64.Rax = TrapFrame->Rax;
+        Break->Registers.X64.Rbx = TrapFrame->Rbx;
+        Break->Registers.X64.Rcx = TrapFrame->Rcx;
+        Break->Registers.X64.Rdx = TrapFrame->Rdx;
+        Break->Registers.X64.Rbp = TrapFrame->Rbp;
+        Break->Registers.X64.Rsi = TrapFrame->Rsi;
+        Break->Registers.X64.Rdi = TrapFrame->Rdi;
+        Break->Registers.X64.R8 = TrapFrame->R8;
+        Break->Registers.X64.R9 = TrapFrame->R9;
+        Break->Registers.X64.R10 = TrapFrame->R10;
+        Break->Registers.X64.R11 = TrapFrame->R11;
+        Break->Registers.X64.R12 = TrapFrame->R12;
+        Break->Registers.X64.R13 = TrapFrame->R13;
+        Break->Registers.X64.R14 = TrapFrame->R14;
+        Break->Registers.X64.R15 = TrapFrame->R15;
+        Break->Registers.X64.Rflags = TrapFrame->Rflags;
+        Break->Registers.X64.Cs = TrapFrame->Cs;
+        Break->Registers.X64.Ds = TrapFrame->Ds;
+        Break->Registers.X64.Es = TrapFrame->Es;
+        Break->Registers.X64.Fs = TrapFrame->Fs;
+        Break->Registers.X64.Gs = TrapFrame->Gs;
+        Break->Registers.X64.Ss = TrapFrame->Ss;
 
     } else {
+        RtlZeroMemory(&(Break->Registers.X64), sizeof(Break->Registers.X64));
         Break->ErrorCode = 0;
-        Break->Registers.X86.Eax = 0;
-        Break->Registers.X86.Ebx = 0;
-        Break->Registers.X86.Ecx = 0;
-        Break->Registers.X86.Edx = 0;
-        Break->Registers.X86.Ebp = 0;
-        Break->Registers.X86.Esi = 0;
-        Break->Registers.X86.Edi = 0;
-        Break->Registers.X86.Eflags = 0;
-        Break->Registers.X86.Cs = USER_CS;
-        Break->Registers.X86.Ds = USER_DS;
-        Break->Registers.X86.Es = USER_DS;
-        Break->Registers.X86.Fs = GDT_THREAD;
-        Break->Registers.X86.Gs = GDT_THREAD;
-        Break->Registers.X86.Ss = USER_DS;
+        Break->Registers.X64.Cs = USER_CS;
+        Break->Registers.X64.Ds = USER_DS;
+        Break->Registers.X64.Es = USER_DS;
+        Break->Registers.X64.Fs = USER_DS;
+        Break->Registers.X64.Gs = USER_DS;
+        Break->Registers.X64.Ss = USER_DS;
     }
 
+    Break->Registers.X64.Rip = TrapFrame->Rip;
+    Break->Registers.X64.Rsp = TrapFrame->Rsp;
     return STATUS_SUCCESS;
 }
 
@@ -909,34 +813,42 @@ Return Value:
     ASSERT(DebugData->DebugCommand.Size == sizeof(BREAK_NOTIFICATION));
 
     Break = DebugData->DebugCommand.Data;
-    if ((!VALID_USER_SEGMENT(Break->Registers.X86.Cs)) ||
-        (!VALID_USER_SEGMENT(Break->Registers.X86.Ds)) ||
-        (!VALID_USER_SEGMENT(Break->Registers.X86.Es)) ||
-        (!VALID_USER_SEGMENT(Break->Registers.X86.Fs)) ||
-        (!VALID_USER_SEGMENT(Break->Registers.X86.Gs)) ||
-        (!VALID_USER_SEGMENT(Break->Registers.X86.Ss))) {
+    if ((!VALID_USER_SEGMENT(Break->Registers.X64.Cs)) ||
+        (!VALID_USER_SEGMENT(Break->Registers.X64.Ds)) ||
+        (!VALID_USER_SEGMENT(Break->Registers.X64.Es)) ||
+        (!VALID_USER_SEGMENT(Break->Registers.X64.Fs)) ||
+        (!VALID_USER_SEGMENT(Break->Registers.X64.Gs)) ||
+        (!VALID_USER_SEGMENT(Break->Registers.X64.Ss))) {
 
         return STATUS_INVALID_PARAMETER;
     }
 
-    TrapFrame->Eax = Break->Registers.X86.Eax;
-    TrapFrame->Ebx = Break->Registers.X86.Ebx;
-    TrapFrame->Ecx = Break->Registers.X86.Ecx;
-    TrapFrame->Edx = Break->Registers.X86.Edx;
-    TrapFrame->Ebp = Break->Registers.X86.Ebp;
-    TrapFrame->Esp = Break->Registers.X86.Esp;
-    TrapFrame->Esi = Break->Registers.X86.Esi;
-    TrapFrame->Edi = Break->Registers.X86.Edi;
-    TrapFrame->Eip = Break->Registers.X86.Eip;
-    TrapFrame->Eflags = Break->Registers.X86.Eflags |
+    TrapFrame->Rax = Break->Registers.X64.Rax;
+    TrapFrame->Rbx = Break->Registers.X64.Rbx;
+    TrapFrame->Rcx = Break->Registers.X64.Rcx;
+    TrapFrame->Rdx = Break->Registers.X64.Rdx;
+    TrapFrame->Rbp = Break->Registers.X64.Rbp;
+    TrapFrame->Rsp = Break->Registers.X64.Rsp;
+    TrapFrame->Rsi = Break->Registers.X64.Rsi;
+    TrapFrame->Rdi = Break->Registers.X64.Rdi;
+    TrapFrame->R8 = Break->Registers.X64.R8;
+    TrapFrame->R9 = Break->Registers.X64.R9;
+    TrapFrame->R10 = Break->Registers.X64.R10;
+    TrapFrame->R11 = Break->Registers.X64.R11;
+    TrapFrame->R12 = Break->Registers.X64.R12;
+    TrapFrame->R13 = Break->Registers.X64.R13;
+    TrapFrame->R14 = Break->Registers.X64.R14;
+    TrapFrame->R15 = Break->Registers.X64.R15;
+    TrapFrame->Rip = Break->Registers.X64.Rip;
+    TrapFrame->Rflags = (Break->Registers.X64.Rflags & IA32_EFLAG_USER) |
                         IA32_EFLAG_ALWAYS_1 | IA32_EFLAG_IF;
 
-    TrapFrame->Cs = Break->Registers.X86.Cs | SEGMENT_PRIVILEGE_USER;
-    TrapFrame->Ds = Break->Registers.X86.Ds | SEGMENT_PRIVILEGE_USER;
-    TrapFrame->Es = Break->Registers.X86.Es | SEGMENT_PRIVILEGE_USER;
-    TrapFrame->Fs = Break->Registers.X86.Fs | SEGMENT_PRIVILEGE_USER;
-    TrapFrame->Gs = Break->Registers.X86.Gs | SEGMENT_PRIVILEGE_USER;
-    TrapFrame->Ss = Break->Registers.X86.Ss | SEGMENT_PRIVILEGE_USER;
+    TrapFrame->Cs = Break->Registers.X64.Cs | SEGMENT_PRIVILEGE_USER;
+    TrapFrame->Ds = Break->Registers.X64.Ds | SEGMENT_PRIVILEGE_USER;
+    TrapFrame->Es = Break->Registers.X64.Es | SEGMENT_PRIVILEGE_USER;
+    TrapFrame->Fs = Break->Registers.X64.Fs | SEGMENT_PRIVILEGE_USER;
+    TrapFrame->Gs = Break->Registers.X64.Gs | SEGMENT_PRIVILEGE_USER;
+    TrapFrame->Ss = Break->Registers.X64.Ss | SEGMENT_PRIVILEGE_USER;
     return STATUS_SUCCESS;
 }
 
@@ -976,10 +888,10 @@ Return Value:
     ASSERT(IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(TrapFrame) == FALSE);
 
     if (Set != FALSE) {
-        TrapFrame->Eflags |= IA32_EFLAG_TF;
+        TrapFrame->Rflags |= IA32_EFLAG_TF;
 
     } else {
-        TrapFrame->Eflags &= ~IA32_EFLAG_TF;
+        TrapFrame->Rflags &= ~IA32_EFLAG_TF;
     }
 
     return STATUS_SUCCESS;
@@ -988,55 +900,4 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
-KSTATUS
-PspIsSysenterTrapFrame (
-    PTRAP_FRAME TrapFrame,
-    PBOOL FromSysenter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines whether or not the given trap frame was created by
-    sysenter.
-
-Arguments:
-
-    TrapFrame - Supplies a pointer to the trap frame whose origin is in
-        question.
-
-    FromSysenter - Supplies a pointer to a boolean that receives whether or not
-        the trap frame came from sysenter.
-
-Return Value:
-
-    TRUE if the trap frame was created by sysenter. FALSE otherwise.
-
---*/
-
-{
-
-    UCHAR Instruction;
-    PVOID PreviousInstructionPointer;
-    BOOL Result;
-
-    ASSERT(IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(TrapFrame) == FALSE);
-
-    PreviousInstructionPointer = (PVOID)TrapFrame->Eip -
-                                 X86_INT_INSTRUCTION_LENGTH;
-
-    Result = MmUserRead8(PreviousInstructionPointer, &Instruction);
-    if (Result == FALSE) {
-        return STATUS_ACCESS_VIOLATION;
-    }
-
-    *FromSysenter = FALSE;
-    if (Instruction != X86_INT_INSTRUCTION_PREFIX) {
-        *FromSysenter = TRUE;
-    }
-
-    return STATUS_SUCCESS;
-}
 

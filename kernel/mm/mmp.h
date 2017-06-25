@@ -522,6 +522,40 @@ Return Value:
 --*/
 
 KSTATUS
+MmpAllocateScatteredPhysicalPages (
+    PHYSICAL_ADDRESS MinPhysical,
+    PHYSICAL_ADDRESS MaxPhysical,
+    PPHYSICAL_ADDRESS Pages,
+    UINTN PageCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates a set of any physical pages.
+
+Arguments:
+
+    MinPhysical - Supplies the minimum physical address for the allocations,
+        inclusive.
+
+    MaxPhysical - Supplies the maximum physical address to allocate, exclusive.
+
+    Pages - Supplies a pointer to an array where the physical addresses
+        allocated will be returned.
+
+    PageCount - Supplies the number of pages to allocate.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NO_MEMORY on failure.
+
+--*/
+
+KSTATUS
 MmpEarlyAllocatePhysicalMemory (
     PMEMORY_DESCRIPTOR_LIST MemoryMap,
     UINTN PageCount,

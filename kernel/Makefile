@@ -51,6 +51,10 @@ ifeq (x86, $(ARCH))
 ARCHLIB = $(OBJROOT)/os/kernel/x86/x86sup.a
 endif
 
+ifeq (x64, $(ARCH))
+ARCHLIB = $(OBJROOT)/os/kernel/x64/x64sup.a
+endif
+
 TARGETLIBS = $(OBJROOT)/$(THISDIR)/acpi/acpi.a           \
              $(OBJROOT)/os/lib/crypto/crypto.a           \
              $(OBJROOT)/$(THISDIR)/ob/ob.a               \
@@ -79,6 +83,7 @@ DIRS = mm    \
        ke    \
        ps    \
        x86   \
+       x64   \
        armv7 \
        armv6 \
        kd    \
@@ -96,7 +101,7 @@ $(OBJROOT)/$(THISDIR)/io/io.a: io
 $(OBJROOT)/$(THISDIR)/hl/hl.a: hl
 $(OBJROOT)/$(THISDIR)/mm/mm.a: mm
 $(OBJROOT)/$(THISDIR)/sp/sp.a: sp
-$(ARCHLIB): armv7 armv6 x86
+$(ARCHLIB): armv7 armv6 x86 x64
 
 VPATH += $(BINROOT)
 

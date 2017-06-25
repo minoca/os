@@ -49,7 +49,7 @@ Environment:
 #define EXCEPTION_ASSERTION_FAILURE 0x07
 #define EXCEPTION_DOUBLE_FAULT      0x0C
 
-#define CONTEXT_SWAP_MAGIC 0x9A8A7A6A5A4A3A2A
+#define CONTEXT_SWAP_MAGIC 0x5A4A3A2A
 
 //
 // Definition for the TRAP_FRAME structure and the exception stack directly
@@ -125,8 +125,8 @@ Environment:
     movw    $KERNEL_DS, %ax ;      \
     mov     %ax, %ds ;             \
     mov     %ax, %es ;             \
-    mov     $GDT_PROCESSOR, %ax ;  \
     mov     %ax, %fs ;             \
+    mov     %ax, %ss ;             \
 
 #if defined(__WINNT__) || defined(__CYGWIN__)
 
@@ -192,6 +192,57 @@ Environment:
 #define END_FUNCTION(_Name)
 
 #endif
+
+##
+## This macro sets the call frame information so that the debugger can unwind
+## a trap frame. It assumes the CFA register is esp, and sets the CFA to the
+## base of the trap frame just to make things easier.
+##
+
+#define CFI_TRAP_FRAME_PUSHED           \
+    .cfi_def_cfa_offset 0 ;             \
+    .cfi_offset %rax, TRAP_RAX ;        \
+    .cfi_offset %rbx, TRAP_RBX ;        \
+    .cfi_offset %rcx, TRAP_RCX ;        \
+    .cfi_offset %rdx, TRAP_RDX ;        \
+    .cfi_offset %rsi, TRAP_RSI ;        \
+    .cfi_offset %rdi, TRAP_RDI ;        \
+    .cfi_offset %rbp, TRAP_RBP ;        \
+    .cfi_offset %r8, TRAP_R8   ;        \
+    .cfi_offset %r9, TRAP_R9   ;        \
+    .cfi_offset %r10, TRAP_R10 ;        \
+    .cfi_offset %r11, TRAP_R11 ;        \
+    .cfi_offset %r12, TRAP_R12 ;        \
+    .cfi_offset %r13, TRAP_R13 ;        \
+    .cfi_offset %r14, TRAP_R14 ;        \
+    .cfi_offset %r15, TRAP_R15 ;        \
+    .cfi_offset %rip, TRAP_RIP ;        \
+    .cfi_offset %rsp, TRAP_RSP ;        \
+    .cfi_offset %rflags, TRAP_RFLAGS
+
+##
+## This macro sets teh call frame information just after a trap frame was
+## restored. It indicates to the debugger that most registers are now in their
+## proper place. It assumes the CFA register is esp+0.
+##
+
+#define CFI_TRAP_FRAME_POPPED \
+    .cfi_same_value %rax ; \
+    .cfi_same_value %rbx ; \
+    .cfi_same_value %rcx ; \
+    .cfi_same_value %rdx ; \
+    .cfi_same_value %rsi ; \
+    .cfi_same_value %rdi ; \
+    .cfi_same_value %rbp ; \
+    .cfi_same_value %r8  ; \
+    .cfi_same_value %r9  ; \
+    .cfi_same_value %r10 ; \
+    .cfi_same_value %r11 ; \
+    .cfi_same_value %r12 ; \
+    .cfi_same_value %r13 ; \
+    .cfi_same_value %r14 ; \
+    .cfi_same_value %r15 ; \
+    .cfi_offset %rip, 0
 
 ##
 ## Define .cfi directives, macroed so they can be excised if unneeded.

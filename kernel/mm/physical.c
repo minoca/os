@@ -1188,6 +1188,193 @@ Return Value:
 }
 
 KSTATUS
+MmpAllocateScatteredPhysicalPages (
+    PHYSICAL_ADDRESS MinPhysical,
+    PHYSICAL_ADDRESS MaxPhysical,
+    PPHYSICAL_ADDRESS Pages,
+    UINTN PageCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates a set of any physical pages.
+
+Arguments:
+
+    MinPhysical - Supplies the minimum physical address for the allocations,
+        inclusive.
+
+    MaxPhysical - Supplies the maximum physical address to allocate, exclusive.
+
+    Pages - Supplies a pointer to an array where the physical addresses
+        allocated will be returned.
+
+    PageCount - Supplies the number of pages to allocate.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NO_MEMORY on failure.
+
+--*/
+
+{
+
+    PHYSICAL_ADDRESS EndAddress;
+    UINTN EndOffset;
+    BOOL FirstIteration;
+    PPHYSICAL_MEMORY_SEGMENT LastSegment;
+    UINTN LastSegmentOffset;
+    UINTN Offset;
+    UINTN PageIndex;
+    ULONG PageShift;
+    PPHYSICAL_PAGE PhysicalPage;
+    PPHYSICAL_MEMORY_SEGMENT Segment;
+    BOOL SignalEvent;
+    PHYSICAL_ADDRESS StartAddress;
+
+    FirstIteration = TRUE;
+    PageShift = MmPageShift();
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    KeAcquireQueuedLock(MmPhysicalPageLock);
+    LastSegment = MmLastAllocatedSegment;
+    LastSegmentOffset = MmLastAllocatedSegmentOffset;
+    Segment = LastSegment;
+
+    //
+    // Adjust the offset to the min/max. If the segment is completely out of
+    // range, then the offset should end up at or beyond the end offset to
+    // trigger moving to the next segment.
+    //
+
+    EndAddress = Segment->EndAddress;
+    if (EndAddress > MaxPhysical) {
+        EndAddress = MaxPhysical;
+    }
+
+    StartAddress = Segment->StartAddress;
+    if (StartAddress < MinPhysical) {
+        StartAddress = MinPhysical;
+    }
+
+    EndOffset = 0;
+    if (EndAddress >= StartAddress) {
+        EndOffset = (EndAddress - Segment->StartAddress) >> PageShift;
+    }
+
+    Offset = LastSegmentOffset;
+    if (Segment->StartAddress + (Offset << PageShift) < StartAddress) {
+        Offset = (StartAddress - Segment->StartAddress) >> PageShift;
+    }
+
+    PageIndex = 0;
+    while (PageIndex < PageCount) {
+
+        //
+        // See if it's time to move to a new segment.
+        //
+
+        if ((Offset >= EndOffset) || (Segment->FreePages == 0)) {
+            if ((Segment == LastSegment) && (FirstIteration == FALSE)) {
+                break;
+            }
+
+            FirstIteration = FALSE;
+            if (Segment->ListEntry.Next == &MmPhysicalSegmentListHead) {
+                Segment = LIST_VALUE(MmPhysicalSegmentListHead.Next,
+                                     PHYSICAL_MEMORY_SEGMENT,
+                                     ListEntry);
+
+            } else {
+                Segment = LIST_VALUE(Segment->ListEntry.Next,
+                                     PHYSICAL_MEMORY_SEGMENT,
+                                     ListEntry);
+            }
+
+            EndAddress = Segment->EndAddress;
+            if (EndAddress > MaxPhysical) {
+                EndAddress = MaxPhysical;
+            }
+
+            Offset = 0;
+            StartAddress = Segment->StartAddress;
+            if (StartAddress < MinPhysical) {
+                StartAddress = MinPhysical;
+                Offset = (StartAddress - Segment->StartAddress) >> PageShift;
+            }
+
+            EndOffset = 0;
+            if (EndAddress >= StartAddress) {
+                EndOffset = (EndAddress - Segment->StartAddress) >> PageShift;
+            }
+        }
+
+        //
+        // Suck up all the pages in this segment.
+        //
+
+        PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
+        while ((Offset < EndOffset) && (Segment->FreePages != 0)) {
+            if (PhysicalPage[Offset].U.Free == PHYSICAL_PAGE_FREE) {
+                PhysicalPage[Offset].U.Flags = PHYSICAL_PAGE_FLAG_NON_PAGED;
+                Pages[PageIndex] = Segment->StartAddress +
+                                   (Offset << PageShift);
+
+                ASSERT(Segment->FreePages != 0);
+
+                Segment->FreePages -= 1;
+                PageIndex += 1;
+                if (PageIndex == PageCount) {
+                    MmLastAllocatedSegment = Segment;
+                    MmLastAllocatedSegmentOffset = Offset;
+                    break;
+                }
+            }
+
+            Offset += 1;
+        }
+    }
+
+    SignalEvent = MmpUpdatePhysicalMemoryStatistics(PageCount, TRUE);
+    KeReleaseQueuedLock(MmPhysicalPageLock);
+    if (SignalEvent != FALSE) {
+        KeSignalEvent(MmPhysicalMemoryWarningEvent, SignalOptionPulse);
+    }
+
+    //
+    // Space seems to be limited, since not all spots were allocated and all of
+    // physical memory was traversed. Allocate the slow way, with delays and
+    // attempted page outs.
+    //
+
+    while (PageIndex < PageCount) {
+        Pages[PageIndex] = MmpAllocatePhysicalPages(1, 0);
+        if (Pages[PageIndex] == INVALID_PHYSICAL_ADDRESS) {
+
+            //
+            // Ick. Free everything allocated so far and give up.
+            //
+
+            PageCount = PageIndex;
+            for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
+                MmFreePhysicalPage(Pages[PageIndex]);
+            }
+
+            return STATUS_NO_MEMORY;
+        }
+
+        PageIndex += 1;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
 MmpEarlyAllocatePhysicalMemory (
     PMEMORY_DESCRIPTOR_LIST MemoryMap,
     UINTN PageCount,
@@ -2787,7 +2974,7 @@ Arguments:
     PageCount - Supplies the number of pages allocated or freed during the
         update period.
 
-    Allocation - Supplies a boolean indicating whether or not to upddate the
+    Allocation - Supplies a boolean indicating whether or not to update the
         statistics for an allocation (TRUE) or a free (FALSE).
 
 Return Value:

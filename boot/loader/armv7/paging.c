@@ -949,7 +949,7 @@ Return Value:
     StageVirtual = INITIAL_PAGE_TABLE_STAGE;
     Status = BoMapPhysicalAddress(&StageVirtual,
                                   0,
-                                  PAGE_SIZE,
+                                  SWAP_VA_PAGES * PAGE_SIZE,
                                   MAP_FLAG_READ_ONLY,
                                   MemoryTypeMmStructures);
 

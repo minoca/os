@@ -81,7 +81,7 @@ PspArchGetNextPcReadMemory (
 // for a newly created thread.
 //
 
-ULONGLONG PsInitialThreadPointer = 0;
+const ULONGLONG PsInitialThreadPointer = 0;
 
 //
 // ------------------------------------------------------------------ Functions

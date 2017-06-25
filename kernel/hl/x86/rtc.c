@@ -36,7 +36,6 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include <minoca/kernel/x86.h>
 #include <minoca/kernel/ioport.h>
 
 //

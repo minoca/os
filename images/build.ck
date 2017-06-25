@@ -33,6 +33,11 @@ function buildImage(name, msetupFlags) {
 
     if (mconfig.arch == "x64") {
         installDeps = [
+            "kernel:kernel",
+            "kernel:devmap.set",
+            "kernel:dev2drv.set",
+            "kernel:init.set",
+            "kernel:init.sh",
             "boot/loader:loader",
             "boot/bootman:bootman.bin",
             "boot/fatboot:fatboot.bin",

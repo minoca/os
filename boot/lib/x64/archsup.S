@@ -298,12 +298,8 @@ Return Value:
 --*/
 
 FUNCTION(BoLoadBootDataSegments)
-    movw    $KERNEL_DS, %ax         # Get the data segment selector,
-    mov     %ax, %ds                # and save it into the data segments.
-    mov     %ax, %es                #
-    mov     %ax, %ss                # and save it into the stack register.
-    mov     %ax, %fs                # Load it.
-    mov     %ax, %gs                # Load it in GS as well.
+    LOAD_KERNEL_DATA_SEGMENTS       # Load up kernel data segments.
+    movw    %ax, %gs                # Load it in GS as well.
     ret                             #
 
 END_FUNCTION(BoLoadBootDataSegments)

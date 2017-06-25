@@ -139,7 +139,7 @@ BopCreateSegmentDescriptor (
 // Store global processor structures.
 //
 
-GDT_ENTRY BoGdt[GDT_ENTRIES];
+GDT_ENTRY BoGdt[BOOT_GDT_ENTRIES];
 PROCESSOR_GATE BoIdt[BOOT_IDT_SIZE];
 
 //

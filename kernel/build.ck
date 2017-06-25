@@ -83,6 +83,10 @@ function build() {
 
     } else if (arch == "x64") {
         archSources = [
+            "x64/archsup.S",
+            "x64/archsupc.c",
+            "x64/prochw.c",
+            "x64/trap.S"
         ];
     }
 

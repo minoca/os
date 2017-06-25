@@ -63,6 +63,7 @@ function build() {
 
     } else if (arch == "x64") {
         archSources = [
+            "x64/psarch.c"
         ];
     }
 

@@ -755,7 +755,7 @@ Return Value:
     *PageTableStage = (PVOID)-1;
     Status = BoMapPhysicalAddress(PageTableStage,
                                   0,
-                                  PAGE_SIZE,
+                                  SWAP_VA_PAGES * PAGE_SIZE,
                                   MAP_FLAG_READ_ONLY,
                                   MemoryTypeLoaderPermanent);
 

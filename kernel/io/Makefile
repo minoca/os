@@ -77,6 +77,8 @@ X86_OBJS = x86/archio.o   \
            x86/archpm.o   \
            x86/intelcst.o \
 
+X64_OBJS = $(X86_OBJS)
+
 EXTRA_SRC_DIRS = x86 armv7
 
 include $(SRCROOT)/os/minoca.mk
