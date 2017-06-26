@@ -86,7 +86,7 @@ Return Value:
 
     PVOID NewHandle;
 
-    NewHandle = dlopen(BinaryName, RTLD_GLOBAL | RTLD_LAZY);
+    NewHandle = dlopen(BinaryName, RTLD_LOCAL | RTLD_LAZY);
     return NewHandle;
 }
 

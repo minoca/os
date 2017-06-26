@@ -17,7 +17,7 @@ Abstract:
 
 Author:
 
-    Evan GReen 5-Jun-2017
+    Evan Green 5-Jun-2017
 
 Environment:
 

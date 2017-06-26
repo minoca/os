@@ -1783,7 +1783,7 @@ VOID
 CkGetVariable (
     PCK_VM Vm,
     INTN StackIndex,
-    PSTR Name
+    PCSTR Name
     );
 
 /*++
@@ -1815,7 +1815,7 @@ VOID
 CkSetVariable (
     PCK_VM Vm,
     INTN StackIndex,
-    PSTR Name
+    PCSTR Name
     );
 
 /*++

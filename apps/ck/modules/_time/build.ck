@@ -81,7 +81,7 @@ function build() {
 
     lib = {
         "label": "build__time_static",
-        "output": "os",
+        "output": "_time",
         "inputs": buildSources,
         "build": true,
         "prefix": "build"
@@ -91,7 +91,7 @@ function build() {
     entries += staticLibrary(lib);
     lib = {
         "label": "build__time_dynamic",
-        "output": "os",
+        "output": "_time",
         "inputs": objs[0],
         "build": true,
         "prefix": "build"
