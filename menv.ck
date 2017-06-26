@@ -936,14 +936,18 @@ Return Value:
     var copiedEntry;
     var cpflags = params.get("cpflags");;
     var destination;
-    var entries;
+    var destinationLabel;
+    var destinationPath;
+    var element;
+    var entries = [];
+    var extraCopy;
     var fileName;
     var label = params.get("label");
     var mode = params.get("mode");
     var newOriginalLabel;
     var originalTarget;
     var source = params.get("output");
-    var StrippedEntry;
+    var strippedEntry;
     var strippedOutput;
 
     label ?= source;
@@ -961,22 +965,61 @@ Return Value:
     params.type = "target";
     fileName = basename(source);
     destination = params.get("binplace");
-    if (!destination) {
-        destination = "bin";
-    }
-
-    destination = mconfig.outroot + "/" + destination + "/" + fileName;
     newOriginalLabel = label + "_orig";
     originalTarget = ":" + newOriginalLabel;
-    copiedEntry = copy(originalTarget, destination, label, cpflags, mode)[0];
 
     //
-    // The original label was given to the copied destination, so tack a _orig
+    // Create the first or only one with the genuine label.
+    //
+
+    element = destination;
+    if (element is List) {
+        element = element[0];
+    }
+
+    if (!element) {
+        element = "bin";
+    }
+
+    destinationPath = mconfig.outroot + "/" + element + "/" + fileName;
+    copiedEntry = copy(originalTarget,
+                       destinationPath,
+                       label,
+                       cpflags,
+                       mode)[0];
+
+    entries.append(copiedEntry);
+
+    //
+    // Handle binplacing into several areas.
+    //
+
+    if (destination is List) {
+        for (index in 1..destination.length()) {
+            element = destination[index];
+            if (!element) {
+                element = "bin";
+            }
+
+            destinationPath = mconfig.outroot + "/" + element + "/" + fileName;
+            destinationLabel = "%s_%d" % [label, index];
+            extraCopy = copy(originalTarget,
+                             destinationPath,
+                             destinationLabel,
+                             cpflags,
+                             mode)[0];
+
+            copiedEntry.implicit = [":" + destinationLabel];
+            entries.append(extraCopy);
+        }
+    }
+
+    //
+    // The original label was given to the copied destination, so tack an _orig
     // on the source label.
     //
 
     params.label = newOriginalLabel;
-    entries = [copiedEntry, params];
 
     //
     // Unless asked not to, create a stripped entry as well.
@@ -990,7 +1033,7 @@ Return Value:
             strippedOutput = mconfig.stripped + "/" + fileName;
         }
 
-        StrippedEntry = {
+        strippedEntry = {
             "label": label + "_stripped",
             "inputs": [originalTarget],
             "output": strippedOutput,
@@ -1001,10 +1044,11 @@ Return Value:
         // Make the binplaced copy depend on the stripped version.
         //
 
-        copiedEntry.implicit = [":" + StrippedEntry["label"]];
-        entries += strip(StrippedEntry);
+        copiedEntry.implicit = [":" + strippedEntry["label"]];
+        entries += strip(strippedEntry);
     }
 
+    entries.append(params);
     return entries;
 }
 

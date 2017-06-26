@@ -46,3 +46,7 @@ DIRS = build
 
 include $(SRCROOT)/os/minoca.mk
 
+postbuild:
+	@mkdir -p $(BINROOT)/apps/usr/bin
+	@$(STRIP) -p -o $(BINROOT)/apps/usr/bin/$(BINARY) $(BINROOT)/$(BINARY)
+

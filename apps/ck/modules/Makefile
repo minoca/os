@@ -43,7 +43,7 @@ CK_MODULES := bufferedio.ck \
               lzfile.ck     \
               time.ck       \
 
-CK_LIB_PATH := $(BINROOT)/chalk1
+CK_LIB_PATH := $(BINROOT)/apps/usr/lib/chalk1
 CK_BUILD_LIB_PATH := $(OUTROOT)/tools/lib/chalk1
 
 CK_MODULE_TARGETS := $(CK_MODULES:%=$(CK_LIB_PATH)/%)

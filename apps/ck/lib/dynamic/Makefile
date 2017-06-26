@@ -42,3 +42,7 @@ TARGETLIBS = $(OBJROOT)/os/lib/yy/yy.a                     \
 
 include $(SRCROOT)/os/minoca.mk
 
+postbuild:
+	@mkdir -p $(BINROOT)/apps/usr/lib
+	@$(STRIP) -p -o $(BINROOT)/apps/usr/lib/$(BINARY) $(BINROOT)/$(BINARY)
+

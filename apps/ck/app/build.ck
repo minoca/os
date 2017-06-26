@@ -74,7 +74,8 @@ function build() {
     app = {
         "label": "chalk",
         "inputs": sources + libs,
-        "config": config
+        "config": config,
+        "binplace": ["bin", "apps/usr/bin"]
     };
 
     entries = application(app);

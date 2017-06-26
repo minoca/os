@@ -32,7 +32,7 @@ from menv import copy, group, mconfig, sharedLibrary;
 // outroot.
 //
 
-var libPath = "bin/chalk1";
+var libPath = "bin/apps/usr/libl/chalk1";
 var buildLibPath = "tools/lib/chalk1";
 
 function chalkSharedModule(params) {

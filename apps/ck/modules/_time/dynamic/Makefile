@@ -38,6 +38,5 @@ OBJS += $(POSIX_OBJS)
 include $(SRCROOT)/os/minoca.mk
 
 postbuild:
-	@mkdir -p $(BINROOT)/chalk1
-	@cp -p $(BINARY) $(BINROOT)/chalk1/$(BINARY)
-
+	@mkdir -p $(BINROOT)/apps/usr/lib/chalk1
+	@cp -p $(BINARY) $(BINROOT)/apps/usr/lib/chalk1/$(BINARY)

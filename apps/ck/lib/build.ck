@@ -177,6 +177,7 @@ function build() {
         "output": "libchalk",
         "inputs": objs[0] + libs,
         "major_version": majorVersion,
+        "binplace": ["bin", "apps/usr/lib"]
     };
 
     entries += sharedLibrary(lib);
