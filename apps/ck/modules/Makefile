@@ -31,6 +31,7 @@ DIRS = _time     \
        lzma      \
        json      \
        os        \
+       spawn     \
 
 include $(SRCROOT)/os/minoca.mk
 

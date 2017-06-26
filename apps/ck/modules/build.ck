@@ -79,7 +79,8 @@ function build() {
         "bundle",
         "json",
         "lzma",
-        "os"
+        "os",
+        "spawn",
     ];
 
     //
