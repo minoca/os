@@ -40,6 +40,11 @@ Author:
 
 #include "timwin32.h"
 
+#elif defined(__APPLE__)
+
+#define HAVE_TM_GMTOFF
+#define HAVE_TM_ZONE
+
 #else
 
 #define HAVE_TM_GMTOFF

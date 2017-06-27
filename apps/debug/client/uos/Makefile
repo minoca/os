@@ -49,7 +49,7 @@ DYNLIBS += -ldl
 
 endif
 
-ifneq ($(OS),$(filter Windows_NT Minoca,$(OS)))
+ifneq ($(OS),$(filter Windows_NT Minoca Darwin,$(OS)))
 
 DYNLIBS += -pthread
 

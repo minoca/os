@@ -57,6 +57,7 @@ OBJS += $(POSIX_OBJS)
 ifeq ($(OS),Darwin)
 
 DYNLIBS = $(OBJROOT)/os/apps/ck/lib/build/dynamic/libchalk.1.dylib
+EXTRA_LDFLAGS += -Wl,-rpath,@executable_path/../lib
 
 else
 

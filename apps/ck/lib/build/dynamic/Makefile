@@ -58,6 +58,7 @@ OBJS += $(POSIX_OBJS)
 
 ifeq ($(shell uname -s),Darwin)
 BINARY := libchalk.$(SO_VERSION_MAJOR).dylib
+EXTRA_LDFLAGS += -install_name @rpath/libchalk.$(SO_VERSION_MAJOR).dylib
 endif
 
 endif

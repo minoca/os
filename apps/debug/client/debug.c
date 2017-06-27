@@ -314,7 +314,6 @@ Return Value:
                 goto MainEnd;
             }
 
-            ArgumentIndex += 1;
             Channel = optarg;
             ConnectionType = DebugConnectionKernel;
             break;

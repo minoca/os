@@ -180,6 +180,17 @@ Environment:
     .endfunc ; \
     .cfi_endproc
 
+#elif defined(__APPLE__)
+
+#define FUNCTION(_Name) \
+    .global _##_Name ; \
+    _##_Name:
+
+#define PROTECTED_FUNCTION(_Name) FUNCTION(_Name)
+#define EXPORTED_FUNCTION(_Name) FUNCTION(_Name)
+
+#define END_FUNCTION(_Name)
+
 #else
 
 #define FUNCTION(_Name) \

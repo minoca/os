@@ -43,6 +43,7 @@ function build() {
     var genTool;
     var grammar;
     var includes;
+    var installName;
     var lib;
     var libs;
     var majorVersion = "1";
@@ -165,10 +166,13 @@ function build() {
     //
 
     if (buildOs == "Linux") {
-       buildLibConfig["DYNLIBS"] = ["-ldl"];
-    }
+        buildLibConfig["DYNLIBS"] = ["-ldl"];
 
-    if (buildOs == "Windows") {
+    } else if (buildOs == "Darwin") {
+        installName = "@rpath/libchalk." + majorVersion + ".dylib";
+        buildLibConfig["LDFLAGS"] = ["-install_name " + installName];
+
+    } else if (buildOs == "Windows") {
         binplaceLocation = "tools/bin";
     }
 

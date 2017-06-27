@@ -675,8 +675,8 @@ Return Value:
                     fprintf(stderr,
                             "Communicate %d: Wrote %d of %d to stdin.\n",
                             Pid,
-                            BytesDone,
-                            InputSize);
+                            (int)BytesDone,
+                            (int)InputSize);
                 }
 
                 if (BytesDone <= 0) {
@@ -730,7 +730,7 @@ Return Value:
                     fprintf(stderr,
                             "Communicate %d: Read %d from stdout.\n",
                             Pid,
-                            BytesDone);
+                            (int)BytesDone);
                 }
 
                 if (BytesDone < 0) {
@@ -783,7 +783,7 @@ Return Value:
                     fprintf(stderr,
                             "Communicate %d: Read %d from stderr.\n",
                             Pid,
-                            BytesDone);
+                            (int)BytesDone);
                 }
 
                 if (BytesDone < 0) {

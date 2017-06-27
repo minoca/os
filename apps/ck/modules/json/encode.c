@@ -1079,7 +1079,7 @@ Return Value:
     Length = snprintf(Encoder->Result + Encoder->Length,
                       Encoder->Capacity - Encoder->Length,
                       "\n%*s",
-                      Count,
+                      (int)Count,
                       "");
 
     if (Length > 0) {

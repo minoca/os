@@ -83,7 +83,10 @@ function build() {
         buildConfig["LDFLAGS"] = ["-Wl,-rpath=\\$ORIGIN/../lib"];
     }
 
-    buildConfig = {};
+    if (mconfig.build_os == "Darwin") {
+        buildConfig["LDFLAGS"] = ["-Wl,-rpath,@executable_path/../lib"];
+    }
+
     app = {
         "label": "build_chalk",
         "output": "chalk",

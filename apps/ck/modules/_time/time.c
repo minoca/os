@@ -805,7 +805,7 @@ Return Value:
 
     CkPushString(Vm, "tm_zone", 7);
     if (CkDictGet(Vm, StackIndex) != FALSE) {
-        Tm->tm_zone = CkGetString(Vm, -1, NULL);
+        Tm->tm_zone = (char *)CkGetString(Vm, -1, NULL);
         CkStackPop(Vm);
     }
 

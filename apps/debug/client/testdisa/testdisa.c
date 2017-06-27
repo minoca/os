@@ -270,7 +270,7 @@ Return Value:
         //
 
         if (PrintDisassembly != FALSE) {
-            printf("\n%08x: ", TextVirtualAddress + BytesDisassembled);
+            printf("\n%08llx: ", TextVirtualAddress + BytesDisassembled);
         }
 
         Result = DbgDisassemble(TextVirtualAddress + BytesDisassembled,
