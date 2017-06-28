@@ -1032,24 +1032,25 @@ Return Value:
     }
 
     //
-    // Lock the region of interest in the file.
-    //
-
-    Lock.l_start = 0;
-    Lock.l_len = sizeof(struct utmpx);
-    Lock.l_pid = 0;
-    Lock.l_type = Type;
-    Lock.l_whence = SEEK_CUR;
-    if (fcntl(ClUserAccountingFile, F_SETLKW, &Lock) != 0) {
-        return -1;
-    }
-
-    //
     // Save the previous offset in case it has to be restored due to a partial
     // read or write.
     //
 
     Offset = lseek(ClUserAccountingFile, 0, SEEK_CUR);
+
+    //
+    // Lock the region of interest in the file.
+    //
+
+    Lock.l_start = Offset;
+    Lock.l_len = sizeof(struct utmpx);
+    Lock.l_pid = 0;
+    Lock.l_type = Type;
+    Lock.l_whence = SEEK_SET;
+    if (fcntl(ClUserAccountingFile, F_SETLKW, &Lock) != 0) {
+        return -1;
+    }
+
     do {
         if (Type == F_WRLCK) {
             BytesDone = write(ClUserAccountingFile,
@@ -1069,7 +1070,6 @@ Return Value:
     // Unlock the file.
     //
 
-    Lock.l_start = -Lock.l_len;
     Lock.l_type = F_UNLCK;
     fcntl(ClUserAccountingFile, F_SETLK, &Lock);
     if (BytesDone != sizeof(struct utmpx)) {
