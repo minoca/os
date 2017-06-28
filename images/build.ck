@@ -95,7 +95,8 @@ function build() {
     var variant = mconfig.variant;
 
     commonImageFlags = [
-        "-q"
+        "-q",
+        "-a0"
     ];
 
     if (mconfig.debug == "dbg") {

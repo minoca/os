@@ -33,7 +33,7 @@ UPDEST=www.minocacorp.com
 UPPORT=2222
 
 # Define the number of builds to keep, plus one.
-KEEPCOUNT=16
+KEEPCOUNT=6
 
 SSH="$SRCROOT/git/usr/bin/ssh.exe"
 SCP="$SRCROOT/git/usr/bin/scp.exe"
