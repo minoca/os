@@ -37,7 +37,7 @@ function build() {
             "drivers/sound/broadcom/bc27pwma:bc27pwma"
         ];
 
-    } else if (arch == "x86") {
+    } else if ((arch == "x86") || (arch == "x64")) {
         soundDrivers = [
             "drivers/sound/intel/hda:intelhda"
         ];

@@ -376,6 +376,8 @@ Return Value:
     ArLoadTr(KERNEL_TSS);
     ArpInitializeInterrupts(PhysicalMode, BootProcessor, Idt);
     ArpSetProcessorFeatures(ProcessorBlock);
+    ArWriteMsr(X86_MSR_FSBASE, 0);
+    ArWriteMsr(X86_MSR_GSBASE, (UINTN)ProcessorBlock);
 
     //
     // Initialize the FPU, then disable access to it again.

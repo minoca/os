@@ -773,6 +773,7 @@ Return Value:
                    X64Registers->R13,
                    X64Registers->R14,
                    X64Registers->R15,
+                   X64Registers->Rbp,
                    X64Registers->Rip,
                    X64Registers->Rsp);
 
@@ -977,6 +978,7 @@ Return Value:
     if (RegisterString != NULL) {
         switch (Context->MachineType) {
         case MACHINE_TYPE_X86:
+        case MACHINE_TYPE_X64:
             RegisterSize = 8;
             if (strcasecmp(RegisterString, "cr0") == 0) {
                 Register = &(Original->Ia.Cr0);
@@ -1179,6 +1181,7 @@ Return Value:
     } else {
         switch (Context->MachineType) {
         case MACHINE_TYPE_X86:
+        case MACHINE_TYPE_X64:
             DbgOut("cr0=%08I64x cr2=%08I64x cr3=%08I64x cr4=%08I64x tr=%04x\n"
                    "dr0=%08I64x dr1=%08I64x dr2=%08I64x dr3=%08I64x\n"
                    "dr6=%08I64x dr7=%08I64x\n"

@@ -41,7 +41,7 @@ function build() {
             "drivers/plat/ti/tps65217:tps65217"
         ];
 
-    } else if (arch == "x86") {
+    } else if ((arch == "x86") || (arch == "x64")) {
         sdDrivers = [
             "drivers/sd/core:sd"
         ];

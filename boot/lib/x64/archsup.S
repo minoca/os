@@ -299,7 +299,6 @@ Return Value:
 
 FUNCTION(BoLoadBootDataSegments)
     LOAD_KERNEL_DATA_SEGMENTS       # Load up kernel data segments.
-    movw    %ax, %gs                # Load it in GS as well.
     ret                             #
 
 END_FUNCTION(BoLoadBootDataSegments)
@@ -1211,10 +1210,6 @@ BoRestoreTrapFrame:
     movw    %cx, %ds                        #
     movl    TRAP_ES(%rsp), %ecx             # Restore es.
     movw    %cx, %es                        #
-    movl    TRAP_FS(%rsp), %ecx             # Restore fs.
-    movw    %cx, %fs                        #
-    movl    TRAP_GS(%rsp), %ecx             # Restore gs.
-    movw    %cx, %gs                        #
     movq    TRAP_RAX(%rsp), %rax            # Restore general registers.
     movq    TRAP_RBX(%rsp), %rbx            #
     movq    TRAP_RCX(%rsp), %rcx            #

@@ -195,9 +195,6 @@ var SystemFilesX86Pcat = [
 //
 
 if (arch == "x64") {
-    DriverFiles = [];
-    BootDrivers = [];
-    SystemConfigFiles = [];
     SystemFiles = [
         "kernel",
         "libminocaos.so.1"
@@ -796,15 +793,62 @@ if ((plat == "install-x86") || (plat == "install-x64")) {
 
     if (plat == "install-x64") {
         Files = [
+            "acpi.drv",
+            "ahci.drv",
+            "ata.drv",
+            "atl1c.drv",
             "bootman.bin",
+            //"bootmefi.efi",
+            "dev2drv.set",
+            "devmap.set",
+            "devrem.drv",
+            "dwceth.drv",
+            "e100.drv",
+            "e1000.drv",
+            "ehci.drv",
+            "fat.drv",
             "fatboot.bin",
+            "i8042.drv",
+            "init.set",
+            "init.sh",
             "install.ck",
+            "intelhda.drv",
+            "kernel",
+            "kernel-version",
             "libc.so.1",
             "libcrypt.so.1",
             "libminocaos.so.1",
             "loader",
-            "kernel",
+            //"loadefi",
             "mbr.bin",
+            "net80211.drv",
+            "netcore.drv",
+            "null.drv",
+            "onering.drv",
+            "part.drv",
+            "pci.drv",
+            "pcnet32.drv",
+            "qrkhostb.drv",
+            "rtl81xx.drv",
+            "rtlw81xx.drv",
+            "rtlw8188eufw.bin",
+            "rtlw8188cufwUMC.bin",
+            "rtlw8192cufw.bin",
+            "sd.drv",
+            "ser16550.drv",
+            "smsc95xx.drv",
+            "sound.drv",
+            "special.drv",
+            "uhci.drv",
+            "usbcomp.drv",
+            "usbcore.drv",
+            "usbhid.drv",
+            "usbhub.drv",
+            "usbkbd.drv",
+            "usbmass.drv",
+            "usbmouse.drv",
+            "usrinput.drv",
+            "videocon.drv",
         ];
     }
 

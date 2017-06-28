@@ -31,7 +31,17 @@ Environment:
 //
 
 #include <minoca/kernel/driver.h>
+
+#if __SIZEOF_LONG__ == 8
+
+#include <minoca/kernel/x64.h>
+
+#else
+
 #include <minoca/kernel/x86.h>
+
+#endif
+
 #include "../acpip.h"
 #include "../proc.h"
 #include "../namespce.h"

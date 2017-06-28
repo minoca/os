@@ -60,7 +60,7 @@ function build() {
             "armv7/procarch.c"
         ];
 
-    } else if (arch == "x86") {
+    } else if ((arch == "x86") || (arch == "x64")) {
         sources += [
             "x86/procarch.c"
         ];

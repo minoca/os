@@ -72,7 +72,8 @@ FUNCTION(BoEnablePaging)
     ## kernel page tables immediately.
     ##
 
-    movq    BoPageDirectory@GOTPCREL(%rip), %rax   # Get the page directory.
+    movq    BoPageDirectory@GOTPCREL(%rip), %rax   # Get page directory address.
+    movq    (%rax), %rax            # Dereference to get the value.
     movq    %rax, %cr3              # Put it in CR3.
 
     ##

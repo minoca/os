@@ -105,7 +105,7 @@ FUNCTION(BmpFwTransferTo64BitApplication)
 
     movl    $X86_MSR_EFER, %ecx     # Get EFER as MSR register.
     rdmsr                           # Read it.
-    orl     $EFER_LONG_MODE_ENABLE, %eax    # Enable long mode.
+    orl     $(EFER_LONG_MODE_ENABLE | EFER_NO_EXECUTE_ENABLE), %eax
     wrmsr                           # Write it.
 
     ##

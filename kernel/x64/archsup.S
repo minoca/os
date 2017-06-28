@@ -1468,7 +1468,7 @@ FUNCTION(ArReadMsr)
     movq    %rdi, %rcx          # Load the MSR number into ecx.
     xorq    %rax, %rax          # Clear high bits of rax.
     rdmsr                       # Read the MSR into EDX:EAX.
-    shrq    $32, %rdx           # Shift rdx into its high word.
+    shlq    $32, %rdx           # Shift rdx into its high word.
     orq     %rdx, %rax          # OR rdx into rax.
     ret                         # Return.
 
@@ -1625,6 +1625,36 @@ FUNCTION(ArWriteGsbase)
     ret                         # Return.
 
 END_FUNCTION(ArWriteGsbase)
+
+##
+## VOID
+## ArSwapGs (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine exchanges the GS base hidden register with the kernel GS base
+    MSR.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION(ArSwapGs)
+    swapgs                      # Swap gs.
+    ret                         # Return.
+
+END_FUNCTION(ArSwapGs)
 
 ##
 ## KERNEL_API

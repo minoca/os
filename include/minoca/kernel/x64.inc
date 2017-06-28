@@ -124,9 +124,11 @@ Environment:
 #define LOAD_KERNEL_DATA_SEGMENTS  \
     movw    $KERNEL_DS, %ax ;      \
     mov     %ax, %ds ;             \
-    mov     %ax, %es ;             \
-    mov     %ax, %fs ;             \
     mov     %ax, %ss ;             \
+    mov     %ax, %es ;             \
+    xorl    %eax, %eax ;           \
+    mov     %ax, %fs ;             \
+    mov     %ax, %gs ;
 
 #if defined(__WINNT__) || defined(__CYGWIN__)
 

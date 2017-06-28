@@ -290,6 +290,8 @@ Author:
 // Define MSR values.
 //
 
+#define X86_MSR_POWER_CONTROL_C1E_PROMOTION 0x00000002
+
 #define X86_MSR_SYSENTER_CS     0x00000174
 #define X86_MSR_SYSENTER_ESP    0x00000175
 #define X86_MSR_SYSENTER_EIP    0x00000176
@@ -298,8 +300,9 @@ Author:
 #define X86_MSR_STAR            0xC0000081
 #define X86_MSR_LSTAR           0xC0000082
 #define X86_MSR_FMASK           0xC0000084
-
-#define X86_MSR_POWER_CONTROL_C1E_PROMOTION 0x00000002
+#define X86_MSR_FSBASE          0xC0000100
+#define X86_MSR_GSBASE          0xC0000101
+#define X86_MSR_KERNEL_GSBASE   0xC0000102
 
 //
 // Define the PTE bits.
@@ -340,7 +343,7 @@ Author:
 
 //
 // This macro gets a value at the given offset from the current processor block.
-// _Result should be a ULONG.
+// _Result should be the appropriate size.
 //
 
 #define FS_READ32(_Result, _Offset) \
@@ -349,13 +352,21 @@ Author:
 #define FS_READ64(_Result, _Offset) \
     asm volatile ("movq %%fs:(%1), %q0" : "=r" (_Result) : "r" (_Offset))
 
+#define GS_READ32(_Result, _Offset) \
+    asm volatile ("movl %%gs:(%1), %k0" : "=r" (_Result) : "r" (_Offset))
+
+#define GS_READ64(_Result, _Offset) \
+    asm volatile ("movq %%gs:(%1), %q0" : "=r" (_Result) : "r" (_Offset))
+
 #if __SIZEOF_LONG__ == 8
 
 #define FS_READN(_Result, _Offset) FS_READ64(_Result, _Offset)
+#define GS_READN(_Result, _Offset) GS_READ64(_Result, _Offset)
 
 #else
 
 #define FS_READN(_Result, _Offset) FS_READ32(_Result, _Offset)
+#define GS_READN(_Result, _Offset) GS_READ32(_Result, _Offset)
 
 #endif
 

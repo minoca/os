@@ -40,12 +40,12 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
-X86_OBJS = $(COMMON_OBJS)   \
-           dw.o             \
-           swiss.rsc        \
-           w32cmds.o        \
-           sh/shntos.o      \
-           swlib/ntos.o     \
+OBJS = $(COMMON_OBJS)   \
+       dw.o             \
+       swiss.rsc        \
+       w32cmds.o        \
+       sh/shntos.o      \
+       swlib/ntos.o     \
 
 TARGETLIBS = $(OBJROOT)/os/apps/libc/dynamic/wincsup/wincsup.a               \
              $(OBJROOT)/os/lib/termlib/build/termlib.a                       \

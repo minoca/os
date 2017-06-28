@@ -33,6 +33,8 @@ function buildImage(name, msetupFlags) {
 
     if (mconfig.arch == "x64") {
         installDeps = [
+            //"apps/posix:skel",
+            "apps/tzcomp:tz_files",
             "kernel:kernel",
             "kernel:devmap.set",
             "kernel:dev2drv.set",
@@ -44,6 +46,7 @@ function buildImage(name, msetupFlags) {
             "boot/mbr:mbr.bin",
             "apps/libc/dynamic:libc",
             "apps/osbase:libminocaos",
+            "drivers:drivers",
             "apps/setup:build_msetup"
         ];
 

@@ -535,10 +535,6 @@ FUNCTION(ArRestoreTrapFrame)
     movw    %cx, %ds                        #
     movl    TRAP_ES(%rsp), %ecx             # Restore es.
     movw    %cx, %es                        #
-    movl    TRAP_FS(%rsp), %ecx             # Restore fs.
-    movw    %cx, %fs                        #
-    movl    TRAP_GS(%rsp), %ecx             # Restore gs.
-    movw    %cx, %gs                        #
     movq    TRAP_RAX(%rsp), %rax            # Restore general registers.
     movq    TRAP_RBX(%rsp), %rbx            #
     movq    TRAP_RCX(%rsp), %rcx            #
@@ -553,6 +549,13 @@ FUNCTION(ArRestoreTrapFrame)
     movq    TRAP_R12(%rsp), %r12            #
     movq    TRAP_R13(%rsp), %r13            #
     movq    TRAP_R14(%rsp), %r14            #
+    movl    TRAP_CS(%rsp), %r15d            # Get CS.
+    cli                                     # Disable interrupts for user GS.
+    andl    $SEGMENT_PRIVILEGE_MASK, %r15d  # Get Privilege level.
+    jz      RestoreTrapFrameReturn          # Jump over swapgs if kernel mode.
+    swapgs                                  # Swap back to user GS segment.
+
+RestoreTrapFrameReturn:
     movq    TRAP_R15(%rsp), %r15            #
     addq    $TRAP_ERRORCODE, %rsp           # Pop off non-hardware portion.
     ret                                     # Pop error code to return.
@@ -707,6 +710,18 @@ FUNCTION(ArGenerateTrapFrame)
     movl    %ecx, TRAP_FS(%rsp)         # Save FS.
     movq    %gs, %rcx                   #
     movl    %ecx, TRAP_GS(%rsp)         # Save GS.
+
+    ##
+    ## Determine if the exception came from user mode. If so, swap the GS base.
+    ## to get the processor block back.
+    ##
+
+    movl    TRAP_CS(%rsp), %ecx         # Get CS.
+    andl    $SEGMENT_PRIVILEGE_MASK, %ecx   # Mask off the privilege.
+    jz      GenerateTrapFrameReturn     # Return if zero.
+    swapgs                              # Swap GS segment if from user mode.
+
+GenerateTrapFrameReturn:
     jmp     *%rax                       # Return
 
 END_FUNCTION(ArGenerateTrapFrame)

@@ -97,8 +97,8 @@ Author:
 
 #define X64_SELF_MAP_INDEX (X64_PTE_COUNT - 2)
 
-#define X64_CANONICAL_HIGH 0xFFF8000000000000
-#define X64_CANONICAL_LOW  0x0007FFFFFFFFFFFF
+#define X64_CANONICAL_HIGH 0xFFFF800000000000
+#define X64_CANONICAL_LOW  0x00007FFFFFFFFFFF
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -1480,6 +1480,28 @@ Routine Description:
 Arguments:
 
     Gsbase - Supplies the new gsbase value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ArSwapGs (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine exchanges the GS base hidden register with the kernel GS base
+    MSR.
+
+Arguments:
+
+    None.
 
 Return Value:
 

@@ -34,6 +34,31 @@ Environment:
 #include "../kep.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// AMD64 uses GS since the "swapgs" instruction is an important part of the
+// syscall mechanism.
+//
+
+#if defined(__amd64)
+
+#define PROC_READ32(_Value, _Offset) GS_READ32((_Value), (_Offset))
+#define PROC_READN(_Value, _Offset) GS_READN((_Value), (_Offset))
+
+//
+// x86 uses FS to keep out of user mode's way for TLS.
+//
+
+#else
+
+#define PROC_READ32(_Value, _Offset) FS_READ32((_Value), (_Offset))
+#define PROC_READN(_Value, _Offset) FS_READN((_Value), (_Offset))
+
+#endif
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -81,7 +106,7 @@ Return Value:
     ULONG RunLevel;
 
     Offset = FIELD_OFFSET(PROCESSOR_BLOCK, RunLevel);
-    FS_READ32(RunLevel, Offset);
+    PROC_READ32(RunLevel, Offset);
     return RunLevel;
 }
 
@@ -110,7 +135,7 @@ Return Value:
 
     PPROCESSOR_BLOCK Block;
 
-    FS_READN(Block, 0);
+    PROC_READN(Block, 0);
     return Block;
 }
 
@@ -140,7 +165,7 @@ Return Value:
 
     PPROCESSOR_BLOCK Block;
 
-    FS_READN(Block, 0);
+    PROC_READN(Block, 0);
     return Block;
 }
 
@@ -172,7 +197,7 @@ Return Value:
     ULONG Offset;
 
     Offset = FIELD_OFFSET(PROCESSOR_BLOCK, ProcessorNumber);
-    FS_READ32(Number, Offset);
+    PROC_READ32(Number, Offset);
     return Number;
 }
 
@@ -203,7 +228,7 @@ Return Value:
     UINTN Thread;
 
     Offset = FIELD_OFFSET(PROCESSOR_BLOCK, RunningThread);
-    FS_READN(Thread, Offset);
+    PROC_READN(Thread, Offset);
     return (PKTHREAD)Thread;
 }
 

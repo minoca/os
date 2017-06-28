@@ -413,6 +413,19 @@ FUNCTION(FwpRealModeExecute)
     cli
 
     ##
+    ## Save FSBase and GSbase.
+    ##
+
+    movl    $X86_MSR_FSBASE, %ecx
+    rdmsr
+    pushq   %rdx
+    pushq   %rax
+    movl    $X86_MSR_GSBASE, %ecx
+    rdmsr
+    pushq   %rdx
+    pushq   %rax
+
+    ##
     ## Push the parameters for a far return back to the long mode restore code.
     ##
 
@@ -456,6 +469,19 @@ FUNCTION(FwpRealModeExecute)
     ##
 
 FwpRealModeExecuteRestore:
+
+    ##
+    ## Restore GSBase and FSBase
+    ##
+
+    popq    %rax
+    popq    %rdx
+    movl    $X86_MSR_GSBASE, %ecx
+    wrmsr
+    popq    %rax
+    popq    %rdx
+    movl    $X86_MSR_FSBASE, %ecx
+    wrmsr
 
     ##
     ## Restore the non-volatile registers and flags.

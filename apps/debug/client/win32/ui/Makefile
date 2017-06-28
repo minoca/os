@@ -47,8 +47,6 @@ EXTRA_LDFLAGS += -mwindows
 
 VPATH += $(SRCDIR)/..:$(SRCDIR)/../..:
 
-ifeq ($(ARCH), x86)
-
 include $(SRCDIR)/../../sources
 
 OBJS = $(COMMON_OBJS) \
@@ -59,8 +57,6 @@ OBJS = $(COMMON_OBJS) \
        ntsock.o       \
        ntusrdbg.o     \
        ntusrsup.o     \
-
-endif
 
 include $(SRCROOT)/os/minoca.mk
 

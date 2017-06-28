@@ -45,19 +45,15 @@ DYNLIBS = -lpsapi -lws2_32 -lmswsock -ladvapi32
 
 VPATH += $(SRCDIR)/..:$(SRCDIR)/../..:
 
-ifeq ($(ARCH), x86)
-
 include $(SRCDIR)/../../sources
 
-X86_OBJS += $(COMMON_OBJS)   \
-            ntcmdln.o        \
-            ntcomm.o         \
-            ntextsup.o       \
-            ntsock.o         \
-            ntusrdbg.o       \
-            ntusrsup.o       \
-
-endif
+OBJS = $(COMMON_OBJS)   \
+       ntcmdln.o        \
+       ntcomm.o         \
+       ntextsup.o       \
+       ntsock.o         \
+       ntusrdbg.o       \
+       ntusrsup.o       \
 
 include $(SRCROOT)/os/minoca.mk
 

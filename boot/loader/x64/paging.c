@@ -208,7 +208,6 @@ Return Value:
     UINTN CurrentVirtual;
     ULONG EntryShift;
     PMEMORY_DESCRIPTOR ExistingDescriptor;
-    BOOL HugePage;
     ULONG Level;
     ULONGLONG MappedAddress;
     UINTN PageCount;
@@ -321,7 +320,6 @@ Return Value:
     CurrentVirtual = (UINTN)MappedAddress;
     PageCount = ALIGN_RANGE_UP(Size, PAGE_SIZE) / PAGE_SIZE;
     PagesMapped = 0;
-    HugePage = FALSE;
     while (PageCount != PagesMapped) {
 
         //
@@ -336,25 +334,6 @@ Return Value:
             PageTable += PageTableIndex;
             EntryShift -= X64_PTE_BITS;
             if ((*PageTable & X86_PTE_PRESENT) == 0) {
-
-                //
-                // Check to see if the thing being mapped here could fit in a
-                // 2MB page. If so, stop before the last level page table, and
-                // the code outside the loop will fill in a PDE instead of a
-                // PTE.
-                //
-
-                if ((Level == X64_PAGE_LEVEL - 2) &&
-                    ((PageCount - PagesMapped) >= (_2MB / PAGE_SIZE)) &&
-                    ((CurrentVirtual & (_2MB - 1)) == 0)) {
-
-                    RtlDebugPrint("Using huge page at VA 0x%llx\n",
-                                  CurrentVirtual);
-
-                    HugePage = TRUE;
-                    break;
-                }
-
                 PageTableMemoryType = MemoryTypePageTables;
                 if (CurrentVirtual < (UINTN)KERNEL_VA_START) {
 
@@ -386,6 +365,9 @@ Return Value:
 
         PageTableIndex = (CurrentVirtual & X64_PTE_MASK) >> PAGE_SHIFT;
         PageTable += PageTableIndex;
+
+        ASSERT(*PageTable == 0);
+
         *PageTable = PhysicalAddress | X86_PTE_PRESENT;
         if ((Attributes & MAP_FLAG_READ_ONLY) == 0) {
             *PageTable |= X86_PTE_WRITABLE;
@@ -409,15 +391,6 @@ Return Value:
 
         if ((Attributes & MAP_FLAG_EXECUTE) == 0) {
             *PageTable |= X86_PTE_NX;
-        }
-
-        if (HugePage != FALSE) {
-            *PageTable |= X86_PTE_LARGE;
-            PagesMapped += _2MB / PAGE_SIZE;
-            PhysicalAddress += _2MB;
-            CurrentVirtual += _2MB;
-            HugePage = FALSE;
-            continue;
         }
 
         ASSERT((Attributes & MAP_FLAG_LARGE_PAGE) == 0);
@@ -682,6 +655,8 @@ Return Value:
                 *PageTable |= X86_PTE_NX;
             }
         }
+
+        CurrentVirtual += PAGE_SIZE;
     }
 
     return;
