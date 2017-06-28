@@ -349,7 +349,7 @@ Return Value:
 
     //
     // Check to see if the current message block is too small to hold the
-    // initial padding bits and length. If so, process teh block, then continue
+    // initial padding bits and length. If so, process the block, then continue
     // padding onto a second block.
     //
 

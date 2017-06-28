@@ -619,7 +619,7 @@ Arguments:
     StackPointer - Supplies an optional pointer where the stack register value
         will be returned.
 
-    FramePointer - Supplies an optional pointer where teh stack frame base
+    FramePointer - Supplies an optional pointer where the stack frame base
         register value will be returned.
 
 Return Value:

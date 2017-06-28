@@ -1132,7 +1132,7 @@ Members:
 
     SlotDesignation - Stores the string index for the slot designation string.
 
-    SlotType - Stores teh slot type. See SMBIOS_SLOT_TYPE_* definitions.
+    SlotType - Stores the slot type. See SMBIOS_SLOT_TYPE_* definitions.
 
     SlotDataBusWidth - Stores the slot data bus width.
 
@@ -1369,7 +1369,7 @@ Members:
         start of the range. This is only valid if the starting address is
         0xFFFFFFFF.
 
-    ExtendedEndingAddress - Stores teh physical ending addres in bytes of the
+    ExtendedEndingAddress - Stores the physical ending addres in bytes of the
         last byte of the range. This is only valid if the starting address is
         0xFFFFFFFF.
 
@@ -1430,7 +1430,7 @@ Members:
         start of the range. This is only valid if the starting address is
         0xFFFFFFFF.
 
-    ExtendedEndingAddress - Stores teh physical ending addres in bytes of the
+    ExtendedEndingAddress - Stores the physical ending addres in bytes of the
         last byte of the range. This is only valid if the starting address is
         0xFFFFFFFF.
 

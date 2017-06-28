@@ -234,7 +234,7 @@ Environment:
     .cfi_offset %rflags, TRAP_RFLAGS
 
 ##
-## This macro sets teh call frame information just after a trap frame was
+## This macro sets the call frame information just after a trap frame was
 ## restored. It indicates to the debugger that most registers are now in their
 ## proper place. It assumes the CFA register is esp+0.
 ##

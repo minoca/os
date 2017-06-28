@@ -856,7 +856,7 @@ Members:
     EndpointListHead - Stores the head of the list of endpoints in this
         interface.
 
-    UnknownListHead - Stores teh head of the list of other descriptors present
+    UnknownListHead - Stores the head of the list of other descriptors present
         in this interface.
 --*/
 

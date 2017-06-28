@@ -688,7 +688,7 @@ class SantaConfig {
     Routine Description:
 
         This routine merges one dictionary into another, recursively. Values
-        otehr than dictionaries are smashed from the source onto the
+        other than dictionaries are smashed from the source onto the
         destination.
 
     Arguments:

@@ -252,7 +252,7 @@ Environment:
 #define OMAP_VIDEO_ATTRIBUTES_TV_OUTPUT (1 << 16)
 
 //
-// Set this bit to cause the video pipeline to fetch from teh DMA buffer.
+// Set this bit to cause the video pipeline to fetch from the DMA buffer.
 //
 
 #define OMAP_VIDEO_ATTRIBUTES_SELF_REFRESH (1 << 24)
