@@ -77,12 +77,34 @@ if test "$DEBUG" != "rel"; then
 fi
 
 ##
+## Install the automation files.
+##
+
+echo > ./extra_install
+if [ -d "./auto" ]; then
+    chmod +x ./auto/tasks/build/prep_auto.sh
+    cat > ./extra_install <<_EOS
+var AutomationCopy = {
+    "Destination": "/apps/auto",
+    "Source": "./auto",
+    "SourceVolume": -1,
+};
+
+var PrepAutoCopy = {
+    "Destination": "/etc/rc2.d/S45prep_auto.sh",
+    "Source": "./auto/tasks/build/prep_auto.sh",
+    "SourceVolume": -1,
+};
+
+SystemPartition["Files"] += [AutomationCopy, PrepAutoCopy];
+_EOS
+fi
+
+##
 ## If an alternate root was specified, then add that to the build.
 ##
 
-AUTO_ROOT_ARGS=
 if [ -n "$AUTO_ROOT" ]; then
-    AUTO_ROOT_ARGS="--script=./auto_root_script"
     echo "$AUTO_ROOT" > ./auto_root
 
     ##
@@ -90,7 +112,7 @@ if [ -n "$AUTO_ROOT" ]; then
     ## /auto/auto_root at the setup destination.
     ##
 
-    cat > ./auto_root_script <<_EOS
+    cat >> ./extra_install <<_EOS
 var AutoRootCopy = {
     "Destination": "/apps/auto/auto_root",
     "Source": "./auto_root",
@@ -103,7 +125,7 @@ _EOS
 fi
 
 if [ -r /etc/hostname ]; then
-    cat > ./keep_hostname <<_EOS
+    cat >> ./extra_install <<_EOS
 var HostnameCopy = {
     "Destination": "/apps/etc/hostname",
     "Source": "/etc/hostname",
@@ -112,11 +134,11 @@ var HostnameCopy = {
 
 SystemPartition["Files"] += [HostnameCopy];
 _EOS
-
-AUTO_ROOT_ARGS="$AUTO_ROOT_ARGS --script=./keep_hostname"
 fi
 
-echo "Running msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy -a3072"
-msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy -a3072
+echo "Running msetup -v $DEBUG_FLAG --script=./extra_install --autodeploy \
+-a3072"
+
+msetup -v $DEBUG_FLAG --script=./extra_install --autodeploy -a3072
 echo "Done running setup."
 

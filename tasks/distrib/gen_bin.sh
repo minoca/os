@@ -105,13 +105,13 @@ cd "$OLDPWD"
 
 mkdir -p $WORKING/Minoca/Image
 if test "x$ARCH" = "xx86"; then
-    cp -pv ./distribute/pc.img "$WORKING/Minoca/Image"
+    cp -pv ./pc.img "$WORKING/Minoca/Image"
 
 elif test "x$ARCH" = "xarmv7"; then
-    cp -pv ./distribute/integ.img "$WORKING/Minoca/Image"
+    cp -pv ./integ.img "$WORKING/Minoca/Image"
 
 elif test "x$ARCH" = "xarmv6"; then
-    cp -pv ./distribute/rpi.img "$WORKING/Minoca/Image"
+    cp -pv ./rpi.img "$WORKING/Minoca/Image"
 fi
 
 ##
@@ -127,7 +127,7 @@ Python*
 pagefile.sys
 *.zip
 tools
-distribute
+client.py
 packages'
 
 for file in $REMOVE; do

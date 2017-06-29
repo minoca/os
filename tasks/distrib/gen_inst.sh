@@ -52,7 +52,7 @@ for arch in x86 x86q armv7 armv6; do
     fi
 
     mkdir -p "$WORKING/$arch"
-    if [ -r "$BINROOT/distribute/install.img" ]; then
+    if [ -r "$BINROOT/install.img" ]; then
         cp -pv "$BINROOT/install.img" "$WORKING/$arch/"
     fi
 

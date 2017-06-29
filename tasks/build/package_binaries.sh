@@ -46,6 +46,19 @@ ARCHIVE_LOCATION=$PWD/..
 cd $SRCROOT/$ARCH$VARIANT$DEBUG
 
 ##
+## Copy the automation files.
+##
+
+AUTOROOT="$PWD/bin/auto"
+if ! test -d "$AUTOROOT"; then
+    mkdir -p "$AUTOROOT/testbin"
+    cp -v "$SRCROOT/client.py" "$AUTOROOT/client.py"
+    cp -Rv "$SRCROOT/os/tasks/" "$AUTOROOT/"
+    cp -v "bin/perftest" "$AUTOROOT/testbin/perftest"
+    cp -v "bin/perflib.so" "$AUTOROOT/testbin/perflib.so"
+fi
+
+##
 ## Move all the packages over, so they get saved beyond this task and aren't in
 ## the archive.
 ##

@@ -59,7 +59,6 @@ if test -z "$REVISION"; then
     exit 1
 fi
 
-cd $BINROOT/distribute
 if [ "$ARCH" = "x86" ] ; then
     if [ "x$VARIANT" = "xq" ] ; then
         IMAGES="galileo"
