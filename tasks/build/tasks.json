@@ -126,6 +126,11 @@
             "name": "Run Native Compile (test)",
             "type": "runtask",
             "parameter": "Native Compile"
+        },
+        {
+            "name": "Test cleanup",
+            "type": "execute",
+            "parameter": "../../tasks/build/test_cleanup.sh"
         }
     ]
 },
