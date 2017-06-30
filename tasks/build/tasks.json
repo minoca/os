@@ -1533,7 +1533,7 @@
         {
             "name": "Install Build",
             "type": "execute",
-            "parameter": "../../tasks/build/install_build.sh"
+            "parameter": "bin/auto/tasks/build/install_build.sh"
         },
         {
             "name": "Reboot",

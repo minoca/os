@@ -33,7 +33,7 @@ set -xe
 
 cp /auto/tasks/build/autoclient.sh /etc/init.d/autoclient.sh
 chmod +x /etc/init.d/autoclient.sh
-/usr/sbin/update-rc.d autoclient defaults 46
+/usr/sbin/update-rc.d autoclient.sh defaults 46
 
 ##
 ## Point the package repository at the build server.
@@ -92,10 +92,11 @@ root:minoca
 _EOF
 
 ##
-## Start the auto client.
+## Start the auto client and SSH.
 ##
 
 /etc/init.d/autoclient.sh start
+/etc/init.d/sshd start
 
 ##
 ## Remove this file, since one-time initialization is complete.
