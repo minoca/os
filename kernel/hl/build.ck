@@ -142,7 +142,6 @@ function build() {
             "x86/archdbg.c",
             "x86/archintr.c",
             "x86/archrst.c",
-            "x86/archsup.S",
             "x86/archtimr.c",
             "x86/ioport.c",
             "x86/pmtimer.c",
@@ -170,12 +169,14 @@ function build() {
             archSources += [
                 "x64/apinit.c",
                 "x64/apstart.S",
+                "x64/archsup.S",
             ];
 
         } else {
             archSources += [
                 "x86/apinit.c",
                 "x86/apstart.S",
+                "x86/archsup.S",
             ];
         }
     }

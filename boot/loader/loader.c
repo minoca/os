@@ -2130,7 +2130,7 @@ Return Value:
     // this ULONG calculation is off.
     //
 
-    AllocationSize += sizeof(ULONG) * (BoMemoryMap.TotalSpace >> PageShift);
+    AllocationSize += sizeof(UINTN) * (BoMemoryMap.TotalSpace >> PageShift);
     AllocationSize += PageSize;
     AllocationSize = ALIGN_RANGE_UP(AllocationSize, PageSize);
     Status = BopAllocateKernelBuffer(AllocationSize,

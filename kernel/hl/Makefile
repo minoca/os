@@ -104,7 +104,6 @@ X86_COMMON_OBJS = ns16550.o      \
                   x86/archdbg.o  \
                   x86/archintr.o \
                   x86/archrst.o  \
-                  x86/archsup.o  \
                   x86/archtimr.o \
                   x86/ioport.o   \
                   x86/pmtimer.o  \
@@ -115,10 +114,12 @@ X86_COMMON_OBJS = ns16550.o      \
 X86_OBJS = $(X86_COMMON_OBJS)  \
            x86/apinit.o        \
            x86/apstart.o       \
+           x86/archsup.o       \
 
 X64_OBJS = $(X86_COMMON_OBJS)  \
            x64/apinit.o        \
            x64/apstart.o       \
+           x64/archsup.o       \
 
 EXTRA_SRC_DIRS = x86 x64 armv7 armv6
 

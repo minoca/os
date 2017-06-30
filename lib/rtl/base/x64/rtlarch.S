@@ -515,7 +515,7 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION(RtlMemoryBarrier)
-    lock orq $0, (%esp)
+    lock orq $0, (%rsp)
     ret
 
 END_FUNCTION(RtlMemoryBarrier)

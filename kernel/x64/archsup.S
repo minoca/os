@@ -1437,6 +1437,8 @@ Return Value:
 
 FUNCTION(ArReadTimeStampCounter)
     rdtsc                       # Store the timestamp counter in EDX:EAX.
+    shlq    $32, %rdx           # Shift rdx into its high word.
+    orq     %rdx, %rax          # OR rdx into rax.
     ret                         # And return!
 
 END_FUNCTION(ArReadTimeStampCounter)

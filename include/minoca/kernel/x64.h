@@ -97,8 +97,8 @@ Author:
 
 #define X64_SELF_MAP_INDEX (X64_PTE_COUNT - 2)
 
-#define X64_CANONICAL_HIGH 0xFFFF800000000000
-#define X64_CANONICAL_LOW  0x00007FFFFFFFFFFF
+#define X64_CANONICAL_HIGH 0xFFFF800000000000ULL
+#define X64_CANONICAL_LOW  0x00007FFFFFFFFFFFULL
 
 //
 // ------------------------------------------------------ Data Type Definitions

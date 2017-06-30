@@ -43,48 +43,55 @@ Environment:
 //
 
 #define X64_PML4T \
-    ((PPTE)((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) + \
-            (X64_SELF_MAP_INDEX << X64_PDPE_SHIFT) + \
-            (X64_SELF_MAP_INDEX << X64_PDE_SHIFT) + \
-            (X64_SELF_MAP_INDEX << X64_PTE_SHIFT)))
+    ((PPTE)(X64_CANONICAL_HIGH | \
+            ((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) + \
+             (X64_SELF_MAP_INDEX << X64_PDPE_SHIFT) + \
+             (X64_SELF_MAP_INDEX << X64_PDE_SHIFT) + \
+             (X64_SELF_MAP_INDEX << X64_PTE_SHIFT))))
 
 //
 // This macro gets a page directory pointer.
 //
 
 #define X64_PDPT(_VirtualAddress) \
-    ((PPTE)((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) + \
-            (X64_SELF_MAP_INDEX << X64_PDPE_SHIFT) + \
-            (X64_SELF_MAP_INDEX << X64_PDE_SHIFT) + \
-            (((UINTN)(_VirtualAddress) & X64_PDPE_MASK) >> (2 * X64_PTE_BITS))))
+    ((PPTE)(X64_CANONICAL_HIGH | \
+            ((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) + \
+             (X64_SELF_MAP_INDEX << X64_PDPE_SHIFT) + \
+             (X64_SELF_MAP_INDEX << X64_PDE_SHIFT) + \
+             (((UINTN)(_VirtualAddress) & X64_PML4E_MASK) >> \
+              (3 * X64_PTE_BITS)))))
 
 //
 // This macro gets a page directory.
 //
 
 #define X64_PDT(_VirtualAddress) \
-    ((PPTE)((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) + \
-            (X64_SELF_MAP_INDEX << X64_PDPE_SHIFT) + \
-            (((UINTN)(_VirtualAddress) & (X64_PDPE_MASK | X64_PDE_MASK)) >> \
-             X64_PTE_BITS)))
+    ((PPTE)(X64_CANONICAL_HIGH | \
+            ((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) + \
+             (X64_SELF_MAP_INDEX << X64_PDPE_SHIFT) + \
+             (((UINTN)(_VirtualAddress) & (X64_PML4E_MASK | X64_PDPE_MASK)) >> \
+              (2 * X64_PTE_BITS)))))
 //
 // This macro gets a bottom level page table.
 //
 
 #define X64_PT(_VirtualAddress) \
-    ((PPTE)((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) + \
-            ((UINTN)(_VirtualAddress) & \
-             (X64_PDPE_MASK | X64_PDE_MASK | X64_PTE_MASK))))
+    ((PPTE)(X64_CANONICAL_HIGH | \
+            ((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) + \
+             (((UINTN)(_VirtualAddress) & \
+              (X64_PML4E_MASK | X64_PDPE_MASK | X64_PDE_MASK)) >> \
+              X64_PTE_BITS))))
 
 //
 // This macro gets a page table at any level.
 //
 
-#define X64_SELF_MAP(_PdpIndex, _PdIndex, _PtIndex)     \
-    ((PPTE)((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) +   \
-            ((_PdpIndex) << X64_PDPE_SHIFT) +           \
-            ((_PdIndex) << X64_PDE_SHIFT) +             \
-            ((_PtIndex) << X64_PTE_SHIFT)))
+#define X64_SELF_MAP(_Pml4Index, _PdpIndex, _PdIndex)     \
+    ((PPTE)(X64_CANONICAL_HIGH |                          \
+            ((X64_SELF_MAP_INDEX << X64_PML4E_SHIFT) +    \
+             ((_Pml4Index) << X64_PDPE_SHIFT) +           \
+             ((_PdpIndex) << X64_PDE_SHIFT) +             \
+             ((_PdIndex) << X64_PTE_SHIFT))))
 
 //
 // These macros evaluate to pointers to exact table entries for a particular
@@ -430,7 +437,7 @@ Return Value:
             break;
         }
 
-        if ((*Table & X86_PTE_WRITABLE) == 0) {
+        if ((Writable != NULL) && ((*Table & X86_PTE_WRITABLE) == 0)) {
             *Writable = FALSE;
         }
 

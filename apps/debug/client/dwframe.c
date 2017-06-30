@@ -1311,7 +1311,7 @@ Return Value:
         Value = 0;
         Status = DwarfTargetRead(Context,
                                  Cfa + Rule->Operand,
-                                 AddressSize,
+                                 DwarfGetNativeSize(Context),
                                  0,
                                  &Value);
 
@@ -1393,7 +1393,7 @@ Return Value:
         if (Rule->Type == DwarfFrameExpression) {
             Status = DwarfTargetRead(Context,
                                      Location.Value.Address,
-                                     AddressSize,
+                                     DwarfGetNativeSize(Context),
                                      0,
                                      &Value);
 

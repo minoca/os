@@ -1656,8 +1656,8 @@ Return Value:
         break;
 
     case MACHINE_TYPE_X64:
-        Status = EINVAL;
-        goto StackUnwindEnd;
+        Status = EOF;
+        break;
 
     default:
 

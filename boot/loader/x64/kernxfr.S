@@ -123,6 +123,8 @@ Return Value:
 FUNCTION(BoTransferToKernelAsm)
     movq    %rdx, %rsp          # Set up the new stack.
     andq    $~0xF, %rsp         # Align stack down to 16 bytes.
+    movl    $0, %ebp            # Zero out the base pointer.
+    pushq   %rbp                # Push a dummy return address.
     jmp     *%rsi               # Launch off to the kernel.
 
     ##

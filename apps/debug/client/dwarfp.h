@@ -1528,3 +1528,25 @@ Return Value:
 
 --*/
 
+ULONG
+DwarfGetNativeSize (
+    PDWARF_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the native machine word size.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+Return Value:
+
+    Returns the number of bytes in a machine word: usually 4 for 32-bit
+    machines and 8 for 64-bit machines.
+
+--*/
+

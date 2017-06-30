@@ -1032,6 +1032,8 @@ X86_SPARSE_INSTRUCTION_DEFINITION DbgX86TwoByteInstructions[] = {
     {0, 0xAE, {"GRP15", "M", "", "", 15}},       /* Group 15 */
     {0, 0xAF, {"imul", "Gv", "Ev", "", 0}},
 
+    {0xF3, 0xAE, {"GRP15A", "Ry", "", "", 0x15A}},  /* Group 15A */
+
     {0, 0xB0, {"cmpxchg", "Eb", "Gb", "", 0}},
     {0, 0xB1, {"cmpxchg", "Ev", "Gv", "", 0}},
     {0, 0xB2, {"lss", "Gz", "Mp", "", 0}},
@@ -1229,6 +1231,9 @@ X86_OPCODE_GROUP DbgX86OpcodeGroups[] = {
 
     {15, {"fxsave", "fxrstor", "ldmxcsr", "stmxcsr",
           "xsave", "xrstor", "xsaveopt", "clflush"}},
+
+    {0x15A, {"rdfsbase", "rdgsbase", "wrfsbase", "wrgsbase",
+             "ptwrite", "(bad)", "(bad)", "(bad)"}},
 
     {16, {"prefetchnta", "prefetcht0", "prefetcht1", "prefetcht2",
           "hint", "hint", "hint", "hint"}},

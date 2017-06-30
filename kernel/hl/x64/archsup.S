@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -13,12 +13,12 @@ Module Name:
 
 Abstract:
 
-    This module implements x86 processor architecture features not
+    This module implements AMD64 processor architecture features not
     implementable in C.
 
 Author:
 
-    Chris Stevens 26-Feb-2014
+    Evan Green 29-Jun-2017
 
 Environment:
 
@@ -30,17 +30,13 @@ Environment:
 ## ------------------------------------------------------------------ Includes
 ##
 
-#include <minoca/kernel/x86.inc>
+#include <minoca/kernel/x64.inc>
 
 ##
 ## ---------------------------------------------------------------------- Code
 ##
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-
-.text
+ASSEMBLY_FILE_HEADER
 
 ##
 ## KERNEL_API
@@ -79,6 +75,8 @@ Return Value:
 
 PROTECTED_FUNCTION(HlQueryProcessorCounter)
     rdtsc                       # Store the timestamp counter.
+    shlq    $32, %rdx           # Shift rdx into its high word.
+    orq     %rdx, %rax          # OR rdx into rax.
     ret                         # And return!
 
 END_FUNCTION(HlQueryProcessorCounter)

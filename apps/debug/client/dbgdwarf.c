@@ -312,6 +312,52 @@ Return Value:
     return DbgGetRegisterName(Symbols->Machine, Register);
 }
 
+ULONG
+DwarfGetNativeSize (
+    PDWARF_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the native machine word size.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+Return Value:
+
+    Returns the number of bytes in a machine word: usually 4 for 32-bit
+    machines and 8 for 64-bit machines.
+
+--*/
+
+{
+
+    PDEBUG_SYMBOLS Symbols;
+
+    Symbols = (((PDEBUG_SYMBOLS)Context) - 1);
+    switch (Symbols->Machine) {
+    case ImageMachineTypeX86:
+    case ImageMachineTypeArm32:
+        return 4;
+
+    case ImageMachineTypeX64:
+    case ImageMachineTypeArm64:
+        return 8;
+
+    default:
+
+        assert(FALSE);
+
+        break;
+    }
+
+    return 0;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
