@@ -366,7 +366,19 @@ Return Value:
 
     CkPushString(Vm, "args", 4);
     if (ArgumentCount == 1) {
-        CkPushValue(Vm, 1);
+        if (CkIsList(Vm, 1)) {
+            CkPushValue(Vm, 1);
+
+        //
+        // If the argument isn't a list, create a list and wrap the argument
+        // around it, so things like ChildProcess("ls -la") work.
+        //
+
+        } else {
+            CkPushList(Vm);
+            CkPushValue(Vm, 1);
+            CkListSet(Vm, -2, 0);
+        }
 
     } else {
         CkPushNull(Vm);

@@ -91,7 +91,7 @@ command (
 
 Routine Description:
 
-    This routine implements the config command.
+    This routine implements the archive command.
 
 Arguments:
 

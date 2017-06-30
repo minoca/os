@@ -2472,7 +2472,8 @@ class CpioArchive {
         name - Supplies the path name of the file to add.
 
         archiveName - Supplies the name that should go in the archive. Supply
-            null to just use the same name as the source.
+            null to just use the same name as the source. Supply "" to add a
+            directory as the root of the archive.
 
         recursive - Supplies a boolean indicating whether to include files
             within a specified directory or not.
@@ -2500,33 +2501,39 @@ class CpioArchive {
             archiveName = name;
         }
 
-        member = this.createMember(name, archiveName, null);
+        if (archiveName != "") {
+            member = this.createMember(name, archiveName, null);
 
-        //
-        // See if the caller wants to filter this element.
-        //
+            //
+            // See if the caller wants to filter this element.
+            //
 
-        if (filter) {
-            member = filter(name, member);
-            if (member == null) {
-                return;
+            if (filter) {
+                member = filter(name, member);
+                if (member == null) {
+                    return;
+                }
             }
-        }
 
-        if ((os.isfile)(name)) {
-            file = open(name, "rb");
-        }
+            if ((os.isfile)(name)) {
+                file = open(name, "rb");
+            }
 
-        this.addMember(member, file);
-        if (file) {
-            file.close();
+            this.addMember(member, file);
+            if (file) {
+                file.close();
+            }
         }
 
         if (recursive && (os.isdir)(name)) {
             contents = (os.listdir)(name);
+            if (archiveName != "") {
+                archiveName += "/";
+            }
+
             for (element in contents) {
                 this.add(name + "/" + element,
-                         archiveName + "/" + element,
+                         archiveName + element,
                          recursive,
                          filter);
             }

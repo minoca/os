@@ -142,6 +142,8 @@ class Archive {
 
         this.file = file;
         this.mode = mode;
+        this.cpio = null;
+        this.lzma = null;
         this.reset();
         return this;
     }
@@ -262,14 +264,6 @@ class Archive {
 
         archiveName - Supplies the name that should go in the archive. Supply
             null to just use the same name as the source.
-
-        recursive - Supplies a boolean indicating whether to include files
-            within a specified directory or not.
-
-        filter - Supplies an optional function that may modify or remove each
-            member being added to the archive. If the routine returns the
-            member, it is added (potentially modified). If it returns null,
-            the member is abandoned and not added to the archive.
 
     Return Value:
 
@@ -415,13 +409,13 @@ class Archive {
 
     {
 
-        var cpio = this.cpio;
+        var cpioArchive = this.cpio;
         var file = this.file;
         var lzma = this.lzma;
         var mode = this.mode;
 
-        if (cpio) {
-            cpio.close();
+        if (cpioArchive) {
+            cpioArchive.close();
             this.cpio = null;
         }
 

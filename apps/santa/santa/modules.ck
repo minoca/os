@@ -64,6 +64,7 @@ _enumerateModules (
 var builtinCommands = [
     ["archive", "Low-level archive creation/extraction"],
     ["config", "Get or set configuration parameters"],
+    ["convert-archive", "Converts from an alternate archive (eg .tar.gz)"],
     ["new-realm", "Create a new working environment"],
     ["del-realm", "Destroy and delete a realm"],
 ];

@@ -249,17 +249,15 @@ Return Value:
         Shell = getenv("SHELL");
         if (Shell != NULL) {
             ShellArguments[1] = "-c";
-            ShellArguments[2] = CkpJoinArguments(Attributes->Arguments, ' ');
 
         } else {
             Shell = getenv("ComSpec");
             if (Shell == NULL) {
                 Shell = "cmd.exe";
             }
-
-            ShellArguments[2] = CkpEscapeArguments(Attributes->Arguments);
         }
 
+        ShellArguments[2] = CkpJoinArguments(Attributes->Arguments, ' ');
         Executable = Shell;
         ShellArguments[0] = Shell;
         CommandLine = CkpEscapeArguments(ShellArguments);

@@ -269,26 +269,25 @@ Return Value:
     }
 
     if (((os.islink)(filepath)) || (!(os.isdir)(filepath))) {
-        return (os.unlink)(filepath);
-    }
-
-    contents = os.listdir(filepath);
-    for (element in contents) {
-        if ((!(os.islink)(filepath)) && ((os.isdir)(filepath))) {
-            _rmtree("/".join([filepath, element]));
-        }
-
         if (verbose) {
             Core.print("Removing %s" % filepath);
         }
 
-        //
-        // TODO: Uncomment this to make it real.
-        //
-
-//        (os.unlink)(filepath);
+        return (os.unlink)(filepath);
     }
 
+    contents = (os.listdir)(filepath);
+    for (element in contents) {
+        if ((!(os.islink)(filepath)) && ((os.isdir)(filepath))) {
+            _rmtree("/".join([filepath, element]));
+        }
+    }
+
+    if (verbose) {
+        Core.print("Removing %s" % filepath);
+    }
+
+    (os.rmdir)(filepath);
     return;
 }
 

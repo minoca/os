@@ -522,6 +522,10 @@ Return Value:
 
     for (index in 0..shortopts.length()) {
         if ((opt == shortopts[index]) && (opt != ":")) {
+            if (index == shortopts.length() - 1) {
+                return false;
+            }
+
             return shortopts[index + 1] == ":";
         }
     }

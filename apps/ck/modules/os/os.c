@@ -33,6 +33,7 @@ Environment:
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "osp.h"
 
@@ -53,12 +54,18 @@ CkpOsExit (
     PCK_VM Vm
     );
 
+VOID
+CkpOsGetpid (
+    PCK_VM Vm
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 CK_VARIABLE_DESCRIPTION CkOsModuleValues[] = {
     {CkTypeFunction, "exit", CkpOsExit, 1},
+    {CkTypeFunction, "getpid", CkpOsGetpid, 0},
     {CkTypeInvalid, NULL, NULL, 0}
 };
 
@@ -168,6 +175,33 @@ Return Value:
 
     exit(CkGetInteger(Vm, 1));
     CkReturnInteger(Vm, -1LL);
+    return;
+}
+
+VOID
+CkpOsGetpid (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current process identifier.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    This routine does not return. The process exits.
+
+--*/
+
+{
+
+    CkReturnInteger(Vm, getpid());
     return;
 }
 

@@ -118,6 +118,11 @@ CkpOsIsSymbolicLink (
     );
 
 VOID
+CkpOsRmdir (
+    PCK_VM Vm
+    );
+
+VOID
 CkpOsUnlink (
     PCK_VM Vm
     );
@@ -268,6 +273,7 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "isfile", CkpOsIsFile, 1},
     {CkTypeFunction, "isdir", CkpOsIsDirectory, 1},
     {CkTypeFunction, "islink", CkpOsIsSymbolicLink, 1},
+    {CkTypeFunction, "rmdir", CkpOsRmdir, 1},
     {CkTypeFunction, "unlink", CkpOsUnlink, 1},
     {CkTypeFunction, "link", CkpOsLink, 2},
     {CkTypeFunction, "symlink", CkpOsSymlink, 2},
@@ -860,6 +866,46 @@ Return Value:
     }
 
     CkReturnInteger(Vm, Result);
+    return;
+}
+
+VOID
+CkpOsRmdir (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to remove a presumably empty directory.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    if (rmdir(Path) != 0) {
+        CkpOsRaiseError(Vm);
+
+    } else {
+        CkReturnInteger(Vm, 0);
+    }
+
     return;
 }
 
