@@ -1514,10 +1514,6 @@ Return Value:
     ClpStructTmToCalendarTime(&CalendarTime, (struct tm *)Time);
     ClpInitializeTimeZoneData();
     Result = RtlFormatDate(Buffer, BufferSize, (PSTR)Format, &CalendarTime);
-    if (Result != 0) {
-        return Result - 1;
-    }
-
     return Result;
 }
 
