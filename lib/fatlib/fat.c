@@ -3109,6 +3109,8 @@ Return Value:
     ULONG EntriesRead;
     ULONG EntriesWritten;
     ULONGLONG EntryOffset;
+    USHORT FatDate;
+    USHORT FatTime;
     PFAT_VOLUME FatVolume;
     ULONGLONG FileSize;
     UCHAR NewChecksum;
@@ -3215,15 +3217,18 @@ Return Value:
     }
 
     FatpConvertSystemTimeToFatTime(&(NewProperties->ModifiedTime),
-                                   &(DirectoryEntry.LastModifiedDate),
-                                   &(DirectoryEntry.LastModifiedTime),
+                                   &FatDate,
+                                   &FatTime,
                                    NULL);
 
+    DirectoryEntry.LastModifiedDate = FatDate;
+    DirectoryEntry.LastModifiedTime = FatTime;
     FatpConvertSystemTimeToFatTime(&(NewProperties->AccessTime),
-                                   &(DirectoryEntry.LastAccessDate),
+                                   &FatDate,
                                    NULL,
                                    NULL);
 
+    DirectoryEntry.LastAccessDate = FatDate;
     if ((NewProperties->Permissions &
          (FILE_PERMISSION_USER_WRITE | FILE_PERMISSION_GROUP_WRITE |
           FILE_PERMISSION_OTHER_WRITE)) == 0) {

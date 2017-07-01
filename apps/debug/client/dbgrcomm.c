@@ -937,7 +937,7 @@ Return Value:
 
     PSPECIAL_REGISTERS_UNION Original;
     PVOID Register;
-    PULONG Register2;
+    PVOID Register2;
     ULONG RegisterSize;
     PSTR RegisterString;
     INT Result;
@@ -1167,7 +1167,9 @@ Return Value:
             Value = 0;
             memcpy(&Value, Register, RegisterSize);
             if (Register2 != NULL) {
-                DbgOut("%I64x,%x\n", Value, *Register2);
+                Value2 = 0;
+                memcpy(&Value2, Register2, sizeof(USHORT));
+                DbgOut("%I64x,%x\n", Value, (USHORT)Value2);
 
             } else {
                 DbgOut("%I64x\n", Value);

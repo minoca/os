@@ -362,6 +362,7 @@ Return Value:
     ULONG SearchIndex;
     KSTATUS Status;
     PCSTR String;
+    ULONG StringOffset;
     PSTR StringsBase;
     ULONG StringsSize;
     PTIME_ZONE Zone;
@@ -543,12 +544,13 @@ Return Value:
                                    StringsSize,
                                    &CurrentStringsSize,
                                    ZoneName,
-                                   &(NewZone->Name));
+                                   &StringOffset);
 
     if (!KSUCCESS(Status)) {
         goto FilterTimeZoneDataEnd;
     }
 
+    NewZone->Name = StringOffset;
     NewZone->EntryIndex = 0;
     NewZone->EntryCount = ZoneEntryCount;
 
@@ -570,12 +572,13 @@ Return Value:
                                        StringsSize,
                                        &CurrentStringsSize,
                                        String,
-                                       &(NewZoneEntry->Format));
+                                       &StringOffset);
 
         if (!KSUCCESS(Status)) {
             goto FilterTimeZoneDataEnd;
         }
 
+        NewZoneEntry->Format = StringOffset;
         if (ZoneEntry->Rules == -1) {
             continue;
         }
@@ -616,12 +619,13 @@ Return Value:
                                                StringsSize,
                                                &CurrentStringsSize,
                                                String,
-                                               &(NewRule->Letters));
+                                               &StringOffset);
 
                 if (!KSUCCESS(Status)) {
                     goto FilterTimeZoneDataEnd;
                 }
 
+                NewRule->Letters = StringOffset;
                 CurrentRuleCount += 1;
             }
         }

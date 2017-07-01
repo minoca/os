@@ -1077,8 +1077,11 @@ Return Value:
         if ((RegisterNumber >= ArmRegisterR0) &&
             (RegisterNumber <= ArmRegisterR15)) {
 
-            Registers32 = &(Registers->Arm.R0);
-            Value = Registers32[RegisterNumber];
+            Value = 0;
+            Registers32 = (PVOID)&(Registers->Arm.R0) +
+                          (RegisterNumber * sizeof(ULONG));
+
+            memcpy(&Value, Registers32, sizeof(ULONG));
 
         } else if ((RegisterNumber >= ArmRegisterD0) &&
                    (RegisterNumber <= ArmRegisterD31)) {
@@ -1346,8 +1349,10 @@ Return Value:
         if ((RegisterNumber >= ArmRegisterR0) &&
             (RegisterNumber <= ArmRegisterR15)) {
 
-            Registers32 = &(Registers->Arm.R0);
-            Registers32[RegisterNumber] = Value;
+            Registers32 = (PVOID)&(Registers->Arm.R0) +
+                          (RegisterNumber * sizeof(ULONG));
+
+            memcpy(Registers32, &Value, sizeof(ULONG));
 
         } else if ((RegisterNumber >= ArmRegisterD0) &&
                    (RegisterNumber <= ArmRegisterD31)) {

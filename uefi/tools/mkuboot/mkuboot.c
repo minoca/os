@@ -733,6 +733,7 @@ Return Value:
 {
 
     size_t BytesWritten;
+    UINT32 Crc32;
     int Result;
     UBOOT_HEADER UBootHeader;
 
@@ -750,9 +751,9 @@ Return Value:
     UBootHeader.EntryPoint = MupByteSwap32(Context->EntryPoint);
     EfiCoreCalculateCrc32(Context->InputFileBuffer,
                           Context->InputFileSize,
-                          &(UBootHeader.DataCrc32));
+                          &Crc32);
 
-    UBootHeader.DataCrc32 = MupByteSwap32(UBootHeader.DataCrc32);
+    UBootHeader.DataCrc32 = MupByteSwap32(Crc32);
     UBootHeader.OperatingSystem = UBOOT_OS_LINUX;
     UBootHeader.Architecture = UBOOT_ARCHITECTURE_ARM;
     UBootHeader.ImageType = UBOOT_IMAGE_KERNEL;
@@ -763,9 +764,9 @@ Return Value:
 
     EfiCoreCalculateCrc32(&UBootHeader,
                           sizeof(UBOOT_HEADER),
-                          &(UBootHeader.HeaderCrc32));
+                          &Crc32);
 
-    UBootHeader.HeaderCrc32 = MupByteSwap32(UBootHeader.HeaderCrc32);
+    UBootHeader.HeaderCrc32 = MupByteSwap32(Crc32);
 
     //
     // Write out the U-Boot header.

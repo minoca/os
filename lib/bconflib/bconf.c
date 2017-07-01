@@ -369,6 +369,7 @@ Return Value:
     BOOT_CONFIGURATION_HEADER Header;
     PVOID NewFileData;
     KSTATUS Status;
+    ULONG StringIndex;
     PVOID StringTable;
     ULONG StringTableCapacity;
     ULONG StringTableSize;
@@ -431,7 +432,7 @@ Return Value:
 
         Status = BcpAddToStringTable(Context,
                                      Entry->Name,
-                                     &(FileEntry->Name),
+                                     &StringIndex,
                                      &StringTable,
                                      &StringTableSize,
                                      &StringTableCapacity);
@@ -440,9 +441,10 @@ Return Value:
             goto WriteBootConfigurationFileEnd;
         }
 
+        FileEntry->Name = StringIndex;
         Status = BcpAddToStringTable(Context,
                                      Entry->LoaderArguments,
-                                     &(FileEntry->LoaderArguments),
+                                     &StringIndex,
                                      &StringTable,
                                      &StringTableSize,
                                      &StringTableCapacity);
@@ -451,9 +453,10 @@ Return Value:
             goto WriteBootConfigurationFileEnd;
         }
 
+        FileEntry->LoaderArguments = StringIndex;
         Status = BcpAddToStringTable(Context,
                                      Entry->KernelArguments,
-                                     &(FileEntry->KernelArguments),
+                                     &StringIndex,
                                      &StringTable,
                                      &StringTableSize,
                                      &StringTableCapacity);
@@ -462,9 +465,10 @@ Return Value:
             goto WriteBootConfigurationFileEnd;
         }
 
+        FileEntry->KernelArguments = StringIndex;
         Status = BcpAddToStringTable(Context,
                                      Entry->LoaderPath,
-                                     &(FileEntry->LoaderPath),
+                                     &StringIndex,
                                      &StringTable,
                                      &StringTableSize,
                                      &StringTableCapacity);
@@ -473,9 +477,10 @@ Return Value:
             goto WriteBootConfigurationFileEnd;
         }
 
+        FileEntry->LoaderPath = StringIndex;
         Status = BcpAddToStringTable(Context,
                                      Entry->KernelPath,
-                                     &(FileEntry->KernelPath),
+                                     &StringIndex,
                                      &StringTable,
                                      &StringTableSize,
                                      &StringTableCapacity);
@@ -484,9 +489,10 @@ Return Value:
             goto WriteBootConfigurationFileEnd;
         }
 
+        FileEntry->KernelPath = StringIndex;
         Status = BcpAddToStringTable(Context,
                                      Entry->SystemPath,
-                                     &(FileEntry->SystemPath),
+                                     &StringIndex,
                                      &StringTable,
                                      &StringTableSize,
                                      &StringTableCapacity);
@@ -494,6 +500,8 @@ Return Value:
         if (!KSUCCESS(Status)) {
             goto WriteBootConfigurationFileEnd;
         }
+
+        FileEntry->SystemPath = StringIndex;
 
         //
         // If this is the default or boot once entries, fill in the ID now.
