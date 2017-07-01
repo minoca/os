@@ -26,39 +26,39 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 #include "smp.inc"
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
 .equ RK32_GIC_CPU_INTERFACE_BASE, 0xFFC02000
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## .globl allows these labels to be visible to the linker.
-##
+//
+// .globl allows these labels to be visible to the linker.
+//
 
 .globl EfipRk32ProcessorStartup
 .globl EfipRk32ParkingLoop
 .globl EfipRk32ParkingLoopEnd
 
-##
-## VOID
-## EfipRk32SendEvent (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipRk32SendEvent (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -84,12 +84,12 @@ FUNCTION EfipRk32SendEvent
 
 END_FUNCTION EfipRk32SendEvent
 
-##
-## VOID
-## EfipRk32ProcessorStartup (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipRk32ProcessorStartup (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -112,16 +112,16 @@ Return Value:
 .arm
 EfipRk32ProcessorStartup:
 
-    ##
-    ## Perform initialization steps that must be taken on each core.
-    ##
+    //
+    // Perform initialization steps that must be taken on each core.
+    //
 
     RK32_SMP_INIT
 
-    ##
-    ## Initialize the local GIC CPU interface by setting the lowest priority
-    ## and enabling interrupts.
-    ##
+    //
+    // Initialize the local GIC CPU interface by setting the lowest priority
+    // and enabling interrupts.
+    //
 
     ldr     %r0, =RK32_GIC_CPU_INTERFACE_BASE
     mov     %r1, #0x3
@@ -131,9 +131,9 @@ EfipRk32ProcessorStartup:
     mov     %r1, #0x1
     str     %r1, [%r0]
 
-    ##
-    ## Move to the parking location for this processor.
-    ##
+    //
+    // Move to the parking location for this processor.
+    //
 
     mov     %r3, #0                           @ Clear out R3.
     ldr     %r2, =EfiRk32ProcessorId          @ Get the processor ID address.
@@ -147,13 +147,13 @@ EfipRk32ProcessorStartup:
 
 .ltorg
 
-##
-## VOID
-## EfipRk32ParkingLoop (
-##     UINT32 ProcessorId,
-##     VOID *ParkingLocation
-##     )
-##
+//
+// VOID
+// EfipRk32ParkingLoop (
+//     UINT32 ProcessorId,
+//     VOID *ParkingLocation
+//     )
+//
 
 /*++
 
@@ -188,15 +188,15 @@ EfipRk32ParkingLoopJump:
     DSB                                     @ One final breath, then...
     bx      %r2                             @ Jump head first into the abyss.
 
-##
-## Dump any literals being saved up.
-##
+//
+// Dump any literals being saved up.
+//
 
 .ltorg
 
 EfipRk32ParkingLoopEnd:
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

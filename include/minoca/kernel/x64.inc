@@ -145,10 +145,10 @@ Environment:
 
 #elif defined(__ELF__)
 
-##
-## This macro defines a function, callable from C code in any module and
-## capable of being overridden by other functions.
-##
+//
+// This macro defines a function, callable from C code in any module and
+// capable of being overridden by other functions.
+//
 
 #define EXPORTED_FUNCTION(_Name) \
     .func _Name ; \
@@ -159,19 +159,19 @@ Environment:
     .global _Name ; \
     _Name:
 
-##
-## This macro defines a function, callable from C code in the current module
-## only.
-##
+//
+// This macro defines a function, callable from C code in the current module
+// only.
+//
 
 #define FUNCTION(_Name) \
     .hidden _Name ; \
     EXPORTED_FUNCTION(_Name)
 
-##
-## This macro defines a function, callable from C code in any module but always
-## called locally in the current module.
-##
+//
+// This macro defines a function, callable from C code in any module but always
+// called locally in the current module.
+//
 
 #define PROTECTED_FUNCTION(_Name) \
     .protected _Name ; \
@@ -206,11 +206,11 @@ Environment:
 
 #endif
 
-##
-## This macro sets the call frame information so that the debugger can unwind
-## a trap frame. It assumes the CFA register is esp, and sets the CFA to the
-## base of the trap frame just to make things easier.
-##
+//
+// This macro sets the call frame information so that the debugger can unwind
+// a trap frame. It assumes the CFA register is esp, and sets the CFA to the
+// base of the trap frame just to make things easier.
+//
 
 #define CFI_TRAP_FRAME_PUSHED           \
     .cfi_def_cfa_offset 0 ;             \
@@ -233,11 +233,11 @@ Environment:
     .cfi_offset %rsp, TRAP_RSP ;        \
     .cfi_offset %rflags, TRAP_RFLAGS
 
-##
-## This macro sets the call frame information just after a trap frame was
-## restored. It indicates to the debugger that most registers are now in their
-## proper place. It assumes the CFA register is esp+0.
-##
+//
+// This macro sets the call frame information just after a trap frame was
+// restored. It indicates to the debugger that most registers are now in their
+// proper place. It assumes the CFA register is esp+0.
+//
 
 #define CFI_TRAP_FRAME_POPPED \
     .cfi_same_value %rax ; \
@@ -257,9 +257,9 @@ Environment:
     .cfi_same_value %r15 ; \
     .cfi_offset %rip, 0
 
-##
-## Define .cfi directives, macroed so they can be excised if unneeded.
-##
+//
+// Define .cfi directives, macroed so they can be excised if unneeded.
+//
 
 #define CFI_DEF_CFA(_Register, _Offset) .cfi_def_cfa _Register, _Offset
 #define CFI_DEF_CFA_OFFSET(_Offset) .cfi_def_cfa_offset _Offset

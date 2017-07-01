@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## -------------------------------------------------------------------- Globals
-##
+//
+// -------------------------------------------------------------------- Globals
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
@@ -58,14 +58,14 @@ Environment:
 .hidden HlVectorStart
 .hidden HlVectorEnd
 
-##
-## VOID
-## ArBreakExceptionHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// ArBreakExceptionHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -105,12 +105,12 @@ FUNCTION(ArBreakExceptionHandlerAsm)
 
 END_FUNCTION(ArBreakExceptionHandlerAsm)
 
-##
-## VOID
-## KdNmiHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdNmiHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -142,14 +142,14 @@ FUNCTION(KdNmiHandlerAsm)
 
 END_FUNCTION(KdNmiHandlerAsm)
 
-##
-## VOID
-## ArSingleStepExceptionHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// ArSingleStepExceptionHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -187,14 +187,14 @@ FUNCTION(ArSingleStepExceptionHandlerAsm)
 
 END_FUNCTION(ArSingleStepExceptionHandlerAsm)
 
-##
-## VOID
-## KdDebugServiceHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// KdDebugServiceHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -238,14 +238,14 @@ FUNCTION(KdDebugServiceHandlerAsm)
 
 END_FUNCTION(KdDebugServiceHandlerAsm)
 
-##
-## VOID
-## ArDivideByZeroExceptionHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// ArDivideByZeroExceptionHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -282,14 +282,14 @@ FUNCTION(ArDivideByZeroExceptionHandlerAsm)
 
 END_FUNCTION(ArDivideByZeroExceptionHandlerAsm)
 
-##
-## VOID
-## ArFpuAccessExceptionHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// ArFpuAccessExceptionHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -327,12 +327,12 @@ FUNCTION(ArFpuAccessExceptionHandlerAsm)
 
 END_FUNCTION(ArFpuAccessExceptionHandlerAsm)
 
-##
-## VOID
-## ArDoubleFaultHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArDoubleFaultHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -359,14 +359,14 @@ FUNCTION(ArDoubleFaultHandlerAsm)
 
 END_FUNCTION(ArDoubleFaultHandlerAsm)
 
-##
-## VOID
-## ArProtectionFaultHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// ArProtectionFaultHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -404,14 +404,14 @@ FUNCTION(ArProtectionFaultHandlerAsm)
 
 END_FUNCTION(ArProtectionFaultHandlerAsm)
 
-##
-## VOID
-## ArMathFaultHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// ArMathFaultHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -448,14 +448,14 @@ FUNCTION(ArMathFaultHandlerAsm)
 
 END_FUNCTION(ArMathFaultHandlerAsm)
 
-##
-## VOID
-## ArTrapSystemCallHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// ArTrapSystemCallHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -481,17 +481,17 @@ Return Value:
 
 FUNCTION(ArTrapSystemCallHandlerAsm)
 
-    ##
-    ## ESP is currently pointing at the processor double fault stack, which
-    ## is also the main TSS. Switch to the thread stack.
-    ##
+    //
+    // ESP is currently pointing at the processor double fault stack, which
+    // is also the main TSS. Switch to the thread stack.
+    //
 
     movl    TSS_ESP0(%esp), %esp    # Load the stack.
     sti                             # Re-enable interrupts.
 
-    ##
-    ## Fake a user mode exception by pushing SS, Esp, Eflags, CS and Eip.
-    ##
+    //
+    // Fake a user mode exception by pushing SS, Esp, Eflags, CS and Eip.
+    //
 
     pushl   $USER_DS                # Push user mode SS.
     pushl   %eax                    # Push user ESP supplied by sysenter.
@@ -506,14 +506,14 @@ FUNCTION(ArTrapSystemCallHandlerAsm)
 
 END_FUNCTION(ArTrapSystemCallHandlerAsm)
 
-##
-## INTN
-## ArSystemCallHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// INTN
+// ArSystemCallHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -548,21 +548,21 @@ ArSystemCallHandlerAfterTrapSave:
     mov     TRAP_ECX(%ebx), %ecx    # Get ecx, containing the call number.
     mov     TRAP_EDX(%ebx), %edx    # Get edx, containing the parameter.
 
-    ##
-    ## Dispatching the signal takes the system call number, system call
-    ## parameter and trap frame as arguments. This means that the system call
-    ## number and parameter need to be saved across the call to
-    ## KeSystemCallHandler.
-    ##
+    //
+    // Dispatching the signal takes the system call number, system call
+    // parameter and trap frame as arguments. This means that the system call
+    // number and parameter need to be saved across the call to
+    // KeSystemCallHandler.
+    //
 
     pushl   %edx                    # Push system call parameter for dispatch.
     pushl   %ecx                    # Push system call number for dispatch.
 
-    ##
-    ## Push the parameters for the system call handler. The compiler is free to
-    ## modify the parameters on the stack in the callee, so this second push is
-    ## necessary.
-    ##
+    //
+    // Push the parameters for the system call handler. The compiler is free to
+    // modify the parameters on the stack in the callee, so this second push is
+    // necessary.
+    //
 
     pushl   %ebx                    # Push a pointer to the trap frame.
     pushl   %edx                    # Push system call parameter.
@@ -573,19 +573,19 @@ ArSystemCallHandlerAfterTrapSave:
     CFI_ADJUST_CFA_OFFSET(-12)      # Tell the debugger.
     movl    %eax, TRAP_EAX(%ebx)    # Save the return value in the trap frame.
 
-    ##
-    ## If a signal is pending, then go attempt to dispatch it as the trap frame
-    ## is already complete.
-    ##
+    //
+    // If a signal is pending, then go attempt to dispatch it as the trap frame
+    // is already complete.
+    //
 
     movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
     cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
     jnz     ArSystemCallHandlerExit
 
-    ##
-    ## Push the trap frame as the first parameter. The system call number and
-    ## system call parameter were saved on the stack earlier for this call.
-    ##
+    //
+    // Push the trap frame as the first parameter. The system call number and
+    // system call parameter were saved on the stack earlier for this call.
+    //
 
     pushl   %ebx                    # Push trap frame.
     CFI_ADJUST_CFA_OFFSET(4)        # Notify about the push.
@@ -603,12 +603,12 @@ ArSystemCallHandlerExit:
 
 END_FUNCTION(ArSystemCallHandlerAsm)
 
-##
-## INTN
-## ArSysenterHandlerAsm (
-##     VOID
-##     )
-##
+//
+// INTN
+// ArSysenterHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -631,19 +631,19 @@ Return Value:
 
 FUNCTION(ArSysenterHandlerAsm)
 
-    ##
-    ## ESP is currently pointing at the processor double fault stack, which
-    ## is also the main TSS. Switch to the thread stack.
-    ##
+    //
+    // ESP is currently pointing at the processor double fault stack, which
+    // is also the main TSS. Switch to the thread stack.
+    //
 
     movl    TSS_ESP0(%esp), %esp    # Load the stack.
 
-    ##
-    ## Make a fake trap frame but fill in the bare minimum: Eip and Esp.
-    ## These are needed so they can be saved if a signal is dispatched. CS is
-    ## also needed so kernel code can determine whether the trap frame is
-    ## from user or kernel mode.
-    ##
+    //
+    // Make a fake trap frame but fill in the bare minimum: Eip and Esp.
+    // These are needed so they can be saved if a signal is dispatched. CS is
+    // also needed so kernel code can determine whether the trap frame is
+    // from user or kernel mode.
+    //
 
     pushl   %eax                    # Save user ESP in trap frame.
     LoadKernelDataSegments          # Load kernel data segments (using EAX).
@@ -652,35 +652,35 @@ FUNCTION(ArSysenterHandlerAsm)
     movl    %ebx, TRAP_EIP(%esp)    # EBX contains the return address.
     movl    %esp, %ebx              # Save the trap frame in EBX.
 
-    ##
-    ## There's a trap frame at ebx, which is nice since it won't require
-    ## maintenance over all these upcoming push/pops of the stack.
-    ##
+    //
+    // There's a trap frame at ebx, which is nice since it won't require
+    // maintenance over all these upcoming push/pops of the stack.
+    //
 
     CFI_DEF_CFA(%ebx, 0)
     CFI_OFFSET(%eip, TRAP_EIP)
     CFI_OFFSET(%esp, TRAP_ESP)
 
-    ##
-    ## Move user DS (rather than user CS) into the trap frame to indicate
-    ## 1) this is a user mode trap frame and 2) it's incomplete.
-    ##
+    //
+    // Move user DS (rather than user CS) into the trap frame to indicate
+    // 1) this is a user mode trap frame and 2) it's incomplete.
+    //
 
     movl    $USER_DS, TRAP_CS(%ebx) # Indicate a user mode trap frame.
 
-    ##
-    ## Dispatching the signal takes the system call number, system call
-    ## parameter and trap frame as arguments. This means that the system call
-    ## number and parameter need to be saved across the call to
-    ## KeSystemCallHandler.
-    ##
+    //
+    // Dispatching the signal takes the system call number, system call
+    // parameter and trap frame as arguments. This means that the system call
+    // number and parameter need to be saved across the call to
+    // KeSystemCallHandler.
+    //
 
     pushl   %edx                    # Push system call parameter for dispatch.
     pushl   %ecx                    # Push system call number for dispatch.
 
-    ##
-    ## Push the parameters for the system call handler and execute it.
-    ##
+    //
+    // Push the parameters for the system call handler and execute it.
+    //
 
     pushl   %ebx                    # Push a pointer to the sort-of trap frame.
     pushl   %edx                    # Push EDX, the system call parameter.
@@ -688,21 +688,21 @@ FUNCTION(ArSysenterHandlerAsm)
     call    KeSystemCallHandler     # Call out to the main service handler.
     addl    $0xC, %esp              # Pop the system call parameter.
 
-    ##
-    ## If a signal is pending, then save the full trap frame and attempt to
-    ## dispatch the signal. Note that the trap frame was allocated on the
-    ## kernel stack and may be copied out to user mode. Don't leak kernel stack
-    ## values.
-    ##
+    //
+    // If a signal is pending, then save the full trap frame and attempt to
+    // dispatch the signal. Note that the trap frame was allocated on the
+    // kernel stack and may be copied out to user mode. Don't leak kernel stack
+    // values.
+    //
 
     movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
     cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
     jnz     ArSysenterHandlerFastRestore # Exit via the fast restore path.
 
-    ##
-    ## Save the default user mode segment selectors. Update user CS as the trap
-    ## frame is about to become full.
-    ##
+    //
+    // Save the default user mode segment selectors. Update user CS as the trap
+    // frame is about to become full.
+    //
 
     movl    $USER_CS, TRAP_CS(%ebx)    # Save CS.
     movl    $USER_DS, TRAP_DS(%ebx)    # Save DS.
@@ -711,9 +711,9 @@ FUNCTION(ArSysenterHandlerAsm)
     movl    $GDT_THREAD, TRAP_GS(%ebx) # Save GS.
     movl    $USER_DS, TRAP_SS(%ebx)    # Save SS.
 
-    ##
-    ## Save the registers.
-    ##
+    //
+    // Save the registers.
+    //
 
     movl    %eax, TRAP_EAX(%ebx) # Save the return value in the trap frame.
     movl    $0x0, TRAP_EBX(%ebx) # Zero EBX. It holds the kernel trap pointer.
@@ -725,36 +725,36 @@ FUNCTION(ArSysenterHandlerAsm)
     movl    $0x0, TRAP_ERRORCODE(%ebx) # Scrub the error code.
     movl    $0x0, TRAP_EFLAGS(%ebx) # Scrub the EFLAGS.
 
-    ##
-    ## Push the trap frame as the first parameter. The system call number and
-    ## system call paramter were saved on the stack earlier for this call.
-    ##
+    //
+    // Push the trap frame as the first parameter. The system call number and
+    // system call paramter were saved on the stack earlier for this call.
+    //
 
     pushl   %ebx                    # Pass the trap frame.
     call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
     addl    $0xC, %esp              # Pop all three parameters.
 
-    ##
-    ## Restore the non-volatile registers in case they were modified by the
-    ## trap frame.
-    ##
+    //
+    // Restore the non-volatile registers in case they were modified by the
+    // trap frame.
+    //
 
     movl    TRAP_ESI(%esp), %esi
     movl    TRAP_EDI(%esp), %edi
     movl    TRAP_EBP(%esp), %ebp
 
-    ##
-    ## Restore EAX in case the return value was modified. The other volatiles
-    ## (ECX and EDX) are used specifically by sysexit to restore the stack and
-    ## instruction pointer.
-    ##
+    //
+    // Restore EAX in case the return value was modified. The other volatiles
+    // (ECX and EDX) are used specifically by sysexit to restore the stack and
+    // instruction pointer.
+    //
 
     movl    TRAP_EAX(%esp), %eax
 
-    ##
-    ## Restore the segment registers. SS and CS are restored by sysexit. Once
-    ## DS is restored then only memory accesses through ESP are allowed.
-    ##
+    //
+    // Restore the segment registers. SS and CS are restored by sysexit. Once
+    // DS is restored then only memory accesses through ESP are allowed.
+    //
 
     movl    TRAP_DS(%esp), %ecx  # Restore DS.
     movw    %cx, %ds             #
@@ -765,17 +765,17 @@ FUNCTION(ArSysenterHandlerAsm)
     movl    TRAP_GS(%esp), %ecx  # Restore GS.
     movw    %cx, %gs             #
 
-    ##
-    ## Upon sysenter ebx held the return address, making it effectively
-    ## volatile.
-    ##
+    //
+    // Upon sysenter ebx held the return address, making it effectively
+    // volatile.
+    //
 
     xorl    %ebx, %ebx
     jmp     ArSysenterHandlerExit
 
-    ##
-    ## Reset the segment registers to user mode and return.
-    ##
+    //
+    // Reset the segment registers to user mode and return.
+    //
 
 ArSysenterHandlerFastRestore:
     mov     $USER_DS, %cx           # Get the user mode DS.
@@ -789,10 +789,10 @@ ArSysenterHandlerFastRestore:
 ArSysenterHandlerExit:
     CFI_DEF_CFA(%esp, 0)            # The trap frame is at ESP, EBX is gone.
 
-    ##
-    ## Restore some portions of the pseudo trap frame. Do not zero EAX as it
-    ## holds the return value from the system call.
-    ##
+    //
+    // Restore some portions of the pseudo trap frame. Do not zero EAX as it
+    // holds the return value from the system call.
+    //
 
     movl    TRAP_ESP(%esp), %ecx    # Sysexit moves ECX to ESP.
     movl    TRAP_EIP(%esp), %edx    # Sysexit moves EDX to EIP.
@@ -800,14 +800,14 @@ ArSysenterHandlerExit:
 
 END_FUNCTION(ArSysenterHandlerAsm)
 
-##
-## VOID
-## ArpPageFaultHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// ArpPageFaultHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -851,14 +851,14 @@ FUNCTION(ArpPageFaultHandlerAsm)
 
 END_FUNCTION(ArpPageFaultHandlerAsm)
 
-##
-## VOID
-## HlSpuriousInterruptHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// HlSpuriousInterruptHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -894,12 +894,12 @@ FUNCTION(HlSpuriousInterruptHandlerAsm)
 
 END_FUNCTION(HlSpuriousInterruptHandlerAsm)
 
-##
-## VOID
-## ArRestoreTrapFrame (
-##     PTRAP_FRAME TrapFrame
-##     )
-##
+//
+// VOID
+// ArRestoreTrapFrame (
+//     PTRAP_FRAME TrapFrame
+//     )
+//
 
 /*++
 
@@ -928,11 +928,11 @@ FUNCTION(ArRestoreTrapFrame)
     addl    $TRAP_FRAME_SIZE+16, %ebx       # Compute the pre-exception stack.
     movl    TRAP_CS(%ecx), %edx             # Get the destination CS.
 
-##
-## The exception is returning to either kernel or user mode. Either way restore
-## the common data segment registers. Hold off on DS, as this routine will
-## make a couple more DS: accesses. Save it in ESI.
-##
+//
+// The exception is returning to either kernel or user mode. Either way restore
+// the common data segment registers. Hold off on DS, as this routine will
+// make a couple more DS: accesses. Save it in ESI.
+//
 
     movl    TRAP_DS(%ecx), %esi             # Save DS into ESI for now.
     movl    TRAP_ES(%ecx), %eax             # Restore ES.
@@ -942,18 +942,18 @@ FUNCTION(ArRestoreTrapFrame)
     movl    TRAP_GS(%ecx), %eax             # Restore GS.
     movw    %ax, %gs                        #
 
-##
-## Restore the remaining registers based on the destination mode.
-##
+//
+// Restore the remaining registers based on the destination mode.
+//
 
     movl    %edx, %eax                      # Get CS (loaded above).
     andl    $SEGMENT_PRIVILEGE_MASK, %eax   # AND out the privilege.
     jz      RestoreTrapFrameToKernelMode    # Jump over if not.
 
-##
-## The exception is going to jump back into user mode, so put the stack
-## pointer and segments back into the exception-generated part of the stack.
-##
+//
+// The exception is going to jump back into user mode, so put the stack
+// pointer and segments back into the exception-generated part of the stack.
+//
 
     movl    TRAP_ESP(%ecx), %eax            # Restore Esp.
     movl    %eax, TRAP_RET_ESP(%ecx)        #
@@ -963,23 +963,23 @@ FUNCTION(ArRestoreTrapFrame)
 
 RestoreTrapFrameToKernelMode:
 
-##
-## The exception came from kernel mode, so restore the stack segment register.
-##
+//
+// The exception came from kernel mode, so restore the stack segment register.
+//
 
     movl    TRAP_SS(%ecx), %eax      # Restore SS. If this doesn't allow access
     movw    %ax, %ss                 # to the current stack, this will be bad.
 
-##
-## Build the iret return. The parameters going on the new stack are Ebx, Return
-## Address, Error Code, Eip, CS, and Eflags.
-##
-## Note that if the stack pointer doesn't change, the Ebx and Return address
-## values destroy data that was on the stack there (immediately after the
-## Eflags, CS, Eip). This happens to be the last two values in the trap frame
-## structure. Luckily those members are Esp and Eflags, which are restored
-## immediately before their values are destroyed.
-##
+//
+// Build the iret return. The parameters going on the new stack are Ebx, Return
+// Address, Error Code, Eip, CS, and Eflags.
+//
+// Note that if the stack pointer doesn't change, the Ebx and Return address
+// values destroy data that was on the stack there (immediately after the
+// Eflags, CS, Eip). This happens to be the last two values in the trap frame
+// structure. Luckily those members are Esp and Eflags, which are restored
+// immediately before their values are destroyed.
+//
 
     movl    TRAP_ESP(%ecx), %ebx     # Get the kernel Esp.
 
@@ -995,22 +995,22 @@ RestoreTrapFrameGeneralRegisters:
     movl    (%esp), %eax             # Save this function's return address.
     movl    %eax, 4(%ebx)            #
 
-##
-## Now that all DS: accesses are finished, restore DS.
-##
+//
+// Now that all DS: accesses are finished, restore DS.
+//
 
     movw    %si, %ds
 
-##
-## Move the trap frame pointer to the stack, popping everything up until then,
-## including the extended state.
-##
+//
+// Move the trap frame pointer to the stack, popping everything up until then,
+// including the extended state.
+//
 
     movl    %ecx, %esp               # Pop up to the trap frame.
 
-##
-## Restore the general registers.
-##
+//
+// Restore the general registers.
+//
 
     movl    TRAP_EAX(%esp), %eax     #
     movl    TRAP_ECX(%esp), %ecx     #
@@ -1019,9 +1019,9 @@ RestoreTrapFrameGeneralRegisters:
     movl    TRAP_EDI(%esp), %edi     #
     movl    TRAP_EBP(%esp), %ebp     #
 
-##
-## Transition to the new kernel mode stack pointer, pop Ebx, and return.
-##
+//
+// Transition to the new kernel mode stack pointer, pop Ebx, and return.
+//
 
     movl    %ebx, %esp              # Move stacks!
     popl    %ebx                    # Restore Ebx.
@@ -1029,24 +1029,24 @@ RestoreTrapFrameGeneralRegisters:
 
 END_FUNCTION(ArRestoreTrapFrame)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
-##
-## This macro stamps out the assembly dispatch code necessary for interrupts
-## received at each vector. It will create code for all vectors between
-## MinimumVector and MaximumVector.
-##
+//
+// This macro stamps out the assembly dispatch code necessary for interrupts
+// received at each vector. It will create code for all vectors between
+// MinimumVector and MaximumVector.
+//
 
 .macro InterruptVector _Vector
 
-    ##
-    ## 0x6A xx is the instruction for push imm8, except the immediate is sign
-    ## extended. The assembler will use the longer form for numbers >= 0x80
-    ## since those should not be sign extended. Use the shorter form directly
-    ## here to save space, and deal with it using a cast in the C code.
-    ##
+    //
+    // 0x6A xx is the instruction for push imm8, except the immediate is sign
+    // extended. The assembler will use the longer form for numbers >= 0x80
+    // since those should not be sign extended. Use the shorter form directly
+    // here to save space, and deal with it using a cast in the C code.
+    //
 
     .byte   0x6A
     .byte   (\_Vector)
@@ -1074,9 +1074,9 @@ END_FUNCTION(ArRestoreTrapFrame)
 
 .endm
 
-##
-## Now actually instantiate the macro to create the vector code.
-##
+//
+// Now actually instantiate the macro to create the vector code.
+//
 
 HlVectorStart:
 
@@ -1096,15 +1096,15 @@ InterruptVectors16 0xF0
 
 HlVectorEnd:
 
-##
-## PTRAP_FRAME
-## ArGenerateTrapFrame (
-##     ULONG ReturnEip,
-##     ULONG ReturnCs,
-##     ULONG ReturnEflags,
-##     ...
-##     )
-##
+//
+// PTRAP_FRAME
+// ArGenerateTrapFrame (
+//     ULONG ReturnEip,
+//     ULONG ReturnCs,
+//     ULONG ReturnEflags,
+//     ...
+//     )
+//
 
 /*++
 
@@ -1134,10 +1134,10 @@ Return Value:
 
 FUNCTION(ArGenerateTrapFrame)
 
-##
-## Allocate room on the stack for the trap frame plus the return address,
-## minus the original return address.
-##
+//
+// Allocate room on the stack for the trap frame plus the return address,
+// minus the original return address.
+//
 
     subl    $TRAP_FRAME_SIZE, %esp  #
     pushl   %eax                    # Save eax for a moment while the return
@@ -1160,18 +1160,18 @@ FUNCTION(ArGenerateTrapFrame)
     movl    TRAP_RET_EFLAGS+4(%esp), %eax     # Save eflags.
     movl    %eax, TRAP_EFLAGS+4(%esp)
 
-##
-## Figure out if a ring change occurred.
-##
+//
+// Figure out if a ring change occurred.
+//
 
     andl    $SEGMENT_PRIVILEGE_MASK, %ebx   # exception had a ring change.
     jz      GenerateTrapFrameFromKernelMode # Jump over if not.
 
-##
-## The exception caused a privilege level change, so the stack contains the
-## following ULONGs: Eip, CS, Eflags, Esp, and SS. Get the other segment
-## selectors from their current values.
-##
+//
+// The exception caused a privilege level change, so the stack contains the
+// following ULONGs: Eip, CS, Eflags, Esp, and SS. Get the other segment
+// selectors from their current values.
+//
 
     movl    TRAP_RET_ESP+4(%esp), %eax      # Save Esp.
     movl    %eax, TRAP_ESP+4(%esp)          #
@@ -1190,13 +1190,13 @@ FUNCTION(ArGenerateTrapFrame)
 
 GenerateTrapFrameFromKernelMode:
 
-##
-## The exception came from kernel mode, so the only things pushed on the stack
-## by the processor are Eip, CS, and Eflags. The data segments also don't need
-## to be saved. Get the data segments from their current values. Since there
-## was no stack change, the Esp is simply this current one except all the
-## stuff pushed by the exception, plus the error code.
-##
+//
+// The exception came from kernel mode, so the only things pushed on the stack
+// by the processor are Eip, CS, and Eflags. The data segments also don't need
+// to be saved. Get the data segments from their current values. Since there
+// was no stack change, the Esp is simply this current one except all the
+// stuff pushed by the exception, plus the error code.
+//
 
     movl    %esp, %eax                      # Save Esp.
     addl    $TRAP_FRAME_SIZE+20, %eax       # Remove exception stack items.
@@ -1221,13 +1221,13 @@ GenerateTrapFrameEnd:
 
 END_FUNCTION(ArGenerateTrapFrame)
 
-##
-## Define the common interrupt entry code. At this point the vector number has
-## been pushed into the error code slot, but nothing else has been done. Note
-## that this code needs to be far enough away from the vectors themselves so
-## that none of the jumps in the vectors turn into shorter instructions
-## (distance >= 0x100).
-##
+//
+// Define the common interrupt entry code. At this point the vector number has
+// been pushed into the error code slot, but nothing else has been done. Note
+// that this code needs to be far enough away from the vectors themselves so
+// that none of the jumps in the vectors turn into shorter instructions
+// (distance >= 0x100).
+//
 
 FUNCTION(KeInterruptEntry)
     call    ArGenerateTrapFrame     # Create a local trap frame.

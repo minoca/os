@@ -26,28 +26,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## BoEnablePaging (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoEnablePaging (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -70,16 +70,16 @@ FUNCTION BoEnablePaging
     bl      BoInvalidateEntireCache
     mov     %r0, #0
 
-    ##
-    ## Write to CP15, register 8 to clear the entire instruction and data TLB.
-    ##
+    //
+    // Write to CP15, register 8 to clear the entire instruction and data TLB.
+    //
 
     mcr     p15, 0, %r0, c8, c7, 0      @ TLBIALL, Clear entire TLB.
 
-    ##
-    ## Write to CONTEXTIDR to set the ASID to 0, which must be consistent
-    ## across all processors.
-    ##
+    //
+    // Write to CONTEXTIDR to set the ASID to 0, which must be consistent
+    // across all processors.
+    //
 
     mcr     p15, 0, %r0, c13, c0, 1     @ Clear CONTEXTIDR
     mcr     p15, 0, %r0, c2, c0, 1      @ Clear TTBR1
@@ -88,20 +88,20 @@ FUNCTION BoEnablePaging
     mcr     p15, 0, %r0, c6, c0, 0      @ Clear DFAR
     mcr     p15, 0, %r0, c6, c0, 2      @ Clear IFAR
 
-    ##
-    ## Write to CP15, register 3 to set up domain access control for domain 0
-    ## as a client, which means use the translation table's access control.
-    ##
+    //
+    // Write to CP15, register 3 to set up domain access control for domain 0
+    // as a client, which means use the translation table's access control.
+    //
 
     mov     %r0, #1
     mcr     p15, 0, %r0, %cr3, %cr0, 0
 
-    ##
-    ## Write to CP15, register 2 to set up the first level table base.
-    ## An opcode2 of 2 sets the control register (TTBCR), which is being set to
-    ## 0 to always use TTBR0. An opcode2 of 0 sets TTBR0, the Translation Table
-    ## Base Register.
-    ##
+    //
+    // Write to CP15, register 2 to set up the first level table base.
+    // An opcode2 of 2 sets the control register (TTBCR), which is being set to
+    // 0 to always use TTBR0. An opcode2 of 0 sets TTBR0, the Translation Table
+    // Base Register.
+    //
 
     mov     %r0, #0
     mcr     p15, 0, %r0, %cr2, %cr0, 2
@@ -114,37 +114,37 @@ FUNCTION BoEnablePaging
     orr     %r0, %r0, %r1
     mcr     p15, 0, %r0, %cr2, %cr0, 0
 
-    ##
-    ## Enable the MMU.
-    ##
+    //
+    // Enable the MMU.
+    //
 
     ldr     %r0, =MMU_CONTROL_DEFAULT_VALUE
     mcr     p15, 0, %r0, %cr1, %cr0, 0
     bl      ArSerializeExecution
 
-    ##
-    ## Invalidate instruction caches and flush the branch target cache.
-    ##
+    //
+    // Invalidate instruction caches and flush the branch target cache.
+    //
 
     mcr     p15, 0, %r0, c7, c5, 0      @ Write to ICIALLU, flush I-cache.
 
-    ##
-    ## Paging is now enabled. Return.
-    ##
+    //
+    // Paging is now enabled. Return.
+    //
 
     ldmia   %sp!, {%lr}
     bx      %lr
 
 END_FUNCTION BoEnablePaging
 
-##
-## VOID
-## BoTransferToKernelAsm (
-##     PVOID Parameters,
-##     PVOID EntryPoint,
-##     PVOID StackAddress
-##     )
-##
+//
+// VOID
+// BoTransferToKernelAsm (
+//     PVOID Parameters,
+//     PVOID EntryPoint,
+//     PVOID StackAddress
+//     )
+//
 
 /*++
 

@@ -25,39 +25,39 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## .globl allows this label to be visible to the linker.
-##
+//
+// .globl allows this label to be visible to the linker.
+//
 
 .globl _start
 
-##
-## VOID
-## start (
-##     VOID
-##     )
-##
+//
+// VOID
+// start (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -79,25 +79,25 @@ Return Value:
 
 _start:
 
-    ##
-    ## Call out to initialize the C Runtime library. The kernel puts the
-    ## thread parameter both on the stack and in ECX.
-    ##
+    //
+    // Call out to initialize the C Runtime library. The kernel puts the
+    // thread parameter both on the stack and in ECX.
+    //
 
     jmp     ClApplicationInitialize
 
-    ##
-    ## Execution should never get here.
-    ##
+    //
+    // Execution should never get here.
+    //
 
     int $3
 
-    ##
-    ## Create an undefined reference to main. There needs to be a reference to
-    ## main early because if main is defined in a library the linker will
-    ## throw it out if it thinks it's not needed. This jump is never actually
-    ## executed.
-    ##
+    //
+    // Create an undefined reference to main. There needs to be a reference to
+    // main early because if main is defined in a library the linker will
+    // throw it out if it thinks it's not needed. This jump is never actually
+    // executed.
+    //
 
     jmp     main
 

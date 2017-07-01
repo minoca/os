@@ -25,42 +25,42 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
 #define JUMP_BUFFER_SAVE_MASK 0x00
 
-##
-## This offset represents the start offset of the registers in the jump buffer.
-##
+//
+// This offset represents the start offset of the registers in the jump buffer.
+//
 
 #define JUMP_BUFFER_REGISTER_OFFSET 0x0C
 
-##
-## This offset represents the end of the registers in the jump buffer.
-##
+//
+// This offset represents the end of the registers in the jump buffer.
+//
 
 #define JUMP_BUFFER_REGISTER_END_OFFSET 0x34
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## int
-## setjmp (
-##     jmp_buf Environment
-##     )
-##
+//
+// int
+// setjmp (
+//     jmp_buf Environment
+//     )
+//
 
 /*++
 
@@ -86,38 +86,38 @@ EXPORTED_FUNCTION _setjmp
 END_FUNCTION _setjmp
 EXPORTED_FUNCTION setjmp
 
-    ##
-    ## Clear out the boolean indicating whether or not the mask was saved.
-    ##
+    //
+    // Clear out the boolean indicating whether or not the mask was saved.
+    //
 
     mov     %r2, #0
     str     %r2, [%r0, #JUMP_BUFFER_SAVE_MASK]
 
-    ##
-    ## Save the registers.
-    ##
+    //
+    // Save the registers.
+    //
 
     ldr     %r2, =JUMP_BUFFER_REGISTER_END_OFFSET
     add     %r2, %r0, %r2
     mov     %r12, %sp
     stmdb   %r2, {%r4-%r11, %r12, %lr}
 
-    ##
-    ## Return 0.
-    ##
+    //
+    // Return 0.
+    //
 
     mov     %r0, #0
     bx      %lr
 
 END_FUNCTION setjmp
 
-##
-## int
-## sigsetjmp (
-##     sigjmp_buf Environment,
-##     int SaveMask
-##     )
-##
+//
+// int
+// sigsetjmp (
+//     sigjmp_buf Environment,
+//     int SaveMask
+//     )
+//
 
 /*++
 
@@ -144,39 +144,39 @@ Return Value:
 
 EXPORTED_FUNCTION sigsetjmp
 
-    ##
-    ## Save the registers.
-    ##
+    //
+    // Save the registers.
+    //
 
     ldr     %r2, =JUMP_BUFFER_REGISTER_END_OFFSET
     add     %r2, %r0, %r2
     mov     %r12, %sp
     stmdb   %r2, {%r4-%r11, %r12, %lr}
 
-    ##
-    ## Call the helper routine to potentially save the mask.
-    ##
+    //
+    // Call the helper routine to potentially save the mask.
+    //
 
     stmdb   %sp!, {%lr}          @ Save the original lr.
     bl      ClpSetJump           @ Call the helper with the same parameters.
     ldmia   %sp!, {%lr}          @ Restore lr.
 
-    ##
-    ## Return 0.
-    ##
+    //
+    // Return 0.
+    //
 
     mov     %r0, #0
     bx      %lr
 
 END_FUNCTION sigsetjmp
 
-##
-## void
-## ClpLongJump (
-##     jmp_buf Environment,
-##     int Value
-##     )
-##
+//
+// void
+// ClpLongJump (
+//     jmp_buf Environment,
+//     int Value
+//     )
+//
 
 /*++
 

@@ -25,44 +25,44 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## Define the offset into the GDT where the thread area entry starts, in bytes.
-##
+//
+// Define the offset into the GDT where the thread area entry starts, in bytes.
+//
 
 #define GDT_THREAD_OFFSET (GDT_THREAD & ~0x7)
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## VOID
-## KepContextSwap (
-##     PVOID *SavedStackLocation,
-##     PVOID NewStack,
-##     PVOID NewThreadPointer,
-##     BOOL FirstTime
-##     )
-##
+//
+// VOID
+// KepContextSwap (
+//     PVOID *SavedStackLocation,
+//     PVOID NewStack,
+//     PVOID NewThreadPointer,
+//     BOOL FirstTime
+//     )
+//
 
 /*++
 
@@ -88,9 +88,9 @@ Return Value:
 
 --*/
 
-##
-## Parameters
-##
+//
+// Parameters
+//
 
 .equ SavedStackLocation, 8
 .equ NewStack, 12
@@ -108,9 +108,9 @@ FUNCTION(KepContextSwap)
     pushfl
     pushl   $CONTEXT_SWAP_MAGIC
 
-    ##
-    ## Load the new thread pointer GDT entry.
-    ##
+    //
+    // Load the new thread pointer GDT entry.
+    //
 
     movl    NewThreadPointerLowerGdt(%ebp), %eax    # Get lower GDT half.
     movl    NewThreadPointerUpperGdt(%ebp), %edx    # Get upper GDT half.
@@ -120,44 +120,44 @@ FUNCTION(KepContextSwap)
     movw    $GDT_THREAD, %ax                        # Load the GS value.
     movw    %ax, %gs                                # Reload GS to take effect.
 
-    ##
-    ## Save the parameters before the stack switch is initiated.
-    ##
+    //
+    // Save the parameters before the stack switch is initiated.
+    //
 
     movl    FirstTime(%ebp), %esi   # Get FirstTime parameter.
 
-    ##
-    ## Save the current thread's stack pointer. This effectively freezes the
-    ## current thread. When this thread is swapped back in, the stack pointer
-    ## will be restored, and execution of this function will continue. It's
-    ## crucial that the stack pointer not change between a normal context swap
-    ## and a first-time context swap, otherwise the thread that created the
-    ## context swap will have an incorrect stack next time it is swapped in.
-    ##
+    //
+    // Save the current thread's stack pointer. This effectively freezes the
+    // current thread. When this thread is swapped back in, the stack pointer
+    // will be restored, and execution of this function will continue. It's
+    // crucial that the stack pointer not change between a normal context swap
+    // and a first-time context swap, otherwise the thread that created the
+    // context swap will have an incorrect stack next time it is swapped in.
+    //
 
     movl    SavedStackLocation(%ebp), %ecx          # Get location to save in.
     movl    %esp, (%ecx)            # Save stack pointer.
 
-    ##
-    ## Switch to the new stack and perform work than can only be done once off
-    ## of the old stack.
-    ##
+    //
+    // Switch to the new stack and perform work than can only be done once off
+    // of the old stack.
+    //
 
     movl    NewStack(%ebp), %esp    # Switch to new stack.
     xor     %ebp, %ebp              # Zero out ebp so the call stack stops here.
 
-    ##
-    ## Perform any post-stack switch work needed on the old thread.
-    ##
+    //
+    // Perform any post-stack switch work needed on the old thread.
+    //
 
     call    KepPostContextSwapWork  # Perform post swap work.
 
-    ##
-    ## Determine whether to do a first-time return or a normal one. The only
-    ## difference is that a first-time execution has been set up to do an iret,
-    ## and a normal context swap doesn't need that because the stack is already
-    ## set up correctly.
-    ##
+    //
+    // Determine whether to do a first-time return or a normal one. The only
+    // difference is that a first-time execution has been set up to do an iret,
+    // and a normal context swap doesn't need that because the stack is already
+    // set up correctly.
+    //
 
     cmpl    $FALSE, %esi            # Compare FirstTime to FALSE.
     je      KepContextSwapRestore   # Special case a first run.

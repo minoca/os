@@ -26,43 +26,43 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## -------------------------------------------------------------------- Macros
-##
+//
+// -------------------------------------------------------------------- Macros
+//
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## -------------------------------------------------------------------- Globals
-##
+//
+// -------------------------------------------------------------------- Globals
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## UINT8
-## EfiIoPortIn8 (
-##     UINT16 Address
-##     )
-##
+//
+// UINT8
+// EfiIoPortIn8 (
+//     UINT16 Address
+//     )
+//
 
 /*++
 
@@ -89,12 +89,12 @@ FUNCTION(EfiIoPortIn8)
 
 END_FUNCTION(EfiIoPortIn8)
 
-##
-## UINT16
-## EfiIoPortIn16 (
-##     UINT16 Address
-##     )
-##
+//
+// UINT16
+// EfiIoPortIn16 (
+//     UINT16 Address
+//     )
+//
 
 /*++
 
@@ -121,12 +121,12 @@ FUNCTION(EfiIoPortIn16)
 
 END_FUNCTION(EfiIoPortIn16)
 
-##
-## UINT32
-## EfiIoPortIn32 (
-##     UINT16 Address
-##     )
-##
+//
+// UINT32
+// EfiIoPortIn32 (
+//     UINT16 Address
+//     )
+//
 
 /*++
 
@@ -152,13 +152,13 @@ FUNCTION(EfiIoPortIn32)
 
 END_FUNCTION(EfiIoPortIn32)
 
-##
-## VOID
-## EfiIoPortOut8 (
-##     UINT16 Address,
-##     UINT8 Value
-##     )
-##
+//
+// VOID
+// EfiIoPortOut8 (
+//     UINT16 Address,
+//     UINT8 Value
+//     )
+//
 
 /*++
 
@@ -187,13 +187,13 @@ FUNCTION(EfiIoPortOut8)
 
 END_FUNCTION(EfiIoPortOut8)
 
-##
-## VOID
-## EfiIoPortOut16 (
-##     UINT16 Address,
-##     UINT16 Value
-##     )
-##
+//
+// VOID
+// EfiIoPortOut16 (
+//     UINT16 Address,
+//     UINT16 Value
+//     )
+//
 
 /*++
 
@@ -222,13 +222,13 @@ FUNCTION(EfiIoPortOut16)
 
 END_FUNCTION(EfiIoPortOut16)
 
-##
-## VOID
-## EfiIoPortOut32 (
-##     UINT16 Address,
-##     UINT32 Value
-##     )
-##
+//
+// VOID
+// EfiIoPortOut32 (
+//     UINT16 Address,
+//     UINT32 Value
+//     )
+//
 
 /*++
 
@@ -257,7 +257,7 @@ FUNCTION(EfiIoPortOut32)
 
 END_FUNCTION(EfiIoPortOut32)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

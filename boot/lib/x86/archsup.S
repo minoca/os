@@ -26,20 +26,20 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## -------------------------------------------------------------------- Macros
-##
+//
+// -------------------------------------------------------------------- Macros
+//
 
-##
-## This macro switches the DS and ES data segments to the kernel's data
-## segments.
-##
+//
+// This macro switches the DS and ES data segments to the kernel's data
+// segments.
+//
 
 .macro LoadBootDataSegments
     movw    $KERNEL_DS, %ax         # Get the data segment selector,
@@ -47,35 +47,35 @@ Environment:
     mov     %ax, %es                #
 .endm
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## -------------------------------------------------------------------- Globals
-##
+//
+// -------------------------------------------------------------------- Globals
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## VOID
-## BoBreakExceptionHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// BoBreakExceptionHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -115,14 +115,14 @@ FUNCTION(BoBreakExceptionHandlerAsm)
 
 END_FUNCTION(BoBreakExceptionHandlerAsm)
 
-##
-## VOID
-## BoSingleStepExceptionHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// BoSingleStepExceptionHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -160,14 +160,14 @@ FUNCTION(BoSingleStepExceptionHandlerAsm)
 
 END_FUNCTION(BoSingleStepExceptionHandlerAsm)
 
-##
-## VOID
-## BoDebugServiceHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// BoDebugServiceHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -213,14 +213,14 @@ FUNCTION(BoDebugServiceHandlerAsm)
 
 END_FUNCTION(BoDebugServiceHandlerAsm)
 
-##
-## VOID
-## BoDivideByZeroExceptionHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// BoDivideByZeroExceptionHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -255,14 +255,14 @@ FUNCTION(BoDivideByZeroExceptionHandlerAsm)
 
 END_FUNCTION(BoDivideByZeroExceptionHandlerAsm)
 
-##
-## VOID
-## BoProtectionFaultHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// BoProtectionFaultHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -300,14 +300,14 @@ FUNCTION(BoProtectionFaultHandlerAsm)
 
 END_FUNCTION(BoProtectionFaultHandlerAsm)
 
-##
-## VOID
-## BoPageFaultHandlerAsm (
-##     ULONG ReturnEip,
-##     ULONG ReturnCodeSelector,
-##     ULONG ReturnEflags
-##     )
-##
+//
+// VOID
+// BoPageFaultHandlerAsm (
+//     ULONG ReturnEip,
+//     ULONG ReturnCodeSelector,
+//     ULONG ReturnEflags
+//     )
+//
 
 /*++
 
@@ -347,12 +347,12 @@ FUNCTION(BoPageFaultHandlerAsm)
 
 END_FUNCTION(BoPageFaultHandlerAsm)
 
-##
-## VOID
-## BoLoadBootDataSegments (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoLoadBootDataSegments (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -381,12 +381,12 @@ FUNCTION(BoLoadBootDataSegments)
 
 END_FUNCTION(BoLoadBootDataSegments)
 
-##
-## VOID
-## ArLoadTr (
-##     USHORT TssSegment
-##     )
-##
+//
+// VOID
+// ArLoadTr (
+//     USHORT TssSegment
+//     )
+//
 
 /*++
 
@@ -411,12 +411,12 @@ FUNCTION(ArLoadTr)
 
 END_FUNCTION(ArLoadTr)
 
-##
-## VOID
-## ArStoreTr (
-##     PULONG TssSegment
-##     )
-##
+//
+// VOID
+// ArStoreTr (
+//     PULONG TssSegment
+//     )
+//
 
 /*++
 
@@ -442,12 +442,12 @@ FUNCTION(ArStoreTr)
 
 END_FUNCTION(ArStoreTr)
 
-##
-## VOID
-## ArLoadIdtr (
-##     PVOID IdtBase
-##     )
-##
+//
+// VOID
+// ArLoadIdtr (
+//     PVOID IdtBase
+//     )
+//
 
 /*++
 
@@ -472,12 +472,12 @@ FUNCTION(ArLoadIdtr)
 
 END_FUNCTION(ArLoadIdtr)
 
-##
-## VOID
-## ArStoreIdtr (
-##     PTABLE_REGISTER IdtRegister
-##     )
-##
+//
+// VOID
+// ArStoreIdtr (
+//     PTABLE_REGISTER IdtRegister
+//     )
+//
 
 /*++
 
@@ -503,12 +503,12 @@ FUNCTION(ArStoreIdtr)
 
 END_FUNCTION(ArStoreIdtr)
 
-##
-## VOID
-## ArLoadGdtr (
-##     TABLE_REGISTER Gdt
-##     )
-##
+//
+// VOID
+// ArLoadGdtr (
+//     TABLE_REGISTER Gdt
+//     )
+//
 
 /*++
 
@@ -529,10 +529,10 @@ Return Value:
 
 FUNCTION(ArLoadGdtr)
 
-##
-## Load the GDT and then perform a long jump. The long jump is required for
-## the new GDT to actually be loaded.
-##
+//
+// Load the GDT and then perform a long jump. The long jump is required for
+// the new GDT to actually be loaded.
+//
 
     lgdt    4(%esp)                   # Load the GDT.
     ljmp    $KERNEL_CS, $LoadGdtJump  # Long jump.
@@ -542,12 +542,12 @@ LoadGdtJump:
 
 END_FUNCTION(ArLoadGdtr)
 
-##
-## VOID
-## ArStoreGdtr (
-##     PTABLE_REGISTER GdtRegister
-##     )
-##
+//
+// VOID
+// ArStoreGdtr (
+//     PTABLE_REGISTER GdtRegister
+//     )
+//
 
 /*++
 
@@ -572,12 +572,12 @@ FUNCTION(ArStoreGdtr)
 
 END_FUNCTION(ArStoreGdtr)
 
-##
-## PVOID
-## ArGetFaultingAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetFaultingAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -601,12 +601,12 @@ FUNCTION(ArGetFaultingAddress)
 
 END_FUNCTION(ArGetFaultingAddress)
 
-##
-## VOID
-## ArSetFaultingAddress (
-##     PVOID Value
-##     )
-##
+//
+// VOID
+// ArSetFaultingAddress (
+//     PVOID Value
+//     )
+//
 
 /*++
 
@@ -631,12 +631,12 @@ FUNCTION(ArSetFaultingAddress)
 
 END_FUNCTION(ArSetFaultingAddress)
 
-##
-## ULONG
-## ArGetCurrentPageDirectory (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetCurrentPageDirectory (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -660,12 +660,12 @@ FUNCTION(ArGetCurrentPageDirectory)
 
 END_FUNCTION(ArGetCurrentPageDirectory)
 
-##
-## VOID
-## ArSetCurrentPageDirectory (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetCurrentPageDirectory (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -690,15 +690,15 @@ FUNCTION(ArSetCurrentPageDirectory)
 
 END_FUNCTION(ArSetCurrentPageDirectory)
 
-##
-## VOID
-## ArCpuid (
-##     PULONG Eax,
-##     PULONG Ebx,
-##     PULONG Ecx,
-##     PULONG Edx
-##     )
-##
+//
+// VOID
+// ArCpuid (
+//     PULONG Eax,
+//     PULONG Ebx,
+//     PULONG Ecx,
+//     PULONG Edx
+//     )
+//
 
 /*++
 
@@ -757,12 +757,12 @@ FUNCTION(ArCpuid)
 
 END_FUNCTION(ArCpuid)
 
-##
-## ULONG
-## ArGetControlRegister0 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetControlRegister0 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -786,12 +786,12 @@ FUNCTION(ArGetControlRegister0)
 
 END_FUNCTION(ArGetControlRegister0)
 
-##
-## VOID
-## ArSetControlRegister0 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetControlRegister0 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -816,12 +816,12 @@ FUNCTION(ArSetControlRegister0)
 
 END_FUNCTION(ArSetControlRegister0)
 
-##
-## ULONG
-## ArGetControlRegister4 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetControlRegister4 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -845,12 +845,12 @@ FUNCTION(ArGetControlRegister4)
 
 END_FUNCTION(ArGetControlRegister4)
 
-##
-## VOID
-## ArSetControlRegister4 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetControlRegister4 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -875,12 +875,12 @@ FUNCTION(ArSetControlRegister4)
 
 END_FUNCTION(ArSetControlRegister4)
 
-##
-## ULONG
-## ArGetDebugRegister0 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister0 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -904,12 +904,12 @@ FUNCTION(ArGetDebugRegister0)
 
 END_FUNCTION(ArGetDebugRegister0)
 
-##
-## VOID
-## ArSetDebugRegister0 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister0 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -934,12 +934,12 @@ FUNCTION(ArSetDebugRegister0)
 
 END_FUNCTION(ArSetDebugRegister0)
 
-##
-## ULONG
-## ArGetDebugRegister1 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister1 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -963,12 +963,12 @@ FUNCTION(ArGetDebugRegister1)
 
 END_FUNCTION(ArGetDebugRegister1)
 
-##
-## VOID
-## ArSetDebugRegister1 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister1 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -993,12 +993,12 @@ FUNCTION(ArSetDebugRegister1)
 
 END_FUNCTION(ArSetDebugRegister1)
 
-##
-## ULONG
-## ArGetDebugRegister2 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister2 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1022,12 +1022,12 @@ FUNCTION(ArGetDebugRegister2)
 
 END_FUNCTION(ArGetDebugRegister2)
 
-##
-## VOID
-## ArSetDebugRegister2 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister2 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1052,12 +1052,12 @@ FUNCTION(ArSetDebugRegister2)
 
 END_FUNCTION(ArSetDebugRegister2)
 
-##
-## ULONG
-## ArGetDebugRegister3 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister3 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1081,12 +1081,12 @@ FUNCTION(ArGetDebugRegister3)
 
 END_FUNCTION(ArGetDebugRegister3)
 
-##
-## VOID
-## ArSetDebugRegister3 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister3 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1111,12 +1111,12 @@ FUNCTION(ArSetDebugRegister3)
 
 END_FUNCTION(ArSetDebugRegister3)
 
-##
-## ULONG
-## ArGetDebugRegister6 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister6 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1140,12 +1140,12 @@ FUNCTION(ArGetDebugRegister6)
 
 END_FUNCTION(ArGetDebugRegister6)
 
-##
-## VOID
-## ArSetDebugRegister6 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister6 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1170,12 +1170,12 @@ FUNCTION(ArSetDebugRegister6)
 
 END_FUNCTION(ArSetDebugRegister6)
 
-##
-## ULONG
-## ArGetDebugRegister7 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister7 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1199,12 +1199,12 @@ FUNCTION(ArGetDebugRegister7)
 
 END_FUNCTION(ArGetDebugRegister7)
 
-##
-## VOID
-## ArSetDebugRegister7 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister7 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1229,12 +1229,12 @@ FUNCTION(ArSetDebugRegister7)
 
 END_FUNCTION(ArSetDebugRegister7)
 
-##
-## ULONGLONG
-## ArReadTimeStampCounter (
-##     VOID
-##     )
-##
+//
+// ULONGLONG
+// ArReadTimeStampCounter (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1269,16 +1269,16 @@ FUNCTION(ArReadTimeStampCounter)
 
 END_FUNCTION(ArReadTimeStampCounter)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
-##
-## VOID
-## BoRestoreTrapFrame (
-##     TRAP_FRAME TrapFrame
-##     )
-##
+//
+// VOID
+// BoRestoreTrapFrame (
+//     TRAP_FRAME TrapFrame
+//     )
+//
 
 /*++
 
@@ -1306,10 +1306,10 @@ Return Value:
 
 BoRestoreTrapFrame:
 
-##
-## Restore the common data segment registers. Hold off on DS, as this routine
-## will make a couple more DS: accesses. Save it in ESI.
-##
+//
+// Restore the common data segment registers. Hold off on DS, as this routine
+// will make a couple more DS: accesses. Save it in ESI.
+//
 
     movl    TRAP_DS+4(%esp), %esi           # Save DS into ESI for now.
     movl    TRAP_ES+4(%esp), %eax           # Restore ES.
@@ -1321,23 +1321,23 @@ BoRestoreTrapFrame:
 
 RestoreTrapFrameToKernelMode:
 
-##
-## The exception came from kernel mode, so restore the stack segment register.
-##
+//
+// The exception came from kernel mode, so restore the stack segment register.
+//
 
     movl    TRAP_SS+4(%esp), %eax    # Restore SS. If this doesn't allow access
     movw    %ax, %ss                 # to the current stack, this will be bad.
 
-##
-## Build the iret return on the value The parameters going on the new stack are
-## Ebx, Return Address, Error Code, Eip, CS, and Eflags.
-##
-## Note that if the stack pointer doesn't change, the Ebx and Return address
-## values destroy data that was on the stack there (immediately after the
-## Eflags, CS, Eip). This happens to be the last two values in the trap frame
-## structure. Luckily those members are Esp and Eflags, which are restored
-## immediately before their values are destroyed.
-##
+//
+// Build the iret return on the value The parameters going on the new stack are
+// Ebx, Return Address, Error Code, Eip, CS, and Eflags.
+//
+// Note that if the stack pointer doesn't change, the Ebx and Return address
+// values destroy data that was on the stack there (immediately after the
+// Eflags, CS, Eip). This happens to be the last two values in the trap frame
+// structure. Luckily those members are Esp and Eflags, which are restored
+// immediately before their values are destroyed.
+//
 
     movl    TRAP_ESP+4(%esp), %ebx   # Get the kernel Esp.
 
@@ -1355,14 +1355,14 @@ RestoreTrapFrameGeneralRegisters:
     movl    (%esp), %ecx             # Save this function's return address.
     movl    %ecx, 4(%ebx)            #
 
-##
-## Now that all DS: accesses are finished, restore DS.
-##
+//
+// Now that all DS: accesses are finished, restore DS.
+//
 
     movw    %si, %ds
-##
-## Restore the general registers.
-##
+//
+// Restore the general registers.
+//
 
     movl    TRAP_EAX+4(%esp), %eax   #
     movl    TRAP_ECX+4(%esp), %ecx   #
@@ -1371,23 +1371,23 @@ RestoreTrapFrameGeneralRegisters:
     movl    TRAP_EDI+4(%esp), %edi   #
     movl    TRAP_EBP+4(%esp), %ebp   #
 
-##
-## Transition to the new kernel mode stack pointer, pop Ebx, and return.
-##
+//
+// Transition to the new kernel mode stack pointer, pop Ebx, and return.
+//
 
     movl    %ebx, %esp              # Move stacks!
     popl    %ebx                    # Restore Ebx.
     ret
 
-##
-## TRAP_FRAME
-## BoGenerateTrapFrame (
-##     ULONG ReturnEip,
-##     ULONG ReturnCs,
-##     ULONG ReturnEflags,
-##     ...
-##     )
-##
+//
+// TRAP_FRAME
+// BoGenerateTrapFrame (
+//     ULONG ReturnEip,
+//     ULONG ReturnCs,
+//     ULONG ReturnEflags,
+//     ...
+//     )
+//
 
 /*++
 
@@ -1417,10 +1417,10 @@ Return Value:
 
 BoGenerateTrapFrame:
 
-##
-## Allocate room on the stack for the trap frame plus the return address,
-## minus the original return address.
-##
+//
+// Allocate room on the stack for the trap frame plus the return address,
+// minus the original return address.
+//
 
     subl    $TRAP_FRAME_SIZE, %esp  #
     pushl   %eax                    # Save eax for a moment while the return
@@ -1443,13 +1443,13 @@ BoGenerateTrapFrame:
     movl    TRAP_RET_EFLAGS+4(%esp), %eax     # Save eflags.
     movl    %eax, TRAP_EFLAGS+4(%esp)
 
-##
-## The exception came from ring 0, so the only things pushed on the stack
-## by the processor are Eip, CS, and Eflags. The data segments also don't need
-## to be saved. Get the data segments from their current values. Since there
-## was no stack change, the Esp is simply this current one except all the
-## stuff pushed by the exception, plus the error code.
-##
+//
+// The exception came from ring 0, so the only things pushed on the stack
+// by the processor are Eip, CS, and Eflags. The data segments also don't need
+// to be saved. Get the data segments from their current values. Since there
+// was no stack change, the Esp is simply this current one except all the
+// stuff pushed by the exception, plus the error code.
+//
 
     movl    %esp, %eax                      # Save Esp.
     addl    $TRAP_FRAME_SIZE+20, %eax       # Remove exception stack items.

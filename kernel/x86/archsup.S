@@ -26,32 +26,32 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## KERNEL_API
-## BOOL
-## ArAreInterruptsEnabled (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// BOOL
+// ArAreInterruptsEnabled (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -88,13 +88,13 @@ ArAreInterruptsEnabledEnd:
 
 END_FUNCTION(ArAreInterruptsEnabled)
 
-##
-## KERNEL_API
-## BOOL
-## ArDisableInterrupts (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// BOOL
+// ArDisableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -129,13 +129,13 @@ ArDisableInterruptsFalse:
 
 END_FUNCTION(ArDisableInterrupts)
 
-##
-## KERNEL_API
-## VOID
-## ArEnableInterrupts (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// VOID
+// ArEnableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -159,12 +159,12 @@ PROTECTED_FUNCTION(ArEnableInterrupts)
 
 END_FUNCTION(ArEnableInterrupts)
 
-##
-## VOID
-## ArLoadKernelDataSegments (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArLoadKernelDataSegments (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -191,12 +191,12 @@ FUNCTION(ArLoadKernelDataSegments)
 
 END_FUNCTION(ArLoadKernelDataSegments)
 
-##
-## ULONG
-## ArGetProcessorFlags (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetProcessorFlags (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -221,12 +221,12 @@ FUNCTION(ArGetProcessorFlags)
 
 END_FUNCTION(ArGetProcessorFlags)
 
-##
-## VOID
-## ArLoadTr (
-##     USHORT TssSegment
-##     )
-##
+//
+// VOID
+// ArLoadTr (
+//     USHORT TssSegment
+//     )
+//
 
 /*++
 
@@ -251,12 +251,12 @@ FUNCTION(ArLoadTr)
 
 END_FUNCTION(ArLoadTr)
 
-##
-## VOID
-## ArStoreTr (
-##     PULONG TssSegment
-##     )
-##
+//
+// VOID
+// ArStoreTr (
+//     PULONG TssSegment
+//     )
+//
 
 /*++
 
@@ -282,12 +282,12 @@ FUNCTION(ArStoreTr)
 
 END_FUNCTION(ArStoreTr)
 
-##
-## VOID
-## ArLoadIdtr (
-##     PVOID IdtBase
-##     )
-##
+//
+// VOID
+// ArLoadIdtr (
+//     PVOID IdtBase
+//     )
+//
 
 /*++
 
@@ -312,12 +312,12 @@ FUNCTION(ArLoadIdtr)
 
 END_FUNCTION(ArLoadIdtr)
 
-##
-## VOID
-## ArStoreIdtr (
-##     PTABLE_REGISTER IdtRegister
-##     )
-##
+//
+// VOID
+// ArStoreIdtr (
+//     PTABLE_REGISTER IdtRegister
+//     )
+//
 
 /*++
 
@@ -343,12 +343,12 @@ FUNCTION(ArStoreIdtr)
 
 END_FUNCTION(ArStoreIdtr)
 
-##
-## VOID
-## ArLoadGdtr (
-##     TABLE_REGISTER Gdt
-##     )
-##
+//
+// VOID
+// ArLoadGdtr (
+//     TABLE_REGISTER Gdt
+//     )
+//
 
 /*++
 
@@ -369,10 +369,10 @@ Return Value:
 
 FUNCTION(ArLoadGdtr)
 
-##
-## Load the GDT and then perform a long jump. The long jump is required for
-## the new GDT to actually be loaded.
-##
+//
+// Load the GDT and then perform a long jump. The long jump is required for
+// the new GDT to actually be loaded.
+//
 
     lgdt    4(%esp)                   # Load the GDT.
     ljmp    $KERNEL_CS, $LoadGdtJump  # Long jump.
@@ -382,12 +382,12 @@ LoadGdtJump:
 
 END_FUNCTION(ArLoadGdtr)
 
-##
-## VOID
-## ArStoreGdtr (
-##     PTABLE_REGISTER GdtRegister
-##     )
-##
+//
+// VOID
+// ArStoreGdtr (
+//     PTABLE_REGISTER GdtRegister
+//     )
+//
 
 /*++
 
@@ -412,12 +412,12 @@ FUNCTION(ArStoreGdtr)
 
 END_FUNCTION(ArStoreGdtr)
 
-##
-## PVOID
-## ArGetFaultingAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetFaultingAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -441,12 +441,12 @@ FUNCTION(ArGetFaultingAddress)
 
 END_FUNCTION(ArGetFaultingAddress)
 
-##
-## VOID
-## ArSetFaultingAddress (
-##     PVOID Value
-##     )
-##
+//
+// VOID
+// ArSetFaultingAddress (
+//     PVOID Value
+//     )
+//
 
 /*++
 
@@ -471,12 +471,12 @@ FUNCTION(ArSetFaultingAddress)
 
 END_FUNCTION(ArSetFaultingAddress)
 
-##
-## UINTN
-## ArGetCurrentPageDirectory (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetCurrentPageDirectory (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -500,12 +500,12 @@ FUNCTION(ArGetCurrentPageDirectory)
 
 END_FUNCTION(ArGetCurrentPageDirectory)
 
-##
-## VOID
-## ArSetCurrentPageDirectory (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetCurrentPageDirectory (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -530,12 +530,12 @@ FUNCTION(ArSetCurrentPageDirectory)
 
 END_FUNCTION(ArSetCurrentPageDirectory)
 
-##
-## VOID
-## ArInvalidateTlbEntry (
-##     PVOID Address
-##     )
-##
+//
+// VOID
+// ArInvalidateTlbEntry (
+//     PVOID Address
+//     )
+//
 
 /*++
 
@@ -562,12 +562,12 @@ FUNCTION(ArInvalidateTlbEntry)
 
 END_FUNCTION(ArInvalidateTlbEntry)
 
-##
-## VOID
-## ArCleanEntireCache (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArCleanEntireCache (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -590,12 +590,12 @@ FUNCTION(ArCleanEntireCache)
     ret
 END_FUNCTION(ArCleanEntireCache)
 
-##
-## VOID
-## ArInvalidateEntireTlb (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArInvalidateEntireTlb (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -620,12 +620,12 @@ FUNCTION(ArInvalidateEntireTlb)
 
 END_FUNCTION(ArInvalidateEntireTlb)
 
-##
-## VOID
-## ArProcessorYield (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArProcessorYield (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -649,13 +649,13 @@ FUNCTION(ArProcessorYield)
 
 END_FUNCTION(ArProcessorYield)
 
-##
-## KERNEL_API
-## VOID
-## ArWaitForInterrupt (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// VOID
+// ArWaitForInterrupt (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -682,12 +682,12 @@ PROTECTED_FUNCTION(ArWaitForInterrupt)
 
 END_FUNCTION(ArWaitForInterrupt)
 
-##
-## VOID
-## ArSerializeExecution (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArSerializeExecution (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -713,12 +713,12 @@ FUNCTION(ArSerializeExecution)
 
 END_FUNCTION(ArSerializeExecution)
 
-##
-## VOID
-## ArInvalidateInstructionCache (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArInvalidateInstructionCache (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -742,15 +742,15 @@ FUNCTION(ArInvalidateInstructionCache)
 
 END_FUNCTION(ArInvalidateInstructionCache)
 
-##
-## VOID
-## ArCpuid (
-##     PULONG Eax,
-##     PULONG Ebx,
-##     PULONG Ecx,
-##     PULONG Edx
-##     )
-##
+//
+// VOID
+// ArCpuid (
+//     PULONG Eax,
+//     PULONG Ebx,
+//     PULONG Ecx,
+//     PULONG Edx
+//     )
+//
 
 /*++
 
@@ -809,12 +809,12 @@ FUNCTION(ArCpuid)
 
 END_FUNCTION(ArCpuid)
 
-##
-## ULONG
-## ArGetControlRegister0 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetControlRegister0 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -838,12 +838,12 @@ FUNCTION(ArGetControlRegister0)
 
 END_FUNCTION(ArGetControlRegister0)
 
-##
-## VOID
-## ArSetControlRegister0 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetControlRegister0 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -868,12 +868,12 @@ FUNCTION(ArSetControlRegister0)
 
 END_FUNCTION(ArSetControlRegister0)
 
-##
-## ULONG
-## ArGetControlRegister4 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetControlRegister4 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -897,12 +897,12 @@ FUNCTION(ArGetControlRegister4)
 
 END_FUNCTION(ArGetControlRegister4)
 
-##
-## VOID
-## ArSetControlRegister4 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetControlRegister4 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -927,12 +927,12 @@ FUNCTION(ArSetControlRegister4)
 
 END_FUNCTION(ArSetControlRegister4)
 
-##
-## ULONG
-## ArGetDebugRegister0 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister0 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -956,12 +956,12 @@ FUNCTION(ArGetDebugRegister0)
 
 END_FUNCTION(ArGetDebugRegister0)
 
-##
-## VOID
-## ArSetDebugRegister0 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister0 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -986,12 +986,12 @@ FUNCTION(ArSetDebugRegister0)
 
 END_FUNCTION(ArSetDebugRegister0)
 
-##
-## ULONG
-## ArGetDebugRegister1 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister1 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1015,12 +1015,12 @@ FUNCTION(ArGetDebugRegister1)
 
 END_FUNCTION(ArGetDebugRegister1)
 
-##
-## VOID
-## ArSetDebugRegister1 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister1 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1045,12 +1045,12 @@ FUNCTION(ArSetDebugRegister1)
 
 END_FUNCTION(ArSetDebugRegister1)
 
-##
-## ULONG
-## ArGetDebugRegister2 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister2 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1074,12 +1074,12 @@ FUNCTION(ArGetDebugRegister2)
 
 END_FUNCTION(ArGetDebugRegister2)
 
-##
-## VOID
-## ArSetDebugRegister2 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister2 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1104,12 +1104,12 @@ FUNCTION(ArSetDebugRegister2)
 
 END_FUNCTION(ArSetDebugRegister2)
 
-##
-## ULONG
-## ArGetDebugRegister3 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister3 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1133,12 +1133,12 @@ FUNCTION(ArGetDebugRegister3)
 
 END_FUNCTION(ArGetDebugRegister3)
 
-##
-## VOID
-## ArSetDebugRegister3 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister3 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1163,12 +1163,12 @@ FUNCTION(ArSetDebugRegister3)
 
 END_FUNCTION(ArSetDebugRegister3)
 
-##
-## ULONG
-## ArGetDebugRegister6 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister6 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1192,12 +1192,12 @@ FUNCTION(ArGetDebugRegister6)
 
 END_FUNCTION(ArGetDebugRegister6)
 
-##
-## VOID
-## ArSetDebugRegister6 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister6 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1222,12 +1222,12 @@ FUNCTION(ArSetDebugRegister6)
 
 END_FUNCTION(ArSetDebugRegister6)
 
-##
-## ULONG
-## ArGetDebugRegister7 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDebugRegister7 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1251,12 +1251,12 @@ FUNCTION(ArGetDebugRegister7)
 
 END_FUNCTION(ArGetDebugRegister7)
 
-##
-## VOID
-## ArSetDebugRegister7 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister7 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1281,12 +1281,12 @@ FUNCTION(ArSetDebugRegister7)
 
 END_FUNCTION(ArSetDebugRegister7)
 
-##
-## VOID
-## ArFxSave (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ArFxSave (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 
@@ -1316,12 +1316,12 @@ FUNCTION(ArFxSave)
 
 END_FUNCTION(ArFxSave)
 
-##
-## VOID
-## ArFxRestore (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ArFxRestore (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 
@@ -1351,12 +1351,12 @@ FUNCTION(ArFxRestore)
 
 END_FUNCTION(ArFxRestore)
 
-##
-## VOID
-## ArSaveX87State (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ArSaveX87State (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 
@@ -1385,12 +1385,12 @@ FUNCTION(ArSaveX87State)
 
 END_FUNCTION(ArSaveX87State)
 
-##
-## VOID
-## ArRestoreX87State (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ArRestoreX87State (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 
@@ -1419,12 +1419,12 @@ FUNCTION(ArRestoreX87State)
 
 END_FUNCTION(ArRestoreX87State)
 
-##
-## VOID
-## ArEnableFpu (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArEnableFpu (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1448,12 +1448,12 @@ FUNCTION(ArEnableFpu)
 
 END_FUNCTION(ArEnableFpu)
 
-##
-## VOID
-## ArDisableFpu (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArDisableFpu (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1483,12 +1483,12 @@ ArDisableFpuReturn:
 
 END_FUNCTION(ArDisableFpu)
 
-##
-## VOID
-## ArInitializeFpu (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArInitializeFpu (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1512,12 +1512,12 @@ FUNCTION(ArInitializeFpu)
 
 END_FUNCTION(ArInitializeFpu)
 
-##
-## ULONGLONG
-## ArReadTimeStampCounter (
-##     VOID
-##     )
-##
+//
+// ULONGLONG
+// ArReadTimeStampCounter (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1552,12 +1552,12 @@ FUNCTION(ArReadTimeStampCounter)
 
 END_FUNCTION(ArReadTimeStampCounter)
 
-##
-## ULONGLONG
-## ArReadMsr (
-##     ULONG Msr
-##     )
-##
+//
+// ULONGLONG
+// ArReadMsr (
+//     ULONG Msr
+//     )
+//
 
 /*++
 
@@ -1582,13 +1582,13 @@ FUNCTION(ArReadMsr)
 
 END_FUNCTION(ArReadMsr)
 
-##
-## VOID
-## ArWriteMsr (
-##     ULONG Msr,
-##     ULONGLONG Value
-##     )
-##
+//
+// VOID
+// ArWriteMsr (
+//     ULONG Msr,
+//     ULONGLONG Value
+//     )
+//
 
 /*++
 
@@ -1617,12 +1617,12 @@ FUNCTION(ArWriteMsr)
 
 END_FUNCTION(ArWriteMsr)
 
-##
-## VOID
-## ArReloadThreadSegment (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArReloadThreadSegment (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1647,15 +1647,15 @@ FUNCTION(ArReloadThreadSegment)
 
 END_FUNCTION(ArReloadThreadSegment)
 
-##
-## KERNEL_API
-## VOID
-## ArMonitor (
-##     PVOID Address,
-##     UINTN Ecx,
-##     UINTN Edx
-##     )
-##
+//
+// KERNEL_API
+// VOID
+// ArMonitor (
+//     PVOID Address,
+//     UINTN Ecx,
+//     UINTN Edx
+//     )
+//
 
 /*++
 
@@ -1689,14 +1689,14 @@ PROTECTED_FUNCTION(ArMonitor)
 
 END_FUNCTION(ArMonitor)
 
-##
-## KERNEL_API
-## VOID
-## ArMwait (
-##     UINTN Eax,
-##     UINTN Ecx
-##     )
-##
+//
+// KERNEL_API
+// VOID
+// ArMwait (
+//     UINTN Eax,
+//     UINTN Ecx
+//     )
+//
 
 /*++
 
@@ -1732,13 +1732,13 @@ PROTECTED_FUNCTION(ArMwait)
 
 END_FUNCTION(ArMwait)
 
-##
-## KERNEL_API
-## VOID
-## ArIoReadAndHalt (
-##     USHORT IoPort
-##     )
-##
+//
+// KERNEL_API
+// VOID
+// ArIoReadAndHalt (
+//     USHORT IoPort
+//     )
+//
 
 /*++
 
@@ -1767,12 +1767,12 @@ PROTECTED_FUNCTION(ArIoReadAndHalt)
 
 END_FUNCTION(ArIoReadAndHalt)
 
-##
-## UINTN
-## ArSaveProcessorContext (
-##     PPROCESSOR_CONTEXT Context
-##     )
-##
+//
+// UINTN
+// ArSaveProcessorContext (
+//     PPROCESSOR_CONTEXT Context
+//     )
+//
 
 /*++
 
@@ -1861,12 +1861,12 @@ FUNCTION(ArSaveProcessorContext)
 
 END_FUNCTION(ArSaveProcessorContext)
 
-##
-## VOID
-## ArRestoreProcessorContext (
-##     PPROCESSOR_CONTEXT Context
-##     )
-##
+//
+// VOID
+// ArRestoreProcessorContext (
+//     PPROCESSOR_CONTEXT Context
+//     )
+//
 
 /*++
 
@@ -1889,10 +1889,10 @@ Return Value:
 
 FUNCTION(ArRestoreProcessorContext)
 
-    ##
-    ## This function should be called from protected mode. It uses non-volatile
-    ## registers without saving them because it never returns.
-    ##
+    //
+    // This function should be called from protected mode. It uses non-volatile
+    // registers without saving them because it never returns.
+    //
 
     movl    4(%esp), %ecx           # Get the context parameter.
     movl    %ecx, %esi              # Move to source register.
@@ -1953,7 +1953,7 @@ ArRestoreProcessorContextJump:
 
 END_FUNCTION(ArRestoreProcessorContext)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

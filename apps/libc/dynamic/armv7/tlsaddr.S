@@ -26,35 +26,35 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## Define the offset of the TLS vector within the TCB.
-##
+//
+// Define the offset of the TLS vector within the TCB.
+//
 
 .equ TCB_TLS_VECTOR_OFFSET, 0x4
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## LIBC_API
-## void *
-## __tls_get_addr (
-##     PTLS_INDEX Entry
-##     )
-##
+//
+// LIBC_API
+// void *
+// __tls_get_addr (
+//     PTLS_INDEX Entry
+//     )
+//
 
 /*++
 

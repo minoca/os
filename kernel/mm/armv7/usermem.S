@@ -28,36 +28,36 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## Warning: Don't add functions above MmpCopyUserModeMemory without also
-## adjusting the fault detection code, as this function is used as the lower
-## border of the user mode functions.
-##
+//
+// Warning: Don't add functions above MmpCopyUserModeMemory without also
+// adjusting the fault detection code, as this function is used as the lower
+// border of the user mode functions.
+//
 
-##
-## BOOL
-## MmpCopyUserModeMemory (
-##     PVOID Destination,
-##     PCVOID Source,
-##     ULONG ByteCount
-##     )
-##
+//
+// BOOL
+// MmpCopyUserModeMemory (
+//     PVOID Destination,
+//     PCVOID Source,
+//     ULONG ByteCount
+//     )
+//
 
 /*++
 
@@ -91,19 +91,19 @@ FUNCTION MmpCopyUserModeMemory
     tst     %r3, #3                             @ Test for word agreement.
     bne     MmpCopyUserModeMemoryBytes          @ Branch if not similar.
 
-    ##
-    ## Both buffers have the same alignment, so at least some of the data can
-    ## be word-copied.
-    ##
+    //
+    // Both buffers have the same alignment, so at least some of the data can
+    // be word-copied.
+    //
 
     ands    %r3, %r0, #3                        @ Test for word alignment.
     beq     MmpCopyUserModeMemoryAligned        @ Jump over if aligned.
     rsb     %r3, %r3, #4                        @ Get number of unaligned bytes.
     sub     %r2, %r2, %r3                       @ Remove from total.
 
-    ##
-    ## Copy the non-aligned portion.
-    ##
+    //
+    // Copy the non-aligned portion.
+    //
 
 MmpCopyUserModeMemoryUnalignedBytes:
     ldrb    %r12, [%r1], #1                     @ Read a byte from the source.
@@ -111,9 +111,9 @@ MmpCopyUserModeMemoryUnalignedBytes:
     strb    %r12, [%r0], #1                     @ Store to the destination.
     bne     MmpCopyUserModeMemoryUnalignedBytes @ Loop.
 
-    ##
-    ## Copy a word at a time.
-    ##
+    //
+    // Copy a word at a time.
+    //
 
 MmpCopyUserModeMemoryAligned:
     movs    %r3, %r2, asr #2                    @ Get remaining word count.
@@ -129,9 +129,9 @@ MmpCopyUserModeMemoryWordsDone:
     ands    %r2, %r2, #3                        @ Get byte remainder.
     beq     MmpCopyUserModeMemoryBytesDone      @ Jump out if none.
 
-    ##
-    ## Copy any remaining bytes one at a time.
-    ##
+    //
+    // Copy any remaining bytes one at a time.
+    //
 
 MmpCopyUserModeMemoryBytes:
     ldrb    %r12, [%r1], #1                     @ Read in a byte.
@@ -145,13 +145,13 @@ MmpCopyUserModeMemoryBytesDone:
 
 END_FUNCTION MmpCopyUserModeMemory
 
-##
-## BOOL
-## MmpZeroUserModeMemory (
-##     PVOID Buffer,
-##     ULONG ByteCount
-##     )
-##
+//
+// BOOL
+// MmpZeroUserModeMemory (
+//     PVOID Buffer,
+//     ULONG ByteCount
+//     )
+//
 
 /*++
 
@@ -180,14 +180,14 @@ FUNCTION MmpZeroUserModeMemory
 
 END_FUNCTION MmpZeroUserModeMemory
 
-##
-## BOOL
-## MmpSetUserModeMemory (
-##     PVOID Buffer,
-##     INT Byte,
-##     UINTN Count
-##     )
-##
+//
+// BOOL
+// MmpSetUserModeMemory (
+//     PVOID Buffer,
+//     INT Byte,
+//     UINTN Count
+//     )
+//
 
 /*++
 
@@ -218,27 +218,27 @@ FUNCTION MmpSetUserModeMemory
     cmp     %r2, #0x4                           @ See if the set is short.
     blt     MmpSetUserModeMemoryBytes           @ Do byte operation if so.
 
-    ##
-    ## Set the unaligned portion at the beginning byte for byte.
-    ##
+    //
+    // Set the unaligned portion at the beginning byte for byte.
+    //
 
     ands    %r3, %r0, #3                        @ Test for word alignment.
     beq     MmpUserUserModeMemoryAligned        @ Jump over if aligned.
     rsb     %r3, %r3, #4                        @ Get number of unaligned bytes.
     sub     %r2, %r2, %r3                       @ Remove from total.
 
-    ##
-    ## Set the unaligned portion.
-    ##
+    //
+    // Set the unaligned portion.
+    //
 
 MmpSetUserModeMemoryUnalignedBytes:
     subs    %r3, %r3, #1                        @ Decrement the loop count.
     strb    %r1, [%r0], #1                      @ Store to the destination.
     bne     MmpSetUserModeMemoryUnalignedBytes  @ Loop.
 
-    ##
-    ## Prepare to set words at a time.
-    ##
+    //
+    // Prepare to set words at a time.
+    //
 
 MmpUserUserModeMemoryAligned:
     and     %r1, %r1, #0xFF                     @ Get the byte to set.
@@ -247,9 +247,9 @@ MmpUserUserModeMemoryAligned:
     movs    %r3, %r2, asr #2                    @ Get remaining word count.
     beq     MmpSetUserModeMemoryWordsDone       @ Jump out if none.
 
-    ##
-    ## Set a word at a time.
-    ##
+    //
+    // Set a word at a time.
+    //
 
 MmpSetUserModeMemoryWords:
     subs    %r3, %r3, #1                        @ Decrement word count.
@@ -260,9 +260,9 @@ MmpSetUserModeMemoryWordsDone:
     ands    %r2, %r2, #3                        @ Get byte remainder.
     beq     MmpSetUserModeMemoryBytesDone       @ Jump out if none.
 
-    ##
-    ## Set any remaining bytes one at a time.
-    ##
+    //
+    // Set any remaining bytes one at a time.
+    //
 
 MmpSetUserModeMemoryBytes:
     subs    %r2, %r2, #1                        @ Decrement loop count.
@@ -275,14 +275,14 @@ MmpSetUserModeMemoryBytesDone:
 
 END_FUNCTION MmpSetUserModeMemory
 
-##
-## BOOL
-## MmpCompareUserModeMemory (
-##     PVOID FirstBuffer,
-##     PVOID SecondBuffer,
-##     UINTN Size
-##     )
-##
+//
+// BOOL
+// MmpCompareUserModeMemory (
+//     PVOID FirstBuffer,
+//     PVOID SecondBuffer,
+//     UINTN Size
+//     )
+//
 
 /*++
 
@@ -330,13 +330,13 @@ MmpCompareUserModeMemoryReturn:
 
 END_FUNCTION MmpCompareUserModeMemory
 
-##
-## BOOL
-## MmpTouchUserModeMemoryForRead (
-##     PVOID Buffer,
-##     UINTN Size
-##     )
-##
+//
+// BOOL
+// MmpTouchUserModeMemoryForRead (
+//     PVOID Buffer,
+//     UINTN Size
+//     )
+//
 
 /*++
 
@@ -384,13 +384,13 @@ MmpTouchUserModeMemoryForReadReturn:
 
 END_FUNCTION MmpTouchUserModeMemoryForRead
 
-##
-## BOOL
-## MmpTouchUserModeMemoryForWrite (
-##     PVOID Buffer,
-##     UINTN Size
-##     )
-##
+//
+// BOOL
+// MmpTouchUserModeMemoryForWrite (
+//     PVOID Buffer,
+//     UINTN Size
+//     )
+//
 
 /*++
 
@@ -440,13 +440,13 @@ MmpTouchUserModeMemoryForWriteReturn:
 
 END_FUNCTION MmpTouchUserModeMemoryForWrite
 
-##
-## BOOL
-## MmUserRead8 (
-##     PVOID Buffer,
-##     PUCHAR Value
-##     )
-##
+//
+// BOOL
+// MmUserRead8 (
+//     PVOID Buffer,
+//     PUCHAR Value
+//     )
+//
 
 /*++
 
@@ -476,13 +476,13 @@ FUNCTION MmUserRead8
 
 END_FUNCTION MmUserRead8
 
-##
-## BOOL
-## MmUserWrite8 (
-##     PVOID Buffer,
-##     UCHAR Value
-##     )
-##
+//
+// BOOL
+// MmUserWrite8 (
+//     PVOID Buffer,
+//     UCHAR Value
+//     )
+//
 
 /*++
 
@@ -511,13 +511,13 @@ FUNCTION MmUserWrite8
 
 END_FUNCTION MmUserWrite8
 
-##
-## BOOL
-## MmUserRead16 (
-##     PVOID Buffer,
-##     PUSHORT Value
-##     )
-##
+//
+// BOOL
+// MmUserRead16 (
+//     PVOID Buffer,
+//     PUSHORT Value
+//     )
+//
 
 /*++
 
@@ -548,13 +548,13 @@ FUNCTION MmUserRead16
 
 END_FUNCTION MmUserRead16
 
-##
-## BOOL
-## MmUserWrite16 (
-##     PVOID Buffer,
-##     USHORT Value
-##     )
-##
+//
+// BOOL
+// MmUserWrite16 (
+//     PVOID Buffer,
+//     USHORT Value
+//     )
+//
 
 /*++
 
@@ -584,13 +584,13 @@ FUNCTION MmUserWrite16
 
 END_FUNCTION MmUserWrite16
 
-##
-## BOOL
-## MmUserRead32 (
-##     PVOID Buffer,
-##     PULONG Value
-##     )
-##
+//
+// BOOL
+// MmUserRead32 (
+//     PVOID Buffer,
+//     PULONG Value
+//     )
+//
 
 /*++
 
@@ -621,13 +621,13 @@ FUNCTION MmUserRead32
 
 END_FUNCTION MmUserRead32
 
-##
-## BOOL
-## MmUserWrite32 (
-##     PVOID Buffer,
-##     ULONG Value
-##     )
-##
+//
+// BOOL
+// MmUserWrite32 (
+//     PVOID Buffer,
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -657,12 +657,12 @@ FUNCTION MmUserWrite32
 
 END_FUNCTION MmUserWrite32
 
-##
-## BOOL
-## MmpInvalidateCacheLine (
-##     PVOID Address
-##     )
-##
+//
+// BOOL
+// MmpInvalidateCacheLine (
+//     PVOID Address
+//     )
+//
 
 /*++
 
@@ -693,12 +693,12 @@ FUNCTION MmpInvalidateCacheLine
 
 END_FUNCTION MmpInvalidateCacheLine
 
-##
-## BOOL
-## MmpCleanCacheLine (
-##     PVOID Address
-##     )
-##
+//
+// BOOL
+// MmpCleanCacheLine (
+//     PVOID Address
+//     )
+//
 
 /*++
 
@@ -728,12 +728,12 @@ FUNCTION MmpCleanCacheLine
 
 END_FUNCTION MmpCleanCacheLine
 
-##
-## BOOL
-## MmpCleanInvalidateCacheLine (
-##     PVOID Address
-##     )
-##
+//
+// BOOL
+// MmpCleanInvalidateCacheLine (
+//     PVOID Address
+//     )
+//
 
 /*++
 
@@ -763,12 +763,12 @@ FUNCTION MmpCleanInvalidateCacheLine
 
 END_FUNCTION MmpCleanInvalidateCacheLine
 
-##
-## BOOL
-## MmpInvalidateInstructionCacheLine (
-##     PVOID Address
-##     )
-##
+//
+// BOOL
+// MmpInvalidateInstructionCacheLine (
+//     PVOID Address
+//     )
+//
 
 /*++
 
@@ -798,17 +798,17 @@ FUNCTION MmpInvalidateInstructionCacheLine
 
 END_FUNCTION MmpInvalidateInstructionCacheLine
 
-##
-## This epilog can be used for any of the user mode memory functions. It may
-## get jumped to by the page fault handler.
-##
+//
+// This epilog can be used for any of the user mode memory functions. It may
+// get jumped to by the page fault handler.
+//
 
 FUNCTION MmpUserModeMemoryReturn
     bx      %lr                                 @ Return.
 
 END_FUNCTION MmpUserModeMemoryReturn
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

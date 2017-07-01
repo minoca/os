@@ -25,31 +25,31 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## VOID
-## EfiMemoryBarrier (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfiMemoryBarrier (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -77,7 +77,7 @@ FUNCTION(EfiMemoryBarrier)
 
 END_FUNCTION(EfiMemoryBarrier)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

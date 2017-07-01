@@ -26,74 +26,74 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
 .equ STACK_SIZE,    0x4000
 
-##
-## .text specifies that this code belongs in the executable section. This is
-## the only section in the MBR code, data also lives in the text section.
-## .arm specifies that this code should be compiled in ARM mode.
-##
+//
+// .text specifies that this code belongs in the executable section. This is
+// the only section in the MBR code, data also lives in the text section.
+// .arm specifies that this code should be compiled in ARM mode.
+//
 
 .text
 .arm
 
-##
-## Stick this in the .init section so it ends up at the front of the binary.
-##
+//
+// Stick this in the .init section so it ends up at the front of the binary.
+//
 
 .section .init
 
-##
-## .global allows this label to be visible to the linker. _start is the entry
-## point to the MBR code, so it needs to be globally visible.
-##
+//
+// .global allows this label to be visible to the linker. _start is the entry
+// point to the MBR code, so it needs to be globally visible.
+//
 
 .global _start
 
-##
-## This is the entry point for the ARM firmware. It changes to SVC mode,
-## sets up the initial stack, and jumps to the firmware core.
-##
+//
+// This is the entry point for the ARM firmware. It changes to SVC mode,
+// sets up the initial stack, and jumps to the firmware core.
+//
 
 _start:
 
-    ##
-    ## Disable interrupts and switch to SVC mode.
-    ##
+    //
+    // Disable interrupts and switch to SVC mode.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_SVC)
     msr     CPSR_c, %r2
 
-    ##
-    ## Limit the cache to 16K until page coloring is supported.
-    ##
+    //
+    // Limit the cache to 16K until page coloring is supported.
+    //
 
     mrc     p15, 0, %r0, %cr1, %cr0, 1
     orr     %r0, %r0, #ARMV6_AUX_16K_CACHE_SIZE
     mcr     p15, 0, %r0, %cr1, %cr0, 1
 
-    ##
-    ## Flip some essential MMU bits allowing unaligned accesses.
-    ##
+    //
+    // Flip some essential MMU bits allowing unaligned accesses.
+    //
 
     mrc     p15, 0, %r0, %cr1, %cr0, 0
     bic     %r0, %r0, #MMU_ALIGNMENT_FAULT_ENABLED
     orr     %r0, %r0, #MMU_UNALIGNED_ACCESS_ENABLED
     mcr     p15, 0, %r0, %cr1, %cr0, 0
 
-    ##
-    ## Zero out the BSS section.
-    ##
+    //
+    // Zero out the BSS section.
+    //
 
     ldr     %r1, =__bss_start__
     ldr     %r2, =__bss_end__
@@ -104,9 +104,9 @@ BssZeroLoop:
     cmp     %r1, %r2
     blt     BssZeroLoop
 
-    ##
-    ## The stack starts at the image base and works downwards.
-    ##
+    //
+    // The stack starts at the image base and works downwards.
+    //
 
     adr     %r0, _start             @ Get the current address for the stack top.
     ldr     %r1, =STACK_SIZE        @ Get the stack size.

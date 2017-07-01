@@ -26,32 +26,32 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
 #define FE_ALL_EXCEPT 0x3F
 #define FE_DFL_ENV -1
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## LIBC_API
-## int
-## fegetenv (
-##     fenv_t *Environment
-##     )
-##
+//
+// LIBC_API
+// int
+// fegetenv (
+//     fenv_t *Environment
+//     )
+//
 
 /*++
 
@@ -80,13 +80,13 @@ EXPORTED_FUNCTION(fegetenv)
 
 END_FUNCTION(fegetenv)
 
-##
-## LIBC_API
-## int
-## fesetenv (
-##     const fenv_t *Environment
-##     )
-##
+//
+// LIBC_API
+// int
+// fesetenv (
+//     const fenv_t *Environment
+//     )
+//
 
 /*++
 
@@ -120,14 +120,14 @@ fesetenvLoad:
 
 END_FUNCTION(fesetenv)
 
-##
-## LIBC_API
-## int
-## fegetexceptflag (
-##     fexcept_t *Destination,
-##     int Mask
-##     )
-##
+//
+// LIBC_API
+// int
+// fegetexceptflag (
+//     fexcept_t *Destination,
+//     int Mask
+//     )
+//
 
 /*++
 

@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## ArpInitializeExceptionStacks (
-##     PVOID ExceptionStacksBase,
-##     ULONG ExceptionStackSize
-##     )
-##
+//
+// VOID
+// ArpInitializeExceptionStacks (
+//     PVOID ExceptionStacksBase,
+//     ULONG ExceptionStackSize
+//     )
+//
 
 /*++
 
@@ -75,51 +75,51 @@ Return Value:
 
 FUNCTION ArpInitializeExceptionStacks
 
-    ##
-    ## Load R1 with an individual stack size.
-    ##
+    //
+    // Load R1 with an individual stack size.
+    //
 
     add     %r0, %r0, %r1
 
-    ##
-    ## Disable interrupts and switch into IRQ mode. Note that this also
-    ## clobbers the flags register.
-    ##
+    //
+    // Disable interrupts and switch into IRQ mode. Note that this also
+    // clobbers the flags register.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_IRQ)
     msr     CPSR_cxsf, %r2
     mov     %sp, %r0
     add     %r0, %r0, %r1
 
-    ##
-    ## Initialize the FIQ stack.
-    ##
+    //
+    // Initialize the FIQ stack.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_FIQ)
     msr     CPSR_cxsf, %r2
     mov     %sp, %r0
     add     %r0, %r0, %r1
 
-    ##
-    ## Initialize the undefined instruction stack.
-    ##
+    //
+    // Initialize the undefined instruction stack.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_UNDEF)
     msr     CPSR_cxsf, %r2
     mov     %sp, %r0
     add     %r0, %r0, %r1
 
-    ##
-    ## Initialize the data fetch abort stack.
-    ##
+    //
+    // Initialize the data fetch abort stack.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_ABORT)
     msr     CPSR_cxsf, %r2
     mov     %sp, %r0
 
-    ##
-    ## Switch back to SVC mode and return.
-    ##
+    //
+    // Switch back to SVC mode and return.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_SVC)
     msr     CPSR_cxsf, %r2
@@ -127,12 +127,12 @@ FUNCTION ArpInitializeExceptionStacks
 
 END_FUNCTION ArpInitializeExceptionStacks
 
-##
-## VOID
-## ArpUndefinedInstructionEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArpUndefinedInstructionEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -154,17 +154,17 @@ Return Value:
 
 FUNCTION ArpUndefinedInstructionEntry
 
-    ##
-    ## Save state and create a trap frame.
-    ##
+    //
+    // Save state and create a trap frame.
+    //
 
     ARM_ENTER_INTERRUPT
 
-    ##
-    ## Call the main dispatch routine routine with a pointer to the trap frame
-    ## as the only parameter. Align the stack down even though it shouldn't be
-    ## strictly necessary in case something bad happened.
-    ##
+    //
+    // Call the main dispatch routine routine with a pointer to the trap frame
+    // as the only parameter. Align the stack down even though it shouldn't be
+    // strictly necessary in case something bad happened.
+    //
 
     mov     %r0, %sp
     mov     %r4, %sp
@@ -173,20 +173,20 @@ FUNCTION ArpUndefinedInstructionEntry
     bl      KeDispatchUndefinedInstructionException
     mov     %sp, %r4
 
-    ##
-    ## Restore state and return.
-    ##
+    //
+    // Restore state and return.
+    //
 
     ARM_EXIT_INTERRUPT
 
 END_FUNCTION ArpUndefinedInstructionEntry
 
-##
-## INTN
-## ArpSoftwareInterruptEntry (
-##     VOID
-##     )
-##
+//
+// INTN
+// ArpSoftwareInterruptEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -218,10 +218,10 @@ FUNCTION ArpSoftwareInterruptEntry
     str     %sp, [%r2, #TRAP_USERSP]            @ Save usermode SP.
     cpsie   i, #ARM_MODE_SVC                    @ Enable interrupts, svc mode.
 
-    ##
-    ## Save R0 and R1. These are needed by the signal dispatcher and if the
-    ## system call gets restarted.
-    ##
+    //
+    // Save R0 and R1. These are needed by the signal dispatcher and if the
+    // system call gets restarted.
+    //
 
     stmdb   %sp!, {%r0, %r1}                    @ Save the parameters.
 
@@ -231,30 +231,30 @@ FUNCTION ArpSoftwareInterruptEntry
     CFI_OFFSET(lr, TRAP_USERLR + 8)
     CFI_OFFSET(pc, TRAP_PC + 8)
 
-    ##
-    ## Set the exception CPSR to something wild as a hint that this trap frame
-    ## is incomplete.
-    ##
+    //
+    // Set the exception CPSR to something wild as a hint that this trap frame
+    // is incomplete.
+    //
 
     mov     %r3, #0xFFFFFFFF                    @ Create -1.
     str     %r3, [%r2, #TRAP_EXCEPTION_CPSR]    @ Save into exception CPSR.
 
-    ##
-    ## The system call routine takes three parameters: the system call number,
-    ## system call parameter, and a pointer to the trap frame. User-mode
-    ## already set up the first two parameters in R0 and R1, and they were
-    ## preserved throughout the context save process. R2 already holds the trap
-    ## frame from above.
-    ##
+    //
+    // The system call routine takes three parameters: the system call number,
+    // system call parameter, and a pointer to the trap frame. User-mode
+    // already set up the first two parameters in R0 and R1, and they were
+    // preserved throughout the context save process. R2 already holds the trap
+    // frame from above.
+    //
 
     bl      KeSystemCallHandler                 @ Handle system call.
 
-    ##
-    ## Determine whether or not a signal is pending on the thread. Use the
-    ## special macro to get the current thread so that R0 is not trashed. Then
-    ## scrub the volatiles that will no longer be used so that user mode does
-    ## not get any leaked kernel mode values.
-    ##
+    //
+    // Determine whether or not a signal is pending on the thread. Use the
+    // special macro to get the current thread so that R0 is not trashed. Then
+    // scrub the volatiles that will no longer be used so that user mode does
+    // not get any leaked kernel mode values.
+    //
 
     ARM_GET_CURRENT_THREAD                      @ Get current thread in R1.
     eor     %r2, %r2                            @ Scrub volatile R2.
@@ -264,10 +264,10 @@ FUNCTION ArpSoftwareInterruptEntry
     cmp     %r1, #ThreadSignalPending           @ Compare to signal pending.
     beq     ArpSoftwareInterruptFastSignal      @ Jump to dispatch signal.
 
-    ##
-    ## Restore the user mode stack and link registers. Do not restore or
-    ## clobber R0 as it holds the system call's return value.
-    ##
+    //
+    // Restore the user mode stack and link registers. Do not restore or
+    // clobber R0 as it holds the system call's return value.
+    //
 
     add     %r1, %sp, #8                        @ Get trap frame pointer.
     cpsid   i, #ARM_MODE_SYSTEM                 @ Switch to system mode.
@@ -275,9 +275,9 @@ FUNCTION ArpSoftwareInterruptEntry
     ldr     %lr, [%r1, #TRAP_USERLR]            @ Restore usermode LR.
     cpsid   i, #ARM_MODE_SVC                    @ Switch back to svc mode.
 
-    ##
-    ## Pop off the saved R0 and R1 and most of the trap frame.
-    ##
+    //
+    // Pop off the saved R0 and R1 and most of the trap frame.
+    //
 
     add     %sp, #TRAP_FRAME_SIZE               @ Pop up to PC/Cpsr.
     CFI_UNDEFINED(r0)
@@ -286,20 +286,20 @@ FUNCTION ArpSoftwareInterruptEntry
     CFI_OFFSET(lr, 0)
     CFI_UNDEFINED(pc)
 
-    ##
-    ## Clear the remainig volatile register to avoid leaking kernel state.
-    ##
+    //
+    // Clear the remainig volatile register to avoid leaking kernel state.
+    //
 
     eor     %r1, %r1
     rfeia   %sp!                                @ Restore PC and CPSR. Bye!
 
-    ##
-    ## Save the full trap frame. The CPSR, PC, user SP, user LR and exception
-    ## CPSR are the only values saved in the trap frame. The exception CPSR is
-    ## a dummy value, but keep it so that the signal dispatcher knows this trap
-    ## frame came from the fast path. R0 currently holds the system call's
-    ## return value. Do not scrub it. Just save it in the trap frame.
-    ##
+    //
+    // Save the full trap frame. The CPSR, PC, user SP, user LR and exception
+    // CPSR are the only values saved in the trap frame. The exception CPSR is
+    // a dummy value, but keep it so that the signal dispatcher knows this trap
+    // frame came from the fast path. R0 currently holds the system call's
+    // return value. Do not scrub it. Just save it in the trap frame.
+    //
 
 ArpSoftwareInterruptFastSignal:
     CFI_UNDEFINED(lr)
@@ -312,20 +312,20 @@ ArpSoftwareInterruptFastSignal:
     stmdb   %r0!, {%r1-%r12, %lr}               @ Push registers and CPSR.
     str     %sp, [%sp, #8]                      @ Save SP.
 
-    ##
-    ## Jump down to the slow signal path which starts an IT block. The compare
-    ## that dropped the fast path to dispatch a signal should have set the zero
-    ## flag and none of the instructions above should have changed the flags,
-    ## making the IT block safe to jump to.
-    ##
+    //
+    // Jump down to the slow signal path which starts an IT block. The compare
+    // that dropped the fast path to dispatch a signal should have set the zero
+    // flag and none of the instructions above should have changed the flags,
+    // making the IT block safe to jump to.
+    //
 
     b       ArpSoftwareInterruptSlowSignal
 
-    ##
-    ## Perform the slow version of the system call that builds up a complete
-    ## trap frame. This is used for system calls like fork and exec, where the
-    ## trap frame is used in the system call.
-    ##
+    //
+    // Perform the slow version of the system call that builds up a complete
+    // trap frame. This is used for system calls like fork and exec, where the
+    // trap frame is used in the system call.
+    //
 
 ArpSoftwareInterruptEntrySlow:
     mov     %lr, #0                              @ Zero SVC link register.
@@ -339,11 +339,11 @@ ArpSoftwareInterruptEntrySlow:
     str     %sp, [%r2, #TRAP_USERSP]             @ Save usermode LR.
     cpsie   i, #ARM_MODE_SVC                     @ Enable interrupts, svc mode.
 
-    ##
-    ## Save R0 and R1. These are needed by the signal dispatcher if the system
-    ## call gets restarted. It is not good enough to have them saved in the
-    ## trap frame as KeSystemCallHandler may restore an old trap frame.
-    ##
+    //
+    // Save R0 and R1. These are needed by the signal dispatcher if the system
+    // call gets restarted. It is not good enough to have them saved in the
+    // trap frame as KeSystemCallHandler may restore an old trap frame.
+    //
 
     stmdb   %sp!, {%r0, %r1}                     @ Save the parameters.
     str     %sp, [%r2]                           @ Save SP in the trap frame.
@@ -366,23 +366,23 @@ ArpSoftwareInterruptEntrySlow:
     CFI_OFFSET(lr, TRAP_USERLR)
     CFI_OFFSET(pc, TRAP_PC)
 
-    ##
-    ## Just like in the fast case, R0 and R1 are preserved as the first two
-    ## parameters and R2 gets a pointer to the trap frame during the save.
-    ##
+    //
+    // Just like in the fast case, R0 and R1 are preserved as the first two
+    // parameters and R2 gets a pointer to the trap frame during the save.
+    //
 
     bl      KeSystemCallHandler
 
-    ##
-    ## Save the return value in the trap frame. It will either get restored on
-    ## exit or preserved for later if a signal is applied.
-    ##
+    //
+    // Save the return value in the trap frame. It will either get restored on
+    // exit or preserved for later if a signal is applied.
+    //
 
     str     %r0, [%sp, #(TRAP_R0 + 8)]
 
-    ##
-    ## Determine whether or not a signal is pending on the thread.
-    ##
+    //
+    // Determine whether or not a signal is pending on the thread.
+    //
 
     ARM_GET_CURRENT_THREAD                       @ Get current thread in R1.
     ldr     %r1, [%r1, #THREAD_SIGNAL_PENDING]   @ Load signal pending status.
@@ -390,10 +390,10 @@ ArpSoftwareInterruptEntrySlow:
 
 ArpSoftwareInterruptSlowSignal:
 
-    ##
-    ## The dispatch routine takes the trap frame, system call number and
-    ## system call parameter.
-    ##
+    //
+    // The dispatch routine takes the trap frame, system call number and
+    // system call parameter.
+    //
 
     ITTTT   EQ                                   @ If the zero flag is set...
     ldreq   %r2, [%sp, #4]                       @ Get system call parameter.
@@ -401,25 +401,25 @@ ArpSoftwareInterruptSlowSignal:
     addeq   %r0, %sp, #8                         @ Get trap frame.
     bleq    PsDispatchPendingSignalsOnCurrentThread @ Dispatch signal.
 
-    ##
-    ## A slow exit or an exit from a signal dispatch restores the full trap
-    ## frame.
-    ##
+    //
+    // A slow exit or an exit from a signal dispatch restores the full trap
+    // frame.
+    //
 
 ArpSoftwareInterruptEntrySlowEnd:
 
-    ##
-    ## Pop off the saved system call number and parameter and the SVC stack
-    ## pointer. The stack pointer should be the location of the saved system
-    ## call number, which isn't needed.
-    ##
+    //
+    // Pop off the saved system call number and parameter and the SVC stack
+    // pointer. The stack pointer should be the location of the saved system
+    // call number, which isn't needed.
+    //
 
     add     %sp, %sp, #12
     CFI_ADJUST_CFA_OFFSET(-12)
 
-    ##
-    ## Restore the user mode stack and link registers.
-    ##
+    //
+    // Restore the user mode stack and link registers.
+    //
 
     mov     %r0, %sp                            @ Get SVC stack pointer.
     cpsid   i, #ARM_MODE_SYSTEM                 @ Switch to system mode.
@@ -452,12 +452,12 @@ ArpSoftwareInterruptEntrySlowEnd:
 
 END_FUNCTION ArpSoftwareInterruptEntry
 
-##
-## VOID
-## ArpPrefetchAbortEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArpPrefetchAbortEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -478,43 +478,43 @@ Return Value:
 
 FUNCTION ArpPrefetchAbortEntry
 
-    ##
-    ## In ARM mode, prefect aborts save the PC-4 in LR. For Thumb mode, data
-    ## aborts save the PC in LR. Thus, the PC is always 4 bytes head of the
-    ## faulting address.
-    ##
+    //
+    // In ARM mode, prefect aborts save the PC-4 in LR. For Thumb mode, data
+    // aborts save the PC in LR. Thus, the PC is always 4 bytes head of the
+    // faulting address.
+    //
 
     sub     %lr, %lr, #4                @ Prefetches go too far by 4.
 
-    ##
-    ## Save state and create a trap frame.
-    ##
+    //
+    // Save state and create a trap frame.
+    //
 
     ARM_ENTER_INTERRUPT
 
-    ##
-    ## Call the main dispatch routine routine with a pointer to the trap frame
-    ## and 1 to indicate a prefetch abort.
-    ##
+    //
+    // Call the main dispatch routine routine with a pointer to the trap frame
+    // and 1 to indicate a prefetch abort.
+    //
 
     mov     %r0, %sp
     mov     %r1, #1
     blx     KeDispatchException
 
-    ##
-    ## Restore state and return.
-    ##
+    //
+    // Restore state and return.
+    //
 
     ARM_EXIT_INTERRUPT
 
 END_FUNCTION ArpPrefetchAbortEntry
 
-##
-## VOID
-## ArpDataAbortEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArpDataAbortEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -535,43 +535,43 @@ Return Value:
 
 FUNCTION ArpDataAbortEntry
 
-    ##
-    ## In ARM mode, data aborts save the PC in LR. For Thumb mode, data aborts
-    ## save the PC+4 in LR. Thus, the PC is always 8 bytes head of the faulting
-    ## address.
-    ##
+    //
+    // In ARM mode, data aborts save the PC in LR. For Thumb mode, data aborts
+    // save the PC+4 in LR. Thus, the PC is always 8 bytes head of the faulting
+    // address.
+    //
 
     sub     %lr, %lr, #8
 
-    ##
-    ## Save state and create a trap frame.
-    ##
+    //
+    // Save state and create a trap frame.
+    //
 
     ARM_ENTER_INTERRUPT
 
-    ##
-    ## Call the main dispatch routine routine with a pointer to the trap frame
-    ## and 0 to indicate a prefetch abort.
-    ##
+    //
+    // Call the main dispatch routine routine with a pointer to the trap frame
+    // and 0 to indicate a prefetch abort.
+    //
 
     mov     %r0, %sp
     mov     %r1, #0
     blx     KeDispatchException
 
-    ##
-    ## Restore state and return.
-    ##
+    //
+    // Restore state and return.
+    //
 
     ARM_EXIT_INTERRUPT
 
 END_FUNCTION ArpDataAbortEntry
 
-##
-## VOID
-## ArpIrqEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArpIrqEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -595,12 +595,12 @@ FUNCTION ArpIrqEntry
 
 END_FUNCTION ArpIrqEntry
 
-##
-## VOID
-## ArpFiqEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArpFiqEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -624,29 +624,29 @@ FUNCTION ArpFiqEntry
 
 END_FUNCTION ArpFiqEntry
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
-##
-## This code is entered as the result of any interrupt or exception. Its job is
-## to transition back to the SVC stack and then call the real interrupt
-## dispatch routine.
-##
+//
+// This code is entered as the result of any interrupt or exception. Its job is
+// to transition back to the SVC stack and then call the real interrupt
+// dispatch routine.
+//
 
 FUNCTION ArpCommonInterruptEntry
 
-    ##
-    ## Save state and create a trap frame.
-    ##
+    //
+    // Save state and create a trap frame.
+    //
 
     ARM_ENTER_INTERRUPT
 
-    ##
-    ## Call the main dispatch routine routine with a pointer to the trap frame
-    ## as the only parameter. Align the stack down in case the exception
-    ## interrupted something unaligned.
-    ##
+    //
+    // Call the main dispatch routine routine with a pointer to the trap frame
+    // as the only parameter. Align the stack down in case the exception
+    // interrupted something unaligned.
+    //
 
     mov     %r0, %sp
     mov     %r4, %sp
@@ -660,9 +660,9 @@ FUNCTION ArpCommonInterruptEntry
 
     CFI_DEF_CFA(sp, 0)
 
-    ##
-    ## Restore state and return.
-    ##
+    //
+    // Restore state and return.
+    //
 
     ARM_EXIT_INTERRUPT
 

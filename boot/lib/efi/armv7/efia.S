@@ -25,28 +25,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## UINTN
-## BopEfiGetStackPointer (
-##     VOID
-##     )
-##
+//
+// UINTN
+// BopEfiGetStackPointer (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -72,12 +72,12 @@ FUNCTION BopEfiGetStackPointer
 
 END_FUNCTION BopEfiGetStackPointer
 
-##
-## VOID
-## BopEfiSaveFirmwareExceptionStacks (
-##     VOID
-##     )
-##
+//
+// VOID
+// BopEfiSaveFirmwareExceptionStacks (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -97,9 +97,9 @@ Return Value:
 
 FUNCTION BopEfiSaveFirmwareExceptionStacks
 
-    ##
-    ## Save IRQ registers.
-    ##
+    //
+    // Save IRQ registers.
+    //
 
     cps     #ARM_MODE_IRQ               @ Switch to IRQ mode.
     mov     %r0, %sp                    @ Get the stack pointer.
@@ -109,9 +109,9 @@ FUNCTION BopEfiSaveFirmwareExceptionStacks
     ldr     %r1, =BoFirmwareIrqLink     @ Get the address of the global.
     str     %r0, [%r1]                  @ Save to the global.
 
-    ##
-    ## Save FIQ registers.
-    ##
+    //
+    // Save FIQ registers.
+    //
 
     cps     #ARM_MODE_FIQ               @ Switch to FIQ mode.
     mov     %r0, %sp                    @ Get the stack pointer.
@@ -121,9 +121,9 @@ FUNCTION BopEfiSaveFirmwareExceptionStacks
     ldr     %r1, =BoFirmwareFiqLink     @ Get the address of the global.
     str     %r0, [%r1]                  @ Save to the global.
 
-    ##
-    ## Save undefined instruction registers.
-    ##
+    //
+    // Save undefined instruction registers.
+    //
 
     cps     #ARM_MODE_UNDEF             @ Switch to undefined instruction mode.
     mov     %r0, %sp                    @ Get the stack pointer.
@@ -133,9 +133,9 @@ FUNCTION BopEfiSaveFirmwareExceptionStacks
     ldr     %r1, =BoFirmwareUndefLink   @ Get the address of the global.
     str     %r0, [%r1]                  @ Save to the global.
 
-    ##
-    ## Save abort registers.
-    ##
+    //
+    // Save abort registers.
+    //
 
     cps     #ARM_MODE_ABORT             @ Switch to abort mode.
     mov     %r0, %sp                    @ Get the stack pointer.
@@ -145,21 +145,21 @@ FUNCTION BopEfiSaveFirmwareExceptionStacks
     ldr     %r1, =BoFirmwareAbortLink   @ Get the address of the global.
     str     %r0, [%r1]                  @ Save to the global.
 
-    ##
-    ## Switch back to SVC mode and return.
-    ##
+    //
+    // Switch back to SVC mode and return.
+    //
 
     cps     #ARM_MODE_SVC               @ Switch back to SVC mode.
     bx      %lr                         @ Return.
 
 END_FUNCTION BopEfiSaveFirmwareExceptionStacks
 
-##
-## VOID
-## BopEfiRestoreFirmwareExceptionStacks (
-##     VOID
-##     )
-##
+//
+// VOID
+// BopEfiRestoreFirmwareExceptionStacks (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -179,9 +179,9 @@ Return Value:
 
 FUNCTION BopEfiRestoreFirmwareExceptionStacks
 
-    ##
-    ## Restore IRQ registers.
-    ##
+    //
+    // Restore IRQ registers.
+    //
 
     cps     #ARM_MODE_IRQ               @ Switch to IRQ mode.
     ldr     %r1, =BoFirmwareIrqStack    @ Get the address of the global.
@@ -191,9 +191,9 @@ FUNCTION BopEfiRestoreFirmwareExceptionStacks
     ldr     %r0, [%r1]                  @ Get the value of the global.
     mov     %r0, %lr                    @ Move it into the link register.
 
-    ##
-    ## Restore FIQ registers.
-    ##
+    //
+    // Restore FIQ registers.
+    //
 
     cps     #ARM_MODE_FIQ               @ Switch to FIQ mode.
     ldr     %r1, =BoFirmwareFiqStack    @ Get the address of the global.
@@ -203,9 +203,9 @@ FUNCTION BopEfiRestoreFirmwareExceptionStacks
     ldr     %r0, [%r1]                  @ Get the value of the global.
     mov     %r0, %lr                    @ Move it into the link register.
 
-    ##
-    ## Restore undefined instruction registers.
-    ##
+    //
+    // Restore undefined instruction registers.
+    //
 
     cps     #ARM_MODE_UNDEF             @ Switch to undefined instruction mode.
     ldr     %r1, =BoFirmwareUndefStack  @ Get the address of the global.
@@ -215,9 +215,9 @@ FUNCTION BopEfiRestoreFirmwareExceptionStacks
     ldr     %r0, [%r1]                  @ Get the value of the global.
     mov     %r0, %lr                    @ Move it into the link register.
 
-    ##
-    ## Restore abort registers.
-    ##
+    //
+    // Restore abort registers.
+    //
 
     cps     #ARM_MODE_ABORT             @ Switch to abort mode.
     ldr     %r1, =BoFirmwareAbortStack  @ Get the address of the global.
@@ -227,16 +227,16 @@ FUNCTION BopEfiRestoreFirmwareExceptionStacks
     ldr     %r0, [%r1]                  @ Get the value of the global.
     mov     %r0, %lr                    @ Move it into the link register.
 
-    ##
-    ## Switch back to SVC mode and return.
-    ##
+    //
+    // Switch back to SVC mode and return.
+    //
 
     cps     #ARM_MODE_SVC               @ Switch back to SVC mode.
     bx      %lr                         @ Return.
 
 END_FUNCTION BopEfiRestoreFirmwareExceptionStacks
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

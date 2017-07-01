@@ -26,30 +26,30 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## ULONG
-## KdpAtomicCompareExchange32 (
-##     volatile ULONG *Address,
-##     ULONG ExchangeValue,
-##     ULONG CompareValue
-##     )
-##
+//
+// ULONG
+// KdpAtomicCompareExchange32 (
+//     volatile ULONG *Address,
+//     ULONG ExchangeValue,
+//     ULONG CompareValue
+//     )
+//
 
 /*++
 
@@ -80,11 +80,11 @@ FUNCTION KdpAtomicCompareExchange32
     cmp     %r3, %r2                            @ Compare to CompareValue
     bne     KdpAtomicCompareExchange32End1      @ If not equal, exit with clrex.
 
-    ##
-    ## If the values are equal, do an exclusive store of R1 to the address at
-    ## R0. Store whether or not the store succeeded in R12 (a volatile
-    ## register). A 0 in R12 indicates the store succeeded.
-    ##
+    //
+    // If the values are equal, do an exclusive store of R1 to the address at
+    // R0. Store whether or not the store succeeded in R12 (a volatile
+    // register). A 0 in R12 indicates the store succeeded.
+    //
 
     strex   %r12, %r1, [%r0]                    @ Store exclusive.
     cmp     %r12, #0                            @ Compare with 0.
@@ -101,13 +101,13 @@ KdpAtomicCompareExchange32End2:
 
 END_FUNCTION KdpAtomicCompareExchange32
 
-##
-## ULONG
-## KdpAtomicAdd32 (
-##     volatile ULONG *Address,
-##     ULONG Increment
-##     )
-##
+//
+// ULONG
+// KdpAtomicAdd32 (
+//     volatile ULONG *Address,
+//     ULONG Increment
+//     )
+//
 
 /*++
 
@@ -140,7 +140,7 @@ FUNCTION KdpAtomicAdd32
 
 END_FUNCTION KdpAtomicAdd32
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

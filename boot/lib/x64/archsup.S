@@ -26,36 +26,36 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## -------------------------------------------------------------------- Macros
-##
+//
+// -------------------------------------------------------------------- Macros
+//
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## -------------------------------------------------------------------- Globals
-##
+//
+// -------------------------------------------------------------------- Globals
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## BoBreakExceptionHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoBreakExceptionHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -89,12 +89,12 @@ FUNCTION(BoBreakExceptionHandlerAsm)
 
 END_FUNCTION(BoBreakExceptionHandlerAsm)
 
-##
-## VOID
-## BoSingleStepExceptionHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoSingleStepExceptionHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -126,12 +126,12 @@ FUNCTION(BoSingleStepExceptionHandlerAsm)
 
 END_FUNCTION(BoSingleStepExceptionHandlerAsm)
 
-##
-## VOID
-## BoDebugServiceHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoDebugServiceHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -166,12 +166,12 @@ FUNCTION(BoDebugServiceHandlerAsm)
 
 END_FUNCTION(BoDebugServiceHandlerAsm)
 
-##
-## VOID
-## BoDivideByZeroExceptionHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoDivideByZeroExceptionHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -200,12 +200,12 @@ FUNCTION(BoDivideByZeroExceptionHandlerAsm)
 
 END_FUNCTION(BoDivideByZeroExceptionHandlerAsm)
 
-##
-## VOID
-## BoProtectionFaultHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoProtectionFaultHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -237,12 +237,12 @@ FUNCTION(BoProtectionFaultHandlerAsm)
 
 END_FUNCTION(BoProtectionFaultHandlerAsm)
 
-##
-## VOID
-## BoPageFaultHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoPageFaultHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -273,12 +273,12 @@ FUNCTION(BoPageFaultHandlerAsm)
 
 END_FUNCTION(BoPageFaultHandlerAsm)
 
-##
-## VOID
-## BoLoadBootDataSegments (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoLoadBootDataSegments (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -303,12 +303,12 @@ FUNCTION(BoLoadBootDataSegments)
 
 END_FUNCTION(BoLoadBootDataSegments)
 
-##
-## VOID
-## ArLoadTr (
-##     USHORT TssSegment
-##     )
-##
+//
+// VOID
+// ArLoadTr (
+//     USHORT TssSegment
+//     )
+//
 
 /*++
 
@@ -333,12 +333,12 @@ FUNCTION(ArLoadTr)
 
 END_FUNCTION(ArLoadTr)
 
-##
-## VOID
-## ArStoreTr (
-##     PULONG TssSegment
-##     )
-##
+//
+// VOID
+// ArStoreTr (
+//     PULONG TssSegment
+//     )
+//
 
 /*++
 
@@ -363,12 +363,12 @@ FUNCTION(ArStoreTr)
 
 END_FUNCTION(ArStoreTr)
 
-##
-## VOID
-## ArLoadIdtr (
-##     PVOID IdtBase
-##     )
-##
+//
+// VOID
+// ArLoadIdtr (
+//     PVOID IdtBase
+//     )
+//
 
 /*++
 
@@ -392,12 +392,12 @@ FUNCTION(ArLoadIdtr)
 
 END_FUNCTION(ArLoadIdtr)
 
-##
-## VOID
-## ArStoreIdtr (
-##     PTABLE_REGISTER IdtRegister
-##     )
-##
+//
+// VOID
+// ArStoreIdtr (
+//     PTABLE_REGISTER IdtRegister
+//     )
+//
 
 /*++
 
@@ -422,12 +422,12 @@ FUNCTION(ArStoreIdtr)
 
 END_FUNCTION(ArStoreIdtr)
 
-##
-## VOID
-## ArLoadGdtr (
-##     PTABLE_REGISTER Gdt
-##     )
-##
+//
+// VOID
+// ArLoadGdtr (
+//     PTABLE_REGISTER Gdt
+//     )
+//
 
 /*++
 
@@ -449,10 +449,10 @@ Return Value:
 FUNCTION(ArLoadGdtr)
     lgdt    (%rdi)                    # Load the GDT.
 
-    ##
-    ## In order to load the new GDT, a long jump of some kind is needed. Use a
-    ## far return for this purpose, returning from this routine in the process.
-    ##
+    //
+    // In order to load the new GDT, a long jump of some kind is needed. Use a
+    // far return for this purpose, returning from this routine in the process.
+    //
 
     popq    %rax                      # Pop the return address into a register.
     pushq   $KERNEL_CS                # Push the return segemnt.
@@ -461,12 +461,12 @@ FUNCTION(ArLoadGdtr)
 
 END_FUNCTION(ArLoadGdtr)
 
-##
-## VOID
-## ArStoreGdtr (
-##     PTABLE_REGISTER GdtRegister
-##     )
-##
+//
+// VOID
+// ArStoreGdtr (
+//     PTABLE_REGISTER GdtRegister
+//     )
+//
 
 /*++
 
@@ -490,12 +490,12 @@ FUNCTION(ArStoreGdtr)
 
 END_FUNCTION(ArStoreGdtr)
 
-##
-## PVOID
-## ArGetFaultingAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetFaultingAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -519,12 +519,12 @@ FUNCTION(ArGetFaultingAddress)
 
 END_FUNCTION(ArGetFaultingAddress)
 
-##
-## VOID
-## ArSetFaultingAddress (
-##     PVOID Value
-##     )
-##
+//
+// VOID
+// ArSetFaultingAddress (
+//     PVOID Value
+//     )
+//
 
 /*++
 
@@ -548,12 +548,12 @@ FUNCTION(ArSetFaultingAddress)
 
 END_FUNCTION(ArSetFaultingAddress)
 
-##
-## UINTN
-## ArGetCurrentPageDirectory (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetCurrentPageDirectory (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -577,12 +577,12 @@ FUNCTION(ArGetCurrentPageDirectory)
 
 END_FUNCTION(ArGetCurrentPageDirectory)
 
-##
-## VOID
-## ArSetCurrentPageDirectory (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetCurrentPageDirectory (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -606,15 +606,15 @@ FUNCTION(ArSetCurrentPageDirectory)
 
 END_FUNCTION(ArSetCurrentPageDirectory)
 
-##
-## VOID
-## ArCpuid (
-##     PULONG Eax,
-##     PULONG Ebx,
-##     PULONG Ecx,
-##     PULONG Edx
-##     )
-##
+//
+// VOID
+// ArCpuid (
+//     PULONG Eax,
+//     PULONG Ebx,
+//     PULONG Ecx,
+//     PULONG Edx
+//     )
+//
 
 /*++
 
@@ -665,12 +665,12 @@ FUNCTION(ArCpuid)
 
 END_FUNCTION(ArCpuid)
 
-##
-## UINTN
-## ArGetControlRegister0 (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetControlRegister0 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -694,12 +694,12 @@ FUNCTION(ArGetControlRegister0)
 
 END_FUNCTION(ArGetControlRegister0)
 
-##
-## VOID
-## ArSetControlRegister0 (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetControlRegister0 (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -723,12 +723,12 @@ FUNCTION(ArSetControlRegister0)
 
 END_FUNCTION(ArSetControlRegister0)
 
-##
-## UINTN
-## ArGetControlRegister4 (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetControlRegister4 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -752,12 +752,12 @@ FUNCTION(ArGetControlRegister4)
 
 END_FUNCTION(ArGetControlRegister4)
 
-##
-## VOID
-## ArSetControlRegister4 (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetControlRegister4 (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -781,12 +781,12 @@ FUNCTION(ArSetControlRegister4)
 
 END_FUNCTION(ArSetControlRegister4)
 
-##
-## UINTN
-## ArGetDebugRegister0 (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetDebugRegister0 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -810,12 +810,12 @@ FUNCTION(ArGetDebugRegister0)
 
 END_FUNCTION(ArGetDebugRegister0)
 
-##
-## VOID
-## ArSetDebugRegister0 (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister0 (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -839,12 +839,12 @@ FUNCTION(ArSetDebugRegister0)
 
 END_FUNCTION(ArSetDebugRegister0)
 
-##
-## UINTN
-## ArGetDebugRegister1 (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetDebugRegister1 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -868,12 +868,12 @@ FUNCTION(ArGetDebugRegister1)
 
 END_FUNCTION(ArGetDebugRegister1)
 
-##
-## VOID
-## ArSetDebugRegister1 (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister1 (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -897,12 +897,12 @@ FUNCTION(ArSetDebugRegister1)
 
 END_FUNCTION(ArSetDebugRegister1)
 
-##
-## UINTN
-## ArGetDebugRegister2 (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetDebugRegister2 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -926,12 +926,12 @@ FUNCTION(ArGetDebugRegister2)
 
 END_FUNCTION(ArGetDebugRegister2)
 
-##
-## VOID
-## ArSetDebugRegister2 (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister2 (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -955,12 +955,12 @@ FUNCTION(ArSetDebugRegister2)
 
 END_FUNCTION(ArSetDebugRegister2)
 
-##
-## UINTN
-## ArGetDebugRegister3 (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetDebugRegister3 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -984,12 +984,12 @@ FUNCTION(ArGetDebugRegister3)
 
 END_FUNCTION(ArGetDebugRegister3)
 
-##
-## VOID
-## ArSetDebugRegister3 (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister3 (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -1013,12 +1013,12 @@ FUNCTION(ArSetDebugRegister3)
 
 END_FUNCTION(ArSetDebugRegister3)
 
-##
-## UINTN
-## ArGetDebugRegister6 (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetDebugRegister6 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1042,12 +1042,12 @@ FUNCTION(ArGetDebugRegister6)
 
 END_FUNCTION(ArGetDebugRegister6)
 
-##
-## VOID
-## ArSetDebugRegister6 (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister6 (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -1071,12 +1071,12 @@ FUNCTION(ArSetDebugRegister6)
 
 END_FUNCTION(ArSetDebugRegister6)
 
-##
-## UINTN
-## ArGetDebugRegister7 (
-##     VOID
-##     )
-##
+//
+// UINTN
+// ArGetDebugRegister7 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1100,12 +1100,12 @@ FUNCTION(ArGetDebugRegister7)
 
 END_FUNCTION(ArGetDebugRegister7)
 
-##
-## VOID
-## ArSetDebugRegister7 (
-##     UINTN Value
-##     )
-##
+//
+// VOID
+// ArSetDebugRegister7 (
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -1129,12 +1129,12 @@ FUNCTION(ArSetDebugRegister7)
 
 END_FUNCTION(ArSetDebugRegister7)
 
-##
-## ULONGLONG
-## ArReadTimeStampCounter (
-##     VOID
-##     )
-##
+//
+// ULONGLONG
+// ArReadTimeStampCounter (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1171,16 +1171,16 @@ FUNCTION(ArReadTimeStampCounter)
 
 END_FUNCTION(ArReadTimeStampCounter)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
-##
-## VOID
-## BoRestoreTrapFrame (
-##     TRAP_FRAME TrapFrame
-##     )
-##
+//
+// VOID
+// BoRestoreTrapFrame (
+//     TRAP_FRAME TrapFrame
+//     )
+//
 
 /*++
 
@@ -1230,17 +1230,17 @@ BoRestoreTrapFrame:
     addq    $TRAP_ERRORCODE, %rsp           # Pop off non-hardware portion.
     ret                                     # Pop error code to return.
 
-##
-## TRAP_FRAME
-## BoGenerateTrapFrame (
-##     ULONGLONG ErrorCode,
-##     ULONGLONG ReturnRip,
-##     ULONGLONG ReturnCs,
-##     ULONGLONG ReturnRflags,
-##     ULONGLONG ReturnRsp,
-##     ULONGLONG ReturnSs
-##     )
-##
+//
+// TRAP_FRAME
+// BoGenerateTrapFrame (
+//     ULONGLONG ErrorCode,
+//     ULONGLONG ReturnRip,
+//     ULONGLONG ReturnCs,
+//     ULONGLONG ReturnRflags,
+//     ULONGLONG ReturnRsp,
+//     ULONGLONG ReturnSs
+//     )
+//
 
 /*++
 
@@ -1280,11 +1280,11 @@ Return Value:
 
 BoGenerateTrapFrame:
 
-    ##
-    ## Allocate room on the stack for the trap frame, minus the original
-    ## return address, minus the fields that have already been pushed by
-    ## hardware.
-    ##
+    //
+    // Allocate room on the stack for the trap frame, minus the original
+    // return address, minus the fields that have already been pushed by
+    // hardware.
+    //
 
     subq    $TRAP_R15, %rsp             # Allocate remaining trap frame space.
     movq    %rax, TRAP_RAX(%rsp)        # Save RAX to free it up.

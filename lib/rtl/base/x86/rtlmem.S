@@ -25,34 +25,34 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## RTL_API
-## PVOID
-## RtlCopyMemory (
-##     PVOID Destination,
-##     PCVOID Source,
-##     UINTN ByteCount
-##     )
-##
+//
+// RTL_API
+// PVOID
+// RtlCopyMemory (
+//     PVOID Destination,
+//     PCVOID Source,
+//     UINTN ByteCount
+//     )
+//
 
 /*++
 
@@ -93,14 +93,14 @@ PROTECTED_FUNCTION(RtlCopyMemory)
 
 END_FUNCTION(RtlCopyMemory)
 
-##
-## RTL_API
-## VOID
-## RtlZeroMemory (
-##     PVOID Buffer,
-##     UINTN ByteCount
-##     )
-##
+//
+// RTL_API
+// VOID
+// RtlZeroMemory (
+//     PVOID Buffer,
+//     UINTN ByteCount
+//     )
+//
 
 /*++
 
@@ -135,15 +135,15 @@ PROTECTED_FUNCTION(RtlZeroMemory)
 
 END_FUNCTION(RtlZeroMemory)
 
-##
-## RTL_API
-## VOID
-## RtlSetMemory (
-##     PVOID Buffer,
-##     INT Byte,
-##     UINTN Count
-##     )
-##
+//
+// RTL_API
+// VOID
+// RtlSetMemory (
+//     PVOID Buffer,
+//     INT Byte,
+//     UINTN Count
+//     )
+//
 
 /*++
 
@@ -180,15 +180,15 @@ PROTECTED_FUNCTION(RtlSetMemory)
 
 END_FUNCTION(RtlSetMemory)
 
-##
-## RTL_API
-## BOOL
-## RtlCompareMemory (
-##     PCVOID FirstBuffer,
-##     PCVOID SecondBuffer,
-##     UINTN Size
-##     )
-##
+//
+// RTL_API
+// BOOL
+// RtlCompareMemory (
+//     PCVOID FirstBuffer,
+//     PCVOID SecondBuffer,
+//     UINTN Size
+//     )
+//
 
 /*++
 
@@ -231,7 +231,7 @@ PROTECTED_FUNCTION(RtlCompareMemory)
 
 END_FUNCTION(RtlCompareMemory)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

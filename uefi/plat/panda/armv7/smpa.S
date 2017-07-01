@@ -26,38 +26,38 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## .globl allows these labels to be visible to the linker.
-##
+//
+// .globl allows these labels to be visible to the linker.
+//
 
 .globl EfipOmap4ProcessorStartup
 .globl EfipOmap4ParkingLoop
 .globl EfipOmap4ParkingLoopEnd
 
-##
-## UINT32
-## EfipOmap4SmcCommand (
-##     UINT32 Argument1,
-##     UINT32 Argument2,
-##     UINT32 Command
-##     )
-##
+//
+// UINT32
+// EfipOmap4SmcCommand (
+//     UINT32 Argument1,
+//     UINT32 Argument2,
+//     UINT32 Command
+//     )
+//
 
 /*++
 
@@ -93,12 +93,12 @@ FUNCTION EfipOmap4SmcCommand
 
 END_FUNCTION EfipOmap4SmcCommand
 
-##
-## VOID
-## EfipOmap4SendEvent (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipOmap4SendEvent (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -124,12 +124,12 @@ FUNCTION EfipOmap4SendEvent
 
 END_FUNCTION EfipOmap4SendEvent
 
-##
-## VOID
-## EfipOmap4ProcessorStartup (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipOmap4ProcessorStartup (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -163,13 +163,13 @@ EfipOmap4ProcessorStartup:
 
 .ltorg
 
-##
-## VOID
-## EfipOmap4ParkingLoop (
-##     UINT32 ProcessorId,
-##     VOID *ParkingLocation
-##     )
-##
+//
+// VOID
+// EfipOmap4ParkingLoop (
+//     UINT32 ProcessorId,
+//     VOID *ParkingLocation
+//     )
+//
 
 /*++
 
@@ -204,15 +204,15 @@ EfipOmap4ParkingLoopJump:
     DSB                                     @ One final breath, then...
     bx      %r2                             @ Jump head first into the abyss.
 
-##
-## Dump any literals being saved up.
-##
+//
+// Dump any literals being saved up.
+//
 
 .ltorg
 
 EfipOmap4ParkingLoopEnd:
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

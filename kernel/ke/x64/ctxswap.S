@@ -25,31 +25,31 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## KepContextSwap (
-##     PVOID *SavedStackLocation,
-##     PVOID NewStack,
-##     PVOID NewThreadPointer,
-##     BOOL FirstTime
-##     )
-##
+//
+// VOID
+// KepContextSwap (
+//     PVOID *SavedStackLocation,
+//     PVOID NewStack,
+//     PVOID NewThreadPointer,
+//     BOOL FirstTime
+//     )
+//
 
 /*++
 
@@ -87,43 +87,43 @@ FUNCTION(KepContextSwap)
     subq    $16, %rsp               # Grab some extra stack space, aligned.
     movl    $CONTEXT_SWAP_MAGIC, (%rsp)     # Save a sentinal on the stack.
 
-    ##
-    ## Load the new thread pointer GDT entry.
-    ##
+    //
+    // Load the new thread pointer GDT entry.
+    //
 
     wrgsbase    %rdx                # Write the new GS base.
 
-    ##
-    ## Save the current thread's stack pointer. This effectively freezes the
-    ## current thread. When this thread is swapped back in, the stack pointer
-    ## will be restored, and execution of this function will continue. It's
-    ## crucial that the stack pointer not change between a normal context swap
-    ## and a first-time context swap, otherwise the thread that created the
-    ## context swap will have an incorrect stack next time it is swapped in.
-    ##
+    //
+    // Save the current thread's stack pointer. This effectively freezes the
+    // current thread. When this thread is swapped back in, the stack pointer
+    // will be restored, and execution of this function will continue. It's
+    // crucial that the stack pointer not change between a normal context swap
+    // and a first-time context swap, otherwise the thread that created the
+    // context swap will have an incorrect stack next time it is swapped in.
+    //
 
     movq    %rsp, (%rdi)            # Save stack pointer.
 
-    ##
-    ## Switch to the new stack and perform work than can only be done once off
-    ## of the old stack.
-    ##
+    //
+    // Switch to the new stack and perform work than can only be done once off
+    // of the old stack.
+    //
 
     movq    %rsi, %rsp              # Switch to the new stack.
     xorq    %rbp, %rbp              # Zero out rbp so the call stack stops here.
 
-    ##
-    ## Perform any post-stack switch work needed on the old thread.
-    ##
+    //
+    // Perform any post-stack switch work needed on the old thread.
+    //
 
     call    KepPostContextSwapWork  # Perform post swap work.
 
-    ##
-    ## Determine whether to do a first-time return or a normal one. The only
-    ## difference is that a first-time execution has been set up to do an iret,
-    ## and a normal context swap doesn't need that because the stack is already
-    ## set up correctly.
-    ##
+    //
+    // Determine whether to do a first-time return or a normal one. The only
+    // difference is that a first-time execution has been set up to do an iret,
+    // and a normal context swap doesn't need that because the stack is already
+    // set up correctly.
+    //
 
     cmpl    $FALSE, %ecx            # Compare FirstTime to FALSE.
     je      KepContextSwapRestore   # Special case a first run.

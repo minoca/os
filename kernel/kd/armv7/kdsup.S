@@ -26,28 +26,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## KdpBreak (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpBreak (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -71,12 +71,12 @@ FUNCTION KdpBreak
 
 END_FUNCTION KdpBreak
 
-##
-## VOID
-## KdpCleanMemory (
-##     PVOID Address
-##     )
-##
+//
+// VOID
+// KdpCleanMemory (
+//     PVOID Address
+//     )
+//
 
 /*++
 
@@ -106,12 +106,12 @@ FUNCTION KdpCleanMemory
 
 END_FUNCTION KdpCleanMemory
 
-##
-## VOID
-## KdpInvalidateInstructionCache (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpInvalidateInstructionCache (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -138,12 +138,12 @@ FUNCTION KdpInvalidateInstructionCache
 
 END_FUNCTION KdpInvalidateInstructionCache
 
-##
-## VOID
-## KdpDisableInterrupts (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpDisableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -167,7 +167,7 @@ FUNCTION KdpDisableInterrupts
 
 END_FUNCTION KdpDisableInterrupts
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

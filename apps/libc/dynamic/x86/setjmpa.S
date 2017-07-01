@@ -25,22 +25,22 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## Define the register offsets within the jump buffer. The first offset is a
-## boolean indicating whether or not the mask was saved. The next few are the
-## signal mask. If the size of the signal mask changes, these offsets will need
-## to be adjusted to make additional room.
-##
+//
+// Define the register offsets within the jump buffer. The first offset is a
+// boolean indicating whether or not the mask was saved. The next few are the
+// signal mask. If the size of the signal mask changes, these offsets will need
+// to be adjusted to make additional room.
+//
 
 .equ JUMP_BUFFER_SAVE_MASK, 0x00
 .equ JUMP_BUFFER_EBX, 0x0C
@@ -50,25 +50,25 @@ Environment:
 .equ JUMP_BUFFER_ESP, 0x1C
 .equ JUMP_BUFFER_EIP, 0x20
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## int
-## setjmp (
-##     jmp_buf Environment
-##     )
-##
+//
+// int
+// setjmp (
+//     jmp_buf Environment
+//     )
+//
 
 /*++
 
@@ -97,15 +97,15 @@ EXPORTED_FUNCTION(setjmp)
     leal    4(%esp), %edx       # Get the caller's stack pointer.
     movl    (%edx), %eax        # Get the jump buffer.
 
-    ##
-    ## Mark the mask as having not been saved.
-    ##
+    //
+    // Mark the mask as having not been saved.
+    //
 
     movl    $0, JUMP_BUFFER_SAVE_MASK(%eax)
 
-    ##
-    ## Save the non-volatile registers.
-    ##
+    //
+    // Save the non-volatile registers.
+    //
 
     movl    %ebx, JUMP_BUFFER_EBX(%eax)
     movl    %esi, JUMP_BUFFER_ESI(%eax)
@@ -115,22 +115,22 @@ EXPORTED_FUNCTION(setjmp)
     movl    %ecx, JUMP_BUFFER_EIP(%eax)
 
 
-    ##
-    ## Return 0 as a direct call from set jump.
-    ##
+    //
+    // Return 0 as a direct call from set jump.
+    //
 
     movl    $0, %eax
     ret
 
 END_FUNCTION(setjmp)
 
-##
-## int
-## sigsetjmp (
-##     sigjmp_buf Environment,
-##     int SaveMask
-##     )
-##
+//
+// int
+// sigsetjmp (
+//     sigjmp_buf Environment,
+//     int SaveMask
+//     )
+//
 
 /*++
 
@@ -160,15 +160,15 @@ EXPORTED_FUNCTION(sigsetjmp)
     leal    4(%esp), %edx       # Get the caller's stack pointer.
     movl    (%edx), %eax        # Get the jump buffer.
 
-    ##
-    ## Mark the mask as having not been saved.
-    ##
+    //
+    // Mark the mask as having not been saved.
+    //
 
     movl    $0, JUMP_BUFFER_SAVE_MASK(%eax)
 
-    ##
-    ## Save the non-volatile registers.
-    ##
+    //
+    // Save the non-volatile registers.
+    //
 
     movl    %ebx, JUMP_BUFFER_EBX(%eax)
     movl    %esi, JUMP_BUFFER_ESI(%eax)
@@ -177,10 +177,10 @@ EXPORTED_FUNCTION(sigsetjmp)
     movl    %edx, JUMP_BUFFER_ESP(%eax)
     movl    %ecx, JUMP_BUFFER_EIP(%eax)
 
-    ##
-    ## Call the internal set jump C routine to help save the signal mask if
-    ## needed.
-    ##
+    //
+    // Call the internal set jump C routine to help save the signal mask if
+    // needed.
+    //
 
     movl    8(%esp), %ecx       # Get the SaveMask parameter.
     pushl   %ecx                # Push the SaveMask parameter.
@@ -188,22 +188,22 @@ EXPORTED_FUNCTION(sigsetjmp)
     call    ClpSetJump          # Call the helper.
     addl    $8, %esp            # Pop the parameters.
 
-    ##
-    ## Return 0 as a direct call from set jump.
-    ##
+    //
+    // Return 0 as a direct call from set jump.
+    //
 
     movl    $0, %eax
     ret
 
 END_FUNCTION(sigsetjmp)
 
-##
-## void
-## ClpLongJump (
-##     jmp_buf Environment,
-##     int Value
-##     )
-##
+//
+// void
+// ClpLongJump (
+//     jmp_buf Environment,
+//     int Value
+//     )
+//
 
 /*++
 
@@ -231,9 +231,9 @@ FUNCTION(ClpLongJump)
     movl    Environment(%esp), %ecx # Get the environment buffer.
     movl    Value(%esp), %eax       # Get the return value in position.
 
-    ##
-    ## Restore the non-volatile registers.
-    ##
+    //
+    // Restore the non-volatile registers.
+    //
 
     movl    JUMP_BUFFER_EBX(%ecx), %ebx
     movl    JUMP_BUFFER_ESI(%ecx), %esi
@@ -241,9 +241,9 @@ FUNCTION(ClpLongJump)
     movl    JUMP_BUFFER_EBP(%ecx), %ebp
     movl    JUMP_BUFFER_ESP(%ecx), %esp
 
-    ##
-    ## Get and jump to the original EIP.
-    ##
+    //
+    // Get and jump to the original EIP.
+    //
 
     movl    JUMP_BUFFER_EIP(%ecx), %edx
     jmp     *%edx

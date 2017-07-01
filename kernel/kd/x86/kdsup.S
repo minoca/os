@@ -26,36 +26,36 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## VOID
-## KdpBreak (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpBreak (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -79,12 +79,12 @@ FUNCTION(KdpBreak)
 
 END_FUNCTION(KdpBreak)
 
-##
-## VOID
-## KdpInitializeDebugRegisters (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpInitializeDebugRegisters (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -115,14 +115,14 @@ FUNCTION(KdpInitializeDebugRegisters)
 
 END_FUNCTION(KdpInitializeDebugRegisters)
 
-##
-## ULONG
-## KdpAtomicCompareExchange32 (
-##     volatile ULONG *Address,
-##     ULONG ExchangeValue,
-##     ULONG CompareValue
-##     )
-##
+//
+// ULONG
+// KdpAtomicCompareExchange32 (
+//     volatile ULONG *Address,
+//     ULONG ExchangeValue,
+//     ULONG CompareValue
+//     )
+//
 
 /*++
 
@@ -156,13 +156,13 @@ FUNCTION(KdpAtomicCompareExchange32)
 
 END_FUNCTION(KdpAtomicCompareExchange32)
 
-##
-## ULONG
-## KdpAtomicAdd32 (
-##     volatile ULONG *Address,
-##     ULONG Increment
-##     )
-##
+//
+// ULONG
+// KdpAtomicAdd32 (
+//     volatile ULONG *Address,
+//     ULONG Increment
+//     )
+//
 
 /*++
 
@@ -198,12 +198,12 @@ KdpAtomicAdd32Loop:
 
 END_FUNCTION(KdpAtomicAdd32)
 
-##
-## VOID
-## KdpDisableInterrupts (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpDisableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 

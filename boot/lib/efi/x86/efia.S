@@ -25,31 +25,31 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## UINTN
-## BopEfiGetStackPointer (
-##     VOID
-##     )
-##
+//
+// UINTN
+// BopEfiGetStackPointer (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -75,12 +75,12 @@ FUNCTION(BopEfiGetStackPointer)
 
 END_FUNCTION(BopEfiGetStackPointer)
 
-##
-## VOID
-## BopEfiSaveInitialState (
-##     VOID
-##     )
-##
+//
+// VOID
+// BopEfiSaveInitialState (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -125,12 +125,12 @@ FUNCTION(BopEfiSaveInitialState)
 
 END_FUNCTION(BopEfiSaveInitialState)
 
-##
-## VOID
-## BopEfiRestoreFirmwareContext (
-##     VOID
-##     )
-##
+//
+// VOID
+// BopEfiRestoreFirmwareContext (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -153,9 +153,9 @@ Return Value:
 
 FUNCTION(BopEfiRestoreFirmwareContext)
 
-    ##
-    ## Start by saving the OS context.
-    ##
+    //
+    // Start by saving the OS context.
+    //
 
     xorl    %eax, %eax              # Zero eax.
     movw    %cs, %ax                # Get CS.
@@ -179,9 +179,9 @@ FUNCTION(BopEfiRestoreFirmwareContext)
     sgdt    (%eax)                  # Save the GDT.
     cli                             # Disable interrupts.
 
-    ##
-    ## Restore the firmware context.
-    ##
+    //
+    // Restore the firmware context.
+    //
 
     movl    BoFirmwareDs, %ecx      # Get DS.
     movl    BoFirmwareCs, %eax      # Get CS.
@@ -211,12 +211,12 @@ BopEfiRestoreFirmwareContextJump:
 
 END_FUNCTION(BopEfiRestoreFirmwareContext)
 
-##
-## VOID
-## BopEfiRestoreApplicationContext (
-##     VOID
-##     )
-##
+//
+// VOID
+// BopEfiRestoreApplicationContext (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -265,7 +265,7 @@ BopEfiRestoreApplicationContextJump:
 
 END_FUNCTION(BopEfiRestoreApplicationContext)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

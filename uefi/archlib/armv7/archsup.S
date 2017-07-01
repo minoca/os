@@ -26,28 +26,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## EfiMemoryBarrier (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfiMemoryBarrier (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -73,12 +73,12 @@ FUNCTION EfiMemoryBarrier
 
 END_FUNCTION EfiMemoryBarrier
 
-##
-## VOID
-## EfipCleanEntireCache (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipCleanEntireCache (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -150,12 +150,12 @@ EfipCleanEntireCacheEnd:
 
 END_FUNCTION EfipCleanEntireCache
 
-##
-## VOID
-## EfipInvalidateInstructionCache (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipInvalidateInstructionCache (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -184,7 +184,7 @@ FUNCTION EfipInvalidateInstructionCache
 
 END_FUNCTION EfipInvalidateInstructionCache
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

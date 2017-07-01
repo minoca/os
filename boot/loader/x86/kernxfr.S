@@ -26,35 +26,35 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## VOID
-## BoEnablePaging (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoEnablePaging (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -74,16 +74,16 @@ Return Value:
 
 FUNCTION(BoEnablePaging)
 
-    ##
-    ## Set up CR3.
-    ##
+    //
+    // Set up CR3.
+    //
 
     movl    BoPageDirectory, %eax  # Get the page directory.
     movl    %eax, %cr3              # Put it in CR3.
 
-    ##
-    ## Set up CR0, enabling paging.
-    ##
+    //
+    // Set up CR0, enabling paging.
+    //
 
     movl    %cr0, %eax              # Read CR0.
     orl     $CR0_OR_MASK, %eax      # OR in the right bits.
@@ -93,13 +93,13 @@ FUNCTION(BoEnablePaging)
 
 END_FUNCTION(BoEnablePaging)
 
-##
-## VOID
-## BoTransferToKernelAsm (
-##     PVOID Parameters,
-##     PVOID EntryPoint,
-##     PVOID StackAddress
-##     )
+//
+// VOID
+// BoTransferToKernelAsm (
+//     PVOID Parameters,
+//     PVOID EntryPoint,
+//     PVOID StackAddress
+//     )
 
 /*++
 
@@ -124,9 +124,9 @@ Return Value:
 
 --*/
 
-##
-## Parameters
-##
+//
+// Parameters
+//
 
 .equ Parameters, 8
 .equ EntryPoint, 12

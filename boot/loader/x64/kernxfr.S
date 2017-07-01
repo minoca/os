@@ -26,28 +26,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## BoEnablePaging (
-##     VOID
-##     )
-##
+//
+// VOID
+// BoEnablePaging (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -67,19 +67,19 @@ Return Value:
 
 FUNCTION(BoEnablePaging)
 
-    ##
-    ## Set up CR3. Paging may already be on, in which case this switches to the
-    ## kernel page tables immediately.
-    ##
+    //
+    // Set up CR3. Paging may already be on, in which case this switches to the
+    // kernel page tables immediately.
+    //
 
     movq    BoPageDirectory@GOTPCREL(%rip), %rax   # Get page directory address.
     movq    (%rax), %rax            # Dereference to get the value.
     movq    %rax, %cr3              # Put it in CR3.
 
-    ##
-    ## Set up CR0, enabling paging, even though by all accounts it really
-    ## should be on by now.
-    ##
+    //
+    // Set up CR0, enabling paging, even though by all accounts it really
+    // should be on by now.
+    //
 
     movq    %cr0, %rax              # Read CR0.
     orl     $CR0_OR_MASK, %eax      # OR in the right bits.
@@ -89,13 +89,13 @@ FUNCTION(BoEnablePaging)
 
 END_FUNCTION(BoEnablePaging)
 
-##
-## VOID
-## BoTransferToKernelAsm (
-##     PVOID Parameters,
-##     PVOID EntryPoint,
-##     PVOID StackAddress
-##     )
+//
+// VOID
+// BoTransferToKernelAsm (
+//     PVOID Parameters,
+//     PVOID EntryPoint,
+//     PVOID StackAddress
+//     )
 
 /*++
 
@@ -127,9 +127,9 @@ FUNCTION(BoTransferToKernelAsm)
     pushq   %rbp                # Push a dummy return address.
     jmp     *%rsi               # Launch off to the kernel.
 
-    ##
-    ## Jumps are forever, so there's no way to get back here.
-    ##
+    //
+    // Jumps are forever, so there's no way to get back here.
+    //
 
 LoaderEndLoop:
     int     $3

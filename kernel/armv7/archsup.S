@@ -26,28 +26,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## ArCleanEntireCache (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArCleanEntireCache (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -119,12 +119,12 @@ ArCleanEntireCacheEnd:
 
 END_FUNCTION ArCleanEntireCache
 
-##
-## VOID
-## ArCleanInvalidateEntireCache (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArCleanInvalidateEntireCache (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -196,12 +196,12 @@ ArCleanInvalidateEntireCacheEnd:
 
 END_FUNCTION ArCleanInvalidateEntireCache
 
-##
-## ULONG
-## ArGetMultiprocessorIdRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetMultiprocessorIdRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -225,12 +225,12 @@ FUNCTION ArGetMultiprocessorIdRegister
 
 END_FUNCTION ArGetMultiprocessorIdRegister
 
-##
-## ULONG
-## ArGetPerformanceControlRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetPerformanceControlRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -254,12 +254,12 @@ FUNCTION ArGetPerformanceControlRegister
 
 END_FUNCTION ArGetPerformanceControlRegister
 
-##
-## VOID
-## ArSetPerformanceControlRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPerformanceControlRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -283,12 +283,12 @@ FUNCTION ArSetPerformanceControlRegister
 
 END_FUNCTION ArSetPerformanceControlRegister
 
-##
-## VOID
-## ArClearPerformanceInterruptRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArClearPerformanceInterruptRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -313,12 +313,12 @@ FUNCTION ArClearPerformanceInterruptRegister
 
 END_FUNCTION ArClearPerformanceInterruptRegister
 
-##
-## VOID
-## ArSetPerformanceUserEnableRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPerformanceUserEnableRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -342,12 +342,12 @@ FUNCTION ArSetPerformanceUserEnableRegister
 
 END_FUNCTION ArSetPerformanceUserEnableRegister
 
-##
-## ULONG
-## ArGetPerformanceCounterEnableRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetPerformanceCounterEnableRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -372,12 +372,12 @@ FUNCTION ArGetPerformanceCounterEnableRegister
 
 END_FUNCTION ArGetPerformanceCounterEnableRegister
 
-##
-## VOID
-## ArSetCycleCountEnableRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetCycleCountEnableRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -402,12 +402,12 @@ FUNCTION ArSetPerformanceCounterEnableRegister
 
 END_FUNCTION ArSetPerformanceCounterEnableRegister
 
-##
-## ULONG
-## ArGetCycleCountRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetCycleCountRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -432,12 +432,12 @@ FUNCTION ArGetCycleCountRegister
 
 END_FUNCTION ArGetCycleCountRegister
 
-##
-## VOID
-## ArSetCycleCountRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetCycleCountRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -461,7 +461,7 @@ FUNCTION ArSetCycleCountRegister
 
 END_FUNCTION ArSetCycleCountRegister
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

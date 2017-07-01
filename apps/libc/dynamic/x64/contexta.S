@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## LIBC_API
-## int
-## getcontext (
-##     ucontext_t *Context
-##     )
-##
+//
+// LIBC_API
+// int
+// getcontext (
+//     ucontext_t *Context
+//     )
+//
 
 /*++
 
@@ -118,13 +118,13 @@ EXPORTED_FUNCTION(getcontext)
 
 END_FUNCTION(getcontext)
 
-##
-## LIBC_API
-## int
-## setcontext (
-##     const ucontext_t *Context
-##     )
-##
+//
+// LIBC_API
+// int
+// setcontext (
+//     const ucontext_t *Context
+//     )
+//
 
 /*++
 
@@ -179,27 +179,27 @@ EXPORTED_FUNCTION(setcontext)
     popfq                           # Pop eflags off the stack.
     movq    TRAP_RAX(%rcx), %rax    # Restore rax as return value.
 
-    ##
-    ## This last part gets a little fishy depending on where the context
-    ## structure is. If the new rsp is on the same stack but greater than this
-    ## one, then this code runs the risk of taking a signal, which might
-    ## clobber the context before restoring RIP can be done. Hopefully that
-    ## doesn't happen.
-    ##
+    //
+    // This last part gets a little fishy depending on where the context
+    // structure is. If the new rsp is on the same stack but greater than this
+    // one, then this code runs the risk of taking a signal, which might
+    // clobber the context before restoring RIP can be done. Hopefully that
+    // doesn't happen.
+    //
 
     movq    TRAP_RSP(%rcx), %rsp    # Restore stack pointer.
     jmp     *TRAP_RIP(%rcx)         # Return.
 
 END_FUNCTION(setcontext)
 
-##
-## __NO_RETURN
-## void
-## ClpContextStart (
-##     void (*StartFunction)(),
-##     ...
-##     )
-##
+//
+// __NO_RETURN
+// void
+// ClpContextStart (
+//     void (*StartFunction)(),
+//     ...
+//     )
+//
 
 /*++
 
@@ -236,12 +236,12 @@ FUNCTION(ClpContextStart)
 
 END_FUNCTION(ClpContextStart)
 
-##
-## VOID
-## ClpFxSave (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ClpFxSave (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 
@@ -267,12 +267,12 @@ FUNCTION(ClpFxSave)
 
 END_FUNCTION(ClpFxSave)
 
-##
-## VOID
-## ClpFxRestore (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ClpFxRestore (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 

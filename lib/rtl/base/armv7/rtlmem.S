@@ -25,31 +25,31 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## RTL_API
-## PVOID
-## RtlCopyMemory (
-##     PVOID Destination,
-##     PCVOID Source,
-##     UINTN ByteCount
-##     )
-##
+//
+// RTL_API
+// PVOID
+// RtlCopyMemory (
+//     PVOID Destination,
+//     PCVOID Source,
+//     UINTN ByteCount
+//     )
+//
 
 /*++
 
@@ -82,19 +82,19 @@ PROTECTED_FUNCTION RtlCopyMemory
     tst     %r3, #3                             @ Test for word agreement.
     bne     RtlCopyMemoryBytes                  @ Branch if not similar.
 
-    ##
-    ## Both buffers have the same alignment, so at least some of the data can
-    ## be word-copied.
-    ##
+    //
+    // Both buffers have the same alignment, so at least some of the data can
+    // be word-copied.
+    //
 
     ands    %r3, %r0, #3                        @ Test for word alignment.
     beq     RtlCopyMemoryAligned                @ Jump over if aligned.
     rsb     %r3, %r3, #4                        @ Get number of unaligned bytes.
     sub     %r2, %r2, %r3                       @ Remove from total.
 
-    ##
-    ## Copy the non-aligned portion.
-    ##
+    //
+    // Copy the non-aligned portion.
+    //
 
 RtlCopyMemoryUnalignedBytes:
     ldrb    %r12, [%r1], #1                     @ Read a byte from the source.
@@ -102,9 +102,9 @@ RtlCopyMemoryUnalignedBytes:
     strb    %r12, [%r0], #1                     @ Store to the destination.
     bne     RtlCopyMemoryUnalignedBytes         @ Loop.
 
-    ##
-    ## Copy words eight at a time.
-    ##
+    //
+    // Copy words eight at a time.
+    //
 
 RtlCopyMemoryAligned:
     movs    %r3, %r2, asr #5                    @ Get the number of chunks.
@@ -112,9 +112,9 @@ RtlCopyMemoryAligned:
     and     %r2, %r2, #0x1F                     @ Get non-chunk remainder.
     stmdb   %sp!, {%r4-%r10}                    @ Save non-volatile registers.
 
-    ##
-    ## Loop copying chunks.
-    ##
+    //
+    // Loop copying chunks.
+    //
 
 RtlCopyMemoryChunks:
     ldmia   %r1!, {%r4-%r10, %r12}              @ Breathe in a chunk.
@@ -127,9 +127,9 @@ RtlCopyMemoryChunksDone:
     movs    %r3, %r2, asr #2                    @ Get remaining word count.
     beq     RtlCopyMemoryWordsDone              @ Jump out if none.
 
-    ##
-    ## Copy a word at a time.
-    ##
+    //
+    // Copy a word at a time.
+    //
 
 RtlCopyMemoryWords:
     ldr     %r12, [%r1], #4                     @ Load a word.
@@ -141,9 +141,9 @@ RtlCopyMemoryWordsDone:
     ands    %r2, %r2, #3                        @ Get byte remainder.
     beq     RtlCopyMemoryBytesDone              @ Jump out if none.
 
-    ##
-    ## Copy any remaining bytes one at a time.
-    ##
+    //
+    // Copy any remaining bytes one at a time.
+    //
 
 RtlCopyMemoryBytes:
     ldrb    %r12, [%r1], #1                     @ Read in a byte.
@@ -157,14 +157,14 @@ RtlCopyMemoryBytesDone:
 
 END_FUNCTION RtlCopyMemory
 
-##
-## RTL_API
-## VOID
-## RtlZeroMemory (
-##     PVOID Buffer,
-##     UINTN ByteCount
-##     );
-##
+//
+// RTL_API
+// VOID
+// RtlZeroMemory (
+//     PVOID Buffer,
+//     UINTN ByteCount
+//     );
+//
 
 /*++
 
@@ -191,15 +191,15 @@ PROTECTED_FUNCTION RtlZeroMemory
 
 END_FUNCTION RtlZeroMemory
 
-##
-## RTL_API
-## PVOID
-## RtlSetMemory (
-##     PVOID Buffer,
-##     INT Byte,
-##     UINTN Count
-##     )
-##
+//
+// RTL_API
+// PVOID
+// RtlSetMemory (
+//     PVOID Buffer,
+//     INT Byte,
+//     UINTN Count
+//     )
+//
 
 /*++
 
@@ -228,27 +228,27 @@ PROTECTED_FUNCTION RtlSetMemory
     cmp     %r2, #0x4                           @ See if the set is short.
     blt     RtlSetMemoryBytes                   @ Do byte operation if so.
 
-    ##
-    ## Set the unaligned portion at the beginning byte for byte.
-    ##
+    //
+    // Set the unaligned portion at the beginning byte for byte.
+    //
 
     ands    %r3, %r0, #3                        @ Test for word alignment.
     beq     RtlSetMemoryAligned                 @ Jump over if aligned.
     rsb     %r3, %r3, #4                        @ Get number of unaligned bytes.
     sub     %r2, %r2, %r3                       @ Remove from total.
 
-    ##
-    ## Set the unaligned portion.
-    ##
+    //
+    // Set the unaligned portion.
+    //
 
 RtlSetMemoryUnalignedBytes:
     subs    %r3, %r3, #1                        @ Decrement the loop count.
     strb    %r1, [%r0], #1                      @ Store to the destination.
     bne     RtlSetMemoryUnalignedBytes          @ Loop.
 
-    ##
-    ## Prepare to set words eight at a time.
-    ##
+    //
+    // Prepare to set words eight at a time.
+    //
 
 RtlSetMemoryAligned:
     and     %r1, %r1, #0xFF                     @ Get the byte to set.
@@ -267,9 +267,9 @@ RtlSetMemoryAligned:
     mov     %r10, %r1                           @ Copy value.
     mov     %r12, %r1                           @ Copy value.
 
-    ##
-    ## Loop setting chunks.
-    ##
+    //
+    // Loop setting chunks.
+    //
 
 RtlSetMemoryChunks:
     subs    %r3, %r3, #1                        @ Subtract chunk from the count.
@@ -281,9 +281,9 @@ RtlSetMemoryChunksDone:
     movs    %r3, %r2, asr #2                    @ Get remaining word count.
     beq     RtlSetMemoryWordsDone               @ Jump out if none.
 
-    ##
-    ## Set a word at a time.
-    ##
+    //
+    // Set a word at a time.
+    //
 
 RtlSetMemoryWords:
     subs    %r3, %r3, #1                        @ Decrement word count.
@@ -294,9 +294,9 @@ RtlSetMemoryWordsDone:
     ands    %r2, %r2, #3                        @ Get byte remainder.
     beq     RtlSetMemoryBytesDone               @ Jump out if none.
 
-    ##
-    ## Set any remaining bytes one at a time.
-    ##
+    //
+    // Set any remaining bytes one at a time.
+    //
 
 RtlSetMemoryBytes:
     subs    %r2, %r2, #1                        @ Decrement loop count.
@@ -309,15 +309,15 @@ RtlSetMemoryBytesDone:
 
 END_FUNCTION RtlSetMemory
 
-##
-## RTL_API
-## BOOL
-## RtlCompareMemory (
-##     PCVOID FirstBuffer,
-##     PCVOID SecondBuffer,
-##     UINTN Size
-##     )
-##
+//
+// RTL_API
+// BOOL
+// RtlCompareMemory (
+//     PCVOID FirstBuffer,
+//     PCVOID SecondBuffer,
+//     UINTN Size
+//     )
+//
 
 /*++
 
@@ -365,7 +365,7 @@ RtlCompareMemoryReturn:
 
 END_FUNCTION RtlCompareMemory
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

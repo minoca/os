@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## RTL_API
-## VOID
-## RtlDebugBreak (
-##     VOID
-##     )
-##
+//
+// RTL_API
+// VOID
+// RtlDebugBreak (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -72,14 +72,14 @@ PROTECTED_FUNCTION RtlDebugBreak
 
 END_FUNCTION RtlDebugBreak
 
-##
-## RTL_API
-## VOID
-## RtlDebugService (
-##     UINTN ServiceRequest,
-##     PVOID Parameter
-##     )
-##
+//
+// RTL_API
+// VOID
+// RtlDebugService (
+//     UINTN ServiceRequest,
+//     PVOID Parameter
+//     )
+//
 
 /*++
 
@@ -105,14 +105,14 @@ PROTECTED_FUNCTION RtlDebugService
 
 END_FUNCTION RtlDebugService
 
-##
-## RTL_API
-## ULONG
-## RtlAtomicExchange32 (
-##     volatile ULONG *Address,
-##     ULONG ExchangeValue
-##     )
-##
+//
+// RTL_API
+// ULONG
+// RtlAtomicExchange32 (
+//     volatile ULONG *Address,
+//     ULONG ExchangeValue
+//     )
+//
 
 /*++
 
@@ -145,14 +145,14 @@ PROTECTED_FUNCTION RtlAtomicExchange32
 
 END_FUNCTION RtlAtomicExchange32
 
-##
-## RTL_API
-## ULONGLONG
-## RtlAtomicExchange64 (
-##     volatile ULONGLONG *Address,
-##     ULONGLONG ExchangeValue
-##     )
-##
+//
+// RTL_API
+// ULONGLONG
+// RtlAtomicExchange64 (
+//     volatile ULONGLONG *Address,
+//     ULONGLONG ExchangeValue
+//     )
+//
 
 /*++
 
@@ -190,15 +190,15 @@ RtlAtomicExchange64Loop:
 
 END_FUNCTION RtlAtomicExchange64
 
-##
-## RTL_API
-## ULONG
-## RtlAtomicCompareExchange32 (
-##     volatile ULONG *Address,
-##     ULONG ExchangeValue,
-##     ULONG CompareValue
-##     )
-##
+//
+// RTL_API
+// ULONG
+// RtlAtomicCompareExchange32 (
+//     volatile ULONG *Address,
+//     ULONG ExchangeValue,
+//     ULONG CompareValue
+//     )
+//
 
 /*++
 
@@ -229,11 +229,11 @@ PROTECTED_FUNCTION RtlAtomicCompareExchange32
     cmp     %r3, %r2                            @ Compare to CompareValue
     bne     RtlAtomicCompareExchange32End1      @ If not equal, exit with clrex.
 
-    ##
-    ## If the values are equal, do an exclusive store of R1 to the address at
-    ## R0. Store whether or not the store succeeded in R12 (a volatile
-    ## register). A 0 in R12 indicates the store succeeded.
-    ##
+    //
+    // If the values are equal, do an exclusive store of R1 to the address at
+    // R0. Store whether or not the store succeeded in R12 (a volatile
+    // register). A 0 in R12 indicates the store succeeded.
+    //
 
     strex   %r12, %r1, [%r0]                    @ Store exclusive.
     cmp     %r12, #0                            @ Compare with 0.
@@ -250,15 +250,15 @@ RtlAtomicCompareExchange32End2:
 
 END_FUNCTION RtlAtomicCompareExchange32
 
-##
-## RTL_API
-## ULONGLONG
-## RtlAtomicCompareExchange64 (
-##     volatile ULONGLONG *Address,
-##     ULONGLONG ExchangeValue,
-##     ULONGLONG CompareValue
-##     )
-##
+//
+// RTL_API
+// ULONGLONG
+// RtlAtomicCompareExchange64 (
+//     volatile ULONGLONG *Address,
+//     ULONGLONG ExchangeValue,
+//     ULONGLONG CompareValue
+//     )
+//
 
 /*++
 
@@ -295,11 +295,11 @@ RtlAtomicCompareExchange64Loop:
     cmp     %r7, %r5                            @ Compare to CompareValue
     bne     RtlAtomicCompareExchange64End1      @ If not equal, exit with clrex.
 
-    ##
-    ## If the values are equal, do an exclusive store of R2:R3 to the address at
-    ## R0. Store whether or not the store succeeded in R12 (a volatile
-    ## register). A 0 in R12 indicates the store succeeded.
-    ##
+    //
+    // If the values are equal, do an exclusive store of R2:R3 to the address at
+    // R0. Store whether or not the store succeeded in R12 (a volatile
+    // register). A 0 in R12 indicates the store succeeded.
+    //
 
     strexd  %r12, %r2, %r3, [%r0]               @ Store exclusive.
     cmp     %r12, #0                            @ Compare with 0.
@@ -318,14 +318,14 @@ RtlAtomicCompareExchange64End2:
 
 END_FUNCTION RtlAtomicCompareExchange64
 
-##
-## RTL_API
-## ULONG
-## RtlAtomicAdd32 (
-##     volatile ULONG *Address,
-##     ULONG Increment
-##     )
-##
+//
+// RTL_API
+// ULONG
+// RtlAtomicAdd32 (
+//     volatile ULONG *Address,
+//     ULONG Increment
+//     )
+//
 
 /*++
 
@@ -358,14 +358,14 @@ PROTECTED_FUNCTION RtlAtomicAdd32
 
 END_FUNCTION RtlAtomicAdd32
 
-##
-## RTL_API
-## ULONGLONG
-## RtlAtomicAdd64 (
-##     volatile ULONGLONG *Address,
-##     ULONGLONG Increment
-##     )
-##
+//
+// RTL_API
+// ULONGLONG
+// RtlAtomicAdd64 (
+//     volatile ULONGLONG *Address,
+//     ULONGLONG Increment
+//     )
+//
 
 /*++
 
@@ -404,14 +404,14 @@ RtlAtomicAdd64Loop:
 
 END_FUNCTION RtlAtomicAdd64
 
-##
-## RTL_API
-## ULONG
-## RtlAtomicOr32 (
-##     volatile ULONG *Address,
-##     ULONG Mask
-##     )
-##
+//
+// RTL_API
+// ULONG
+// RtlAtomicOr32 (
+//     volatile ULONG *Address,
+//     ULONG Mask
+//     )
+//
 
 /*++
 
@@ -444,14 +444,14 @@ PROTECTED_FUNCTION RtlAtomicOr32
 
 END_FUNCTION RtlAtomicOr32
 
-##
-## RTL_API
-## ULONGLONG
-## RtlAtomicOr64 (
-##     volatile ULONGLONG *Address,
-##     ULONGLONG Mask
-##     )
-##
+//
+// RTL_API
+// ULONGLONG
+// RtlAtomicOr64 (
+//     volatile ULONGLONG *Address,
+//     ULONGLONG Mask
+//     )
+//
 
 /*++
 
@@ -490,14 +490,14 @@ RtlAtomicOr64Loop:
 
 END_FUNCTION RtlAtomicOr64
 
-##
-## RTL_API
-## ULONG
-## RtlAtomicAnd32 (
-##     volatile ULONG *Address,
-##     ULONG Mask
-##     )
-##
+//
+// RTL_API
+// ULONG
+// RtlAtomicAnd32 (
+//     volatile ULONG *Address,
+//     ULONG Mask
+//     )
+//
 
 /*++
 
@@ -530,14 +530,14 @@ PROTECTED_FUNCTION RtlAtomicAnd32
 
 END_FUNCTION RtlAtomicAnd32
 
-##
-## RTL_API
-## ULONG
-## RtlAtomicXor32 (
-##     volatile ULONG *Address,
-##     ULONG Mask
-##     )
-##
+//
+// RTL_API
+// ULONG
+// RtlAtomicXor32 (
+//     volatile ULONG *Address,
+//     ULONG Mask
+//     )
+//
 
 /*++
 
@@ -570,13 +570,13 @@ PROTECTED_FUNCTION RtlAtomicXor32
 
 END_FUNCTION RtlAtomicXor32
 
-##
-## RTL_API
-## VOID
-## RtlMemoryBarrier (
-##     VOID
-##     )
-##
+//
+// RTL_API
+// VOID
+// RtlMemoryBarrier (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -602,7 +602,7 @@ PROTECTED_FUNCTION RtlMemoryBarrier
 
 END_FUNCTION RtlMemoryBarrier
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

@@ -26,19 +26,19 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## BIOS_CALL_CONTEXT structure definition.
-##
+//
+// BIOS_CALL_CONTEXT structure definition.
+//
 
 .equ CODEPAGE,  0x00
 .equ DATAPAGE,  0x04
@@ -60,22 +60,22 @@ Environment:
 .equ GS,        0x44
 .equ SS,        0x48
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## .globl allows this label to be visible to the linker.
-##
+//
+// .globl allows this label to be visible to the linker.
+//
 
 .globl EfiBiosCallTemplate
 .globl EfiBiosCallTemplateLongJump
@@ -85,16 +85,16 @@ Environment:
 .globl EfiBiosCallTemplateEnd
 .globl EfipExecuteBiosCall
 
-##
-## This code represents the real-mode code run to call BIOS code. It is 16-bit
-## real-mode code. SI contains a pointer to the context structure.
-##
+//
+// This code represents the real-mode code run to call BIOS code. It is 16-bit
+// real-mode code. SI contains a pointer to the context structure.
+//
 
 FUNCTION(EfiBiosCallTemplate)
 
-    ##
-    ## Save the GDT, IDT, and CR0.
-    ##
+    //
+    // Save the GDT, IDT, and CR0.
+    //
 
     subl    $0x8, %esp
     sgdt    (%esp)
@@ -105,9 +105,9 @@ FUNCTION(EfiBiosCallTemplate)
     andl    $0xFFFFFFFE, %ecx
     pushl   %esi
 
-    ##
-    ## Push the registers from the context onto the stack.
-    ##
+    //
+    // Push the registers from the context onto the stack.
+    //
 
     movl    EFLAGS(%esi), %eax
     pushl   %eax
@@ -132,41 +132,41 @@ FUNCTION(EfiBiosCallTemplate)
     movl    GS(%esi), %eax
     pushl   %eax
 
-    ##
-    ## Load 16-bit protected mode GDT and IDT registers.
-    ##
+    //
+    // Load 16-bit protected mode GDT and IDT registers.
+    //
 
     lgdt    Efi16BitGdt
     lidt    Efi16BitIdt
 
-    ##
-    ## Jump to consummate the transition to 16-bit protected mode.
-    ##
+    //
+    // Jump to consummate the transition to 16-bit protected mode.
+    //
 
 EfiBiosCallTemplateLongJump:
     ljmp    $KERNEL_CS, $0x3456
 
-    ##
-    ## This is now 16-bit protected mode code (a weird combination). Remove the
-    ## protected mode bit to get to real mode.
-    ##
+    //
+    // This is now 16-bit protected mode code (a weird combination). Remove the
+    // protected mode bit to get to real mode.
+    //
 
 .code16
 
     movl    %ecx, %cr0
 
-    ##
-    ## Perform a long jump to get back to 16 bit real mode. This assumes that
-    ## the code is located below 64k. The actual constants will be patched up,
-    ## this constant is a dummy.
-    ##
+    //
+    // Perform a long jump to get back to 16 bit real mode. This assumes that
+    // the code is located below 64k. The actual constants will be patched up,
+    // this constant is a dummy.
+    //
 
 EfiBiosCallTemplateLongJump2:
     ljmp    $0x12, $0x3456
 
-    ##
-    ## Reset the stack segment, and pop the registers into place.
-    ##
+    //
+    // Reset the stack segment, and pop the registers into place.
+    //
 
     xorw    %ax, %ax
     movw    %ax, %ss
@@ -186,17 +186,17 @@ EfiBiosCallTemplateLongJump2:
     popl    %eax
     popfl
 
-    ##
-    ## Blast off. This 0x1B is a dummy value, the setup code will have
-    ## modified that to be the correct vector.
-    ##
+    //
+    // Blast off. This 0x1B is a dummy value, the setup code will have
+    // modified that to be the correct vector.
+    //
 
 EfiBiosCallTemplateIntInstruction:
     int     $0x1B
 
-    ##
-    ## Push the registers onto the stack. This is still 16 bit code.
-    ##
+    //
+    // Push the registers onto the stack. This is still 16 bit code.
+    //
 
     pushfl
     cli
@@ -216,10 +216,10 @@ EfiBiosCallTemplateIntInstruction:
     movw    %ds, %ax
     pushl   %eax
 
-    ##
-    ## Restore back to 32-bit protected mode by loading up the GDT and IDT,
-    ## then applying the original CR0.
-    ##
+    //
+    // Restore back to 32-bit protected mode by loading up the GDT and IDT,
+    // then applying the original CR0.
+    //
 
     xorw    %ax, %ax
     movw    %ax, %ds
@@ -229,9 +229,9 @@ EfiBiosCallTemplateIntInstruction:
     lgdt    (%eax)
     movl    0x30(%esp), %eax
 
-    ##
-    ## Restore protected mode, and perform a long jump to make it apply.
-    ##
+    //
+    // Restore protected mode, and perform a long jump to make it apply.
+    //
 
     movl    %eax, %cr0
 
@@ -240,9 +240,9 @@ EfiBiosCallTemplateLongJump3:
 
 .code32
 
-    ##
-    ## Restore the protected mode segment registers.
-    ##
+    //
+    // Restore the protected mode segment registers.
+    //
 
     movw    $KERNEL_DS, %dx
     movw    %dx, %ds
@@ -251,10 +251,10 @@ EfiBiosCallTemplateLongJump3:
     movw    %dx, %gs
     movw    %dx, %ss
 
-    ##
-    ## Safely back in 32-bit land, get the address of the context structure,
-    ## and save the registers saved onto the stack into the context structure.
-    ##
+    //
+    // Safely back in 32-bit land, get the address of the context structure,
+    // and save the registers saved onto the stack into the context structure.
+    //
 
     movl    0x2C(%esp), %esi
     popl    %eax
@@ -283,10 +283,10 @@ EfiBiosCallTemplateLongJump3:
     movl    $EfipExecuteBiosCallRestore, %eax
     jmp     *%eax
 
-##
-## That was the end of the code. Now define a 16-bit protected mode GDT.
-## The GDT must be aligned to 8 bytes.
-##
+//
+// That was the end of the code. Now define a 16-bit protected mode GDT.
+// The GDT must be aligned to 8 bytes.
+//
 
 .align 8
 
@@ -299,9 +299,9 @@ Efi16BitGdtTable:
     .long   0x0                         # null descriptor, it is essentially
                                         # unused by the processor.
 
-##
-## Define the code segment descriptor.
-##
+//
+// Define the code segment descriptor.
+//
 
     .word   0xFFFF                      # Limit 15:0
     .word   0x0                         # Base 15:0
@@ -310,9 +310,9 @@ Efi16BitGdtTable:
     .byte   0x8F                        # Granularity: 1Kb, 16-bit mode
     .byte   0x00                        # Base 31:24
 
-##
-## Define the dat segment descriptor.
-##
+//
+// Define the dat segment descriptor.
+//
 
     .word   0xFFFF                      # Limit 15:0
     .word   0x0                         # Base 15:0
@@ -321,36 +321,36 @@ Efi16BitGdtTable:
     .byte   0x8F                        # Granularity: 1kB, 16-bit mode
     .byte   0x00                        # Base 31:24
 
-##
-## Also define a 16-bit protected mode IDT.
-##
+//
+// Also define a 16-bit protected mode IDT.
+//
 
 Efi16BitIdt:
     .word   0x3FF                       # IDT Table Limit
     .long   0x0                         # IDT Table base
 
-##
-## This label marks the end of the template code. It is useful for determining
-## the size of the template code.
-##
+//
+// This label marks the end of the template code. It is useful for determining
+// the size of the template code.
+//
 
 EfiBiosCallTemplateEnd:
     nop
 
 END_FUNCTION(EfiBiosCallTemplate)
 
-##
-## This function is 32-bit protected mode code.
-##
+//
+// This function is 32-bit protected mode code.
+//
 
 .code32
 
-##
-## VOID
-## EfipExecuteBiosCall (
-##     PBIOS_CALL_CONTEXT Context
-##     )
-##
+//
+// VOID
+// EfipExecuteBiosCall (
+//     PBIOS_CALL_CONTEXT Context
+//     )
+//
 
 /*++
 
@@ -374,9 +374,9 @@ FUNCTION(EfipExecuteBiosCall)
     push    %ebp
     movl    %esp, %ebp
 
-    ##
-    ## Save the non-volatile registers and flags.
-    ##
+    //
+    // Save the non-volatile registers and flags.
+    //
 
     push    %ebx
     push    %esi
@@ -385,9 +385,9 @@ FUNCTION(EfipExecuteBiosCall)
     pushfl
     cli
 
-    ##
-    ## Load the context parameter into ESI, get EIP, and jump to it.
-    ##
+    //
+    // Load the context parameter into ESI, get EIP, and jump to it.
+    //
 
     movl    8(%ebp), %esi
     movl    CS(%esi), %eax
@@ -396,15 +396,15 @@ FUNCTION(EfipExecuteBiosCall)
     add     %edx, %eax
     jmp     *%eax
 
-    ##
-    ## This code is jumped to by the end of the BIOS call template.
-    ##
+    //
+    // This code is jumped to by the end of the BIOS call template.
+    //
 
 EfipExecuteBiosCallRestore:
 
-    ##
-    ## Restore the non-volatile registers and flags.
-    ##
+    //
+    // Restore the non-volatile registers and flags.
+    //
 
     popfl
     popl    %ebp

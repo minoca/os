@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## SIGNED_INT64_DIVIDE_RESULT
-## __aeabi_ldivmod (
-##    long long Numerator,
-##    long long Denominator
-##    )
-##
+//
+// SIGNED_INT64_DIVIDE_RESULT
+// __aeabi_ldivmod (
+//    long long Numerator,
+//    long long Denominator
+//    )
+//
 
 /*++
 
@@ -80,13 +80,13 @@ PROTECTED_FUNCTION __aeabi_ldivmod
     pop     {%pc}
 END_FUNCTION __aeabi_ldivmod
 
-##
-## UNSIGNED_INT64_DIVIDE_RESULT
-## __aeabi_uldivmod (
-##    long long Numerator,
-##    long long Denominator
-##    )
-##
+//
+// UNSIGNED_INT64_DIVIDE_RESULT
+// __aeabi_uldivmod (
+//    long long Numerator,
+//    long long Denominator
+//    )
+//
 
 /*++
 
@@ -118,13 +118,13 @@ PROTECTED_FUNCTION __aeabi_uldivmod
     pop     {%pc}
 END_FUNCTION __aeabi_uldivmod
 
-##
-## SIGNED_INT_DIVIDE_RESULT
-## __aeabi_idivmod (
-##     unsigned int Numerator,
-##     unsigned int Denominator
-##     )
-##
+//
+// SIGNED_INT_DIVIDE_RESULT
+// __aeabi_idivmod (
+//     unsigned int Numerator,
+//     unsigned int Denominator
+//     )
+//
 
 /*++
 
@@ -154,13 +154,13 @@ PROTECTED_FUNCTION __aeabi_idivmod
     pop     {%pc}
 END_FUNCTION __aeabi_idivmod
 
-##
-## UNSIGNED_INT_DIVIDE_RESULT
-## __aeabi_uidivmod (
-##     unsigned int Numerator,
-##     unsigned int Denominator
-##     )
-##
+//
+// UNSIGNED_INT_DIVIDE_RESULT
+// __aeabi_uidivmod (
+//     unsigned int Numerator,
+//     unsigned int Denominator
+//     )
+//
 
 /*++
 
@@ -190,13 +190,13 @@ PROTECTED_FUNCTION __aeabi_uidivmod
     pop     {%pc}
 END_FUNCTION __aeabi_uidivmod
 
-##
-## ULONGLONG
-## __aeabi_llsl (
-##     ULONGLONG Value
-##     ULONG ShiftCount
-##     )
-##
+//
+// ULONGLONG
+// __aeabi_llsl (
+//     ULONGLONG Value
+//     ULONG ShiftCount
+//     )
+//
 
 /*++
 
@@ -234,13 +234,13 @@ PROTECTED_FUNCTION __aeabi_llsl
 
 END_FUNCTION __aeabi_llsl
 
-##
-## ULONGLONG
-## __aeabi_llsr (
-##     ULONGLONG Value
-##     ULONG ShiftCount
-##     )
-##
+//
+// ULONGLONG
+// __aeabi_llsr (
+//     ULONGLONG Value
+//     ULONG ShiftCount
+//     )
+//
 
 /*++
 
@@ -278,13 +278,13 @@ PROTECTED_FUNCTION __aeabi_llsr
 
 END_FUNCTION __aeabi_llsr
 
-##
-## ULONGLONG
-## __aeabi_lasr (
-##     ULONGLONG Value
-##     ULONG ShiftCount
-##     )
-##
+//
+// ULONGLONG
+// __aeabi_lasr (
+//     ULONGLONG Value
+//     ULONG ShiftCount
+//     )
+//
 
 /*++
 
@@ -322,7 +322,7 @@ PROTECTED_FUNCTION __aeabi_lasr
 
 END_FUNCTION __aeabi_lasr
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

@@ -25,28 +25,28 @@ Environment:
 
 --*/
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## .global allows this label to be visible to the linker.
-##
+//
+// .global allows this label to be visible to the linker.
+//
 
 .global ArArmInterruptTable
 
-##
-## This address must be aligned to a 32 byte address so that it can be set in
-## the VBAR register.
-##
+//
+// This address must be aligned to a 32 byte address so that it can be set in
+// the VBAR register.
+//
 
 .balign 32
 

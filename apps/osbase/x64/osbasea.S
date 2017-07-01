@@ -25,29 +25,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## INTN
-## OspSystemCallFull (
-##     ULONG SystemCallNumber,
-##     PVOID SystemCallParameter
-##     )
-##
+//
+// INTN
+// OspSystemCallFull (
+//     ULONG SystemCallNumber,
+//     PVOID SystemCallParameter
+//     )
+//
 
 /*++
 
@@ -76,11 +76,11 @@ FUNCTION(OspSystemCallFull)
 
 END_FUNCTION(OspSystemCallFull)
 
-##
-## VOID
-## OspSignalHandler (
-##     )
-##
+//
+// VOID
+// OspSignalHandler (
+//     )
+//
 
 /*++
 
@@ -109,12 +109,12 @@ FUNCTION(OspSignalHandler)
 
 END_FUNCTION(OspSignalHandler)
 
-##
-## PTHREAD_CONTROL_BLOCK
-## OspGetThreadControlBlock (
-##     VOID
-##     )
-##
+//
+// PTHREAD_CONTROL_BLOCK
+// OspGetThreadControlBlock (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -140,13 +140,13 @@ FUNCTION(OspGetThreadControlBlock)
 
 END_FUNCTION(OspGetThreadControlBlock)
 
-##
-## VOID
-## OspImArchResolvePltEntry (
-##     PLOADED_IMAGE Image,
-##     ULONG RelocationOffset
-##     )
-##
+//
+// VOID
+// OspImArchResolvePltEntry (
+//     PLOADED_IMAGE Image,
+//     ULONG RelocationOffset
+//     )
+//
 
 /*++
 

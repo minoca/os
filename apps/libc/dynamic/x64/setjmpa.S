@@ -25,22 +25,22 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## Define the register offsets within the jump buffer. The first offset is a
-## boolean indicating whether or not the mask was saved. The next few are the
-## signal mask. If the size of the signal mask changes, these offsets will need
-## to be adjusted to make additional room.
-##
+//
+// Define the register offsets within the jump buffer. The first offset is a
+// boolean indicating whether or not the mask was saved. The next few are the
+// signal mask. If the size of the signal mask changes, these offsets will need
+// to be adjusted to make additional room.
+//
 
 #define JUMP_BUFFER_SAVE_MASK 0x00
 #define JUMP_BUFFER_RBX 0x10
@@ -54,18 +54,18 @@ Environment:
 #define JUMP_BUFFER_R15 0x50
 #define JUMP_BUFFER_RIP 0x58
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## int
-## setjmp (
-##     jmp_buf Environment
-##     )
-##
+//
+// int
+// setjmp (
+//     jmp_buf Environment
+//     )
+//
 
 /*++
 
@@ -93,15 +93,15 @@ EXPORTED_FUNCTION(setjmp)
     int     $3                  # TODO: Check this, it's never been run!
     movq    (%rsp), %rcx        # Load the return address.
 
-    ##
-    ## Mark the mask as having not been saved.
-    ##
+    //
+    // Mark the mask as having not been saved.
+    //
 
     movl    $0, JUMP_BUFFER_SAVE_MASK(%rdi)
 
-    ##
-    ## Save non-volatile registers.
-    ##
+    //
+    // Save non-volatile registers.
+    //
 
     movq    %rbx, JUMP_BUFFER_RBX(%rdi)
     movq    %rbp, JUMP_BUFFER_RBP(%rdi)
@@ -113,9 +113,9 @@ EXPORTED_FUNCTION(setjmp)
     movq    %r15, JUMP_BUFFER_R15(%rdi)
     movq    %rcx, JUMP_BUFFER_RIP(%rdi)
 
-    ##
-    ## Save the stack.
-    ##
+    //
+    // Save the stack.
+    //
 
     leaq    8(%rsp), %rdx       # Load the return address.
     movq    %rdx, JUMP_BUFFER_RSP(%rdi) # Save it to the RSP slot.
@@ -124,13 +124,13 @@ EXPORTED_FUNCTION(setjmp)
 
 END_FUNCTION(setjmp)
 
-##
-## int
-## sigsetjmp (
-##     sigjmp_buf Environment,
-##     int SaveMask
-##     )
-##
+//
+// int
+// sigsetjmp (
+//     sigjmp_buf Environment,
+//     int SaveMask
+//     )
+//
 
 /*++
 
@@ -159,15 +159,15 @@ EXPORTED_FUNCTION(sigsetjmp)
     int     $3                  # TODO: Check this, it's never been run!
     movq    (%rsp), %rcx        # Load the return address.
 
-    ##
-    ## Mark the mask as having not been saved.
-    ##
+    //
+    // Mark the mask as having not been saved.
+    //
 
     movl    $0, JUMP_BUFFER_SAVE_MASK(%rdi)
 
-    ##
-    ## Save non-volatile registers.
-    ##
+    //
+    // Save non-volatile registers.
+    //
 
     movq    %rbx, JUMP_BUFFER_RBX(%rdi)
     movq    %rbp, JUMP_BUFFER_RBP(%rdi)
@@ -179,17 +179,17 @@ EXPORTED_FUNCTION(sigsetjmp)
     movq    %r15, JUMP_BUFFER_R15(%rdi)
     movq    %rcx, JUMP_BUFFER_RIP(%rdi)
 
-    ##
-    ## Save the stack.
-    ##
+    //
+    // Save the stack.
+    //
 
     leaq    8(%rsp), %rdx       # Load the return address.
     movq    %rdx, JUMP_BUFFER_RSP(%rdi) # Save it to the RSP slot.
 
-    ##
-    ## Call the helper routine (with the same parameters) to save the signal
-    ## mask.
-    ##
+    //
+    // Call the helper routine (with the same parameters) to save the signal
+    // mask.
+    //
 
     call    ClpSetJump          # Call helper with same arguments.
     xorq    %rax, %rax          # Return 0 to indicate return from setjmp.
@@ -197,13 +197,13 @@ EXPORTED_FUNCTION(sigsetjmp)
 
 END_FUNCTION(sigsetjmp)
 
-##
-## void
-## ClpLongJump (
-##     jmp_buf Environment,
-##     int Value
-##     )
-##
+//
+// void
+// ClpLongJump (
+//     jmp_buf Environment,
+//     int Value
+//     )
+//
 
 /*++
 
@@ -235,15 +235,15 @@ FUNCTION(ClpLongJump)
     movq    JUMP_BUFFER_RBP(%rdi), %rbp
     movq    JUMP_BUFFER_RBX(%rdi), %rbx
 
-    ##
-    ## Restore the stack.
-    ##
+    //
+    // Restore the stack.
+    //
 
     movq    JUMP_BUFFER_RSP(%rdi), %rsp
 
-    ##
-    ## Move the return value to rax and jump to the original rip.
-    ##
+    //
+    // Move the return value to rax and jump to the original rip.
+    //
 
     movq    %rsi, %rax
     movq    JUMP_BUFFER_RIP(%rdi), %rdx

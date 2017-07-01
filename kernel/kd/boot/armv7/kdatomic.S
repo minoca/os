@@ -26,30 +26,30 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## ULONG
-## KdpAtomicCompareExchange32 (
-##     volatile ULONG *Address,
-##     ULONG ExchangeValue,
-##     ULONG CompareValue
-##     )
-##
+//
+// ULONG
+// KdpAtomicCompareExchange32 (
+//     volatile ULONG *Address,
+//     ULONG ExchangeValue,
+//     ULONG CompareValue
+//     )
+//
 
 /*++
 
@@ -86,13 +86,13 @@ KdpAtomicCompareExchange32End:
 
 END_FUNCTION KdpAtomicCompareExchange32
 
-##
-## ULONG
-## KdpAtomicAdd32 (
-##     volatile ULONG *Address,
-##     ULONG Increment
-##     )
-##
+//
+// ULONG
+// KdpAtomicAdd32 (
+//     volatile ULONG *Address,
+//     ULONG Increment
+//     )
+//
 
 /*++
 
@@ -121,7 +121,7 @@ FUNCTION KdpAtomicAdd32
 
 END_FUNCTION KdpAtomicAdd32
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

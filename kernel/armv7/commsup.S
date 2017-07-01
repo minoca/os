@@ -26,30 +26,30 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 .fpu vfpv3
 
-##
-## KERNEL_API
-## BOOL
-## ArDisableInterrupts (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// BOOL
+// ArDisableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -80,13 +80,13 @@ PROTECTED_FUNCTION ArDisableInterrupts
 
 END_FUNCTION ArDisableInterrupts
 
-##
-## KERNEL_API
-## VOID
-## ArEnableInterrupts (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// VOID
+// ArEnableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -110,13 +110,13 @@ PROTECTED_FUNCTION ArEnableInterrupts
 
 END_FUNCTION ArEnableInterrupts
 
-##
-## KERNEL_API
-## BOOL
-## ArAreInterruptsEnabled (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// BOOL
+// ArAreInterruptsEnabled (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -147,12 +147,12 @@ PROTECTED_FUNCTION ArAreInterruptsEnabled
 
 END_FUNCTION ArAreInterruptsEnabled
 
-##
-## ULONG
-## ArGetProcessorFlags (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetProcessorFlags (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -176,12 +176,12 @@ FUNCTION ArGetProcessorFlags
 
 END_FUNCTION ArGetProcessorFlags
 
-##
-## ULONG
-## ArGetCacheTypeRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetCacheTypeRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -206,12 +206,12 @@ FUNCTION ArGetCacheTypeRegister
 
 END_FUNCTION ArGetCacheTypeRegister
 
-##
-## VOID
-## ArInvalidateInstructionCache (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArInvalidateInstructionCache (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -239,12 +239,12 @@ FUNCTION ArInvalidateInstructionCache
 
 END_FUNCTION ArInvalidateInstructionCache
 
-##
-## VOID
-## ArInvalidateTlbEntry (
-##     PVOID Address
-##     )
-##
+//
+// VOID
+// ArInvalidateTlbEntry (
+//     PVOID Address
+//     )
+//
 
 /*++
 
@@ -274,12 +274,12 @@ FUNCTION ArInvalidateTlbEntry
 
 END_FUNCTION ArInvalidateTlbEntry
 
-##
-## VOID
-## ArInvalidateEntireTlb (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArInvalidateEntireTlb (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -307,14 +307,14 @@ FUNCTION ArInvalidateEntireTlb
 
 END_FUNCTION ArInvalidateEntireTlb
 
-##
-## ULONG
-## ArLockTlbEntry (
-##     ULONG TlbEntry,
-##     PVOID VirtualAddress,
-##     ULONG NextTlbEntry
-##     )
-##
+//
+// ULONG
+// ArLockTlbEntry (
+//     ULONG TlbEntry,
+//     PVOID VirtualAddress,
+//     ULONG NextTlbEntry
+//     )
+//
 
 /*++
 
@@ -357,12 +357,12 @@ FUNCTION ArLockTlbEntry
 
 END_FUNCTION ArLockTlbEntry
 
-##
-## VOID
-## ArSerializeExecution (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArSerializeExecution (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -388,12 +388,12 @@ FUNCTION ArSerializeExecution
 
 END_FUNCTION ArSerializeExecution
 
-##
-## PVOID
-## ArGetDataFaultingAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetDataFaultingAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -417,12 +417,12 @@ FUNCTION ArGetDataFaultingAddress
 
 END_FUNCTION ArGetDataFaultingAddress
 
-##
-## VOID
-## ArSetDataFaultingAddress (
-##     PVOID Value
-##     )
-##
+//
+// VOID
+// ArSetDataFaultingAddress (
+//     PVOID Value
+//     )
+//
 
 /*++
 
@@ -446,12 +446,12 @@ FUNCTION ArSetDataFaultingAddress
 
 END_FUNCTION ArSetDataFaultingAddress
 
-##
-## PVOID
-## ArGetInstructionFaultingAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetInstructionFaultingAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -475,12 +475,12 @@ FUNCTION ArGetInstructionFaultingAddress
 
 END_FUNCTION ArGetInstructionFaultingAddress
 
-##
-## VOID
-## ArSetInstructionFaultingAddress (
-##     PVOID Value
-##     )
-##
+//
+// VOID
+// ArSetInstructionFaultingAddress (
+//     PVOID Value
+//     )
+//
 
 /*++
 
@@ -504,12 +504,12 @@ FUNCTION ArSetInstructionFaultingAddress
 
 END_FUNCTION ArSetInstructionFaultingAddress
 
-##
-## ULONG
-## ArGetDataFaultStatus (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDataFaultStatus (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -534,12 +534,12 @@ FUNCTION ArGetDataFaultStatus
 
 END_FUNCTION ArGetDataFaultStatus
 
-##
-## VOID
-## ArSetDataFaultStatus (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDataFaultStatus (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -563,12 +563,12 @@ FUNCTION ArSetDataFaultStatus
 
 END_FUNCTION ArSetDataFaultStatus
 
-##
-## ULONG
-## ArGetInstructionFaultStatus (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetInstructionFaultStatus (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -593,12 +593,12 @@ FUNCTION ArGetInstructionFaultStatus
 
 END_FUNCTION ArGetInstructionFaultStatus
 
-##
-## VOID
-## ArSetInstructionFaultStatus (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetInstructionFaultStatus (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -622,12 +622,12 @@ FUNCTION ArSetInstructionFaultStatus
 
 END_FUNCTION ArSetInstructionFaultStatus
 
-##
-## VOID
-## ArProcessorYield (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArProcessorYield (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -651,13 +651,13 @@ FUNCTION ArProcessorYield
 
 END_FUNCTION ArProcessorYield
 
-##
-## KERNEL_API
-## VOID
-## ArWaitForInterrupt (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// VOID
+// ArWaitForInterrupt (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -685,12 +685,12 @@ PROTECTED_FUNCTION ArWaitForInterrupt
 
 END_FUNCTION ArWaitForInterrupt
 
-##
-## VOID
-## ArCpuid (
-##     PARM_CPUID Features
-##     )
-##
+//
+// VOID
+// ArCpuid (
+//     PARM_CPUID Features
+//     )
+//
 
 /*++
 
@@ -743,12 +743,12 @@ FUNCTION ArCpuid
 
 END_FUNCTION ArCpuid
 
-##
-## ULONG
-## ArGetSystemControlRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetSystemControlRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -772,12 +772,12 @@ FUNCTION ArGetSystemControlRegister
 
 END_FUNCTION ArGetSystemControlRegister
 
-##
-## VOID
-## ArSetSystemControlRegister (
-##     ULONG NewValue
-##     )
-##
+//
+// VOID
+// ArSetSystemControlRegister (
+//     ULONG NewValue
+//     )
+//
 
 /*++
 
@@ -801,12 +801,12 @@ FUNCTION ArSetSystemControlRegister
 
 END_FUNCTION ArSetSystemControlRegister
 
-##
-## ULONG
-## ArGetAuxiliaryControlRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetAuxiliaryControlRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -830,12 +830,12 @@ FUNCTION ArGetAuxiliaryControlRegister
 
 END_FUNCTION ArGetAuxiliaryControlRegister
 
-##
-## VOID
-## ArSetAuxiliaryControlRegister (
-##     ULONG NewValue
-##     )
-##
+//
+// VOID
+// ArSetAuxiliaryControlRegister (
+//     ULONG NewValue
+//     )
+//
 
 /*++
 
@@ -859,12 +859,12 @@ FUNCTION ArSetAuxiliaryControlRegister
 
 END_FUNCTION ArSetAuxiliaryControlRegister
 
-##
-## PVOID
-## ArGetVectorBaseAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetVectorBaseAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -889,12 +889,12 @@ FUNCTION ArGetVectorBaseAddress
 
 END_FUNCTION ArGetVectorBaseAddress
 
-##
-## VOID
-## ArSetVectorBaseAddress (
-##     PVOID VectorBaseAddress
-##     )
-##
+//
+// VOID
+// ArSetVectorBaseAddress (
+//     PVOID VectorBaseAddress
+//     )
+//
 
 /*++
 
@@ -920,12 +920,12 @@ FUNCTION ArSetVectorBaseAddress
 
 END_FUNCTION ArSetVectorBaseAddress
 
-##
-## PVOID
-## ArGetProcessorBlockRegister (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetProcessorBlockRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -951,12 +951,12 @@ FUNCTION ArGetProcessorBlockRegister
 
 END_FUNCTION ArGetProcessorBlockRegister
 
-##
-## PVOID
-## ArGetProcessorBlockRegisterForDebugger (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetProcessorBlockRegisterForDebugger (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -982,12 +982,12 @@ FUNCTION ArGetProcessorBlockRegisterForDebugger
 
 END_FUNCTION ArGetProcessorBlockRegisterForDebugger
 
-##
-## VOID
-## ArSetProcessorBlockRegister (
-##     PVOID ProcessorBlockRegisterValue
-##     )
-##
+//
+// VOID
+// ArSetProcessorBlockRegister (
+//     PVOID ProcessorBlockRegisterValue
+//     )
+//
 
 /*++
 
@@ -1014,12 +1014,12 @@ FUNCTION ArSetProcessorBlockRegister
 
 END_FUNCTION ArSetProcessorBlockRegister
 
-##
-## UINTN
-## ArDereferenceProcessorBlock (
-##     UINTN Offset
-##     )
-##
+//
+// UINTN
+// ArDereferenceProcessorBlock (
+//     UINTN Offset
+//     )
+//
 
 /*++
 
@@ -1049,12 +1049,12 @@ FUNCTION ArDereferenceProcessorBlock
 
 END_FUNCTION ArDereferenceProcessorBlock
 
-##
-## ULONG
-## ArGetTranslationTableBaseRegister0 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetTranslationTableBaseRegister0 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1079,12 +1079,12 @@ FUNCTION ArGetTranslationTableBaseRegister0
 
 END_FUNCTION ArGetTranslationTableBaseRegister0
 
-##
-## VOID
-## ArSetTranslationTableBaseRegister0 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetTranslationTableBaseRegister0 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1108,12 +1108,12 @@ FUNCTION ArSetTranslationTableBaseRegister0
 
 END_FUNCTION ArSetTranslationTableBaseRegister0
 
-##
-## ULONG
-## ArGetTranslationTableBaseRegister1 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetTranslationTableBaseRegister1 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1137,12 +1137,12 @@ FUNCTION ArGetTranslationTableBaseRegister1
 
 END_FUNCTION ArGetTranslationTableBaseRegister1
 
-##
-## VOID
-## ArSetTranslationTableBaseRegister1 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetTranslationTableBaseRegister1 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1166,12 +1166,12 @@ FUNCTION ArSetTranslationTableBaseRegister1
 
 END_FUNCTION ArSetTranslationTableBaseRegister1
 
-##
-## ULONG
-## ArGetPrimaryRegionRemapRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetPrimaryRegionRemapRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1195,12 +1195,12 @@ FUNCTION ArGetPrimaryRegionRemapRegister
 
 END_FUNCTION ArGetPrimaryRegionRemapRegister
 
-##
-## VOID
-## ArSetPrimaryRegionRemapRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPrimaryRegionRemapRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1224,12 +1224,12 @@ FUNCTION ArSetPrimaryRegionRemapRegister
 
 END_FUNCTION ArSetPrimaryRegionRemapRegister
 
-##
-## ULONG
-## ArGetNormalMemoryRemapRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetNormalMemoryRemapRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1253,12 +1253,12 @@ FUNCTION ArGetNormalMemoryRemapRegister
 
 END_FUNCTION ArGetNormalMemoryRemapRegister
 
-##
-## VOID
-## ArSetNormalMemoryRemapRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetNormalMemoryRemapRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1282,12 +1282,12 @@ FUNCTION ArSetNormalMemoryRemapRegister
 
 END_FUNCTION ArSetNormalMemoryRemapRegister
 
-##
-## ULONG
-## ArGetPhysicalAddressRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetPhysicalAddressRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1311,12 +1311,12 @@ FUNCTION ArGetPhysicalAddressRegister
 
 END_FUNCTION ArGetPhysicalAddressRegister
 
-##
-## VOID
-## ArSetPhysicalAddressRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPhysicalAddressRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1340,12 +1340,12 @@ FUNCTION ArSetPhysicalAddressRegister
 
 END_FUNCTION ArSetPhysicalAddressRegister
 
-##
-## VOID
-## ArSetPrivilegedReadTranslateRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPrivilegedReadTranslateRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1369,12 +1369,12 @@ FUNCTION ArSetPrivilegedReadTranslateRegister
 
 END_FUNCTION ArSetPrivilegedReadTranslateRegister
 
-##
-## VOID
-## ArSetPrivilegedWriteTranslateRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPrivilegedWriteTranslateRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1398,12 +1398,12 @@ FUNCTION ArSetPrivilegedWriteTranslateRegister
 
 END_FUNCTION ArSetPrivilegedWriteTranslateRegister
 
-##
-## VOID
-## ArSetUnprivilegedReadTranslateRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetUnprivilegedReadTranslateRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1427,12 +1427,12 @@ FUNCTION ArSetUnprivilegedReadTranslateRegister
 
 END_FUNCTION ArSetUnprivilegedReadTranslateRegister
 
-##
-## VOID
-## ArSetUnprivilegedWriteTranslateRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetUnprivilegedWriteTranslateRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1457,12 +1457,12 @@ FUNCTION ArSetUnprivilegedWriteTranslateRegister
 
 END_FUNCTION ArSetUnprivilegedWriteTranslateRegister
 
-##
-## ULONG
-## ArTranslateVirtualToPhysical (
-##     PVOID VirtualAddress
-##     )
-##
+//
+// ULONG
+// ArTranslateVirtualToPhysical (
+//     PVOID VirtualAddress
+//     )
+//
 
 /*++
 
@@ -1493,12 +1493,12 @@ FUNCTION ArTranslateVirtualToPhysical
 
 END_FUNCTION ArTranslateVirtualToPhysical
 
-##
-## VOID
-## ArSetThreadPointerUserReadOnly (
-##     PVOID NewPointer
-##     )
-##
+//
+// VOID
+// ArSetThreadPointerUserReadOnly (
+//     PVOID NewPointer
+//     )
+//
 
 /*++
 
@@ -1522,12 +1522,12 @@ FUNCTION ArSetThreadPointerUserReadOnly
 
 END_FUNCTION ArSetThreadPointerUserReadOnly
 
-##
-## ULONG
-## ArGetThreadPointerUser (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetThreadPointerUser (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1551,12 +1551,12 @@ FUNCTION ArGetThreadPointerUser
 
 END_FUNCTION ArGetThreadPointerUser
 
-##
-## VOID
-## ArSwitchTtbr0 (
-##     ULONG NewValue
-##     )
-##
+//
+// VOID
+// ArSwitchTtbr0 (
+//     ULONG NewValue
+//     )
+//
 
 /*++
 
@@ -1587,12 +1587,12 @@ FUNCTION ArSwitchTtbr0
 
 END_FUNCTION ArSwitchTtbr0
 
-##
-## UINTN
-## ArSaveProcessorContext (
-##     PPROCESSOR_CONTEXT Context
-##     )
-##
+//
+// UINTN
+// ArSaveProcessorContext (
+//     PPROCESSOR_CONTEXT Context
+//     )
+//
 
 /*++
 
@@ -1699,12 +1699,12 @@ FUNCTION ArSaveProcessorContext
 
 END_FUNCTION ArSaveProcessorContext
 
-##
-## VOID
-## ArRestoreProcessorContext (
-##     PPROCESSOR_CONTEXT Context
-##     )
-##
+//
+// VOID
+// ArRestoreProcessorContext (
+//     PPROCESSOR_CONTEXT Context
+//     )
+//
 
 /*++
 
@@ -1764,10 +1764,10 @@ FUNCTION ArRestoreProcessorContext
     ldmdb   %r0!, {%r1}                 @
     mcr     p15, 0, %r1, c1, c0, 2      @ Restore CPACR.
 
-    ##
-    ## Sometimes the ACTLR cannot be written in non-secure mode, so only try to
-    ## write it if it appears to need restoring.
-    ##
+    //
+    // Sometimes the ACTLR cannot be written in non-secure mode, so only try to
+    // write it if it appears to need restoring.
+    //
 
     mrc     p15, 0, %r2, c1, c0, 1      @ Get current ACTLR.
     ldmdb   %r0!, {%r1}                 @ Load saved one.
@@ -1781,22 +1781,22 @@ ArRestoreProcessorContextAfterActlr:
     ldmdb   %r0!, {%r1}                 @
     mcr     p15, 0, %r1, c2, c0, 0      @ Restore TTBR0.
 
-    ##
-    ## This next bit is tricky, because paging may suddenly become enabled.
-    ## This code must be identity mapped, but the context might not be. Load
-    ## the SCTLR and the virtual address of the next structure member. Then
-    ## restore SCTLR and continue the restore from the virtual address.
-    ##
+    //
+    // This next bit is tricky, because paging may suddenly become enabled.
+    // This code must be identity mapped, but the context might not be. Load
+    // the SCTLR and the virtual address of the next structure member. Then
+    // restore SCTLR and continue the restore from the virtual address.
+    //
 
     ldmdb   %r0!, {%r1}                 @ Get SCTLR.
     ldmdb   %r0, {%r2}                  @ Also get the VA of the remainder.
     mov     %r0, %r2                    @ Make it the new current pointer.
     mcr     p15, 0, %r1, c1, c0, 0      @ Restore SCTLR.
 
-    ##
-    ## The paging context may have changed (and observed a wonky ASID in the
-    ## process), so some invalidations are in order.
-    ##
+    //
+    // The paging context may have changed (and observed a wonky ASID in the
+    // process), so some invalidations are in order.
+    //
 
     mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
     BPIALL                              @ BPIALL, Invalidate Branch Predictor.
@@ -1804,9 +1804,9 @@ ArRestoreProcessorContextAfterActlr:
     DSB                                 @ Data synchronization barrier.
     ISB                                 @ Instruction syncrhonization barrier.
 
-    ##
-    ## Restore the banked registers.
-    ##
+    //
+    // Restore the banked registers.
+    //
 
     cpsid   if, #ARM_MODE_UNDEF         @ Get to undefined instruction mode.
     ldmdb   %r0!, {%r1, %lr}            @ Restore banked registers.
@@ -1825,10 +1825,10 @@ ArRestoreProcessorContextAfterActlr:
     mov     %sp, %r1                    @ Restore banked SP.
     cpsid   if, #ARM_MODE_SVC           @ Get back to SVC mode.
 
-    ##
-    ## Restore the general registers and jump back to the return of the
-    ## save context function.
-    ##
+    //
+    // Restore the general registers and jump back to the return of the
+    // save context function.
+    //
 
     mov     %r12, %r0                   @ Move to a free register.
     ldmdb   %r12!, {%r3-%r11}           @ Restore general context.
@@ -1841,12 +1841,12 @@ ArRestoreProcessorContextAfterActlr:
 
 END_FUNCTION ArRestoreProcessorContext
 
-##
-## ULONG
-## ArGetMainIdRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetMainIdRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1870,12 +1870,12 @@ FUNCTION ArGetMainIdRegister
 
 END_FUNCTION ArGetMainIdRegister
 
-##
-## ULONG
-## ArGetCoprocessorAccessRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetCoprocessorAccessRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1899,12 +1899,12 @@ FUNCTION ArGetCoprocessorAccessRegister
 
 END_FUNCTION ArGetCoprocessorAccessRegister
 
-##
-## VOID
-## ArSetCoprocessorAccessRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetCoprocessorAccessRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1928,12 +1928,12 @@ FUNCTION ArSetCoprocessorAccessRegister
 
 END_FUNCTION ArSetCoprocessorAccessRegister
 
-##
-## ULONG
-## ArGetFloatingPointIdRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetFloatingPointIdRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1957,12 +1957,12 @@ FUNCTION ArGetFloatingPointIdRegister
 
 END_FUNCTION ArGetFloatingPointIdRegister
 
-##
-## ULONG
-## ArGetMvfr0Register (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetMvfr0Register (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1987,12 +1987,12 @@ FUNCTION ArGetMvfr0Register
 
 END_FUNCTION ArGetMvfr0Register
 
-##
-## ULONG
-## ArGetVfpExceptionRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetVfpExceptionRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -2016,12 +2016,12 @@ FUNCTION ArGetVfpExceptionRegister
 
 END_FUNCTION ArGetVfpExceptionRegister
 
-##
-## VOID
-## ArSetVfpExceptionRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetVfpExceptionRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -2045,12 +2045,12 @@ FUNCTION ArSetVfpExceptionRegister
 
 END_FUNCTION ArSetVfpExceptionRegister
 
-##
-## ULONG
-## ArGetVfpInstructionRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetVfpInstructionRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -2074,12 +2074,12 @@ FUNCTION ArGetVfpInstructionRegister
 
 END_FUNCTION ArGetVfpInstructionRegister
 
-##
-## ULONG
-## ArGetFpscr (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetFpscr (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -2103,13 +2103,13 @@ FUNCTION ArGetFpscr
 
 END_FUNCTION ArGetFpscr
 
-##
-## VOID
-## ArSaveVfp (
-##     PFPU_CONTEXT Context,
-##     BOOL SimdSupport
-##     )
-##
+//
+// VOID
+// ArSaveVfp (
+//     PFPU_CONTEXT Context,
+//     BOOL SimdSupport
+//     )
+//
 
 /*++
 
@@ -2142,13 +2142,13 @@ FUNCTION ArSaveVfp
 
 END_FUNCTION ArSaveVfp
 
-##
-## VOID
-## ArRestoreVfp (
-##     PFPU_CONTEXT Context,
-##     BOOL SimdSupport
-##     )
-##
+//
+// VOID
+// ArRestoreVfp (
+//     PFPU_CONTEXT Context,
+//     BOOL SimdSupport
+//     )
+//
 
 /*++
 
@@ -2182,7 +2182,7 @@ FUNCTION ArRestoreVfp
 
 END_FUNCTION ArRestoreVfp
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

@@ -25,36 +25,36 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## INTN
-## OspSystemCallFull (
-##     ULONG SystemCallNumber,
-##     PVOID SystemCallParameter
-##     )
-##
+//
+// INTN
+// OspSystemCallFull (
+//     ULONG SystemCallNumber,
+//     PVOID SystemCallParameter
+//     )
+//
 
 /*++
 
@@ -85,13 +85,13 @@ FUNCTION(OspSystemCallFull)
 
 END_FUNCTION(OspSystemCallFull)
 
-##
-## INTN
-## OspSysenterSystemCall (
-##     ULONG SystemCallNumber,
-##     PVOID SystemCallParameter
-##     )
-##
+//
+// INTN
+// OspSysenterSystemCall (
+//     ULONG SystemCallNumber,
+//     PVOID SystemCallParameter
+//     )
+//
 
 /*++
 
@@ -122,12 +122,12 @@ FUNCTION(OspSysenterSystemCall)
     CFI_ADJUST_CFA_OFFSET(-4)   # Let the debugger know about the pop.
     ret                         # Return.
 
-##
-## This small fake-ish function is used to be able to get the return address
-## without generating text relocations. The CFA offset is explicitly set to 8
-## because the debugger does not know that this is a function, so the stack
-## has the return address and ebx on it.
-##
+//
+// This small fake-ish function is used to be able to get the return address
+// without generating text relocations. The CFA offset is explicitly set to 8
+// because the debugger does not know that this is a function, so the stack
+// has the return address and ebx on it.
+//
 
 OspSysenter:
     CFI_DEF_CFA_OFFSET(8)
@@ -141,13 +141,13 @@ OspSysenter:
 
 END_FUNCTION(OspSysenterSystemCall)
 
-##
-## VOID
-## OspSignalHandler (
-##     PSIGNAL_PARAMETERS Parameters,
-##     PSIGNAL_CONTEXT Context
-##     )
-##
+//
+// VOID
+// OspSignalHandler (
+//     PSIGNAL_PARAMETERS Parameters,
+//     PSIGNAL_CONTEXT Context
+//     )
+//
 
 /*++
 
@@ -183,10 +183,10 @@ FUNCTION(OspSignalHandler)
     CFI_OFFSET(%eip, TRAP_EIP)
     CFI_OFFSET(%esp, TRAP_ESP)
 
-    ##
-    ## Volatile registers are either saved or don't matter. Non-volatiles will
-    ## be saved and restored by any C routine called.
-    ##
+    //
+    // Volatile registers are either saved or don't matter. Non-volatiles will
+    // be saved and restored by any C routine called.
+    //
 
     movl    %esp, %eax          # Get a pointer to the signal parameters.
     leal    SIGNAL_PARAMETERS_SIZE(%eax), %ecx # Get a pointer to the context.
@@ -203,12 +203,12 @@ FUNCTION(OspSignalHandler)
 
 END_FUNCTION(OspSignalHandler)
 
-##
-## PTHREAD_CONTROL_BLOCK
-## OspGetThreadControlBlock (
-##     VOID
-##     )
-##
+//
+// PTHREAD_CONTROL_BLOCK
+// OspGetThreadControlBlock (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -233,13 +233,13 @@ FUNCTION(OspGetThreadControlBlock)
 
 END_FUNCTION(OspGetThreadControlBlock)
 
-##
-## VOID
-## OspImArchResolvePltEntry (
-##     PLOADED_IMAGE Image,
-##     ULONG RelocationOffset
-##     )
-##
+//
+// VOID
+// OspImArchResolvePltEntry (
+//     PLOADED_IMAGE Image,
+//     ULONG RelocationOffset
+//     )
+//
 
 /*++
 

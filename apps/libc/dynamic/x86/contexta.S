@@ -26,36 +26,36 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## LIBC_API
-## int
-## getcontext (
-##     ucontext_t *Context
-##     )
-##
+//
+// LIBC_API
+// int
+// getcontext (
+//     ucontext_t *Context
+//     )
+//
 
 /*++
 
@@ -119,13 +119,13 @@ EXPORTED_FUNCTION(getcontext)
 
 END_FUNCTION(getcontext)
 
-##
-## LIBC_API
-## int
-## setcontext (
-##     const ucontext_t *Context
-##     )
-##
+//
+// LIBC_API
+// int
+// setcontext (
+//     const ucontext_t *Context
+//     )
+//
 
 /*++
 
@@ -172,27 +172,27 @@ EXPORTED_FUNCTION(setcontext)
     popfl                           # Pop eflags/old argument off the stack.
     movl    TRAP_EAX(%ecx), %eax    # Restore eax as return value.
 
-    ##
-    ## This last part gets a little fishy depending on where the context
-    ## structure is. If the new esp is on the same stack but greater than this
-    ## one, then this code runs the risk of taking a signal, which might
-    ## clobber the context before restoring EIP can be done. Hopefully that
-    ## doesn't happen.
-    ##
+    //
+    // This last part gets a little fishy depending on where the context
+    // structure is. If the new esp is on the same stack but greater than this
+    // one, then this code runs the risk of taking a signal, which might
+    // clobber the context before restoring EIP can be done. Hopefully that
+    // doesn't happen.
+    //
 
     movl    TRAP_ESP(%ecx), %esp    # Restore stack pointer.
     jmp     *TRAP_EIP(%ecx)         # Return.
 
 END_FUNCTION(setcontext)
 
-##
-## __NO_RETURN
-## void
-## ClpContextStart (
-##     void (*StartFunction)(),
-##     ...
-##     )
-##
+//
+// __NO_RETURN
+// void
+// ClpContextStart (
+//     void (*StartFunction)(),
+//     ...
+//     )
+//
 
 /*++
 
@@ -222,12 +222,12 @@ FUNCTION(ClpContextStart)
 
 END_FUNCTION(ClpContextStart)
 
-##
-## VOID
-## ClpFxSave (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ClpFxSave (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 
@@ -254,12 +254,12 @@ FUNCTION(ClpFxSave)
 
 END_FUNCTION(ClpFxSave)
 
-##
-## VOID
-## ClpFxRestore (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ClpFxRestore (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 
@@ -286,12 +286,12 @@ FUNCTION(ClpFxRestore)
 
 END_FUNCTION(ClpFxRestore)
 
-##
-## VOID
-## ClpFSave (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ClpFSave (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 
@@ -317,12 +317,12 @@ FUNCTION(ClpFSave)
 
 END_FUNCTION(ClpFSave)
 
-##
-## VOID
-## ClpFRestore (
-##     PFPU_CONTEXT Buffer
-##     )
-##
+//
+// VOID
+// ClpFRestore (
+//     PFPU_CONTEXT Buffer
+//     )
+//
 
 /*++
 

@@ -28,33 +28,33 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## BOOL
-## MmpCopyUserModeMemory (
-##     PVOID Destination,
-##     PCVOID Source,
-##     ULONG ByteCount
-##     )
-##
+//
+// BOOL
+// MmpCopyUserModeMemory (
+//     PVOID Destination,
+//     PCVOID Source,
+//     ULONG ByteCount
+//     )
+//
 
 /*++
 
@@ -94,13 +94,13 @@ FUNCTION(MmpCopyUserModeMemory)
 
 END_FUNCTION(MmpCopyUserModeMemory)
 
-##
-## BOOL
-## MmpZeroUserModeMemory (
-##     PVOID Buffer,
-##     ULONG ByteCount
-##     )
-##
+//
+// BOOL
+// MmpZeroUserModeMemory (
+//     PVOID Buffer,
+//     ULONG ByteCount
+//     )
+//
 
 /*++
 
@@ -137,14 +137,14 @@ FUNCTION(MmpZeroUserModeMemory)
 
 END_FUNCTION(MmpZeroUserModeMemory)
 
-##
-## BOOL
-## MmpSetUserModeMemory (
-##     PVOID Buffer,
-##     INT Byte,
-##     UINTN Count
-##     )
-##
+//
+// BOOL
+// MmpSetUserModeMemory (
+//     PVOID Buffer,
+//     INT Byte,
+//     UINTN Count
+//     )
+//
 
 /*++
 
@@ -184,14 +184,14 @@ FUNCTION(MmpSetUserModeMemory)
 
 END_FUNCTION(MmpSetUserModeMemory)
 
-##
-## BOOL
-## MmpCompareUserModeMemory (
-##     PVOID FirstBuffer,
-##     PVOID SecondBuffer,
-##     UINTN Size
-##     )
-##
+//
+// BOOL
+// MmpCompareUserModeMemory (
+//     PVOID FirstBuffer,
+//     PVOID SecondBuffer,
+//     UINTN Size
+//     )
+//
 
 /*++
 
@@ -231,13 +231,13 @@ FUNCTION(MmpCompareUserModeMemory)
 
 END_FUNCTION(MmpCompareUserModeMemory)
 
-##
-## BOOL
-## MmpTouchUserModeMemoryForRead (
-##     PVOID Buffer,
-##     UINTN Size
-##     )
-##
+//
+// BOOL
+// MmpTouchUserModeMemoryForRead (
+//     PVOID Buffer,
+//     UINTN Size
+//     )
+//
 
 /*++
 
@@ -288,13 +288,13 @@ MmpTouchUserModeMemoryForReadNextPage:
 
 END_FUNCTION(MmpTouchUserModeMemoryForRead)
 
-##
-## BOOL
-## MmpTouchUserModeMemoryForWrite (
-##     PVOID Buffer,
-##     UINTN Size
-##     )
-##
+//
+// BOOL
+// MmpTouchUserModeMemoryForWrite (
+//     PVOID Buffer,
+//     UINTN Size
+//     )
+//
 
 /*++
 
@@ -345,13 +345,13 @@ MmpTouchUserModeMemoryForWriteNextPage:
 
 END_FUNCTION(MmpTouchUserModeMemoryForWrite)
 
-##
-## BOOL
-## MmUserRead8 (
-##     PVOID Buffer,
-##     PUCHAR Value
-##     )
-##
+//
+// BOOL
+// MmUserRead8 (
+//     PVOID Buffer,
+//     PUCHAR Value
+//     )
+//
 
 /*++
 
@@ -387,13 +387,13 @@ FUNCTION(MmUserRead8)
 
 END_FUNCTION(MmUserRead8)
 
-##
-## BOOL
-## MmUserWrite8 (
-##     PVOID Buffer,
-##     UCHAR Value
-##     )
-##
+//
+// BOOL
+// MmUserWrite8 (
+//     PVOID Buffer,
+//     UCHAR Value
+//     )
+//
 
 /*++
 
@@ -428,13 +428,13 @@ FUNCTION(MmUserWrite8)
 
 END_FUNCTION(MmUserWrite8)
 
-##
-## BOOL
-## MmUserRead16 (
-##     PVOID Buffer,
-##     PUSHORT Value
-##     )
-##
+//
+// BOOL
+// MmUserRead16 (
+//     PVOID Buffer,
+//     PUSHORT Value
+//     )
+//
 
 /*++
 
@@ -470,13 +470,13 @@ FUNCTION(MmUserRead16)
 
 END_FUNCTION(MmUserRead16)
 
-##
-## BOOL
-## MmUserWrite16 (
-##     PVOID Buffer,
-##     USHORT Value
-##     )
-##
+//
+// BOOL
+// MmUserWrite16 (
+//     PVOID Buffer,
+//     USHORT Value
+//     )
+//
 
 /*++
 
@@ -511,13 +511,13 @@ FUNCTION(MmUserWrite16)
 
 END_FUNCTION(MmUserWrite16)
 
-##
-## BOOL
-## MmUserRead32 (
-##     PVOID Buffer,
-##     PULONG Value
-##     )
-##
+//
+// BOOL
+// MmUserRead32 (
+//     PVOID Buffer,
+//     PULONG Value
+//     )
+//
 
 /*++
 
@@ -554,13 +554,13 @@ FUNCTION(MmUserRead32)
 
 END_FUNCTION(MmUserRead32)
 
-##
-## BOOL
-## MmUserWrite32 (
-##     PVOID Buffer,
-##     ULONG Value
-##     )
-##
+//
+// BOOL
+// MmUserWrite32 (
+//     PVOID Buffer,
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -596,11 +596,11 @@ FUNCTION(MmUserWrite32)
 
 END_FUNCTION(MmUserWrite32)
 
-##
-## This common epilog is both jumped to by the memory routines directly, as
-## well as routed to by the page fault code if it detects a fault in one of the
-## user mode memory routines.
-##
+//
+// This common epilog is both jumped to by the memory routines directly, as
+// well as routed to by the page fault code if it detects a fault in one of the
+// user mode memory routines.
+//
 
 FUNCTION(MmpUserModeMemoryReturn)
     popl    %edi                    # Restore edi.
@@ -610,7 +610,7 @@ FUNCTION(MmpUserModeMemoryReturn)
 
 END_FUNCTION(MmpUserModeMemoryReturn)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

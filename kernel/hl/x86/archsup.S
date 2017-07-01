@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
 
 .text
 
-##
-## KERNEL_API
-## ULONGLONG
-## HlQueryProcessorCounter (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// ULONGLONG
+// HlQueryProcessorCounter (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -83,6 +83,6 @@ PROTECTED_FUNCTION(HlQueryProcessorCounter)
 
 END_FUNCTION(HlQueryProcessorCounter)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//

@@ -26,23 +26,23 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## -------------------------------------------------------------------- Globals
-##
+//
+// -------------------------------------------------------------------- Globals
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
@@ -51,12 +51,12 @@ ASSEMBLY_FILE_HEADER
 .hidden HlVectorStart
 .hidden HlVectorEnd
 
-##
-## VOID
-## ArBreakExceptionHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArBreakExceptionHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -90,12 +90,12 @@ FUNCTION(ArBreakExceptionHandlerAsm)
 
 END_FUNCTION(ArBreakExceptionHandlerAsm)
 
-##
-## VOID
-## KdNmiHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdNmiHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -126,12 +126,12 @@ FUNCTION(KdNmiHandlerAsm)
 
 END_FUNCTION(KdNmiHandlerAsm)
 
-##
-## VOID
-## ArSingleStepExceptionHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArSingleStepExceptionHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -163,12 +163,12 @@ FUNCTION(ArSingleStepExceptionHandlerAsm)
 
 END_FUNCTION(ArSingleStepExceptionHandlerAsm)
 
-##
-## VOID
-## KdDebugServiceHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdDebugServiceHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -206,12 +206,12 @@ FUNCTION(KdDebugServiceHandlerAsm)
 
 END_FUNCTION(KdDebugServiceHandlerAsm)
 
-##
-## VOID
-## ArDivideByZeroExceptionHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArDivideByZeroExceptionHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -242,12 +242,12 @@ FUNCTION(ArDivideByZeroExceptionHandlerAsm)
 
 END_FUNCTION(ArDivideByZeroExceptionHandlerAsm)
 
-##
-## VOID
-## ArFpuAccessExceptionHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArFpuAccessExceptionHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -279,12 +279,12 @@ FUNCTION(ArFpuAccessExceptionHandlerAsm)
 
 END_FUNCTION(ArFpuAccessExceptionHandlerAsm)
 
-##
-## VOID
-## ArDoubleFaultHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArDoubleFaultHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -317,12 +317,12 @@ FUNCTION(ArDoubleFaultHandlerAsm)
 
 END_FUNCTION(ArDoubleFaultHandlerAsm)
 
-##
-## VOID
-## ArProtectionFaultHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArProtectionFaultHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -354,12 +354,12 @@ FUNCTION(ArProtectionFaultHandlerAsm)
 
 END_FUNCTION(ArProtectionFaultHandlerAsm)
 
-##
-## VOID
-## ArMathFaultHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArMathFaultHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -390,12 +390,12 @@ FUNCTION(ArMathFaultHandlerAsm)
 
 END_FUNCTION(ArMathFaultHandlerAsm)
 
-##
-## INTN
-## ArSystemCallHandlerAsm (
-##     VOID
-##     )
-##
+//
+// INTN
+// ArSystemCallHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -424,12 +424,12 @@ FUNCTION(ArSystemCallHandlerAsm)
 
 END_FUNCTION(ArSystemCallHandlerAsm)
 
-##
-## VOID
-## ArpPageFaultHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// ArpPageFaultHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -462,12 +462,12 @@ FUNCTION(ArpPageFaultHandlerAsm)
 
 END_FUNCTION(ArpPageFaultHandlerAsm)
 
-##
-## VOID
-## HlSpuriousInterruptHandlerAsm (
-##     VOID
-##     )
-##
+//
+// VOID
+// HlSpuriousInterruptHandlerAsm (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -499,12 +499,12 @@ FUNCTION(HlSpuriousInterruptHandlerAsm)
 
 END_FUNCTION(HlSpuriousInterruptHandlerAsm)
 
-##
-## VOID
-## ArRestoreTrapFrame (
-##     PTRAP_FRAME TrapFrame
-##     )
-##
+//
+// VOID
+// ArRestoreTrapFrame (
+//     PTRAP_FRAME TrapFrame
+//     )
+//
 
 /*++
 
@@ -562,24 +562,24 @@ RestoreTrapFrameReturn:
 
 END_FUNCTION(ArRestoreTrapFrame)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
-##
-## This macro stamps out the assembly dispatch code necessary for interrupts
-## received at each vector. It will create code for all vectors between
-## MinimumVector and MaximumVector.
-##
+//
+// This macro stamps out the assembly dispatch code necessary for interrupts
+// received at each vector. It will create code for all vectors between
+// MinimumVector and MaximumVector.
+//
 
 .macro InterruptVector _Vector
 
-    ##
-    ## 0x6A xx is the instruction for push imm8, except the immediate is sign
-    ## extended. The assembler will use the longer form for numbers >= 0x80
-    ## since those should not be sign extended. Use the shorter form directly
-    ## here to save space, and deal with it using a cast in the C code.
-    ##
+    //
+    // 0x6A xx is the instruction for push imm8, except the immediate is sign
+    // extended. The assembler will use the longer form for numbers >= 0x80
+    // since those should not be sign extended. Use the shorter form directly
+    // here to save space, and deal with it using a cast in the C code.
+    //
 
     .byte   0x6A
     .byte   (\_Vector)
@@ -607,9 +607,9 @@ END_FUNCTION(ArRestoreTrapFrame)
 
 .endm
 
-##
-## Now actually instantiate the macro to create the vector code.
-##
+//
+// Now actually instantiate the macro to create the vector code.
+//
 
 HlVectorStart:
 
@@ -629,17 +629,17 @@ InterruptVectors16 0xF0
 
 HlVectorEnd:
 
-##
-## TRAP_FRAME
-## ArGenerateTrapFrame (
-##     ULONGLONG ErrorCode,
-##     ULONGLONG ReturnRip,
-##     ULONGLONG ReturnCs,
-##     ULONGLONG ReturnRflags,
-##     ULONGLONG ReturnRsp,
-##     ULONGLONG ReturnSs
-##     )
-##
+//
+// TRAP_FRAME
+// ArGenerateTrapFrame (
+//     ULONGLONG ErrorCode,
+//     ULONGLONG ReturnRip,
+//     ULONGLONG ReturnCs,
+//     ULONGLONG ReturnRflags,
+//     ULONGLONG ReturnRsp,
+//     ULONGLONG ReturnSs
+//     )
+//
 
 /*++
 
@@ -679,11 +679,11 @@ Return Value:
 
 FUNCTION(ArGenerateTrapFrame)
 
-    ##
-    ## Allocate room on the stack for the trap frame, minus the original
-    ## return address, minus the fields that have already been pushed by
-    ## hardware.
-    ##
+    //
+    // Allocate room on the stack for the trap frame, minus the original
+    // return address, minus the fields that have already been pushed by
+    // hardware.
+    //
 
     subq    $TRAP_R15, %rsp             # Allocate remaining trap frame space.
     movq    %rax, TRAP_RAX(%rsp)        # Save RAX to free it up.
@@ -711,10 +711,10 @@ FUNCTION(ArGenerateTrapFrame)
     movq    %gs, %rcx                   #
     movl    %ecx, TRAP_GS(%rsp)         # Save GS.
 
-    ##
-    ## Determine if the exception came from user mode. If so, swap the GS base.
-    ## to get the processor block back.
-    ##
+    //
+    // Determine if the exception came from user mode. If so, swap the GS base.
+    // to get the processor block back.
+    //
 
     movl    TRAP_CS(%rsp), %ecx         # Get CS.
     andl    $SEGMENT_PRIVILEGE_MASK, %ecx   # Mask off the privilege.
@@ -726,13 +726,13 @@ GenerateTrapFrameReturn:
 
 END_FUNCTION(ArGenerateTrapFrame)
 
-##
-## Define the common interrupt entry code. At this point the vector number has
-## been pushed into the error code slot, but nothing else has been done. Note
-## that this code needs to be far enough away from the vectors themselves so
-## that none of the jumps in the vectors turn into shorter instructions
-## (distance >= 0x100).
-##
+//
+// Define the common interrupt entry code. At this point the vector number has
+// been pushed into the error code slot, but nothing else has been done. Note
+// that this code needs to be far enough away from the vectors themselves so
+// that none of the jumps in the vectors turn into shorter instructions
+// (distance >= 0x100).
+//
 
 FUNCTION(KeInterruptEntry)
     call    ArGenerateTrapFrame     # Create a local trap frame.

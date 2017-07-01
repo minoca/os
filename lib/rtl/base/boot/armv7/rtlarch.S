@@ -26,28 +26,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## RtlMemoryBarrier (
-##     VOID
-##     )
-##
+//
+// VOID
+// RtlMemoryBarrier (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -73,13 +73,13 @@ FUNCTION RtlMemoryBarrier
 
 END_FUNCTION RtlMemoryBarrier
 
-##
-## RTL_API
-## VOID
-## RtlDebugBreak (
-##     VOID
-##     )
-##
+//
+// RTL_API
+// VOID
+// RtlDebugBreak (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -103,14 +103,14 @@ PROTECTED_FUNCTION RtlDebugBreak
 
 END_FUNCTION RtlDebugBreak
 
-##
-## RTL_API
-## VOID
-## RtlDebugService (
-##     UINTN ServiceRequest,
-##     PVOID Parameter
-##     )
-##
+//
+// RTL_API
+// VOID
+// RtlDebugService (
+//     UINTN ServiceRequest,
+//     PVOID Parameter
+//     )
+//
 
 /*++
 
@@ -136,13 +136,13 @@ PROTECTED_FUNCTION RtlDebugService
 
 END_FUNCTION RtlDebugService
 
-##
-## ULONG
-## RtlAtomicExchange32 (
-##     volatile ULONG *Address,
-##     ULONG ExchangeValue
-##     )
-##
+//
+// ULONG
+// RtlAtomicExchange32 (
+//     volatile ULONG *Address,
+//     ULONG ExchangeValue
+//     )
+//
 
 /*++
 
@@ -171,14 +171,14 @@ FUNCTION RtlAtomicExchange32
 
 END_FUNCTION RtlAtomicExchange32
 
-##
-## ULONG
-## RtlAtomicCompareExchange32 (
-##     volatile ULONG *Address,
-##     ULONG ExchangeValue,
-##     ULONG CompareValue
-##     )
-##
+//
+// ULONG
+// RtlAtomicCompareExchange32 (
+//     volatile ULONG *Address,
+//     ULONG ExchangeValue,
+//     ULONG CompareValue
+//     )
+//
 
 /*++
 
@@ -215,14 +215,14 @@ RtlAtomicCompareExchange32End:
 
 END_FUNCTION RtlAtomicCompareExchange32
 
-##
-## ULONG
-## RtlAtomicCompareExchange64 (
-##     volatile ULONGLONG *Address,
-##     ULONGLONG ExchangeValue,
-##     ULONGLONG CompareValue
-##     )
-##
+//
+// ULONG
+// RtlAtomicCompareExchange64 (
+//     volatile ULONGLONG *Address,
+//     ULONGLONG ExchangeValue,
+//     ULONGLONG CompareValue
+//     )
+//
 
 /*++
 
@@ -268,13 +268,13 @@ RtlAtomicCompareExchange64End:
 
 END_FUNCTION RtlAtomicCompareExchange64
 
-##
-## ULONG
-## RtlAtomicAdd32 (
-##     volatile ULONG *Address,
-##     ULONG Increment
-##     )
-##
+//
+// ULONG
+// RtlAtomicAdd32 (
+//     volatile ULONG *Address,
+//     ULONG Increment
+//     )
+//
 
 /*++
 
@@ -303,13 +303,13 @@ FUNCTION RtlAtomicAdd32
 
 END_FUNCTION RtlAtomicAdd32
 
-##
-## ULONG
-## RtlAtomicAdd64 (
-##     volatile ULONGLONG *Address,
-##     ULONGLONG Increment
-##     )
-##
+//
+// ULONG
+// RtlAtomicAdd64 (
+//     volatile ULONGLONG *Address,
+//     ULONGLONG Increment
+//     )
+//
 
 /*++
 
@@ -342,13 +342,13 @@ FUNCTION RtlAtomicAdd64
 
 END_FUNCTION RtlAtomicAdd64
 
-##
-## ULONG
-## RtlAtomicOr32 (
-##     volatile ULONG *Address,
-##     ULONG Mask
-##     )
-##
+//
+// ULONG
+// RtlAtomicOr32 (
+//     volatile ULONG *Address,
+//     ULONG Mask
+//     )
+//
 
 /*++
 
@@ -377,13 +377,13 @@ FUNCTION RtlAtomicOr32
 
 END_FUNCTION RtlAtomicOr32
 
-##
-## ULONGLONG
-## RtlAtomicOr64 (
-##     volatile ULONGLONG *Address,
-##     ULONGLONG Mask
-##     )
-##
+//
+// ULONGLONG
+// RtlAtomicOr64 (
+//     volatile ULONGLONG *Address,
+//     ULONGLONG Mask
+//     )
+//
 
 /*++
 
@@ -416,13 +416,13 @@ FUNCTION RtlAtomicOr64
 
 END_FUNCTION RtlAtomicOr64
 
-##
-## ULONG
-## RtlAtomicAnd32 (
-##     volatile ULONG *Address,
-##     ULONG Mask
-##     )
-##
+//
+// ULONG
+// RtlAtomicAnd32 (
+//     volatile ULONG *Address,
+//     ULONG Mask
+//     )
+//
 
 /*++
 
@@ -451,13 +451,13 @@ FUNCTION RtlAtomicAnd32
 
 END_FUNCTION RtlAtomicAnd32
 
-##
-## ULONG
-## RtlAtomicXor32 (
-##     volatile ULONG *Address,
-##     ULONG Mask
-##     )
-##
+//
+// ULONG
+// RtlAtomicXor32 (
+//     volatile ULONG *Address,
+//     ULONG Mask
+//     )
+//
 
 /*++
 
@@ -486,7 +486,7 @@ FUNCTION RtlAtomicXor32
 
 END_FUNCTION RtlAtomicXor32
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

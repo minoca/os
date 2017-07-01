@@ -25,36 +25,36 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
 
 .text
 
-##
-## .globl allows this label to be visible to the linker.
-##
+//
+// .globl allows this label to be visible to the linker.
+//
 
 .globl _start
 
-##
-## VOID
-## start (
-##     VOID
-##     )
-##
+//
+// VOID
+// start (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -76,16 +76,16 @@ Return Value:
 
 _start:
 
-    ##
-    ## Call out to initialize the C Runtime library. The kernel puts the
-    ## thread parameter both on the stack and in ECX.
-    ##
+    //
+    // Call out to initialize the C Runtime library. The kernel puts the
+    // thread parameter both on the stack and in ECX.
+    //
 
     jmp     ClApplicationInitialize
 
-    ##
-    ## Execution should never get here.
-    ##
+    //
+    // Execution should never get here.
+    //
 
     int $3
     ret

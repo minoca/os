@@ -26,25 +26,25 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## KERNEL_API
-## ULONGLONG
-## HlQueryProcessorCounter (
-##     VOID
-##     )
-##
+//
+// KERNEL_API
+// ULONGLONG
+// HlQueryProcessorCounter (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -81,6 +81,6 @@ PROTECTED_FUNCTION(HlQueryProcessorCounter)
 
 END_FUNCTION(HlQueryProcessorCounter)
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//

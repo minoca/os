@@ -25,13 +25,13 @@ Environment:
 
 --*/
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## Set this to 1 to enable Thumb-2 instructions.
-##
+//
+// Set this to 1 to enable Thumb-2 instructions.
+//
 
 #ifdef __thumb__
 #define THUMB 1
@@ -41,13 +41,13 @@ Environment:
 
 #define NULL 0x0
 
-##
-## Processor flags
-##
+//
+// Processor flags
+//
 
-##
-## Program Status Register flags.
-##
+//
+// Program Status Register flags.
+//
 
 #define PSR_FLAG_NEGATIVE   0x80000000
 #define PSR_FLAG_ZERO       0x40000000
@@ -59,9 +59,9 @@ Environment:
 #define PSR_FLAG_IRQ        0x00000080
 #define PSR_FLAG_FIQ        0x00000040
 
-##
-## Processor modes
-##
+//
+// Processor modes
+//
 
 #define ARM_MODE_USER   0x00000010
 #define ARM_MODE_FIQ    0x00000011
@@ -74,34 +74,34 @@ Environment:
 #define ARM_MODE_SYSTEM 0x0000001F
 #define ARM_MODE_MASK   0x0000001F
 
-##
-## Basic constants.
-##
+//
+// Basic constants.
+//
 
 #define FALSE 0
 #define TRUE 1
 
-##
-## Kernel constants.
-##
+//
+// Kernel constants.
+//
 
 #define EXCEPTION_BREAK             0x03
 #define EXCEPTION_SINGLE_STEP       0x04
 #define EXCEPTION_ACCESS_VIOLATION  0x05
 #define EXCEPTION_ASSERTION_FAILURE 0x07
 
-##
-## Translation table base register address mask.
-##
-## Bit definitions are tricky for this register because they change based on
-## whether or not the Multiprocessing Extensions are supported on the CPU.
-##
+//
+// Translation table base register address mask.
+//
+// Bit definitions are tricky for this register because they change based on
+// whether or not the Multiprocessing Extensions are supported on the CPU.
+//
 
 #define TTBR_ADDRESS_MASK                0x00003FFF
 
-##
-## MMU Control bits (SCTLR, CP15, register 1).
-##
+//
+// MMU Control bits (SCTLR, CP15, register 1).
+//
 
 #define MMU_ENABLED                     0x00000001
 #define MMU_ALIGNMENT_FAULT_ENABLED     0x00000002
@@ -124,27 +124,27 @@ Environment:
 
 #define MMU_CONTROL_DEFAULT_VALUE       0x00C0180D
 
-##
-## ARMv6 auxiliary control register bits (ACTLR).
-##
+//
+// ARMv6 auxiliary control register bits (ACTLR).
+//
 
 #define ARMV6_AUX_16K_CACHE_SIZE 0x00000040
 
-##
-## Cortex A17 auxiliary control register bits (ACTLR).
-##
+//
+// Cortex A17 auxiliary control register bits (ACTLR).
+//
 
 #define CORTEX_A17_AUX_SMP_ENABLE 0x00000040
 
-##
-## Nonsecure Access Control Register bits (CP15, register 1, opcode2 2).
-##
+//
+// Nonsecure Access Control Register bits (CP15, register 1, opcode2 2).
+//
 
 #define MMU_TLB_LOCKING_ENABLE          0x00020000
 
-##
-## Secure Configuration Register bits (SCR).
-##
+//
+// Secure Configuration Register bits (SCR).
+//
 
 #define SCR_NON_SECURE                            0x00000001
 #define SCR_MONITOR_MODE_IRQ                      0x00000002
@@ -157,22 +157,22 @@ Environment:
 #define SCR_NON_SECURE_HVC_ENABLED                0x00000100
 #define SCR_NON_SECURE_INSTRUCTION_FETCH_DISABLED 0x00000200
 
-##
-## Definition for the structure on the exception stacks.
-##
+//
+// Definition for the structure on the exception stacks.
+//
 
 #define EXCEPTION_STACK_R0   0
 #define EXCEPTION_STACK_CPSR 4
 
-##
-## Processor block offsets.
-##
+//
+// Processor block offsets.
+//
 
 #define PROCESSOR_BLOCK_RUNNING_THREAD 0x14
 
-##
-## Define the offsets for members of the TRAP_FRAME structure.
-##
+//
+// Define the offsets for members of the TRAP_FRAME structure.
+//
 
 #define TRAP_SVCSP 0
 #define TRAP_USERSP 4
@@ -196,33 +196,33 @@ Environment:
 #define TRAP_CPSR 76
 #define TRAP_FRAME_SIZE 80
 
-##
-## Define the size of the common SIGNAL_CONTEXT structure.
-##
+//
+// Define the size of the common SIGNAL_CONTEXT structure.
+//
 
 #define SIGNAL_CONTEXT_SIZE 32
 
-##
-## Define the size of the PROCESSOR_CONTEXT structure.
-##
+//
+// Define the size of the PROCESSOR_CONTEXT structure.
+//
 
 #define PROCESSOR_CONTEXT_SIZE 192
 
-##
-## Thread structure offsets.
-##
+//
+// Thread structure offsets.
+//
 
 #define THREAD_SIGNAL_PENDING 84
 
-##
-## Define the thread signal pending state options.
-##
+//
+// Define the thread signal pending state options.
+//
 
 #define ThreadSignalPending 2
 
-##
-## Define the instructions for DSB/ISB, which are different in ARMv6 vs ARMv7.
-##
+//
+// Define the instructions for DSB/ISB, which are different in ARMv6 vs ARMv7.
+//
 
 #if __ARM_ARCH == 6
 
@@ -244,21 +244,21 @@ Environment:
 
 #endif
 
-##
-## Define the system call number for resuming after a signal.
-##
+//
+// Define the system call number for resuming after a signal.
+//
 
 #define SystemCallRestoreContext 1
 #define SIGNAL_PARAMETERS_SIZE 24
 #define SIGNAL_CONTEXT_SIZE 32
 
-##
-## -------------------------------------------------------------------- Macros
-##
+//
+// -------------------------------------------------------------------- Macros
+//
 
-##
-## Define .cfi directives, macroed so they can be excised if unneeded.
-##
+//
+// Define .cfi directives, macroed so they can be excised if unneeded.
+//
 
 #define CFI_DEF_CFA(_Register, _Offset) .cfi_def_cfa _Register, _Offset
 #define CFI_DEF_CFA_OFFSET(_Offset) .cfi_def_cfa_offset _Offset
@@ -267,9 +267,9 @@ Environment:
 #define CFI_UNDEFINED(_Register) .cfi_undefined _Register
 #define CFI_SAME_VALUE(_Register) .cfi_same_value _Register
 
-##
-## This macro emits a thumb if-then instruction, if compiling in Thumb mode.
-##
+//
+// This macro emits a thumb if-then instruction, if compiling in Thumb mode.
+//
 
 #define IT(_Condition) \
     .if THUMB ; \
@@ -291,14 +291,14 @@ Environment:
         ittte  _Condition ; \
     .endif
 
-##
-## This macro goes at the top of an assembly file.
-## .text specifies that this code belongs in the executable section.
-## .thumb specifies this is Thumb code (not ARM code).
-## .syntax unified turns on Unified Assembly Language which is required to
-## enable Thumb-2 features.
-## .align 4 ensures functions are emitted on proper boundaries.
-##
+//
+// This macro goes at the top of an assembly file.
+// .text specifies that this code belongs in the executable section.
+// .thumb specifies this is Thumb code (not ARM code).
+// .syntax unified turns on Unified Assembly Language which is required to
+// enable Thumb-2 features.
+// .align 4 ensures functions are emitted on proper boundaries.
+//
 
 .macro ASSEMBLY_FILE_HEADER
     .text
@@ -319,30 +319,30 @@ Environment:
 #endif
 .endm
 
-##
-## This macro defines a function, callable from C code within the current
-## module.
-##
+//
+// This macro defines a function, callable from C code within the current
+// module.
+//
 
 .macro FUNCTION FunctionName
     .hidden \FunctionName
     EXPORTED_FUNCTION \FunctionName
 .endm
 
-##
-## This macro defines a function, callable from C code in any module, but
-## always called locally in the current module.
-##
+//
+// This macro defines a function, callable from C code in any module, but
+// always called locally in the current module.
+//
 
 .macro PROTECTED_FUNCTION FunctionName
     .protected \FunctionName
     EXPORTED_FUNCTION \FunctionName
 .endm
 
-##
-## This macro defines a function, callable from C code in any module, and
-## capable of being overridden by other modules.
-##
+//
+// This macro defines a function, callable from C code in any module, and
+// capable of being overridden by other modules.
+//
 
 .macro EXPORTED_FUNCTION FunctionName
     .func \FunctionName
@@ -356,9 +356,9 @@ Environment:
     \FunctionName:
 .endm
 
-##
-## This macro defines the end of a function.
-##
+//
+// This macro defines the end of a function.
+//
 
 .macro END_FUNCTION FunctionName
     .ltorg
@@ -367,9 +367,9 @@ Environment:
     .endfunc
 .endm
 
-##
-## Define a macro used to generate the debugger break instruction.
-##
+//
+// Define a macro used to generate the debugger break instruction.
+//
 
 .macro DEBUGGER_BREAK
     .if THUMB
@@ -379,9 +379,9 @@ Environment:
     .endif
 .endm
 
-##
-## Define a macro used to generate the debug service instruction.
-##
+//
+// Define a macro used to generate the debug service instruction.
+//
 
 .macro DEBUG_SERVICE
     .if THUMB
@@ -391,11 +391,11 @@ Environment:
     .endif
 .endm
 
-##
-## This macro can be run immediately after an exception or interrupt. It
-## switches back to SVC mode and creates a trap frame. This uses several
-## instructions from ARMv6T2, including srs, cpsid #mode, and clrex.
-##
+//
+// This macro can be run immediately after an exception or interrupt. It
+// switches back to SVC mode and creates a trap frame. This uses several
+// instructions from ARMv6T2, including srs, cpsid #mode, and clrex.
+//
 
 .macro ARM_ENTER_INTERRUPT
     srsdb   %sp!, #ARM_MODE_SVC                 @ Push lr and spsr to SVC.
@@ -434,25 +434,25 @@ Environment:
 
 .endm
 
-##
-## This macro can be used for an interrupt or exception that was entered with
-## ARM_INTERRUPT_ENTER. It restores the state in the trap frame and returns
-## from the exception.
-##
+//
+// This macro can be used for an interrupt or exception that was entered with
+// ARM_INTERRUPT_ENTER. It restores the state in the trap frame and returns
+// from the exception.
+//
 
 .macro ARM_EXIT_INTERRUPT
 
-    ##
-    ## Restore the stack pointer. The rest of the context better be at the new
-    ## stack location. Then restore the user mode sp and lr.
-    ##
+    //
+    // Restore the stack pointer. The rest of the context better be at the new
+    // stack location. Then restore the user mode sp and lr.
+    //
 
     ldr     %sp, [%sp]                          @ Restore stack pointer.
     add     %sp, %sp, #4                        @ Pop stack pointer.
 
-    ##
-    ## Restore the user mode stack and link registers.
-    ##
+    //
+    // Restore the user mode stack and link registers.
+    //
 
     mov     %r0, %sp                            @ Get SVC stack pointer.
     cpsid   i, #ARM_MODE_SYSTEM                 @ Switch to system mode.
@@ -483,10 +483,10 @@ Environment:
 
 .endm
 
-##
-## This macro can be used to get the current thread out of the processor block.
-## It is used by the system call assembly routines and purposely avoids R0.
-##
+//
+// This macro can be used to get the current thread out of the processor block.
+// It is used by the system call assembly routines and purposely avoids R0.
+//
 
 .macro ARM_GET_CURRENT_THREAD
     mrs     %r2, CPSR               @ Get the original status register.

@@ -25,30 +25,30 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 .fpu vfpv3
 
-##
-## LIBC_API
-## int
-## getcontext (
-##     ucontext_t *Context
-##     )
-##
+//
+// LIBC_API
+// int
+// getcontext (
+//     ucontext_t *Context
+//     )
+//
 
 /*++
 
@@ -93,13 +93,13 @@ EXPORTED_FUNCTION getcontext
 
 END_FUNCTION getcontext
 
-##
-## LIBC_API
-## int
-## setcontext (
-##     const ucontext_t *Context
-##     )
-##
+//
+// LIBC_API
+// int
+// setcontext (
+//     const ucontext_t *Context
+//     )
+//
 
 /*++
 
@@ -138,14 +138,14 @@ EXPORTED_FUNCTION setcontext
 
 END_FUNCTION setcontext
 
-##
-## __NO_RETURN
-## void
-## ClpContextStart (
-##     void (*StartFunction)(),
-##     ...
-##     )
-##
+//
+// __NO_RETURN
+// void
+// ClpContextStart (
+//     void (*StartFunction)(),
+//     ...
+//     )
+//
 
 /*++
 
@@ -177,13 +177,13 @@ FUNCTION ClpContextStart
 
 END_FUNCTION ClpContextStart
 
-##
-## VOID
-## ClpSaveVfp (
-##     PFPU_CONTEXT Context,
-##     BOOL SimdSupport
-##     )
-##
+//
+// VOID
+// ClpSaveVfp (
+//     PFPU_CONTEXT Context,
+//     BOOL SimdSupport
+//     )
+//
 
 /*++
 
@@ -216,13 +216,13 @@ FUNCTION ClpSaveVfp
 
 END_FUNCTION ClpSaveVfp
 
-##
-## VOID
-## ClpRestoreVfp (
-##     PFPU_CONTEXT Context,
-##     BOOL SimdSupport
-##     )
-##
+//
+// VOID
+// ClpRestoreVfp (
+//     PFPU_CONTEXT Context,
+//     BOOL SimdSupport
+//     )
+//
 
 /*++
 

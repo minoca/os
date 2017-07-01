@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## EfipInitializeExceptionStacks (
-##     PVOID ExceptionStacksBase,
-##     ULONG ExceptionStackSize
-##     )
-##
+//
+// VOID
+// EfipInitializeExceptionStacks (
+//     PVOID ExceptionStacksBase,
+//     ULONG ExceptionStackSize
+//     )
+//
 
 /*++
 
@@ -75,51 +75,51 @@ Return Value:
 
 FUNCTION EfipInitializeExceptionStacks
 
-    ##
-    ## Load R1 with an individual stack size.
-    ##
+    //
+    // Load R1 with an individual stack size.
+    //
 
     add     %r0, %r0, %r1
 
-    ##
-    ## Disable interrupts and switch into IRQ mode. Note that this also
-    ## clobbers the flags register.
-    ##
+    //
+    // Disable interrupts and switch into IRQ mode. Note that this also
+    // clobbers the flags register.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_IRQ)
     msr     CPSR_cxsf, %r2
     mov     %sp, %r0
     add     %r0, %r0, %r1
 
-    ##
-    ## Initialize the FIQ stack.
-    ##
+    //
+    // Initialize the FIQ stack.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_FIQ)
     msr     CPSR_cxsf, %r2
     mov     %sp, %r0
     add     %r0, %r0, %r1
 
-    ##
-    ## Initialize the undefined instruction stack.
-    ##
+    //
+    // Initialize the undefined instruction stack.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_UNDEF)
     msr     CPSR_cxsf, %r2
     mov     %sp, %r0
     add     %r0, %r0, %r1
 
-    ##
-    ## Initialize the data fetch abort stack.
-    ##
+    //
+    // Initialize the data fetch abort stack.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_ABORT)
     msr     CPSR_cxsf, %r2
     mov     %sp, %r0
 
-    ##
-    ## Switch back to SVC mode and return.
-    ##
+    //
+    // Switch back to SVC mode and return.
+    //
 
     mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_SVC)
     msr     CPSR_cxsf, %r2
@@ -127,12 +127,12 @@ FUNCTION EfipInitializeExceptionStacks
 
 END_FUNCTION EfipInitializeExceptionStacks
 
-##
-## BOOLEAN
-## EfiDisableInterrupts (
-##     VOID
-##     )
-##
+//
+// BOOLEAN
+// EfiDisableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -163,12 +163,12 @@ FUNCTION EfiDisableInterrupts
 
 END_FUNCTION EfiDisableInterrupts
 
-##
-## VOID
-## EfiEnableInterrupts (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfiEnableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -192,12 +192,12 @@ FUNCTION EfiEnableInterrupts
 
 END_FUNCTION EfiEnableInterrupts
 
-##
-## BOOLEAN
-## EfiAreInterruptsEnabled (
-##     VOID
-##     )
-##
+//
+// BOOLEAN
+// EfiAreInterruptsEnabled (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -228,12 +228,12 @@ FUNCTION EfiAreInterruptsEnabled
 
 END_FUNCTION EfiAreInterruptsEnabled
 
-##
-## VOID
-## EfipUndefinedInstructionEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipUndefinedInstructionEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -255,34 +255,34 @@ Return Value:
 
 FUNCTION EfipUndefinedInstructionEntry
 
-    ##
-    ## Save state and create a trap frame.
-    ##
+    //
+    // Save state and create a trap frame.
+    //
 
     ARM_ENTER_INTERRUPT
 
-    ##
-    ## Call the main dispatch routine routine with a pointer to the trap frame
-    ## as the only parameter.
-    ##
+    //
+    // Call the main dispatch routine routine with a pointer to the trap frame
+    // as the only parameter.
+    //
 
     mov     %r0, %sp
     blx     EfipDispatchUndefinedInstructionException
 
-    ##
-    ## Restore state and return.
-    ##
+    //
+    // Restore state and return.
+    //
 
     ARM_EXIT_INTERRUPT
 
 END_FUNCTION EfipUndefinedInstructionEntry
 
-##
-## VOID
-## EfipSoftwareInterruptEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipSoftwareInterruptEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -306,12 +306,12 @@ FUNCTION EfipSoftwareInterruptEntry
 
 END_FUNCTION EfipSoftwareInterruptEntry
 
-##
-## VOID
-## EfipPrefetchAbortEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipPrefetchAbortEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -333,35 +333,35 @@ Return Value:
 FUNCTION EfipPrefetchAbortEntry
     sub     %lr, %lr, #4                @ Prefetches go too far by 4.
 
-    ##
-    ## Save state and create a trap frame.
-    ##
+    //
+    // Save state and create a trap frame.
+    //
 
     ARM_ENTER_INTERRUPT
 
-    ##
-    ## Call the main dispatch routine routine with a pointer to the trap frame
-    ## and 1 to indicate a prefetch abort.
-    ##
+    //
+    // Call the main dispatch routine routine with a pointer to the trap frame
+    // and 1 to indicate a prefetch abort.
+    //
 
     mov     %r0, %sp
     mov     %r1, #1
     blx     EfipDispatchException
 
-    ##
-    ## Restore state and return.
-    ##
+    //
+    // Restore state and return.
+    //
 
     ARM_EXIT_INTERRUPT
 
 END_FUNCTION EfipPrefetchAbortEntry
 
-##
-## VOID
-## EfipDataAbortEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipDataAbortEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -383,35 +383,35 @@ Return Value:
 FUNCTION EfipDataAbortEntry
     sub     %lr, %lr, #8                @ Data aborts go too far by 8.
 
-    ##
-    ## Save state and create a trap frame.
-    ##
+    //
+    // Save state and create a trap frame.
+    //
 
     ARM_ENTER_INTERRUPT
 
-    ##
-    ## Call the main dispatch routine routine with a pointer to the trap frame
-    ## and 0 to indicate a prefetch abort.
-    ##
+    //
+    // Call the main dispatch routine routine with a pointer to the trap frame
+    // and 0 to indicate a prefetch abort.
+    //
 
     mov     %r0, %sp
     mov     %r1, #0
     blx     EfipDispatchException
 
-    ##
-    ## Restore state and return.
-    ##
+    //
+    // Restore state and return.
+    //
 
     ARM_EXIT_INTERRUPT
 
 END_FUNCTION EfipDataAbortEntry
 
-##
-## VOID
-## EfipIrqEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipIrqEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -435,12 +435,12 @@ FUNCTION EfipIrqEntry
 
 END_FUNCTION EfipIrqEntry
 
-##
-## VOID
-## EfipFiqEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipFiqEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -464,12 +464,12 @@ FUNCTION EfipFiqEntry
 
 END_FUNCTION EfipFiqEntry
 
-##
-## VOID
-## EfipCpuid (
-##     PARM_CPUID Features
-##     )
-##
+//
+// VOID
+// EfipCpuid (
+//     PARM_CPUID Features
+//     )
+//
 
 /*++
 
@@ -522,13 +522,13 @@ FUNCTION EfipCpuid
 
 END_FUNCTION EfipCpuid
 
-##
-## EFIAPI
-## UINTN
-## EfipArchSetJump (
-##     PEFI_JUMP_BUFFER JumpBuffer
-##     )
-##
+//
+// EFIAPI
+// UINTN
+// EfipArchSetJump (
+//     PEFI_JUMP_BUFFER JumpBuffer
+//     )
+//
 
 /*++
 
@@ -559,14 +559,14 @@ FUNCTION EfipArchSetJump
 
 END_FUNCTION EfipArchSetJump
 
-##
-## EFIAPI
-## VOID
-## EfipArchLongJump (
-##     PEFI_JUMP_BUFFER JumpBuffer,
-##     UINTN Value
-##     )
-##
+//
+// EFIAPI
+// VOID
+// EfipArchLongJump (
+//     PEFI_JUMP_BUFFER JumpBuffer,
+//     UINTN Value
+//     )
+//
 
 /*++
 
@@ -598,12 +598,12 @@ FUNCTION EfipArchLongJump
 
 END_FUNCTION EfipArchLongJump
 
-##
-## ULONG
-## ArGetSystemControlRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetSystemControlRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -627,12 +627,12 @@ FUNCTION ArGetSystemControlRegister
 
 END_FUNCTION ArGetSystemControlRegister
 
-##
-## VOID
-## ArSetSystemControlRegister (
-##     ULONG NewValue
-##     )
-##
+//
+// VOID
+// ArSetSystemControlRegister (
+//     ULONG NewValue
+//     )
+//
 
 /*++
 
@@ -656,12 +656,12 @@ FUNCTION ArSetSystemControlRegister
 
 END_FUNCTION ArSetSystemControlRegister
 
-##
-## ULONG
-## ArGetAuxiliaryControlRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetAuxiliaryControlRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -685,12 +685,12 @@ FUNCTION ArGetAuxiliaryControlRegister
 
 END_FUNCTION ArGetAuxiliaryControlRegister
 
-##
-## VOID
-## ArSetAuxiliaryControlRegister (
-##     ULONG NewValue
-##     )
-##
+//
+// VOID
+// ArSetAuxiliaryControlRegister (
+//     ULONG NewValue
+//     )
+//
 
 /*++
 
@@ -714,12 +714,12 @@ FUNCTION ArSetAuxiliaryControlRegister
 
 END_FUNCTION ArSetAuxiliaryControlRegister
 
-##
-## PVOID
-## ArGetVectorBaseAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetVectorBaseAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -744,12 +744,12 @@ FUNCTION ArGetVectorBaseAddress
 
 END_FUNCTION ArGetVectorBaseAddress
 
-##
-## VOID
-## ArSetVectorBaseAddress (
-##     PVOID VectorBaseAddress
-##     )
-##
+//
+// VOID
+// ArSetVectorBaseAddress (
+//     PVOID VectorBaseAddress
+//     )
+//
 
 /*++
 
@@ -775,12 +775,12 @@ FUNCTION ArSetVectorBaseAddress
 
 END_FUNCTION ArSetVectorBaseAddress
 
-##
-## PVOID
-## ArGetDataFaultingAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetDataFaultingAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -804,12 +804,12 @@ FUNCTION ArGetDataFaultingAddress
 
 END_FUNCTION ArGetDataFaultingAddress
 
-##
-## VOID
-## ArSetDataFaultingAddress (
-##     PVOID Value
-##     )
-##
+//
+// VOID
+// ArSetDataFaultingAddress (
+//     PVOID Value
+//     )
+//
 
 /*++
 
@@ -834,12 +834,12 @@ FUNCTION ArSetDataFaultingAddress
 
 END_FUNCTION ArSetDataFaultingAddress
 
-##
-## PVOID
-## ArGetInstructionFaultingAddress (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetInstructionFaultingAddress (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -863,12 +863,12 @@ FUNCTION ArGetInstructionFaultingAddress
 
 END_FUNCTION ArGetInstructionFaultingAddress
 
-##
-## VOID
-## ArSetInstructionFaultingAddress (
-##     PVOID Value
-##     )
-##
+//
+// VOID
+// ArSetInstructionFaultingAddress (
+//     PVOID Value
+//     )
+//
 
 /*++
 
@@ -892,12 +892,12 @@ FUNCTION ArSetInstructionFaultingAddress
 
 END_FUNCTION ArSetInstructionFaultingAddress
 
-##
-## ULONG
-## ArGetDataFaultStatus (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetDataFaultStatus (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -922,12 +922,12 @@ FUNCTION ArGetDataFaultStatus
 
 END_FUNCTION ArGetDataFaultStatus
 
-##
-## VOID
-## ArSetDataFaultStatus (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetDataFaultStatus (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -951,12 +951,12 @@ FUNCTION ArSetDataFaultStatus
 
 END_FUNCTION ArSetDataFaultStatus
 
-##
-## ULONG
-## ArGetInstructionFaultStatus (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetInstructionFaultStatus (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -981,12 +981,12 @@ FUNCTION ArGetInstructionFaultStatus
 
 END_FUNCTION ArGetInstructionFaultStatus
 
-##
-## VOID
-## ArSetInstructionFaultStatus (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetInstructionFaultStatus (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1010,12 +1010,12 @@ FUNCTION ArSetInstructionFaultStatus
 
 END_FUNCTION ArSetInstructionFaultStatus
 
-##
-## PVOID
-## ArGetProcessorBlockRegister (
-##     VOID
-##     )
-##
+//
+// PVOID
+// ArGetProcessorBlockRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1041,12 +1041,12 @@ FUNCTION ArGetProcessorBlockRegister
 
 END_FUNCTION ArGetProcessorBlockRegister
 
-##
-## VOID
-## ArSetProcessorBlockRegister (
-##     PVOID ProcessorBlockRegisterValue
-##     )
-##
+//
+// VOID
+// ArSetProcessorBlockRegister (
+//     PVOID ProcessorBlockRegisterValue
+//     )
+//
 
 /*++
 
@@ -1073,12 +1073,12 @@ FUNCTION ArSetProcessorBlockRegister
 
 END_FUNCTION ArSetProcessorBlockRegister
 
-##
-## ULONG
-## ArGetTranslationTableBaseRegister0 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetTranslationTableBaseRegister0 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1103,12 +1103,12 @@ FUNCTION ArGetTranslationTableBaseRegister0
 
 END_FUNCTION ArGetTranslationTableBaseRegister0
 
-##
-## VOID
-## ArSetTranslationTableBaseRegister0 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetTranslationTableBaseRegister0 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1132,12 +1132,12 @@ FUNCTION ArSetTranslationTableBaseRegister0
 
 END_FUNCTION ArSetTranslationTableBaseRegister0
 
-##
-## ULONG
-## ArGetTranslationTableBaseRegister1 (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetTranslationTableBaseRegister1 (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1161,12 +1161,12 @@ FUNCTION ArGetTranslationTableBaseRegister1
 
 END_FUNCTION ArGetTranslationTableBaseRegister1
 
-##
-## VOID
-## ArSetTranslationTableBaseRegister1 (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetTranslationTableBaseRegister1 (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1190,12 +1190,12 @@ FUNCTION ArSetTranslationTableBaseRegister1
 
 END_FUNCTION ArSetTranslationTableBaseRegister1
 
-##
-## ULONG
-## ArGetPrimaryRegionRemapRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetPrimaryRegionRemapRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1219,12 +1219,12 @@ FUNCTION ArGetPrimaryRegionRemapRegister
 
 END_FUNCTION ArGetPrimaryRegionRemapRegister
 
-##
-## VOID
-## ArSetPrimaryRegionRemapRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPrimaryRegionRemapRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1248,12 +1248,12 @@ FUNCTION ArSetPrimaryRegionRemapRegister
 
 END_FUNCTION ArSetPrimaryRegionRemapRegister
 
-##
-## ULONG
-## ArGetNormalMemoryRemapRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetNormalMemoryRemapRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1277,12 +1277,12 @@ FUNCTION ArGetNormalMemoryRemapRegister
 
 END_FUNCTION ArGetNormalMemoryRemapRegister
 
-##
-## VOID
-## ArSetNormalMemoryRemapRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetNormalMemoryRemapRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1306,12 +1306,12 @@ FUNCTION ArSetNormalMemoryRemapRegister
 
 END_FUNCTION ArSetNormalMemoryRemapRegister
 
-##
-## ULONG
-## ArGetPhysicalAddressRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetPhysicalAddressRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1335,12 +1335,12 @@ FUNCTION ArGetPhysicalAddressRegister
 
 END_FUNCTION ArGetPhysicalAddressRegister
 
-##
-## VOID
-## ArSetPhysicalAddressRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPhysicalAddressRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1364,12 +1364,12 @@ FUNCTION ArSetPhysicalAddressRegister
 
 END_FUNCTION ArSetPhysicalAddressRegister
 
-##
-## VOID
-## ArSetPrivilegedReadTranslateRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPrivilegedReadTranslateRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1393,12 +1393,12 @@ FUNCTION ArSetPrivilegedReadTranslateRegister
 
 END_FUNCTION ArSetPrivilegedReadTranslateRegister
 
-##
-## VOID
-## ArSetPrivilegedWriteTranslateRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetPrivilegedWriteTranslateRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1422,12 +1422,12 @@ FUNCTION ArSetPrivilegedWriteTranslateRegister
 
 END_FUNCTION ArSetPrivilegedWriteTranslateRegister
 
-##
-## VOID
-## ArSetUnprivilegedReadTranslateRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetUnprivilegedReadTranslateRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1451,12 +1451,12 @@ FUNCTION ArSetUnprivilegedReadTranslateRegister
 
 END_FUNCTION ArSetUnprivilegedReadTranslateRegister
 
-##
-## VOID
-## ArSetUnprivilegedWriteTranslateRegister (
-##     ULONG Value
-##     )
-##
+//
+// VOID
+// ArSetUnprivilegedWriteTranslateRegister (
+//     ULONG Value
+//     )
+//
 
 /*++
 
@@ -1481,12 +1481,12 @@ FUNCTION ArSetUnprivilegedWriteTranslateRegister
 
 END_FUNCTION ArSetUnprivilegedWriteTranslateRegister
 
-##
-## ULONG
-## ArGetCacheTypeRegister (
-##     VOID
-##     )
-##
+//
+// ULONG
+// ArGetCacheTypeRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -1511,36 +1511,36 @@ FUNCTION ArGetCacheTypeRegister
 
 END_FUNCTION ArGetCacheTypeRegister
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
-##
-## This code is entered as the result of any interrupt or exception. Its job is
-## to transition back to the SVC stack and then call the real interrupt
-## dispatch routine.
-##
+//
+// This code is entered as the result of any interrupt or exception. Its job is
+// to transition back to the SVC stack and then call the real interrupt
+// dispatch routine.
+//
 
 
 FUNCTION EfipCommonInterruptEntry
 
-    ##
-    ## Save state and create a trap frame.
-    ##
+    //
+    // Save state and create a trap frame.
+    //
 
     ARM_ENTER_INTERRUPT
 
-    ##
-    ## Call the main dispatch routine routine with a pointer to the trap frame
-    ## as the only parameter.
-    ##
+    //
+    // Call the main dispatch routine routine with a pointer to the trap frame
+    // as the only parameter.
+    //
 
     mov     %r0, %sp
     blx     EfipDispatchException
 
-    ##
-    ## Restore state and return.
-    ##
+    //
+    // Restore state and return.
+    //
 
     ARM_EXIT_INTERRUPT
 

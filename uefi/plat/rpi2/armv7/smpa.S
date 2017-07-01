@@ -26,37 +26,37 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 .arch_extension virt
 
-##
-## .globl allows these labels to be visible to the linker.
-##
+//
+// .globl allows these labels to be visible to the linker.
+//
 
 .globl EfipBcm2836ProcessorStartup
 .globl EfipBcm2836ParkingLoop
 .globl EfipBcm2836ParkingLoopEnd
 
-##
-## VOID
-## EfipBcm2836SendEvent (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipBcm2836SendEvent (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -82,12 +82,12 @@ FUNCTION EfipBcm2836SendEvent
 
 END_FUNCTION EfipBcm2836SendEvent
 
-##
-## UINT32
-## EfipBcm2836GetMultiprocessorIdRegister (
-##     VOID
-##     )
-##
+//
+// UINT32
+// EfipBcm2836GetMultiprocessorIdRegister (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -111,12 +111,12 @@ FUNCTION EfipBcm2836GetMultiprocessorIdRegister
 
 END_FUNCTION EfipBcm2836GetMultiprocessorIdRegister
 
-##
-## VOID
-## EfipBcm2836SwitchToSvcMode (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipBcm2836SwitchToSvcMode (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -138,35 +138,35 @@ Return Value:
 
 FUNCTION EfipBcm2836SwitchToSvcMode
 
-    ##
-    ## Disable interrupts.
-    ##
+    //
+    // Disable interrupts.
+    //
 
     cpsid   i
 
-    ##
-    ## Test to see if the core is in HYP mode. Transitioning from HYP mode to
-    ## SVC mode requires an ERET to switch execution states.
-    ##
+    //
+    // Test to see if the core is in HYP mode. Transitioning from HYP mode to
+    // SVC mode requires an ERET to switch execution states.
+    //
 
     mrs     %r0, CPSR
     and     %r1, %r0, #ARM_MODE_MASK
     cmp     %r1, #ARM_MODE_HYP
     bne     EfipBcm2836SwitchToSvcModeEnd
 
-    ##
-    ## While in HYP mode, zero out the Generic Timer's virtual offset. Assume
-    ## that if the core is not in HYP mode that some other source appropriately
-    ## set the virtual offset.
-    ##
+    //
+    // While in HYP mode, zero out the Generic Timer's virtual offset. Assume
+    // that if the core is not in HYP mode that some other source appropriately
+    // set the virtual offset.
+    //
 
     mov     %r2, #0
     mov     %r3, #0
     mcrr    p15, 4, %r2, %r3, %c14
 
-    ##
-    ## Trasition to SVC mode with the ERET.
-    ##
+    //
+    // Trasition to SVC mode with the ERET.
+    //
 
     msr     ELR_hyp, %lr
     and     %r0, %r0, #~(ARM_MODE_MASK)
@@ -176,9 +176,9 @@ FUNCTION EfipBcm2836SwitchToSvcMode
 
 EfipBcm2836SwitchToSvcModeEnd:
 
-    ##
-    ## The core was not in HYP mode. Switch to SVC mode the easy way.
-    ##
+    //
+    // The core was not in HYP mode. Switch to SVC mode the easy way.
+    //
 
     mov     %r0, #(PSR_FLAG_IRQ | ARM_MODE_SVC)
     msr     CPSR_c, %r0
@@ -186,12 +186,12 @@ EfipBcm2836SwitchToSvcModeEnd:
 
 END_FUNCTION EfipBcm2836SwitchToSvcMode
 
-##
-## VOID
-## EfipBcm2836ProcessorStartup (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipBcm2836ProcessorStartup (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -215,16 +215,16 @@ Return Value:
 .align 4
 EfipBcm2836ProcessorStartup:
 
-    ##
-    ## Disable interrupts and switch to SVC mode.
-    ##
+    //
+    // Disable interrupts and switch to SVC mode.
+    //
 
     bl      EfipBcm2836SwitchToSvcMode
 
-    ##
-    ## Park the core again, waiting until the firmware can allocate a page for
-    ## the final parking location.
-    ##
+    //
+    // Park the core again, waiting until the firmware can allocate a page for
+    // the final parking location.
+    //
 
     mov     %r3, #0
     ldr     %r1, =EfiBcm2836ProcessorId     @ Get the processor ID address.
@@ -250,13 +250,13 @@ EfipBcm2836ProcessorStartupEnd:
 
 .ltorg
 
-##
-## VOID
-## EfipBcm2836ParkingLoop (
-##     UINT32 ProcessorId,
-##     VOID *ParkingLocation
-##     )
-##
+//
+// VOID
+// EfipBcm2836ParkingLoop (
+//     UINT32 ProcessorId,
+//     VOID *ParkingLocation
+//     )
+//
 
 /*++
 
@@ -291,15 +291,15 @@ EfipBcm2836ParkingLoopJump:
     DSB                                     @ One final breath, then...
     bx      %r2                             @ Jump head first into the abyss.
 
-##
-## Dump any literals being saved up.
-##
+//
+// Dump any literals being saved up.
+//
 
 .ltorg
 
 EfipBcm2836ParkingLoopEnd:
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

@@ -26,33 +26,33 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 .arch_extension virt
 
-##
-## .globl allows these labels to be visible to the linker.
-##
+//
+// .globl allows these labels to be visible to the linker.
+//
 
 .globl EfipRk32MonitorInterruptTable
 
-##
-## This address must be aligned to a 32 byte address so that it can be set in
-## the MVBAR register.
-##
+//
+// This address must be aligned to a 32 byte address so that it can be set in
+// the MVBAR register.
+//
 
 .balign 32
 
@@ -81,16 +81,16 @@ EfipRk32IrqInterruptVector:
 EfipRk32FiqInterruptVector:
     .word 0
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
-##
-## VOID
-## EfipRk32SecureMonitorCallEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfipRk32SecureMonitorCallEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -111,11 +111,11 @@ Return Value:
 
 FUNCTION EfipRk32SecureMonitorCallEntry
 
-    ##
-    ## The ARM Generic Timer's virtual offset can bet set in HYP mode and in
-    ## Monitor Mode when the SCR.NS bit is set to 1. Set the NS bit and zero
-    ## the offset.
-    ##
+    //
+    // The ARM Generic Timer's virtual offset can bet set in HYP mode and in
+    // Monitor Mode when the SCR.NS bit is set to 1. Set the NS bit and zero
+    // the offset.
+    //
 
     mrc     p15, 0, %r0, %c1, %c1, 0          @ Get the SCR
     orr     %r0, %r0, #SCR_NON_SECURE
@@ -124,10 +124,10 @@ FUNCTION EfipRk32SecureMonitorCallEntry
     mov     %r3, #0
     mcrr    p15, 4, %r2, %r3, %c14
 
-    ##
-    ## Clear the NS bit before returing from the exception to remain in secure
-    ## mode.
-    ##
+    //
+    // Clear the NS bit before returing from the exception to remain in secure
+    // mode.
+    //
 
     bic     %r0, %r0, #SCR_NON_SECURE
     mcr     p15, 0, %r0, %c1, %c1, 0          @ Set the SCR

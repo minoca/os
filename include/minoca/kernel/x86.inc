@@ -25,19 +25,19 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86defs.h>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## Basic constants.
-##
+//
+// Basic constants.
+//
 
 #define FALSE 0
 #define TRUE 1
@@ -51,24 +51,24 @@ Environment:
 
 #define CONTEXT_SWAP_MAGIC 0x5A4A3A2A
 
-##
-## Relevant TSS structure definitions.
-##
+//
+// Relevant TSS structure definitions.
+//
 
 #define TSS_ESP0  0x04
 
-##
-## Processor block offsets.
-##
+//
+// Processor block offsets.
+//
 
 #define PROCESSOR_BLOCK_TSS 0x0C
 #define PROCESSOR_BLOCK_GDT 0x10
 #define PROCESSOR_BLOCK_RUNNING_THREAD 0x14
 
-##
-## Definition for the TRAP_FRAME structure and the exception stack directly
-## above it.
-##
+//
+// Definition for the TRAP_FRAME structure and the exception stack directly
+// above it.
+//
 
 #define TRAP_DS             0
 #define TRAP_ES             4
@@ -103,47 +103,47 @@ Environment:
 #define PROCESSOR_CONTEXT_SIZE 0x60
 #define SIGNAL_CONTEXT_SIZE 32
 
-##
-## Thread structure offsets.
-##
+//
+// Thread structure offsets.
+//
 
 #define THREAD_SIGNAL_PENDING 84
 
-##
-## Define the thread signal pending state options.
-##
+//
+// Define the thread signal pending state options.
+//
 
 #define ThreadSignalPending 2
 
-##
-## Define the minimum and maximum external interrupt vectors.
-##
+//
+// Define the minimum and maximum external interrupt vectors.
+//
 
 #define MINIMUM_VECTOR 0x30
 #define MAXIMUM_VECTOR 0xFF
 
-##
-## APIC End Of Interrupt Offset.
-##
+//
+// APIC End Of Interrupt Offset.
+//
 
 #define APIC_EOI_OFFSET    0xB
 
-##
-## Define the system call number for resuming after a signal.
-##
+//
+// Define the system call number for resuming after a signal.
+//
 
 #define SystemCallRestoreContext 1
 #define SIGNAL_PARAMETERS_SIZE 24
 #define SIGNAL_CONTEXT_SIZE 32
 
-##
-## -------------------------------------------------------------------- Macros
-##
+//
+// -------------------------------------------------------------------- Macros
+//
 
-##
-## This macro switches the DS and ES data segments to the kernel's data
-## segments.
-##
+//
+// This macro switches the DS and ES data segments to the kernel's data
+// segments.
+//
 
 .macro LoadKernelDataSegments
     movw    $KERNEL_DS, %ax         # Get the data segment selector,
@@ -168,10 +168,10 @@ Environment:
 
 #elif defined(__ELF__)
 
-##
-## This macro defines a function, callable from C code in any module and
-## capable of being overridden by other functions.
-##
+//
+// This macro defines a function, callable from C code in any module and
+// capable of being overridden by other functions.
+//
 
 #define EXPORTED_FUNCTION(_Name) \
     .func _Name ; \
@@ -182,19 +182,19 @@ Environment:
     .global _Name ; \
     _Name:
 
-##
-## This macro defines a function, callable from C code in the current module
-## only.
-##
+//
+// This macro defines a function, callable from C code in the current module
+// only.
+//
 
 #define FUNCTION(_Name) \
     .hidden _Name ; \
     EXPORTED_FUNCTION(_Name)
 
-##
-## This macro defines a function, callable from C code in any module but always
-## called locally in the current module.
-##
+//
+// This macro defines a function, callable from C code in any module but always
+// called locally in the current module.
+//
 
 #define PROTECTED_FUNCTION(_Name) \
     .protected _Name ; \
@@ -218,11 +218,11 @@ Environment:
 
 #endif
 
-##
-## This macro sets the call frame information so that the debugger can unwind
-## a trap frame. It assumes the CFA register is esp, and sets the CFA to the
-## base of the trap frame just to make things easier.
-##
+//
+// This macro sets the call frame information so that the debugger can unwind
+// a trap frame. It assumes the CFA register is esp, and sets the CFA to the
+// base of the trap frame just to make things easier.
+//
 
 #define CFI_TRAP_FRAME_PUSHED           \
     .cfi_def_cfa_offset 0 ;             \
@@ -237,11 +237,11 @@ Environment:
     .cfi_offset %esp, TRAP_ESP ;        \
     .cfi_offset %eflags, TRAP_EFLAGS
 
-##
-## This macro sets the call frame information just after a trap frame was
-## restored. It indicates to the debugger that most registers are now in their
-## proper place. It assumes the CFA register is esp+0.
-##
+//
+// This macro sets the call frame information just after a trap frame was
+// restored. It indicates to the debugger that most registers are now in their
+// proper place. It assumes the CFA register is esp+0.
+//
 
 #define CFI_TRAP_FRAME_POPPED \
     .cfi_same_value %eax ; \
@@ -253,9 +253,9 @@ Environment:
     .cfi_same_value %ebp ; \
     .cfi_offset %eip, 4
 
-##
-## Define .cfi directives, macroed so they can be excised if unneeded.
-##
+//
+// Define .cfi directives, macroed so they can be excised if unneeded.
+//
 
 #define CFI_DEF_CFA(_Register, _Offset) .cfi_def_cfa _Register, _Offset
 #define CFI_DEF_CFA_OFFSET(_Offset) .cfi_def_cfa_offset _Offset

@@ -25,28 +25,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## EfipGtSetVirtualTimerControl (
-##     UINT32 Control
-##     )
-##
+//
+// VOID
+// EfipGtSetVirtualTimerControl (
+//     UINT32 Control
+//     )
+//
 
 /*++
 
@@ -70,12 +70,12 @@ FUNCTION EfipGtSetVirtualTimerControl
 
 END_FUNCTION EfipGtSetVirtualTimerControl
 
-##
-## UINT64
-## EfipGtGetVirtualCount (
-##     VOID
-##     )
-##
+//
+// UINT64
+// EfipGtGetVirtualCount (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -99,12 +99,12 @@ FUNCTION EfipGtGetVirtualCount
 
 END_FUNCTION EfipGtGetVirtualCount
 
-##
-## VOID
-## EfipGtSetVirtualTimerCompare (
-##     UINT64 CompareValue
-##     )
-##
+//
+// VOID
+// EfipGtSetVirtualTimerCompare (
+//     UINT64 CompareValue
+//     )
+//
 
 /*++
 
@@ -128,8 +128,8 @@ FUNCTION EfipGtSetVirtualTimerCompare
 
 END_FUNCTION EfipGtSetVirtualTimerCompare
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 

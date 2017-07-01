@@ -25,37 +25,37 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
 
 .text
 
-##
-## Stick this in the .init section so it ends up at the front of the binary.
-##
+//
+// Stick this in the .init section so it ends up at the front of the binary.
+//
 
 .section .init
 
-##
-## .globl allows this label to be visible to the linker.
-##
+//
+// .globl allows this label to be visible to the linker.
+//
 
 .globl _start
 
-##
-## void
-## start (
-##     )
-##
+//
+// void
+// start (
+//     )
+//
 
 /*++
 
@@ -79,7 +79,7 @@ Return Value:
 _start:
     jmp     BoMain                  # Just do it.
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

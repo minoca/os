@@ -26,27 +26,27 @@ Environment:
 
 --*/
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 16-bit real mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 16-bit real mode code.
+//
 
 .text
 .code32
 
-##
-## .globl allows this label to be visible to the linker. _Start is the entry
-## point to the code, so it needs to be globally visible.
-##
+//
+// .globl allows this label to be visible to the linker. _Start is the entry
+// point to the code, so it needs to be globally visible.
+//
 
 .globl _Start
 _Start:
@@ -75,12 +75,12 @@ _Start:
 .long 0
 .long 0
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 

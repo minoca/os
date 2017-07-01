@@ -25,15 +25,15 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
 #define AM335_GPIO1_OUTPUT_SET 0x4804C194
 #define AM335_GPIO1_OUTPUT_CLEAR 0x4804C190
@@ -138,16 +138,16 @@ Environment:
 
 #define BEAGLEBONE_BLACK_LED1 (1 << 21)
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## These functions are defined in ARM mode, which is okay since the MMU-disable
-## transition code uses blx jumps to possibly transition between modes.
-##
+//
+// These functions are defined in ARM mode, which is okay since the MMU-disable
+// transition code uses blx jumps to possibly transition between modes.
+//
 
 .arm
 
@@ -162,9 +162,9 @@ ASSEMBLY_FILE_HEADER
 
 Am3SocOcmcCode:
 
-##
-## This macro is useful for debugging on the BeagleBone Black.
-##
+//
+// This macro is useful for debugging on the BeagleBone Black.
+//
 
 .macro SetLeds, Value
     ldr     %r3, =AM335_GPIO1_OUTPUT_CLEAR
@@ -215,12 +215,12 @@ Am3SocOcmcCode:
     nop
 .endm
 
-##
-## VOID
-## Am3SocRefreshWfi (
-##     VOID
-##     )
-##
+//
+// VOID
+// Am3SocRefreshWfi (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -241,49 +241,49 @@ Return Value:
 
 Am3SocRefreshWfi:
 
-    ##
-    ## Put the DDR into self refresh.
-    ##
+    //
+    // Put the DDR into self refresh.
+    //
 
     Am3SocEmifSelfRefresh
 
-    ##
-    ## Turn off LED1.
-    ## TODO: Remove this as it's BeagleBone Black specific (but super cool).
-    ##
+    //
+    // Turn off LED1.
+    // TODO: Remove this as it's BeagleBone Black specific (but super cool).
+    //
 
     ldr     %r3, =AM335_GPIO1_OUTPUT_CLEAR      @ Load GPIO clear address.
     ldr     %r2, =BEAGLEBONE_BLACK_LED1         @ Load LED pin.
     str     %r2, [%r3]                          @ Turn off LED.
 
-    ##
-    ## Go down. Add enough nops to ensure the A8 pipeline is clean.
-    ##
+    //
+    // Go down. Add enough nops to ensure the A8 pipeline is clean.
+    //
 
     Am3SocWfi
 
-    ##
-    ## Turn on the LED to indicate the core is running.
-    ## TODO: Remove this as it's BeagleBone Black specific.
-    ##
+    //
+    // Turn on the LED to indicate the core is running.
+    // TODO: Remove this as it's BeagleBone Black specific.
+    //
 
     ldr     %r3, =AM335_GPIO1_OUTPUT_SET        @ Load GPIO set address.
     ldr     %r2, =BEAGLEBONE_BLACK_LED1         @ Load LED pin.
     str     %r2, [%r3]                          @ Turn on LED.
 
-    ##
-    ## Disable self-refresh.
-    ##
+    //
+    // Disable self-refresh.
+    //
 
     Am3SocEmifDisableSelfRefresh
     bx      %lr             @ Return.
 
-##
-## VOID
-## Am3SocStandby (
-##     ULONG ResumeAddress
-##     )
-##
+//
+// VOID
+// Am3SocStandby (
+//     ULONG ResumeAddress
+//     )
+//
 
 /*++
 
@@ -306,31 +306,31 @@ Return Value:
 Am3SocStandby:
     str     %lr, Am3SocAbortAddress     @ Save return address for failure.
 
-    ##
-    ## Save the OS resume physical address into the global in OCMC RAM.
-    ##
+    //
+    // Save the OS resume physical address into the global in OCMC RAM.
+    //
 
     str     %r0, Am3SocResumeAddress    @ Save OS resume address.
 
-    ##
-    ## Put the DDR into self refresh.
-    ##
+    //
+    // Put the DDR into self refresh.
+    //
 
     Am3SocEmifSelfRefresh
 
-    ##
-    ## Set the MPU clock control register to disable.
-    ##
+    //
+    // Set the MPU clock control register to disable.
+    //
 
     ldr     %r0, =AM335_CM_MPU_MPU_CLOCK_CONTROL
     ldr     %r1, [%r0]
     bic     %r1, %r1, #AM335_CM_MPU_MPU_CLOCK_CONTROL_MODE_MASK
     str     %r1, [%r0]
 
-    ##
-    ## Put the PLLs into bypass mode. The display is still active in standby,
-    ## so CORE, DDR, and PER need to stay locked.
-    ##
+    //
+    // Put the PLLs into bypass mode. The display is still active in standby,
+    // so CORE, DDR, and PER need to stay locked.
+    //
 
     ldr     %r12, =AM335_CM_WAKEUP_REGISTERS    @ Get CM wakeup base.
     add     %r0, %r12, #AM335_CM_WAKEUP_CLOCK_MODE_DPLL_DISP
@@ -343,48 +343,48 @@ Am3SocStandby:
     add     %r2, %r12, #AM335_CM_WAKEUP_IDLE_STATUS_DPLL_MPU
     bl      Am3SocPllBypass
 
-    ##
-    ## Turn off LED1.
-    ## TODO: Remove this as it's BeagleBone Black specific (but super cool).
-    ##
+    //
+    // Turn off LED1.
+    // TODO: Remove this as it's BeagleBone Black specific (but super cool).
+    //
 
     ldr     %r3, =AM335_GPIO1_OUTPUT_CLEAR      @ Load GPIO clear address.
     ldr     %r2, =BEAGLEBONE_BLACK_LED1         @ Load LED pin.
     str     %r2, [%r3]                          @ Turn off LED.
 
-    ##
-    ## Go down. Add enough nops to ensure the A8 pipeline is clean.
-    ##
+    //
+    // Go down. Add enough nops to ensure the A8 pipeline is clean.
+    //
 
     Am3SocWfi
 
-    ##
-    ## Execution might resume here if the A8 came out of WFI before the Cortex
-    ## M3 could take it down. Make the resume address the abort address and
-    ## resume normally.
-    ##
+    //
+    // Execution might resume here if the A8 came out of WFI before the Cortex
+    // M3 could take it down. Make the resume address the abort address and
+    // resume normally.
+    //
 
     ldr     %r0, Am3SocAbortAddress
     str     %r0, Am3SocResumeAddress
 
-    ##
-    ## Real resume starts here.
-    ##
+    //
+    // Real resume starts here.
+    //
 
 Am3SocResumeStandby:
 
-    ##
-    ## Turn on the LED to indicate the core is running.
-    ## TODO: Remove this as it's BeagleBone Black specific.
-    ##
+    //
+    // Turn on the LED to indicate the core is running.
+    // TODO: Remove this as it's BeagleBone Black specific.
+    //
 
     ldr     %r3, =AM335_GPIO1_OUTPUT_SET        @ Load GPIO set address.
     ldr     %r2, =BEAGLEBONE_BLACK_LED1         @ Load LED pin.
     str     %r2, [%r3]                          @ Turn on LED.
 
-    ##
-    ## Set the MPU module mode to enabled.
-    ##
+    //
+    // Set the MPU module mode to enabled.
+    //
 
     ldr     %r0, =AM335_CM_MPU_MPU_CLOCK_CONTROL
     ldr     %r1, [%r0]
@@ -392,9 +392,9 @@ Am3SocResumeStandby:
     orr     %r1, %r1, #AM335_CM_MPU_MPU_CLOCK_CONTROL_MODE_ENABLED
     str     %r1, [%r0]
 
-    ##
-    ## Re-lock the PLLs.
-    ##
+    //
+    // Re-lock the PLLs.
+    //
 
     ldr     %r12, =AM335_CM_WAKEUP_REGISTERS    @ Get CM wakeup base.
     add     %r0, %r12, #AM335_CM_WAKEUP_CLOCK_MODE_DPLL_MPU
@@ -407,27 +407,27 @@ Am3SocResumeStandby:
     add     %r2, %r12, #AM335_CM_WAKEUP_IDLE_STATUS_DPLL_DISP
     bl      Am3SocPllRestore
 
-    ##
-    ## Disable self-refresh.
-    ##
+    //
+    // Disable self-refresh.
+    //
 
     Am3SocEmifDisableSelfRefresh
 
-    ##
-    ## Jump to the restore entry point, which is either the resume address or
-    ## the original return address of this function, depending on whether or
-    ## not the context was actually lost.
-    ##
+    //
+    // Jump to the restore entry point, which is either the resume address or
+    // the original return address of this function, depending on whether or
+    // not the context was actually lost.
+    //
 
     ldr     %lr, Am3SocResumeAddress     @ Get the resume location.
     bx      %lr             @ Return.
 
-##
-## VOID
-## Am3SocSleep (
-##     ULONG ResumeAddress
-##     )
-##
+//
+// VOID
+// Am3SocSleep (
+//     ULONG ResumeAddress
+//     )
+//
 
 /*++
 
@@ -450,15 +450,15 @@ Return Value:
 Am3SocSleep:
     str     %lr, Am3SocAbortAddress     @ Save return address for failure.
 
-    ##
-    ## Save the OS resume physical address into the global in OCMC RAM.
-    ##
+    //
+    // Save the OS resume physical address into the global in OCMC RAM.
+    //
 
     str     %r0, Am3SocResumeAddress    @ Save OS resume address.
 
-    ##
-    ## Save EMIF configuration.
-    ##
+    //
+    // Save EMIF configuration.
+    //
 
     ldr     %r0, =AM335_EMIF_0_REGISTERS    @ Get EMIF base.
     ldr     %r1, [%r0, #AM335_EMIF_SDRAM_CONFIG]
@@ -481,15 +481,15 @@ Am3SocSleep:
     str     %r1, Am3SocPhyControl1
     DSB
 
-    ##
-    ## Put the DDR into self refresh.
-    ##
+    //
+    // Put the DDR into self refresh.
+    //
 
     Am3SocEmifSelfRefresh
 
-    ##
-    ## Disable EMIF.
-    ##
+    //
+    // Disable EMIF.
+    //
 
     ldr     %r0, =AM335_CM_PER_EMIF_CLOCK_CONTROL
     ldr     %r1, [%r0]
@@ -502,26 +502,26 @@ Am3SocEmifDisableLoop:
     cmp     %r1, %r2
     bne     Am3SocEmifDisableLoop
 
-    ##
-    ## Set the MPU clock control register to disable.
-    ##
+    //
+    // Set the MPU clock control register to disable.
+    //
 
     ldr     %r0, =AM335_CM_MPU_MPU_CLOCK_CONTROL
     ldr     %r1, [%r0]
     bic     %r1, %r1, #AM335_CM_MPU_MPU_CLOCK_CONTROL_MODE_MASK
     str     %r1, [%r0]
 
-    ##
-    ## Set the DDR3 default reset value and mDDR (CMOS) mode.
-    ##
+    //
+    // Set the DDR3 default reset value and mDDR (CMOS) mode.
+    //
 
     ldr     %r0, =AM335_DDR_IO_CONTROL
     ldr     %r1, =AM335_DDR_IO_CONTROL_SLEEP_VALUE
     str     %r1, [%r0]
 
-    ##
-    ## Set a weak pull-down for DQ and DM.
-    ##
+    //
+    // Set a weak pull-down for DQ and DM.
+    //
 
     ldr     %r0, =AM335_DDR_DATA0_IO_CONTROL
     ldr     %r2, =AM335_DDR_DATA1_IO_CONTROL
@@ -529,26 +529,26 @@ Am3SocEmifDisableLoop:
     str     %r1, [%r0]
     str     %r1, [%r2]
 
-    ##
-    ## Disable VTP.
-    ##
+    //
+    // Disable VTP.
+    //
 
     ldr     %r0, =AM335_DDR_VTP_CONTROL
     ldr     %r1, =AM335_DDR_VTP_CONTROL_SLEEP_VALUE
     str     %r1, [%r0]
 
-    ##
-    ## Enable SRAM retention mode.
-    ##
+    //
+    // Enable SRAM retention mode.
+    //
 
     ldr     %r0, =AM335_PRM_LDO_SRAM_MPU_CONTROL
     ldr     %r1, [%r0]
     orr     %r1, %r1, #AM335_PRM_LDO_SRAM_MPU_CONTROL_RETENTION_ENABLE
     str     %r1, [%r0]
 
-    ##
-    ## Put the PLLs into bypass mode.
-    ##
+    //
+    // Put the PLLs into bypass mode.
+    //
 
     ldr     %r12, =AM335_CM_WAKEUP_REGISTERS    @ Get CM wakeup base.
     add     %r0, %r12, #AM335_CM_WAKEUP_CLOCK_MODE_DPLL_CORE
@@ -576,44 +576,44 @@ Am3SocEmifDisableLoop:
     add     %r2, %r12, #AM335_CM_WAKEUP_IDLE_STATUS_DPLL_MPU
     bl      Am3SocPllBypass
 
-    ##
-    ## Turn off LED1.
-    ## TODO: Remove this as it's BeagleBone Black specific (but super cool).
-    ##
+    //
+    // Turn off LED1.
+    // TODO: Remove this as it's BeagleBone Black specific (but super cool).
+    //
 
     ldr     %r3, =AM335_GPIO1_OUTPUT_CLEAR      @ Load GPIO clear address.
     ldr     %r2, =BEAGLEBONE_BLACK_LED1         @ Load LED pin.
     str     %r2, [%r3]                          @ Turn off LED.
 
-    ##
-    ## Go down. Add enough nops to ensure the A8 pipeline is clean.
-    ##
+    //
+    // Go down. Add enough nops to ensure the A8 pipeline is clean.
+    //
 
     Am3SocWfi
 
-    ##
-    ## Execution might resume here if the A8 came out of WFI before the Cortex
-    ## M3 could take it down. Make the resume address the abort address, then
-    ## resume normally.
-    ##
+    //
+    // Execution might resume here if the A8 came out of WFI before the Cortex
+    // M3 could take it down. Make the resume address the abort address, then
+    // resume normally.
+    //
 
     ldr     %r0, Am3SocAbortAddress
     str     %r0, Am3SocResumeAddress
 
 Am3SocResume:
 
-    ##
-    ## Turn on the LED to indicate the core is running.
-    ## TODO: Remove this as it's BeagleBone Black specific.
-    ##
+    //
+    // Turn on the LED to indicate the core is running.
+    // TODO: Remove this as it's BeagleBone Black specific.
+    //
 
     ldr     %r3, =AM335_GPIO1_OUTPUT_SET        @ Load GPIO set address.
     ldr     %r2, =BEAGLEBONE_BLACK_LED1         @ Load LED pin.
     str     %r2, [%r3]                          @ Turn on LED.
 
-    ##
-    ## Set the MPU module mode to enabled.
-    ##
+    //
+    // Set the MPU module mode to enabled.
+    //
 
     ldr     %r0, =AM335_CM_MPU_MPU_CLOCK_CONTROL
     ldr     %r1, [%r0]
@@ -621,9 +621,9 @@ Am3SocResume:
     orr     %r1, %r1, #AM335_CM_MPU_MPU_CLOCK_CONTROL_MODE_ENABLED
     str     %r1, [%r0]
 
-    ##
-    ## Re-lock the PLLs.
-    ##
+    //
+    // Re-lock the PLLs.
+    //
 
     ldr     %r12, =AM335_CM_WAKEUP_REGISTERS    @ Get CM wakeup base.
     add     %r0, %r12, #AM335_CM_WAKEUP_CLOCK_MODE_DPLL_MPU
@@ -651,18 +651,18 @@ Am3SocResume:
     add     %r2, %r12, #AM335_CM_WAKEUP_IDLE_STATUS_DPLL_CORE
     bl      Am3SocPllRestore
 
-    ##
-    ## Disable SRAM retention mode.
-    ##
+    //
+    // Disable SRAM retention mode.
+    //
 
     ldr     %r0, =AM335_PRM_LDO_SRAM_MPU_CONTROL
     ldr     %r1, [%r0]
     bic     %r1, %r1, #AM335_PRM_LDO_SRAM_MPU_CONTROL_RETENTION_ENABLE
     str     %r1, [%r0]
 
-    ##
-    ## Restore the pull resistor settings for DQ and DM.
-    ##
+    //
+    // Restore the pull resistor settings for DQ and DM.
+    //
 
     ldr     %r0, =AM335_DDR_DATA0_IO_CONTROL
     ldr     %r2, =AM335_DDR_DATA1_IO_CONTROL
@@ -670,9 +670,9 @@ Am3SocResume:
     str     %r1, [%r0]
     str     %r1, [%r2]
 
-    ##
-    ## Enable VTP (changes refresh rate dynamically based on temperature, etc).
-    ##
+    //
+    // Enable VTP (changes refresh rate dynamically based on temperature, etc).
+    //
 
     ldr     %r0, =AM335_DDR_VTP_CONTROL
     ldr     %r1, [%r0]
@@ -695,17 +695,17 @@ Am3SocVtpReadyLoop:
     tst     %r1, #AM335_DDR_VTP_CONTROL_READY
     beq     Am3SocVtpReadyLoop  @ Loop if the bit is set.
 
-    ##
-    ## Clear the DDR3 default reset value and mDDR (CMOS) mode.
-    ##
+    //
+    // Clear the DDR3 default reset value and mDDR (CMOS) mode.
+    //
 
     ldr     %r0, =AM335_DDR_IO_CONTROL
     ldr     %r1, =AM335_DDR_IO_CONTROL_WAKE_VALUE
     str     %r1, [%r0]
 
-    ##
-    ## Enable EMIF.
-    ##
+    //
+    // Enable EMIF.
+    //
 
     ldr     %r0, =AM335_CM_PER_EMIF_CLOCK_CONTROL
     ldr     %r1, =AM335_CM_PER_EMIF_CLOCK_CONTROL_MODE_ENABLED
@@ -716,9 +716,9 @@ Am3SocEmifEnableLoop:
     cmp     %r1, %r2
     bne     Am3SocEmifEnableLoop
 
-    ##
-    ## Restore EMIF configuration.
-    ##
+    //
+    // Restore EMIF configuration.
+    //
 
     ldr     %r0, =AM335_EMIF_0_REGISTERS    @ Get EMIF base.
     ldr     %r1, Am3SocPhyControl1
@@ -747,21 +747,21 @@ Am3SocEmifEnableLoop:
     ldr     %r2, =AM335_DDR_START       @ Perform a DDR access...
     ldr     %r2, [%r2]                  @ ... for fun.
 
-    ##
-    ## Return to the resume (or abort) address.
-    ##
+    //
+    // Return to the resume (or abort) address.
+    //
 
     ldr     %lr, Am3SocResumeAddress    @ Get the resume physical address.
     bx      %lr                         @ Branch to the OS resume address.
 
-##
-## VOID
-## Am3SocPllBypass (
-##     PVOID ClockModeRegister,
-##     PULONG SavedMode,
-##     PVOID IdleStateRegister
-##     )
-##
+//
+// VOID
+// Am3SocPllBypass (
+//     PVOID ClockModeRegister,
+//     PULONG SavedMode,
+//     PVOID IdleStateRegister
+//     )
+//
 
 /*++
 
@@ -798,14 +798,14 @@ Am3SocPllBypassLoop:
     bne     Am3SocPllBypassLoop
     bx      %lr
 
-##
-## VOID
-## Am3SocPllRestore (
-##     PVOID ClockModeRegister,
-##     ULONG SavedMode,
-##     PVOID IdleStateRegister
-##     )
-##
+//
+// VOID
+// Am3SocPllRestore (
+//     PVOID ClockModeRegister,
+//     ULONG SavedMode,
+//     PVOID IdleStateRegister
+//     )
+//
 
 /*++
 
@@ -843,9 +843,9 @@ Am3SocPllRestoreLoop:
 Am3SocPllRestoreReturn:
     bx      %lr
 
-##
-## -------------------------------------------------------------------- Globals
-##
+//
+// -------------------------------------------------------------------- Globals
+//
 
 Am3SocResumeAddress:
     .long 0

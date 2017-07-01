@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 .fpu vfpv3
 
-##
-## unsigned int
-## ClpGetFpscr (
-##     void
-##     )
-##
+//
+// unsigned int
+// ClpGetFpscr (
+//     void
+//     )
+//
 
 /*++
 
@@ -73,12 +73,12 @@ FUNCTION ClpGetFpscr
 
 END_FUNCTION ClpGetFpscr
 
-##
-## void
-## ClpSetFpscr (
-##     unsigned int Value
-##     )
-##
+//
+// void
+// ClpSetFpscr (
+//     unsigned int Value
+//     )
+//
 
 /*++
 

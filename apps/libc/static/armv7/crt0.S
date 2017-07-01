@@ -25,28 +25,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## _start (
-##     VOID
-##     )
-##
+//
+// VOID
+// _start (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -69,24 +69,24 @@ Return Value:
 EXPORTED_FUNCTION _start
     CFI_UNDEFINED(lr)
 
-    ##
-    ## Call out to initialize the C Runtime library.
-    ##
+    //
+    // Call out to initialize the C Runtime library.
+    //
 
     bl      ClApplicationInitialize
 
-    ##
-    ## Execution should never get here.
-    ##
+    //
+    // Execution should never get here.
+    //
 
     DEBUGGER_BREAK
 
-    ##
-    ## Create an undefined reference to main. There needs to be a reference to
-    ## main early because if main is defined in a library the linker will
-    ## throw it out if it thinks it's not needed. This call is never actually
-    ## executed.
-    ##
+    //
+    // Create an undefined reference to main. There needs to be a reference to
+    // main early because if main is defined in a library the linker will
+    // throw it out if it thinks it's not needed. This call is never actually
+    // executed.
+    //
 
     blx     main
 

@@ -25,29 +25,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## INTN
-## OspSystemCallFull (
-##     ULONG SystemCallNumber,
-##     PVOID SystemCallParameter
-##     )
-##
+//
+// INTN
+// OspSystemCallFull (
+//     ULONG SystemCallNumber,
+//     PVOID SystemCallParameter
+//     )
+//
 
 /*++
 
@@ -77,13 +77,13 @@ FUNCTION OspSystemCallFull
 
 END_FUNCTION OspSystemCallFull
 
-##
-## INTN
-## OsSystemCall (
-##     ULONG SystemCallNumber,
-##     PVOID SystemCallParameter
-##     )
-##
+//
+// INTN
+// OsSystemCall (
+//     ULONG SystemCallNumber,
+//     PVOID SystemCallParameter
+//     )
+//
 
 /*++
 
@@ -112,13 +112,13 @@ FUNCTION OsSystemCall
 
 END_FUNCTION OsSystemCall
 
-##
-## VOID
-## OspSignalHandler (
-##     PSIGNAL_PARAMETERS Parameters,
-##     PSIGNAL_CONTEXT Context
-##     )
-##
+//
+// VOID
+// OspSignalHandler (
+//     PSIGNAL_PARAMETERS Parameters,
+//     PSIGNAL_CONTEXT Context
+//     )
+//
 
 /*++
 
@@ -172,12 +172,12 @@ FUNCTION OspSignalHandler
 
 END_FUNCTION OspSignalHandler
 
-##
-## PTHREAD_CONTROL_BLOCK
-## OspGetThreadControlBlock (
-##     VOID
-##     )
-##
+//
+// PTHREAD_CONTROL_BLOCK
+// OspGetThreadControlBlock (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -202,12 +202,12 @@ FUNCTION OspGetThreadControlBlock
 
 END_FUNCTION OspGetThreadControlBlock
 
-##
-## VOID
-## OspImArchResolvePltEntry (
-##     VOID
-##     )
-##
+//
+// VOID
+// OspImArchResolvePltEntry (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -232,20 +232,20 @@ Return Value:
 FUNCTION OspImArchResolvePltEntry
     CFI_OFFSET(lr, 0)
 
-    ##
-    ## Push the original arguments, and an extra register to keep the stack
-    ## aligned (since the old lr was already pushed).
-    ##
+    //
+    // Push the original arguments, and an extra register to keep the stack
+    // aligned (since the old lr was already pushed).
+    //
 
     stmdb   %sp!, {%r0-%r4}         @ Save the original arguments.
     CFI_ADJUST_CFA_OFFSET(20)
 
-    ##
-    ## Upon entry to the resolver:
-    ## *sp = original lr.
-    ## lr = &(GOT[2])
-    ## ip = &(GOT[n + 3])
-    ##
+    //
+    // Upon entry to the resolver:
+    // *sp = original lr.
+    // lr = &(GOT[2])
+    // ip = &(GOT[n + 3])
+    //
 
     ldr     %r0, [%lr, #-4]         @ Get GOT[1] for the context pointer.
     sub     %r1, %ip, %lr           @ &(GOT[n+3])-&(GOT[2]) = n + 1.

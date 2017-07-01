@@ -26,29 +26,29 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## VOID
-## KdpBreak (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpBreak (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -72,12 +72,12 @@ FUNCTION(KdpBreak)
 
 END_FUNCTION(KdpBreak)
 
-##
-## VOID
-## KdpInitializeDebugRegisters (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpInitializeDebugRegisters (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -108,14 +108,14 @@ FUNCTION(KdpInitializeDebugRegisters)
 
 END_FUNCTION(KdpInitializeDebugRegisters)
 
-##
-## ULONG
-## KdpAtomicCompareExchange32 (
-##     volatile ULONG *Address,
-##     ULONG ExchangeValue,
-##     ULONG CompareValue
-##     )
-##
+//
+// ULONG
+// KdpAtomicCompareExchange32 (
+//     volatile ULONG *Address,
+//     ULONG ExchangeValue,
+//     ULONG CompareValue
+//     )
+//
 
 /*++
 
@@ -144,23 +144,23 @@ FUNCTION(KdpAtomicCompareExchange32)
     xorq    %rax, %rax              # Zero out the high part of rax, for safety.
     movl    %edx, %eax              # Move CompareValue into eax.
 
-    ##
-    ## Compare Address (rdi) with eax, exchange with esi if equal. Return the
-    ## original value in eax.
-    ##
+    //
+    // Compare Address (rdi) with eax, exchange with esi if equal. Return the
+    // original value in eax.
+    //
 
     lock cmpxchgl %esi, (%rdi)      # Compare exchange.
     ret                             # Return value is already in the right spot.
 
 END_FUNCTION(KdpAtomicCompareExchange32)
 
-##
-## ULONG
-## KdpAtomicAdd32 (
-##     volatile ULONG *Address,
-##     ULONG Increment
-##     )
-##
+//
+// ULONG
+// KdpAtomicAdd32 (
+//     volatile ULONG *Address,
+//     ULONG Increment
+//     )
+//
 
 /*++
 
@@ -192,12 +192,12 @@ KdpAtomicAdd32Loop:
 
 END_FUNCTION(KdpAtomicAdd32)
 
-##
-## VOID
-## KdpDisableInterrupts (
-##     VOID
-##     )
-##
+//
+// VOID
+// KdpDisableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 

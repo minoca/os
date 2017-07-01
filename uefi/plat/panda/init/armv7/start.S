@@ -26,39 +26,39 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .arm specifies that this is ARM code, not Thumb code.
-##
-## .align 4 specifies that ARM instructions must be word aligned.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .arm specifies that this is ARM code, not Thumb code.
+//
+// .align 4 specifies that ARM instructions must be word aligned.
+//
 
 .text
 .arm
 .align 4
 
-##
-## Stick this in the .init section so it ends up at the front of the binary.
-##
+//
+// Stick this in the .init section so it ends up at the front of the binary.
+//
 
 .section .init
 
-##
-## .globl allows this label to be visible to the linker.
-##
+//
+// .globl allows this label to be visible to the linker.
+//
 
 .globl _start
 .globl _end
@@ -67,11 +67,11 @@ Environment:
 
 .func _start
 
-##
-## VOID
-## _start (
-##     )
-##
+//
+// VOID
+// _start (
+//     )
+//
 
 /*++
 
@@ -93,10 +93,10 @@ Return Value:
 
 _start:
 
-    ##
-    ## Copy the image whereever it was loaded to where it was supposed to be
-    ## loaded.
-    ##
+    //
+    // Copy the image whereever it was loaded to where it was supposed to be
+    // loaded.
+    //
 
     adr     %r7, _start             @ Get the current address.
     adr     %r8, ImageSize          @ Get the image size address (relatively).
@@ -111,9 +111,9 @@ CopyImage:
     cmp     %r9, %r8                @ Finished?
     bne     CopyImage               @ If not, keep copying.
 
-    ##
-    ## Jump to the C routine.
-    ##
+    //
+    // Jump to the C routine.
+    //
 
     ldr     %r8, =EfiFirstStageLoader   @ Get C routine address, absolute.
     bx      %r8                     @ Jump to destination image.
@@ -126,12 +126,12 @@ ImageSize:
 
 .ltorg
 
-##
-## BOOLEAN
-## EfiDisableInterrupts (
-##     VOID
-##     )
-##
+//
+// BOOLEAN
+// EfiDisableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -160,12 +160,12 @@ EfiDisableInterrupts:
     movne   %r0, #1                 @ If enabled, return TRUE.
     bx      %lr                     @
 
-##
-## VOID
-## EfiEnableInterrupts (
-##     VOID
-##     )
-##
+//
+// VOID
+// EfiEnableInterrupts (
+//     VOID
+//     )
+//
 
 /*++
 

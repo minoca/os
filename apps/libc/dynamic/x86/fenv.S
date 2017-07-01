@@ -26,39 +26,39 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------- Includes
-##
+//
+// ------------------------------------------------------------------- Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------- Definitions
-##
+//
+// ---------------------------------------------------------------- Definitions
+//
 
 #define FE_ALL_EXCEPT 0x3F
 #define FE_DFL_ENV -1
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## LIBC_API
-## int
-## fegetenv (
-##     fenv_t *Environment
-##     )
-##
+//
+// LIBC_API
+// int
+// fegetenv (
+//     fenv_t *Environment
+//     )
+//
 
 /*++
 
@@ -88,13 +88,13 @@ EXPORTED_FUNCTION(fegetenv)
 
 END_FUNCTION(fegetenv)
 
-##
-## LIBC_API
-## int
-## fesetenv (
-##     const fenv_t *Environment
-##     )
-##
+//
+// LIBC_API
+// int
+// fesetenv (
+//     const fenv_t *Environment
+//     )
+//
 
 /*++
 
@@ -129,14 +129,14 @@ fesetenvLoad:
 
 END_FUNCTION(fesetenv)
 
-##
-## LIBC_API
-## int
-## fegetexceptflag (
-##     fexcept_t *Destination,
-##     int Mask
-##     )
-##
+//
+// LIBC_API
+// int
+// fegetexceptflag (
+//     fexcept_t *Destination,
+//     int Mask
+//     )
+//
 
 /*++
 

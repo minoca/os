@@ -26,19 +26,19 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x64.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## REAL_MODE_CONTEXT structure definition.
-##
+//
+// REAL_MODE_CONTEXT structure definition.
+//
 
 .equ CODEPAGE,  0x0
 .equ DATAPAGE,  0x10
@@ -60,15 +60,15 @@ Environment:
 .equ GS,        0x68
 .equ SS,        0x6C
 
-##
-## ----------------------------------------------------------------------- Code
-##
+//
+// ----------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## .globl allows this label to be visible to the linker.
-##
+//
+// .globl allows this label to be visible to the linker.
+//
 
 .globl FwpRealModeBiosCallTemplate
 .globl FwpRealModeBiosCallTemplateLongJump
@@ -77,19 +77,19 @@ ASSEMBLY_FILE_HEADER
 .globl FwpRealModeBiosCallTemplateIntInstruction
 .globl FwpRealModeBiosCallTemplateEnd
 
-##
-## This code represents the trampoline code that gets down to 16-bit real mode
-## and then makes an int 0xN BIOS call. It starts as 32-bit protected mode
-## code. When this code is actually run it will not be at its original location.
-## ESI contains a pointer to the context.
-##
+//
+// This code represents the trampoline code that gets down to 16-bit real mode
+// and then makes an int 0xN BIOS call. It starts as 32-bit protected mode
+// code. When this code is actually run it will not be at its original location.
+// ESI contains a pointer to the context.
+//
 
 .code32
 FwpRealModeBiosCallTemplate:
 
-    ##
-    ## Save the GDT, IDT, and CR0.
-    ##
+    //
+    // Save the GDT, IDT, and CR0.
+    //
 
     subl    $0x8, %esp
     sgdt    (%esp)
@@ -97,41 +97,41 @@ FwpRealModeBiosCallTemplate:
     sidt    (%esp)
     movl    %cr0, %ecx
 
-    ##
-    ## Disable paging, and save CR0 with the enable paging flag clear.
-    ##
+    //
+    // Disable paging, and save CR0 with the enable paging flag clear.
+    //
 
     andl    $~CR0_PAGING_ENABLE, %ecx
     movl    %ecx, %cr0
     pushl   %ecx
     pushl   %esi
 
-    ##
-    ## Disable long mode.
-    ##
+    //
+    // Disable long mode.
+    //
 
     movl    $X86_MSR_EFER, %ecx     # Get EFER as MSR register.
     rdmsr                           # Read it.
     andl    $~EFER_LONG_MODE_ENABLE, %eax    # Disable long mode.
     wrmsr                           # Write it.
 
-    ##
-    ## Set up a real mode cr0, but don't switch to it yet.
-    ##
+    //
+    // Set up a real mode cr0, but don't switch to it yet.
+    //
 
     movl    %cr0, %ecx
     andl    $~CR0_PROTECTED_MODE, %ecx
 
-    ##
-    ## Load 16-bit protected mode GDT and IDT registers.
-    ##
+    //
+    // Load 16-bit protected mode GDT and IDT registers.
+    //
 
     lgdt    24(%esp)
     lidt    32(%esp)
 
-    ##
-    ## Push the registers from the context onto the stack.
-    ##
+    //
+    // Push the registers from the context onto the stack.
+    //
 
     movl    EFLAGS(%esi), %eax
     pushl   %eax
@@ -156,34 +156,34 @@ FwpRealModeBiosCallTemplate:
     movl    GS(%esi), %eax
     pushl   %eax
 
-    ##
-    ## Jump to consummate the transition to 16-bit protected mode.
-    ##
+    //
+    // Jump to consummate the transition to 16-bit protected mode.
+    //
 
 FwpRealModeBiosCallTemplateLongJump:
     ljmp    $KERNEL_CS, $0x3456
 
-    ##
-    ## This is now 16-bit protected mode code (a weird combination). Remove the
-    ## protected mode bit to get to real mode.
-    ##
+    //
+    // This is now 16-bit protected mode code (a weird combination). Remove the
+    // protected mode bit to get to real mode.
+    //
 
 .code16
 
     movl    %ecx, %cr0
 
-    ##
-    ## Perform a long jump to get back to 16 bit real mode. This assumes that
-    ## the code is located below 64k. The actual constants will be patched up,
-    ## this constant is a dummy.
-    ##
+    //
+    // Perform a long jump to get back to 16 bit real mode. This assumes that
+    // the code is located below 64k. The actual constants will be patched up,
+    // this constant is a dummy.
+    //
 
 FwpRealModeBiosCallTemplateLongJump2:
     ljmp    $0x12, $0x3456
 
-    ##
-    ## Reset the stack segment, and pop the registers into place.
-    ##
+    //
+    // Reset the stack segment, and pop the registers into place.
+    //
 
     xorw    %ax, %ax
     movw    %ax, %ss
@@ -203,17 +203,17 @@ FwpRealModeBiosCallTemplateLongJump2:
     popl    %eax
     popfl
 
-    ##
-    ## Blast off. This 0x1B is a dummy value, the setup code will have
-    ## modified that to be the correct vector.
-    ##
+    //
+    // Blast off. This 0x1B is a dummy value, the setup code will have
+    // modified that to be the correct vector.
+    //
 
 FwpRealModeBiosCallTemplateIntInstruction:
     int     $0x1B
 
-    ##
-    ## Push the registers onto the stack. This is still 16 bit code.
-    ##
+    //
+    // Push the registers onto the stack. This is still 16 bit code.
+    //
 
     pushfl
     cli
@@ -233,10 +233,10 @@ FwpRealModeBiosCallTemplateIntInstruction:
     movw    %ds, %ax
     pushl   %eax
 
-    ##
-    ## Restore back to 32-bit protected mode by loading up the GDT and IDT,
-    ## then applying the original CR0.
-    ##
+    //
+    // Restore back to 32-bit protected mode by loading up the GDT and IDT,
+    // then applying the original CR0.
+    //
 
     xorw    %ax, %ax
     movw    %ax, %ds
@@ -244,9 +244,9 @@ FwpRealModeBiosCallTemplateIntInstruction:
     lgdt    0x3C(%esp)
     movl    0x30(%esp), %eax
 
-    ##
-    ## Restore protected mode, and perform a long jump to make it apply.
-    ##
+    //
+    // Restore protected mode, and perform a long jump to make it apply.
+    //
 
     movl    %eax, %cr0
 
@@ -255,9 +255,9 @@ FwpRealModeBiosCallTemplateLongJump3:
 
 .code32
 
-    ##
-    ## Restore the protected mode segment registers.
-    ##
+    //
+    // Restore the protected mode segment registers.
+    //
 
     movw    $KERNEL_DS, %dx
     movw    %dx, %ds
@@ -266,10 +266,10 @@ FwpRealModeBiosCallTemplateLongJump3:
     movw    %dx, %gs
     movw    %dx, %ss
 
-    ##
-    ## Safely back in 32-bit land, get the address of the context structure,
-    ## and save the registers saved onto the stack into the context structure.
-    ##
+    //
+    // Safely back in 32-bit land, get the address of the context structure,
+    // and save the registers saved onto the stack into the context structure.
+    //
 
     movl    0x2C(%esp), %esi
     popl    %eax
@@ -296,33 +296,33 @@ FwpRealModeBiosCallTemplateLongJump3:
     movl    %eax, EFLAGS(%esi)
     addl    $0x28, %esp
 
-    ##
-    ## Enable long mode.
-    ##
+    //
+    // Enable long mode.
+    //
 
     movl    $X86_MSR_EFER, %ecx     # Get EFER as MSR register.
     rdmsr                           # Read it.
     orl     $EFER_LONG_MODE_ENABLE, %eax    # Enable long mode.
     wrmsr                           # Write it.
 
-    ##
-    ## Enable paging.
-    ##
+    //
+    // Enable paging.
+    //
 
     movl    %cr0, %ecx
     orl     $CR0_PAGING_ENABLE, %ecx
     movl    %ecx, %cr0
 
-    ##
-    ## Far return back to long mode.
-    ##
+    //
+    // Far return back to long mode.
+    //
 
     retf
 
-##
-## That was the end of the code. Now define a 16-bit protected mode GDT.
-## The GDT must be aligned to 8 bytes.
-##
+//
+// That was the end of the code. Now define a 16-bit protected mode GDT.
+// The GDT must be aligned to 8 bytes.
+//
 
 .align 8
 
@@ -331,9 +331,9 @@ Fwp16BitGdtTable:
     .long   0x0                         # null descriptor, it is essentially
                                         # unused by the processor.
 
-##
-## Define the code segment descriptor.
-##
+//
+// Define the code segment descriptor.
+//
 
     .word   0xFFFF                      # Limit 15:0
     .word   0x0                         # Base 15:0
@@ -342,9 +342,9 @@ Fwp16BitGdtTable:
     .byte   0x8F                        # Granularity: 1Kb, 16-bit mode
     .byte   0x00                        # Base 31:24
 
-##
-## Define the data segment descriptor.
-##
+//
+// Define the data segment descriptor.
+//
 
     .word   0xFFFF                      # Limit 15:0
     .word   0x0                         # Base 15:0
@@ -353,26 +353,26 @@ Fwp16BitGdtTable:
     .byte   0x8F                        # Granularity: 1kB, 16-bit mode
     .byte   0x00                        # Base 31:24
 
-##
-## This label marks the end of the template code. It is useful for determining
-## the size of the template code.
-##
+//
+// This label marks the end of the template code. It is useful for determining
+// the size of the template code.
+//
 
 FwpRealModeBiosCallTemplateEnd:
     nop
 
-##
-## This function is 64-bit long mode code.
-##
+//
+// This function is 64-bit long mode code.
+//
 
 .code64
 
-##
-## VOID
-## FwpRealModeExecute (
-##     PREAL_MODE_CONTEXT Context
-##     )
-##
+//
+// VOID
+// FwpRealModeExecute (
+//     PREAL_MODE_CONTEXT Context
+//     )
+//
 
 /*++
 
@@ -396,12 +396,12 @@ FUNCTION(FwpRealModeExecute)
     pushq   %rbp
     movq    %rsp, %rbp
 
-    ##
-    ## Save the non-volatile registers and flags. Theoretically r8 and higher
-    ## shouldn't be touched by 16-bit real mode code, or even 32-bit protected
-    ## mode code. Save them on the off chance that the BIOS is flipping into
-    ## long mode somewhere behind the scenes.
-    ##
+    //
+    // Save the non-volatile registers and flags. Theoretically r8 and higher
+    // shouldn't be touched by 16-bit real mode code, or even 32-bit protected
+    // mode code. Save them on the off chance that the BIOS is flipping into
+    // long mode somewhere behind the scenes.
+    //
 
     pushq   %rbx
     pushq   %r12
@@ -412,9 +412,9 @@ FUNCTION(FwpRealModeExecute)
     pushfq
     cli
 
-    ##
-    ## Save FSBase and GSbase.
-    ##
+    //
+    // Save FSBase and GSbase.
+    //
 
     movl    $X86_MSR_FSBASE, %ecx
     rdmsr
@@ -425,18 +425,18 @@ FUNCTION(FwpRealModeExecute)
     pushq   %rdx
     pushq   %rax
 
-    ##
-    ## Push the parameters for a far return back to the long mode restore code.
-    ##
+    //
+    // Push the parameters for a far return back to the long mode restore code.
+    //
 
     subq    $8, %rsp
     movl    $KERNEL_CS, 4(%rsp)
     movq    FwpRealModeExecuteRestore@GOTPCREL(%rip), %rax
     movl    %eax, (%rsp)
 
-    ##
-    ## Get the linear EIP.
-    ##
+    //
+    // Get the linear EIP.
+    //
 
     movq    %rdi, %rsi
     movl    CS(%rsi), %eax
@@ -444,9 +444,9 @@ FUNCTION(FwpRealModeExecute)
     movl    EIP(%rsi), %edx
     add     %edx, %eax
 
-    ##
-    ## Push the 16-bit IDT (empty) and GDT addresses.
-    ##
+    //
+    // Push the 16-bit IDT (empty) and GDT addresses.
+    //
 
     subq    $16, %rsp
     movl    $0x0, 12(%rsp)
@@ -456,23 +456,23 @@ FUNCTION(FwpRealModeExecute)
     movw    $((3 * 8) - 1), (%rsp)
     movl    %ecx, 2(%rsp)
 
-    ##
-    ## Push parameters for a far return, and use it to get into 32-bit code.
-    ##
+    //
+    // Push parameters for a far return, and use it to get into 32-bit code.
+    //
 
     pushq   $KERNEL64_TRANSITION_CS
     pushq   %rax
     retfq
 
-    ##
-    ## This code is jumped to by the end of the BIOS call template.
-    ##
+    //
+    // This code is jumped to by the end of the BIOS call template.
+    //
 
 FwpRealModeExecuteRestore:
 
-    ##
-    ## Restore GSBase and FSBase
-    ##
+    //
+    // Restore GSBase and FSBase
+    //
 
     popq    %rax
     popq    %rdx
@@ -483,9 +483,9 @@ FwpRealModeExecuteRestore:
     movl    $X86_MSR_FSBASE, %ecx
     wrmsr
 
-    ##
-    ## Restore the non-volatile registers and flags.
-    ##
+    //
+    // Restore the non-volatile registers and flags.
+    //
 
     popfq
     popq    %rbp

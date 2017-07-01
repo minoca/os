@@ -25,42 +25,42 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/x86.inc>
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
-##
-## .text specifies that this code belongs in the executable section.
-##
-## .code32 specifies that this is 32-bit protected mode code.
-##
+//
+// .text specifies that this code belongs in the executable section.
+//
+// .code32 specifies that this is 32-bit protected mode code.
+//
 
 .text
 .code32
 
-##
-## Stick this in the .init section so it ends up at the front of the binary.
-##
+//
+// Stick this in the .init section so it ends up at the front of the binary.
+//
 
 .section .init
 
-##
-## .globl allows this label to be visible to the linker.
-##
+//
+// .globl allows this label to be visible to the linker.
+//
 
 .globl _start
 
-##
-## void
-## start (
-##     )
-##
+//
+// void
+// start (
+//     )
+//
 
 /*++
 
@@ -84,7 +84,7 @@ Return Value:
 _start:
     jmp     EfiBiosMain             # Just do it.
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 

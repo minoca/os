@@ -25,28 +25,28 @@ Environment:
 
 --*/
 
-##
-## ------------------------------------------------------------------ Includes
-##
+//
+// ------------------------------------------------------------------ Includes
+//
 
 #include <minoca/kernel/arm.inc>
 
-##
-## --------------------------------------------------------------- Definitions
-##
+//
+// --------------------------------------------------------------- Definitions
+//
 
-##
-## ---------------------------------------------------------------------- Code
-##
+//
+// ---------------------------------------------------------------------- Code
+//
 
 ASSEMBLY_FILE_HEADER
 
-##
-## ULONG
-## HlpGtGetFrequency (
-##     VOID
-##     )
-##
+//
+// ULONG
+// HlpGtGetFrequency (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -70,12 +70,12 @@ FUNCTION HlpGtGetFrequency
 
 END_FUNCTION HlpGtGetFrequency
 
-##
-## VOID
-## HlpGtSetVirtualTimerControl (
-##     ULONG Control
-##     )
-##
+//
+// VOID
+// HlpGtSetVirtualTimerControl (
+//     ULONG Control
+//     )
+//
 
 /*++
 
@@ -99,12 +99,12 @@ FUNCTION HlpGtSetVirtualTimerControl
 
 END_FUNCTION HlpGtSetVirtualTimerControl
 
-##
-## ULONGLONG
-## HlpGtGetVirtualCount (
-##     VOID
-##     )
-##
+//
+// ULONGLONG
+// HlpGtGetVirtualCount (
+//     VOID
+//     )
+//
 
 /*++
 
@@ -128,12 +128,12 @@ FUNCTION HlpGtGetVirtualCount
 
 END_FUNCTION HlpGtGetVirtualCount
 
-##
-## VOID
-## HlpGtSetVirtualTimerCompare (
-##     ULONGLONG CompareValue
-##     )
-##
+//
+// VOID
+// HlpGtSetVirtualTimerCompare (
+//     ULONGLONG CompareValue
+//     )
+//
 
 /*++
 
@@ -157,8 +157,8 @@ FUNCTION HlpGtSetVirtualTimerCompare
 
 END_FUNCTION HlpGtSetVirtualTimerCompare
 
-##
-## --------------------------------------------------------- Internal Functions
-##
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 
