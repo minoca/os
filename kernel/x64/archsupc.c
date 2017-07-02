@@ -75,13 +75,6 @@ Return Value:
 
 {
 
-    //
-    // TODO: Set up x64 syscall registers. Maybe not here since there's no
-    // test needed for them?
-    //
-
-    ASSERT(FALSE);
-
     return;
 }
 
@@ -188,10 +181,15 @@ Return Value:
     TypedThread->ThreadPointer = (UINTN)NewThreadPointer;
 
     //
-    // TODO: Set up x64 thread pointer.
+    // If this is the current user mode thread, set the kernel gsbase MSR so
+    // the next swapgs will restore the user's thread pointer.
     //
 
-    ASSERT(FALSE);
+    if (((TypedThread->Flags & THREAD_FLAG_USER_MODE) != 0) &&
+        (TypedThread == KeGetCurrentThread())) {
+
+        ArWriteMsr(X86_MSR_KERNEL_GSBASE, (UINTN)NewThreadPointer);
+    }
 
     if (Thread == KeGetCurrentThread()) {
         ArWriteGsbase(NewThreadPointer);

@@ -1704,6 +1704,7 @@ Return Value:
 {
 
     ULONGLONG CallSite;
+    INT ColumnSize;
     ULONG FrameCount;
     ULONG FrameIndex;
     PSTACK_FRAME Frames;
@@ -1729,6 +1730,7 @@ Return Value:
     //
 
     CallSite = DbgGetPc(Context, Registers);
+    ColumnSize = DbgGetTargetPointerSize(Context) * 2;
 
     //
     // Allocate the call stack frames buffer.
@@ -1755,7 +1757,7 @@ Return Value:
         DbgOut("No ");
     }
 
-    DbgOut("Frame    RetAddr  Call Site\n");
+    DbgOut("%-*s %-*s Call Site\n", ColumnSize, "Frame", ColumnSize, "RetAddr");
     for (FrameIndex = 0; FrameIndex < FrameCount; FrameIndex += 1) {
         SymbolName = DbgGetAddressSymbol(Context, CallSite, &Function);
 
@@ -1769,7 +1771,7 @@ Return Value:
                 DbgOut("   ");
             }
 
-            DbgOut("<inline>          %s\n", SymbolName);
+            DbgOut("%-*s %s\n", (ColumnSize * 2) + 1, "<inline>", SymbolName);
             free(SymbolName);
             SymbolName = NULL;
             Function = Function->ParentFunction;
@@ -1778,7 +1780,11 @@ Return Value:
                     DbgOut("   ");
                 }
 
-                DbgOut("<inline>          %s\n", Function->Name);
+                DbgOut("%-*s %s\n",
+                       (ColumnSize * 2) + 1,
+                       "<inline>",
+                       Function->Name);
+
                 Function = Function->ParentFunction;
             }
         }
@@ -1791,8 +1797,10 @@ Return Value:
             DbgOut("%2d ", FrameIndex);
         }
 
-        DbgOut("%08I64x %08I64x ",
+        DbgOut("%0*llx %0*llx ",
+               ColumnSize,
                Frames[FrameIndex].FramePointer,
+               ColumnSize,
                Frames[FrameIndex].ReturnAddress);
 
         if (SymbolName != NULL) {

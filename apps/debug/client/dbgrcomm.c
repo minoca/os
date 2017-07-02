@@ -4763,12 +4763,14 @@ Return Value:
 {
 
     ULONGLONG Address;
+    ULONG AddressSize;
     PSTR AddressString;
-    PULONG Buffer;
+    PVOID Buffer;
     ULONG BufferSize;
     ULONG BytesRead;
     INT Index;
     INT Result;
+    ULONGLONG Value;
 
     Buffer = NULL;
     AddressString = NULL;
@@ -4784,7 +4786,8 @@ Return Value:
         Address = Context->LastMemoryDump.NextAddress;
     }
 
-    BufferSize = sizeof(ULONG) * DEFAULT_DUMP_POINTERS_ROWS;
+    AddressSize = DbgGetTargetPointerSize(Context);
+    BufferSize = AddressSize * DEFAULT_DUMP_POINTERS_ROWS;
     Buffer = malloc(BufferSize);
     if (Buffer == NULL) {
         Result = ENOMEM;
@@ -4803,14 +4806,21 @@ Return Value:
     }
 
     for (Index = 0; Index < DEFAULT_DUMP_POINTERS_ROWS; Index += 1) {
-        DbgOut("%08I64x ", Address);
-        Address += sizeof(ULONG);
-        if (((Index + 1) * sizeof(ULONG)) <= BytesRead) {
-            DbgOut("%08x ", Buffer[Index]);
-            DbgPrintAddressSymbol(Context, Buffer[Index]);
+        DbgOut("%0*llx ", (int)AddressSize * 2, Address);
+        Address += AddressSize;
+        if (((Index + 1) * AddressSize) <= BytesRead) {
+            Value = 0;
+            memcpy(&Value, Buffer + (Index * AddressSize), AddressSize);
+            DbgOut("%0*llx ", (int)AddressSize * 2, Value);
+            DbgPrintAddressSymbol(Context, Value);
 
         } else {
-            DbgOut("????????");
+            if (AddressSize == 8) {
+                DbgOut("????????????????");
+
+            } else {
+                DbgOut("????????");
+            }
         }
 
         DbgOut("\n");

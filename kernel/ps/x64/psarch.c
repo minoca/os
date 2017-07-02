@@ -494,8 +494,17 @@ Return Value:
     UINTN TrapStackPointer;
     PUINTN UserStackPointer;
 
-    TrapStackPointer = (UINTN)Thread->KernelStack + Thread->KernelStackSize;
+    TrapStackPointer = (UINTN)Thread->KernelStack + Thread->KernelStackSize -
+                       sizeof(UINTN);
+
     StackPointer = (PUINTN)TrapStackPointer;
+
+    //
+    // Zero out the last word so that debugger call stacks terminate, and a
+    // return from the thread function would fault predictably.
+    //
+
+    *StackPointer = 0;
 
     //
     // Determine the appropriate value for the flags, code selector, and entry

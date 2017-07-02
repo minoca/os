@@ -88,12 +88,6 @@ FUNCTION(KepContextSwap)
     movl    $CONTEXT_SWAP_MAGIC, (%rsp)     # Save a sentinal on the stack.
 
     //
-    // Load the new thread pointer GDT entry.
-    //
-
-    wrgsbase    %rdx                # Write the new GS base.
-
-    //
     // Save the current thread's stack pointer. This effectively freezes the
     // current thread. When this thread is swapped back in, the stack pointer
     // will be restored, and execution of this function will continue. It's
@@ -147,7 +141,7 @@ KepContextSwapReturn:
     popq    %r13
     popq    %r12
     popq    %rbx
-    leave
+    popq    %rbp
     ret
 
 KepContextSwapBadMagic:

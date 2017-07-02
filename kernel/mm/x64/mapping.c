@@ -690,7 +690,7 @@ Return Value:
             //
 
             PdpHasEntries = FALSE;
-            Pdp = X64_PDPT((UINTN)Pml4Index << X64_PDPE_SHIFT);
+            Pdp = X64_PDPT((UINTN)Pml4Index << X64_PML4E_SHIFT);
             for (PdpIndex = 0; PdpIndex < X64_PTE_COUNT; PdpIndex += 1) {
                 if (X86_PTE_ENTRY(Pdp[PdpIndex]) == 0) {
 
@@ -703,8 +703,8 @@ Return Value:
                 // Scan the PD looking for valid entries.
                 //
 
-                Pd = X64_PDT(((UINTN)Pml4Index << X64_PDPE_SHIFT) |
-                             ((UINTN)PdpIndex << X64_PDE_SHIFT));
+                Pd = X64_PDT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                             ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
                 PdHasEntries = FALSE;
                 for (PdIndex = 0; PdIndex < X64_PTE_COUNT; PdIndex += 1) {
@@ -719,9 +719,9 @@ Return Value:
                     // Scan the page table looking for entries.
                     //
 
-                    Pt = X64_PT(((UINTN)Pml4Index << X64_PDPE_SHIFT) |
-                                ((UINTN)PdpIndex << X64_PDE_SHIFT) |
-                                ((UINTN)PdIndex << X64_PTE_SHIFT));
+                    Pt = X64_PT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                                ((UINTN)PdpIndex << X64_PDPE_SHIFT) |
+                                ((UINTN)PdIndex << X64_PDE_SHIFT));
 
                     for (PtIndex = 0; PtIndex < X64_PTE_COUNT; PtIndex += 1) {
                         if (X86_PTE_ENTRY(Pt[PtIndex] != 0)) {
@@ -1962,7 +1962,7 @@ Return Value:
         SavedPdp = *SwapPte;
         ArInvalidateTlbEntry(Pte);
         RtlZeroMemory(Pte, PAGE_SIZE);
-        Pdp = X64_PDPT((UINTN)Pml4Index << X64_PDPE_SHIFT);
+        Pdp = X64_PDPT((UINTN)Pml4Index << X64_PML4E_SHIFT);
         for (PdpIndex = 0; PdpIndex < X64_PTE_COUNT; PdpIndex += 1) {
             if ((Pdp[Pml4Index] & X86_PTE_PRESENT) == 0) {
                 continue;
@@ -1981,8 +1981,8 @@ Return Value:
             *SwapPte = Pte[PdpIndex];
             ArInvalidateTlbEntry(Pte);
             RtlZeroMemory(Pte, PAGE_SIZE);
-            Pd = X64_PDT(((UINTN)Pml4Index << X64_PDPE_SHIFT) |
-                         ((UINTN)PdpIndex << X64_PDE_SHIFT));
+            Pd = X64_PDT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                         ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
             for (PdIndex = 0; PdIndex < X64_PTE_COUNT; PdIndex += 1) {
                 if ((Pd[PdIndex] & X86_PTE_PRESENT) == 0) {
@@ -2077,6 +2077,7 @@ Return Value:
 
 {
 
+    UINTN Canonical;
     PADDRESS_SPACE_X64 DestinationSpace;
     INTN MappedCount;
     RUNLEVEL OldRunLevel;
@@ -2104,6 +2105,7 @@ Return Value:
 
     DestinationSpace = (PADDRESS_SPACE_X64)Destination;
     MappedCount = 0;
+    Canonical = (UINTN)VirtualAddress & X64_CANONICAL_HIGH;
     VirtualEnd = VirtualAddress + Size - 1;
 
     ASSERT((VirtualEnd > VirtualAddress) &&
@@ -2133,7 +2135,7 @@ Return Value:
             continue;
         }
 
-        Pml4Start = (PVOID)((UINTN)Pml4Index << X64_PML4E_SHIFT);
+        Pml4Start = (PVOID)(Canonical | ((UINTN)Pml4Index << X64_PML4E_SHIFT));
         Pml4End = Pml4Start + (1ULL << X64_PML4E_SHIFT) - 1;
         if (Pml4Start < VirtualAddress) {
             Pml4Start = VirtualAddress;
@@ -2150,7 +2152,7 @@ Return Value:
         *SwapPte = Pte[Pml4Index];
         SavedPdp = *SwapPte;
         ArInvalidateTlbEntry(Pte);
-        Pdp = X64_PDPT((UINTN)Pml4Index << X64_PDPE_SHIFT);
+        Pdp = X64_PDPT((UINTN)Pml4Index << X64_PML4E_SHIFT);
         for (PdpIndex = X64_PDP_INDEX(Pml4Start);
              PdpIndex <= X64_PDP_INDEX(Pml4End);
              PdpIndex += 1) {
@@ -2159,7 +2161,8 @@ Return Value:
                 continue;
             }
 
-            PdpStart = (PVOID)(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+            PdpStart = (PVOID)(Canonical |
+                               ((UINTN)Pml4Index << X64_PML4E_SHIFT) |
                                ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
             PdpEnd = PdpStart + (1ULL << X64_PDPE_SHIFT) - 1;
@@ -2178,8 +2181,8 @@ Return Value:
             *SwapPte = Pte[PdpIndex];
             SavedPd = *SwapPte;
             ArInvalidateTlbEntry(Pte);
-            Pd = X64_PDT(((UINTN)Pml4Index << X64_PDPE_SHIFT) |
-                         ((UINTN)PdpIndex << X64_PDE_SHIFT));
+            Pd = X64_PDT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                         ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
             for (PdIndex = X64_PD_INDEX(PdpStart);
                  PdIndex <= X64_PD_INDEX(PdpEnd);
@@ -2189,7 +2192,8 @@ Return Value:
                     continue;
                 }
 
-                PdStart = (PVOID)(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                PdStart = (PVOID)(Canonical |
+                                  ((UINTN)Pml4Index << X64_PML4E_SHIFT) |
                                   ((UINTN)PdpIndex << X64_PDPE_SHIFT) |
                                   ((UINTN)PdIndex << X64_PDE_SHIFT));
 
@@ -2253,9 +2257,9 @@ Return Value:
                 // As promised in the title, copy and change section mappings.
                 //
 
-                Pt = X64_PT(((UINTN)Pml4Index << X64_PDPE_SHIFT) |
-                            ((UINTN)PdpIndex << X64_PDE_SHIFT) |
-                            ((UINTN)PdIndex << X64_PTE_SHIFT));
+                Pt = X64_PT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                            ((UINTN)PdpIndex << X64_PDPE_SHIFT) |
+                            ((UINTN)PdIndex << X64_PDE_SHIFT));
 
                 for (PtIndex = PtStart; PtIndex <= PtEnd; PtIndex += 1) {
                     if (X86_PTE_ENTRY(Pte[PtIndex]) != 0) {
@@ -2323,6 +2327,7 @@ Return Value:
 {
 
     PADDRESS_SPACE_X64 AddressSpace;
+    UINTN Canonical;
     PVOID End;
     PPTE Pd;
     ULONG PdIndex;
@@ -2338,6 +2343,7 @@ Return Value:
 
     Process = PsGetCurrentProcess();
     AddressSpace = (PADDRESS_SPACE_X64)(Process->AddressSpace);
+    Canonical = (UINTN)VirtualAddress & X64_CANONICAL_HIGH;
     End = VirtualAddress + Size - 1;
 
     ASSERT(End > VirtualAddress);
@@ -2365,7 +2371,7 @@ Return Value:
             }
         }
 
-        Pml4Start = (PVOID)((UINTN)Pml4Index << X64_PML4E_SHIFT);
+        Pml4Start = (PVOID)(Canonical | ((UINTN)Pml4Index << X64_PML4E_SHIFT));
         Pml4End = Pml4Start + (1ULL << X64_PML4E_SHIFT) - 1;
         if (Pml4Start < VirtualAddress) {
             Pml4Start = VirtualAddress;
@@ -2375,12 +2381,13 @@ Return Value:
             Pml4End = End;
         }
 
-        Pdp = X64_PDPT((UINTN)Pml4Index << X64_PDPE_SHIFT);
+        Pdp = X64_PDPT((UINTN)Pml4Index << X64_PML4E_SHIFT);
         for (PdpIndex = X64_PDP_INDEX(Pml4Start);
              PdpIndex <= X64_PDP_INDEX(Pml4End);
              PdpIndex += 1) {
 
-            PdpStart = (PVOID)(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+            PdpStart = (PVOID)(Canonical |
+                               ((UINTN)Pml4Index << X64_PML4E_SHIFT) |
                                ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
             PdpEnd = PdpStart + (1ULL << X64_PDPE_SHIFT) - 1;
@@ -2402,8 +2409,8 @@ Return Value:
                 }
             }
 
-            Pd = X64_PDT(((UINTN)Pml4Index << X64_PDPE_SHIFT) |
-                         ((UINTN)PdpIndex << X64_PDE_SHIFT));
+            Pd = X64_PDT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                         ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
             for (PdIndex = X64_PD_INDEX(PdpStart);
                  PdIndex <= X64_PD_INDEX(PdpEnd);
@@ -2481,14 +2488,14 @@ Return Value:
             continue;
         }
 
-        Pdp = X64_PDPT((UINTN)Pml4Index << X64_PDPE_SHIFT);
+        Pdp = X64_PDPT((UINTN)Pml4Index << X64_PML4E_SHIFT);
         for (PdpIndex = 0; PdpIndex <= X64_PTE_COUNT; PdpIndex += 1) {
             if ((Pdp[PdpIndex] & X86_PTE_PRESENT) == 0) {
                 continue;
             }
 
-            Pd = X64_PDT(((UINTN)Pml4Index << X64_PDPE_SHIFT) |
-                         ((UINTN)PdpIndex << X64_PDE_SHIFT));
+            Pd = X64_PDT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                         ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
             for (PdIndex = 0; PdIndex <= X64_PTE_COUNT; PdIndex += 1) {
                 Entry = X86_PTE_ENTRY(Pd[PdIndex]);
@@ -2575,8 +2582,14 @@ Return Value:
     PPTE SwapPte;
 
     //
-    // TODO: Handle the first call representing the kernel address space.
+    // If this is the kernel being initialized, just return what's already been
+    // created by the loader.
     //
+
+    if (MmKernelAddressSpace == NULL) {
+        AddressSpace->Pml4Physical = ArGetCurrentPageDirectory();
+        return STATUS_SUCCESS;
+    }
 
     Physical = MmpAllocatePhysicalPages(1, 0);
     if (Physical == INVALID_PHYSICAL_ADDRESS) {

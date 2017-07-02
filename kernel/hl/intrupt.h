@@ -190,7 +190,7 @@ typedef struct _INTERRUPT_LINES {
     LONG LineStart;
     LONG LineEnd;
     ULONG Gsi;
-    ULONG OutputControllerIdentifier;
+    UINTN OutputControllerIdentifier;
     PINTERRUPT_LINE_INTERNAL_STATE State;
 } INTERRUPT_LINES, *PINTERRUPT_LINES;
 

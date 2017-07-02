@@ -1445,7 +1445,7 @@ Return Value:
     // Load the IDT register with our interrupt descriptor table.
     //
 
-    IdtRegister.Limit = (IDT_SIZE * 8) - 1;
+    IdtRegister.Limit = (IDT_SIZE * sizeof(PROCESSOR_GATE)) - 1;
     IdtRegister.Base = (ULONG)IdtTable;
     ArLoadIdtr(&IdtRegister);
     return;
