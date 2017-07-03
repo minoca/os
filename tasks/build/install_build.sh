@@ -91,7 +91,7 @@ var AutomationCopy = {
 };
 
 var PrepAutoCopy = {
-    "Destination": "/etc/rc2.d/S45prep_auto.sh",
+    "Destination": "/apps/etc/rc2.d/S45prep_auto.sh",
     "Source": "./auto/tasks/build/prep_auto.sh",
     "SourceVolume": -1,
 };
