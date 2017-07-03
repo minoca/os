@@ -45,10 +45,15 @@ Author:
 #define HAVE_TM_GMTOFF
 #define HAVE_TM_ZONE
 
-#else
+#elif defined(__MINOCA__)
 
 #define HAVE_TM_GMTOFF
 #define HAVE_TM_NANOSECOND
+#define HAVE_TM_ZONE
+
+#else
+
+#define HAVE_TM_GMTOFF
 #define HAVE_TM_ZONE
 
 #endif

@@ -2473,7 +2473,7 @@ Return Value:
     // page directory.
     //
 
-    KernelIndex = (ULONG)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT;
+    KernelIndex = (ULONG)(UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT;
     ZeroSize = KernelIndex * sizeof(PTE);
     CopySize = PAGE_SIZE - ZeroSize;
     RtlZeroMemory((PVOID)PageDirectory, ZeroSize);

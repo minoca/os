@@ -224,14 +224,24 @@ Return Value:
 
         if (errno != 0) {
             Status = errno;
-            write(StatusPipe[1], &Status, sizeof(Status));
-            _exit(126);
+            if (write(StatusPipe[1], &Status, sizeof(Status)) !=
+                sizeof(Status)) {
+
+                _exit(126);
+            }
+
+            _exit(125);
         }
 
         if ((Attributes->Cwd != NULL) && (chdir(Attributes->Cwd) != 0)) {
             Status = errno;
-            write(StatusPipe[1], &Status, sizeof(Status));
-            _exit(125);
+            if (write(StatusPipe[1], &Status, sizeof(Status)) !=
+                sizeof(Status)) {
+
+                _exit(126);
+            }
+
+            _exit(124);
         }
 
         if (Attributes->Environment != NULL) {
@@ -246,7 +256,12 @@ Return Value:
         //
 
         Status = errno;
-        write(StatusPipe[1], &Status, sizeof(Status));
+        if (write(StatusPipe[1], &Status, sizeof(Status)) !=
+            sizeof(Status)) {
+
+            _exit(126);
+        }
+
         _exit(127);
     }
 
@@ -815,7 +830,11 @@ Return Value:
                 // Clean out the pipe byte that triggered this poll.
                 //
 
-                read(SigchldContext.Pipe[0], &Status, 1);
+                do {
+                    Status = read(SigchldContext.Pipe[0], &Status, 1);
+
+                } while ((Status < 0) && (errno == EINTR));
+
                 if (CkpOsWaitPid(Attributes, WNOHANG) == 0) {
                     Pollfd[PollIndex] = Pollfd[PollfdCount - 1];
                     PollfdCount -= 1;

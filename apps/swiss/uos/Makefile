@@ -60,8 +60,8 @@ endif
 endif
 
 TARGETLIBS = $(OBJROOT)/os/lib/termlib/build/termlib.a                       \
-             $(OBJROOT)/os/lib/rtl/urtl/rtlc/build/rtlc.a                    \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a                      \
+             $(OBJROOT)/os/lib/rtl/urtl/rtlc/build/rtlc.a                    \
 
 ifneq ($(shell uname -s),FreeBSD)
 DYNLIBS += -ldl
