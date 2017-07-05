@@ -221,6 +221,33 @@ class ConfigFile {
         return null;
     }
 
+    function
+    clear (
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine clears the configuration contents back to a blank file.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        None.
+
+    --*/
+
+    {
+
+        _data = {};
+        _metadata["loaded"] = true;
+        return;
+    }
+
     //
     // Functions to make the instance act like a dictionary.
     //

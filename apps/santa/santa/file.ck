@@ -89,8 +89,8 @@ Return Value:
 
     var root = config.getKey("core.root");
 
-    if (filepath[0..1] == "~/") {
-        filepath = config.home + filepath[0..-1];
+    if (filepath[0...1] == "~/") {
+        filepath = config.getKey("core.home") + filepath[1...-1];
     }
 
     if (!root || (root.length() == 0)) {
@@ -349,6 +349,7 @@ Return Value:
 
     var chunk;
     var contents;
+
     var infile;
     var link;
     var outfile;
@@ -394,6 +395,15 @@ Return Value:
 
         if (source == destination) {
             return;
+        }
+
+        //
+        // If the destination is a directory, copy the source file inside of
+        // the directory.
+        //
+
+        if ((os.isdir)(destination)) {
+            destination += "/" + (os.basename)(source);
         }
 
         verbose = config.getKey("core.verbose");

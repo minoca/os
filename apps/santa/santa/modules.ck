@@ -63,6 +63,7 @@ _enumerateModules (
 
 var builtinCommands = [
     ["archive", "Low-level archive creation/extraction"],
+    ["build", "Build a package from its sources"],
     ["config", "Get or set configuration parameters"],
     ["convert-archive", "Converts from an alternate archive (eg .tar.gz)"],
     ["new-realm", "Create a new working environment"],

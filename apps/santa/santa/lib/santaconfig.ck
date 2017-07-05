@@ -49,10 +49,22 @@ from santa.lib.config import ConfigFile;
 var SANTA_GLOBAL_CONFIG_PATH = "/etc/santa.conf";
 
 //
+// Define the path to Santa's base directory for th user.
+//
+
+var SANTA_USER_ROOT = "~/.santa";
+
+//
 // The path to load the user's configuration from.
 //
 
-var SANTA_USER_CONFIG_PATH = "~/.santa/santa.conf";
+var SANTA_USER_CONFIG_PATH = SANTA_USER_ROOT + "/santa.conf";
+
+//
+// Define the path to the patch manager's configuration.
+//
+
+var SANTA_PATCH_CONFIG_PATH = SANTA_USER_ROOT + "/patch.conf";
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -97,8 +109,14 @@ var defaultConfig = {
 
         "extensions": [
             "/usr/lib/santa/extensions",
-            "~/.santa/extensions"
+            SANTA_USER_ROOT + "/extensions"
         ],
+
+        //
+        // Define the directory where builds are run.
+        //
+
+        "builddir": SANTA_USER_ROOT + "/build"
     },
 
     //

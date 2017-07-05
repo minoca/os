@@ -283,7 +283,7 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "basename", CkpOsBasename, 1},
     {CkTypeFunction, "dirname", CkpOsDirname, 1},
     {CkTypeFunction, "getenv", CkpOsGetenv, 1},
-    {CkTypeFunction, "setenv", CkpOsGetenv, 2},
+    {CkTypeFunction, "setenv", CkpOsSetenv, 2},
     {CkTypeFunction, "mkdir", CkpOsMkdir, 2},
     {CkTypeFunction, "listdir", CkpOsListDirectory, 1},
     {CkTypeFunction, "chdir", CkpOsChdir, 1},

@@ -279,6 +279,56 @@ class Archive {
     }
 
     function
+    extractAll (
+        directoryPath,
+        uid,
+        gid,
+        setPermissions
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine extracts all members from the archive. Permissions are
+        only set at the very end.
+
+    Arguments:
+
+        members - Supplies an optional list of archive members to extract. The
+            list should consist only of members from this archive. If null,
+            all archive members will be extracted.
+
+        directoryPath - Supplies an optional directory path to extract to. If
+            null, contents will be extracted to the current directory.
+
+        uid - Supplies the user ID to set on the extracted object. Supply -1 to
+            use the user ID number in the archive.
+
+        gid - Supplies the group ID to set on the extracted object. Supply -1
+            to use the group ID number in the archive.
+
+        setPermissions - Supplies a boolean indicating whether to set the
+            permissions in the file. If false and uid/gid are -1, then
+            no special attributes will be set on the file (which will make it
+            be owned by the caller).
+
+    Return Value:
+
+        None. An exception will be raised on failure.
+
+    --*/
+
+    {
+
+        return this.cpio.extractAll(null,
+                                    directoryPath,
+                                    uid,
+                                    gid,
+                                    setPermissions);
+    }
+
+    function
     extract (
         archivePath,
         destinationPath
