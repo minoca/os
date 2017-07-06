@@ -89,7 +89,7 @@ Environment:
 // TODO: Fix these sizes.
 //
 
-#define PROCESSOR_CONTEXT_SIZE 0x60
+#define PROCESSOR_CONTEXT_SIZE 284
 #define SIGNAL_CONTEXT_SIZE 28
 
 //

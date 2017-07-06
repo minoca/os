@@ -1776,7 +1776,7 @@ Return Value:
                                                  &Address);
 
                 if (Result == 0) {
-                    DbgOut("%s!%s @ 0x%08x\n",
+                    DbgOut("%s!%s @ 0x%08llx\n",
                            CurrentModule->ModuleName,
                            SearchResult.U.DataResult->Name,
                            Address + CurrentModule->BaseDifference);
@@ -5355,7 +5355,7 @@ Return Value:
                 }
 
                 if (Address != 0) {
-                    DbgOut("Dumping memory at 0x%08x\n", (ULONG)Address);
+                    DbgOut("Dumping memory at 0x%08llx\n", Address);
                 }
 
                 Result = DbgPrintType(Context,
@@ -5519,7 +5519,7 @@ Return Value:
             // Print the values.
             //
 
-            DbgOut("Dumping memory at 0x%08x\n", (ULONG)Address);
+            DbgOut("Dumping memory at 0x%08llx\n", Address);
             Result = DbgPrintType(Context,
                                   Type,
                                   DataStream,

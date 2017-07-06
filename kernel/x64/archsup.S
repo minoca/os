@@ -1812,9 +1812,96 @@ Return Value:
 --*/
 
 FUNCTION(ArSaveProcessorContext)
-    int $3                          # TODO: ArSaveProcessorContext for x64.
-    jmp     ArSaveProcessorContext  # End of the road.
+    movq    %rdi, %r10              # Save rdi into a volatile register.
+    movl    $1, %eax                # Get default return value.
+    cld                             # Increment edi upon stosd.
+    stosq                           # Save it.
+    movq    (%rsp), %rax            # Get the return address.
+    stosq                           # Save it.
+    xorl    %eax, %eax              # Zero out rax.
+    movw    %cs, %ax                # Get CS.
+    stosq                           # Save it.
+    pushfq                          # Push rflags.
+    popq    %rax                    # Get rflags in rax.
+    stosq                           # Save it.
+    movq    %r10, (%rdi)            # Save original rdi.
+    movq    %rsi, 8(%rdi)           # Save rsi.
+    movq    %rdx, 16(%rdi)          # Save rdx.
+    movq    %rcx, 24(%rdi)          # Save rcx.
+    movq    %r8, 32(%rdi)           # Save r8.
+    movq    %r9, 40(%rdi)           # Save r9.
+    addq    $48, %rdi               # Advance over arguments.
+    movq    %rbx, %rax              # Get rbx.
+    stosq                           # Save it.
+    movq    %rbp, %rax              # Get rbp.
+    stosq                           # Save it.
+    movq    %rsp, %rax              # Get rsp.
+    addq    $8, %rax                # Pop off return address.
+    stosq                           # Save it.
+    movq    %r12, (%rdi)            # Save r12.
+    movq    %r13, 8(%rdi)           # Save r13.
+    movq    %r14, 16(%rdi)          # Save r14
+    movq    %r15, 24(%rdi)          # Save r15
+    addq    $32, %rdi               # Advance pointer for r12-r15.
+    movq    %dr7, %rax              # Get dr7.
+    stosq                           # Save it.
+    movq    %dr6, %rax              # Get dr6.
+    stosq                           # Save it.
+    movq    %dr0, %rax              # Get dr0.
+    stosq                           # Save it.
+    movq    %dr1, %rax              # Get dr1.
+    stosq                           # Save it.
+    movq    %dr2, %rax              # Get dr2.
+    stosq                           # Save it.
+    movq    %dr3, %rax              # Get dr3.
+    stosq                           # Save it.
+    movq    %rdi, (%rdi)            # Save VA of this structure member.
+    addq    $8, %rdi                # Advance over VA member.
+    movq    %cr0, %rax              # Get cr0.
+    stosq                           # Save it.
+    movq    %cr2, %rax              # Get cr2. Why is there no cr1?
+    stosq                           # Save it.
+    movq    %cr3, %rax              # Get the all-important cr3.
+    stosq                           # Save it.
+    movq    %cr4, %rax              # Get cr4.
+    stosq                           # Save it.
 
+    movl    $X86_MSR_FSBASE, %ecx   # Load MSR number.
+    rdmsr                           # Read FSBASE.
+    shlq    $32, %rdx               # Shift rdx into its high word.
+    orq     %rdx, %rax              # OR rdx into rax.
+    stosq                           # Save it.
+
+    movl    $X86_MSR_GSBASE, %ecx   # Load MSR number.
+    rdmsr                           # Read GSBASE.
+    shlq    $32, %rdx               # Shift rdx into its high word.
+    orq     %rdx, %rax              # OR rdx into rax.
+    stosq                           # Save it.
+
+    movl    $X86_MSR_KERNEL_GSBASE, %ecx   # Load MSR number.
+    rdmsr                           # Read kernel GSBASE.
+    shlq    $32, %rdx               # Shift rdx into its high word.
+    orq     %rdx, %rax              # OR rdx into rax.
+    stosq                           # Save it.
+
+    movl    $X86_MSR_EFER, %ecx     # Load MSR number.
+    rdmsr                           # Read EFER.
+    shlq    $32, %rdx               # Shift rdx into its high word.
+    orq     %rdx, %rax              # OR rdx into rax.
+    stosq                           # Save it.
+
+    xor     %eax, %eax              # Clear out upper bits of rax.
+    str     %ax                     # Get the TR register.
+    stosq                           # Save it.
+    pushq   %rdi                    # Save rdi temporarily.
+    movq    %rax, %rdi              # Set the TSS segment as the first param.
+    call    ArClearTssBusyBit       # Clear the busy bit from the TSS.
+    popq    %rdi                    # Restore rdi.
+    sidt    (%rdi)                  # Save IDT base/limit.
+    addq    $10, %rdi               # Advance over IDT area.
+    sgdt    (%rdi)                  # Save GDT base/limit.
+    xor     %eax, %eax              # Zero out return value.
+    ret
 
 END_FUNCTION(ArSaveProcessorContext)
 
@@ -1845,8 +1932,104 @@ Return Value:
 --*/
 
 FUNCTION(ArRestoreProcessorContext)
-    int $3                          # TODO: ArRestoreProcessorContext for x64.
-    jmp     ArSaveProcessorContext  # End of the road.
+
+    ##
+    ## Note that the processor must already be running in 64-bit mode. This
+    ## function cannot be used to trampoline from 32-bit to 64-bit mode.
+    ##
+
+    movq    %rdi, %rsi              # Load the pointer into rsi (for stosq).
+    movq    16(%rdi), %rax          # Load CS into rax.
+    addq    $(PROCESSOR_CONTEXT_SIZE - 20), %rsi    # Get to the IDT location.
+    std                             # Decrement rsi during lodsq.
+
+    ##
+    ## After loading the GDT, a far return is needed for it to take effect.
+    ## this also loads CS.
+    ##
+
+    pushq   %rax                    # Push CS.
+    movq    ArRestoreProcessorContextJump@GOTPCREL(%rip), %rax
+    pushq   %rax                    # Push "return" address (just below).
+    lgdt    10(%rsi)                # Load the new GDT.
+    retfq                           # Far return to load the new GDT.
+
+ArRestoreProcessorContextJump:
+    lidt    (%rsi)                  # Load the IDT.
+    subq    $8, %rsi                # Retreat to tr.
+    lodsq                           # Pop a value and retreat.
+    ltr     %ax                     # Load the task segment.
+
+    lodsq                           # Pop a value and retreat.
+    movl    $X86_MSR_EFER, %ecx     # Load the MSR number.
+    movq    %rax, %rdx              # Load rdx with the whole 64-bit word.
+    shrq    $32, %rdx               # Put the high bits in edx.
+    wrmsr                           # Write the MSR.
+
+    lodsq                           # Pop a value and retreat.
+    movl    $X86_MSR_KERNEL_GSBASE, %ecx  # Load the MSR number.
+    movq    %rax, %rdx              # Load rdx with the whole 64-bit word.
+    shrq    $32, %rdx               # Put the high bits in edx.
+    wrmsr                           # Write the MSR.
+
+    lodsq                           # Pop a value and retreat.
+    movl    $X86_MSR_GSBASE, %ecx   # Load the MSR number.
+    movq    %rax, %rdx              # Load rdx with the whole 64-bit word.
+    shrq    $32, %rdx               # Put the high bits in edx.
+    wrmsr                           # Write the MSR.
+
+    lodsq                           # Pop a value and retreat.
+    movl    $X86_MSR_FSBASE, %ecx   # Load the MSR number.
+    movq    %rax, %rdx              # Load rdx with the whole 64-bit word.
+    shrq    $32, %rdx               # Put the high bits in edx.
+    wrmsr                           # Write the MSR.
+
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %cr4              # Load CR4.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %cr3              # Load CR3.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %cr2              # Load CR2.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %cr0              # Load CR0.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %rsi              # Load the new VA.
+    subq    $8, %rsi                # Retreat beyond the VA.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %dr3              # Restore a debug register.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %dr2              # Restore a debug register.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %dr1              # Restore a debug register.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %dr0              # Restore a debug register.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %dr6              # Restore a debug register.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %dr7              # Restore a debug register.
+    movq    (%rsi), %r15            # Restore a general register.
+    movq    -8(%rsi), %r14          # Restore a general register.
+    movq    -16(%rsi), %r13         # Restore a general register.
+    movq    -24(%rsi), %r12         # Restore a general register.
+    movq    -32(%rsi), %rax         # Get RSP.
+    movq    %rax, %rsp              # Restore rsp.
+    movq    -40(%rsi), %rbp         # Restore a general register.
+    movq    -48(%rsi), %rbx         # Restore a general register.
+    movq    -56(%rsi), %r9          # Restore an argument register.
+    movq    -64(%rsi), %r8          # Restore an argument register.
+    movq    -72(%rsi), %rcx         # Restore an argument register.
+    movq    -80(%rsi), %rdx         # Restore an argument register.
+    movq    -88(%rsi), %r10         # Restore RSI into R10 (volatile) for now.
+    movq    -96(%rsi), %rdi         # Restore an argument register.
+    movq    -104(%rsi), %rax        # Get RFLAGS.
+    subq    $120, %rsi              # Advance beyond the registers and CS.
+    pushq   %rax                    # Push rflags.
+    lodsq                           # Pop a value and retreat.
+    movq    %rax, %r11              # Save rip in r11 (a volatile register).
+    lodsq                           # Pop rax, the return value, into place.
+    movq    %r10, %rsi              # Restore RSI (held in R10 from above).
+    popfq                           # Pop rflags (including direction flag).
+    jmp     *%r11                   # Jump off to the return value.
 
 END_FUNCTION(ArRestoreProcessorContext)
 

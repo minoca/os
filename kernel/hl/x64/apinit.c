@@ -289,7 +289,7 @@ Return Value:
 
     //
     // Save the current processor context. Processors will not restore to here
-    // however. Use the edge of the stack as a region to store the context.
+    // however.
     //
 
     ProcessorContext = StartBlock->StackBase;
@@ -300,9 +300,8 @@ Return Value:
     //
 
     StackPointer = StartBlock->StackBase + StartBlock->StackSize;
-    StackPointer -= 2;
+    StackPointer -= 1;
     StackPointer[0] = NULL;
-    StackPointer[1] = StartBlock;
     StartBlock->StackPointer = StackPointer;
 
     //
@@ -312,13 +311,9 @@ Return Value:
 
     ProcessorContext->Rsp = (UINTN)StackPointer;
     ProcessorContext->Rip = (UINTN)StartRoutine;
+    ProcessorContext->Rdi = (UINTN)StartBlock;
     ProcessorContext->Rbp = 0;
     ProcessorContext->Rbx = 0;
-    ProcessorContext->Rax = 0;
-    ProcessorContext->R12 = 0;
-    ProcessorContext->R13 = 0;
-    ProcessorContext->R14 = 0;
-    ProcessorContext->R15 = 0;
     ProcessorContext->Fsbase = 0;
     ProcessorContext->Gsbase = 0;
     HlProcessorStartContext = ProcessorContext;

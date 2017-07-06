@@ -310,7 +310,7 @@ Return Value:
     // Physical mode implies P0.
     //
 
-    if (PhysicalMode != FALSE) {
+    if ((PhysicalMode != FALSE) || (ProcessorStructures == NULL)) {
         Gdt = ArP0Gdt;
         Idt = ArP0Idt;
         InterruptTable = ArP0InterruptTable;
@@ -318,43 +318,28 @@ Return Value:
         Tss = &ArP0Tss;
 
     } else {
+        BootProcessor = FALSE;
+        PageSize = MmPageSize();
+        Address = ALIGN_RANGE_UP((UINTN)ProcessorStructures, PageSize);
+        Address += ALTERNATE_STACK_SIZE;
+        NmiStack = (PVOID)Address;
+        Address += ALTERNATE_STACK_SIZE;
+        DoubleFaultStack = (PVOID)Address;
+        Gdt = (PVOID)Address;
+
+        ASSERT(ALIGN_RANGE_DOWN((UINTN)Gdt, 8) == (UINTN)Gdt);
+
+        Address += sizeof(ArP0Gdt);
+        ProcessorBlock = (PVOID)Address;
+        Address += sizeof(PROCESSOR_BLOCK);
+        Tss = (PVOID)Address;
 
         //
-        // Use the globals if this is the boot processor because the memory
-        // subsystem is not yet online.
+        // Use a global IDT space.
         //
 
-        if (ProcessorStructures == NULL) {
-            Gdt = ArP0Gdt;
-            Idt = ArP0Idt;
-            InterruptTable = ArP0InterruptTable;
-            ProcessorBlock = &ArP0ProcessorBlock;
-            Tss = &ArP0Tss;
-
-        } else {
-            BootProcessor = FALSE;
-            PageSize = MmPageSize();
-            Address = ALIGN_RANGE_UP((UINTN)ProcessorStructures, PageSize);
-            Address += ALTERNATE_STACK_SIZE;
-            NmiStack = (PVOID)Address;
-            Address += ALTERNATE_STACK_SIZE;
-            DoubleFaultStack = (PVOID)Address;
-            Tss = (PVOID)Address;
-            Address += sizeof(ArP0Tss);
-            Gdt = (PVOID)Address;
-
-            ASSERT(ALIGN_RANGE_DOWN((UINTN)Gdt, 8) == (UINTN)Gdt);
-
-            Address += sizeof(ArP0Gdt);
-            ProcessorBlock = (PVOID)Address;
-
-            //
-            // Use a global IDT space.
-            //
-
-            Idt = ArP0Idt;
-            InterruptTable = ArP0InterruptTable;
-        }
+        Idt = ArP0Idt;
+        InterruptTable = ArP0InterruptTable;
     }
 
     //
@@ -982,6 +967,11 @@ Return Value:
 
     PGDT64_ENTRY Entry64;
     TABLE_REGISTER Gdt;
+
+    if (GdtTable != ArP0Gdt) {
+        RtlCopyMemory(GdtTable, ArP0Gdt, sizeof(ArP0Gdt));
+        GdtTable[KERNEL_TSS / sizeof(GDT_ENTRY)].Access &= ~GDT_TSS_BUSY;
+    }
 
     //
     // Set the pointer to the kernel TSS, which is really the only thing that's

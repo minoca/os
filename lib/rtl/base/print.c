@@ -1080,7 +1080,7 @@ Return Value:
     } else if (*CurrentFormat == FORMAT_LONG) {
         LongSpecified = TRUE;
         CurrentFormat += 1;
-        Properties.IntegerSize = sizeof(LONG);
+        Properties.IntegerSize = sizeof(long);
         if (*CurrentFormat == FORMAT_LONG) {
             LongSpecified = FALSE;
             CurrentFormat += 1;

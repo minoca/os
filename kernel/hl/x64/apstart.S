@@ -114,6 +114,9 @@ ProtectedModeCode:
     orl     $(EFER_LONG_MODE_ENABLE | EFER_NO_EXECUTE_ENABLE), %eax
     wrmsr                           # Write it.
 
+    movl    %cr4, %eax              # Read CR4.
+    orl     $CR4_OR_MASK, %eax      # OR in the PAE bit and others.
+    movl    %eax, %cr4              # Set CR4.
     movl    (HlTrampolineCr3 - HlpTrampolineCode + STUB_ADDRESS), %eax
     movl    %eax, %cr3                  # Set up the kernel page directory.
     movl    %cr0, %eax                  # Read CR0.
@@ -136,8 +139,8 @@ LongModeCode:
     // true address of the label below.
     //
 
-    movq    $(HlKernelStartPointer - HlpTrampolineCode + STUB_ADDRESS), %rdi
-    jmp     *(%rdi)
+    movq    (HlKernelStartPointer - HlpTrampolineCode + STUB_ADDRESS), %rdi
+    jmp     *%rdi
 
     //
     // From here on in, the code is executing back at the original kernel VA,
@@ -151,6 +154,7 @@ HlKernelStart:
     //
 
     movq    HlProcessorStartContext@GOTPCREL(%rip), %rdi   # Get context.
+    movq    (%rdi), %rdi                    # Dereference to get value.
     call    ArRestoreProcessorContext       # Restore away forever.
 
     //

@@ -478,6 +478,18 @@ Members:
 
     Rflags - Stores the eflags register.
 
+    Rdi - Stores an argument register.
+
+    Rsi - Stores an argument register.
+
+    Rdx - Stores an argument register.
+
+    Rcx - Stores an argument register.
+
+    R8 - Stores an argument register.
+
+    R9 - Stores an argument register.
+
     Rbx - Stores a non-volatile general register.
 
     Rbp - Stores a non-volatile general register.
@@ -522,6 +534,10 @@ Members:
 
     Gsbase - Stores the GS: base address.
 
+    KernelGsbase - Stores the kernel GS: base MSR.
+
+    Efer - Stores the EFER register.
+
     Tr - Stores the task register (must be restored after the GDT).
 
     Idt - Stores the interrupt descriptor table. The task register and GDT
@@ -537,6 +553,12 @@ struct _PROCESSOR_CONTEXT {
     UINTN Rip;
     UINTN Cs;
     UINTN Rflags;
+    UINTN Rdi;
+    UINTN Rsi;
+    UINTN Rdx;
+    UINTN Rcx;
+    UINTN R8;
+    UINTN R9;
     UINTN Rbx;
     UINTN Rbp;
     UINTN Rsp;
@@ -557,10 +579,12 @@ struct _PROCESSOR_CONTEXT {
     UINTN Cr4;
     UINTN Fsbase;
     UINTN Gsbase;
+    UINTN KernelGsbase;
+    UINTN Efer;
     UINTN Tr;
     TABLE_REGISTER Idt;
     TABLE_REGISTER Gdt;
-} PACKED;
+};
 
 /*++
 

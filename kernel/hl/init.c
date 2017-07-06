@@ -239,7 +239,7 @@ Return Value:
             goto InitializeEnd;
         }
 
-        RtlDebugPrint("Processor %d alive. 0x%x\n",
+        RtlDebugPrint("Processor %d alive. 0x%lx\n",
                       ProcessorNumber,
                       KeGetCurrentProcessorBlock());
 
