@@ -3192,7 +3192,7 @@ Return Value:
             }
 
         //
-        // If only files A is modified, then it's a deletion.
+        // If only file A is modified, then it's a deletion.
         //
 
         } else if ((LineA < FileA->LineCount) &&
@@ -3389,7 +3389,7 @@ Return Value:
         //
 
         if (SizeA <= 1) {
-            printf("*** %ld ***\n", LineA + SizeA);
+            printf("*** %ld ***\n", LineA + ((LineA + SizeA) != 0));
 
         } else {
             printf("*** %ld,%ld ***\n", LineA + 1, LineA + SizeA);
@@ -3468,7 +3468,7 @@ Return Value:
         //
 
         if (SizeB <= 1) {
-            printf("--- %ld ---\n", LineB + SizeB);
+            printf("--- %ld ---\n", LineB + ((LineB + SizeB) != 0));
 
         } else {
             printf("--- %ld,%ld ---\n", LineB + 1, LineB + SizeB);
@@ -3647,20 +3647,20 @@ Return Value:
         //
 
         if (SizeA == 0) {
-            printf("@@ -%ld,0 ", LineA);
+            printf("@@ -%ld,0 ", LineA + (LineA != 0));
 
         } else if (SizeA == 1) {
-            printf("@@ -%ld ", LineA + SizeA);
+            printf("@@ -%ld ", LineA + 1);
 
         } else {
             printf("@@ -%ld,%ld ", LineA + 1, SizeA);
         }
 
         if (SizeB == 0) {
-            printf("+%ld,0 @@\n", LineB);
+            printf("+%ld,0 @@\n", LineB + (LineB != 0));
 
         } else if (SizeB == 1) {
-            printf("+%ld @@\n", LineB + SizeB);
+            printf("+%ld @@\n", LineB + 1);
 
         } else {
             printf("+%ld,%ld @@\n", LineB + 1, SizeB);
@@ -3808,30 +3808,14 @@ Return Value:
     *SizeB = 0;
     OriginalLineA = *LineA;
     OriginalLineB = *LineB;
-    while ((*LineA < FileA->LineCount) || (*LineB < FileB->LineCount)) {
-
-        //
-        // If file A ended, then the rest of file B is a hunk.
-        //
-
-        if (*LineA == FileA->LineCount) {
-            *SizeB = FileB->LineCount - *LineB;
-            return;
-
-        //
-        // If file B ended, then the rest of file A is a hunk.
-        //
-
-        } else if (*LineB == FileB->LineCount) {
-            *SizeA = FileA->LineCount - *LineA;
-            return;
+    while ((*LineA < FileA->LineCount) && (*LineB < FileB->LineCount)) {
 
         //
         // If either line is modified, then a hunk has been found.
         //
 
-        } else if ((FileA->Lines[*LineA]->Modified != FALSE) ||
-                   (FileB->Lines[*LineB]->Modified != FALSE)) {
+        if ((FileA->Lines[*LineA]->Modified != FALSE) ||
+            (FileB->Lines[*LineB]->Modified != FALSE)) {
 
             break;
         }

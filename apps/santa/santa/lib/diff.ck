@@ -275,11 +275,12 @@ class DiffFile {
         endB = lineB + sizeB;
 
         //
-        // Print the hunk marker.
+        // Print the hunk marker. For size zero hunks, use line zero if the
+        // file was empty, or the correct 1-based line if not.
         //
 
         if (sizeA == 0) {
-            header = "@@ -%d,0 " % lineA;
+            header = "@@ -%d,0 " % (lineA + (lineA != 0));
 
         } else if (sizeA == 1) {
             header = "@@ -%d " % (lineA + 1);
@@ -289,7 +290,7 @@ class DiffFile {
         }
 
         if (sizeB == 0) {
-            header += "+%d,0 @@" % lineB;
+            header += "+%d,0 @@" % (lineB + (lineB != 0));
 
         } else if (sizeB == 1) {
             header += "+%d @@" % (lineB + 1);
@@ -1025,29 +1026,13 @@ class DiffFile {
 
         hunk.left.size = 0;
         hunk.right.size = 0;
-        while ((lineA < lineCountA) || (lineB < lineCountB)) {
-
-            //
-            // If A ended, then the rest of file B is a hunk.
-            //
-
-            if (lineA == lineCountA) {
-                hunk.right.size = lineCountB - lineB;
-                return hunk;
-
-            //
-            // If file B ended, then the rest of file A is a hunk.
-            //
-
-            } else if (lineB == lineCountB) {
-                hunk.left.size = lineCountA - lineA;
-                return hunk;
+        while ((lineA < lineCountA) && (lineB < lineCountB)) {
 
             //
             // If either line is modified, then a hunk has been found.
             //
 
-            } else if ((_modifiedA.get(lineA)) || (_modifiedB.get(lineB))) {
+            if ((_modifiedA.get(lineA)) || (_modifiedB.get(lineB))) {
                 break;
             }
 
