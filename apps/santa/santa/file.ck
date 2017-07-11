@@ -360,13 +360,14 @@ Return Value:
     //
 
     if ((os.isdir)(source)) {
-        contents = os.listdir(source);
+        contents = (os.listdir)(source);
         if (!(os.isdir)(destination)) {
             (os.mkdir)(destination);
         }
 
         for (element in contents) {
-            _cptree("/".join(source, element), "/".join(destination, element));
+            _cptree("/".join([source, element]),
+                    "/".join([destination, element]));
         }
 
     //

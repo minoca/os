@@ -66,8 +66,9 @@ var builtinCommands = [
     ["build", "Build a package from its sources"],
     ["config", "Get or set configuration parameters"],
     ["convert-archive", "Converts from an alternate archive (eg .tar.gz)"],
-    ["new-realm", "Create a new working environment"],
     ["del-realm", "Destroy and delete a realm"],
+    ["new-realm", "Create a new working environment"],
+    ["patch", "Build-time patch management support"],
 ];
 
 //

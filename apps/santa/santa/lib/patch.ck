@@ -147,17 +147,76 @@ class PatchFile {
 
     {
 
-        var file = this._openTarget("r", pathSplit);
-        var lines = file.readall().split("\n", -1);
+        var destination;
+        var file;
+        var hunk;
+        var lines;
+        var path;
         var reverse = options & PATCH_OPTION_REVERSE;
+        var source;
 
-        file.close();
+        if (this.hunks.length() == 1) {
+            hunk = this.hunks[0];
+            if (reverse) {
+                destination = hunk.source;
+                source = hunk.destination;
+
+            } else {
+                destination = hunk.destination;
+                source = hunk.source;
+            }
+
+            //
+            // Handle removing a file.
+            //
+
+            if ((destination.line == 0) && (destination.length == 0)) {
+                path = reverse ? this.sourceFile : this.destinationFile;
+                if (pathSplit != 0) {
+                    path = path.split("/", pathSplit)[-1];
+                }
+
+                if (!(os.exists)(path)) {
+                    path = reverse ? this.destinationFile: this.sourceFile;
+                    if (pathSplit != 0) {
+                        path = path.split("/", pathSplit)[-1];
+                    }
+                }
+
+                if ((os.exists)(path)) {
+                    if (options & PATCH_OPTION_VERBOSE) {
+                        Core.print("Removing file: %s" % path);
+                    }
+
+                    if (options & PATCH_OPTION_TEST) {
+                        return;
+                    }
+
+                    (os.unlink)(path);
+                }
+
+                return;
+
+            //
+            // Handle creating a file.
+            //
+
+            } else if ((source.line == 0) && (source.length == 0)) {
+                lines = [];
+            }
+        }
+
+        if (lines == null) {
+            file = this._openTarget("r", pathSplit);
+            lines = file.readall().split("\n", -1);
+            file.close();
+        }
 
         //
         // Remove the trailing newline, it gets added explicitly at the end.
         //
 
-        if (lines[-1] == "") {
+        if ((lines.length()) && (lines[-1] == "")) {
             lines.removeAt(-1);
         }
 
@@ -760,7 +819,6 @@ class PatchFile {
             right = right.replace("\v", "", -1).replace("\f", "", -1);
         }
 
-Core.print("compare '%s' and '%s'" % [left, right]);
         return left == right;
     }
 
