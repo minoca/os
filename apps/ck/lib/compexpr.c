@@ -276,6 +276,13 @@ Return Value:
 
         ElseJump = CkpEmitJump(Compiler, CkOpJump);
         CkpPatchJump(Compiler, IfJump);
+
+        //
+        // Adjust the stack slots since only one side of the condition ever
+        // comes true.
+        //
+
+        Compiler->StackSlots -= 1;
         CkpVisitNode(Compiler, CK_GET_AST_NODE(Compiler, Node->ChildIndex + 4));
         CkpPatchJump(Compiler, ElseJump);
     }
