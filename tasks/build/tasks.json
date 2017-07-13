@@ -389,6 +389,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/autoconf-2.69"
         },
         {
+            "name": "Make automake-1.12",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/automake-1.12.6"
+        },
+        {
             "name": "Make automake",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/automake-1.15"
