@@ -603,6 +603,32 @@ Return Value:
             goto EncodeEnd;
         }
 
+        //
+        // If there's still input left and the output buffer is not full,
+        // go back to the pre-allocated buffer and try to grab the rest of that
+        // input.
+        //
+
+        if ((OldOutBuffer != NULL) &&
+            (LzpLzmaCopyOutput(Context) != FALSE) &&
+            (Context->OutputSize != 0) && (Context->InputSize != 0)) {
+
+            Range->Buffer = OldOutBuffer;
+            Range->BufferLimit = OldOutBuffer + LZMA_RANGE_ENCODER_BUFFER_SIZE;
+            Range->BufferBase = OldOutBuffer;
+            Range->BufferRead = OldOutBuffer;
+            Range->DirectOutput = FALSE;
+            OldOutBuffer = NULL;
+            Status = LzpLzmaEncode(Encoder, FALSE, 0, 0, Flush);
+            if (Status != LzSuccess) {
+                if (Status == LzErrorProgress) {
+                    Status = LzSuccess;
+                }
+
+                goto EncodeEnd;
+            }
+        }
+
         if (Encoder->MatchFinderData.StreamEndWasReached != FALSE) {
             Status = LzpLzmaEncoderFlush(Encoder, (ULONG)(Encoder->Processed));
             if (Status != LzSuccess) {

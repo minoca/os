@@ -45,6 +45,12 @@ Environment:
 //
 
 //
+// Define the minimum size of buffer to use.
+//
+
+#define CK_LZ_MIN_BUFFER_SIZE 4096
+
+//
 // Define the default size of the buffers to use.
 //
 
@@ -803,6 +809,9 @@ Return Value:
     OutputLength = InputLength;
     if (OutputLength == 0) {
         OutputLength = CK_LZ_DEFAULT_BUFFER_SIZE;
+
+    } else if (OutputLength < CK_LZ_MIN_BUFFER_SIZE) {
+        OutputLength = CK_LZ_MIN_BUFFER_SIZE;
     }
 
     Output = CkPushStringBuffer(Vm, OutputLength);
