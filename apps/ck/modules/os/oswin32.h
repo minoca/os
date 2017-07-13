@@ -44,6 +44,14 @@ Author:
 #define chown(_Path, _Uid, _Gid) (errno = ENOSYS, (_Path), (_Uid), (_Gid), -1)
 
 //
+// Re-define unlink to a function that tries unlink a few times, since Windows
+// often fails with EPERM when weird other things are using a file.
+//
+
+#define unlink CkpWin32Unlink
+#define rmdir CkpWin32Rmdir
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -61,6 +69,8 @@ Author:
 
 #define S_IFLNK 0
 #define S_IFSOCK 0
+
+#define _SC_NPROCESSORS_ONLN 1
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -182,6 +192,83 @@ Arguments:
 
     Times - Supplies an optional array of time value structures containing the
         access and modification times to set.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+long
+sysconf (
+    int Variable
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the system value for the given variable index. These
+    variables are not expected to change within a single invocation of a
+    process, and therefore need only be queried once per process.
+
+Arguments:
+
+    Variable - Supplies the variable to get. See _SC_* definitions.
+
+Return Value:
+
+    Returns the value for that variable.
+
+    -1 if the variable has no limit. The errno variable will be left unchanged.
+
+    -1 if the variable was invalid, and errno will be set to EINVAL.
+
+--*/
+
+int
+CkpWin32Unlink (
+    const char *Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unlink a path. This is the Windows version, so it
+    will try a few times and only fail if it really cannot get access after
+    some time.
+
+Arguments:
+
+    Path - Supplies a pointer to the path of the file to unlink.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+int
+CkpWin32Rmdir (
+    const char *Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to remove a directory. This is the Windows version,
+    so it will try a few times and only fail if it really cannot get access
+    after some time.
+
+Arguments:
+
+    Path - Supplies a pointer to the path of the file to unlink.
 
 Return Value:
 

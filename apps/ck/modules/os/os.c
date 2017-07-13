@@ -31,6 +31,7 @@ Environment:
 //
 
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -59,6 +60,11 @@ CkpOsGetpid (
     PCK_VM Vm
     );
 
+VOID
+CkpOsNproc (
+    PCK_VM Vm
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -66,6 +72,7 @@ CkpOsGetpid (
 CK_VARIABLE_DESCRIPTION CkOsModuleValues[] = {
     {CkTypeFunction, "exit", CkpOsExit, 1},
     {CkTypeFunction, "getpid", CkpOsGetpid, 0},
+    {CkTypeFunction, "nproc", CkpOsNproc, 0},
     {CkTypeInvalid, NULL, NULL, 0}
 };
 
@@ -206,8 +213,43 @@ Return Value:
 }
 
 VOID
-CkpOsRaiseError (
+CkpOsNproc (
     PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of processors online.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None. The routine will return the number of processors online, minimum 1.
+
+--*/
+
+{
+
+    long Count;
+
+    Count = sysconf(_SC_NPROCESSORS_ONLN);
+    if (Count <= 0) {
+        Count = 1;
+    }
+
+    CkReturnInteger(Vm, Count);
+    return;
+}
+
+VOID
+CkpOsRaiseError (
+    PCK_VM Vm,
+    PCSTR Path
     )
 
 /*++
@@ -220,6 +262,8 @@ Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
 
+    Path - Supplies an optional path.
+
 Return Value:
 
     This routine does not return. The process exits.
@@ -230,9 +274,23 @@ Return Value:
 
     INT Error;
     PCSTR ErrorString;
+    INT Length;
+    CHAR LocalBuffer[2048];
 
     Error = errno;
-    ErrorString = strerror(Error);
+    if (Path != NULL) {
+        Length = snprintf(LocalBuffer,
+                          sizeof(LocalBuffer),
+                          "%s: %s",
+                          Path,
+                          strerror(Error));
+
+        ErrorString = LocalBuffer;
+
+    } else {
+        ErrorString = strerror(Error);
+        Length = strlen(ErrorString);
+    }
 
     //
     // Create an OsError exception.
@@ -240,7 +298,7 @@ Return Value:
 
     CkPushModule(Vm, "os");
     CkGetVariable(Vm, -1, "OsError");
-    CkPushString(Vm, ErrorString, strlen(ErrorString));
+    CkPushString(Vm, ErrorString, Length);
     CkCall(Vm, 1);
 
     //
@@ -250,6 +308,22 @@ Return Value:
     CkPushValue(Vm, -1);
     CkPushString(Vm, "errno", 5);
     CkPushInteger(Vm, Error);
+    CkCallMethod(Vm, "__set", 2);
+    CkStackPop(Vm);
+
+    //
+    // Also set instance.path if one was supplied.
+    //
+
+    CkPushValue(Vm, -1);
+    CkPushString(Vm, "path", 4);
+    if (Path != NULL) {
+        CkPushString(Vm, Path, strlen(Path));
+
+    } else {
+        CkPushNull(Vm);
+    }
+
     CkCallMethod(Vm, "__set", 2);
     CkStackPop(Vm);
 

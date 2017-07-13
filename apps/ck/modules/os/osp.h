@@ -176,7 +176,8 @@ Return Value:
 
 VOID
 CkpOsRaiseError (
-    PCK_VM Vm
+    PCK_VM Vm,
+    PCSTR Path
     );
 
 /*++
@@ -188,6 +189,8 @@ Routine Description:
 Arguments:
 
     Vm - Supplies a pointer to the virtual machine.
+
+    Path - Supplies an optional path.
 
 Return Value:
 

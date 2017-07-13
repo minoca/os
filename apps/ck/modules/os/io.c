@@ -128,6 +128,11 @@ CkpOsUnlink (
     );
 
 VOID
+CkpOsRename (
+    PCK_VM Vm
+    );
+
+VOID
 CkpOsLink (
     PCK_VM Vm
     );
@@ -275,6 +280,7 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "islink", CkpOsIsSymbolicLink, 1},
     {CkTypeFunction, "rmdir", CkpOsRmdir, 1},
     {CkTypeFunction, "unlink", CkpOsUnlink, 1},
+    {CkTypeFunction, "rename", CkpOsRename, 2},
     {CkTypeFunction, "link", CkpOsLink, 2},
     {CkTypeFunction, "symlink", CkpOsSymlink, 2},
     {CkTypeFunction, "fstat", CkpOsFstat, 1},
@@ -341,7 +347,7 @@ Return Value:
     Mode = CkGetInteger(Vm, 3);
     Descriptor = open(Path, Flags, Mode);
     if (Descriptor < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -438,7 +444,7 @@ Return Value:
 
     if (BytesRead < 0) {
         CkFinalizeString(Vm, -1, 0);
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
 
     } else {
         CkFinalizeString(Vm, -1, BytesRead);
@@ -491,7 +497,7 @@ Return Value:
     } while ((BytesWritten < 0) && (errno == EINTR));
 
     if (BytesWritten < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
     }
 
     CkReturnInteger(Vm, BytesWritten);
@@ -541,7 +547,7 @@ Return Value:
     Whence = CkGetInteger(Vm, 3);
     Offset = lseek(Descriptor, Offset, Whence);
     if (Offset < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
@@ -591,7 +597,7 @@ Return Value:
     Offset = CkGetInteger(Vm, 2);
     Result = ftruncate(Descriptor, Offset);
     if (Result < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
@@ -639,7 +645,7 @@ Return Value:
     Descriptor = CkGetInteger(Vm, 1);
     Result = isatty(Descriptor);
     if (Result < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
@@ -900,7 +906,7 @@ Return Value:
 
     Path = CkGetString(Vm, 1, NULL);
     if (rmdir(Path) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
 
     } else {
         CkReturnInteger(Vm, 0);
@@ -940,7 +946,50 @@ Return Value:
 
     Path = CkGetString(Vm, 1, NULL);
     if (unlink(Path) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
+
+    } else {
+        CkReturnInteger(Vm, 0);
+    }
+
+    return;
+}
+
+VOID
+CkpOsRename (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to rename one path to another. This may not work
+    if renaming across different file systems.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Destination;
+    PCSTR Source;
+
+    if (!CkCheckArguments(Vm, 2, CkTypeString, CkTypeString)) {
+        return;
+    }
+
+    Source = CkGetString(Vm, 1, NULL);
+    Destination = CkGetString(Vm, 2, NULL);
+    if (rename(Source, Destination) != 0) {
+        CkpOsRaiseError(Vm, Source);
 
     } else {
         CkReturnInteger(Vm, 0);
@@ -985,7 +1034,7 @@ Return Value:
     Source = CkGetString(Vm, 1, NULL);
     NewLink = CkGetString(Vm, 2, NULL);
     if (link(Source, NewLink) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Source);
 
     } else {
         CkReturnInteger(Vm, 0);
@@ -1031,7 +1080,7 @@ Return Value:
     LinkTarget = CkGetString(Vm, 1, NULL);
     LinkLocation = CkGetString(Vm, 2, NULL);
     if (symlink(LinkTarget, LinkLocation) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, LinkTarget);
 
     } else {
         CkReturnInteger(Vm, 0);
@@ -1076,7 +1125,7 @@ Return Value:
     LinkLocation = CkGetString(Vm, 1, NULL);
     Size = readlink(LinkLocation, LinkTarget, sizeof(LinkTarget));
     if (Size < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, LinkLocation);
 
     } else {
         CkReturnString(Vm, LinkTarget, Size);
@@ -1126,7 +1175,7 @@ Return Value:
     Descriptor = CkGetInteger(Vm, 1);
     Result = fstat(Descriptor, &Stat);
     if (Result < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
@@ -1175,7 +1224,7 @@ Return Value:
     Path = CkGetString(Vm, 1, NULL);
     Result = stat(Path, &Stat);
     if (Result < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1211,7 +1260,7 @@ Return Value:
 
     Directory = getcwd(NULL, 0);
     if (Directory == NULL) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
@@ -1258,14 +1307,14 @@ Return Value:
 
     Path = strdup(CkGetString(Vm, 1, NULL));
     if (Path == NULL) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
     BaseName = basename(Path);
     if (BaseName == NULL) {
         free(Path);
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1312,14 +1361,14 @@ Return Value:
 
     Path = strdup(CkGetString(Vm, 1, NULL));
     if (Path == NULL) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
     DirName = dirname(Path);
     if (DirName == NULL) {
         free(Path);
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1420,13 +1469,13 @@ Return Value:
         Size = NameLength + ValueLength + 2;
         String = malloc(Size);
         if (String == NULL) {
-            CkpOsRaiseError(Vm);
+            CkpOsRaiseError(Vm, NULL);
             return;
         }
 
         snprintf(String, Size, "%s=%s", Name, Value);
         if (putenv(String) != 0) {
-            CkpOsRaiseError(Vm);
+            CkpOsRaiseError(Vm, NULL);
             return;
         }
 
@@ -1434,13 +1483,13 @@ Return Value:
         Size = NameLength + 2;
         String = malloc(Size);
         if (String == NULL) {
-            CkpOsRaiseError(Vm);
+            CkpOsRaiseError(Vm, NULL);
             return;
         }
 
         snprintf(String, Size, "%s=", Name);
         if (putenv(String) != 0) {
-            CkpOsRaiseError(Vm);
+            CkpOsRaiseError(Vm, NULL);
             return;
         }
     }
@@ -1485,7 +1534,7 @@ Return Value:
 
     Path = CkGetString(Vm, 1, NULL);
     if (mkdir(Path, CkGetInteger(Vm, 2)) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1535,7 +1584,7 @@ Return Value:
 
     Directory = opendir(Path);
     if (Directory == NULL) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1547,7 +1596,7 @@ Return Value:
         if (Entry == NULL) {
             if (errno != 0) {
                 closedir(Directory);
-                CkpOsRaiseError(Vm);
+                CkpOsRaiseError(Vm, Path);
                 return;
             }
 
@@ -1610,7 +1659,7 @@ Return Value:
 
     Path = CkGetString(Vm, 1, NULL);
     if (chdir(Path) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1653,7 +1702,7 @@ Return Value:
 
     Path = CkGetString(Vm, 1, NULL);
     if (chroot(Path) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1719,12 +1768,12 @@ Return Value:
     Value[1].tv_usec = ModifiedNano / 1000;
     if ((Value[0].tv_sec != Access) || (Value[1].tv_sec != Modified)) {
         errno = ERANGE;
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
     if (utimes(Path, Value) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1770,7 +1819,7 @@ Return Value:
     Path = CkGetString(Vm, 1, NULL);
     Mode = CkGetInteger(Vm, 2);
     if (chmod(Path, Mode) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 
@@ -1818,7 +1867,7 @@ Return Value:
     User = CkGetInteger(Vm, 2);
     Group = CkGetInteger(Vm, 3);
     if (chown(Path, User, Group) != 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, Path);
         return;
     }
 

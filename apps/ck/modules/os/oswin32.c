@@ -31,10 +31,13 @@ Environment:
 
 #define _WIN32_WINNT 0x0601
 
+#include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <windows.h>
+#include <unistd.h>
 #include <utime.h>
 
 #include "oswin32.h"
@@ -42,6 +45,13 @@ Environment:
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// Define the number of times to retry an unlink.
+//
+
+#define UNLINK_RETRY_COUNT 20
+#define UNLINK_RETRY_DELAY 50
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -224,6 +234,166 @@ Return Value:
     TimeBuffer.actime = Times[0].tv_sec;
     TimeBuffer.modtime = Times[1].tv_sec;
     return utime(Path, &TimeBuffer);
+}
+
+long
+sysconf (
+    int Variable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the system value for the given variable index. These
+    variables are not expected to change within a single invocation of a
+    process, and therefore need only be queried once per process.
+
+Arguments:
+
+    Variable - Supplies the variable to get. See _SC_* definitions.
+
+Return Value:
+
+    Returns the value for that variable.
+
+    -1 if the variable has no limit. The errno variable will be left unchanged.
+
+    -1 if the variable was invalid, and errno will be set to EINVAL.
+
+--*/
+
+{
+
+    SYSTEM_INFO SystemInfo;
+    long Value;
+
+    Value = -1;
+    switch (Variable) {
+    case _SC_NPROCESSORS_ONLN:
+        GetSystemInfo(&SystemInfo);
+        Value = SystemInfo.dwNumberOfProcessors;
+        break;
+
+    default:
+        fprintf(stderr, "Unknown sysconf variable %d\n", Variable);
+
+        assert(FALSE);
+
+        break;
+    }
+
+    return Value;
+}
+
+int
+CkpWin32Unlink (
+    const char *Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unlink a path. This is the Windows version, so it
+    will try a few times and only fail if it really cannot get access after
+    some time.
+
+Arguments:
+
+    Path - Supplies a pointer to the path of the file to unlink.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    INT Result;
+    struct stat Stat;
+    INT Try;
+
+    for (Try = 0; Try < UNLINK_RETRY_COUNT; Try += 1) {
+
+        //
+        // Use the underscore version since the regular one is still #defined.
+        //
+
+        Result = _unlink(Path);
+        if (Result != -1) {
+            break;
+        }
+
+        //
+        // Just do a quick check: unlink is never going to work without the
+        // proper permissions.
+        //
+
+        if (Try == 0) {
+            if (stat(Path, &Stat) != 0) {
+                break;
+            }
+
+            if ((Stat.st_mode & S_IWUSR) == 0) {
+                break;
+            }
+        }
+
+        Sleep(UNLINK_RETRY_DELAY);
+    }
+
+    return Result;
+}
+
+int
+CkpWin32Rmdir (
+    const char *Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to remove a directory. This is the Windows version,
+    so it will try a few times and only fail if it really cannot get access
+    after some time.
+
+Arguments:
+
+    Path - Supplies a pointer to the path of the file to unlink.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    INT Result;
+    INT Try;
+
+    for (Try = 0; Try < UNLINK_RETRY_COUNT * 2; Try += 1) {
+
+        //
+        // Use the underscore version since the regular one is still #defined.
+        //
+
+        Result = _rmdir(Path);
+        if ((Result != -1) || (errno != ENOTEMPTY)) {
+            break;
+        }
+
+        Sleep(UNLINK_RETRY_DELAY);
+    }
+
+    return Result;
 }
 
 //

@@ -139,7 +139,7 @@ Return Value:
     struct utsname UtsName;
 
     if (uname(&UtsName) < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
@@ -174,7 +174,7 @@ Return Value:
     CHAR Line[256];
 
     if (getdomainname(Line, sizeof(Line)) < 0) {
-        CkpOsRaiseError(Vm);
+        CkpOsRaiseError(Vm, NULL);
         return;
     }
 
