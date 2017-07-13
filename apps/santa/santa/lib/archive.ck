@@ -29,6 +29,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+from bufferedio import BufferedIo;
 import cpio;
 import io;
 import lzfile;
@@ -476,8 +477,8 @@ class Archive {
 
         file.seek(0, io.IO_SEEK_SET);
         lzma = (lzfile.LzFile)(file, mode, 9);
-        this.lzma = lzma;
-        this.cpio = (cpio.CpioArchive)(lzma, mode);
+        this.lzma = BufferedIo(lzma, 0);
+        this.cpio = (cpio.CpioArchive)(this.lzma, mode);
         return;
     }
 }

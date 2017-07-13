@@ -717,33 +717,47 @@ class PatchManager {
     {
 
         var files;
+        var patchdir;
 
         if (_config) {
             return;
         }
 
         _config = ConfigFile(path(SANTA_PATCH_CONFIG_PATH), {});
-        _patches = _config.getKey("patches");
+
+        //
+        // Use this instance's variables if they've been populated.
+        //
+
         try {
-            _config.setKey("srcdir", this.srcdir);
+            this.srcdir;
+            patchdir = this.patchdir;
+
+            //
+            // Clear the patches if the patch directory has changed.
+            //
+
+            if (patchdir != _config.getKey("patchdir")) {
+                _patches = {};
+                this.files = {};
+            }
+
+        //
+        // Load from the config file if the patchdir has not yet been assigned.
+        //
 
         } except KeyError {
             this.srcdir = _config.getKey("srcdir");
-        }
-
-        try {
-            _config.setKey("patchdir", this.patchdir);
-
-        } except KeyError {
             this.patchdir = _config.getKey("patchdir");
+            _patches = _config.getKey("patches");
+            files = {};
+            for (file in _config.getKey("files")) {
+                files[file] = true;
+            }
+
+            this.files = files;
         }
 
-        files = {};
-        for (file in _config.getKey("files")) {
-            files[file] = true;
-        }
-
-        this.files = files;
         return;
     }
 

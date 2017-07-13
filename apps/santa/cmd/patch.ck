@@ -253,8 +253,13 @@ Return Value:
             }
         }
 
-        for (arg in options[1]) {
-            manager.markPatches(Int.fromString(arg), applied);
+        if (options[1].length() == 0) {
+            manager.markPatches(-1, applied);
+
+        } else {
+            for (arg in options[1]) {
+                manager.markPatches(Int.fromString(arg), applied);
+            }
         }
 
     //

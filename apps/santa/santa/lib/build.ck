@@ -32,6 +32,7 @@ Environment:
 import os;
 from santa.config import config;
 from santa.file import mkdir, path, rmtree;
+from santa.lib.config import ConfigFile;
 import santa.lib.defaultbuild;
 
 //
@@ -123,13 +124,14 @@ var requiredVars = [
 //
 
 class Build {
+    var _config;
     var _startDirectory;
     var _module;
     var _subpackageDirectories;
 
     function
     __init (
-        buildFilePath
+        pathOrNumber
         )
 
     /*++
@@ -140,7 +142,8 @@ class Build {
 
     Arguments:
 
-        buildFilePath - Supplies the path to the build file.
+        pathOrNumber - Supplies either a path to the build file, or a build
+            number to resume.
 
     Return Value:
 
@@ -150,21 +153,29 @@ class Build {
 
     {
 
-        this._loadModule(buildFilePath);
-        this.filePath = buildFilePath;
-        this.module = _module;
-        this.step = "init";
-        this.vars = {
-            "os": os.system,
-            "buildos": os.system,
-            "targetos": os.system,
-            "buildarch": os.machine,
-            "targetarch": os.machine,
-            "verbose": config.getKey("core.verbose"),
-            "debug": false,
-        };
+        if (pathOrNumber is Int) {
+            this._load(pathOrNumber);
 
-        _subpackageDirectories = [];
+        } else {
+            this._loadModule(pathOrNumber);
+            this.filePath = pathOrNumber;
+            this.number = (os.getpid)();
+            this.module = _module;
+            this.step = "init";
+            this.vars = {
+                "os": os.system,
+                "buildos": os.system,
+                "buildarch": os.machine,
+                "arch": os.machine,
+                "verbose": config.getKey("core.verbose"),
+                "debug": false,
+            };
+
+            this.env = this.vars.copy();
+            _subpackageDirectories = [];
+        }
+
+        this.complete = false;
         return this;
     }
 
@@ -208,6 +219,7 @@ class Build {
             }
         }
 
+        this.complete = true;
         return;
     }
 
@@ -238,8 +250,11 @@ class Build {
         var next;
         var returnValue;
         var stepFunction;
+        var verbose;
 
+        this._setupEnvironment();
         if (step == "complete") {
+            this.complete = true;
             return;
 
         } else if (step == "package") {
@@ -258,7 +273,8 @@ class Build {
         }
 
         if (stepFunction != null) {
-            if (this.vars.verbose) {
+            verbose = this.vars.verbose;
+            if (verbose) {
                 if (stepFunction == definition.default) {
                     Core.print("Executing default step %s" % step);
 
@@ -268,6 +284,9 @@ class Build {
             }
 
             stepFunction(this);
+            if (verbose) {
+                Core.print("Completed step: %s" % step);
+            }
         }
 
         //
@@ -284,11 +303,23 @@ class Build {
         next = definition.next;
 
         //
-        // Advance the step.
+        // Advance the step. Save progress.
         //
 
         if (next) {
             this.step = next;
+
+            //
+            // Unless the build is completely cleaned up and deleted, save all
+            // progress.
+            //
+
+            if (next == "complete") {
+                this.complete = true;
+
+            } else {
+                this.save();
+            }
         }
 
         return;
@@ -321,7 +352,10 @@ class Build {
 
     {
 
+        var env = this.env;
         var finalPath;
+        var flags;
+        var flagsDict;
         var vars = this.vars;
         var verbose = vars.verbose;
         var value;
@@ -353,6 +387,28 @@ class Build {
         }
 
         //
+        // Parse out the flags into a dictionary.
+        //
+
+        if (vars.get("flags") == null) {
+            vars.flags = {};
+
+        } else {
+            flags = vars.flags.split(null, -1);
+            flagsDict = {};
+            for (flag in flags) {
+                if (flags[0] == "!") {
+                    flagsDict[flags[1...-1]] = false;
+
+                } else {
+                    flagsDict[flags] = true;
+                }
+            }
+
+            vars.flags = flagsDict;
+        }
+
+        //
         // Create the build directories. The Santa version of mkdir calls path
         // internally, so be careful not to double-apply path().
         //
@@ -365,6 +421,7 @@ class Build {
 
             mkdir(vars.srcdir);
             vars.srcdir = finalPath;
+            env.srcdir = finalPath;
         }
 
         finalPath = path(vars.pkgdir);
@@ -375,6 +432,7 @@ class Build {
 
             mkdir(vars.pkgdir);
             vars.pkgdir = finalPath;
+            env.pkgdir = finalPath;
         }
 
         finalPath = path(vars.builddir);
@@ -385,24 +443,109 @@ class Build {
 
             mkdir(vars.builddir);
             vars.builddir = finalPath;
+            env.builddir = finalPath;
         }
 
+        return;
+    }
+
+    function
+    save (
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine saves the current state of the build to permanent storage.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        None. On failure, an exception is raised.
+
+    --*/
+
+    {
+
+        var configPath;
+        var buildRoot;
+
         //
-        // Set the variables in the environment as well.
+        // Don't bother saving a build that's already been cleaned up.
         //
 
-        for (key in vars) {
-            value = vars[key];
-            if (value is List) {
-                value = " ".join(value);
-
-            } else {
-                value = value.__str();
-            }
-
-            (os.setenv)(key, value);
+        if (this.complete) {
+            return;
         }
 
+        if (_config == null) {
+            buildRoot = config.getKey("core.builddir");
+            configPath = path("%s/%d/status.json" % [buildRoot, this.number]);
+            _config = ConfigFile(configPath, {});
+        }
+
+        _config.clear();
+        _config.startDirectory = _startDirectory;
+        _config.subpackageDirectories = _subpackageDirectories;
+        _config.vars = this.vars;
+        _config.env = this.env;
+        _config.filePath = this.filePath;
+        _config.step = this.step;
+        _config.number = this.number;
+        _config.save();
+        return;
+    }
+
+    function
+    _load (
+        number
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine loads a build from a previously saved configuration file.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        None. On failure, an exception is raised.
+
+    --*/
+
+    {
+
+        var configPath;
+        var buildRoot = config.getKey("core.builddir");
+
+        configPath = path("%s/%d/status.json" % [buildRoot, number]);
+        if (!(os.exists)(configPath)) {
+            Core.raise(ValueError("Build %d does not exist" % number));
+        }
+
+        _config = ConfigFile(configPath, {});
+        if (_config.number != number) {
+            Core.raise(ValueError("Error: build number requested was %d, "
+                                  "but loaded %d" % [number, this.number]));
+        }
+
+        this.number = number;
+        _startDirectory = _config.startDirectory;
+        _subpackageDirectories = _config.subpackageDirectories;
+        this.vars = _config.vars;
+        this.env = _config.env;
+        this.filePath = _config.filePath;
+        this.step = _config.step;
+        this._loadModule(this.filePath);
+        this.module = _module;
         return;
     }
 
@@ -437,7 +580,7 @@ class Build {
 
         if (!basename.endsWith(".ck")) {
             Core.raise(ValueError("Expected build file path '%s' to "
-                                  "end in .ck." % buildFilePath));
+                                  "end in .ck" % buildFilePath));
         }
 
         //
@@ -531,15 +674,16 @@ class Build {
     {
 
         var buildRoot = config.getKey("core.builddir");
-        var pid = (os.getpid)();
         var vars = this.vars;
 
-        buildRoot = path("%s/%d" % [buildRoot, pid]);
+        buildRoot = path("%s/%d" % [buildRoot, this.number]);
         if (vars.verbose) {
-            Core.print("Removing %s" % buildRoot);
+            Core.print("Cleaning %s" % buildRoot);
         }
 
+        (os.chdir)(vars.startdir);
         rmtree(buildRoot);
+        _config = null;
         return;
     }
 
@@ -566,7 +710,7 @@ class Build {
     {
 
         var buildRoot = config.getKey("core.builddir");
-        var pid = (os.getpid)();
+        var number = this.number;
         var vars = this.vars;
 
         if (!buildRoot) {
@@ -574,9 +718,9 @@ class Build {
         }
 
         vars.startdir = _startDirectory;
-        vars.srcdir = "%s/%d/src" % [buildRoot, pid];
-        vars.pkgdir = "%s/%d/pkg" % [buildRoot, pid];
-        vars.builddir = "%s/%d/bld" % [buildRoot, pid];
+        vars.srcdir = "%s/%d/src" % [buildRoot, number];
+        vars.pkgdir = "%s/%d/pkg" % [buildRoot, number];
+        vars.builddir = "%s/%d/bld" % [buildRoot, number];
         vars.subpkgdir = null;
         return;
     }
@@ -650,6 +794,16 @@ class Build {
             mkdir(pkgdir);
             _subpackageDirectories.append(pkgdir);
             vars.subpkgdir = pkgdir;
+            this.env.subpkgdir = pkgdir;
+            (os.setenv)("subpkgdir", pkgdir);
+
+            //
+            // Create a copy of the variables that can be changed by
+            // the subpackage.
+            //
+
+            this.vars = vars.copy();
+            this.vars.name = "%s-%s" % [vars.name, modifier];
 
             //
             // Get the package function associated with the submodule.
@@ -664,9 +818,9 @@ class Build {
                     functionName = "defaultPackage" + modifier;
                     subpackageFunction = defaultbuild.__get(functionName);
 
-                } except NameError {}
-
-                Core.raise(e);
+                } except NameError {
+                    Core.raise(e);
+                }
             }
 
             //
@@ -679,8 +833,54 @@ class Build {
             // Remove the subpackage directory.
             //
 
+            (os.chdir)(vars.startdir);
             rmtree(pkgdir);
-            _subpackageDirectories.remove(_subpackageDirectories.length() - 1);
+            _subpackageDirectories.removeAt(-1);
+        }
+
+        //
+        // Restore the original variable.
+        //
+
+        this.vars = vars;
+        return;
+    }
+
+    function
+    _setupEnvironment (
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine sets all the environment variables within this.env.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        None. On failure, an exception is raised.
+
+    --*/
+
+    {
+
+        var env = this.env;
+        var value;
+
+        for (key in env) {
+            value = env[key];
+            if (value is List) {
+                value = " ".join(value);
+
+            } else {
+                value = value.__str();
+            }
+
+            (os.setenv)(key, env[key]);
         }
 
         return;

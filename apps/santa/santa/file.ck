@@ -273,7 +273,34 @@ Return Value:
             Core.print("Removing %s" % filepath);
         }
 
-        return (os.unlink)(filepath);
+        try {
+            return (os.unlink)(filepath);
+
+        } except os.OsError as e {
+
+            //
+            // If the caller doesn't have permission to delete the file, try to
+            // gain permission.
+            //
+
+            if (e.errno == os.EACCES) {
+                try {
+                    (os.chmod)(filepath, 0666);
+
+                //
+                // On failure to change permissions, raise the original error.
+                //
+
+                } except os.OsError {
+                    Core.raise(e);
+                }
+
+                return (os.unlink)(filepath);
+
+            } else {
+                Core.raise(e);
+            }
+        }
     }
 
     contents = (os.listdir)(filepath);
@@ -287,7 +314,29 @@ Return Value:
         Core.print("Removing %s" % filepath);
     }
 
-    (os.rmdir)(filepath);
+    try {
+        return (os.rmdir)(filepath);
+
+    } except os.OsError as e {
+
+        //
+        // Again, if the caller doesn't have permission, try to gain permission.
+        //
+
+        if (e.errno == os.EACCES) {
+            try {
+                (os.chmod)(filepath, 0666);
+
+            } except os.OsError {
+                Core.raise(e);
+            }
+
+            return (os.rmdir)(filepath);
+        }
+
+        Core.raise(e);
+    }
+
     return;
 }
 
@@ -493,6 +542,55 @@ Return Value:
     }
 
     return (os.chdir)(filepath);
+}
+
+function
+mv (
+    source,
+    destination
+    )
+
+/*++
+
+Routine Description:
+
+    This routine moves a file or directory. It attempts to do a rename, and
+    falls back on cptree + rmtree.
+
+Arguments:
+
+    source - Supplies the source path to copy.
+
+    destination - Supplies the destination of the copy.
+
+Return Value:
+
+    0 on success.
+
+    Raises an exception if removal failed.
+
+--*/
+
+{
+
+    try {
+        (os.rename)(path(source), path(destination));
+        if (config.getKey("core.verbose")) {
+            Core.print("Moving %s -> %s" % [path(source), path(destination)]);
+        }
+
+    } except os.OsError as e {
+        if (e.errno != os.EXDEV) {
+            Core.raise(e);
+        }
+    }
+
+    cptree(source, destination);
+    if (source != destination) {
+        rmtree(source);
+    }
+
+    return;
 }
 
 function

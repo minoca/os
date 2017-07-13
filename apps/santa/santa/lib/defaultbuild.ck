@@ -34,6 +34,7 @@ from santa.build import shell;
 from santa.config import config;
 from santa.file import chdir, mkdir, rmtree, cptree;
 from santa.lib.archive import Archive;
+from santa.lib.patchman import PatchManager;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -140,7 +141,12 @@ Return Value:
         // files are supported.
         //
 
-        (os.stat)(element);
+        try {
+            (os.stat)(element);
+
+        } except os.OsError {
+            Core.raise(ValueError("Failed to stat source: %s" % element));
+        }
     }
 
     return;
@@ -222,9 +228,25 @@ Return Value:
 
 {
 
+    var patchdir;
+    var patchman;
+    var vars = build.vars;
+    var verbose = vars.verbose;
+
+    patchdir = vars.get("patchdir");
+    if (patchdir == null) {
+        patchdir = vars.startdir + "/patches";
+    }
+
     //
-    // TODO: Apply any patches found.
+    // Create a new temporary patch manager for the given source and patch
+    // directory. Then apply all patches.
     //
+
+    if ((os.isdir)(patchdir)) {
+        patchman = PatchManager(vars.srcdir, patchdir);
+        patchman.applyTo(-1);
+    }
 
     return;
 }
@@ -279,11 +301,32 @@ Return Value:
 
 {
 
+    var count;
+    var parallel = "";
+    var pkgdir;
     var vars = build.vars;
 
+    count = (os.nproc)();
+    if ((vars.flags.get("parallel") != false) && (count != 1)) {
+        parallel = "-j%d" % [count + 2];
+    }
+
+    //
+    // On Windows, remove the drive letter since too many things get fouled up
+    // by not having / as the first character.
+    //
+
+    pkgdir = vars.pkgdir;
+    if (os.system == "Windows") {
+        if ((pkgdir.length() > 2) && (pkgdir[1] == ":")) {
+            pkgdir = pkgdir[2...-1];
+        }
+    }
+
     chdir(vars.builddir);
-    shell("make");
-    shell("make install DESTDIR=" + vars.pkgdir);
+    shell("make %s" % parallel);
+    shell("make install DESTDIR=%s" % [pkgdir]);
+    shell("rm -f $pkgdir/usr/lib/*.la");
     return;
 }
 
@@ -336,6 +379,136 @@ Return Value:
 --*/
 
 {
+
+    return;
+}
+
+function
+defaultPackagedoc (
+    build
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the default docs subpackage function, which
+    moves anything in a doc-like directory off in /usr/share into the package.
+
+Arguments:
+
+    build - Supplies the build manager object.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    shell("for d in doc man info html sgml licenses gtk-doc ri help; do\n"
+          "if [ -d \"$pkgdir/usr/share/$d\" ]; then\n"
+          "    mkdir -p \"$subpkgdir/usr/share\"\n"
+          "    mv \"$pkgdir/usr/share/$d\" \"$subpkgdir/usr/share\"\n"
+          "fi\n"
+          "done\n"
+          "rm -f \"$subpkgdir/usr/share/info/dir\"\n"
+          "rmdir \"$pkgdir/usr/share\" \"$pkgdir/usr\" 2>/dev/null || :\n");
+
+    return;
+}
+
+function
+defaultPackagelibs (
+    build
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the default libs subpackage function, which pulls
+    out any .so or .dll files into the subpackage.
+
+Arguments:
+
+    build - Supplies the build manager object.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    var pattern = "\"$pkgdir\"/$d/lib*.so.[0-9]*";
+
+    if (build.vars.os == "Windows") {
+        pattern = "\"$pkgdir\"/$d/*.dll";
+    }
+
+    chdir(build.vars.pkgdir);
+    shell("for d in lib usr/lib; do\n"
+          "  for file in %s; do\n"
+          "    [ -f $file ] || continue\n"
+          "    mkdir -p \"$subpkgdir/$dir\"\n"
+          "    mv \"$file\" \"$subpkgdir/$dir\"\n"
+          "  done\n"
+          "done\n" % pattern);
+
+    return;
+}
+
+function
+defaultPackagedev (
+    build
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the default dev subpackage function, which pulls
+    out includes, common build files, and files ending in .c, .h, .a, or .o.
+
+Arguments:
+
+    build - Supplies the build manager object.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    chdir(build.vars.pkgdir);
+    shell("libdirs=usr\n"
+          "[ -d lib ] && libdirs=\"$libdirs lib\"\n"
+          "for i in usr/lib/pkgconfig usr/share/aclocal "
+          "usr/share/gettext usr/bin/*-config "
+          "usr/share/vala/vapi usr/share/gir-[0-9]* usr/share/qt*/mkspecs "
+          "usr/lib/qt*/mkspecs usr/lib/cmake "
+          "$(find . -name include -type d) "
+          "$(find $libdirs -name '*.[ahco]' -o -name '*.prl' 2>/dev/null); do\n"
+          "  if [ -e \"$pkgdir/$i\" ] || [ -L \"$pkgdir/$i\" ]; then\n"
+          "    dest=\"$subpkgdir/${i%/*}\"\\n"
+          "    mkdir -p \"$dest\"\n"
+          "    mv \"$pkgdir\$i\" \"$dest\"\n"
+          "    rmdir \"$pkgdir/${i%/*}\" 2>/dev/null || :\n"
+          "  fi\n"
+          "done\n"
+          "for i in lib/*.so usr/lib/*.so; do\n"
+          "  if [ -L \"$i\" ]; then\n"
+          "    mkdir -p \"$subpkgdir/${i%/*}\"\n"
+          "    mv \"$i\" \"$subpkgdir/$i\" || return 1\n"
+          "  fi\n"
+          "done\n"
+          "return 0\n");
+
 
     return;
 }

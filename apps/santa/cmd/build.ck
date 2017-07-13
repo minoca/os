@@ -65,9 +65,12 @@ var longOptions = [
 ];
 
 var usage =
-    "usage: santa build [options] <recipe.ck>\n"
-    "This command builds a package from source. The input file is a recipe\n"
-    "specifying definitions for the various build steps. Options are:\n"
+    "usage: santa build [options] <recipe.ck|build_number...>\n"
+    "This command builds a package from source. The input parameter is either\n"
+    "a path to a recipe file or a previously incomplete build number.\n"
+    "Options are:\n"
+    "  -r, --run=step -- Run to the specified step and stop.\n"
+    "  -s, --solo-step=step -- Run only the specified step and stop.\n"
     "  -v, --verbose -- Print out more information about what's going on.\n"
     "  -h, --help -- Print this help text.\n";
 
@@ -144,13 +147,25 @@ Return Value:
     //
 
     for (arg in args) {
-        if (verbose) {
-            Core.print("Building recipe: %s" % arg);
+        try {
+            arg = Int.fromString(arg);
+            if (verbose) {
+                Core.print("Resuming build: %d" % arg);
+            }
+
+        } except ValueError {
+            if (verbose) {
+                Core.print("Building recipe: %s" % arg);
+            }
         }
 
         build = Build(arg);
+        Core.print("%s build %d" % [(arg is String) ? "starting" : "resuming",
+                                    build.number]);
+
         if (verbose) {
             build.vars.verbose = verbose;
+
         }
 
         //

@@ -92,7 +92,69 @@ Return Value:
 }
 
 function
+triplet (
+    arch,
+    osName
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the config.sub triplicate for the given architecture and
+    OS.
+
+Arguments:
+
+    arch - Supplies the architecture.
+
+    osName - Supplies the OS name.
+
+Return Value:
+
+    returns the arch-machine-os triplet on success.
+
+    null if the OS or architecture are not recognized.
+
+--*/
+
+{
+
+    var triplet;
+
+    if (arch == "all") {
+        arch = os.machine;
+    }
+
+    if (osName == "Windows") {
+        if (arch == "x86_64") {
+            osName = "mingw64";
+
+        } else {
+            osName = "mingw32";
+        }
+
+    } else {
+        osName = osName.lower();
+    }
+
+    if ((arch == "i686") || (arch == "i586") || (arch == "x86_64")) {
+        triplet = "%s-pc-%s" % [arch, osName];
+
+    } else {
+        if ((arch == "armv6") || (arch == "armv7")) {
+            arch = "arm";
+        }
+
+        triplet = "%s-none-%s" % [arch, osName];
+    }
+
+    return triplet;
+}
+
+function
 autoconfigure (
+    build,
     arguments,
     options
     )
@@ -104,6 +166,8 @@ Routine Description:
     This routine performs the autoconf configure step.
 
 Arguments:
+
+    build - Supplies the build object.
 
     arguments - Supplies additional arguments to pass along to the configure
         script.
@@ -118,36 +182,82 @@ Return Value:
 
 {
 
+    var args;
+    var autoreconf;
+    var configure;
+    var confDir;
+    var vars = build.vars;
+
+    if (options == null) {
+        options = {};
+    }
+
+    configure = options.get("configure");
+    if (configure != null) {
+        confDir = (os.dirname)(configure);
+
+    } else {
+        confDir = "%s/%s-%s" % [vars.srcdir, vars.name, vars.version];
+        configure = "%s/configure" % confDir;
+    }
+
     //
-    // TODO: Autoreconf, then configure...
+    // On Windows, remove the drive letter since too many things get fouled up
+    // by not having / as the first character.
     //
-}
 
-function
-autoconf (
-    arguments
-    )
+    if (os.system == "Windows") {
+        if ((configure.length() > 2) && (configure[1] == ":")) {
+            configure = configure[2...-1];
+        }
+    }
 
-/*++
+    //
+    // Perform an autoreconf unless asked not to.
+    //
 
-Routine Description:
+    if (!options.get("no_reconf")) {
+        chdir(confDir);
+        autoreconf = options.get("reconfigure");
+        if (autoreconf == null) {
+            autoreconf = "${AUTORECONF:=autoreconf}";
+        }
 
-    This routine performs a basic autoreconf and ./configure step.
+        if (options.get("reconf_args")) {
+            args = "%s %s" % [autoreconf, options.reconf_args];
 
-Arguments:
+        } else {
+            args = "%s -fi" % autoreconf;
+        }
 
-    arguments - Supplies additional arguments to pass along to the configure
-        script.
+        shell(args);
+    }
 
-Return Value:
+    chdir(vars.builddir);
+    if (arguments is List) {
+        arguments = " ".join(arguments);
+    }
 
-    None. On failure, an exception is raised.
+    args = "";
+    if ((vars.os != vars.buildos) || (vars.arch != vars.buildarch)) {
+        if (vars.flags.get("cross") == false) {
+            Core.raise(ValueError("This package cannot be cross compiled"));
+        }
 
---*/
+        args += "--build=%s --host=%s " %
+                [triplet(vars.buildarch, vars.buildos),
+                 triplet(vars.arch, vars.os)];
+    }
 
-{
+    if (options.get("add_paths")) {
+        args += "--prefix=/usr --sysconfdir=/etc --mandir=/usr/share/man "
+                "--infodir=/usr/share/info --localstatedir=/var "
+                "--sharedstatedir=/var/com";
+    }
 
-    return autoconfigure(arguments, null);
+    args = " ".join([configure, args, arguments]);
+    shell(args);
+    return;
 }
 
 //

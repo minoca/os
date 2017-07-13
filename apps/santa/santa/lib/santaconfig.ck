@@ -301,6 +301,7 @@ class SantaConfig {
             }
 
             if (home) {
+                home = home.replace("\\", "/", -1);
                 _override.setKey("core.home", home);
                 path = root + home + path[1...-1];
 
