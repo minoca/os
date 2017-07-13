@@ -651,6 +651,8 @@ Return Value:
     Shell->ExecutingLineNumber = Node->LineNumber;
     Result = ShApplyRedirections(Shell, ExecutionNode);
     if (Result == FALSE) {
+        Shell->ReturnValue = 2;
+        Result = TRUE;
         goto ExecuteNodeEnd;
     }
 

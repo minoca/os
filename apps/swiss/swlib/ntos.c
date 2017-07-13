@@ -64,7 +64,7 @@ Environment:
 #define RUBOUT_CHARACTER 0x7F
 
 //
-// Define the number of times to retry a remove directory.
+// Define the number of times to retry an unlink.
 //
 
 #define UNLINK_RETRY_COUNT 20
