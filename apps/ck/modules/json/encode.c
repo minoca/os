@@ -749,6 +749,7 @@ Return Value:
 
             if ((Character == '"') || (Character == '\\')) {
                 OutLength += 1;
+                Encoder->Length = OutIndex;
                 Status = CkpJsonEnsureBuffer(Encoder, OutLength);
                 if (Status != 0) {
                     return Status;
@@ -768,6 +769,7 @@ Return Value:
                     (Character == '\t')) {
 
                     OutLength += 1;
+                    Encoder->Length = OutIndex;
                     Status = CkpJsonEnsureBuffer(Encoder, OutLength);
                     if (Status != 0) {
                         return Status;
@@ -806,6 +808,7 @@ Return Value:
 
                 } else {
                     OutLength += 5;
+                    Encoder->Length = OutIndex;
                     Status = CkpJsonEnsureBuffer(Encoder, OutLength);
                     if (Status != 0) {
                         return Status;
@@ -848,6 +851,7 @@ Return Value:
 
             if (Character < 0x10000) {
                 OutLength += 5;
+                Encoder->Length = OutIndex;
                 Status = CkpJsonEnsureBuffer(Encoder, OutLength);
                 if (Status != 0) {
                     return Status;
@@ -868,6 +872,7 @@ Return Value:
             } else {
                 Character -= 0x10000;
                 OutLength += 11;
+                Encoder->Length = OutIndex;
                 Status = CkpJsonEnsureBuffer(Encoder, OutLength);
                 if (Status != 0) {
                     return Status;
