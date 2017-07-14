@@ -123,7 +123,7 @@ Return Value:
     var triplet;
 
     if (arch == "all") {
-        arch = os.machine;
+        Core.raise(ValueError("Triplet requested for 'all' architecture"));
     }
 
     if (osName == "Windows") {

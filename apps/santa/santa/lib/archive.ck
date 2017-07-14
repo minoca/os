@@ -61,6 +61,7 @@ import lzfile;
 class ArchiveMemberError is Exception {}
 
 class Archive {
+    var _lz;
 
     static
     function
@@ -439,6 +440,31 @@ class Archive {
     }
 
     function
+    stats (
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine returns the lzma stats for the file.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        Returns the lzma stats dictionary.
+
+    --*/
+
+    {
+
+        return _lz.stats();
+    }
+
+    function
     reset (
         )
 
@@ -473,12 +499,14 @@ class Archive {
         if (lzma) {
             lzma.close();
             this.lzma = null;
+            _lz = null;
         }
 
         file.seek(0, io.IO_SEEK_SET);
-        lzma = (lzfile.LzFile)(file, mode, 9);
-        this.lzma = BufferedIo(lzma, 0);
-        this.cpio = (cpio.CpioArchive)(this.lzma, mode);
+        _lz = (lzfile.LzFile)(file, mode, 9);
+        lzma = BufferedIo(_lz, 0);
+        this.lzma = lzma;
+        this.cpio = (cpio.CpioArchive)(lzma, mode);
         return;
     }
 }

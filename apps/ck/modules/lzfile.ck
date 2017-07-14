@@ -230,6 +230,31 @@ class LzFile is RawIoBase {
         return "<LzFile file=%s>" % [_file];
     }
 
+    function
+    stats (
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine returns the lzma stats for the file.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        Returns the lzma stats dictionary.
+
+    --*/
+
+    {
+
+        return _lz.stats();
+    }
+
     //
     // RawIoBase functions.
     //

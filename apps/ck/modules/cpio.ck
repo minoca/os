@@ -1427,6 +1427,32 @@ class ArchiveMemberFile {
     }
 
     function
+    readall (
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine reads the entire contents of the archive member.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        Returns the read data.
+
+    --*/
+
+    {
+
+        this.seek(0, IO_SEEK_SET);
+        return this.read(-1);
+    }
+
+    function
     read (
         size
         )

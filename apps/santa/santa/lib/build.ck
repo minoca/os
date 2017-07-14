@@ -34,6 +34,7 @@ from santa.config import config;
 from santa.file import mkdir, path, rmtree;
 from santa.lib.config import ConfigFile;
 import santa.lib.defaultbuild;
+from santa.lib.pkgdepot import PackageDepot;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -123,11 +124,14 @@ var requiredVars = [
 // ------------------------------------------------------------------ Functions
 //
 
+class PackageConfigError is Exception {}
+
 class Build {
     var _config;
     var _startDirectory;
     var _module;
     var _subpackageDirectories;
+    var _packageDepot;
 
     function
     __init (
@@ -161,6 +165,7 @@ class Build {
             this.filePath = pathOrNumber;
             this.number = (os.getpid)();
             this.module = _module;
+            this.outdir = null;
             this.step = "init";
             this.vars = {
                 "os": os.system,
@@ -296,6 +301,9 @@ class Build {
         if (step == "init") {
             this._postInitStep();
 
+        } else if (step == "package") {
+            this._postPackageStep();
+
         } else if (step == "clean") {
             this._postCleanupStep();
         }
@@ -352,15 +360,20 @@ class Build {
 
     {
 
+        var arch;
         var env = this.env;
         var finalPath;
         var flags;
         var flagsDict;
+        var supportedOses;
+        var targetOs;
         var vars = this.vars;
         var verbose = vars.verbose;
         var value;
 
         this._initVars();
+        arch = vars.arch;
+        targetOs = vars.os;
 
         //
         // Iterate once and add everything without any substitutions.
@@ -386,6 +399,14 @@ class Build {
             vars.subpackages = "$name-dev $name-doc".template(vars, false);
         }
 
+        if (vars.get("section") == null) {
+            vars.section = "bin";
+        }
+
+        if (vars.get("release") == null) {
+            vars.release = 0;
+        }
+
         //
         // Parse out the flags into a dictionary.
         //
@@ -406,6 +427,72 @@ class Build {
             }
 
             vars.flags = flagsDict;
+        }
+
+        //
+        // Reconcile the architecture. The selected architecture must be
+        // supported.
+        //
+
+        if (vars.arch is String) {
+
+            //
+            // If building for all, build for the current one.
+            //
+
+            if (vars.arch == "all") {
+                vars.arch = arch;
+
+            } else if (vars.arch != "none") {
+                vars.arch = vars.arch.split(null, -1);
+            }
+        }
+
+        if (vars.arch is List) {
+            if (!vars.arch.contains(arch)) {
+                Core.raise(PackageConfigError(
+                    "Package %s cannot be built for architecture %s" %
+                    [vars.name, arch]));
+            }
+
+            vars.arch = arch;
+        }
+
+        //
+        // Reconcile the selected OS. If not supplied, assume all OSes work.
+        //
+
+        if (vars.get("os") == null) {
+            vars.os = "all";
+        }
+
+        if (vars.os is String) {
+            if (vars.os != "none") {
+                vars.os = vars.os.split(null, -1);
+            }
+        }
+
+        if (vars.os is List) {
+            if (!vars.os.contains(targetOs)) {
+                Core.raise(PackageConfigError(
+                    "Package %s cannot be built for OS %s" %
+                    [vars.name, targetOs]));
+            }
+
+            vars.os = targetOs;
+        }
+
+        //
+        // Complain if the package cannot be cross-compiled.
+        //
+
+        if ((vars.os != vars.buildos) || (vars.arch != vars.buildarch)) {
+            if (vars.flags.get("cross") == false) {
+                Core.raise(PackageConfigError(
+                    "Package %s cannot be cross compiled: "
+                    "Build is %s-%s, target is %s-%s" %
+                    [vars.buildarch, vars.buildos, vars.arch, vars.os]));
+            }
         }
 
         //
@@ -494,6 +581,7 @@ class Build {
         _config.vars = this.vars;
         _config.env = this.env;
         _config.filePath = this.filePath;
+        _config.outdir = this.outdir;
         _config.step = this.step;
         _config.number = this.number;
         _config.save();
@@ -543,6 +631,7 @@ class Build {
         this.vars = _config.vars;
         this.env = _config.env;
         this.filePath = _config.filePath;
+        this.outdir = _config.outdir;
         this.step = _config.step;
         this._loadModule(this.filePath);
         this.module = _module;
@@ -651,6 +740,34 @@ class Build {
     }
 
     function
+    _postPackageStep (
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine is called after the module's package function finishes. It
+        creates the main package and updates the index.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        None. On failure, an exception is raised.
+
+    --*/
+
+    {
+
+        this._createPackage(this.vars, this.vars.pkgdir);
+        _packageDepot.rebuildIndex();
+        return;
+    }
+
+    function
     _postCleanupStep (
         )
 
@@ -750,6 +867,7 @@ class Build {
 
         var buildRoot = config.getKey("core.builddir");
         var functionName;
+        var functionResult;
         var modifier;
         var pkgdir;
         var subpackageFunction;
@@ -827,12 +945,22 @@ class Build {
             // Call out to the subpackage function.
             //
 
-            subpackageFunction(this);
+            functionResult = subpackageFunction(this);
+
+            //
+            // Create the package if the subpackage function returned non-zero.
+            //
+
+            if (functionResult) {
+                this._createPackage(this.vars, pkgdir);
+            }
 
             //
             // Remove the subpackage directory.
             //
 
+            this.env.subpkgdir = null;
+            (os.setenv)("subpkgdir", null);
             (os.chdir)(vars.startdir);
             rmtree(pkgdir);
             _subpackageDirectories.removeAt(-1);
@@ -881,6 +1009,55 @@ class Build {
             }
 
             (os.setenv)(key, env[key]);
+        }
+
+        return;
+    }
+
+    function
+    _createPackage (
+        vars,
+        dataDir
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine creates a package from the current variables.
+
+    Arguments:
+
+        vars - Supplies the current set of variables to use.
+
+        dataDir - Supplies the pacakge contents directory.
+
+    Return Value:
+
+        None. On failure, an exception is raised.
+
+    --*/
+
+    {
+
+        var outdir = this.outdir;
+        var verbose = this.vars.verbose;
+
+        if (_packageDepot == null) {
+            _packageDepot = PackageDepot(this.outdir);
+        }
+
+        //
+        // Create the package. Don't bother rebuilding the index until the end.
+        //
+
+        if (verbose) {
+            Core.print("Assembling package: %s" % vars.name);
+        }
+
+        _packageDepot.createPackage(vars, dataDir, false);
+        if (verbose) {
+            Core.print("Completed assembling package %s" % vars.name);
         }
 
         return;

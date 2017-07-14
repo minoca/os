@@ -224,6 +224,26 @@ Return Value:
         value = args[1];
         if (json != false) {
             value = loads(value);
+
+        } else {
+
+            //
+            // Convert true, false, and anything that looks like a number. To
+            // override this behavior, use the --json flag.
+            //
+
+            if (value == "true") {
+                value = true;
+
+            } else if (value == "false") {
+                value = false;
+
+            } else {
+                try {
+                    value = Int.fromString(value);
+
+                } except ValueError {}
+            }
         }
 
         if (action == "add") {

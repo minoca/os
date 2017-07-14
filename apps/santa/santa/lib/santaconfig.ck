@@ -116,7 +116,13 @@ var defaultConfig = {
         // Define the directory where builds are run.
         //
 
-        "builddir": SANTA_USER_ROOT + "/build"
+        "builddir": SANTA_USER_ROOT + "/build",
+
+        //
+        // Define the directory where packages are stored.
+        //
+
+        "pkgdir": SANTA_USER_ROOT + "/pkgs",
     },
 
     //

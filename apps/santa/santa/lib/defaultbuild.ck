@@ -32,7 +32,7 @@ Environment:
 import os;
 from santa.build import shell;
 from santa.config import config;
-from santa.file import chdir, mkdir, rmtree, cptree;
+from santa.file import chdir, mkdir, path, rmtree, cptree;
 from santa.lib.archive import Archive;
 from santa.lib.patchman import PatchManager;
 
@@ -401,12 +401,25 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns true if the package has contents and should be created.
+
+    Returns false if it turns out there's no need to create the package.
 
 --*/
 
 {
 
+    var description;
+    var vars = build.vars;
+
+    description = vars.description;
+    if (description.endsWith(".")) {
+        description = description[0..-1];
+    }
+
+    vars.description = description + " (documentation)";
+    vars.section = "doc";
+    chdir(build.vars.pkgdir);
     shell("for d in doc man info html sgml licenses gtk-doc ri help; do\n"
           "if [ -d \"$pkgdir/usr/share/$d\" ]; then\n"
           "    mkdir -p \"$subpkgdir/usr/share\"\n"
@@ -416,7 +429,15 @@ Return Value:
           "rm -f \"$subpkgdir/usr/share/info/dir\"\n"
           "rmdir \"$pkgdir/usr/share\" \"$pkgdir/usr\" 2>/dev/null || :\n");
 
-    return;
+    //
+    // If any files were added, create the package.
+    //
+
+    if ((os.listdir)(build.vars.subpkgdir).length() != 0) {
+        return true;
+    }
+
+    return false;
 }
 
 function
@@ -437,18 +458,29 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns true if the package has contents and should be created.
+
+    Returns false if it turns out there's no need to create the package.
 
 --*/
 
 {
 
+    var description;
     var pattern = "\"$pkgdir\"/$d/lib*.so.[0-9]*";
+    var vars = build.vars;
 
     if (build.vars.os == "Windows") {
         pattern = "\"$pkgdir\"/$d/*.dll";
     }
 
+    description = vars.description;
+    if (description.endsWith(".")) {
+        description = description[0..-1];
+    }
+
+    vars.description = description + " (libraries)";
+    vars.section = "lib";
     chdir(build.vars.pkgdir);
     shell("for d in lib usr/lib; do\n"
           "  for file in %s; do\n"
@@ -458,7 +490,15 @@ Return Value:
           "  done\n"
           "done\n" % pattern);
 
-    return;
+    //
+    // If any files were added, create the package.
+    //
+
+    if ((os.listdir)(build.vars.subpkgdir).length() != 0) {
+        return true;
+    }
+
+    return false;
 }
 
 function
@@ -479,12 +519,24 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns true if the package has contents and should be created.
+
+    Returns false if it turns out there's no need to create the package.
 
 --*/
 
 {
 
+    var description;
+    var vars = build.vars;
+
+    description = vars.description;
+    if (description.endsWith(".")) {
+        description = description[0..-1];
+    }
+
+    vars.description = description + " (development)";
+    vars.section = "dev";
     chdir(build.vars.pkgdir);
     shell("libdirs=usr\n"
           "[ -d lib ] && libdirs=\"$libdirs lib\"\n"
@@ -509,8 +561,15 @@ Return Value:
           "done\n"
           "return 0\n");
 
+    //
+    // If any files were added, create the package.
+    //
 
-    return;
+    if ((os.listdir)(build.vars.subpkgdir).length() != 0) {
+        return true;
+    }
+
+    return false;
 }
 
 function
@@ -540,6 +599,7 @@ Return Value:
     var vars = build.vars;
     var verbose = vars.verbose;
 
+    (os.chdir)(vars.startdir);
     if (verbose) {
         Core.print("Removing %s" % vars.pkgdir);
     }

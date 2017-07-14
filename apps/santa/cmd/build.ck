@@ -56,9 +56,11 @@ from santa.lib.build import Build;
 
 var description = "Build a package from its sources";
 
-var shortOptions = "hs:r:v";
+var shortOptions = "c:hs:o:r:v";
 var longOptions = [
+    "cross=",
     "help",
+    "output="
     "solo-step=",
     "run=",
     "verbose"
@@ -69,6 +71,9 @@ var usage =
     "This command builds a package from source. The input parameter is either\n"
     "a path to a recipe file or a previously incomplete build number.\n"
     "Options are:\n"
+    "  -c, --cross=[arch-]os -- Cross compile (eg \"Minoca\" or "
+    "\"x86_64-Minoca\""
+    "  -o, --output=dir -- Output packages to the specified directory"
     "  -r, --run=step -- Run to the specified step and stop.\n"
     "  -s, --solo-step=step -- Run only the specified step and stop.\n"
     "  -v, --verbose -- Print out more information about what's going on.\n"
@@ -103,11 +108,14 @@ Return Value:
 
     var argc;
     var build;
+    var crossArch;
+    var crossOs;
     var inputPath;
     var ignoreErrors = false;
     var mode = "r";
     var name;
     var options = gnuGetopt(args[1...-1], shortOptions, longOptions);
+    var output;
     var runTo;
     var soloStep;
     var status;
@@ -120,9 +128,22 @@ Return Value:
     for (option in options) {
         name = option[0];
         value = option[1];
-        if ((name == "-h") || (name == "--help")) {
+        if ((name == "-c") || (name == "--cross")) {
+            crossOs = value.split("-", 1);
+            if (crossOs.length() == 1) {
+                crossOs = crossOs[0];
+
+            } else {
+                crossArch = crossOs[0];
+                crossOs = crossOs[1];
+            }
+
+        } else if ((name == "-h") || (name == "--help")) {
             Core.print(usage);
             return 1;
+
+        } else if ((name == "-o") || (name == "--output")) {
+            output = value;
 
         } else if ((name == "-s") || (name == "--solo-step")) {
             soloStep = value;
@@ -160,12 +181,23 @@ Return Value:
         }
 
         build = Build(arg);
+        if (crossOs) {
+            build.vars.os = crossOs;
+        }
+
+        if (crossArch) {
+            build.vars.arch = crossArch;
+        }
+
+        if (output) {
+            build.outdir = output;
+        }
+
         Core.print("%s build %d" % [(arg is String) ? "starting" : "resuming",
                                     build.number]);
 
         if (verbose) {
             build.vars.verbose = verbose;
-
         }
 
         //
