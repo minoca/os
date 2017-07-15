@@ -61,6 +61,12 @@ Environment:
 #define BLOCK_ALLOCATOR_TRIM_DIVISOR 4
 
 //
+// Define the all ones value.
+//
+
+#define BLOCK_FULL ((UINTN)-1L)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -521,7 +527,7 @@ Return Value:
                  IntegerIndex < MaxIndex;
                  IntegerIndex += 1) {
 
-                if (Segment->Bitmap[IntegerIndex] != -1) {
+                if (Segment->Bitmap[IntegerIndex] != BLOCK_FULL) {
                     break;
                 }
             }
@@ -536,7 +542,7 @@ Return Value:
                      IntegerIndex < StartIndex;
                      IntegerIndex += 1) {
 
-                    if (Segment->Bitmap[IntegerIndex] != -1) {
+                    if (Segment->Bitmap[IntegerIndex] != BLOCK_FULL) {
                         break;
                     }
                 }
@@ -547,7 +553,7 @@ Return Value:
             StartIndex = 0;
 
             ASSERT(IntegerIndex < MaxIndex);
-            ASSERT(Segment->Bitmap[IntegerIndex] != (UINTN)-1);
+            ASSERT(Segment->Bitmap[IntegerIndex] != BLOCK_FULL);
 
             //
             // Loop over all bits to find the exact index of the free one. This
@@ -563,7 +569,7 @@ Return Value:
                 Index = RtlCountTrailingZeros(~(Segment->Bitmap[IntegerIndex]));
             }
 
-            Mask = 1 << Index;
+            Mask = 1L << Index;
 
             ASSERT(Mask != 0);
 
@@ -703,7 +709,7 @@ Return Value:
     SegmentToDestroy = NULL;
     KeAcquireQueuedLock(Allocator->Lock);
     SegmentIndex = MmpBlockAllocatorFindSegment(Allocator, Allocation);
-    if (SegmentIndex == (UINTN)-1) {
+    if (SegmentIndex == BLOCK_FULL) {
 
         ASSERT(FALSE);
 
@@ -749,9 +755,9 @@ Return Value:
     IntegerIndex = BlockIndex / (BITS_PER_BYTE * sizeof(UINTN));
     BitIndex = BlockIndex % (BITS_PER_BYTE * sizeof(UINTN));
 
-    ASSERT((Segment->Bitmap[IntegerIndex] & (1 << BitIndex)) != 0);
+    ASSERT((Segment->Bitmap[IntegerIndex] & (1L << BitIndex)) != 0);
 
-    Segment->Bitmap[IntegerIndex] &= ~(1 << BitIndex);
+    Segment->Bitmap[IntegerIndex] &= ~(1L << BitIndex);
     Segment->FreeBlocks += 1;
     Allocator->FreeBlocks += 1;
 
@@ -1171,7 +1177,7 @@ Return Value:
         ASSERT(BitmapSize >= sizeof(UINTN));
 
         LastBitmapIndex = (BitmapSize / sizeof(UINTN)) - 1;
-        LastBitmapBit = 1 <<
+        LastBitmapBit = 1L <<
                         (ExpansionBlockCount % (BITS_PER_BYTE * sizeof(UINTN)));
 
         LastBitmapMask = ~(LastBitmapBit - 1);
@@ -1303,7 +1309,7 @@ Return Value:
 
     Returns the segment index of the segment containing the allocation.
 
-    -1 if no segment contains the allocation.
+    BLOCK_FULL if no segment contains the allocation.
 
 --*/
 
@@ -1319,7 +1325,7 @@ Return Value:
 
         ASSERT(FALSE);
 
-        return -1;
+        return BLOCK_FULL;
     }
 
     //
@@ -1357,7 +1363,7 @@ Return Value:
 
     ASSERT(FALSE);
 
-    return -1;
+    return BLOCK_FULL;
 }
 
 KSTATUS

@@ -1359,7 +1359,7 @@ Return Value:
         //
 
         Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
-                                       1 << Disk->BlockShift,
+                                       1ULL << Disk->BlockShift,
                                        0,
                                        MAX_ULONG,
                                        IrpReadWriteFlags);
@@ -1425,9 +1425,10 @@ Return Value:
 
         ASSERT(Irp->U.ReadWrite.IoSizeInBytes != 0);
         ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
-                          (1 << Disk->BlockShift)));
+                          (1ULL << Disk->BlockShift)));
 
-        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset, (1 << Disk->BlockShift)));
+        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset,
+                          (1ULL << Disk->BlockShift)));
 
         //
         // Pend the IRP first so that the request can't complete in between
@@ -1545,9 +1546,10 @@ Return Value:
             Properties->Type = IoObjectBlockDevice;
             Properties->HardLinkCount = 1;
 
-            ASSERT(((1 << Disk->BlockShift) != 0) && (Disk->BlockCount != 0));
+            ASSERT(((1ULL << Disk->BlockShift) != 0) &&
+                   (Disk->BlockCount != 0));
 
-            Properties->BlockSize = 1 << Disk->BlockShift;
+            Properties->BlockSize = 1ULL << Disk->BlockShift;
             Properties->BlockCount = Disk->BlockCount;
             FileSize = (ULONGLONG)Disk->BlockCount <<
                        (ULONGLONG)Disk->BlockShift;
@@ -1572,7 +1574,7 @@ Return Value:
         if ((Properties->FileId != 0) ||
             (Properties->Type != IoObjectBlockDevice) ||
             (Properties->HardLinkCount != 1) ||
-            (Properties->BlockSize != (1 << Disk->BlockShift)) ||
+            (Properties->BlockSize != (1ULL << Disk->BlockShift)) ||
             (Properties->BlockCount != Disk->BlockCount) ||
             (PropertiesFileSize != FileSize)) {
 
@@ -3005,7 +3007,10 @@ Return Value:
                           sizeof(DISK_INTERFACE));
 
             Disk->DiskInterface.DiskToken = Disk;
-            Disk->DiskInterface.BlockSize = 1 << Disk->BlockShift;
+            Disk->DiskInterface.BlockSize = 1ULL << Disk->BlockShift;
+
+            ASSERT(Disk->DiskInterface.BlockSize == (1ULL << Disk->BlockShift));
+
             Disk->DiskInterface.BlockCount = Disk->BlockCount;
             Status = IoCreateInterface(&UsbMassDiskInterfaceUuid,
                                        Disk->OsDevice,
@@ -4526,11 +4531,11 @@ Return Value:
 
     Block = Irp->U.ReadWrite.IoOffset + Disk->CurrentBytesTransferred;
 
-    ASSERT(IS_ALIGNED(Block, (1 << Disk->BlockShift)) != FALSE);
+    ASSERT(IS_ALIGNED(Block, (1ULL << Disk->BlockShift)) != FALSE);
 
     Block >>= Disk->BlockShift;
 
-    ASSERT(IS_ALIGNED(RequestSize, (1 << Disk->BlockShift)) != FALSE);
+    ASSERT(IS_ALIGNED(RequestSize, (1ULL << Disk->BlockShift)) != FALSE);
     ASSERT(Block == (ULONG)Block);
 
     BlockCount = RequestSize >> Disk->BlockShift;
@@ -5164,7 +5169,7 @@ Return Value:
     }
 
     Status = IoPrepareReadWriteIrp(IrpReadWrite,
-                                   1 << Disk->BlockShift,
+                                   1ULL << Disk->BlockShift,
                                    0,
                                    MAX_ULONG,
                                    IrpReadWriteFlags);
@@ -5221,8 +5226,9 @@ Return Value:
 
     BytesRemaining = IrpReadWrite->IoSizeInBytes;
 
-    ASSERT(IS_ALIGNED(BytesRemaining, 1 << Disk->BlockShift) != FALSE);
-    ASSERT(IS_ALIGNED(IrpReadWrite->IoOffset, 1 << Disk->BlockShift) != FALSE);
+    ASSERT(IS_ALIGNED(BytesRemaining, 1ULL << Disk->BlockShift) != FALSE);
+    ASSERT(IS_ALIGNED(IrpReadWrite->IoOffset, 1ULL << Disk->BlockShift) !=
+           FALSE);
 
     BlockOffset = IrpReadWrite->IoOffset >> Disk->BlockShift;
     while (BytesRemaining != 0) {
@@ -5248,7 +5254,7 @@ Return Value:
         }
 
         ASSERT(BytesThisRound != 0);
-        ASSERT(IS_ALIGNED(BytesThisRound, 1 << Disk->BlockShift) != FALSE);
+        ASSERT(IS_ALIGNED(BytesThisRound, 1ULL << Disk->BlockShift) != FALSE);
 
         BlockCount = BytesThisRound >> Disk->BlockShift;
 

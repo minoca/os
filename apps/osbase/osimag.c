@@ -2533,8 +2533,8 @@ Return Value:
 
         Bitmap = OsImModuleNumberBitmap[BlockIndex];
         for (Index = 0; Index < sizeof(UINTN) * BITS_PER_BYTE; Index += 1) {
-            if ((Bitmap & (1 << Index)) == 0) {
-                OsImModuleNumberBitmap[BlockIndex] |= 1 << Index;
+            if ((Bitmap & (1L << Index)) == 0) {
+                OsImModuleNumberBitmap[BlockIndex] |= 1L << Index;
                 Image->ModuleNumber =
                         (BlockIndex * (sizeof(UINTN) * BITS_PER_BYTE)) + Index;
 
@@ -2619,7 +2619,7 @@ Return Value:
 
     BlockIndex = Image->ModuleNumber / (sizeof(UINTN) * BITS_PER_BYTE);
     BlockOffset = Image->ModuleNumber % (sizeof(UINTN) * BITS_PER_BYTE);
-    OsImModuleNumberBitmap[BlockIndex] &= ~(1 << BlockOffset);
+    OsImModuleNumberBitmap[BlockIndex] &= ~(1L << BlockOffset);
     Image->ModuleNumber = 0;
     return;
 }

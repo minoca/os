@@ -1222,10 +1222,10 @@ Return Value:
 
             } else {
                 BitNumber = 31;
-                Maximum = 1 << BitNumber;
+                Maximum = 1ULL << BitNumber;
                 while ((Maximum & Value) == 0) {
                     BitNumber -= 1;
-                    Maximum = 1 << BitNumber;
+                    Maximum = 1ULL << BitNumber;
                 }
 
                 //

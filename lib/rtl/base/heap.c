@@ -1488,7 +1488,7 @@ Return Value:
         }
 
         Shift = (sizeof(UINTN) * BITS_PER_BYTE) - Shift;
-        Alignment = 1 << Shift;
+        Alignment = 1L << Shift;
 
         ASSERT(POWER_OF_2(Alignment));
     }

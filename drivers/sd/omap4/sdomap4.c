@@ -724,10 +724,10 @@ Return Value:
     ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
     ASSERT((Child->BlockCount != 0) && (Child->BlockShift != 0));
     ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset,
-                      1 << Child->BlockShift) != FALSE);
+                      1ULL << Child->BlockShift) != FALSE);
 
     ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
-                      1 << Child->BlockShift) != FALSE);
+                      1ULL << Child->BlockShift) != FALSE);
 
     //
     // Before acquiring the controller's lock and starting the DMA, prepare
@@ -736,7 +736,7 @@ Return Value:
     //
 
     Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
-                                   1 << Child->BlockShift,
+                                   1ULL << Child->BlockShift,
                                    0,
                                    MAX_ULONG,
                                    IrpReadWriteFlags);
@@ -857,7 +857,7 @@ Return Value:
             Properties->Type = IoObjectBlockDevice;
             Properties->HardLinkCount = 1;
             Properties->BlockCount = Child->BlockCount;
-            Properties->BlockSize = 1 << Child->BlockShift;
+            Properties->BlockSize = 1ULL << Child->BlockShift;
             Properties->Size = Child->BlockCount << Child->BlockShift;
             Status = STATUS_SUCCESS;
         }
@@ -877,7 +877,7 @@ Return Value:
         if ((Properties->FileId != 0) ||
             (Properties->Type != IoObjectBlockDevice) ||
             (Properties->HardLinkCount != 1) ||
-            (Properties->BlockSize != (1 << Child->BlockShift)) ||
+            (Properties->BlockSize != (1ULL << Child->BlockShift)) ||
             (Properties->BlockCount != Child->BlockCount) ||
             (PropertiesFileSize != (Child->BlockCount << Child->BlockShift))) {
 
@@ -1047,7 +1047,11 @@ Return Value:
                               &SdOmap4DiskInterfaceTemplate,
                               sizeof(DISK_INTERFACE));
 
-                Child->DiskInterface.BlockSize = 1 << Child->BlockShift;
+                Child->DiskInterface.BlockSize = 1ULL << Child->BlockShift;
+
+                ASSERT(Child->DiskInterface.BlockSize ==
+                       (1ULL << Child->BlockShift));
+
                 Child->DiskInterface.BlockCount = Child->BlockCount;
                 Child->DiskInterface.DiskToken = Child;
                 Status = IoCreateInterface(&SdOmap4DiskInterfaceUuid,
@@ -2324,7 +2328,7 @@ Return Value:
     }
 
     Status = IoPrepareReadWriteIrp(IrpReadWrite,
-                                   1 << Child->BlockShift,
+                                   1ULL << Child->BlockShift,
                                    0,
                                    MAX_ULONGLONG,
                                    IrpReadWriteFlags);
@@ -2387,8 +2391,9 @@ Return Value:
 
     BytesRemaining = IrpReadWrite->IoSizeInBytes;
 
-    ASSERT(IS_ALIGNED(BytesRemaining, 1 << Child->BlockShift) != FALSE);
-    ASSERT(IS_ALIGNED(IrpReadWrite->IoOffset, 1 << Child->BlockShift) != FALSE);
+    ASSERT(IS_ALIGNED(BytesRemaining, 1ULL << Child->BlockShift) != FALSE);
+    ASSERT(IS_ALIGNED(IrpReadWrite->IoOffset, 1ULL << Child->BlockShift) !=
+           FALSE);
 
     BlockOffset = IrpReadWrite->IoOffset >> Child->BlockShift;
     while (BytesRemaining != 0) {
@@ -2402,7 +2407,8 @@ Return Value:
             BytesThisRound = BytesRemaining;
         }
 
-        ASSERT(IS_ALIGNED(BytesThisRound, (1 << Child->BlockShift)) != FALSE);
+        ASSERT(IS_ALIGNED(BytesThisRound, (1ULL << Child->BlockShift)) !=
+               FALSE);
 
         BlockCount = BytesThisRound >> Child->BlockShift;
 

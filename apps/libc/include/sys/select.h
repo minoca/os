@@ -48,7 +48,7 @@ Author:
 //
 
 #define _FD_MASK(_FileDescriptor) \
-    (1 << ((_FileDescriptor) % NFDBITS))
+    (1L << ((_FileDescriptor) % NFDBITS))
 
 //
 // This macro clears the bit for the file descriptor in the set.

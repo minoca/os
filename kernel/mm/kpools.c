@@ -750,8 +750,8 @@ Return Value:
             Alignment = Size;
 
         } else {
-            Alignment = 1 << ((sizeof(UINTN) * BITS_PER_BYTE) - 1 -
-                              RtlCountLeadingZeros(Size));
+            Alignment = 1L << ((sizeof(UINTN) * BITS_PER_BYTE) - 1 -
+                               RtlCountLeadingZeros(Size));
         }
     }
 

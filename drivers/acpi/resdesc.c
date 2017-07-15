@@ -594,7 +594,7 @@ Return Value:
                     Alignment = 1;
 
                 } else {
-                    Alignment = 1 << (*(Buffer + 4) - 1);
+                    Alignment = 1ULL << (*(Buffer + 4) - 1);
                 }
 
                 Length = (*(Buffer + 2) + *(Buffer + 3)) / BITS_PER_BYTE;
@@ -1244,7 +1244,7 @@ Return Value:
                     Alignment = 1;
 
                 } else {
-                    Alignment = 1 << (*(Buffer + 4) - 1);
+                    Alignment = 1ULL << (*(Buffer + 4) - 1);
                 }
 
                 Length = (*(Buffer + 2) + *(Buffer + 3)) / BITS_PER_BYTE;

@@ -996,7 +996,7 @@ Return Value:
 
         for (ServerIndex = 0; ServerIndex < State->nscount; ServerIndex += 1) {
             ServerAddress = &(State->nsaddr_list[ServerIndex]);
-            if ((BadNameServer & (1 << ServerIndex)) != 0) {
+            if ((BadNameServer & (1L << ServerIndex)) != 0) {
                 res_nclose(State);
                 continue;
             }
@@ -1121,7 +1121,7 @@ Return Value:
                             perror("res_send: Failed to connect");
                         }
 
-                        BadNameServer |= (1 << ServerIndex);
+                        BadNameServer |= (1L << ServerIndex);
                         res_nclose(State);
                         continue;
                     }
@@ -1145,7 +1145,7 @@ Return Value:
                         perror("res_send: Failed to writev");
                     }
 
-                    BadNameServer |= 1 << ServerIndex;
+                    BadNameServer |= 1L << ServerIndex;
                     res_nclose(State);
                     continue;
                 }
@@ -1212,7 +1212,7 @@ Return Value:
                     }
 
                     Error = ENOSPC;
-                    BadNameServer |= (1 << ServerIndex);
+                    BadNameServer |= (1L << ServerIndex);
                     res_nclose(State);
                     continue;
                 }
@@ -1332,7 +1332,7 @@ Return Value:
                                 perror("res_send: Failed to connect");
                             }
 
-                            BadNameServer |= 1 << ServerIndex;
+                            BadNameServer |= 1L << ServerIndex;
                             res_nclose(State);
                             continue;
                         }
@@ -1354,7 +1354,7 @@ Return Value:
                             perror("res_send: Failed to send");
                         }
 
-                        BadNameServer |= 1 << ServerIndex;
+                        BadNameServer |= 1L << ServerIndex;
                         res_nclose(State);
                         continue;
                     }
@@ -1416,7 +1416,7 @@ Return Value:
                             perror("res_send: Failed to send");
                         }
 
-                        BadNameServer |= 1 << ServerIndex;
+                        BadNameServer |= 1L << ServerIndex;
                         res_nclose(State);
                         continue;
                     }
@@ -1516,7 +1516,7 @@ Return Value:
                         }
 
                         Error = ENOSPC;
-                        BadNameServer |= 1 << ServerIndex;
+                        BadNameServer |= 1L << ServerIndex;
                         res_nclose(State);
                         Result = -1;
                         break;
@@ -1606,7 +1606,7 @@ Return Value:
                                 ResponseCode);
                     }
 
-                    BadNameServer |= 1 << ServerIndex;
+                    BadNameServer |= 1L << ServerIndex;
                     res_nclose(State);
                     if (State->pfcode == 0) {
                         continue;

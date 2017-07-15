@@ -1545,7 +1545,7 @@ Return Value:
             FragmentShift += SOUND_FRAGMENT_SIZE_DEFAULT_SHIFT;
         }
 
-        FragmentSize = 1 << FragmentShift;
+        FragmentSize = 1L << FragmentShift;
 
         //
         // The fragment count and size can only be changed before the device
@@ -1616,9 +1616,9 @@ Return Value:
                              SOUND_BUFFER_SIZE_HINT_FRAGMENT_COUNT_MASK) >>
                             SOUND_BUFFER_SIZE_HINT_FRAGMENT_COUNT_SHIFT;
 
-            FragmentSize = 1 << ((IntegerUlong &
-                                  SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_MASK) >>
-                                 SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_SHIFT);
+            FragmentSize = 1L << ((IntegerUlong &
+                                   SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_MASK) >>
+                                  SOUND_BUFFER_SIZE_HINT_FRAGMENT_SIZE_SHIFT);
 
             KeAcquireQueuedLock(Handle->Lock);
             LockHeld = TRUE;
@@ -3186,7 +3186,7 @@ Return Value:
         if (FragmentCount != 0) {
             Shift = RtlCountLeadingZeros(FragmentCount);
             Shift = (sizeof(FragmentCount) * BITS_PER_BYTE) - 1 - Shift;
-            FragmentCount = 1 << Shift;
+            FragmentCount = 1L << Shift;
         }
 
         if (FragmentCount < Handle->Controller->Host.MinFragmentCount) {
