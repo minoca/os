@@ -1328,7 +1328,7 @@ Return Value:
     *PagesPaged = 0;
     SectionOffset = -1LL;
 
-    ASSERT((Section->VirtualAddress < KERNEL_VA_START) ||
+    ASSERT((Section->VirtualAddress < USER_VA_END) ||
            (Section->AddressSpace == MmKernelAddressSpace));
 
     //

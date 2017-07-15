@@ -739,7 +739,7 @@ Return Value:
         RunPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
         Directory = MmKernelPageDirectory;
         for (DirectoryIndex = 0;
-             DirectoryIndex < (UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT;
+             DirectoryIndex < (UINTN)USER_VA_END >> PAGE_DIRECTORY_SHIFT;
              DirectoryIndex += 1) {
 
             if (Directory[DirectoryIndex].Entry == 0) {
@@ -1078,7 +1078,7 @@ Return Value:
 
     if ((Flags & MAP_FLAG_USER_MODE) != 0) {
 
-        ASSERT(VirtualAddress < KERNEL_VA_START);
+        ASSERT(VirtualAddress < USER_VA_END);
 
         PageTable[TableIndex].User = 1;
 
@@ -1184,7 +1184,7 @@ Return Value:
         // mode address, then there's no need to send a TLB invalidate IPI.
         //
 
-        if ((Process->ThreadCount <= 1) && (VirtualAddress < KERNEL_VA_START)) {
+        if ((Process->ThreadCount <= 1) && (VirtualAddress < USER_VA_END)) {
             UnmapFlags &= ~UNMAP_FLAG_SEND_INVALIDATE_IPI;
             if (Process->ThreadCount == 0) {
                 InvalidateTlb = FALSE;
@@ -1681,7 +1681,7 @@ Return Value:
         *PageWasDirty = TRUE;
     }
 
-    ASSERT(VirtualAddress < KERNEL_VA_START);
+    ASSERT(VirtualAddress < USER_VA_END);
 
     MmpUpdateResidentSetCounter(&(Space->Common), -1);
 
@@ -1815,7 +1815,7 @@ Return Value:
     }
 
     ASSERT(((MapFlags & MAP_FLAG_USER_MODE) == 0) ||
-           (VirtualAddress < KERNEL_VA_START));
+           (VirtualAddress < USER_VA_END));
 
     if ((MapFlags & MAP_FLAG_USER_MODE) != 0) {
         PageTable[PageTableIndex].User = 1;
@@ -1840,7 +1840,7 @@ Return Value:
         MmpSendTlbInvalidateIpi(&(Space->Common), VirtualAddress, 1);
     }
 
-    ASSERT(VirtualAddress < KERNEL_VA_START);
+    ASSERT(VirtualAddress < USER_VA_END);
 
     if (MappedCount != 0) {
         MmpUpdateResidentSetCounter(&(Space->Common), MappedCount);
@@ -2063,7 +2063,7 @@ Return Value:
     Source = SourceSpace->PageDirectory;
     Total = 0;
     for (DirectoryIndex = 0;
-         DirectoryIndex < ((UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT);
+         DirectoryIndex < ((UINTN)USER_VA_END >> PAGE_DIRECTORY_SHIFT);
          DirectoryIndex += 1) {
 
         if (Source[DirectoryIndex].Entry == 0) {
@@ -2327,7 +2327,7 @@ Return Value:
         }
     }
 
-    ASSERT(VirtualAddress < KERNEL_VA_START);
+    ASSERT(VirtualAddress < USER_VA_END);
 
     if (MappedCount != 0) {
         MmpUpdateResidentSetCounter(&(DestinationSpace->Common), MappedCount);
@@ -2547,7 +2547,7 @@ Return Value:
     }
 
     for (DirectoryIndex = 0;
-         DirectoryIndex < ((UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT);
+         DirectoryIndex < ((UINTN)USER_VA_END >> PAGE_DIRECTORY_SHIFT);
          DirectoryIndex += 1) {
 
         if (Directory[DirectoryIndex].Entry != 0) {
@@ -2665,7 +2665,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    if ((VirtualAddress < KERNEL_VA_START) &&
+    if ((VirtualAddress < USER_VA_END) &&
         (Directory[DirectoryIndex].Entry != 0)) {
 
         NewPageTable = (ULONG)(Directory[DirectoryIndex].Entry << PAGE_SHIFT);
@@ -2706,7 +2706,7 @@ Return Value:
 
     if (Directory[DirectoryIndex].Present == 0) {
 
-        ASSERT((VirtualAddress < KERNEL_VA_START) ||
+        ASSERT((VirtualAddress < USER_VA_END) ||
                (MmKernelPageDirectory[DirectoryIndex].Present == 0));
 
         //

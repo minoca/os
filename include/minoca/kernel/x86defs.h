@@ -205,8 +205,11 @@ Author:
 #define PDE_INDEX_MASK 0xFFC00000
 #define PTE_INDEX_MASK 0x003FF000
 
-#define X86_FAULT_FLAG_PROTECTION_VIOLATION 0x00000001
+#define X86_FAULT_ERROR_CODE_PRESENT        0x00000001
 #define X86_FAULT_ERROR_CODE_WRITE          0x00000002
+#define X86_FAULT_ERROR_CODE_USER_MODE      0x00000004
+#define X86_FAULT_ERROR_CODE_RESERVED       0x00000008
+#define X86_FAULT_ERROR_CODE_EXECUTE        0x00000010
 
 //
 // Define the location of the legacy keyboard controller. While not strictly

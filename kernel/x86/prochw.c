@@ -1208,7 +1208,7 @@ Return Value:
 
     ArpCreateSegmentDescriptor(&(GdtTable[USER_CS / sizeof(GDT_ENTRY)]),
                                (PVOID)0,
-                               (ULONG)KERNEL_VA_START >> PAGE_SHIFT,
+                               (ULONG)USER_VA_END >> PAGE_SHIFT,
                                GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
                                GATE_ACCESS_USER | GDT_TYPE_CODE);
 
@@ -1220,7 +1220,7 @@ Return Value:
 
     ArpCreateSegmentDescriptor(&(GdtTable[USER_DS / sizeof(GDT_ENTRY)]),
                                (PVOID)0,
-                               (ULONG)KERNEL_VA_START >> PAGE_SHIFT,
+                               (ULONG)USER_VA_END >> PAGE_SHIFT,
                                GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,
                                GATE_ACCESS_USER | GDT_TYPE_DATA_WRITE);
 

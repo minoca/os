@@ -314,7 +314,7 @@ Return Value:
                   FaultingAddress,
                   TrapFrame->Rip);
 
-    if ((TrapFrame->ErrorCode & X86_FAULT_FLAG_PROTECTION_VIOLATION) != 0) {
+    if ((TrapFrame->ErrorCode & X86_FAULT_ERROR_CODE_PRESENT) != 0) {
         RtlDebugPrint(", Protection Violation");
 
     } else {

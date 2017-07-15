@@ -539,7 +539,7 @@ Return Value:
     //
 
     if ((IS_ALIGNED((UINTN)Parameters->Address, PageSize) == FALSE) ||
-        ((Parameters->Address + Parameters->Size) >= KERNEL_VA_START) ||
+        ((Parameters->Address + Parameters->Size) >= USER_VA_END) ||
         ((Parameters->Address + Parameters->Size) < Parameters->Address)) {
 
         Status = STATUS_INVALID_PARAMETER;
@@ -715,7 +715,7 @@ Return Value:
         if ((MapFlags & SYS_MAP_FLAG_FIXED) != 0) {
             VaRequest.Strategy = AllocationStrategyFixedAddressClobber;
             if ((IS_ALIGNED((UINTN)Parameters->Address, PageSize) == FALSE) ||
-                ((Parameters->Address + Parameters->Size) >= KERNEL_VA_START) ||
+                ((Parameters->Address + Parameters->Size) > USER_VA_END) ||
                 (Parameters->Address == NULL)) {
 
                 Status = STATUS_INVALID_PARAMETER;
@@ -823,7 +823,7 @@ Return Value:
 
     if ((IS_ALIGNED((UINTN)Parameters->Address, PageSize) == FALSE) ||
         (Parameters->Address == NULL) ||
-        ((Parameters->Address + Parameters->Size) >= KERNEL_VA_START) ||
+        ((Parameters->Address + Parameters->Size) >= USER_VA_END) ||
         ((Parameters->Address + Parameters->Size) <= Parameters->Address)) {
 
         Status = STATUS_INVALID_PARAMETER;
@@ -930,7 +930,7 @@ Return Value:
     // If the specified range is not all within user mode, then fail.
     //
 
-    if ((Parameters->Address + Parameters->Size) > KERNEL_VA_START) {
+    if ((Parameters->Address + Parameters->Size) > USER_VA_END) {
         Status = STATUS_INVALID_ADDRESS_RANGE;
         goto SysSyncMemoryEnd;
     }

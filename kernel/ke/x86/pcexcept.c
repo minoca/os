@@ -429,8 +429,11 @@ Return Value:
 
     PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
     FaultFlags = 0;
-    if ((TrapFrame->ErrorCode & X86_FAULT_FLAG_PROTECTION_VIOLATION) == 0) {
+    if ((TrapFrame->ErrorCode & X86_FAULT_ERROR_CODE_PRESENT) == 0) {
         FaultFlags |= FAULT_FLAG_PAGE_NOT_PRESENT;
+
+    } else {
+        FaultFlags |= FAULT_FLAG_PERMISSION_ERROR;
     }
 
     if ((TrapFrame->ErrorCode & X86_FAULT_ERROR_CODE_WRITE) != 0) {

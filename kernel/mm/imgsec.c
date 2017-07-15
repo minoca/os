@@ -723,7 +723,7 @@ Return Value:
     UINTN SectionOffset;
     KSTATUS Status;
 
-    if (Address >= KERNEL_VA_START) {
+    if (Address >= USER_VA_END) {
         return NULL;
     }
 
@@ -845,7 +845,7 @@ Return Value:
     UINTN SizeThisRound;
     KSTATUS Status;
 
-    ASSERT((UserDestination + Size < KERNEL_VA_START) &&
+    ASSERT((UserDestination + Size < USER_VA_END) &&
            (UserDestination + Size >= UserDestination));
 
     //
@@ -2361,7 +2361,7 @@ Return Value:
         MapFlags |= MAP_FLAG_EXECUTE;
     }
 
-    if (VirtualAddress < KERNEL_VA_START) {
+    if (VirtualAddress < USER_VA_END) {
         MapFlags |= MAP_FLAG_USER_MODE;
 
     } else {

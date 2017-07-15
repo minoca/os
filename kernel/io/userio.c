@@ -530,7 +530,7 @@ Return Value:
         goto SysPerformIoEnd;
     }
 
-    if ((Parameters->Buffer + Size > KERNEL_VA_START) ||
+    if ((Parameters->Buffer + Size > USER_VA_END) ||
         (Parameters->Buffer + Size < Parameters->Buffer)) {
 
         Status = STATUS_INVALID_PARAMETER;

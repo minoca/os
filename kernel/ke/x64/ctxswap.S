@@ -105,6 +105,7 @@ FUNCTION(KepContextSwap)
 
     movq    %rsi, %rsp              # Switch to the new stack.
     xorq    %rbp, %rbp              # Zero out rbp so the call stack stops here.
+    movq    %rcx, %r12              # Move FirstTime parameter to non-volatile.
 
     //
     // Perform any post-stack switch work needed on the old thread.
@@ -119,7 +120,7 @@ FUNCTION(KepContextSwap)
     // set up correctly.
     //
 
-    cmpl    $FALSE, %ecx            # Compare FirstTime to FALSE.
+    cmpl    $FALSE, %r12d           # Compare FirstTime to FALSE.
     je      KepContextSwapRestore   # Special case a first run.
 
 KepContextSwapFirstTime:

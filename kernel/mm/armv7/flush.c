@@ -331,12 +331,12 @@ Return Value:
     Parameters = SystemCallParameter;
     Address = Parameters->Address;
     Size = Parameters->Size;
-    if (Address >= KERNEL_VA_START) {
-        Address = KERNEL_VA_START - 1;
+    if (Address >= USER_VA_END) {
+        Address = USER_VA_END - 1;
     }
 
-    if ((Address + Size > KERNEL_VA_START) || (Address + Size < Address)) {
-        Size = KERNEL_VA_START - Address;
+    if ((Address + Size > USER_VA_END) || (Address + Size < Address)) {
+        Size = USER_VA_END - Address;
     }
 
     return MmSyncCacheRegion(Address, Size);
@@ -428,8 +428,7 @@ Return Value:
         Result &= MmpInvalidateInstructionCacheLine(CurrentAddress);
 
         ASSERT((Result != FALSE) ||
-               ((Address < KERNEL_VA_START) &&
-                (Address + Size <= KERNEL_VA_START)));
+               ((Address < USER_VA_END) && (Address + Size <= USER_VA_END)));
 
         CurrentAddress += CacheLineSize;
         Size -= CacheLineSize;
@@ -489,8 +488,7 @@ Return Value:
         Result &= MmpCleanCacheLine(Address);
 
         ASSERT((Result != FALSE) ||
-               ((Address < KERNEL_VA_START) &&
-                (Address + Size <= KERNEL_VA_START)));
+               ((Address < USER_VA_END) && (Address + Size <= USER_VA_END)));
 
         Address += CacheLineSize;
         Size -= CacheLineSize;
@@ -554,8 +552,7 @@ Return Value:
         Result &= MmpCleanInvalidateCacheLine(Address);
 
         ASSERT((Result != FALSE) ||
-               ((Address < KERNEL_VA_START) &&
-                (Address + Size <= KERNEL_VA_START)));
+               ((Address < USER_VA_END) && (Address + Size <= USER_VA_END)));
 
         Address += CacheLineSize;
         Size -= CacheLineSize;
@@ -616,8 +613,7 @@ Return Value:
         Result &= MmpInvalidateCacheLine(Address);
 
         ASSERT((Result != FALSE) ||
-               ((Address < KERNEL_VA_START) &&
-                (Address + Size <= KERNEL_VA_START)));
+               ((Address < USER_VA_END) && (Address + Size <= USER_VA_END)));
 
         Address += CacheLineSize;
         Size -= CacheLineSize;

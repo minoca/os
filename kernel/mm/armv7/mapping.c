@@ -2035,7 +2035,7 @@ Return Value:
         *PageWasDirty = TRUE;
     }
 
-    ASSERT(VirtualAddress < KERNEL_VA_START);
+    ASSERT(VirtualAddress < USER_VA_END);
 
     MmpUpdateResidentSetCounter(&(Space->Common), -1);
 
@@ -2246,7 +2246,7 @@ Return Value:
                                 1);
     }
 
-    ASSERT(VirtualAddress < KERNEL_VA_START);
+    ASSERT(VirtualAddress < USER_VA_END);
 
     if (MappedCount != 0) {
         MmpUpdateResidentSetCounter(&(OtherAddressSpace->Common), MappedCount);
@@ -2539,7 +2539,7 @@ Return Value:
     Destination = DestinationSpace->PageDirectory;
     Source = SourceSpace->PageDirectory;
     Total = 0;
-    for (Index = 0; Index < FLT_INDEX(KERNEL_VA_START); Index += 4) {
+    for (Index = 0; Index < FLT_INDEX(USER_VA_END); Index += 4) {
         if (Source[Index].Entry == 0) {
             continue;
         }
@@ -2917,7 +2917,7 @@ Return Value:
         MmpCleanPageTableCacheRegion(CleanStart, CleanSize);
     }
 
-    ASSERT(VirtualAddress < KERNEL_VA_START);
+    ASSERT(VirtualAddress < USER_VA_END);
 
     if (MappedCount != 0) {
         MmpUpdateResidentSetCounter(&(DestinationSpace->Common), MappedCount);
@@ -3112,11 +3112,11 @@ Return Value:
     // boundaries.
     //
 
-    ASSERT(ALIGN_RANGE_DOWN((UINTN)KERNEL_VA_START, (1 << (32 - 2))) ==
-           (UINTN)KERNEL_VA_START);
+    ASSERT(ALIGN_RANGE_DOWN((UINTN)USER_VA_END, (1 << (32 - 2))) ==
+           (UINTN)USER_VA_END);
 
     for (LoopIndex = 0;
-         LoopIndex < ((UINTN)KERNEL_VA_START >> (32 - 2));
+         LoopIndex < ((UINTN)USER_VA_END >> (32 - 2));
          LoopIndex += 1) {
 
         Entry = ((ULONG)SelfMapPageTablePhysical >> SLT_ALIGNMENT) + LoopIndex;
@@ -3186,7 +3186,7 @@ Return Value:
     FirstLevelTable = Space->PageDirectory;
     Total = 0;
     for (FirstIndex = 0;
-         FirstIndex < FLT_INDEX(KERNEL_VA_START);
+         FirstIndex < FLT_INDEX(USER_VA_END);
          FirstIndex += 4) {
 
         if (FirstLevelTable[FirstIndex].Entry != 0) {

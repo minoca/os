@@ -759,7 +759,7 @@ Return Value:
 
     Pointer = SystemCallParameter;
     Thread = KeGetCurrentThread();
-    if (Pointer < KERNEL_VA_START) {
+    if (Pointer < USER_VA_END) {
         Thread->ThreadIdPointer = Pointer;
 
         //
@@ -1393,7 +1393,7 @@ Return Value:
 
     if ((LastThread == FALSE) && (Thread->ThreadIdPointer != NULL)) {
 
-        ASSERT((PVOID)(Thread->ThreadIdPointer) < KERNEL_VA_START);
+        ASSERT((PVOID)(Thread->ThreadIdPointer) < USER_VA_END);
 
         ASSERT(sizeof(THREAD_ID) == sizeof(ULONG));
 
@@ -1529,7 +1529,7 @@ Return Value:
 
     ASSERT((ThreadRoutine == NULL) ||
            ((UserMode == FALSE) && ((PVOID)ThreadRoutine >= KERNEL_VA_START)) ||
-           ((UserMode != FALSE) && ((PVOID)ThreadRoutine < KERNEL_VA_START)));
+           ((UserMode != FALSE) && ((PVOID)ThreadRoutine < USER_VA_END)));
 
     NameLength = 0;
     if (Name != NULL) {

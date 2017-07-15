@@ -708,7 +708,7 @@ Return Value:
 
                 PdHasEntries = FALSE;
                 for (PdIndex = 0; PdIndex < X64_PTE_COUNT; PdIndex += 1) {
-                    if (X86_PTE_ENTRY(Pd[PdIndex] == 0)) {
+                    if (X86_PTE_ENTRY(Pd[PdIndex]) == 0) {
 
                         ASSERT((Pd[PdIndex] & X86_PTE_PRESENT) == 0);
 
@@ -1017,12 +1017,12 @@ Return Value:
 
     if ((Flags & MAP_FLAG_USER_MODE) != 0) {
 
-        ASSERT(VirtualAddress < KERNEL_VA_START);
+        ASSERT(VirtualAddress < USER_VA_END);
 
         *Pte |= X86_PTE_USER_MODE;
 
     } else if ((Flags & MAP_FLAG_GLOBAL) != 0) {
-        *Pte |= X86_PTE_USER_MODE;
+        *Pte |= X86_PTE_GLOBAL;
     }
 
     if ((Flags & MAP_FLAG_DIRTY) != 0) {
@@ -1529,7 +1529,7 @@ Return Value:
 
         MmpSendTlbInvalidateIpi(AddressSpace, VirtualAddress, 1);
 
-        ASSERT(VirtualAddress < KERNEL_VA_START);
+        ASSERT(VirtualAddress < USER_VA_END);
 
         MmpUpdateResidentSetCounter(AddressSpace, -1);
     }
@@ -1734,7 +1734,7 @@ Return Value:
     End = VirtualAddress + (PageCount << PAGE_SHIFT);
     Process = PsGetKernelProcess();
     AddressSpace = Process->AddressSpace;
-    if (End < KERNEL_VA_START) {
+    if (End <= USER_VA_END) {
 
         //
         // If there's only one thread in the process, then there's no need to
@@ -1770,7 +1770,6 @@ Return Value:
     }
 
     if ((MapFlagsMask & MAP_FLAG_EXECUTE) != 0) {
-        PteMask |= X86_PTE_NX;
         if ((MapFlags & MAP_FLAG_EXECUTE) == 0) {
             PteValue |= X86_PTE_NX;
         }
@@ -1956,7 +1955,9 @@ Return Value:
 
         ASSERT(PageIndex < PageCount);
 
-        Pte[Pml4Index] = Pages[PageIndex] | X86_PTE_PRESENT | X86_PTE_WRITABLE;
+        Pte[Pml4Index] = Pages[PageIndex] | X86_PTE_PRESENT | X86_PTE_WRITABLE |
+                         X86_PTE_USER_MODE;
+
         PageIndex += 1;
         *SwapPte = Pte[Pml4Index];
         SavedPdp = *SwapPte;
@@ -1975,7 +1976,8 @@ Return Value:
             ASSERT(PageIndex < PageCount);
 
             Pte[PdpIndex] = Pages[PageIndex] |
-                            X86_PTE_PRESENT | X86_PTE_WRITABLE;
+                            X86_PTE_PRESENT | X86_PTE_WRITABLE |
+                            X86_PTE_USER_MODE;
 
             PageIndex += 1;
             *SwapPte = Pte[PdpIndex];
@@ -2224,7 +2226,9 @@ Return Value:
 
                     ASSERT(X86_PTE_ENTRY(Pte[PdIndex]) != 0);
 
-                    Pte[PdIndex] |= X86_PTE_PRESENT | X86_PTE_WRITABLE;
+                    Pte[PdIndex] |= X86_PTE_PRESENT | X86_PTE_WRITABLE |
+                                    X86_PTE_USER_MODE;
+
                     *SwapPte = Pte[PdIndex];
                     ArInvalidateTlbEntry(Pte);
                     DestinationSpace->ActivePageTables += 1;
@@ -2973,7 +2977,7 @@ Return Value:
 
     if (X86_PTE_ENTRY(*Pte) != 0) {
         if ((*Pte & X86_PTE_PRESENT) == 0) {
-            *Pte |= X86_PTE_PRESENT | X86_PTE_WRITABLE;
+            *Pte |= X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_USER_MODE;
 
             ASSERT(AddressSpace->ActivePageTables <
                    AddressSpace->AllocatedPageTables);
@@ -2982,7 +2986,9 @@ Return Value:
         }
 
     } else {
-        *Pte = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE;
+        *Pte = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE |
+               X86_PTE_USER_MODE;
+
         AddressSpace->AllocatedPageTables += 1;
         AddressSpace->ActivePageTables += 1;
     }

@@ -581,7 +581,7 @@ Return Value:
 
         ASSERT(PsGetCurrentProcess() != PsGetKernelProcess());
 
-        if ((Buffer + SizeInBytes > KERNEL_VA_START) ||
+        if ((Buffer + SizeInBytes > USER_VA_END) ||
             (Buffer + SizeInBytes < Buffer)) {
 
             return STATUS_ACCESS_VIOLATION;
@@ -756,8 +756,8 @@ Return Value:
         // Validate the vector address.
         //
 
-        if ((Address >= KERNEL_VA_START) ||
-            (Address + Size > KERNEL_VA_START) ||
+        if ((Address >= USER_VA_END) ||
+            (Address + Size > USER_VA_END) ||
             (Address + Size < Address)) {
 
             Status = STATUS_ACCESS_VIOLATION;
@@ -910,7 +910,7 @@ Return Value:
 
             ASSERT(PsGetCurrentProcess() != PsGetKernelProcess());
 
-            if ((VirtualAddress + SizeInBytes > KERNEL_VA_START) ||
+            if ((VirtualAddress + SizeInBytes > USER_VA_END) ||
                 (VirtualAddress + SizeInBytes < VirtualAddress)) {
 
                 return STATUS_ACCESS_VIOLATION;

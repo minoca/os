@@ -510,8 +510,8 @@ Return Value:
 
     BOOL Result;
 
-    if ((UserModePointer >= KERNEL_VA_START) ||
-        (UserModePointer + Size > KERNEL_VA_START) ||
+    if ((UserModePointer >= USER_VA_END) ||
+        (UserModePointer + Size > USER_VA_END) ||
         (UserModePointer + Size <= UserModePointer)) {
 
         return STATUS_ACCESS_VIOLATION;
@@ -561,8 +561,8 @@ Return Value:
 
     BOOL Result;
 
-    if ((UserModePointer >= KERNEL_VA_START) ||
-        (UserModePointer + Size > KERNEL_VA_START) ||
+    if ((UserModePointer >= USER_VA_END) ||
+        (UserModePointer + Size > USER_VA_END) ||
         (UserModePointer + Size <= UserModePointer)) {
 
         return STATUS_ACCESS_VIOLATION;
@@ -613,8 +613,8 @@ Return Value:
 
     BOOL Result;
 
-    if ((Buffer >= KERNEL_VA_START) ||
-        (Buffer + Size > KERNEL_VA_START) ||
+    if ((Buffer >= USER_VA_END) ||
+        (Buffer + Size > USER_VA_END) ||
         (Buffer + Size <= Buffer)) {
 
         return STATUS_ACCESS_VIOLATION;
@@ -1042,7 +1042,7 @@ Return Value:
 
     MmMdInitDescriptor(&FreeRange,
                        PageSize,
-                       (UINTN)KERNEL_VA_START,
+                       (UINTN)USER_VA_END,
                        MemoryTypeFree);
 
     return MmpAddAccountingDescriptor(Accountant, &FreeRange);

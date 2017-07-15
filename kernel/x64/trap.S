@@ -451,9 +451,10 @@ Return Value:
 FUNCTION(ArpPageFaultHandlerAsm)
     call    ArGenerateTrapFrame     # Create a local trap frame.
     CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
-    xorq    %rax, %rax              # Zero a register.
+    xorl    %eax, %eax              # Zero a register.
     movq    %cr2, %rdi              # 1st parameter is faulting address.
     movq    %rax, %cr2              # Clear CR2.
+    sti                             # Re-enable interrupts.
     movq    %rsp, %rsi              # 2nd parameter is trap frame pointer.
     call    KeDispatchPageFault     # Call the main exception handler.
     call    ArRestoreTrapFrame      # Restore the trap frame
