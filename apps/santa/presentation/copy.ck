@@ -30,6 +30,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+from santa.config import config;
+from santa.file import cptree, exists;
 from santa.presentation import Presentation, PresentationError;
 
 //
@@ -84,7 +86,7 @@ class CopyPresentation is Presentation {
     {
 
         _parameters = parameters.copy();
-        _parameters["type"] = "copy";
+        this.type = "copy";
         return;
     }
 
@@ -139,6 +141,7 @@ class CopyPresentation is Presentation {
     {
 
         _parameters = parameters;
+        this.type = "copy";
         return;
     }
 
@@ -171,7 +174,11 @@ class CopyPresentation is Presentation {
 
     function
     addFiles (
-        parameters
+        controlDirectory,
+        realm,
+        files,
+        conffiles,
+        root
         )
 
     /*++
@@ -182,9 +189,17 @@ class CopyPresentation is Presentation {
 
     Arguments:
 
-        parameters - Supplies the parameters of the operation. This will
-            include the source directory, destination directory, virtual
-            paths (within the container), and a list of files.
+        controlDirectory - Supplies the directory containing the control and
+            initial data of the package.
+
+        realm - Supplies the realm being operated on.
+
+        files - Supplies the files to add.
+
+        conffiles - Suppiles the dictionary of files not to clobber if they
+            exist, or to copy directly if they do not.
+
+        root - Supplies the root directory to install to.
 
     Return Value:
 
@@ -194,34 +209,25 @@ class CopyPresentation is Presentation {
 
     {
 
-        Core.raise(PresentationError("Function not implemented"));
-    }
+        var dest;
+        var destdir = realm.containment.path(root);
+        var srcdir = controlDirectory + "/data";
 
-    function
-    removeFiles (
-        parameters
-        )
+        for (file in files) {
+            dest = "/".join([destdir, file]);
+            if ((conffiles.get(dest) != null) && (exists(dest))) {
+                if (config.getKey("core.verbose")) {
+                    Core.print("Skipping pre-existing configuration file: %s" %
+                               dest);
+                }
 
-    /*++
+                continue;
+            }
 
-    Routine Description:
+            cptree("/".join([srcdir, file]), dest);
+        }
 
-        This routine removes a set of files from the environment.
-
-    Arguments:
-
-        parameters - Supplies the set of files to remove, as well as the
-            directories.
-
-    Return Value:
-
-        None.
-
-    --*/
-
-    {
-
-        Core.raise(PresentationError("Function not implemented"));
+        return;
     }
 }
 

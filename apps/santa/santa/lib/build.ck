@@ -361,6 +361,7 @@ class Build {
     {
 
         var arch;
+        var conffiles;
         var env = this.env;
         var finalPath;
         var flags;
@@ -414,7 +415,7 @@ class Build {
         if (vars.get("flags") == null) {
             vars.flags = {};
 
-        } else {
+        } else if (vars.flags is String) {
             flags = vars.flags.split(null, -1);
             flagsDict = {};
             for (flag in flags) {
@@ -428,6 +429,16 @@ class Build {
 
             vars.flags = flagsDict;
         }
+
+        conffiles = vars.get("conffiles");
+        if (conffiles == null) {
+            conffiles = [];
+
+        } else if (conffiles is String) {
+            conffiles = conffiles.split(null, -1);
+        }
+
+        vars.conffiles = conffiles;
 
         //
         // Reconcile the architecture. The selected architecture must be

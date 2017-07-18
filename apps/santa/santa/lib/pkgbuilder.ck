@@ -152,6 +152,7 @@ class PackageBuilder {
             "os": vars.os,
             "license": vars.license,
             "depends": vars.depends,
+            "conffiles": vars.conffiles,
         };
 
         (os.chdir)(this.datadir);

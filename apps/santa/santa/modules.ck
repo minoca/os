@@ -69,6 +69,8 @@ var builtinCommands = [
     ["del-realm", "Destroy and delete a realm"],
     ["new-realm", "Create a new working environment"],
     ["patch", "Build-time patch management support"],
+    ["install", "Install new packages onto the system"],
+    ["uninstall", "Remove installed packages from the system"],
 ];
 
 //
@@ -82,17 +84,6 @@ var builtinContainment = [
 ];
 
 //
-// Other storage types not yet implemented:
-// romount (returns paths to a read-only mount of the store except during
-// installation).
-//
-
-var builtinStorage = [
-    ["none", "No storage"],
-    ["basic", "Basic package contents store"],
-];
-
-//
 // Other presentation types not yet implemented:
 // hardlink - Create hard links from storage to the final location.
 // symlink - Create symlinks from storage to the final location.
@@ -102,6 +93,7 @@ var builtinStorage = [
 
 var builtinPresentation = [
     ["copy", "Copy-based package installation"],
+    ["move", "Move-based package installation"],
 ];
 
 //
@@ -323,84 +315,6 @@ Return Value:
 }
 
 function
-getStorage (
-    name
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the storage class associated with the given name.
-
-Arguments:
-
-    name - Supplies the name of the containment class.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    var module;
-    var run;
-
-    try {
-        module = Core.importModule("storage." + name);
-        module.run();
-
-    } except ImportError {
-        Core.print("Error: Unknown storage type %s.");
-        return 2;
-    }
-
-    return module.storage;
-}
-
-function
-enumerateStorageTypes (
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns a list of available storage methods.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Returns a list of storage methods.
-
---*/
-
-{
-
-    var module;
-    var result;
-
-    result = [];
-    for (builtin in builtinStorage) {
-        module = Core.importModule("storage." + builtin[0]);
-        module.run();
-        result.append({
-            "value": module.storage,
-            "name": builtin[0],
-            "description": builtin[1]
-        });
-    }
-
-    result += _enumerateModules("storage", "storage");
-    return result;
-}
-
-function
 getPresentation (
     name
     )
@@ -454,7 +368,7 @@ Arguments:
 
 Return Value:
 
-    Returns a list of storage methods.
+    Returns a list of presentation methods.
 
 --*/
 

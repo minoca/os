@@ -2438,7 +2438,7 @@ class CpioArchive {
 
     {
 
-        this._extract(member, directoryPath, uid, gid, setPermissions);
+        this._extract(member, directoryPath);
         if (setPermissions) {
             this._setPermissions(member, directoryPath, uid, gid);
         }

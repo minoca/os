@@ -72,8 +72,8 @@ var usage =
     "a path to a recipe file or a previously incomplete build number.\n"
     "Options are:\n"
     "  -c, --cross=[arch-]os -- Cross compile (eg \"Minoca\" or "
-    "\"x86_64-Minoca\""
-    "  -o, --output=dir -- Output packages to the specified directory"
+    "\"x86_64-Minoca\"\n"
+    "  -o, --output=dir -- Output packages to the specified directory\n"
     "  -r, --run=step -- Run to the specified step and stop.\n"
     "  -s, --solo-step=step -- Run only the specified step and stop.\n"
     "  -v, --verbose -- Print out more information about what's going on.\n"
@@ -92,7 +92,7 @@ command (
 
 Routine Description:
 
-    This routine implements the convert-archive command.
+    This routine implements the build command.
 
 Arguments:
 

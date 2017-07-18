@@ -102,6 +102,7 @@ class PackageDepot {
         mkdir(directory);
         _directory = directory;
         this.pkgs = null;
+        this.location = directory;
         return this;
     }
 

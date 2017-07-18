@@ -29,6 +29,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+from santa.file import rmtree;
+
 //
 // --------------------------------------------------------------------- Macros
 //
@@ -166,7 +168,11 @@ class Presentation {
 
     function
     addFiles (
-        parameters
+        controlDirectory,
+        realm,
+        files,
+        conffiles,
+        root
         )
 
     /*++
@@ -177,9 +183,17 @@ class Presentation {
 
     Arguments:
 
-        parameters - Supplies the parameters of the operation. This will
-            include the source directory, destination directory, virtual
-            paths (within the container), and a list of files.
+        controlDirectory - Supplies the directory containing the control and
+            initial data of the package.
+
+        realm - Supplies the realm being operated on.
+
+        files - Supplies the files to add.
+
+        conffiles - Suppiles the dictionary of files not to clobber if they
+            exist, or to copy directly if they do not.
+
+        root - Supplies the root directory to install to.
 
     Return Value:
 
@@ -194,7 +208,11 @@ class Presentation {
 
     function
     removeFiles (
-        parameters
+        controlDirectory,
+        realm,
+        files,
+        conffiles,
+        root
         )
 
     /*++
@@ -205,8 +223,17 @@ class Presentation {
 
     Arguments:
 
-        parameters - Supplies the set of files to remove, as well as the
-            directories.
+        controlDirectory - Supplies the directory containing the control and
+            initial data of the package.
+
+        realm - Supplies the realm being operated on.
+
+        files - Supplies the files to remove.
+
+        conffiles - Suppiles the dictionary of files not to remove if they've
+            changed.
+
+        root - Supplies the root directory to install to.
 
     Return Value:
 
@@ -216,7 +243,17 @@ class Presentation {
 
     {
 
-        Core.raise(PresentationError("Function not implemented"));
+        var destdir = realm.containment.path(root);
+
+        //
+        // The default implementation just removes the files.
+        //
+
+        for (file in files) {
+            rmtree("/".join([destdir, file]));
+        }
+
+        return;
     }
 }
 

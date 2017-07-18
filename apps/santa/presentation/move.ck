@@ -9,16 +9,18 @@ Copyright (c) 2017 Minoca Corp.
 
 Module Name:
 
-    none.ck
+    move.ck
 
 Abstract:
 
-    This module implements no-op storage, where packages contents are simply
-    stored at their final location.
+    This module implements package presentation based on moving files from
+    storage into their final destination. This is useful if storage is not
+    shared or containers are not in use, and the user doesn't want package
+    contents duplicated.
 
 Author:
 
-    Evan Green 1-Jun-2017
+    Evan Green 17-Jul-2017
 
 Environment:
 
@@ -31,7 +33,8 @@ Environment:
 //
 
 from santa.config import config;
-from santa.storage import Storage, StorageError;
+from santa.file import cptree, mv, exists;
+from santa.presentation import Presentation, PresentationError;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -57,7 +60,7 @@ from santa.storage import Storage, StorageError;
 // ------------------------------------------------------------------ Functions
 //
 
-class NoneStorage is Storage {
+class CopyPresentation is Presentation {
     var _parameters;
 
     function
@@ -69,7 +72,7 @@ class NoneStorage is Storage {
 
     Routine Description:
 
-        This routine creates a new storage region and initializes this
+        This routine creates a new presentation layer and initializes this
         instance's internal variables to represent it.
 
     Arguments:
@@ -84,10 +87,8 @@ class NoneStorage is Storage {
 
     {
 
-        var path;
-
         _parameters = parameters.copy();
-        _parameters.type = "none";
+        this.type = "move";
         return;
     }
 
@@ -99,7 +100,8 @@ class NoneStorage is Storage {
 
     Routine Description:
 
-        This routine destroys a storage zone and all data held therein.
+        This routine destroys the presentation layer represented by this
+        instance.
 
     Arguments:
 
@@ -113,7 +115,6 @@ class NoneStorage is Storage {
 
     {
 
-        _parameters = null;
         return;
     }
 
@@ -126,7 +127,7 @@ class NoneStorage is Storage {
 
     Routine Description:
 
-        This routine initializes this instance to reflect the storage zone
+        This routine initializes this instance to reflect the presentation
         identified by the given parameters.
 
     Arguments:
@@ -142,6 +143,7 @@ class NoneStorage is Storage {
     {
 
         _parameters = parameters;
+        this.type = "move";
         return;
     }
 
@@ -154,8 +156,8 @@ class NoneStorage is Storage {
     Routine Description:
 
         This routine returns the dictionary of state and identification needed
-        to restore information about this storage zone by other instances of
-        this class.
+        to restore information about this presentation layer by other instances
+        of this class.
 
     Arguments:
 
@@ -173,43 +175,70 @@ class NoneStorage is Storage {
     }
 
     function
-    path (
-        filepath,
-        write
+    addFiles (
+        controlDirectory,
+        realm,
+        files,
+        conffiles,
+        root
         )
 
     /*++
 
     Routine Description:
 
-        This routine translates a path to a path within the storage zone.
+        This routine adds a set of files into the environment.
 
     Arguments:
 
-        filepath - Supplies a path to the desired file.
+        controlDirectory - Supplies the directory containing the control and
+            initial data of the package.
 
-        write - Supplies a boolean indicating whether or not write access is
-            needed. This should only be used internally to extract the packages,
-            and should not be used to allow modifications to the package file.
+        realm - Supplies the realm being operated on.
+
+        files - Supplies the files to add.
+
+        conffiles - Suppiles the dictionary of files not to clobber if they
+            exist, or to copy directly if they do not.
+
+        root - Supplies the root directory to install to.
 
     Return Value:
 
-        Returns the path to the file within the storage region.
+        None.
 
     --*/
 
     {
 
-        return filepath;
+        var dest;
+        var destdir = realm.containment.path(root);
+        var srcdir = controlDirectory + "/data";
+
+        for (file in files) {
+            dest = "/".join([destdir, file]);
+            if ((conffiles.get(dest) != null) && (exists(dest))) {
+                if (config.getKey("core.verbose")) {
+                    Core.print("Skipping pre-existing configuration file: %s" %
+                               dest);
+                }
+
+                continue;
+            }
+
+            mv("/".join([srcdir, file]), dest);
+        }
+
+        return;
     }
 }
 
 //
-// Set the variables needed so that the module loader can enumerate this class.
+// Define the globals needed so the module loader can pick up this class.
 //
 
-var description = "No package contents storage, other than final location";
-var storage = NoneStorage;
+var description = "Copy-based installation";
+var presentation = CopyPresentation;
 
 //
 // --------------------------------------------------------- Internal Functions

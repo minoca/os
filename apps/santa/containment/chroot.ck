@@ -267,6 +267,10 @@ class ChrootContainment is Containment {
 
     {
 
+        if (filepath == "/") {
+            return _parameters.path;
+        }
+
         return "/".join([_parameters.path, filepath]);
     }
 }

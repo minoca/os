@@ -405,6 +405,54 @@ class Archive {
     }
 
     function
+    extractMember (
+        member,
+        directoryPath,
+        uid,
+        gid,
+        setPermissions
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine extracts a member from the archive as a file object.
+
+    Arguments:
+
+        member - Supplies a pointer to the member to extract.
+
+        directoryPath - Supplies an optional directory path to extract to. If
+            null, contents will be extracted to the current directory.
+
+        uid - Supplies the user ID to set on the extracted object. Supply -1 to
+            use the user ID number in the archive.
+
+        gid - Supplies the group ID to set on the extracted object. Supply -1
+            to use the group ID number in the archive.
+
+        setPermissions - Supplies a boolean indicating whether to set the
+            permissions in the file. If false and uid/gid are -1, then
+            no special attributes will be set on the file (which will make it
+            be owned by the caller).
+
+    Return Value:
+
+        None. An exception will be raised on failure.
+
+    --*/
+
+    {
+
+        return this.cpio.extract(member,
+                                 directoryPath,
+                                 uid,
+                                 gid,
+                                 setPermissions);
+    }
+
+    function
     extractData (
         archivePath
         )
@@ -502,7 +550,6 @@ class Archive {
             _lz = null;
         }
 
-        file.seek(0, io.IO_SEEK_SET);
         _lz = (lzfile.LzFile)(file, mode, 9);
         lzma = BufferedIo(_lz, 0);
         this.lzma = lzma;

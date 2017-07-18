@@ -67,6 +67,18 @@ var SANTA_USER_CONFIG_PATH = SANTA_USER_ROOT + "/santa.conf";
 var SANTA_PATCH_CONFIG_PATH = SANTA_USER_ROOT + "/patch.conf";
 
 //
+// Define the path to the package manager's state.
+//
+
+var SANTA_PACKAGE_STATE_PATH = SANTA_USER_ROOT + "/packages.json";
+
+//
+// Define the path to the package storage area.
+//
+
+var SANTA_STORAGE_PATH = SANTA_USER_ROOT + "/storage";
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -140,10 +152,6 @@ var defaultConfig = {
                 "type": "none",
             },
 
-            "storage": {
-                "type": "none",
-            },
-
             "presentation": {
                 "type": "copy",
             },
@@ -156,10 +164,6 @@ var defaultConfig = {
         "new": {
             "containment": {
                 "type": "none", //"chroot",
-            },
-
-            "storage": {
-                "type": "none", //"basic",
             },
 
             "presentation": {
@@ -185,7 +189,16 @@ var defaultConfig = {
                 "globalconfig": "copy",
             }
         }
-    }
+    },
+
+    //
+    // Define repository locations. Null is a location so that the local
+    // package directory is used (core.pkgdir).
+    //
+
+    "repositories": [
+        null,
+    ]
 };
 
 //

@@ -411,7 +411,7 @@ Return Value:
     if ((os.isdir)(source)) {
         contents = (os.listdir)(source);
         if (!(os.isdir)(destination)) {
-            (os.mkdir)(destination);
+            (os.mkdir)(destination, 0775);
         }
 
         for (element in contents) {
@@ -700,6 +700,62 @@ Return Value:
     }
 
     return (os.symlink)(linktarget, linkname);
+}
+
+function
+exists (
+    name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given path exists.
+
+Arguments:
+
+    name - Supplies the path to check.
+
+Return Value:
+
+    true if the path exists.
+
+    false if the path does not exist.
+
+--*/
+
+{
+
+    return (os.exists)(path(name));
+}
+
+function
+isdir (
+    name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given path is a directory.
+
+Arguments:
+
+    name - Supplies the path to check.
+
+Return Value:
+
+    true if the path exists and is a directory.
+
+    false if the path does not exist or is not a directory.
+
+--*/
+
+{
+
+    return (os.isdir)(path(name));
 }
 
 function

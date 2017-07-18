@@ -29,9 +29,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-from santa.file import cptree, link, rmtree;
-from santa.lib.santaconfig import SANTA_GLOBAL_CONFIG_PATH;
-from santa.modules import getContainment, getStorage, getPresentation;
+from santa.file import cptree, link, path, rmtree;
+from santa.lib.santaconfig import SANTA_GLOBAL_CONFIG_PATH, SANTA_STORAGE_PATH;
+from santa.modules import getContainment, getPresentation;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -58,9 +58,6 @@ from santa.modules import getContainment, getStorage, getPresentation;
 //
 
 class Realm {
-    var _containment;
-    var _storage;
-    var _presentation;
     var _parameters;
 
     function
@@ -98,14 +95,11 @@ class Realm {
         //
 
         type = getContainment(_parameters.containment.type);
-        _containment = type();
-        _containment.create(parameters.containment);
-        type = getStorage(_parameters.storage.type);
-        _storage = type();
-        _storage.create(parameters.storage);
+        this.containment = type();
+        this.containment.create(parameters.containment);
         type = getPresentation(parameters.presentation.type);
-        _presentation = type();
-        _presentation.create(parameters.presentation);
+        this.presentation = type();
+        this.presentation.create(parameters.presentation);
         this.setupSharing(false);
         return null;
     }
@@ -133,12 +127,10 @@ class Realm {
     {
 
         this.setupSharing(true);
-        _presentation.destroy();
-        _presentation = null;
-        _storage.destroy();
-        _storage = null;
-        _containment.destroy();
-        _containment = null;
+        this.presentation.destroy();
+        this.presentation = null;
+        this.containment.destroy();
+        this.containment = null;
         _parameters = null;
         return;
     }
@@ -178,14 +170,11 @@ class Realm {
         //
 
         type = getContainment(_parameters.containment.type);
-        _containment = type();
-        _containment.load(parameters.containment);
-        type = getStorage(_parameters.storage.type);
-        _storage = type();
-        _storage.load(parameters.storage);
+        this.containment = type();
+        this.containment.load(parameters.containment);
         type = getPresentation(parameters.presentation.type);
-        _presentation = type();
-        _presentation.load(parameters.presentation);
+        this.presentation = type();
+        this.presentation.load(parameters.presentation);
         return;
     }
 
@@ -214,9 +203,8 @@ class Realm {
 
     {
 
-        _parameters.containment = _containment.save();
-        _parameters.storage = _storage.save();
-        _parameters.presentation = _presentation.save();
+        _parameters.containment = this.containment.save();
+        _parameters.presentation = this.presentation.save();
         return _parameters;
     }
 
@@ -257,7 +245,7 @@ class Realm {
             for (element in sharing) {
                 method = sharing[element];
                 if (element == "store") {
-                    source = _storage.path("/", true);
+                    source = path(SANTA_STORAGE_PATH);
                     if (source == "/") {
                         source = null;
                     }
@@ -324,8 +312,7 @@ class Realm {
 
     {
 
-        destination = _storage.path(destination, true);
-        destination = _containment.path(destination);
+        destination = this.containment.path(destination);
         if (method == "hardlink") {
             link(source, destination);
 
@@ -368,8 +355,7 @@ class Realm {
 
     {
 
-        destination = _storage.path(destination, true);
-        destination = _containment.path(destination);
+        destination = this.containment.path(destination);
         if ((method == "hardlink") || (method == "copy")) {
             rmtree(destination);
 
