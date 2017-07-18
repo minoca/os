@@ -59,11 +59,9 @@ case "$1" in
                 mkdir "$AUTO_ROOT/"
             fi
 
-            if ! [ -r "$AUTO_ROOT/auto_root" ]; then
-                log_daemon_msg "Copying Minoca Build client files" || true
-                cp -Rpv /auto/* "$AUTO_ROOT/"
-                log_end_msg 0 || true
-            fi
+            log_daemon_msg "Copying Minoca Build client files" || true
+            cp -Rp /auto/* "$AUTO_ROOT/"
+            log_end_msg 0 || true
         fi
 
         ##
