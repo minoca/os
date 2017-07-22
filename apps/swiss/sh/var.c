@@ -735,9 +735,9 @@ Arguments:
 
 Return Value:
 
-    TRUE if the variable was successfully unset.
+    TRUE if the variable was successfully unset or was not previously set.
 
-    FALSE if the variable already doesn't exist or is read-only.
+    FALSE if the variable is read-only and cannot be unset.
 
 --*/
 
@@ -789,7 +789,12 @@ Return Value:
         }
     }
 
-    return FALSE;
+    //
+    // It's not a failure to unset a variable or function that was not
+    // previously set.
+    //
+
+    return TRUE;
 }
 
 BOOL
