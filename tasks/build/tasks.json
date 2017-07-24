@@ -1494,6 +1494,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/gperftools-2.5"
         },
         {
+            "name": "Make llvm3",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/llvm-3.9.1"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
