@@ -1499,6 +1499,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/llvm-3.9.1"
         },
         {
+            "name": "Make ocaml",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/ocaml-4.05.0"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
