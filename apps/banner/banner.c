@@ -193,7 +193,6 @@ Return Value:
         //
 
     case BannerActionEnable:
-        Value = TRUE;
         Status = OsGetSetSystemInformation(SystemInformationKe,
                                            KeInformationBannerThread,
                                            &Value,
@@ -218,6 +217,7 @@ Return Value:
         }
 
         Value = !Value;
+        Size = sizeof(Value);
         Status = OsGetSetSystemInformation(SystemInformationKe,
                                            KeInformationBannerThread,
                                            &Value,
