@@ -30,6 +30,7 @@ Environment:
 //
 
 import os;
+from santa.build import shell;
 from santa.config import config;
 from santa.file import mkdir, path, rmtree;
 from santa.lib.config import ConfigFile;
@@ -362,6 +363,7 @@ class Build {
 
         var arch;
         var conffiles;
+        var depends;
         var env = this.env;
         var finalPath;
         var flags;
@@ -439,6 +441,18 @@ class Build {
         }
 
         vars.conffiles = conffiles;
+        depends = vars.get("depends");
+        if (depends == null) {
+            depends = [];
+
+        } else if (depends is String) {
+            depends = depends.split(null, -1);
+
+        } else if (!(depends is List)) {
+            Core.raise(PackageConfigError("Invalid depends type"));
+        }
+
+        vars.depends = depends;
 
         //
         // Reconcile the architecture. The selected architecture must be
@@ -773,7 +787,7 @@ class Build {
 
     {
 
-        this._createPackage(this.vars, this.vars.pkgdir);
+        this._createPackage(this.vars, path(this.vars.pkgdir));
         _packageDepot.rebuildIndex();
         return;
     }
@@ -1064,6 +1078,7 @@ class Build {
 
         if (verbose) {
             Core.print("Assembling package: %s" % vars.name);
+            shell("ls -laR " + path(dataDir));
         }
 
         _packageDepot.createPackage(vars, dataDir, false);

@@ -527,6 +527,7 @@ Return Value:
 
 {
 
+    var depends = [];
     var description;
     var vars = build.vars;
 
@@ -537,6 +538,20 @@ Return Value:
 
     vars.description = description + " (development)";
     vars.section = "dev";
+
+    //
+    // By default the dev package depends on everything that's not dev and docs.
+    //
+
+    for (element in vars.depends) {
+        if ((element != vars.name + "-dev") &&
+            (element != vars.name + "-doc")) {
+
+            depends.append(element);
+        }
+    }
+
+    vars.depends = depends;
     chdir(build.vars.pkgdir);
     shell("libdirs=usr\n"
           "[ -d lib ] && libdirs=\"$libdirs lib\"\n"
