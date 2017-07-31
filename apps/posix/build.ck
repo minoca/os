@@ -44,6 +44,7 @@ function build() {
     var updateRcTool;
 
     binfiles = [
+        ["apps/banner:banner", "banner"],
         ["apps/debug/client:debug", "debug"],
         ["apps/efiboot:efiboot", "efiboot"],
         ["apps/mount:mount", "mount"],

@@ -29,7 +29,8 @@
 ## Add apps that are dependent on the C library here.
 ##
 
-APPS = ck       \
+APPS = banner   \
+       ck       \
        debug    \
        efiboot  \
        mingen   \

@@ -46,6 +46,7 @@ function build() {
     ];
 
     apps = [
+        "apps/banner:banner",
         "apps/ck:build_chalk",
         "apps/ck:chalk",
         "apps/debug:debug",
