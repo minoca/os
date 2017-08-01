@@ -209,7 +209,9 @@ Members:
     Flags - Stores a bitfield of flags governing the transfer. See
         DMA_TRANSFER_* definitions.
 
-    Completed - Stores the number of bytes successfully transferred.
+    Completed - Stores the number of bytes successfully transferred. For
+        continous transfers, this represents the current offset within the
+        transfer at which the DMA is operating at the time of the interrupt.
 
     Status - Stores the final status code of the transfer, as returned by the
         DMA controller.

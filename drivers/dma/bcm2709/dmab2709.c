@@ -1793,9 +1793,13 @@ Return Value:
 
 {
 
+    UINTN BaseBlockAddress;
+    UINTN BlockIndex;
     ULONG ChannelStatus;
     BOOL CompleteTransfer;
     BOOL Continuous;
+    PIO_BUFFER ControlBlockTable;
+    UINTN CurrentBlockAddress;
     PDMA_TRANSFER DmaTransfer;
     KSTATUS Status;
     PDMA_BCM2709_TRANSFER Transfer;
@@ -1856,12 +1860,27 @@ Return Value:
 
     //
     // If the transfer is meant to loop, the rest of this doesn't make sense.
-    // The completed bytes don't need updating nor do more transfers need
-    // scheduling, as the loop goes on continuously.
+    // The transfers don't need updating as the loop goes on continuously and
+    // the completed bytes do not mean the same thing. For continuous
+    // transfers, the completed bytes store the current offset within the DMA
+    // transfer. Calculate that offset and call the completion callback.
     //
 
     if (Continuous != FALSE) {
-        goto ProcessCompletedTransferEnd;
+        CurrentBlockAddress = DMA_BCM2709_CHANNEL_READ(
+                                         Controller,
+                                         Channel,
+                                         DmaBcm2709ChannelControlBlockAddress);
+
+        ControlBlockTable = Controller->Channels[Channel].ControlBlockTable;
+        BaseBlockAddress = ControlBlockTable->Fragment[0].PhysicalAddress;
+        BlockIndex = (CurrentBlockAddress - BaseBlockAddress) /
+                     sizeof(DMA_BCM2709_CONTROL_BLOCK);
+
+        DmaTransfer->Completed = BlockIndex * DmaTransfer->InterruptPeriod;
+        DmaTransfer->Status = Status;
+        DmaTransfer->CompletionCallback(DmaTransfer);
+        return;
     }
 
     //
@@ -1913,10 +1932,6 @@ ProcessCompletedTransferEnd:
         } else {
             Transfer->Transfer = NULL;
         }
-
-    } else if (Continuous != FALSE) {
-        DmaTransfer->Status = Status;
-        DmaTransfer->CompletionCallback(DmaTransfer);
     }
 
     return;

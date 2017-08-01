@@ -1837,11 +1837,14 @@ Return Value:
 
     //
     // Another fragment completed. Update the internal count and then update
-    // sound core with the offset.
+    // sound core with the offset. The completed bytes field holds the DMA
+    // transfers current position, but recall that it is off by 2x because the
+    // PCM to PWM conversion makes the DMA transfer buffer bigger.
     //
 
     Device = Transfer->UserContext;
-    Device->BufferPosition += Device->Buffer->FragmentSize;
+    Device->BufferPosition = Transfer->Completed /
+                             BCM27_PWMA_PWM_BYTES_PER_PCM_BYTES;
 
     //
     // The buffer size should be a power of 2, so just mask off the size.
