@@ -1421,6 +1421,18 @@ Return Value:
 
 StartDeviceEnd:
     if (!KSUCCESS(Status)) {
+
+        //
+        // If either the keyboard or the mouse fails, disconnect the mouse
+        // interrupt.
+        //
+
+        Device->MouseInterruptFound = FALSE;
+        if (Device->InterruptHandles[1] != INVALID_HANDLE) {
+            IoDisconnectInterrupt(Device->InterruptHandles[1]);
+            Device->InterruptHandles[1] = INVALID_HANDLE;
+        }
+
         if (Irp->Device == Device->KeyboardDevice) {
             Device->KeyboardInterruptFound = FALSE;
             if (Device->InterruptHandles[0] != INVALID_HANDLE) {
@@ -1432,17 +1444,6 @@ StartDeviceEnd:
                 InDestroyInputDevice(Device->KeyboardInputHandle);
                 Device->KeyboardInputHandle = INVALID_HANDLE;
             }
-        }
-
-        //
-        // If either the keyboard or the mouse fails, disconnect the mouse
-        // interrupt.
-        //
-
-        Device->MouseInterruptFound = FALSE;
-        if (Device->InterruptHandles[1] != INVALID_HANDLE) {
-            IoDisconnectInterrupt(Device->InterruptHandles[1]);
-            Device->InterruptHandles[1] = INVALID_HANDLE;
         }
 
         if (Device->MouseInputHandle != INVALID_HANDLE) {

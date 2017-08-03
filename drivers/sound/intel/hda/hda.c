@@ -1102,14 +1102,14 @@ Return Value:
 
 StartControllerEnd:
     if (!KSUCCESS(Status)) {
-        if (Controller->ControllerBase != NULL) {
-            MmUnmapAddress(Controller->ControllerBase, Size);
-            Controller->ControllerBase = NULL;
-        }
-
         if (Controller->InterruptHandle != INVALID_HANDLE) {
             IoDisconnectInterrupt(Controller->InterruptHandle);
             Controller->InterruptHandle = INVALID_HANDLE;
+        }
+
+        if (Controller->ControllerBase != NULL) {
+            MmUnmapAddress(Controller->ControllerBase, Size);
+            Controller->ControllerBase = NULL;
         }
 
         if (Controller->SoundController != NULL) {
