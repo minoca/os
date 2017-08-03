@@ -233,7 +233,7 @@ class ChrootContainment is Containment {
 
     {
 
-        var path = parameters.path;
+        var path = _parameters.path;
 
         chdir(path);
         chroot(path);
@@ -243,7 +243,7 @@ class ChrootContainment is Containment {
     }
 
     function
-    path (
+    outerPath (
         filepath
         )
 
@@ -267,11 +267,56 @@ class ChrootContainment is Containment {
 
     {
 
+        var rootpath = path(_parameters.path);
+
         if (filepath == "/") {
-            return _parameters.path;
+            return rootpath;
         }
 
-        return "/".join([_parameters.path, filepath]);
+        return "/".join([rootpath, filepath]);
+    }
+
+    function
+    innerPath (
+        filepath
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine translates from a path outside the container to a path
+        within of the container.
+
+    Arguments:
+
+        filepath - Supplies the path rooted from outside the container.
+
+    Return Value:
+
+        Returns the path to the file from the perspective of an application
+        executing within the container.
+
+    --*/
+
+    {
+
+        var rootpath = _parameters.path;
+
+        if (!filepath.startsWith(rootpath)) {
+            rootpath = path(rootpath);
+            if (!filepath.startsWith(rootpath)) {
+                Core.raise(ValueError("Path '%s' does not start in container "
+                                      "rooted at '%s'" % [filepath, rootpath]));
+            }
+        }
+
+        filepath = filepath[rootpath.length()...-1];
+        if (filepath == "") {
+            return "/";
+        }
+
+        return filepath;
     }
 }
 

@@ -529,6 +529,7 @@ Return Value:
 
     var depends = [];
     var description;
+    var name;
     var vars = build.vars;
 
     description = vars.description;
@@ -543,14 +544,16 @@ Return Value:
     // By default the dev package depends on everything that's not dev and docs.
     //
 
+    name = vars.name[0..-4];
     for (element in vars.depends) {
-        if ((element != vars.name + "-dev") &&
-            (element != vars.name + "-doc")) {
+        if ((element != name + "-dev") &&
+            (element != name + "-doc")) {
 
             depends.append(element);
         }
     }
 
+    depends.append(name);
     vars.depends = depends;
     chdir(build.vars.pkgdir);
     shell("libdirs=usr\n"

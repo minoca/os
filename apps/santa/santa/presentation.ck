@@ -243,7 +243,7 @@ class Presentation {
 
     {
 
-        var destdir = realm.containment.path(root);
+        var destdir = realm.containment.outerPath(root);
 
         //
         // The default implementation just removes the files.

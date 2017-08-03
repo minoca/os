@@ -210,7 +210,7 @@ class CopyPresentation is Presentation {
     {
 
         var dest;
-        var destdir = realm.containment.path(root);
+        var destdir = realm.containment.outerPath(root);
         var srcdir = controlDirectory + "/data";
 
         for (file in files) {

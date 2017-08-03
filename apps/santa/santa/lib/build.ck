@@ -32,10 +32,12 @@ Environment:
 import os;
 from santa.build import shell;
 from santa.config import config;
-from santa.file import mkdir, path, rmtree;
+from santa.file import isdir, mkdir, path, rmtree;
 from santa.lib.config import ConfigFile;
 import santa.lib.defaultbuild;
 from santa.lib.pkgdepot import PackageDepot;
+from santa.lib.pkgman import PackageManager, PackageNotFoundError;
+from santa.lib.realmmanager import RealmManager;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -65,46 +67,55 @@ var buildSteps = {
     "init": {
         "default": defaultbuild.defaultInit,
         "next": "fetch",
+        "contained": false,
     },
 
     "fetch": {
         "default": defaultbuild.defaultFetch,
         "next": "unpack",
+        "contained": false,
     },
 
     "unpack": {
         "default": defaultbuild.defaultUnpack,
         "next": "prepare",
+        "contained": false,
     },
 
     "prepare": {
         "default": defaultbuild.defaultPrepare,
         "next": "configure",
+        "contained": true,
     },
 
     "configure": {
         "default": defaultbuild.defaultConfigure,
         "next": "build",
+        "contained": true,
     },
 
     "build": {
         "default": defaultbuild.defaultBuild,
         "next": "check",
+        "contained": true,
     },
 
     "check": {
         "default": defaultbuild.defaultCheck,
         "next": "package",
+        "contained": true,
     },
 
     "package": {
         "default": defaultbuild.defaultPackage,
         "next": "clean",
+        "contained": false,
     },
 
     "clean": {
         "default": defaultbuild.defaultClean,
         "next": "complete",
+        "contained": false,
     },
 };
 
@@ -131,8 +142,9 @@ class Build {
     var _config;
     var _startDirectory;
     var _module;
-    var _subpackageDirectories;
     var _packageDepot;
+    var _realm;
+    var _subpackageDirectories;
 
     function
     __init (
@@ -178,6 +190,8 @@ class Build {
             };
 
             this.env = this.vars.copy();
+            this.ignoreMissingDeps = false;
+            this._getRealm(this.number, true);
             _subpackageDirectories = [];
         }
 
@@ -252,61 +266,110 @@ class Build {
 
     {
 
+        var child = null;
         var definition = buildSteps[step];
         var next;
         var returnValue;
         var stepFunction;
         var verbose;
 
-        this._setupEnvironment();
         if (step == "complete") {
             this.complete = true;
             return;
 
-        } else if (step == "package") {
-            this._packageSubmodules();
         }
 
         //
-        // Try to get the function associated with this step.
+        // Enter the containment environment if desired. Do it from a child
+        // process so the outer environment can still be accessed at the end.
+        // Windows does not support fork, but also does not support proper
+        // containment.
         //
 
-        try {
-            stepFunction = this.module.__get(step);
+        if (definition.contained != false) {
+            try {
+                child = (os.fork)();
 
-        } except NameError {
-            stepFunction = definition.default;
-        }
-
-        if (stepFunction != null) {
-            verbose = this.vars.verbose;
-            if (verbose) {
-                if (stepFunction == definition.default) {
-                    Core.print("Executing default step %s" % step);
-
-                } else {
-                    Core.print("Executing step %s" % step);
+            } except os.OsError as e {
+                if (e.errno != os.ENOSYS) {
+                    Core.raise(e);
                 }
             }
 
-            stepFunction(this);
-            if (verbose) {
-                Core.print("Completed step: %s" % step);
-            }
+            _realm.containment.enter(null);
+            this._translatePaths();
         }
 
+        if ((child == null) || (child == 0)) {
+            this._setupEnvironment();
+            if (step == "package") {
+                this._packageSubmodules();
+            }
+
+            //
+            // Try to get the function associated with this step.
+            //
+
+            try {
+                stepFunction = this.module.__get(step);
+
+            } except NameError {
+                stepFunction = definition.default;
+            }
+
+            if (stepFunction != null) {
+                verbose = this.vars.verbose;
+                if (verbose) {
+                    if (stepFunction == definition.default) {
+                        Core.print("Executing default step %s" % step);
+
+                    } else {
+                        Core.print("Executing step %s" % step);
+                    }
+                }
+
+                stepFunction(this);
+                if (verbose) {
+                    Core.print("Completed step: %s" % step);
+                }
+            }
+
+            //
+            // Process any results.
+            //
+
+            if (step == "init") {
+                this._postInitStep();
+
+            } else if (step == "package") {
+                this._postPackageStep();
+
+            } else if (step == "clean") {
+                this._postCleanupStep();
+            }
+
+            //
+            // Return back to the parent process now that the step is complete.
+            //
+
+            if (child == 0) {
+                (os.exit)(0);
+            }
+
         //
-        // Process any results.
+        // In the parent, just wait for the child to exit. In the case fork
+        // is not supported, this doesn't run.
         //
 
-        if (step == "init") {
-            this._postInitStep();
+        } else {
+            child = (os.waitpid)(child, os.WEXITED)[2];
+            if (child != 0) {
+                if (verbose) {
+                    Core.print("Child worker exited with: %d" % child);
+                }
 
-        } else if (step == "package") {
-            this._postPackageStep();
-
-        } else if (step == "clean") {
-            this._postCleanupStep();
+                (os.exit)(child);
+            }
         }
 
         next = definition.next;
@@ -441,18 +504,20 @@ class Build {
         }
 
         vars.conffiles = conffiles;
-        depends = vars.get("depends");
-        if (depends == null) {
-            depends = [];
+        for (key in ["depends", "makedepends_build", "makedepends_host"]) {
+            depends = vars.get(key);
+            if (depends == null) {
+                depends = [];
 
-        } else if (depends is String) {
-            depends = depends.split(null, -1);
+            } else if (depends is String) {
+                depends = depends.split(null, -1);
 
-        } else if (!(depends is List)) {
-            Core.raise(PackageConfigError("Invalid depends type"));
+            } else if (!(depends is List)) {
+                Core.raise(PackageConfigError("Invalid %s type" % key));
+            }
+
+            vars[key] = depends;
         }
-
-        vars.depends = depends;
 
         //
         // Reconcile the architecture. The selected architecture must be
@@ -532,10 +597,10 @@ class Build {
             }
 
             mkdir(vars.srcdir);
-            vars.srcdir = finalPath;
-            env.srcdir = finalPath;
         }
 
+        vars.srcdir = finalPath;
+        env.srcdir = finalPath;
         finalPath = path(vars.pkgdir);
         if (!(os.isdir)(finalPath)) {
             if (verbose) {
@@ -543,10 +608,10 @@ class Build {
             }
 
             mkdir(vars.pkgdir);
-            vars.pkgdir = finalPath;
-            env.pkgdir = finalPath;
         }
 
+        vars.pkgdir = finalPath;
+        env.pkgdir = finalPath;
         finalPath = path(vars.builddir);
         if (!(os.isdir)(finalPath)) {
             if (verbose) {
@@ -554,10 +619,14 @@ class Build {
             }
 
             mkdir(vars.builddir);
-            vars.builddir = finalPath;
-            env.builddir = finalPath;
         }
 
+        vars.builddir = finalPath;
+        env.builddir = finalPath;
+        vars.buildsysroot = path(vars.buildsysroot);
+        env.buildsysroot = vars.buildsysroot;
+        vars.sysroot = path(vars.sysroot);
+        env.sysroot = vars.sysroot;
         return;
     }
 
@@ -584,7 +653,6 @@ class Build {
     {
 
         var configPath;
-        var buildRoot;
 
         //
         // Don't bother saving a build that's already been cleaned up.
@@ -595,8 +663,7 @@ class Build {
         }
 
         if (_config == null) {
-            buildRoot = config.getKey("core.builddir");
-            configPath = path("%s/%d/status.json" % [buildRoot, this.number]);
+            configPath = _realm.containment.outerPath("santa/status.json");
             _config = ConfigFile(configPath, {});
         }
 
@@ -637,9 +704,9 @@ class Build {
     {
 
         var configPath;
-        var buildRoot = config.getKey("core.builddir");
 
-        configPath = path("%s/%d/status.json" % [buildRoot, number]);
+        this._getRealm(number, false);
+        configPath = _realm.containment.outerPath("santa/status.json");
         if (!(os.exists)(configPath)) {
             Core.raise(ValueError("Build %d does not exist" % number));
         }
@@ -740,7 +807,10 @@ class Build {
 
     {
 
+        var deps;
         var missing = [];
+        var packages = PackageManager(_realm);
+        var params = {};
         var value;
         var vars = this.vars;
 
@@ -761,6 +831,53 @@ class Build {
                                    ", ".join(missing)]));
         }
 
+        //
+        // Install required build dependencies.
+        //
+
+        deps = vars.get("makedepends_build");
+        if (deps != null) {
+            for (dep in deps) {
+                try {
+                    packages.install(dep, null);
+
+                } except PackageNotFoundError as e {
+                    if (!this.ignoreMissingDeps) {
+                        Core.raise(e);
+
+                    } else {
+                        Core.print("Ignoring missing build dependency: %s" %
+                                   dep);
+                    }
+                }
+            }
+        }
+
+        deps = vars.get("makedepends_host");
+        if (deps != null) {
+            if ((vars.arch != os.machine) || (vars.os != os.system)) {
+                params.arch = vars.arch;
+                params.os = vars.os;
+                params.root = _realm.containment.innerPath(vars.sysroot);
+            }
+
+            for (dep in deps) {
+                try {
+                    packages.install(dep, params);
+
+                } except PackageNotFoundError as e {
+                    if (!this.ignoreMissingDeps) {
+                        Core.raise(e);
+
+                    } else {
+                        Core.print("Ignoring missing host dependency: %s" %
+                                   dep);
+                    }
+                }
+            }
+        }
+
+        packages.commit();
         return;
     }
 
@@ -815,7 +932,8 @@ class Build {
 
     {
 
-        var buildRoot = config.getKey("core.builddir");
+        var buildRoot = _realm.containment.outerPath("santa");
+        var realms = RealmManager();
         var vars = this.vars;
 
         buildRoot = path("%s/%d" % [buildRoot, this.number]);
@@ -825,6 +943,13 @@ class Build {
 
         (os.chdir)(vars.startdir);
         rmtree(buildRoot);
+
+        //
+        // Destroy the realm used to build this package.
+        //
+
+        realms.destroyRealm("build%d" % this.number);
+        _realm = null;
         _config = null;
         return;
     }
@@ -851,19 +976,20 @@ class Build {
 
     {
 
-        var buildRoot = config.getKey("core.builddir");
-        var number = this.number;
+        var buildRoot = _realm.containment.outerPath("santa");
         var vars = this.vars;
 
-        if (!buildRoot) {
-            Core.raise(ValueError("core.builddir not set"));
+        vars.startdir = _startDirectory;
+        vars.srcdir = buildRoot + "/src";
+        vars.pkgdir = buildRoot + "/pkg";
+        vars.builddir = buildRoot + "/bld";
+        vars.subpkgdir = null;
+        vars.buildsysroot = _realm.containment.outerPath("/");
+        vars.sysroot = vars.buildsysroot;
+        if ((vars.os != vars.buildos) || (vars.arch != vars.buildarch)) {
+            vars.sysroot = "%s/%s-%s" % [buildRoot, vars.arch, vars.os];
         }
 
-        vars.startdir = _startDirectory;
-        vars.srcdir = "%s/%d/src" % [buildRoot, number];
-        vars.pkgdir = "%s/%d/pkg" % [buildRoot, number];
-        vars.builddir = "%s/%d/bld" % [buildRoot, number];
-        vars.subpkgdir = null;
         return;
     }
 
@@ -890,7 +1016,6 @@ class Build {
 
     {
 
-        var buildRoot = config.getKey("core.builddir");
         var functionName;
         var functionResult;
         var modifier;
@@ -1084,6 +1209,88 @@ class Build {
         _packageDepot.createPackage(vars, dataDir, false);
         if (verbose) {
             Core.print("Completed assembling package %s" % vars.name);
+        }
+
+        return;
+    }
+
+    function
+    _getRealm (
+        number,
+        create
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine creates a package from the current variables.
+
+    Arguments:
+
+        number - Supplies the build number to get the realm for.
+
+        create - Supplies a boolean indicating if the realm should be created
+            if it does not exist.
+
+    Return Value:
+
+        None. On failure, an exception is raised.
+
+    --*/
+
+    {
+
+        var realmName = "build%d" % number;
+        var realms = RealmManager();
+
+        try {
+            _realm = realms.getRealm(realmName);
+
+        } except KeyError {
+            if (create) {
+                _realm = realms.createRealm(realmName, null);
+
+            } else {
+                Core.raise(KeyError("Build %d does not exist" % number));
+            }
+        }
+
+        return;
+    }
+
+    function
+    _translatePaths (
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine translates paths that were anchored outside the container
+        into the container, now that the containment environment has been
+        entered. This routine assumes the environment has not yet been set up.
+
+    Arguments:
+
+        None.
+
+    Return Value:
+
+        None.
+
+    --*/
+
+    {
+
+        var env = this.env;
+        var value;
+        var vars = this.vars;
+
+        for (key in ["srcdir", "builddir", "pkgdir"]) {
+            value = _realm.containment.innerPath(vars[key]);
+            vars[key] = value;
+            env[key] = value;
         }
 
         return;

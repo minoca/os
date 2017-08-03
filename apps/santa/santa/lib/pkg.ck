@@ -426,7 +426,7 @@ class Package {
 
         archive.close();
         (os.unlink)(dataArchivePath);
-        this.extracted = true;
+        this.status.extracted = true;
         this.status.files = files;
         return;
     }

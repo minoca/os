@@ -31,7 +31,7 @@ Environment:
 //
 
 from iobase import IoError;
-from os import dirname, getenv, mkdir, OsError, ENOENT;
+from os import dirname, getenv, mkdir, OsError, ENOENT, system, geteuid;
 from santa.lib.config import ConfigFile;
 
 //
@@ -79,6 +79,27 @@ var SANTA_PACKAGE_STATE_PATH = SANTA_USER_ROOT + "/packages.json";
 var SANTA_STORAGE_PATH = SANTA_USER_ROOT + "/storage";
 
 //
+// Define the path to the default containers.
+//
+
+var SANTA_CONTAINER_PATH = SANTA_USER_ROOT + "/containers";
+
+//
+// Define the path to the realm configuration.
+//
+
+var SANTA_REALM_STATE_PATH = SANTA_USER_ROOT + "/realms.json";
+
+//
+// Define the root container path.
+//
+
+var SANTA_ROOT_CONTAINER_PATH = "/";
+if (system == "Windows") {
+    SANTA_ROOT_CONTAINER_PATH = SANTA_CONTAINER_PATH + "/root";
+}
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -110,7 +131,7 @@ var defaultConfig = {
         "verbose": false,
 
         //
-        // Define the directory where data is stored.
+        // Define the directory where global state is stored.
         //
 
         "statedir": "/var/lib/santa",
@@ -123,12 +144,6 @@ var defaultConfig = {
             "/usr/lib/santa/extensions",
             SANTA_USER_ROOT + "/extensions"
         ],
-
-        //
-        // Define the directory where builds are run.
-        //
-
-        "builddir": SANTA_USER_ROOT + "/build",
 
         //
         // Define the directory where packages are stored.
@@ -150,6 +165,7 @@ var defaultConfig = {
         "root": {
             "containment": {
                 "type": "none",
+                "path": SANTA_ROOT_CONTAINER_PATH
             },
 
             "presentation": {
@@ -163,31 +179,12 @@ var defaultConfig = {
 
         "new": {
             "containment": {
-                "type": "none", //"chroot",
+                "type": (system == "Windows") ? "none" : "chroot",
             },
 
             "presentation": {
                 "type": "copy",
             },
-
-            //
-            // Define the sharing of data between child realms and the root.
-            //
-
-            "sharing": {
-
-                //
-                // Define the sharing style for the storage region.
-                //
-
-                "store": "none", //"mount",
-
-                //
-                // Define the sharing style for the global configuration file.
-                //
-
-                "globalconfig": "copy",
-            }
         }
     },
 
@@ -298,38 +295,50 @@ class SantaConfig {
         }
 
         //
-        // Load up the user configuration file. If it starts with ~, prefix
-        // with the user's home directory. If that cannot be found, don't load
-        // anything.
+        // For the root user, set "home" to be the global directory, and don't
+        // load a per-user configuration.
         //
 
-        path = SANTA_USER_CONFIG_PATH;
-        if (path[0] == "~") {
-            home = _override.getKey("core.home");
-            if (!home) {
-                home = getenv("HOME");
+        if (geteuid() == 0) {
+            home = _global.getKey("core.statedir");
+            _override.setKey("core.home", home);
+
+        } else {
+
+            //
+            // Load up the user configuration file. If it starts with ~, prefix
+            // with the user's home directory. If that cannot be found, don't
+            // load anything.
+            //
+
+            path = SANTA_USER_CONFIG_PATH;
+            if (path[0] == "~") {
+                home = _override.getKey("core.home");
                 if (!home) {
-                    home = getenv("Home");
+                    home = getenv("HOME");
                     if (!home) {
-                        home = getenv("HOMEPATH");
-                        if (home) {
-                            home = getenv("HOMEDRIVE") + home;
+                        home = getenv("Home");
+                        if (!home) {
+                            home = getenv("HOMEPATH");
+                            if (home) {
+                                home = getenv("HOMEDRIVE") + home;
+                            }
                         }
                     }
                 }
-            }
 
-            if (home) {
-                home = home.replace("\\", "/", -1);
-                _override.setKey("core.home", home);
-                path = root + home + path[1...-1];
+                if (home) {
+                    home = home.replace("\\", "/", -1);
+                    _override.setKey("core.home", home);
+                    path = root + home + path[1...-1];
+
+                } else {
+                    path = null;
+                }
 
             } else {
-                path = null;
+                path = root + path;
             }
-
-        } else {
-            path = root + path;
         }
 
         //

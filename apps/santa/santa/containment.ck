@@ -192,7 +192,7 @@ class Containment {
     }
 
     function
-    path (
+    outerPath (
         filepath
         )
 
@@ -219,6 +219,33 @@ class Containment {
         Core.raise(ContainmentError("Function not implemented"));
     }
 
+    function
+    innerPath (
+        filepath
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine translates from a path outside the container to a path
+        within of the container.
+
+    Arguments:
+
+        filepath - Supplies the path rooted from outside the container.
+
+    Return Value:
+
+        Returns the path to the file from the perspective of an application
+        executing within the container.
+
+    --*/
+
+    {
+
+        Core.raise(ContainmentError("Function not implemented"));
+    }
 }
 
 //

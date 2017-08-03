@@ -100,7 +100,6 @@ class Realm {
         type = getPresentation(parameters.presentation.type);
         this.presentation = type();
         this.presentation.create(parameters.presentation);
-        this.setupSharing(false);
         return null;
     }
 
@@ -126,7 +125,6 @@ class Realm {
 
     {
 
-        this.setupSharing(true);
         this.presentation.destroy();
         this.presentation = null;
         this.containment.destroy();
@@ -209,78 +207,6 @@ class Realm {
     }
 
     function
-    setupSharing (
-        tearDown
-        )
-
-    /*++
-
-    Routine Description:
-
-        This routine sets up shared data between the parent and this new
-        child realm.
-
-    Arguments:
-
-        tearDown - Supplies a boolean indicating whether or not to actually
-            tear down sharing rather than setting it up.
-
-    Return Value:
-
-        Null on success.
-
-        Raises an exception on failure.
-
-    --*/
-
-    {
-
-        var destination;
-        var method;
-        var sharing;
-        var source;
-
-        sharing = _parameters.get("sharing");
-        if (sharing is Dict) {
-            for (element in sharing) {
-                method = sharing[element];
-                if (element == "store") {
-                    source = path(SANTA_STORAGE_PATH);
-                    if (source == "/") {
-                        source = null;
-                    }
-
-                    destination = source;
-
-                } else if (element == "globalconfig") {
-                    source = SANTA_GLOBAL_CONFIG_PATH;
-                    destination = source;
-
-                } else if (element[0] == "/") {
-                    source = element;
-                    destination = element;
-
-                } else {
-                    Core.raise(ValueError("Unknown shareable %s" % element));
-                }
-
-                if (tearDown) {
-                    if (destination) {
-                        this._unshareFile(destination, method);
-                    }
-
-                } else {
-                    if (source) {
-                        this._shareFile(source, destination, method);
-                    }
-                }
-            }
-        }
-
-        return;
-    }
-
-    function
     _shareFile (
         source,
         destination,
@@ -312,7 +238,7 @@ class Realm {
 
     {
 
-        destination = this.containment.path(destination);
+        destination = this.containment.outerPath(destination);
         if (method == "hardlink") {
             link(source, destination);
 
@@ -355,7 +281,7 @@ class Realm {
 
     {
 
-        destination = this.containment.path(destination);
+        destination = this.containment.outerPath(destination);
         if ((method == "hardlink") || (method == "copy")) {
             rmtree(destination);
 

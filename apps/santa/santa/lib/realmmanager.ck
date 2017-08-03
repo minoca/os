@@ -31,8 +31,9 @@ Environment:
 
 from santa.config import config;
 from santa.lib.config import ConfigFile;
-from santa.file import open;
+from santa.file import open, path;
 from santa.lib.realm import Realm;
+from santa.lib.santaconfig import SANTA_REALM_STATE_PATH, SANTA_CONTAINER_PATH;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -103,7 +104,7 @@ class RealmManager {
             return _singleton;
         }
 
-        configPath = "/".join([config.getKey("core.statedir"), "realm.json"]);
+        configPath = path(SANTA_REALM_STATE_PATH);
         _config = ConfigFile(configPath, defaultRealmsConfig);
         _singleton = this;
         return this;
@@ -220,8 +221,10 @@ class RealmManager {
 
         } else {
             realmConfig = realmConfig.copy();
-            for (key in parameters) {
-                realmConfig[key] = parameters[key];
+            if (parameters) {
+                for (key in parameters) {
+                    realmConfig[key] = parameters[key];
+                }
             }
         }
 
@@ -231,6 +234,20 @@ class RealmManager {
                                   name));
 
         } except KeyError {}
+
+        //
+        // If no path was set for the container, create a default one from the
+        // name.
+        //
+
+        if (realmConfig.get("containment") == null) {
+            realmConfig.containment = {};
+        }
+
+        if (realmConfig.containment.get("path") == null) {
+            realmConfig.containment.path =
+                                        "/".join([SANTA_CONTAINER_PATH, name]);
+        }
 
         realm = Realm();
         realm.create(realmConfig);

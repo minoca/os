@@ -29,7 +29,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-from santa.containment import Containment;
+from santa.config import config;
+from santa.containment import Containment, ContainmentError;
+from santa.file import chdir, mkdir, path, rmtree;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -86,6 +88,21 @@ class NoneContainment is Containment {
 
         _parameters = parameters.copy();
         _parameters.type = "none";
+        try {
+            rootpath = parameters.path;
+
+        } except KeyError {
+            Core.raise(ContainmentError("Required parameter is missing"));
+        }
+
+        if (rootpath && (rootpath != "/")) {
+            mkdir(rootpath);
+        }
+
+        if (config.getKey("core.verbose")) {
+            Core.print("Created container at %s" % rootpath);
+        }
+
         return;
     }
 
@@ -111,7 +128,19 @@ class NoneContainment is Containment {
 
     {
 
+        var rootpath = _parameters.path;
+        var verbose = config.getKey("core.verbose");
+
+        if (verbose) {
+            Core.print("Destroying container at %s" % rootpath);
+        }
+
+        rmtree(rootpath);
         _parameters = null;
+        if (verbose) {
+            Core.print("Destroyed container at %s" % rootpath);
+        }
+
         return;
     }
 
@@ -140,6 +169,14 @@ class NoneContainment is Containment {
     {
 
         _parameters = parameters;
+
+        try {
+            parameters.path;
+
+        } except KeyError {
+            Core.raise(ContainmentError("Required parameter is missing"));
+        }
+
         return;
     }
 
@@ -195,11 +232,16 @@ class NoneContainment is Containment {
 
     {
 
-        return;
+        var path = _parameters.path;
+
+        chdir(path);
+        if (config.getKey("core.verbose")) {
+            Core.print("Changed working directory to container at %s" % path);
+        }
     }
 
     function
-    path (
+    outerPath (
         filepath
         )
 
@@ -222,6 +264,71 @@ class NoneContainment is Containment {
     --*/
 
     {
+
+        var rootpath = path(_parameters.path);
+
+        if (filepath == "/") {
+            return rootpath;
+        }
+
+        if (!rootpath || (rootpath == "/")) {
+            return filepath;
+        }
+
+        //
+        // Slice off the drive letter if this is an absolute Windows path.
+        //
+
+        if (filepath[1..2] == ":") {
+            filepath = filepath[2...-1];
+        }
+
+        return "/".join([rootpath, filepath]);
+    }
+
+    function
+    innerPath (
+        filepath
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine translates from a path outside the container to a path
+        within of the container.
+
+    Arguments:
+
+        filepath - Supplies the path rooted from outside the container.
+
+    Return Value:
+
+        Returns the path to the file from the perspective of an application
+        executing within the container.
+
+    --*/
+
+    {
+
+        var rootpath = _parameters.path;
+
+        if (!rootpath || (rootpath == "/")) {
+            return filepath;
+        }
+
+        if (!filepath.startsWith(rootpath)) {
+            rootpath = path(rootpath);
+            if (!filepath.startsWith(rootpath)) {
+                Core.raise(ValueError("Path '%s' does not start in container "
+                                      "rooted at '%s'" % [filepath, rootpath]));
+            }
+        }
+
+        //
+        // The "none" containment doesn't change the root, so the path doesn't
+        // change.
+        //
 
         return filepath;
     }

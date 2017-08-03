@@ -110,7 +110,12 @@ class PackageManager {
         }
 
         _realm = realm;
-        statePath = realm.containment.path(path(SANTA_PACKAGE_STATE_PATH));
+        statePath = path(SANTA_PACKAGE_STATE_PATH);
+        if (realm.name != "root") {
+            statePath = realm.containment.outerPath(statePath);
+        }
+
+        mkdir((os.dirname)(statePath));
         _state = ConfigFile(statePath, defaultPackageManagerState);
         this.db = PackageDatabase();
         _addPlan = [];
@@ -151,6 +156,10 @@ class PackageManager {
         var filter;
         var package;
         var packages;
+
+        if (parameters == null) {
+            parameters = {};
+        }
 
         //
         // Set a root if there isn't one so it's always identified as a filter
@@ -740,7 +749,7 @@ class PackageManager {
                 dep = this.getPackage(dep, parameters);
 
             } except PackageNotFoundError as e {
-                Core.raise(PackageDependencyError(
+                Core.raise(PackageNotFoundError(
                            "Cannot add dependency %s: needed by %s: "
                            "Package not found" % [dep, parameters.trail]));
             }
@@ -865,7 +874,7 @@ class PackageManager {
                 dep = this._getInstalledPackage(dep, parameters);
 
             } except PackageNotFoundError as e {
-                Core.raise(PackageDependencyError(
+                Core.raise(PackageNotFoundError(
                            "Cannot remove dependency %s: from %s: "
                            "Package not found" % [dep, package.trail]));
             }

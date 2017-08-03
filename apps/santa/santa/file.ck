@@ -280,10 +280,11 @@ Return Value:
 
             //
             // If the caller doesn't have permission to delete the file, try to
-            // gain permission.
+            // gain permission. Windows for some reason returns EINVAL
+            // sometimes.
             //
 
-            if (e.errno == os.EACCES) {
+            if ((e.errno == os.EACCES) || (e.errno == os.EINVAL)) {
                 try {
                     (os.chmod)(filepath, 0666);
 
@@ -786,10 +787,10 @@ Return Value:
 
 {
 
-    var statedir = config.getKey("core.statedir");
+    var rootContainer = config.getKey("realm.root.containment.path");
 
-    if (statedir) {
-        mkdir(statedir);
+    if (rootContainer && (rootContainer != "/")) {
+        mkdir(rootContainer);
     }
 
     return;
