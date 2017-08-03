@@ -2988,7 +2988,6 @@ class CpioArchive {
             mode |= os.S_ISVTX;
         }
 
-        (os.chmod)(path, mode);
         if (uid < 0) {
             uid = member.uid;
         }
@@ -3007,6 +3006,7 @@ class CpioArchive {
             }
         }
 
+        (os.chmod)(path, mode);
         return;
     }
 }

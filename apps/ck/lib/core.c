@@ -1096,13 +1096,16 @@ Return Value:
 
 {
 
+    PCK_CLASS Class;
     PCK_DICT Dict;
     PCK_INSTANCE Instance;
 
     if (!CK_IS_INSTANCE(Arguments[0])) {
+        Class = CkpGetClass(Vm, Arguments[0]);
         CkpRuntimeError(Vm,
                         "TypeError",
-                        "Builtin type does not implement __get");
+                        "%s does not implement __get",
+                        Class->Name->Value);
 
         return FALSE;
     }
@@ -1152,13 +1155,16 @@ Return Value:
 
 {
 
+    PCK_CLASS Class;
     PCK_DICT Dict;
     PCK_INSTANCE Instance;
 
     if (!CK_IS_INSTANCE(Arguments[0])) {
+        Class = CkpGetClass(Vm, Arguments[0]);
         CkpRuntimeError(Vm,
                         "TypeError",
-                        "Builtin type does not implement __set");
+                        "%s does not implement __set",
+                        Class->Name->Value);
 
         return FALSE;
     }
