@@ -35,6 +35,7 @@ Author:
 #else
 
 #include <sys/utsname.h>
+#include <sys/wait.h>
 
 #endif
 
@@ -148,6 +149,7 @@ Author:
 
 extern CK_VARIABLE_DESCRIPTION CkOsErrnoValues[];
 extern CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[];
+extern CK_VARIABLE_DESCRIPTION CkOsUserValues[];
 
 //
 // -------------------------------------------------------- Function Prototypes

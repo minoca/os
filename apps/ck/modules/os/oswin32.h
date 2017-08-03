@@ -42,6 +42,16 @@ Author:
     (errno = ENOSYS, (_Symlink), -1)
 
 #define chown(_Path, _Uid, _Gid) (errno = ENOSYS, (_Path), (_Uid), (_Gid), -1)
+#define fork() (errno = ENOSYS, -1)
+#define waitpid(_ProcessId, _Status, _Options) (errno = ENOSYS, -1)
+
+#define WIFEXITED(_Status) 1
+#define WIFSTOPPED(_Status) 0
+#define WIFCONTINUED(_Status) 0
+#define WIFSIGNALED(_Status) 0
+#define WEXITSTATUS(_Status) (_Status)
+#define WTERMSIG(_Status) (_Status)
+#define WSTOPSIG(_Status) (_Status)
 
 //
 // Re-define unlink to a function that tries unlink a few times, since Windows
@@ -50,6 +60,18 @@ Author:
 
 #define unlink CkpWin32Unlink
 #define rmdir CkpWin32Rmdir
+
+//
+// The user ID functions all point to the same thing.
+//
+
+#define getuid geteuid
+#define getgid geteuid
+#define getegid geteuid
+#define seteuid(_NewId) (errno = ENOSYS, -1)
+#define setegid(_NewId) (errno = ENOSYS, -1)
+#define setresuid(_RealId, _EffectiveId, _SavedId) (errno = ENOSYS, -1)
+#define setresgid(_RealId, _EffectiveId, _SavedId) (errno = ENOSYS, -1)
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -71,6 +93,12 @@ Author:
 #define S_IFSOCK 0
 
 #define _SC_NPROCESSORS_ONLN 1
+
+#define WCONTINUED 0
+#define WNOHANG 0
+#define WUNTRACED 0
+#define WEXITED 0
+#define WNOWAIT 0
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -275,6 +303,30 @@ Return Value:
     0 on success.
 
     -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+int
+geteuid (
+    void
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the effective user ID in Windows. If the process is
+    privileged, this routine returns 0. Otherwise, this routine returns 1000.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    0 if the process is privileged.
+
+    1000 if the process is a regular user.
 
 --*/
 

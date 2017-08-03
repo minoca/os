@@ -51,12 +51,17 @@ Environment:
 //
 
 VOID
-CkpOsExit (
+CkpOsFork (
     PCK_VM Vm
     );
 
 VOID
-CkpOsGetpid (
+CkpOsWaitPid (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsExit (
     PCK_VM Vm
     );
 
@@ -70,8 +75,14 @@ CkpOsNproc (
 //
 
 CK_VARIABLE_DESCRIPTION CkOsModuleValues[] = {
+    {CkTypeInteger, "WNOHANG", NULL, WNOHANG},
+    {CkTypeInteger, "WUNTRACED", NULL, WUNTRACED},
+    {CkTypeInteger, "WCONTINUED", NULL, WCONTINUED},
+    {CkTypeInteger, "WEXITED", NULL, WEXITED},
+    {CkTypeInteger, "WNOWAIT", NULL, WNOWAIT},
+    {CkTypeFunction, "fork", CkpOsFork, 0},
+    {CkTypeFunction, "waitpid", CkpOsWaitPid, 2},
     {CkTypeFunction, "exit", CkpOsExit, 1},
-    {CkTypeFunction, "getpid", CkpOsGetpid, 0},
     {CkTypeFunction, "nproc", CkpOsNproc, 0},
     {CkTypeInvalid, NULL, NULL, 0}
 };
@@ -147,8 +158,122 @@ Return Value:
 
     CkDeclareVariables(Vm, 0, CkOsErrnoValues);
     CkDeclareVariables(Vm, 0, CkOsIoModuleValues);
+    CkDeclareVariables(Vm, 0, CkOsUserValues);
     CkDeclareVariables(Vm, 0, CkOsModuleValues);
     CkpOsInitializeInfo(Vm);
+    return;
+}
+
+VOID
+CkpOsFork (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the fork call. It takes no parameters. In the child
+    forked process, it returns 0. In the parent process, it returns the pid of
+    the child. On error and on Windows an exception is raised.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    Returns 0 in the child, or the pid in the parent. On failure, an exception
+    is raised.
+
+--*/
+
+{
+
+    pid_t Result;
+
+    Result = fork();
+    if (Result < 0) {
+        CkpOsRaiseError(Vm, NULL);
+        return;
+    }
+
+    CkReturnInteger(Vm, Result);
+    return;
+}
+
+VOID
+CkpOsWaitPid (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the waitpid call. It takes two parameters: a pid
+    to wait for, and an integer bitfield of options to wait for.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    Returns a list of [Pid, Status] on success. Status is either non-negative
+    if the process exited, or negative if the process hit a signal (and either
+    stopped or terminated). Status will be 0x1000 if the process is continued.
+
+    Returns null if WNOHANG is specified and no children are ready.
+
+    Raises an exception on failure and on Windows.
+
+--*/
+
+{
+
+    pid_t Result;
+    int Status;
+    CK_INTEGER StatusValue;
+
+    if (!CkCheckArguments(Vm, 2, CkTypeInteger, CkTypeInteger)) {
+        return;
+    }
+
+    Status = 0;
+    Result = waitpid(CkGetInteger(Vm, 1), &Status, CkGetInteger(Vm, 2));
+    if (Result < 0) {
+        CkpOsRaiseError(Vm, NULL);
+        return;
+    }
+
+    if (Result == 0) {
+        CkReturnNull(Vm);
+        return;
+    }
+
+    CkPushList(Vm);
+    CkPushInteger(Vm, Result);
+    CkListSet(Vm, -1, 0);
+    if (WIFEXITED(Status)) {
+        StatusValue = WEXITSTATUS(Status);
+
+    } else if (WIFSTOPPED(Status)) {
+        StatusValue = -WSTOPSIG(Status);
+
+    } else if (WIFSIGNALED(Status)) {
+        StatusValue = -WTERMSIG(Status);
+
+    } else if (WIFCONTINUED(Status)) {
+        StatusValue = 0x1000;
+
+    } else {
+        CkpOsRaiseError(Vm, NULL);
+        return;
+    }
+
+    CkPushInteger(Vm, StatusValue);
+    CkStackReplace(Vm, 0);
     return;
 }
 
@@ -182,33 +307,6 @@ Return Value:
 
     exit(CkGetInteger(Vm, 1));
     CkReturnInteger(Vm, -1LL);
-    return;
-}
-
-VOID
-CkpOsGetpid (
-    PCK_VM Vm
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the current process identifier.
-
-Arguments:
-
-    Vm - Supplies a pointer to the virtual machine.
-
-Return Value:
-
-    This routine does not return. The process exits.
-
---*/
-
-{
-
-    CkReturnInteger(Vm, getpid());
     return;
 }
 

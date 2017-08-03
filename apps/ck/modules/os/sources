@@ -30,6 +30,7 @@ OBJS = entry.o        \
        io.o           \
        os.o           \
        osinfo.o       \
+       user.o         \
 
 WIN32_OBJS = oswin32.o \
 

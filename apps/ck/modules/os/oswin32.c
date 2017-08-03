@@ -65,6 +65,8 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
+SID_IDENTIFIER_AUTHORITY CkNtAuthority = {SECURITY_NT_AUTHORITY};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -394,6 +396,72 @@ Return Value:
     }
 
     return Result;
+}
+
+int
+geteuid (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the effective user ID in Windows. If the process is
+    privileged, this routine returns 0. Otherwise, this routine returns 1000.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    0 if the process is privileged.
+
+    1000 if the process is a regular user.
+
+--*/
+
+{
+
+    PSID AdministratorsGroup;
+    BOOL IsAdministrator;
+    BOOL Result;
+
+    IsAdministrator = FALSE;
+
+    //
+    // Return 0 if the current user is an admin.
+    //
+
+    Result = AllocateAndInitializeSid(&CkNtAuthority,
+                                      2,
+                                      SECURITY_BUILTIN_DOMAIN_RID,
+                                      DOMAIN_ALIAS_RID_ADMINS,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      &AdministratorsGroup);
+
+    if (Result != FALSE) {
+        if (CheckTokenMembership(NULL,
+                                 AdministratorsGroup,
+                                 &IsAdministrator) == FALSE) {
+
+            IsAdministrator = FALSE;
+        }
+
+        FreeSid(AdministratorsGroup);
+    }
+
+    if (IsAdministrator != FALSE) {
+        return 0;
+    }
+
+    return 1000;
 }
 
 //

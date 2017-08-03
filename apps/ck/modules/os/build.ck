@@ -44,7 +44,8 @@ function build() {
         "errno.c",
         "io.c",
         "os.c",
-        "osinfo.c"
+        "osinfo.c",
+        "user.c"
     ];
 
     win32Sources = [
