@@ -296,11 +296,14 @@ class Build {
                 }
             }
 
-            _realm.containment.enter(null);
-            this._translatePaths();
         }
 
         if ((child == null) || (child == 0)) {
+            if (definition.contained != false) {
+                _realm.containment.enter(null);
+                this._translatePaths();
+            }
+
             this._setupEnvironment();
             if (step == "package") {
                 this._packageSubmodules();
@@ -362,7 +365,7 @@ class Build {
         //
 
         } else {
-            child = (os.waitpid)(child, os.WEXITED)[2];
+            child = (os.waitpid)(child, 0)[1];
             if (child != 0) {
                 if (verbose) {
                     Core.print("Child worker exited with: %d" % child);

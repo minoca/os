@@ -31,7 +31,7 @@ Environment:
 
 from santa.config import config;
 from santa.containment import Containment, ContainmentError;
-from santa.file import mkdir, rmtree, chdir, chroot;
+from santa.file import chdir, chroot, mkdir, path, rmtree;
 
 //
 // --------------------------------------------------------------------- Macros

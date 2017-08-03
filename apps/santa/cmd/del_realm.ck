@@ -120,7 +120,18 @@ Return Value:
 
     manager = getRealmManager();
     for (name in args) {
-        manager.destroyRealm(name);
+        if (name == "*") {
+            for (realm in manager.enumerateRealms()) {
+                if (realm == "root") {
+                    continue;
+                }
+
+                manager.destroyRealm(realm);
+            }
+
+        } else {
+            manager.destroyRealm(name);
+        }
     }
 
     return 0;

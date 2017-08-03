@@ -49,46 +49,47 @@ from santa.lib.config import ConfigFile;
 var SANTA_GLOBAL_CONFIG_PATH = "/etc/santa.conf";
 
 //
-// Define the path to Santa's base directory for th user.
+// Define the suffix that goes on the end of the user's home directory to
+// become Santa's home.
 //
 
-var SANTA_USER_ROOT = "~/.santa";
+var SANTA_USER_SUFFIX = "/.santa";
 
 //
 // The path to load the user's configuration from.
 //
 
-var SANTA_USER_CONFIG_PATH = SANTA_USER_ROOT + "/santa.conf";
+var SANTA_USER_CONFIG_PATH = "~/santa.conf";
 
 //
 // Define the path to the patch manager's configuration.
 //
 
-var SANTA_PATCH_CONFIG_PATH = SANTA_USER_ROOT + "/patch.conf";
+var SANTA_PATCH_CONFIG_PATH = "~/patch.conf";
 
 //
 // Define the path to the package manager's state.
 //
 
-var SANTA_PACKAGE_STATE_PATH = SANTA_USER_ROOT + "/packages.json";
+var SANTA_PACKAGE_STATE_PATH = "~/packages.json";
 
 //
 // Define the path to the package storage area.
 //
 
-var SANTA_STORAGE_PATH = SANTA_USER_ROOT + "/storage";
+var SANTA_STORAGE_PATH = "~/storage";
 
 //
 // Define the path to the default containers.
 //
 
-var SANTA_CONTAINER_PATH = SANTA_USER_ROOT + "/containers";
+var SANTA_CONTAINER_PATH = "~/containers";
 
 //
 // Define the path to the realm configuration.
 //
 
-var SANTA_REALM_STATE_PATH = SANTA_USER_ROOT + "/realms.json";
+var SANTA_REALM_STATE_PATH = "~/realms.json";
 
 //
 // Define the root container path.
@@ -142,14 +143,14 @@ var defaultConfig = {
 
         "extensions": [
             "/usr/lib/santa/extensions",
-            SANTA_USER_ROOT + "/extensions"
+            "~/extensions"
         ],
 
         //
         // Define the directory where packages are stored.
         //
 
-        "pkgdir": SANTA_USER_ROOT + "/pkgs",
+        "pkgdir": "~/pkgs",
     },
 
     //
@@ -324,6 +325,10 @@ class SantaConfig {
                                 home = getenv("HOMEDRIVE") + home;
                             }
                         }
+                    }
+
+                    if (home) {
+                        home += SANTA_USER_SUFFIX;
                     }
                 }
 

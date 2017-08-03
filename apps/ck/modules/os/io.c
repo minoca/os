@@ -158,6 +158,11 @@ CkpOsStat (
     );
 
 VOID
+CkpOsLstat (
+    PCK_VM Vm
+    );
+
+VOID
 CkpOsGetcwd (
     PCK_VM Vm
     );
@@ -208,12 +213,22 @@ CkpOsUtimes (
     );
 
 VOID
+CkpOsLutimes (
+    PCK_VM Vm
+    );
+
+VOID
 CkpOsChmod (
     PCK_VM Vm
     );
 
 VOID
 CkpOsChown (
+    PCK_VM Vm
+    );
+
+VOID
+CkpOsLchown (
     PCK_VM Vm
     );
 
@@ -283,8 +298,10 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "rename", CkpOsRename, 2},
     {CkTypeFunction, "link", CkpOsLink, 2},
     {CkTypeFunction, "symlink", CkpOsSymlink, 2},
+    {CkTypeFunction, "readlink", CkpOsReadlink, 1},
     {CkTypeFunction, "fstat", CkpOsFstat, 1},
     {CkTypeFunction, "stat", CkpOsStat, 1},
+    {CkTypeFunction, "lstat", CkpOsLstat, 1},
     {CkTypeFunction, "getcwd", CkpOsGetcwd, 0},
     {CkTypeFunction, "basename", CkpOsBasename, 1},
     {CkTypeFunction, "dirname", CkpOsDirname, 1},
@@ -295,7 +312,9 @@ CK_VARIABLE_DESCRIPTION CkOsIoModuleValues[] = {
     {CkTypeFunction, "chdir", CkpOsChdir, 1},
     {CkTypeFunction, "chroot", CkpOsChroot, 1},
     {CkTypeFunction, "utimes", CkpOsUtimes, 5},
+    {CkTypeFunction, "lutimes", CkpOsLutimes, 5},
     {CkTypeFunction, "chown", CkpOsChown, 3},
+    {CkTypeFunction, "lchown", CkpOsLchown, 3},
     {CkTypeFunction, "chmod", CkpOsChmod, 2},
     {CkTypeInvalid, NULL, NULL, 0}
 };
@@ -865,7 +884,7 @@ Return Value:
 
     Result = 0;
     Path = CkGetString(Vm, 1, NULL);
-    if (stat(Path, &Stat) == 0) {
+    if (lstat(Path, &Stat) == 0) {
         if (S_ISLNK(Stat.st_mode)) {
             Result = 1;
         }
@@ -1223,6 +1242,58 @@ Return Value:
 
     Path = CkGetString(Vm, 1, NULL);
     Result = stat(Path, &Stat);
+    if (Result < 0) {
+        CkpOsRaiseError(Vm, Path);
+        return;
+    }
+
+    CkpOsCreateStatDict(Vm, &Stat);
+    CkStackReplace(Vm, 0);
+    return;
+}
+
+VOID
+CkpOsLstat (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the lstat call. It takes in a file path string and
+    returns information about that descriptor. On success, returns a
+    dictionary of stat information, or an OsError exception is raised on error.
+    The only difference between this routine at stat is that if the target is
+    a symbolic link, this routine returns information about the link, where
+    the regular stat returns information about the target of the link.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCSTR Path;
+    INT Result;
+    struct stat Stat;
+
+    //
+    // The function is lstat(path).
+    //
+
+    if (!CkCheckArguments(Vm, 1, CkTypeString)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    Result = lstat(Path, &Stat);
     if (Result < 0) {
         CkpOsRaiseError(Vm, Path);
         return;
@@ -1782,6 +1853,80 @@ Return Value:
 }
 
 VOID
+CkpOsLutimes (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine changes the access and modification times of the given file.
+    The function takes a path, access time, nanoseconds, modification time, and
+    nano seconds. The times are integer timestamps. The only difference between
+    this function and the regular utimes function is that if the path refers to
+    a symbolic link, this function acts on the symbolic link, whereas the
+    regular utimes function acts on the target of the symbolic link.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CK_INTEGER Access;
+    CK_INTEGER AccessNano;
+    CK_INTEGER Modified;
+    CK_INTEGER ModifiedNano;
+    PCSTR Path;
+    struct timeval Value[2];
+
+    //
+    // The function takes a path.
+    //
+
+    if (!CkCheckArguments(Vm,
+                          5,
+                          CkTypeString,
+                          CkTypeInteger,
+                          CkTypeInteger,
+                          CkTypeInteger,
+                          CkTypeInteger)) {
+
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    Access = CkGetInteger(Vm, 2);
+    AccessNano = CkGetInteger(Vm, 3);
+    Modified = CkGetInteger(Vm, 4);
+    ModifiedNano = CkGetInteger(Vm, 5);
+    Value[0].tv_sec = Access;
+    Value[0].tv_usec = AccessNano / 1000;
+    Value[1].tv_sec = Modified;
+    Value[1].tv_usec = ModifiedNano / 1000;
+    if ((Value[0].tv_sec != Access) || (Value[1].tv_sec != Modified)) {
+        errno = ERANGE;
+        CkpOsRaiseError(Vm, Path);
+        return;
+    }
+
+    if (lutimes(Path, Value) != 0) {
+        CkpOsRaiseError(Vm, Path);
+        return;
+    }
+
+    CkReturnInteger(Vm, 0);
+    return;
+}
+
+VOID
 CkpOsChmod (
     PCK_VM Vm
     )
@@ -1856,7 +2001,7 @@ Return Value:
     uid_t User;
 
     //
-    // The function takes a path.
+    // The function is chown(path, uid, gid).
     //
 
     if (!CkCheckArguments(Vm, 3, CkTypeString, CkTypeInteger, CkTypeInteger)) {
@@ -1867,6 +2012,56 @@ Return Value:
     User = CkGetInteger(Vm, 2);
     Group = CkGetInteger(Vm, 3);
     if (chown(Path, User, Group) != 0) {
+        CkpOsRaiseError(Vm, Path);
+        return;
+    }
+
+    CkReturnInteger(Vm, 0);
+    return;
+}
+
+VOID
+CkpOsLchown (
+    PCK_VM Vm
+    )
+
+/*++
+
+Routine Description:
+
+    This routine changes the ownership of the given path. It takes in a path
+    string and a new user and group. If the target path is a symbolic link,
+    this function operates on the link, whereas the regular chown function
+    operates on the target of the link.
+
+Arguments:
+
+    Vm - Supplies a pointer to the virtual machine.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    gid_t Group;
+    PCSTR Path;
+    uid_t User;
+
+    //
+    // The function is lchown(path, uid, gid).
+    //
+
+    if (!CkCheckArguments(Vm, 3, CkTypeString, CkTypeInteger, CkTypeInteger)) {
+        return;
+    }
+
+    Path = CkGetString(Vm, 1, NULL);
+    User = CkGetInteger(Vm, 2);
+    Group = CkGetInteger(Vm, 3);
+    if (lchown(Path, User, Group) != 0) {
         CkpOsRaiseError(Vm, Path);
         return;
     }

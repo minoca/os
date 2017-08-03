@@ -31,7 +31,7 @@ Environment:
 //
 
 from santa.config import config;
-from santa.file import cptree, exists;
+from santa.file import cptree, exists, mkdir, isdir;
 from santa.presentation import Presentation, PresentationError;
 
 //
@@ -211,9 +211,34 @@ class CopyPresentation is Presentation {
 
         var dest;
         var destdir = realm.containment.outerPath(root);
+        var srcfile;
         var srcdir = controlDirectory + "/data";
 
+        if (destdir.endsWith("/")) {
+            destdir = destdir[0..-1];
+        }
+
+        //
+        // First create all the directories.
+        //
+
         for (file in files) {
+            srcfile = "/".join([srcdir, file]);
+            if (isdir(srcfile)) {
+                mkdir("/".join([destdir, file]));
+            }
+        }
+
+        //
+        // Now copy all the files.
+        //
+
+        for (file in files) {
+            srcfile = "/".join([srcdir, file]);
+            if (isdir(srcfile)) {
+                continue;
+            }
+
             dest = "/".join([destdir, file]);
             if ((conffiles.get(dest) != null) && (exists(dest))) {
                 if (config.getKey("core.verbose")) {
@@ -224,7 +249,7 @@ class CopyPresentation is Presentation {
                 continue;
             }
 
-            cptree("/".join([srcdir, file]), dest);
+            cptree(srcfile, dest);
         }
 
         return;

@@ -29,6 +29,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+import os;
 from santa.file import rmtree;
 
 //
@@ -244,13 +245,38 @@ class Presentation {
     {
 
         var destdir = realm.containment.outerPath(root);
+        var dirs = [];
+        var filepath;
 
         //
-        // The default implementation just removes the files.
+        // The default implementation just removes the files. Start with the
+        // files themselves.
         //
 
         for (file in files) {
-            rmtree("/".join([destdir, file]));
+            filepath = "/".join([destdir, file]);
+            if ((os.isdir)(filepath)) {
+                dirs.append(filepath);
+
+            } else {
+                rmtree(filepath);
+            }
+        }
+
+        //
+        // Now try to remove the directories, ignoring failure if they're not
+        // empty.
+        //
+
+        for (dir in dirs) {
+            try {
+                (os.rmdir)(dir);
+
+            } except os.OsError as e {
+                if (e.errno != os.ENOTEMPTY) {
+                    Core.raise(e);
+                }
+            }
         }
 
         return;

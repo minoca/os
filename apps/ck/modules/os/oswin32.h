@@ -42,6 +42,8 @@ Author:
     (errno = ENOSYS, (_Symlink), -1)
 
 #define chown(_Path, _Uid, _Gid) (errno = ENOSYS, (_Path), (_Uid), (_Gid), -1)
+#define lchown chown
+#define lutimes utimes
 #define fork() (errno = ENOSYS, -1)
 #define waitpid(_ProcessId, _Status, _Options) (errno = ENOSYS, -1)
 

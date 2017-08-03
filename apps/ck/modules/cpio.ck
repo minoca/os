@@ -2609,7 +2609,7 @@ class CpioArchive {
         var statMode;
 
         if (file is String) {
-            stat = (os.stat)(file);
+            stat = (os.lstat)(file);
             if (!archivePath) {
                 archivePath = file;
             }
@@ -2642,6 +2642,9 @@ class CpioArchive {
         if ((statMode & os.S_IFMT) == os.S_IFLNK) {
             member.link = (os.readlink)(sourcePath);
             size = member.link.length();
+
+        } else if ((statMode & os.S_IFMT) == os.S_IFDIR) {
+            size = 0;
         }
 
         mode |= _osFileTypes[statMode & os.S_IFMT];
@@ -2666,7 +2669,7 @@ class CpioArchive {
         member.gid = stat.st_gid;
         member.nlink = stat.st_nlink;
         member.mtime = stat.st_mtime;
-        member.size = stat.st_size;
+        member.size = size;
         member.devMinor = stat.st_dev;
         member.devMajor = 0;
         member.rdevMinor = stat.st_rdev;
@@ -2904,7 +2907,18 @@ class CpioArchive {
             }
 
         } else if (member.isLink()) {
-            (os.symlink)(member.link, path);
+            try {
+                (os.symlink)(member.link, path);
+
+            } except os.OsError as e {
+                if (e.errno == os.EEXIST) {
+                    (os.unlink)(path);
+                    (os.symlink)(member.link, path);
+
+                } else {
+                    Core.raise(e);
+                }
+            }
 
         } else {
             source = this.extractFile(member);
@@ -2996,9 +3010,9 @@ class CpioArchive {
             gid = member.gid;
         }
 
-        (os.utimes)(path, member.mtime, 0, member.mtime, 0);
+        (os.lutimes)(path, member.mtime, 0, member.mtime, 0);
         try {
-            (os.chown)(path, uid, gid);
+            (os.lchown)(path, uid, gid);
 
         } except os.OsError as e {
             if (e.errno != os.ENOSYS) {
@@ -3006,7 +3020,10 @@ class CpioArchive {
             }
         }
 
-        (os.chmod)(path, mode);
+        if (!(os.islink)(path)) {
+            (os.chmod)(path, mode);
+        }
+
         return;
     }
 }

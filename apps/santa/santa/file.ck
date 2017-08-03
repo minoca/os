@@ -205,6 +205,35 @@ Return Value:
 }
 
 function
+rmdir (
+    filepath
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes a directory (munging the path if there is a root or ~
+    in the path). The directory must be empty
+
+Arguments:
+
+    filepath - Supplies the directory path to remove.
+
+Return Value:
+
+    0 on success.
+
+    Raises an exception if directory removal failed.
+
+--*/
+
+{
+
+    return (os.rmdir)(path(filepath));
+}
+
+function
 unlink (
     filepath
     )
@@ -264,7 +293,7 @@ Return Value:
     var contents;
     var verbose = config.getKey("core.verbose");
 
-    if (!(os.exists)(filepath)) {
+    if (!(os.lexists)(filepath)) {
         return;
     }
 
@@ -432,7 +461,15 @@ Return Value:
                        [source, link, destination]);
         }
 
-        (os.symlink)(link, destination);
+        try {
+            (os.symlink)(link, destination);
+
+        } except os.OsError as e {
+            if (e.errno == os.EEXIST) {
+                (os.unlink)(destination);
+                (os.symlink)(link, destination);
+            }
+        }
 
     //
     // Copy a regular file.
@@ -712,7 +749,8 @@ exists (
 
 Routine Description:
 
-    This routine determines if the given path exists.
+    This routine determines if the given path exists. If the target is a
+    symbolic link, it is followed to determine if the link target exists.
 
 Arguments:
 
@@ -729,6 +767,34 @@ Return Value:
 {
 
     return (os.exists)(path(name));
+}
+
+function
+lexists (
+    name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given path or symbolic link exists.
+
+Arguments:
+
+    name - Supplies the path to check.
+
+Return Value:
+
+    true if the path exists.
+
+    false if the path does not exist.
+
+--*/
+
+{
+
+    return (os.lexists)(path(name));
 }
 
 function

@@ -78,8 +78,6 @@ CK_VARIABLE_DESCRIPTION CkOsModuleValues[] = {
     {CkTypeInteger, "WNOHANG", NULL, WNOHANG},
     {CkTypeInteger, "WUNTRACED", NULL, WUNTRACED},
     {CkTypeInteger, "WCONTINUED", NULL, WCONTINUED},
-    {CkTypeInteger, "WEXITED", NULL, WEXITED},
-    {CkTypeInteger, "WNOWAIT", NULL, WNOWAIT},
     {CkTypeFunction, "fork", CkpOsFork, 0},
     {CkTypeFunction, "waitpid", CkpOsWaitPid, 2},
     {CkTypeFunction, "exit", CkpOsExit, 1},
@@ -254,7 +252,7 @@ Return Value:
 
     CkPushList(Vm);
     CkPushInteger(Vm, Result);
-    CkListSet(Vm, -1, 0);
+    CkListSet(Vm, -2, 0);
     if (WIFEXITED(Status)) {
         StatusValue = WEXITSTATUS(Status);
 
@@ -273,6 +271,7 @@ Return Value:
     }
 
     CkPushInteger(Vm, StatusValue);
+    CkListSet(Vm, -2, 1);
     CkStackReplace(Vm, 0);
     return;
 }

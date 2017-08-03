@@ -916,7 +916,7 @@ class DiffFile {
 
         result.name = path;
         try {
-            stat = (os.stat)(path);
+            stat = (os.lstat)(path);
             fileType = stat.st_mode & os.S_IFMT;
             if (fileType == os.S_IFREG) {
                 fileType = "file";

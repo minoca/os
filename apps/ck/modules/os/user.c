@@ -29,6 +29,12 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+//
+// This is needed to get setresuid.
+//
+
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>

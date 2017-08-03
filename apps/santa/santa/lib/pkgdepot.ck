@@ -33,6 +33,7 @@ Environment:
 from bufferedio import BufferedIo;
 import cpio;
 import io;
+from iobase import IoError;
 import json;
 import lzfile;
 import os;
@@ -250,11 +251,22 @@ class PackageDepot {
         }
 
         indexPath = path(_directory) + "/index.json";
-        file = (lzfile.LzFile)(indexPath, "r", 9);
-        file = BufferedIo(file, 0);
-        data = file.readall();
-        file.close();
-        this.pkgs = (json.loads)(data);
+        try {
+            file = (lzfile.LzFile)(indexPath, "r", 9);
+            file = BufferedIo(file, 0);
+            data = file.readall();
+            file.close();
+            this.pkgs = (json.loads)(data);
+
+        } except IoError as e {
+            if (e.errno == os.ENOENT) {
+                this.pkgs = [];
+                return;
+            }
+
+            Core.raise(e);
+        }
+
         return;
     }
 }
