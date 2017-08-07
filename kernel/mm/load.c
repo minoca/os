@@ -1207,7 +1207,8 @@ SysSetBreakEnd:
 
 VOID
 MmCleanUpProcessMemory (
-    PVOID ExitedProcess
+    PADDRESS_SPACE AddressSpace,
+    BOOL Terminated
     )
 
 /*++
@@ -1219,7 +1220,11 @@ Routine Description:
 
 Arguments:
 
-    ExitedProcess - Supplies a pointer to the process to clean up.
+    AddressSpace - Supplies a pointer to the address space to clean up. It is
+        assumed to be still live at this point.
+
+    Terminated - Supplies a boolean indicating wheter the process is being
+        terminated (TRUE) or just undergoing an exec (FALSE).
 
 Return Value:
 
@@ -1229,28 +1234,27 @@ Return Value:
 
 {
 
-    PKPROCESS Process;
     KSTATUS Status;
 
-    Process = ExitedProcess;
-
-    ASSERT((Process != NULL) && (Process != PsGetKernelProcess()));
+    ASSERT(AddressSpace != MmKernelAddressSpace);
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     //
     // Images should have been cleaned up by the last thread to terminate.
     //
 
-    ASSERT(LIST_EMPTY(&(Process->ImageListHead)) != FALSE);
+    ASSERT(LIST_EMPTY(&(PsGetCurrentProcess()->ImageListHead)) != FALSE);
 
-    Status = MmpUnmapImageRegion(Process->AddressSpace,
+    Status = MmpUnmapImageRegion(AddressSpace,
                                  (PVOID)0,
                                  (UINTN)KERNEL_VA_START);
 
     ASSERT(KSUCCESS(Status));
 
-    ASSERT(LIST_EMPTY(&(Process->AddressSpace->SectionListHead)) != FALSE);
+    ASSERT(LIST_EMPTY(&(AddressSpace->SectionListHead)) != FALSE);
+    ASSERT(AddressSpace->ResidentSet == 1);
 
+    MmpTearDownPageTables(AddressSpace, Terminated);
     return;
 }
 

@@ -31,24 +31,35 @@ Author:
 #define SEGMENT_PRIVILEGE_USER      0x0003
 
 //
-// Define the GDT entries. The first batch is used by both x86 and x64. The
-// second set is used only by x86. There's a blank entry after the kernel TSS
-// entry because in 64-bit mode it's doubled in size.
+// Define the GDT slots. This is a little confusing because it defines both
+// x86, x64, and some temporary slots used in special cases. On x64,
+// much of the layout and definition of these entries is defined by the
+// syscall/sysret instructions, so please be aware of those constraints when
+// moving these entries around.
+// For x64: KERNEL64_TRANSITION_CS is used by the boot environment and during
+// AP startup. It's not needed at regular kernel runtime, so USER32_CS aliases
+// on it. Also, the KERNEL_TSS segment takes up two slots since it's a 64-bit
+// entry. The alternate TSS slots needed by x86 are not used, the IST mechanism
+// replaces task switches.
+//
+// For x86: KERNEL64_TRANSITION_CS obviously is never used. USER64_CS isn't a
+// thing either, so that slot is taken by GDT_PROCESSOR.
 //
 
 #define KERNEL_CS               0x08
 #define KERNEL_DS               0x10
 #define KERNEL64_TRANSITION_CS  0x18
-#define USER_CS                 (0x18 | SEGMENT_PRIVILEGE_USER)
+#define USER32_CS               (0x18 | SEGMENT_PRIVILEGE_USER)
 #define USER_DS                 (0x20 | SEGMENT_PRIVILEGE_USER)
-#define KERNEL_TSS              0x28
-#define X64_GDT_ENTRIES         7
+#define USER64_CS               (0x28 | SEGMENT_PRIVILEGE_USER)
+#define KERNEL_TSS              0x30
+#define X64_GDT_ENTRIES         8
 
-#define GDT_PROCESSOR           0x38
-#define GDT_THREAD              (0x40 | SEGMENT_PRIVILEGE_USER)
-#define DOUBLE_FAULT_TSS        0x48
-#define NMI_TSS                 0x50
-#define X86_GDT_ENTRIES         11
+#define GDT_PROCESSOR           0x28
+#define GDT_THREAD              (0x38 | SEGMENT_PRIVILEGE_USER)
+#define DOUBLE_FAULT_TSS        0x40
+#define NMI_TSS                 0x48
+#define X86_GDT_ENTRIES         10
 
 //
 // Define the IST indices.
@@ -324,6 +335,14 @@ Author:
 #define X86_PTE_ENTRY_SHIFT    12
 
 //
+// Define the canonical regions. Addresses between the low and high values are
+// "non-canonical" and generate a general protection fault if used.
+//
+
+#define X64_CANONICAL_HIGH 0xFFFF800000000000
+#define X64_CANONICAL_LOW  0x00007FFFFFFFFFFF
+
+//
 // Define the size of the x64 red zone. This is not used in the kernel, since
 // the exception handlers in the hardware don't honor it. But it is used by
 // user mode, so signal dispatching has to be careful.
@@ -387,9 +406,7 @@ Author:
 // handler sets CS to user DS as a hint that the trap frame is incomplete.
 //
 
-#define IS_TRAP_FRAME_COMPLETE(_TrapFrame) \
-    (IS_TRAP_FRAME_FROM_PRIVILEGED_MODE(_TrapFrame) || \
-     ((_TrapFrame)->Cs == USER_CS))
+#define IS_TRAP_FRAME_COMPLETE(_TrapFrame) ((_TrapFrame)->Cs != USER_DS)
 
 //
 // This macro extracts the address ut of a PTE (or PDE, etc).

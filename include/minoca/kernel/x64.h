@@ -97,9 +97,6 @@ Author:
 
 #define X64_SELF_MAP_INDEX (X64_PTE_COUNT - 2)
 
-#define X64_CANONICAL_HIGH 0xFFFF800000000000ULL
-#define X64_CANONICAL_LOW  0x00007FFFFFFFFFFFULL
-
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -427,7 +424,7 @@ struct _TRAP_FRAME {
     ULONGLONG Rflags;
     ULONGLONG Rsp;
     ULONGLONG Ss;
-} PACKED;
+};
 
 /*++
 
@@ -452,7 +449,7 @@ typedef struct _SIGNAL_CONTEXT_X64 {
     SIGNAL_CONTEXT Common;
     TRAP_FRAME TrapFrame;
     FPU_CONTEXT FpuContext;
-} PACKED SIGNAL_CONTEXT_X64, *PSIGNAL_CONTEXT_X64;
+} SIGNAL_CONTEXT_X64, *PSIGNAL_CONTEXT_X64;
 
 /*++
 
@@ -629,6 +626,31 @@ extern PAR_SAVE_RESTORE_FPU_CONTEXT ArRestoreFpuState;
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+INTN
+ArSyscallHandlerAsm (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is executed when user mode invokes the SYSCALL instruction.
+    Upon entry, CS, SS, RIP, and RFLAGS are set to predefined values. Execution
+    is still running on the user mode stack.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    STATUS_SUCCESS or positive integer on success.
+
+    Error status code on failure.
+
+--*/
 
 VOID
 ArLoadKernelDataSegments (

@@ -232,7 +232,15 @@ Author:
 // Define user mode virtual address for the user shared data page.
 //
 
+#if defined(__amd64)
+
+#define USER_SHARED_DATA_USER_ADDRESS ((PVOID)0x00007FFFFFFFF000)
+
+#else
+
 #define USER_SHARED_DATA_USER_ADDRESS ((PVOID)0x7FFFF000)
+
+#endif
 
 //
 // Define the maximum number of I/O vector elements that will be tolerated from
@@ -3664,7 +3672,8 @@ Return Value:
 
 VOID
 MmCleanUpProcessMemory (
-    PVOID ExitedProcess
+    PADDRESS_SPACE AddressSpace,
+    BOOL Terminated
     );
 
 /*++
@@ -3676,7 +3685,11 @@ Routine Description:
 
 Arguments:
 
-    ExitedProcess - Supplies a pointer to the process to clean up.
+    AddressSpace - Supplies a pointer to the address space to clean up. It is
+        assumed to be still live at this point.
+
+    Terminated - Supplies a boolean indicating wheter the process is being
+        terminated (TRUE) or just undergoing an exec (FALSE).
 
 Return Value:
 

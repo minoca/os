@@ -1091,13 +1091,13 @@ Members:
 --*/
 
 typedef struct _TERMINAL_SETTINGS {
-    LONG InputFlags;
-    LONG OutputFlags;
-    LONG ControlFlags;
-    LONG LocalFlags;
-    CHAR ControlCharacters[TerminalCharacterCount];
-    INT InputSpeed;
-    INT OutputSpeed;
+    ULONG InputFlags;
+    ULONG OutputFlags;
+    ULONG ControlFlags;
+    ULONG LocalFlags;
+    UCHAR ControlCharacters[TerminalCharacterCount];
+    ULONG InputSpeed;
+    ULONG OutputSpeed;
 } TERMINAL_SETTINGS, *PTERMINAL_SETTINGS;
 
 /*++

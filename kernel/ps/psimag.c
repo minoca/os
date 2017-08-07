@@ -586,10 +586,7 @@ Return Value:
         goto ProcessUserModeModuleChangeEnd;
     }
 
-    if (Image.Format != ImageElf32) {
-
-        ASSERT(FALSE);
-
+    if ((Image.Format != ImageElf32) && (Image.Format != ImageElf64)) {
         Status = STATUS_INVALID_PARAMETER;
         goto ProcessUserModeModuleChangeEnd;
     }

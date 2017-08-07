@@ -1172,6 +1172,8 @@ Return Value:
         }
     }
 
+    ASSERT(Source->ResidentSet == Destination->ResidentSet + 1);
+
     //
     // Invalidate the entire TLB as all the source process's writable image
     // sections were converted to read-only image sections.
@@ -2791,11 +2793,12 @@ Return Value:
     OriginalValue = RtlAtomicAdd(&(AddressSpace->ResidentSet), Addition);
     if (Addition <= 0) {
 
-        ASSERT(OriginalValue != 0);
+        ASSERT((Addition == 0) || (OriginalValue != 0));
 
         return;
     }
 
+    OriginalValue += Addition;
     PreviousMaximum = AddressSpace->MaxResidentSet;
 
     //

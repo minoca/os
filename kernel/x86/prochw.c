@@ -1206,7 +1206,7 @@ Return Value:
     // not a system segment.
     //
 
-    ArpCreateSegmentDescriptor(&(GdtTable[USER_CS / sizeof(GDT_ENTRY)]),
+    ArpCreateSegmentDescriptor(&(GdtTable[USER32_CS / sizeof(GDT_ENTRY)]),
                                (PVOID)0,
                                (ULONG)USER_VA_END >> PAGE_SHIFT,
                                GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT,

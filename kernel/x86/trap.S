@@ -496,7 +496,7 @@ FUNCTION(ArTrapSystemCallHandlerAsm)
     pushl   $USER_DS                # Push user mode SS.
     pushl   %eax                    # Push user ESP supplied by sysenter.
     pushfl                          # Push the Eflags.
-    pushl   $USER_CS                # Push user CS.
+    pushl   $USER32_CS              # Push user CS.
     pushl   %ebx                    # Push return address supplied by sysenter.
     pushl   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
@@ -704,7 +704,7 @@ FUNCTION(ArSysenterHandlerAsm)
     // frame is about to become full.
     //
 
-    movl    $USER_CS, TRAP_CS(%ebx)    # Save CS.
+    movl    $USER32_CS, TRAP_CS(%ebx)  # Save CS.
     movl    $USER_DS, TRAP_DS(%ebx)    # Save DS.
     movl    $USER_DS, TRAP_ES(%ebx)    # Save ES.
     movl    $GDT_THREAD, TRAP_FS(%ebx) # Save FS.

@@ -541,7 +541,7 @@ Return Value:
         // Set the variables that will be used to set up the kernel stack.
         //
 
-        CodeSelector = USER_CS;
+        CodeSelector = USER64_CS;
         DataSelector = USER_DS;
         Rip = (UINTN)Thread->ThreadRoutine;
 
@@ -562,10 +562,12 @@ Return Value:
             RtlCopyMemory(StackTrapFrame, TrapFrame, sizeof(TRAP_FRAME));
 
             //
-            // Return a process ID of 0 to the child on fork.
+            // Return a process ID of 0 to the child on fork, and return the
+            // child's process ID in the parent.
             //
 
             StackTrapFrame->Rax = 0;
+            TrapFrame->Rax = Thread->OwningProcess->Identifiers.ProcessId;
 
         } else {
 
@@ -637,7 +639,7 @@ Return Value:
 
     MmUserWrite(UserStackPointer, 0);
     RtlZeroMemory(TrapFrame, sizeof(TRAP_FRAME));
-    TrapFrame->Cs = USER_CS;
+    TrapFrame->Cs = USER64_CS;
     TrapFrame->Ds = USER_DS;
     TrapFrame->Es = USER_DS;
     TrapFrame->Fs = USER_DS;
@@ -769,7 +771,7 @@ Return Value:
     } else {
         RtlZeroMemory(&(Break->Registers.X64), sizeof(Break->Registers.X64));
         Break->ErrorCode = 0;
-        Break->Registers.X64.Cs = USER_CS;
+        Break->Registers.X64.Cs = USER64_CS;
         Break->Registers.X64.Ds = USER_DS;
         Break->Registers.X64.Es = USER_DS;
         Break->Registers.X64.Fs = USER_DS;

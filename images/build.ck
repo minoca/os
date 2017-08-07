@@ -33,7 +33,7 @@ function buildImage(name, msetupFlags) {
 
     if (mconfig.arch == "x64") {
         installDeps = [
-            //"apps/posix:skel",
+            "apps/posix:skel",
             "apps/tzcomp:tz_files",
             "kernel:kernel",
             "kernel:devmap.set",

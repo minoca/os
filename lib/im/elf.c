@@ -2054,14 +2054,16 @@ Return Value:
     ASSERT(Image->Format == ImageElfNative);
 
     //
-    // On ARM, what's passed in is a PLT index. Convert that to an offset based
-    // on the size of each PLT entry.
+    // On ARM and AMD64, what's passed in is a PLT index.
+    // Convert that to an offset based on the size of each PLT entry.
     //
 
-    if (Image->Machine == ImageMachineTypeArm32) {
-        RelocationSize = sizeof(ELF32_RELOCATION_ENTRY);
+    if ((Image->Machine == ImageMachineTypeArm32) ||
+        (Image->Machine == ImageMachineTypeX64)) {
+
+        RelocationSize = sizeof(ELF_RELOCATION_ENTRY);
         if (Image->PltRelocationsAddends != FALSE) {
-            RelocationSize = sizeof(ELF32_RELOCATION_ADDEND_ENTRY);
+            RelocationSize = sizeof(ELF_RELOCATION_ADDEND_ENTRY);
         }
 
         RelocationOffset *= RelocationSize;
@@ -3944,6 +3946,48 @@ Return Value:
 
         case ElfX64RelocationRelative:
             Address = BaseDifference + Addend;
+            break;
+
+        //
+        // This is the module ID.
+        //
+
+        case ElfX64RelocationDtpMod64:
+            if (SymbolImage == NULL) {
+                SymbolImage = Image;
+            }
+
+            Address = SymbolImage->ModuleNumber;
+
+            ASSERT(Address != 0);
+
+            AddendNeeded = FALSE;
+            break;
+
+        //
+        // This is the offset from the start of the TLS image to the given
+        // symbol.
+        //
+
+        case ElfX64RelocationDtpOff64:
+            Address = SymbolValue + Addend;
+            AddendNeeded = FALSE;
+            break;
+
+        //
+        // This is the total offset from the thread pointer to the symbol, as
+        // a positive value to be subtracted from the thread pointer.
+        //
+
+        case ElfX64RelocationTpOff64:
+            if (SymbolImage == NULL) {
+                SymbolImage = Image;
+            }
+
+            ASSERT((SymbolImage != NULL) &&
+                   (SymbolImage->TlsOffset != (UINTN)-1));
+
+            Address = SymbolImage->TlsOffset - SymbolValue + Addend;
             break;
 
         //

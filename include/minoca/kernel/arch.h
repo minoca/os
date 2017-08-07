@@ -467,7 +467,7 @@ Return Value:
 
 VOID
 ArInvalidateTlbEntry (
-    PVOID Address
+    volatile VOID *Address
     );
 
 /*++

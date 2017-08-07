@@ -2404,6 +2404,43 @@ Return Value:
     return;
 }
 
+VOID
+MmpTearDownPageTables (
+    PADDRESS_SPACE AddressSpace,
+    BOOL Terminated
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tears down all the page tables for the given address space
+    in user mode while the process is still live (but exiting).
+
+Arguments:
+
+    AddressSpace - Supplies a pointer to the address space being torn down.
+
+    Terminated - Supplies a boolean indicating whether the process is being
+        terminated or just exec'ed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // The x86 page tables are only one level deep, so they can be torn down
+    // from outside the process. Consider moving that destruction in here if
+    // changing things around a buncn.
+    //
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

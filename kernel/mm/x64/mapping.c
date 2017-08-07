@@ -140,8 +140,9 @@ MmpEnsurePageTables (
 KSTATUS
 MmpCreatePageTable (
     PADDRESS_SPACE_X64 AddressSpace,
-    PPTE Pte,
-    PHYSICAL_ADDRESS Physical
+    volatile PTE *Pte,
+    PHYSICAL_ADDRESS Physical,
+    BOOL ZeroTable
     );
 
 //
@@ -553,6 +554,9 @@ Return Value:
     //
 
     Index = X64_PML4_INDEX(CurrentStack);
+
+    ASSERT(Index != X64_SELF_MAP_INDEX);
+
     X64_PML4T[Index] = MmKernelPml4[Index];
     ArSetCurrentPageDirectory(Space->Pml4Physical);
     return;
@@ -743,6 +747,9 @@ Return Value:
                     //
 
                     } else {
+
+                        ASSERT((Pd[PdIndex] & X86_PTE_GLOBAL) == 0);
+
                         MmFreePhysicalPages(X86_PTE_ENTRY(Pd[PdIndex]), 1);
                         Pd[PdIndex] = 0;
                     }
@@ -754,6 +761,9 @@ Return Value:
                 //
 
                 if (PdHasEntries == FALSE) {
+
+                    ASSERT((Pdp[PdpIndex] & X86_PTE_GLOBAL) == 0);
+
                     MmFreePhysicalPages(X86_PTE_ENTRY(Pdp[PdpIndex]), 1);
                     Pdp[PdpIndex] = 0;
                 }
@@ -765,6 +775,9 @@ Return Value:
             //
 
             if (PdpHasEntries == FALSE) {
+
+                ASSERT((Pml4[Pml4Index] & X86_PTE_GLOBAL) == 0);
+
                 MmFreePhysicalPages(X86_PTE_ENTRY(Pml4[Pml4Index]), 1);
                 Pml4[Pml4Index] = 0;
             }
@@ -911,6 +924,9 @@ Return Value:
     Pml4Index = X64_PML4_INDEX(FaultingAddress);
     Pml4 = X64_PML4T;
     if (Pml4[Pml4Index] != MmKernelPml4[Pml4Index]) {
+
+        ASSERT(Pml4Index != X64_SELF_MAP_INDEX);
+
         Pml4[Pml4Index] = MmKernelPml4[Pml4Index];
 
         //
@@ -970,6 +986,9 @@ Return Value:
         ASSERT(VirtualAddress >= KERNEL_VA_START);
 
         AddressSpace = NULL;
+
+    } else if (VirtualAddress >= KERNEL_VA_START) {
+        AddressSpace = (PADDRESS_SPACE_X64)MmKernelAddressSpace;
 
     } else {
         Process = CurrentThread->OwningProcess;
@@ -1147,6 +1166,8 @@ Return Value:
         if ((Pml4[Pml4Index] & X86_PTE_PRESENT) == 0) {
             if ((CurrentVirtual >= KERNEL_VA_START) &&
                 ((MmKernelPml4[Pml4Index] & X86_PTE_PRESENT) != 0)) {
+
+                ASSERT(Pml4Index != X64_SELF_MAP_INDEX);
 
                 Pml4[Pml4Index] = MmKernelPml4[Pml4Index];
             }
@@ -1340,6 +1361,9 @@ Return Value:
     Pml4Index = X64_PML4_INDEX(VirtualAddress);
     if ((Pml4[Pml4Index] & X86_PTE_PRESENT) == 0) {
         if (VirtualAddress >= KERNEL_VA_START) {
+
+            ASSERT(Pml4Index != X64_SELF_MAP_INDEX);
+
             Pml4[Pml4Index] = MmKernelPml4[Pml4Index];
         }
 
@@ -1770,6 +1794,7 @@ Return Value:
     }
 
     if ((MapFlagsMask & MAP_FLAG_EXECUTE) != 0) {
+        PteMask |= X86_PTE_NX;
         if ((MapFlags & MAP_FLAG_EXECUTE) == 0) {
             PteValue |= X86_PTE_NX;
         }
@@ -1781,6 +1806,9 @@ Return Value:
         Pml4 = X64_PML4T;
         if (CurrentVirtual > KERNEL_VA_START) {
             if (X86_PTE_ENTRY(Pml4[Pml4Index]) == 0) {
+
+                ASSERT(Pml4Index != X64_SELF_MAP_INDEX);
+
                 Pml4[Pml4Index] = MmKernelPml4[Pml4Index];
             }
         }
@@ -1889,7 +1917,7 @@ Return Value:
 {
 
     PADDRESS_SPACE_X64 DestinationSpace;
-    PHYSICAL_ADDRESS LocalPages[16];
+    PHYSICAL_ADDRESS LocalPages[32];
     RUNLEVEL OldRunLevel;
     UINTN PageCount;
     UINTN PageIndex;
@@ -1901,11 +1929,11 @@ Return Value:
     ULONG Pml4Index;
     PPROCESSOR_BLOCK Processor;
     UINTN PtCount;
-    PPTE Pte;
+    volatile PTE *Pte;
     PTE SavedPdp;
     PADDRESS_SPACE_X64 SourceSpace;
     KSTATUS Status;
-    PPTE SwapPte;
+    volatile PTE *SwapPte;
 
     DestinationSpace = (PADDRESS_SPACE_X64)DestinationAddressSpace;
     SourceSpace = (PADDRESS_SPACE_X64)SourceAddressSpace;
@@ -1942,8 +1970,13 @@ Return Value:
                X86_PTE_PRESENT | X86_PTE_WRITABLE;
 
     for (Pml4Index = 0;
-         Pml4Index < X64_PML4_INDEX(X64_CANONICAL_LOW + 1);
+         Pml4Index <= X64_PML4_INDEX(X64_CANONICAL_LOW);
          Pml4Index += 1) {
+
+        //
+        // Skip tables that are offline, even if they're allocated. This is how
+        // the number of page tables shrinks.
+        //
 
         if ((X64_PML4T[Pml4Index] & X86_PTE_PRESENT) == 0) {
             continue;
@@ -1962,10 +1995,10 @@ Return Value:
         *SwapPte = Pte[Pml4Index];
         SavedPdp = *SwapPte;
         ArInvalidateTlbEntry(Pte);
-        RtlZeroMemory(Pte, PAGE_SIZE);
+        RtlZeroMemory((PVOID)Pte, PAGE_SIZE);
         Pdp = X64_PDPT((UINTN)Pml4Index << X64_PML4E_SHIFT);
         for (PdpIndex = 0; PdpIndex < X64_PTE_COUNT; PdpIndex += 1) {
-            if ((Pdp[Pml4Index] & X86_PTE_PRESENT) == 0) {
+            if ((Pdp[PdpIndex] & X86_PTE_PRESENT) == 0) {
                 continue;
             }
 
@@ -1982,7 +2015,7 @@ Return Value:
             PageIndex += 1;
             *SwapPte = Pte[PdpIndex];
             ArInvalidateTlbEntry(Pte);
-            RtlZeroMemory(Pte, PAGE_SIZE);
+            RtlZeroMemory((PVOID)Pte, PAGE_SIZE);
             Pd = X64_PDT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
                          ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
@@ -2096,13 +2129,13 @@ Return Value:
     PVOID Pml4Start;
     PPROCESSOR_BLOCK Processor;
     PPTE Pt;
-    PPTE Pte;
+    volatile PTE *Pte;
     ULONG PtEnd;
     ULONG PtIndex;
     ULONG PtStart;
     PTE SavedPd;
     PTE SavedPdp;
-    PPTE SwapPte;
+    volatile PTE *SwapPte;
     PVOID VirtualEnd;
 
     DestinationSpace = (PADDRESS_SPACE_X64)Destination;
@@ -2111,7 +2144,7 @@ Return Value:
     VirtualEnd = VirtualAddress + Size - 1;
 
     ASSERT((VirtualEnd > VirtualAddress) &&
-           (VirtualEnd < (PVOID)X64_CANONICAL_LOW));
+           (VirtualEnd <= (PVOID)X64_CANONICAL_LOW));
 
     //
     // It is assumed that all image sections are page aligned in base address
@@ -2217,6 +2250,10 @@ Return Value:
 
                 PtStart = X64_PT_INDEX(PdStart);
                 PtEnd = X64_PT_INDEX(PdEnd);
+                Pt = X64_PT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
+                            ((UINTN)PdpIndex << X64_PDPE_SHIFT) |
+                            ((UINTN)PdIndex << X64_PDE_SHIFT));
+
                 if ((Pte[PdIndex] & X86_PTE_PRESENT) == 0) {
 
                     //
@@ -2233,7 +2270,23 @@ Return Value:
                     ArInvalidateTlbEntry(Pte);
                     DestinationSpace->ActivePageTables += 1;
                     if (PtStart != 0) {
-                        RtlZeroMemory(Pte, PtStart * sizeof(PTE));
+                        RtlZeroMemory((PVOID)Pte, PtStart * sizeof(PTE));
+                    }
+
+                    //
+                    // As promised in the title, copy and change section
+                    // mappings.
+                    //
+
+                    for (PtIndex = PtStart; PtIndex <= PtEnd; PtIndex += 1) {
+                        if (X86_PTE_ENTRY(Pt[PtIndex]) != 0) {
+                            MappedCount += 1;
+                            Pt[PtIndex] &= ~X86_PTE_WRITABLE;
+                            Pte[PtIndex] = Pt[PtIndex] & ~X86_PTE_DIRTY;
+
+                        } else {
+                            Pte[PtIndex] = 0;
+                        }
                     }
 
                     //
@@ -2243,7 +2296,7 @@ Return Value:
 
                     if ((PtEnd + 1) < X64_PTE_COUNT) {
                         RtlZeroMemory(
-                                  &(Pte[PtEnd + 1]),
+                                  (PVOID)&(Pte[PtEnd + 1]),
                                   (X64_PTE_COUNT - (PtEnd + 1)) * sizeof(PTE));
                     }
 
@@ -2255,20 +2308,17 @@ Return Value:
                 } else {
                     *SwapPte = Pte[PdIndex];
                     ArInvalidateTlbEntry(Pte);
-                }
 
-                //
-                // As promised in the title, copy and change section mappings.
-                //
+                    //
+                    // Copy and change section mappings.
+                    //
 
-                Pt = X64_PT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
-                            ((UINTN)PdpIndex << X64_PDPE_SHIFT) |
-                            ((UINTN)PdIndex << X64_PDE_SHIFT));
-
-                for (PtIndex = PtStart; PtIndex <= PtEnd; PtIndex += 1) {
-                    if (X86_PTE_ENTRY(Pte[PtIndex]) != 0) {
-                        Pt[PtIndex] &= ~X86_PTE_WRITABLE;
-                        Pte[PtIndex] = Pt[PtIndex] & ~X86_PTE_DIRTY;
+                    for (PtIndex = PtStart; PtIndex <= PtEnd; PtIndex += 1) {
+                        if (X86_PTE_ENTRY(Pt[PtIndex]) != 0) {
+                            MappedCount += 1;
+                            Pt[PtIndex] &= ~X86_PTE_WRITABLE;
+                            Pte[PtIndex] = Pt[PtIndex] & ~X86_PTE_DIRTY;
+                        }
                     }
                 }
 
@@ -2299,7 +2349,10 @@ Return Value:
     *SwapPte = 0;
     ArInvalidateTlbEntry(Pte);
     KeLowerRunLevel(OldRunLevel);
-    MmpUpdateResidentSetCounter(&(DestinationSpace->Common), MappedCount);
+    if (MappedCount != 0) {
+        MmpUpdateResidentSetCounter(&(DestinationSpace->Common), MappedCount);
+    }
+
     return STATUS_SUCCESS;
 }
 
@@ -2333,7 +2386,7 @@ Return Value:
     PADDRESS_SPACE_X64 AddressSpace;
     UINTN Canonical;
     PVOID End;
-    PPTE Pd;
+    volatile PTE *Pd;
     ULONG PdIndex;
     PPTE Pdp;
     PVOID PdpEnd;
@@ -2362,13 +2415,17 @@ Return Value:
         //
 
         if (Pml4Index >= X64_PML4_INDEX(KERNEL_VA_START)) {
+
+            ASSERT(Pml4Index != X64_SELF_MAP_INDEX);
+
             X64_PML4T[Pml4Index] = MmKernelPml4[Pml4Index];
         }
 
         if ((X64_PML4T[Pml4Index] & X86_PTE_PRESENT) == 0) {
             Status = MmpCreatePageTable(AddressSpace,
                                         &(X64_PML4T[Pml4Index]),
-                                        INVALID_PHYSICAL_ADDRESS);
+                                        INVALID_PHYSICAL_ADDRESS,
+                                        FALSE);
 
             if (!KSUCCESS(Status)) {
                 goto CreatePageTablesEnd;
@@ -2406,7 +2463,8 @@ Return Value:
             if ((Pdp[PdpIndex] & X86_PTE_PRESENT) == 0) {
                 Status = MmpCreatePageTable(AddressSpace,
                                             &(Pdp[PdpIndex]),
-                                            INVALID_PHYSICAL_ADDRESS);
+                                            INVALID_PHYSICAL_ADDRESS,
+                                            FALSE);
 
                 if (!KSUCCESS(Status)) {
                     goto CreatePageTablesEnd;
@@ -2423,7 +2481,8 @@ Return Value:
                 if ((Pd[PdIndex] & X86_PTE_PRESENT) == 0) {
                     Status = MmpCreatePageTable(AddressSpace,
                                                 &(Pd[PdIndex]),
-                                                INVALID_PHYSICAL_ADDRESS);
+                                                INVALID_PHYSICAL_ADDRESS,
+                                                TRUE);
 
                     if (!KSUCCESS(Status)) {
                         goto CreatePageTablesEnd;
@@ -2448,7 +2507,8 @@ CreatePageTablesEnd:
 
 VOID
 MmpTearDownPageTables (
-    PADDRESS_SPACE_X64 AddressSpace
+    PADDRESS_SPACE AddressSpace,
+    BOOL Terminated
     )
 
 /*++
@@ -2462,6 +2522,9 @@ Arguments:
 
     AddressSpace - Supplies a pointer to the address space being torn down.
 
+    Terminated - Supplies a boolean indicating whether the process is being
+        terminated or just exec'ed.
+
 Return Value:
 
     None.
@@ -2470,17 +2533,26 @@ Return Value:
 
 {
 
-    PHYSICAL_ADDRESS Entry;
     INTN Inactive;
     PPTE Pd;
     ULONG PdIndex;
     PPTE Pdp;
     ULONG PdpIndex;
     ULONG Pml4Index;
+    PADDRESS_SPACE_X64 Space;
     INTN Total;
 
-    ASSERT(AddressSpace ==
-           (PADDRESS_SPACE_X64)(PsGetCurrentProcess()->AddressSpace));
+    Space = (PADDRESS_SPACE_X64)AddressSpace;
+
+    ASSERT(AddressSpace == PsGetCurrentProcess()->AddressSpace);
+
+    if (MmpVirtualToPhysical(USER_SHARED_DATA_USER_ADDRESS, NULL) !=
+        INVALID_PHYSICAL_ADDRESS) {
+
+        ASSERT(sizeof(USER_SHARED_DATA) <= PAGE_SIZE);
+
+        MmpUpdateResidentSetCounter(AddressSpace, -1L);
+    }
 
     Inactive = 0;
     Total = 0;
@@ -2488,62 +2560,111 @@ Return Value:
          Pml4Index <= X64_PML4_INDEX(X64_CANONICAL_LOW);
          Pml4Index += 1) {
 
-        if ((X64_PML4T[Pml4Index] & X86_PTE_PRESENT) == 0) {
+        if (X86_PTE_ENTRY(X64_PML4T[Pml4Index]) == 0) {
             continue;
         }
 
+        //
+        // PDPs may not be live, but are always "good". Make it live to dig in
+        // further.
+        //
+
+        if ((X64_PML4T[Pml4Index] & X86_PTE_PRESENT) == 0) {
+            Inactive += 1;
+            X64_PML4T[Pml4Index] |= X86_PTE_PRESENT;
+        }
+
         Pdp = X64_PDPT((UINTN)Pml4Index << X64_PML4E_SHIFT);
-        for (PdpIndex = 0; PdpIndex <= X64_PTE_COUNT; PdpIndex += 1) {
-            if ((Pdp[PdpIndex] & X86_PTE_PRESENT) == 0) {
+        for (PdpIndex = 0; PdpIndex < X64_PTE_COUNT; PdpIndex += 1) {
+            if (X86_PTE_ENTRY(Pdp[PdpIndex]) == 0) {
                 continue;
+            }
+
+            //
+            // PDs may not be live, but are always "good".
+            //
+
+            if ((Pdp[PdpIndex] & X86_PTE_PRESENT) == 0) {
+                Inactive += 1;
+                Pdp[PdpIndex] |= X86_PTE_PRESENT;
             }
 
             Pd = X64_PDT(((UINTN)Pml4Index << X64_PML4E_SHIFT) |
                          ((UINTN)PdpIndex << X64_PDPE_SHIFT));
 
-            for (PdIndex = 0; PdIndex <= X64_PTE_COUNT; PdIndex += 1) {
-                Entry = X86_PTE_ENTRY(Pd[PdIndex]);
-                if (Entry == 0) {
+            for (PdIndex = 0; PdIndex < X64_PTE_COUNT; PdIndex += 1) {
+                if (X86_PTE_ENTRY(Pd[PdIndex]) == 0) {
                     continue;
                 }
 
                 //
-                // Free the page table, which might either be active or
-                // inactive.
+                // PTs may or may not be valid, but there's no need to dig into
+                // them since there are no lower level tables beyond it.
                 //
 
-                if ((Pd[PdIndex] & X86_PTE_PRESENT) == 0) {
+                if ((Pd[PdIndex] & X86_PTE_PRESENT) != 0) {
+                    if (Terminated != FALSE) {
+                        MmFreePhysicalPage(X86_PTE_ENTRY(Pd[PdIndex]));
+                        Pd[PdIndex] = 0;
+
+                    //
+                    // Just flip the page table offline for now, since
+                    // it may be used soon again by exec. This also
+                    // saves the need for a complete TLB invalidate to
+                    // invalidate the self map region, since page
+                    // tables never change this way, they just go
+                    // offline for a bit.
+                    //
+
+                    } else {
+                        Pd[PdIndex] &= ~X86_PTE_PRESENT;
+                    }
+
+                //
+                // The PT is allocated but not online.
+                //
+
+                } else {
                     Inactive += 1;
                 }
 
-                MmFreePhysicalPage(X86_PTE_ENTRY(Pd[PdIndex]));
-                Pd[PdIndex] = 0;
                 Total += 1;
             }
 
-            //
-            // Free the page directory, which should always be active.
-            //
+            if (Terminated != FALSE) {
+                MmFreePhysicalPage(X86_PTE_ENTRY(Pdp[PdpIndex]));
+                Pdp[PdpIndex] = 0;
 
-            MmFreePhysicalPage(X86_PTE_ENTRY(Pdp[PdpIndex]));
-            Pdp[PdpIndex] = 0;
+            } else {
+                Pdp[PdpIndex] &= ~X86_PTE_PRESENT;
+            }
+
             Total += 1;
         }
 
         //
-        // Free the page directory pointer, which should always be active.
+        // Free the PDP.
         //
 
-        MmFreePhysicalPage(X86_PTE_ENTRY(X64_PML4T[Pml4Index]));
-        X64_PML4T[Pml4Index] = 0;
+        if (Terminated != FALSE) {
+            MmFreePhysicalPage(X86_PTE_ENTRY(X64_PML4T[Pml4Index]));
+            X64_PML4T[Pml4Index] = 0;
+
+        } else {
+            X64_PML4T[Pml4Index] &= ~X86_PTE_PRESENT;
+        }
+
         Total += 1;
     }
 
-    ASSERT(Total == AddressSpace->AllocatedPageTables);
-    ASSERT((Total - Inactive) == AddressSpace->ActivePageTables);
+    ASSERT(Total == Space->AllocatedPageTables);
+    ASSERT((Total - Inactive) == Space->ActivePageTables);
 
-    AddressSpace->AllocatedPageTables -= Total;
-    AddressSpace->ActivePageTables -= Total - Inactive;
+    if (Terminated != FALSE) {
+        Space->AllocatedPageTables -= Total;
+    }
+
+    Space->ActivePageTables -= Total - Inactive;
     return;
 }
 
@@ -2714,7 +2835,8 @@ Return Value:
     PHYSICAL_ADDRESS NextTable;
     PHYSICAL_ADDRESS Physical;
     PPROCESSOR_BLOCK Processor;
-    PPTE Pte;
+    volatile PTE *Pte;
+    KSTATUS Status;
     PVOID SwapPage;
     PPTE SwapPte;
 
@@ -2728,7 +2850,7 @@ Return Value:
 
     EntryShift = X64_PML4E_SHIFT;
     Physical = AddressSpace->Pml4Physical;
-    for (Level = 0; Level < X64_PAGE_LEVEL - 1; Level += 1) {
+    for (Level = 1; Level < X64_PAGE_LEVEL; Level += 1) {
         *SwapPte = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE;
         Index = ((UINTN)VirtualAddress >> EntryShift) & X64_PT_MASK;
         EntryShift -= X64_PTE_BITS;
@@ -2763,7 +2885,12 @@ Return Value:
 
             *SwapPte = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE;
             Pte = (PPTE)SwapPage + Index;
-            MmpCreatePageTable(AddressSpace, Pte, NextTable);
+            Status = MmpCreatePageTable(AddressSpace,
+                                        Pte,
+                                        NextTable,
+                                        Level == X64_PAGE_LEVEL - 1);
+
+            ASSERT(KSUCCESS(Status));
 
             //
             // If the page wasn't even used, go down again to free it. Sad.
@@ -2798,7 +2925,7 @@ Return Value:
     *SwapPte = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE;
     Index = ((UINTN)VirtualAddress >> EntryShift) & X64_PT_MASK;
     Pte = (PPTE)SwapPage + Index;
-    return Pte;
+    return (PPTE)Pte;
 }
 
 KSTATUS
@@ -2835,7 +2962,8 @@ Return Value:
     if ((*Pte & X86_PTE_PRESENT) == 0) {
         Status = MmpCreatePageTable(AddressSpace,
                                     Pte,
-                                    INVALID_PHYSICAL_ADDRESS);
+                                    INVALID_PHYSICAL_ADDRESS,
+                                    FALSE);
 
         if (!KSUCCESS(Status)) {
             return Status;
@@ -2846,7 +2974,8 @@ Return Value:
     if ((*Pte & X86_PTE_PRESENT) == 0) {
         Status = MmpCreatePageTable(AddressSpace,
                                     Pte,
-                                    INVALID_PHYSICAL_ADDRESS);
+                                    INVALID_PHYSICAL_ADDRESS,
+                                    FALSE);
 
         if (!KSUCCESS(Status)) {
             return Status;
@@ -2857,7 +2986,8 @@ Return Value:
     if ((*Pte & X86_PTE_PRESENT) == 0) {
         Status = MmpCreatePageTable(AddressSpace,
                                     Pte,
-                                    INVALID_PHYSICAL_ADDRESS);
+                                    INVALID_PHYSICAL_ADDRESS,
+                                    TRUE);
 
         if (!KSUCCESS(Status)) {
             return Status;
@@ -2870,8 +3000,9 @@ Return Value:
 KSTATUS
 MmpCreatePageTable (
     PADDRESS_SPACE_X64 AddressSpace,
-    PPTE Pte,
-    PHYSICAL_ADDRESS Physical
+    volatile PTE *Pte,
+    PHYSICAL_ADDRESS Physical,
+    BOOL ZeroTable
     )
 
 /*++
@@ -2896,6 +3027,9 @@ Arguments:
     Physical - Supplies an optional physical address to use for the new page
         table.
 
+    ZeroTable - Supplies a boolean indicating if the table should be zeroed if
+        it already exists. If the table is allocated, it is always zeroed.
+
 Return Value:
 
     Status code.
@@ -2910,7 +3044,7 @@ Return Value:
     PPROCESSOR_BLOCK Processor;
     PVOID SwapPage;
     PTE SwapPte;
-    PPTE SwapPtePointer;
+    volatile PTE *SwapPtePointer;
 
     //
     // See if someone beat this routine to the punch, or perhaps there's an
@@ -2940,24 +3074,35 @@ Return Value:
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     Processor = KeGetCurrentProcessorBlock();
-    SwapPage = Processor->SwapPage;
-    SwapPtePointer = X64_PTE(SwapPage);
-    SwapPte = *SwapPtePointer;
-    *SwapPtePointer = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE;
-    if (SwapPte != 0) {
-        ArInvalidateTlbEntry(SwapPage);
+    KeAcquireSpinLock(&MmPageTableLock);
+
+    //
+    // Double check that the page table hasn't been already allocated.
+    //
+
+    if ((*Pte & X86_PTE_PRESENT) != 0) {
+        return STATUS_SUCCESS;
     }
 
-    RtlZeroMemory(SwapPage, PAGE_SIZE);
+    if (ZeroTable != FALSE) {
+        SwapPage = Processor->SwapPage;
+        SwapPtePointer = X64_PTE(SwapPage);
+        SwapPte = *SwapPtePointer;
+        *SwapPtePointer = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE;
+        if (SwapPte != 0) {
+            ArInvalidateTlbEntry(SwapPage);
+        }
 
-    //
-    // Put the original swap page back now in case the PTE pointer is in the
-    // swap page itself.
-    //
+        RtlZeroMemory(SwapPage, PAGE_SIZE);
 
-    *SwapPtePointer = SwapPte;
-    ArInvalidateTlbEntry(SwapPage);
-    KeAcquireSpinLock(&MmPageTableLock);
+        //
+        // Put the original swap page back now in case the PTE pointer is in the
+        // swap page itself.
+        //
+
+        *SwapPtePointer = SwapPte;
+        ArInvalidateTlbEntry(SwapPage);
+    }
 
     //
     // Sync the kernel top level table if this is one of those PTEs.
@@ -2967,6 +3112,9 @@ Return Value:
         (Pte < (X64_PML4T + X64_PTE_COUNT))) {
 
         Index = ((UINTN)Pte - (UINTN)X64_PML4T) / sizeof(PTE);
+
+        ASSERT(Index != X64_SELF_MAP_INDEX);
+
         *Pte = MmKernelPml4[Index];
     }
 
@@ -2975,15 +3123,18 @@ Return Value:
     // install it.
     //
 
+    ASSERT((*Pte & X86_PTE_PRESENT) == 0);
+
     if (X86_PTE_ENTRY(*Pte) != 0) {
-        if ((*Pte & X86_PTE_PRESENT) == 0) {
-            *Pte |= X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_USER_MODE;
 
-            ASSERT(AddressSpace->ActivePageTables <
-                   AddressSpace->AllocatedPageTables);
+        ASSERT(X86_PTE_ENTRY(*Pte) == Physical);
 
-            AddressSpace->ActivePageTables += 1;
-        }
+        *Pte |= X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_USER_MODE;
+
+        ASSERT(AddressSpace->ActivePageTables <
+               AddressSpace->AllocatedPageTables);
+
+        AddressSpace->ActivePageTables += 1;
 
     } else {
         *Pte = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE |

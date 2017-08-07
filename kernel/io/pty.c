@@ -2726,7 +2726,7 @@ Return Value:
 
 {
 
-    PCHAR ControlCharacters;
+    PUCHAR ControlCharacters;
     PTERMINAL_SLAVE Slave;
     KSTATUS Status;
     PTERMINAL Terminal;
@@ -3006,7 +3006,7 @@ Return Value:
     UCHAR Bytes[2];
     UINTN BytesSize;
     BOOL CharacterHandled;
-    PCHAR ControlCharacters;
+    PUCHAR ControlCharacters;
     ULONG DirtyRegionBegin;
     ULONG DirtyRegionEnd;
     ULONG EchoFlags;
@@ -3923,7 +3923,7 @@ Return Value:
     BOOL BreakForNewline;
     UINTN BytesRead;
     CHAR Character;
-    PCHAR ControlCharacters;
+    PUCHAR ControlCharacters;
     UINTN CopyIndex;
     UINTN CopySize;
     UCHAR FlushCount;
@@ -4466,7 +4466,7 @@ Return Value:
 {
 
     CHAR Character;
-    PCHAR ControlCharacters;
+    PUCHAR ControlCharacters;
     KSTATUS Status;
     ULONG ValidLineEnd;
     ULONG WorkingInputLength;
@@ -4630,7 +4630,7 @@ Return Value:
 {
 
     TERMINAL_COMMAND_DATA CommandData;
-    PCHAR ControlCharacters;
+    PUCHAR ControlCharacters;
     UINTN LastIndex;
     ULONG LocalFlags;
     UINTN MoveIndex;

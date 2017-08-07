@@ -75,6 +75,22 @@ Return Value:
 
 {
 
+    ULONGLONG Efer;
+
+    //
+    // Set up the syscall mechanism.
+    //
+
+    ArWriteMsr(X86_MSR_STAR,
+               ((UINTN)USER32_CS << 48) | ((UINTN)KERNEL_CS << 32));
+
+    ArWriteMsr(X86_MSR_LSTAR, (UINTN)ArSyscallHandlerAsm);
+    ArWriteMsr(X86_MSR_FMASK,
+               IA32_EFLAG_IF | IA32_EFLAG_TF | IA32_EFLAG_RF | IA32_EFLAG_VM);
+
+    Efer = ArReadMsr(X86_MSR_EFER);
+    Efer |= EFER_SYSTEM_CALL_EXTENSIONS;
+    ArWriteMsr(X86_MSR_EFER, Efer);
     return;
 }
 
@@ -188,11 +204,7 @@ Return Value:
     if (((TypedThread->Flags & THREAD_FLAG_USER_MODE) != 0) &&
         (TypedThread == KeGetCurrentThread())) {
 
-        ArWriteMsr(X86_MSR_KERNEL_GSBASE, (UINTN)NewThreadPointer);
-    }
-
-    if (Thread == KeGetCurrentThread()) {
-        ArWriteGsbase(NewThreadPointer);
+        ArWriteMsr(X86_MSR_FSBASE, (UINTN)NewThreadPointer);
     }
 
     KeLowerRunLevel(OldRunLevel);

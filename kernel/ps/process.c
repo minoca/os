@@ -617,7 +617,7 @@ Return Value:
     INITIALIZE_SIGNAL_SET(Process->HandledSignals);
     PspSetThreadUserStackSize(Thread, 0);
     PspImUnloadAllImages(Process);
-    MmCleanUpProcessMemory(Process);
+    MmCleanUpProcessMemory(Process->AddressSpace, FALSE);
     NewName = RtlStringFindCharacterRight(NewEnvironment->ImageName,
                                           '/',
                                           NewEnvironment->ImageNameLength);
@@ -2948,7 +2948,7 @@ Return Value:
     PspDestroyProcessTimers(Process);
     PspImUnloadAllImages(Process);
     IoCloseProcessHandles(Process, 0);
-    MmCleanUpProcessMemory(Process);
+    MmCleanUpProcessMemory(Process->AddressSpace, TRUE);
     if (PsIsSessionLeader(Process)) {
         IoTerminalDisassociate(Process);
     }

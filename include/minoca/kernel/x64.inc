@@ -52,6 +52,31 @@ Environment:
 #define CONTEXT_SWAP_MAGIC 0x5A4A3A2A
 
 //
+// Relevant TSS structure definitions.
+//
+
+#define TSS_RSP0  0x04
+
+//
+// Processor block offsets.
+//
+
+#define PROCESSOR_BLOCK_TSS 0x10
+#define PROCESSOR_BLOCK_RUNNING_THREAD 0x20
+
+//
+// Thread structure offsets.
+//
+
+#define THREAD_SIGNAL_PENDING 0x94
+
+//
+// Define the thread signal pending state options.
+//
+
+#define ThreadSignalPending 2
+
+//
 // Definition for the TRAP_FRAME structure and the exception stack directly
 // above it.
 //

@@ -179,9 +179,10 @@ TSS64 ArP0Tss;
 // 0x00 - Null entry, required.
 // 0x08 - KERNEL_CS, flat 64-bit code segment.
 // 0x10 - KERNEL_DS, flat 64-bit data segment.
-// 0x18 - USER_CS, flat user-mode 64-bit code segment.
+// 0x18 - USER32_CS, flat user-mode 32-bit code segment.
 // 0x20 - USER_DS, flat user-mode 64-bit data segment.
-// 0x28 - KERNEL_TSS, long mode kernel TSS segment (double sized).
+// 0x28 - USER64_CS, flat user-mode 64-bit code segment.
+// 0x30 - KERNEL_TSS, long mode kernel TSS segment (double sized).
 //
 
 GDT_ENTRY ArP0Gdt[X64_GDT_ENTRIES] = {
@@ -214,7 +215,7 @@ GDT_ENTRY ArP0Gdt[X64_GDT_ENTRIES] = {
         0,
         0,
         GATE_ACCESS_USER | GATE_ACCESS_PRESENT | GDT_TYPE_CODE,
-        GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_64BIT |
+        GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_32BIT |
             (MAX_GDT_LIMIT >> 16),
 
         0
@@ -225,6 +226,17 @@ GDT_ENTRY ArP0Gdt[X64_GDT_ENTRIES] = {
         0,
         0,
         GATE_ACCESS_USER | GATE_ACCESS_PRESENT | GDT_TYPE_DATA_WRITE,
+        GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_64BIT |
+            (MAX_GDT_LIMIT >> 16),
+
+        0
+    },
+
+    {
+        MAX_USHORT,
+        0,
+        0,
+        GATE_ACCESS_USER | GATE_ACCESS_PRESENT | GDT_TYPE_CODE,
         GDT_GRANULARITY_KILOBYTE | GDT_GRANULARITY_64BIT |
             (MAX_GDT_LIMIT >> 16),
 

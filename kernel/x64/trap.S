@@ -392,7 +392,7 @@ END_FUNCTION(ArMathFaultHandlerAsm)
 
 //
 // INTN
-// ArSystemCallHandlerAsm (
+// ArSyscallHandlerAsm (
 //     VOID
 //     )
 //
@@ -401,13 +401,13 @@ END_FUNCTION(ArMathFaultHandlerAsm)
 
 Routine Description:
 
-    This routine is entered via an IDT entry to service a user mode request.
-    Ecx contains the system call number, and Edx contains the argument.
+    This routine is executed when user mode invokes the SYSCALL instruction.
+    Upon entry, CS, SS, RIP, and RFLAGS are set to predefined values. Execution
+    is still running on the user mode stack.
 
 Arguments:
 
-    None. RIP, CS, RFLAGS, RSP, and SS have been pushed onto the stack by the
-    processor, and the stack was 16-byte aligned before the pushes.
+    None.
 
 Return Value:
 
@@ -417,12 +417,167 @@ Return Value:
 
 --*/
 
-FUNCTION(ArSystemCallHandlerAsm)
-    int $3                  # TODO: Implement x64 INT $80 system call mechanism.
-    jmp     ArSystemCallHandlerAsm # End of the line.
+FUNCTION(ArSyscallHandlerAsm)
 
+    //
+    // Switch to the kernel GS: base, and get onto the kernel stack (since rsp
+    // is still the user mode one) as quickly as possible.
+    //
 
-END_FUNCTION(ArSystemCallHandlerAsm)
+    swapgs                          # Enable access to the PROCESSOR_BLOCK.
+    movq    %rsp, %r10              # Save the user stack pointer in a volatile.
+    movq    %gs:PROCESSOR_BLOCK_TSS, %rsp   # Get to the TSS from the processor.
+    movq    TSS_RSP0(%rsp), %rsp    # Get to the kernel stack.
+    sti                             # With a stack, it's safe for interrupts.
+
+    //
+    // Save a minimal amount of stuff in the trap frame, and let the debugger
+    // know how to unwind from here.
+    //
+
+    subq    $TRAP_FRAME_SIZE, %rsp  # Allocate space for a trap frame.
+    movq    %rcx, TRAP_RIP(%rsp)    # Save the user RIP, saved by syscall.
+    movq    %r11, TRAP_RFLAGS(%rsp) # Save RFLAGS, put there by syscall.
+    movq    %r10, TRAP_RSP(%rsp)    # Save the user RSP.
+    movq    %rdi, TRAP_RDI(%rsp)    # Save first parameter in case of restart.
+    movq    %rsi, TRAP_RSI(%rsp)    # Save second parameter in case of restart.
+    movq    %rdx, TRAP_RDX(%rsp)    # Save third parameter in case of restart.
+    CFI_DEF_CFA(%rsp, 0)
+    CFI_OFFSET(%rip, TRAP_RIP)
+    CFI_OFFSET(%rsp, TRAP_RSP)
+    CFI_OFFSET(%rdi, TRAP_RDI)
+    CFI_OFFSET(%rsi, TRAP_RSI)
+    CFI_OFFSET(%rdx, TRAP_RDX)
+
+    //
+    // Move user DS (rather than user CS) into the trap frame to indicate
+    // 1) this is a user mode trap frame and 2) it's incomplete.
+    //
+
+    movq    $USER_DS, TRAP_CS(%rsp)
+
+    //
+    // See if a slower and more rare full-save is necessary. If not, just let
+    // the C functions maintain the non-volatile registers.
+    //
+
+    testl   %edx, %edx              # See if the user wants the full save.
+    jz      ArSyscallCallHandler    # Jump out in the unlikely full save case.
+    call    ArSyscallFullSave       # Perform a "call" to save the rest.
+
+ArSyscallCallHandler:
+    movq    %rsp, %rdx              # Move fake trap frame to 3rd parameter.
+    call    KeSystemCallHandler     # Call out to the handler.
+
+    //
+    // If a signal is pending, then save the full trap frame and attempt to
+    // dispatch the signal. Note that the trap frame was allocated on the
+    // kernel stack and may be copied out to user mode. Don't leak kernel stack
+    // values.
+    //
+
+    movq    %gs:(PROCESSOR_BLOCK_RUNNING_THREAD), %rcx # Get current thread.
+    cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%rcx) # Signal test.
+    jne     ArSyscallHandlerFastRestore # Exit via the fast restore path.
+
+    //
+    // Save RAX into the trap frame in case the full save was already done.
+    // TODO: Remove this once user mode stops doing "full save" system calls.
+    //
+
+    movq    %rax, TRAP_RAX(%rsp)
+
+    //
+    // See if the trap frame has been saved already or not. Save it if it has
+    // not.
+    //
+
+    movl    TRAP_CS(%rsp), %edx     # Get whether or not the trap frame is full.
+    cmpl    $USER_DS, %edx          # Compare against the non-full value.
+    jnz     ArSyscallDispatchSignals   # Go straight to signal dispatch if full.
+    call    ArSyscallFullSave       # Save the remainder if not done.
+    CFI_TRAP_FRAME_PUSHED           # Inform the unwinder of the full frame.
+
+ArSyscallDispatchSignals:
+    movq    %rsp, %rdi              # Set the trap frame as the first parameter.
+    movq    TRAP_RDI(%rsp), %rsi    # Set the system call number as the second.
+    movq    TRAP_RSI(%rsp), %rdx    # Set the call parameter as the third.
+    call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
+
+    //
+    // Do a full trap frame restore if a signal was applied in case the
+    // debugger changed registers.
+    //
+
+ArSyscallFullRestore:
+    call    ArRestoreTrapFrame      # Restore the full context.
+    iretq                           # Jump out the old way.
+
+ArSyscallHandlerFastRestore:
+    movl    TRAP_CS(%rsp), %edx     # Get whether or not the trap frame is full.
+    cmpl    $USER_DS, %edx          # Compare against the non-full value.
+    jne     ArSyscallFullRestore    # Go back and do a full restoration maybe.
+
+    //
+    // Restore some portions of the pseudo trap frame. Do not zero RAX as it
+    // holds the return value from the system call. Canonicalize the RIP to
+    // avoid the infamous AMD sysret bug.
+    //
+
+    movq    TRAP_RIP(%rsp), %rcx    # Prepare rip in rcx for sysret.
+    movq    $X64_CANONICAL_LOW, %rdx    # Load 64-bit immediate for AND.
+    andq    %rdx, %rcx              # Canonicalize rip.
+    movq    TRAP_RFLAGS(%rsp), %r11 # Prepare rflags in rcx for sysret.
+    xorl    %edx, %edx              # Clear volatile to avoid leaking data.
+    movl    %edx, %esi              # Clear volatile.
+    movl    %edx, %r8d              # Clear volatile.
+    movl    %edx, %r9d              # Clear volatile.
+    movl    %edx, %r10d             # Clear volatile.
+
+    //
+    // Restore rdi unconditionally. This is done so that an exec even with the
+    // fast call mechanism (inappropriate) will have its parameter set up.
+    //
+
+    movq    TRAP_RDI(%rsp), %rdi    # Restore rdi (maybe a parameter).
+    cli                             # Disable interrupts to go off-stack.
+    movq    TRAP_RSP(%rsp), %rsp    # Restore user mode stack.
+    swapgs                          # Go back to user land.
+    sysretq                         # Return to user mode, slickly.
+
+    //
+    // This out of line "function" implements the full save, which saves a
+    // complete trap frame. It assumes the trap frame is right above the return
+    // address, and it destroys rax and rcx.
+    //
+
+ArSyscallFullSave:
+    popq    %rcx                    # Pop the return addr, stack frame at rsp.
+    movq    %rax, TRAP_RAX(%rsp)    # Save RAX.
+    movl    $USER_DS, %eax          # Get USER_DS in a register.
+    movl    %eax, TRAP_SS(%rsp)     # Set SS.
+    movl    %eax, TRAP_DS(%rsp)     # Set DS.
+    movl    %eax, TRAP_ES(%rsp)     # Set ES.
+    movl    %eax, TRAP_FS(%rsp)     # Set FS.
+    movl    %eax, TRAP_GS(%rsp)     # Set GS.
+    xorl    %eax, %eax              # Get a zero register.
+    movq    %rax, TRAP_PADDING(%rsp)# Clear padding.
+    movq    $USER64_CS, TRAP_CS(%rsp)   # Save CS, and indicate completeness.
+    movq    %rax, TRAP_ERRORCODE(%rsp)  # Clear error code.
+    movq    %r15, TRAP_R15(%rsp)    # Save R15.
+    movq    %r14, TRAP_R14(%rsp)    # Save R14.
+    movq    %r13, TRAP_R13(%rsp)    # Save R13.
+    movq    %r12, TRAP_R12(%rsp)    # Save R12.
+    movq    %rax, TRAP_R11(%rsp)    # Clear volatile R11.
+    movq    %rax, TRAP_R10(%rsp)    # Clear volatile R10.
+    movq    %r9, TRAP_R9(%rsp)      # Save volatile R9 unnecessarily.
+    movq    %r8, TRAP_R8(%rsp)      # Save volatile R8 unnecessarily.
+    movq    %rbp, TRAP_RBP(%rsp)    # Save RBP.
+    movq    %rax, TRAP_RCX(%rsp)    # Clear RCX.
+    movq    %rbx, TRAP_RBX(%rsp)    # Save RBX.
+    jmp     *%rcx                   # Return.
+
+END_FUNCTION(ArSyscallHandlerAsm)
 
 //
 // VOID

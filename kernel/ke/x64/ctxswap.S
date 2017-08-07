@@ -108,6 +108,16 @@ FUNCTION(KepContextSwap)
     movq    %rcx, %r12              # Move FirstTime parameter to non-volatile.
 
     //
+    // Switch to the new thread pointer. The kernel doesn't use FS, so it's no
+    // biggie.
+    //
+
+    movl    $X86_MSR_FSBASE, %ecx   # Set the MSR.
+    movl    %edx, %eax              # Copy the low word into eax.
+    shlq    $32, %rdx               # Shift rdx into its high word.
+    wrmsr                           # Write the new FS base for user mode.
+
+    //
     // Perform any post-stack switch work needed on the old thread.
     //
 

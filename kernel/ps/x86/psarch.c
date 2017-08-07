@@ -602,7 +602,7 @@ Return Value:
         // Set the variables that will be used to set up the kernel stack.
         //
 
-        CodeSelector = USER_CS;
+        CodeSelector = USER32_CS;
         DataSelector = USER_DS;
         Eip = (UINTN)Thread->ThreadRoutine;
         Fs = DataSelector;
@@ -717,7 +717,7 @@ Return Value:
     UserStackPointer -= 1;
     MmUserWrite(UserStackPointer, 0);
     RtlZeroMemory(TrapFrame, sizeof(TRAP_FRAME));
-    TrapFrame->Cs = USER_CS;
+    TrapFrame->Cs = USER32_CS;
     TrapFrame->Ds = USER_DS;
     TrapFrame->Es = USER_DS;
     TrapFrame->Fs = USER_DS;
@@ -858,7 +858,7 @@ Return Value:
         Break->Registers.X86.Esi = 0;
         Break->Registers.X86.Edi = 0;
         Break->Registers.X86.Eflags = 0;
-        Break->Registers.X86.Cs = USER_CS;
+        Break->Registers.X86.Cs = USER32_CS;
         Break->Registers.X86.Ds = USER_DS;
         Break->Registers.X86.Es = USER_DS;
         Break->Registers.X86.Fs = GDT_THREAD;
