@@ -199,6 +199,7 @@ X64_OBJS = x64/contexta.o \
            x64/contextc.o \
            x64/fenv.o     \
            x64/setjmpa.o  \
+           x64/tlsaddr.o  \
            x86/fenvc.o    \
 
 EXTRA_SRC_DIRS = x86 x64 armv7 math pthread

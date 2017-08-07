@@ -223,6 +223,7 @@ function build() {
             "x64/contextc.c",
             "x64/fenv.S",
             "x64/setjmpa.S",
+            "x64/tlsaddr.S",
             "x86/fenvc.c",
         ];
     }

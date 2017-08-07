@@ -36,17 +36,6 @@ Author:
 //
 
 //
-// TODO: Implement syscall system call mechanism on x64, in addition to keeping
-// the old int mechanism for full save/restore.
-//
-
-#if defined(__amd64)
-
-#define OsSystemCall OspSystemCallFull
-
-#endif
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -193,7 +182,7 @@ Return Value:
 
 --*/
 
-#if defined (__arm__)
+#if defined (__arm__) || defined(__amd64)
 
 INTN
 OsSystemCall (

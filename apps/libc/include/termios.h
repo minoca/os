@@ -566,19 +566,19 @@ extern "C" {
 // Define the type used for terminal special characters.
 //
 
-typedef char cc_t;
+typedef unsigned char cc_t;
 
 //
 // Define the type used for baud rates.
 //
 
-typedef int speed_t;
+typedef unsigned speed_t;
 
 //
 // Define the type used for terminal modes.
 //
 
-typedef long tcflag_t;
+typedef unsigned tcflag_t;
 
 /*++
 

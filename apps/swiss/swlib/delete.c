@@ -182,7 +182,7 @@ Return Value:
         TypeString = "block device";
 
     } else if (S_ISCHR(Stat.st_mode)) {
-        TypeString = "charater device";
+        TypeString = "character device";
 
     } else if (S_ISDIR(Stat.st_mode)) {
         TypeString = "directory";

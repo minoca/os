@@ -253,7 +253,7 @@ OS_LOCK ClTimeZoneLock;
 // Store the timer backing the alarm function.
 //
 
-timer_t ClAlarm = -1;
+timer_t ClAlarm = -1L;
 
 //
 // Store the number of days per month in non-leap years.
@@ -327,14 +327,12 @@ Return Value:
     struct itimerspec RemainingTime;
     int Result;
 
-    ASSERT(sizeof(ULONG) == sizeof(timer_t));
-
     //
     // If seconds is zero, cancel any existing alarm.
     //
 
     if (Seconds == 0) {
-        Alarm = RtlAtomicExchange32((PULONG)(&ClAlarm), -1);
+        Alarm = RtlAtomicExchange(&ClAlarm, -1);
         if (Alarm != -1) {
             Result = timer_gettime(Alarm, &RemainingTime);
             timer_delete(Alarm);
@@ -351,13 +349,13 @@ Return Value:
     // yet.
     //
 
-    if (ClAlarm == -1) {
+    if (ClAlarm == -1L) {
         Result = timer_create(CLOCK_REALTIME, NULL, &NewAlarm);
         if (Result != 0) {
             return -1;
         }
 
-        Alarm = RtlAtomicCompareExchange32((PULONG)(&ClAlarm), NewAlarm, -1);
+        Alarm = RtlAtomicCompareExchange(&ClAlarm, NewAlarm, -1);
 
         //
         // If this routine lost the compare exchange, delete the newly created

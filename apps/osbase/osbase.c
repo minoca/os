@@ -792,7 +792,21 @@ Return Value:
     ASSERT(FIELD_OFFSET(SYSTEM_CALL_EXECUTE_IMAGE, Environment) == 0);
 
     Parameters = (PSYSTEM_CALL_EXECUTE_IMAGE)Environment;
+
+    //
+    // TODO: Remove SystemCallFull, then these can be unified.
+    //
+
+#if defined(__amd64)
+
+    return OsSystemCall(SystemCallExecuteImage, Parameters);
+
+#else
+
     return OspSystemCallFull(SystemCallExecuteImage, Parameters);
+
+#endif
+
 }
 
 OS_API

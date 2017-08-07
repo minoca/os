@@ -82,7 +82,7 @@ Members:
 --*/
 
 typedef struct _DIR {
-    ULONG Descriptor;
+    HANDLE Descriptor;
     PVOID Buffer;
     ULONG ValidBufferSize;
     ULONG CurrentPosition;
@@ -172,7 +172,7 @@ Return Value:
                     FilePathLength + 1,
                     Flags,
                     FILE_PERMISSION_NONE,
-                    (PVOID)&(Directory->Descriptor));
+                    &(Directory->Descriptor));
 
     if (!KSUCCESS(Status)) {
         goto opendirEnd;
@@ -235,7 +235,7 @@ Return Value:
         goto fdopendirEnd;
     }
 
-    Directory->Descriptor = FileDescriptor;
+    Directory->Descriptor = (HANDLE)(UINTN)FileDescriptor;
     Status = STATUS_SUCCESS;
 
 fdopendirEnd:
@@ -360,7 +360,7 @@ Return Value:
             goto readdir_rEnd;
         }
 
-        Status = OsPerformIo((HANDLE)(UINTN)(Directory->Descriptor),
+        Status = OsPerformIo(Directory->Descriptor,
                              IO_OFFSET_NONE,
                              DIRECTORY_BUFFER_SIZE,
                              0,
@@ -515,7 +515,7 @@ Return Value:
 
 {
 
-    OsSeek((HANDLE)(UINTN)(Directory->Descriptor),
+    OsSeek(Directory->Descriptor,
            SeekCommandFromBeginning,
            Location,
            NULL);
@@ -556,7 +556,7 @@ Return Value:
     IO_OFFSET Offset;
     KSTATUS Status;
 
-    Status = OsSeek((HANDLE)(UINTN)(Directory->Descriptor),
+    Status = OsSeek(Directory->Descriptor,
                     SeekCommandNop,
                     0,
                     &Offset);
@@ -622,14 +622,12 @@ Return Value:
 
 {
 
-    if ((Directory == NULL) ||
-        (Directory->Descriptor == (ULONG)(UINTN)INVALID_HANDLE)) {
-
+    if ((Directory == NULL) || (Directory->Descriptor == INVALID_HANDLE)) {
         errno = EINVAL;
         return -1;
     }
 
-    return Directory->Descriptor;
+    return (int)(UINTN)(Directory->Descriptor);
 }
 
 LIBC_API
@@ -995,10 +993,7 @@ Return Value:
     }
 
     RtlZeroMemory(Directory, sizeof(DIR));
-
-    ASSERT(sizeof(HANDLE) == sizeof(ULONG));
-
-    Directory->Descriptor = (ULONG)(UINTN)INVALID_HANDLE;
+    Directory->Descriptor = INVALID_HANDLE;
     Directory->Buffer = malloc(DIRECTORY_BUFFER_SIZE + 1);
     if (Directory->Buffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1044,8 +1039,8 @@ Return Value:
     KSTATUS Status;
 
     Status = STATUS_INVALID_HANDLE;
-    if (Directory->Descriptor != (ULONG)(UINTN)INVALID_HANDLE) {
-        Status = OsClose((HANDLE)(UINTN)(Directory->Descriptor));
+    if (Directory->Descriptor != INVALID_HANDLE) {
+        Status = OsClose(Directory->Descriptor);
     }
 
     if (Directory->Buffer != NULL) {
