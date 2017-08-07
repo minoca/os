@@ -442,6 +442,7 @@ Return Value:
     ULONGLONG Cfa;
     ULONG DefaultCfaRegister;
     ULONG Index;
+    ULONG NativeSize;
     ULONG ReturnRegister;
     DWARF_FRAME_STATE State;
     INT Status;
@@ -452,6 +453,7 @@ Return Value:
 
     memset(&State, 0, sizeof(DWARF_FRAME_STATE));
     State.Location = Fde->InitialLocation;
+    NativeSize = DwarfGetNativeSize(Context);
 
     //
     // Set the return address register so that it keeps its same value.
@@ -521,7 +523,7 @@ Return Value:
     Status = DwarfpGetValueFromRule(Context,
                                     &State,
                                     -1,
-                                    Cie->AddressSize,
+                                    NativeSize,
                                     0,
                                     &Cfa);
 
@@ -549,7 +551,7 @@ Return Value:
         Status = DwarfpGetValueFromRule(Context,
                                         &State,
                                         Index,
-                                        Cie->AddressSize,
+                                        NativeSize,
                                         Cfa,
                                         &Value);
 
