@@ -48,7 +48,7 @@ function build() {
 
     app = {
         "label": "banner",
-        "inputs": sources,
+        "inputs": sources + dynlibs,
         "includes": includes,
     };
 

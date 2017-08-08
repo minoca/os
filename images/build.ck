@@ -35,6 +35,7 @@ function buildImage(name, msetupFlags) {
         installDeps = [
             "apps/posix:skel",
             "apps/tzcomp:tz_files",
+            "apps/testapps:testapps",
             "kernel:kernel",
             "kernel:devmap.set",
             "kernel:dev2drv.set",

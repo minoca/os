@@ -781,7 +781,7 @@ Return Value:
 
 {
 
-#if defined(__i386)
+#if defined(__i386) || defined(__amd64)
 
     ULONG ByteIndex;
 
@@ -873,6 +873,23 @@ Return Value:
                   Break->Registers.Arm.R14Lr,
                   Break->Registers.Arm.R15Pc,
                   Break->Registers.Arm.Cpsr);
+
+#elif defined(__amd64)
+
+    DBGTEST_PRINT("Modules count %d signature %I64x, "
+                  "Instruction pointer %I64x.\nInstruction stream: ",
+                  Break->LoadedModuleCount,
+                  Break->LoadedModuleSignature,
+                  Break->InstructionPointer);
+
+    for (ByteIndex = 0;
+         ByteIndex < BREAK_NOTIFICATION_STREAM_SIZE;
+         ByteIndex += 1) {
+
+        DBGTEST_PRINT("%02X ", Break->InstructionStream[ByteIndex]);
+    }
+
+    DBGTEST_PRINT("\n");
 
 #else
 

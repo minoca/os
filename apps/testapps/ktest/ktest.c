@@ -849,7 +849,7 @@ OpenDriverEnd:
         free(Results);
     }
 
-    *DriverHandle = (INT)Handle;
+    *DriverHandle = (INT)(INTN)Handle;
     return Status;
 }
 
@@ -876,7 +876,7 @@ Return Value:
 
 {
 
-    OsClose((HANDLE)DriverHandle);
+    OsClose((HANDLE)(UINTN)DriverHandle);
     return;
 }
 

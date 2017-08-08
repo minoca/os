@@ -44,7 +44,13 @@ function build() {
     ];
 
     driverSources = [
-        "driver/ktestdrv.c"
+        "driver/ktestdrv.c",
+        "driver/tblock.c",
+        "driver/tdesc.c",
+        "driver/testsup.c",
+        "driver/tpool.c",
+        "driver/tthread.c",
+        "driver/twork.c"
     ];
 
     dynlibs = [
@@ -56,7 +62,8 @@ function build() {
     ];
 
     includes = [
-        "$S/apps/libc/include"
+        "$S/apps/libc/include",
+        "$S/apps/testapps/ktest"
     ];
 
     app = {

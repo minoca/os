@@ -2400,6 +2400,10 @@ Return Value:
 
     Process = PsGetCurrentProcess();
     AddressSpace = (PADDRESS_SPACE_X64)(Process->AddressSpace);
+    if (VirtualAddress >= KERNEL_VA_START) {
+        AddressSpace = (PADDRESS_SPACE_X64)MmKernelAddressSpace;
+    }
+
     Canonical = (UINTN)VirtualAddress & X64_CANONICAL_HIGH;
     End = VirtualAddress + Size - 1;
 
@@ -2602,30 +2606,16 @@ Return Value:
                 // them since there are no lower level tables beyond it.
                 //
 
-                if ((Pd[PdIndex] & X86_PTE_PRESENT) != 0) {
-                    if (Terminated != FALSE) {
-                        MmFreePhysicalPage(X86_PTE_ENTRY(Pd[PdIndex]));
-                        Pd[PdIndex] = 0;
+                if ((Pd[PdIndex] & X86_PTE_PRESENT) == 0) {
+                    Inactive += 1;
+                }
 
-                    //
-                    // Just flip the page table offline for now, since
-                    // it may be used soon again by exec. This also
-                    // saves the need for a complete TLB invalidate to
-                    // invalidate the self map region, since page
-                    // tables never change this way, they just go
-                    // offline for a bit.
-                    //
-
-                    } else {
-                        Pd[PdIndex] &= ~X86_PTE_PRESENT;
-                    }
-
-                //
-                // The PT is allocated but not online.
-                //
+                if (Terminated != FALSE) {
+                    MmFreePhysicalPage(X86_PTE_ENTRY(Pd[PdIndex]));
+                    Pd[PdIndex] = 0;
 
                 } else {
-                    Inactive += 1;
+                    Pd[PdIndex] &= ~X86_PTE_PRESENT;
                 }
 
                 Total += 1;
@@ -3070,6 +3060,7 @@ Return Value:
         }
 
         AllocatedPhysical = Physical;
+        ZeroTable = TRUE;
     }
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
@@ -3108,6 +3099,7 @@ Return Value:
     // Sync the kernel top level table if this is one of those PTEs.
     //
 
+    Index = 0;
     if ((Pte >= (X64_PML4T + X64_PML4_INDEX(KERNEL_VA_START))) &&
         (Pte < (X64_PML4T + X64_PTE_COUNT))) {
 
@@ -3142,6 +3134,17 @@ Return Value:
 
         AddressSpace->AllocatedPageTables += 1;
         AddressSpace->ActivePageTables += 1;
+    }
+
+    //
+    // If a kernel PDP was just installed, set it in the master PML4 as well.
+    // Also disable user mode just for kicks, even though the lower level
+    // tables will do that as well.
+    //
+
+    if (Index != 0) {
+        *Pte &= ~X86_PTE_USER_MODE;
+        MmKernelPml4[Index] = *Pte;
     }
 
     KeReleaseSpinLock(&MmPageTableLock);
