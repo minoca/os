@@ -153,8 +153,7 @@ VOID
 PsApplySynchronousSignal (
     PTRAP_FRAME TrapFrame,
     PSIGNAL_PARAMETERS SignalParameters,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+    BOOL InSystemCall
     )
 
 /*++
@@ -172,13 +171,9 @@ Arguments:
 
     SignalParameters - Supplies a pointer to the signal information to apply.
 
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supply SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
+    InSystemCall - Supplies a boolean indicating if the trap frame came from
+        a system call, in which case this routine will look inside to
+        potentially prepare restart information.
 
 Return Value:
 
@@ -222,7 +217,12 @@ Return Value:
     Result &= MmUserWrite(&(Context->Common.Stack.Size), 0);
     Result &= MmUserWrite32(&(Context->Common.Stack.Flags), 0);
 
-    ASSERT(ArIsTrapFrameComplete(TrapFrame) != FALSE);
+    //
+    // The trap frame had better be complete or else kernel data might be being
+    // leaked.
+    //
+
+    ASSERT(ArIsTrapFrameComplete(TrapFrame));
 
     Status |= MmCopyToUserMode(&(Context->TrapFrame),
                                TrapFrame,
@@ -247,22 +247,18 @@ Return Value:
     //
 
     SystemCallResult = (INTN)TrapFrame->Eax;
-    if ((SystemCallNumber != SystemCallInvalid) &&
-        (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) != FALSE) &&
+    if ((InSystemCall != FALSE) &&
+        (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(Context->TrapFrame.Ecx)) &&
         (IS_SYSTEM_CALL_RESULT_RESTARTABLE(SystemCallResult) != FALSE)) {
 
         //
         // If the result indicates that the system call is restartable after a
         // signal is applied, then let user mode know by setting the restart
-        // flag in the context. Also save the system call number and parameters
-        // in volatile registers so that they can be placed in the correct
-        // registers for restart.
+        // flag in the context.
         //
 
         if (IS_SYSTEM_CALL_RESULT_RESTARTABLE_AFTER_SIGNAL(SystemCallResult)) {
             Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
-            MmUserWrite(&(Context->TrapFrame.Ecx), SystemCallNumber);
-            MmUserWrite(&(Context->TrapFrame.Edx), (UINTN)SystemCallParameter);
         }
 
         //
@@ -285,9 +281,7 @@ Return Value:
                               TrapFrame,
                               Thread->OwningProcess);
 
-        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
-                                                SystemCallNumber,
-                                                SystemCallParameter);
+        PsApplyPendingSignals(TrapFrame);
     }
 
     TrapFrame->Eip = (ULONG)(Thread->OwningProcess->SignalHandlerRoutine);
@@ -426,9 +420,7 @@ RestorePreSignalTrapFrameEnd:
 
 VOID
 PspArchRestartSystemCall (
-    PTRAP_FRAME TrapFrame,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+    PTRAP_FRAME TrapFrame
     )
 
 /*++
@@ -443,14 +435,6 @@ Arguments:
 
     TrapFrame - Supplies a pointer to the full trap frame saved by a system
         call in order to attempt dispatching a signal.
-
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
 
 Return Value:
 
@@ -468,7 +452,7 @@ Return Value:
     // to see if the system call can be restarted. If not, exit.
     //
 
-    if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) ||
+    if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(TrapFrame->Ecx) ||
         !IS_SYSTEM_CALL_RESULT_RESTARTABLE_NO_SIGNAL((INTN)TrapFrame->Eax)) {
 
         return;
@@ -488,28 +472,21 @@ Return Value:
                        NULL,
                        TRUE);
 
-        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
-                                                SystemCallNumber,
-                                                SystemCallParameter);
-
+        PsApplyPendingSignals(TrapFrame);
         return;
     }
 
     //
     // If the trap frame was from a full system call (not sysenter), only back
-    // up over the INT instruction. Store the system call number and parameter
-    // in ECX and EDX so that only the INT instruction needs to be replayed.
+    // up over the INT instruction.
     //
 
     if (FromSysenter == FALSE) {
-        TrapFrame->Ecx = SystemCallNumber;
-        TrapFrame->Edx = (ULONG)(UINTN)SystemCallParameter;
         TrapFrame->Eip -= X86_INT_INSTRUCTION_LENGTH;
 
     //
     // A sysenter trap frame's EIP points to the instruction after the dummy
-    // call to OspSysenter. Back up over that. It will replay enough to gather
-    // the system call number and parameter from the stack.
+    // call to OspSysenter. Back up over that.
     //
 
     } else {
@@ -831,12 +808,12 @@ Return Value:
 
     Break->Registers.X86.Eip = TrapFrame->Eip;
     Break->Registers.X86.Esp = TrapFrame->Esp;
+    Break->Registers.X86.Ecx = TrapFrame->Ecx;
+    Break->Registers.X86.Edx = TrapFrame->Edx;
     if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
         Break->ErrorCode = TrapFrame->ErrorCode;
         Break->Registers.X86.Eax = TrapFrame->Eax;
         Break->Registers.X86.Ebx = TrapFrame->Ebx;
-        Break->Registers.X86.Ecx = TrapFrame->Ecx;
-        Break->Registers.X86.Edx = TrapFrame->Edx;
         Break->Registers.X86.Ebp = TrapFrame->Ebp;
         Break->Registers.X86.Esi = TrapFrame->Esi;
         Break->Registers.X86.Edi = TrapFrame->Edi;
@@ -852,8 +829,6 @@ Return Value:
         Break->ErrorCode = 0;
         Break->Registers.X86.Eax = 0;
         Break->Registers.X86.Ebx = 0;
-        Break->Registers.X86.Ecx = 0;
-        Break->Registers.X86.Edx = 0;
         Break->Registers.X86.Ebp = 0;
         Break->Registers.X86.Esi = 0;
         Break->Registers.X86.Edi = 0;

@@ -142,8 +142,7 @@ VOID
 PsApplySynchronousSignal (
     PTRAP_FRAME TrapFrame,
     PSIGNAL_PARAMETERS SignalParameters,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+    BOOL InSystemCall
     )
 
 /*++
@@ -161,13 +160,9 @@ Arguments:
 
     SignalParameters - Supplies a pointer to the signal information to apply.
 
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supply SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
+    InSystemCall - Supplies a boolean indicating if the trap frame came from
+        a system call, in which case this routine will look inside to
+        potentially prepare restart information.
 
 Return Value:
 
@@ -209,6 +204,13 @@ Return Value:
                               sizeof(SIGNAL_SET));
 
     //
+    // The trap frame had better be complete or else kernel data might be being
+    // leaked.
+    //
+
+    ASSERT(ArIsTrapFrameComplete(TrapFrame));
+
+    //
     // TODO: Support alternate signal stacks.
     //
 
@@ -241,22 +243,18 @@ Return Value:
     //
 
     SystemCallResult = (INTN)TrapFrame->Rax;
-    if ((SystemCallNumber != SystemCallInvalid) &&
-        (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) != FALSE) &&
+    if ((InSystemCall != FALSE) &&
+        (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(TrapFrame->Rdi)) &&
         (IS_SYSTEM_CALL_RESULT_RESTARTABLE(SystemCallResult) != FALSE)) {
 
         //
         // If the result indicates that the system call is restartable after a
         // signal is applied, then let user mode know by setting the restart
-        // flag in the context. Also save the system call number and parameters
-        // in volatile registers so that they can be placed in the correct
-        // registers for restart.
+        // flag in the context.
         //
 
         if (IS_SYSTEM_CALL_RESULT_RESTARTABLE_AFTER_SIGNAL(SystemCallResult)) {
             Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
-            MmUserWrite(&(Context->TrapFrame.Rdi), SystemCallNumber);
-            MmUserWrite(&(Context->TrapFrame.Rsi), (UINTN)SystemCallParameter);
         }
 
         //
@@ -279,9 +277,7 @@ Return Value:
                               TrapFrame,
                               Thread->OwningProcess);
 
-        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
-                                                SystemCallNumber,
-                                                SystemCallParameter);
+        PsApplyPendingSignals(TrapFrame);
     }
 
     TrapFrame->Rip = (UINTN)(Thread->OwningProcess->SignalHandlerRoutine);
@@ -398,9 +394,7 @@ RestorePreSignalTrapFrameEnd:
 
 VOID
 PspArchRestartSystemCall (
-    PTRAP_FRAME TrapFrame,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+    PTRAP_FRAME TrapFrame
     )
 
 /*++
@@ -416,14 +410,6 @@ Arguments:
     TrapFrame - Supplies a pointer to the full trap frame saved by a system
         call in order to attempt dispatching a signal.
 
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
-
 Return Value:
 
     None.
@@ -437,19 +423,16 @@ Return Value:
     // to see if the system call can be restarted. If not, exit.
     //
 
-    if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) ||
+    if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(TrapFrame->Rdi) ||
         !IS_SYSTEM_CALL_RESULT_RESTARTABLE_NO_SIGNAL((INTN)TrapFrame->Rax)) {
 
         return;
     }
 
     //
-    // Back up over the syscall or int $N instruction, and reset the
-    // number/parameter to restart the call.
+    // Back up over the syscall instruction.
     //
 
-    TrapFrame->Rdi = SystemCallNumber;
-    TrapFrame->Rsi = (UINTN)SystemCallParameter;
     TrapFrame->Rip -= X86_SYSCALL_INSTRUCTION_LENGTH;
     return;
 }
@@ -567,7 +550,6 @@ Return Value:
             //
 
             StackTrapFrame->Rax = 0;
-            TrapFrame->Rax = Thread->OwningProcess->Identifiers.ProcessId;
 
         } else {
 

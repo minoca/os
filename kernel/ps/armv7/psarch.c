@@ -40,22 +40,16 @@ Environment:
 //
 
 //
-// Define the length of thumb instructions used to execute full and fast system
-// calls.
+// Define the length of thumb instructions used to execute system calls.
 //
 
 #define THUMB_SWI_INSTRUCTION_LENGTH THUMB16_INSTRUCTION_LENGTH
-#define THUMB_EOR_INSTRUCTION_LENGTH THUMB32_INSTRUCTION_LENGTH
-#define THUMB_MOV_INSTRUCTION_LENGTH THUMB32_INSTRUCTION_LENGTH
 
 //
 // Define the length of the required PC back-up when restarting a system call.
-// Luckily, both eor and mov are the same size, so full and fast system calls
-// have the same back-up length.
 //
 
-#define THUMB_RESTART_PC_BACKUP_LENGTH \
-    (THUMB_SWI_INSTRUCTION_LENGTH + THUMB_EOR_INSTRUCTION_LENGTH)
+#define THUMB_RESTART_PC_BACKUP_LENGTH THUMB_SWI_INSTRUCTION_LENGTH
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -149,8 +143,7 @@ VOID
 PsApplySynchronousSignal (
     PTRAP_FRAME TrapFrame,
     PSIGNAL_PARAMETERS SignalParameters,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+    BOOL InSystemCall
     )
 
 /*++
@@ -168,13 +161,9 @@ Arguments:
 
     SignalParameters - Supplies a pointer to the signal information to apply.
 
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supply SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
+    InSystemCall - Supplies a boolean indicating if the trap frame came from
+        a system call, in which case this routine will look inside to
+        potentially prepare restart information.
 
 Return Value:
 
@@ -211,6 +200,13 @@ Return Value:
                               sizeof(SIGNAL_SET));
 
     //
+    // The trap frame had better be complete or else kernel data might be being
+    // leaked.
+    //
+
+    ASSERT(ArIsTrapFrameComplete(TrapFrame));
+
+    //
     // TODO: Support alternate signal stacks.
     //
 
@@ -243,22 +239,18 @@ Return Value:
     //
 
     SystemCallResult = (INTN)TrapFrame->R0;
-    if ((SystemCallNumber != SystemCallInvalid) &&
-        (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) != FALSE) &&
+    if ((InSystemCall != FALSE) &&
+        (IS_SYSTEM_CALL_NUMBER_RESTARTABLE(TrapFrame->R2) != FALSE) &&
         (IS_SYSTEM_CALL_RESULT_RESTARTABLE(SystemCallResult) != FALSE)) {
 
         //
         // If the result indicates that the system call is restartable after a
         // signal is applied, then let user mode know by setting the restart
-        // flag in the context. Also save the system call number and parameters
-        // in volatile registers so that they can be placed in the correct
-        // registers for restart.
+        // flag in the context.
         //
 
         if (IS_SYSTEM_CALL_RESULT_RESTARTABLE_AFTER_SIGNAL(SystemCallResult)) {
             Flags |= SIGNAL_CONTEXT_FLAG_RESTART;
-            MmUserWrite32(&(Context->TrapFrame.R1), (UINTN)SystemCallParameter);
-            MmUserWrite32(&(Context->TrapFrame.R2), SystemCallNumber);
         }
 
         //
@@ -281,9 +273,7 @@ Return Value:
                               TrapFrame,
                               Thread->OwningProcess);
 
-        PsDispatchPendingSignalsOnCurrentThread(TrapFrame,
-                                                SystemCallNumber,
-                                                SystemCallParameter);
+        PsApplyPendingSignals(TrapFrame);
     }
 
     TrapFrame->Pc = (ULONG)(Thread->OwningProcess->SignalHandlerRoutine);
@@ -363,7 +353,7 @@ Return Value:
     Frame.Cpsr |= ARM_MODE_USER;
     Frame.SvcSp = TrapFrame->SvcSp;
     Frame.SvcLink = TrapFrame->SvcLink;
-    Frame.ExceptionCpsr = TrapFrame->ExceptionCpsr;
+    Frame.ExceptionCpsr = 0;
     RtlCopyMemory(TrapFrame, &Frame, sizeof(TRAP_FRAME));
     if (((Flags & SIGNAL_CONTEXT_FLAG_FPU_VALID) != 0) &&
         (Thread->FpuContext != NULL)) {
@@ -385,9 +375,8 @@ Return Value:
 
     //
     // If a restart is necessary, back up the PC so that the system call
-    // gets executed again when the trap frame gets restored. Also make sure
-    // that the system call number and parameters are in R0 and R1, which just
-    // requires copying R2 to R0, as the system call number was saved in R2.
+    // gets executed again when the trap frame gets restored. The original R0
+    // was saved in R2.
     //
 
     if ((Flags & SIGNAL_CONTEXT_FLAG_RESTART) != 0) {
@@ -405,9 +394,7 @@ RestorePreSignalTrapFrameEnd:
 
 VOID
 PspArchRestartSystemCall (
-    PTRAP_FRAME TrapFrame,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+    PTRAP_FRAME TrapFrame
     )
 
 /*++
@@ -423,14 +410,6 @@ Arguments:
     TrapFrame - Supplies a pointer to the full trap frame saved by a system
         call in order to attempt dispatching a signal.
 
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
-
 Return Value:
 
     None.
@@ -445,20 +424,19 @@ Return Value:
     // exit without modifying the trap frame.
     //
 
-    if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(SystemCallNumber) ||
+    if (!IS_SYSTEM_CALL_NUMBER_RESTARTABLE(TrapFrame->R2) ||
         !IS_SYSTEM_CALL_RESULT_RESTARTABLE_NO_SIGNAL((INTN)TrapFrame->R0)) {
 
         return;
     }
 
     //
-    // This system call needs to be restarted. Back up the PC. And restore the
-    // system call number and parameter into R0 and R1.
+    // This system call needs to be restarted. Back up the PC. The original R0
+    // (system call number) was stashed away in R2 since R0 is the return value.
     //
 
     TrapFrame->Pc -= THUMB_RESTART_PC_BACKUP_LENGTH;
-    TrapFrame->R0 = SystemCallNumber;
-    TrapFrame->R1 = (ULONG)(UINTN)SystemCallParameter;
+    TrapFrame->R0 = TrapFrame->R2;
     return;
 }
 
@@ -559,9 +537,8 @@ Return Value:
         } else {
 
             //
-            // User mode tried to pull a fast one by forking with the fast
-            // system call handler path. Joke's on them; zero out the registers
-            // that didn't get saved.
+            // The trap frame isn't complete, so forking clears most of the
+            // registers.
             //
 
             RtlZeroMemory(StackTrapFrame, sizeof(TRAP_FRAME));
@@ -631,6 +608,7 @@ Return Value:
     TrapFrame->UserSp = (UINTN)UserStackPointer;
     TrapFrame->Cpsr = ARM_MODE_USER;
     TrapFrame->Pc = (UINTN)Thread->ThreadRoutine;
+    TrapFrame->R0 = (UINTN)(Thread->ThreadParameter);
     if ((TrapFrame->Pc & ARM_THUMB_BIT) != 0) {
         TrapFrame->Cpsr |= PSR_FLAG_THUMB;
     }
@@ -803,10 +781,10 @@ Return Value:
     Break->Registers.Arm.Cpsr = TrapFrame->Cpsr;
     Break->Registers.Arm.R13Sp = TrapFrame->UserSp;
     Break->Registers.Arm.R14Lr = TrapFrame->UserLink;
+    Break->Registers.Arm.R1 = TrapFrame->R1;
+    Break->Registers.Arm.R2 = TrapFrame->R2;
     if (ArIsTrapFrameComplete(TrapFrame) != FALSE) {
         Break->Registers.Arm.R0 = TrapFrame->R0;
-        Break->Registers.Arm.R1 = TrapFrame->R1;
-        Break->Registers.Arm.R2 = TrapFrame->R2;
         Break->Registers.Arm.R3 = TrapFrame->R3;
         Break->Registers.Arm.R4 = TrapFrame->R4;
         Break->Registers.Arm.R5 = TrapFrame->R5;
@@ -820,8 +798,6 @@ Return Value:
 
     } else {
         Break->Registers.Arm.R0 = 0;
-        Break->Registers.Arm.R1 = 0;
-        Break->Registers.Arm.R2 = 0;
         Break->Registers.Arm.R3 = 0;
         Break->Registers.Arm.R4 = 0;
         Break->Registers.Arm.R5 = 0;

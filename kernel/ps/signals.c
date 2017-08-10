@@ -1467,6 +1467,106 @@ Return Value:
     return;
 }
 
+VOID
+PsApplyPendingSignals (
+    PTRAP_FRAME TrapFrame
+    )
+
+/*++
+
+Routine Description:
+
+    This routine dispatches any pending signals that should be run on the
+    current thread.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
+        is not destined for user mode, this function exits immediately.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG SignalNumber;
+    SIGNAL_PARAMETERS SignalParameters;
+
+    while (TRUE) {
+        SignalNumber = PsDequeuePendingSignal(&SignalParameters, TrapFrame);
+        if (SignalNumber == (ULONG)-1) {
+            break;
+        }
+
+        PsApplySynchronousSignal(TrapFrame, &SignalParameters, FALSE);
+    }
+
+    return;
+}
+
+VOID
+PsApplyPendingSignalsOrRestart (
+    PTRAP_FRAME TrapFrame
+    )
+
+/*++
+
+Routine Description:
+
+    This routine dispatches any pending signals that should be run on the
+    current thread. If no signals were dispatched, it attempts to restart a
+    system call.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
+        is not destined for user mode, this function exits immediately.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    BOOL Applied;
+    ULONG SignalNumber;
+    SIGNAL_PARAMETERS SignalParameters;
+    PKTHREAD Thread;
+
+    Applied = FALSE;
+    while (TRUE) {
+        SignalNumber = PsDequeuePendingSignal(&SignalParameters, TrapFrame);
+        if (SignalNumber == (ULONG)-1) {
+            break;
+        }
+
+        Applied = TRUE;
+        PsApplySynchronousSignal(TrapFrame, &SignalParameters, TRUE);
+    }
+
+    //
+    // If a signal did not get applied, restore the signal mask if necessary
+    // and potentially restart the system call.
+    //
+
+    if (Applied == FALSE) {
+        Thread = KeGetCurrentThread();
+        if ((Thread->Flags & THREAD_FLAG_RESTORE_SIGNALS) != 0) {
+            Thread->Flags &= ~THREAD_FLAG_RESTORE_SIGNALS;
+            PsSetSignalMask(&(Thread->RestoreSignals), NULL);
+        }
+
+        PspArchRestartSystemCall(TrapFrame);
+    }
+
+    return;
+}
+
 KSTATUS
 PspCancelQueuedSignal (
     PKPROCESS Process,
@@ -1519,84 +1619,6 @@ Return Value:
     }
 
     return Status;
-}
-
-BOOL
-PsDispatchPendingSignalsOnCurrentThread (
-    PTRAP_FRAME TrapFrame,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine dispatches any pending signals that should be run on the
-    current thread.
-
-Arguments:
-
-    TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
-        is not destined for user mode, this function exits immediately.
-
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supply SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
-
-Return Value:
-
-    FALSE if no signals are pending.
-
-    TRUE if a signal was applied.
-
---*/
-
-{
-
-    BOOL Applied;
-    ULONG SignalNumber;
-    SIGNAL_PARAMETERS SignalParameters;
-    PKTHREAD Thread;
-
-    Applied = FALSE;
-    while (TRUE) {
-        SignalNumber = PsDequeuePendingSignal(&SignalParameters, TrapFrame);
-        if (SignalNumber == -1) {
-            break;
-        }
-
-        Applied = TRUE;
-        PsApplySynchronousSignal(TrapFrame,
-                                 &SignalParameters,
-                                 SystemCallNumber,
-                                 SystemCallParameter);
-    }
-
-    //
-    // If a signal did not get applied, restore the signal mask if necessary
-    // and potentially restart the system call.
-    //
-
-    if (SystemCallNumber != SystemCallInvalid) {
-        if (Applied == FALSE) {
-            Thread = KeGetCurrentThread();
-            if ((Thread->Flags & THREAD_FLAG_RESTORE_SIGNALS) != 0) {
-                Thread->Flags &= ~THREAD_FLAG_RESTORE_SIGNALS;
-                PsSetSignalMask(&(Thread->RestoreSignals), NULL);
-            }
-
-            PspArchRestartSystemCall(TrapFrame,
-                                     SystemCallNumber,
-                                     SystemCallParameter);
-        }
-    }
-
-    return Applied;
 }
 
 ULONG

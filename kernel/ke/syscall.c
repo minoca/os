@@ -88,6 +88,7 @@ KepTestSystemCall (
 SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
     {KepTestSystemCall, 0, 0},
     {PsSysRestoreContext, 0, 0},
+    {PsSysForkProcess, sizeof(SYSTEM_CALL_FORK), 0},
     {PsSysExitThread, sizeof(SYSTEM_CALL_EXIT_THREAD), 0},
     {IoSysOpen, sizeof(SYSTEM_CALL_OPEN), sizeof(SYSTEM_CALL_OPEN)},
     {IoSysClose, 0, 0},
@@ -98,7 +99,6 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
     {PsSysCreateThread,
         sizeof(SYSTEM_CALL_CREATE_THREAD),
         sizeof(SYSTEM_CALL_CREATE_THREAD)},
-    {PsSysForkProcess, sizeof(SYSTEM_CALL_FORK), 0},
     {PsSysExecuteImage, sizeof(SYSTEM_CALL_EXECUTE_IMAGE), 0},
     {IoSysChangeDirectory, sizeof(SYSTEM_CALL_CHANGE_DIRECTORY), 0},
     {PsSysSetSignalHandler,

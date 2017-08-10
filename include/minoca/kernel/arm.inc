@@ -245,10 +245,12 @@ Environment:
 #endif
 
 //
-// Define the system call number for resuming after a signal.
+// Define the system call number for resuming after a signal and
+// forking a process, operations which happen from assembly.
 //
 
 #define SystemCallRestoreContext 1
+#define SystemCallForkProcess 2
 #define SIGNAL_PARAMETERS_SIZE 24
 #define SIGNAL_CONTEXT_SIZE 32
 

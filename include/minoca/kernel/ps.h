@@ -91,10 +91,10 @@ Author:
 // This macro dispatches pending signals on the given thread if there are any.
 //
 
-#define PsDispatchPendingSignals(_Thread, _TrapFrame)     \
-    ((_Thread)->SignalPending == ThreadNoSignalPending) ? \
-    FALSE :                                               \
-    PsDispatchPendingSignalsOnCurrentThread(_TrapFrame, SystemCallInvalid, NULL)
+#define PsDispatchPendingSignals(_Thread, _TrapFrame)        \
+    if ((_Thread)->SignalPending != ThreadNoSignalPending) { \
+        PsApplyPendingSignals(_TrapFrame);                   \
+    }
 
 //
 // This macro performs a quick inline check to see if any of the runtime timers
@@ -2840,11 +2840,9 @@ Return Value:
 
 --*/
 
-BOOL
-PsDispatchPendingSignalsOnCurrentThread (
-    PTRAP_FRAME TrapFrame,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+VOID
+PsApplyPendingSignals (
+    PTRAP_FRAME TrapFrame
     );
 
 /*++
@@ -2859,19 +2857,33 @@ Arguments:
     TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
         is not destined for user mode, this function exits immediately.
 
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supply SystemCallInvalid if
-        the caller is not a system call.
+Return Value:
 
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
+    None.
+
+--*/
+
+VOID
+PsApplyPendingSignalsOrRestart (
+    PTRAP_FRAME TrapFrame
+    );
+
+/*++
+
+Routine Description:
+
+    This routine dispatches any pending signals that should be run on the
+    current thread. If no signals were dispatched, it attempts to restart a
+    system call.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the current trap frame. If this trap frame
+        is not destined for user mode, this function exits immediately.
 
 Return Value:
 
-    FALSE if no signals are pending.
-
-    TRUE if a signal was applied.
+    None.
 
 --*/
 
@@ -2908,8 +2920,7 @@ VOID
 PsApplySynchronousSignal (
     PTRAP_FRAME TrapFrame,
     PSIGNAL_PARAMETERS SignalParameters,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+    BOOL InSystemCall
     );
 
 /*++
@@ -2927,13 +2938,9 @@ Arguments:
 
     SignalParameters - Supplies a pointer to the signal information to apply.
 
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supply SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
+    InSystemCall - Supplies a boolean indicating if the trap frame came from
+        a system call, in which case this routine will look inside to
+        potentially prepare restart information.
 
 Return Value:
 

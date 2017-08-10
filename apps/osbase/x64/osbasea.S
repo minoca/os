@@ -42,6 +42,81 @@ Environment:
 ASSEMBLY_FILE_HEADER
 
 //
+// OS_API
+// INTN
+// OsForkProcess (
+//     ULONG Flags,
+//     PVOID FrameRestoreBase
+//     )
+//
+
+/*++
+
+Routine Description:
+
+    This routine forks the current process into two separate processes. The
+    child process begins executing in the middle of this function.
+
+Arguments:
+
+    Flags - Supplies a bitfield of flags governing the behavior of the newly
+        forked process. See FORK_FLAG_* definitions.
+
+    FrameRestoreBase - Supplies an optional pointer to a region of recent
+        stack. On vfork operations, the kernel will copy the stack region from
+        the supplied pointer up to the current stack pointer into a temporary
+        buffer. After the child execs or exits, the kernel will copy that
+        region back into the parent process' stack. This is needed so that the
+        stack can be used in between the C library and the final system call.
+
+Return Value:
+
+    In the child, returns 0 indicating success.
+
+    In the parent, returns the process ID of the child on success, which is
+    always a positive value.
+
+    On failure, returns a KSTATUS code, which is a negative value.
+
+--*/
+
+EXPORTED_FUNCTION(OsForkProcess)
+
+    //
+    // Save non-volatiles, since in the child process they're all zeroed out.
+    //
+
+    pushq   %rbp                # Preserve non-volatile.
+    pushq   %rbx                # Preserve non-volatile.
+    pushq   %r12                # Preserve non-volatile.
+    pushq   %r13                # Preserve non-volatile.
+    pushq   %r14                # Preserve non-volatile.
+    pushq   %r15                # Preserve non-volatile.
+
+    //
+    // Create the SYSTEM_CALL_FORK structure, and pass a pointer to it.
+    //
+
+    pushq   %rsi                # Push frame restore base parameter.
+    pushq   %rdi                # Push flags parameter.
+    movq    %rsp, %rsi          # Pass pointer to "structure" as parameter 2.
+    subq    $8, %rsp            # Align stack.
+    CFI_ADJUST_CFA_OFFSET(72)   # Let the debugger know about the stack change.
+    movl    $SystemCallForkProcess, %edi    # Pass system call number param 1.
+    callq   OsSystemCall        # Perform the system call.
+    addq    $24, %rsp           # Pop structure and alignment.
+    CFI_ADJUST_CFA_OFFSET(-24)  # Let the debugger know about the stack change.
+    popq    %r15                # Restore non-volatile.
+    popq    %r14                # Restore non-volatile.
+    popq    %r13                # Restore non-volatile.
+    popq    %r12                # Restore non-volatile.
+    popq    %rbx                # Restore non-volatile.
+    popq    %rbp                # Restore non-volatile.
+    retq
+
+END_FUNCTION(OsForkProcess)
+
+//
 // INTN
 // OsSystemCall (
 //     ULONG SystemCallNumber,
@@ -70,49 +145,10 @@ Return Value:
 --*/
 
 FUNCTION(OsSystemCall)
-    xorl    %edx, %edx          # Do a non-full system call.
     syscall                     # Just do that system call, params in rdi, rsi.
     ret                         # Return.
 
 END_FUNCTION(OsSystemCall)
-
-//
-// INTN
-// OspSystemCallFull (
-//     ULONG SystemCallNumber,
-//     PVOID SystemCallParameter
-//     )
-//
-
-/*++
-
-Routine Description:
-
-    This routine executes a system call, saving all non-volatile registers
-    along the way. This type of system call is needed for operations that will
-    need access to all non-volatile registers, such as fork or restoring after
-    a signal.
-
-Arguments:
-
-    SystemCallNumber - Supplies the system call number.
-
-    SystemCallParameter - Supplies the system call parameter.
-
-Return Value:
-
-    STATUS_SUCCESS or positive integer on success.
-
-    Error status code on failure.
-
---*/
-
-FUNCTION(OspSystemCallFull)
-    movl    $1, %edx            # Indicate a full system call.
-    syscall                     # Just do that system call, params in rdi, rsi.
-    ret                         # Return.
-
-END_FUNCTION(OspSystemCallFull)
 
 //
 // VOID

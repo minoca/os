@@ -655,10 +655,10 @@ Return Value:
 --*/
 
 OS_API
-KSTATUS
+INTN
 OsForkProcess (
     ULONG Flags,
-    PPROCESS_ID NewProcessId
+    PVOID FrameRestoreBase
     );
 
 /*++
@@ -673,9 +673,12 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior of the newly
         forked process. See FORK_FLAG_* definitions.
 
-    NewProcessId - Supplies a pointer that on success contains the process ID
-        of the child process in the parent, and 0 in the child. This value
-        contains -1 if the new process failed to spawn.
+    FrameRestoreBase - Supplies an optional pointer to a region of recent
+        stack. On vfork operations, the kernel will copy the stack region from
+        the supplied pointer up to the current stack pointer into a temporary
+        buffer. After the child execs or exits, the kernel will copy that
+        region back into the parent process' stack. This is needed so that the
+        stack can be used in between the C library and the final system call.
 
 Return Value:
 

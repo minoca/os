@@ -541,22 +541,18 @@ Return Value:
 
 FUNCTION(ArSystemCallHandlerAsm)
     pushl   $0                      # Push a dummy error code.
+
+    //
+    // Save the complete trap frame. This routine is aware that
+    // ArGenerateTrapFrame doesn't clobber ecx and edx, which hold the system
+    // call number and parameter. If ArGenerateTrapFrame did clobber those
+    // registers, they'd need to be reloaded after this.
+    //
+
     call    ArGenerateTrapFrame     # Create a local trap frame.
     CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
 
 ArSystemCallHandlerAfterTrapSave:
-    mov     TRAP_ECX(%ebx), %ecx    # Get ecx, containing the call number.
-    mov     TRAP_EDX(%ebx), %edx    # Get edx, containing the parameter.
-
-    //
-    // Dispatching the signal takes the system call number, system call
-    // parameter and trap frame as arguments. This means that the system call
-    // number and parameter need to be saved across the call to
-    // KeSystemCallHandler.
-    //
-
-    pushl   %edx                    # Push system call parameter for dispatch.
-    pushl   %ecx                    # Push system call number for dispatch.
 
     //
     // Push the parameters for the system call handler. The compiler is free to
@@ -567,7 +563,7 @@ ArSystemCallHandlerAfterTrapSave:
     pushl   %ebx                    # Push a pointer to the trap frame.
     pushl   %edx                    # Push system call parameter.
     pushl   %ecx                    # Push system call number.
-    CFI_ADJUST_CFA_OFFSET(20)       # Tell the debugger.
+    CFI_ADJUST_CFA_OFFSET(12)       # Tell the debugger.
     call    KeSystemCallHandler     # Call the main exception handler.
     addl    $0xC, %esp              # Pop the parameters.
     CFI_ADJUST_CFA_OFFSET(-12)      # Tell the debugger.
@@ -589,13 +585,11 @@ ArSystemCallHandlerAfterTrapSave:
 
     pushl   %ebx                    # Push trap frame.
     CFI_ADJUST_CFA_OFFSET(4)        # Notify about the push.
-    call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
+    call    PsApplyPendingSignalsOrRestart  # Apply signals or restart the call.
     addl    $0x4, %esp              # Pop the trap frame.
     CFI_ADJUST_CFA_OFFSET(-4)       # Notify about the pop.
 
 ArSystemCallHandlerExit:
-    addl    $0x8, %esp              # Pop the system call number and parameter.
-    CFI_ADJUST_CFA_OFFSET(-8)       # Notify about the pop.
     call    ArRestoreTrapFrame      # Restore the trap frame
     CFI_TRAP_FRAME_POPPED           # Let the debugger know.
     addl    $0x4, %esp              # Pop the error code.
@@ -633,16 +627,17 @@ FUNCTION(ArSysenterHandlerAsm)
 
     //
     // ESP is currently pointing at the processor double fault stack, which
-    // is also the main TSS. Switch to the thread stack.
+    // is also the main TSS. Switch to the thread stack. Make room on the stack
+    // as if the hardware has pushed SS, ESP, EFLAGS, CS, EIP, and an error
+    // code, since the return path might go out with a full iret.
     //
 
     movl    TSS_ESP0(%esp), %esp    # Load the stack.
+    subl    $24, %esp               # Fake the hardware pushes.
 
     //
     // Make a fake trap frame but fill in the bare minimum: Eip and Esp.
-    // These are needed so they can be saved if a signal is dispatched. CS is
-    // also needed so kernel code can determine whether the trap frame is
-    // from user or kernel mode.
+    // These are needed so they can be saved if a signal is dispatched.
     //
 
     pushl   %eax                    # Save user ESP in trap frame.
@@ -651,6 +646,8 @@ FUNCTION(ArSysenterHandlerAsm)
     subl    $(TRAP_FRAME_SIZE - 4), %esp  # Allocate the rest of the trap frame.
     movl    %ebx, TRAP_EIP(%esp)    # EBX contains the return address.
     movl    %esp, %ebx              # Save the trap frame in EBX.
+    movl    %ecx, TRAP_ECX(%esp)    # Save system call number for restarts.
+    movl    %edx, TRAP_EDX(%esp)    # Save system call parameter for restarts.
 
     //
     // There's a trap frame at ebx, which is nice since it won't require
@@ -660,6 +657,8 @@ FUNCTION(ArSysenterHandlerAsm)
     CFI_DEF_CFA(%ebx, 0)
     CFI_OFFSET(%eip, TRAP_EIP)
     CFI_OFFSET(%esp, TRAP_ESP)
+    CFI_OFFSET(%ecx, TRAP_ECX)
+    CFI_OFFSET(%edx, TRAP_EDX)
 
     //
     // Move user DS (rather than user CS) into the trap frame to indicate
@@ -667,16 +666,6 @@ FUNCTION(ArSysenterHandlerAsm)
     //
 
     movl    $USER_DS, TRAP_CS(%ebx) # Indicate a user mode trap frame.
-
-    //
-    // Dispatching the signal takes the system call number, system call
-    // parameter and trap frame as arguments. This means that the system call
-    // number and parameter need to be saved across the call to
-    // KeSystemCallHandler.
-    //
-
-    pushl   %edx                    # Push system call parameter for dispatch.
-    pushl   %ecx                    # Push system call number for dispatch.
 
     //
     // Push the parameters for the system call handler and execute it.
@@ -697,11 +686,21 @@ FUNCTION(ArSysenterHandlerAsm)
 
     movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
     cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
-    jnz     ArSysenterHandlerFastRestore # Exit via the fast restore path.
+    jnz     ArSysenterHandlerRestore # Skip the expensive signal stuff.
 
     //
-    // Save the default user mode segment selectors. Update user CS as the trap
-    // frame is about to become full.
+    // See if the trap frame is already complete, as a result perhaps of the
+    // system call itself. If so, skip the full save part, as it might undo
+    // useful work (like restoring pre-signal context).
+    //
+
+    cmpl    $USER32_CS, TRAP_CS(%ebx)   # See if the trap frame is complete.
+    je      ArSysenterSignalDispatch    # Skip the save if complete already.
+
+    //
+    // Upgrade the trap frame to a complete one. Update user CS to indicate the
+    // trap frame is complete. This will also mean the expensive iret exit path
+    // is used.
     //
 
     movl    $USER32_CS, TRAP_CS(%ebx)  # Save CS.
@@ -717,76 +716,45 @@ FUNCTION(ArSysenterHandlerAsm)
 
     movl    %eax, TRAP_EAX(%ebx) # Save the return value in the trap frame.
     movl    $0x0, TRAP_EBX(%ebx) # Zero EBX. It holds the kernel trap pointer.
-    movl    $0x0, TRAP_ECX(%ebx) # Zero ECX. It is volatile.
-    movl    $0x0, TRAP_EDX(%ebx) # Zero EDX. It is volatile.
     movl    %esi, TRAP_ESI(%ebx) # Save ESI. It is non-volatile.
     movl    %edi, TRAP_EDI(%ebx) # Save EDI. It is non-volatile.
     movl    %ebp, TRAP_EBP(%ebx) # Save EBP. It is non-volatile.
     movl    $0x0, TRAP_ERRORCODE(%ebx) # Scrub the error code.
     movl    $0x0, TRAP_EFLAGS(%ebx) # Scrub the EFLAGS.
 
+ArSysenterSignalDispatch:
+
     //
-    // Push the trap frame as the first parameter. The system call number and
-    // system call paramter were saved on the stack earlier for this call.
+    // Push the trap frame as the first parameter, either apply signals now
+    // that a full trap frame is available, or potentially restart the system
+    // call if no signals were applied (maybe a process-wide signal got
+    // serviced by another thread).
     //
 
     pushl   %ebx                    # Pass the trap frame.
-    call    PsDispatchPendingSignalsOnCurrentThread # Dispatch signals.
-    addl    $0xC, %esp              # Pop all three parameters.
+    call    PsApplyPendingSignalsOrRestart  # Dispatch signals or restart.
+    addl    $0x4, %esp              # Pop the parameter.
+
+ArSysenterHandlerRestore:
 
     //
-    // Restore the non-volatile registers in case they were modified by the
-    // trap frame.
+    // See if the trap frame is complete. If it is, then go do the slower
+    // complete restore.
     //
 
-    movl    TRAP_ESI(%esp), %esi
-    movl    TRAP_EDI(%esp), %edi
-    movl    TRAP_EBP(%esp), %ebp
-
-    //
-    // Restore EAX in case the return value was modified. The other volatiles
-    // (ECX and EDX) are used specifically by sysexit to restore the stack and
-    // instruction pointer.
-    //
-
-    movl    TRAP_EAX(%esp), %eax
-
-    //
-    // Restore the segment registers. SS and CS are restored by sysexit. Once
-    // DS is restored then only memory accesses through ESP are allowed.
-    //
-
-    movl    TRAP_DS(%esp), %ecx  # Restore DS.
-    movw    %cx, %ds             #
-    movl    TRAP_ES(%esp), %ecx  # Restore ES.
-    movw    %cx, %es             #
-    movl    TRAP_FS(%esp), %ecx  # Restore FS.
-    movw    %cx, %fs             #
-    movl    TRAP_GS(%esp), %ecx  # Restore GS.
-    movw    %cx, %gs             #
-
-    //
-    // Upon sysenter ebx held the return address, making it effectively
-    // volatile.
-    //
-
-    xorl    %ebx, %ebx
-    jmp     ArSysenterHandlerExit
+    cmpl    $USER32_CS, TRAP_CS(%ebx)   # See if the trap frame is complete.
+    je      ArSystemCallHandlerExit     # Do a full restore if so.
 
     //
     // Reset the segment registers to user mode and return.
     //
 
-ArSysenterHandlerFastRestore:
     mov     $USER_DS, %cx           # Get the user mode DS.
     mov     %cx, %ds                # Move to DS.
     mov     %cx, %es                # Move to ES.
     mov     $GDT_THREAD, %cx        # Get the user-mode GS.
     mov     %cx, %fs                # Move to FS.
     mov     %cx, %gs                # Move to GS.
-    addl    $0x8, %esp              # Pop the system call number and parameter.
-
-ArSysenterHandlerExit:
     CFI_DEF_CFA(%esp, 0)            # The trap frame is at ESP, EBX is gone.
 
     //

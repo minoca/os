@@ -153,6 +153,8 @@ extern UINTN OsPageSize;
 // -------------------------------------------------------- Function Prototypes
 //
 
+#if defined(__i386)
+
 INTN
 OspSystemCallFull (
     ULONG SystemCallNumber,
@@ -182,7 +184,7 @@ Return Value:
 
 --*/
 
-#if defined (__arm__) || defined(__amd64)
+#elif defined (__arm__) || defined(__amd64)
 
 INTN
 OsSystemCall (

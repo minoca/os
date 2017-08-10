@@ -32,7 +32,7 @@ Environment:
 #include <minoca/kernel/arm.inc>
 
 //
-// --------------------------------------------------------------- Definitions
+// ---------------------------------------------------------------- Definitions
 //
 
 //
@@ -42,10 +42,11 @@ Environment:
 ASSEMBLY_FILE_HEADER
 
 //
+// OS_API
 // INTN
-// OspSystemCallFull (
-//     ULONG SystemCallNumber,
-//     PVOID SystemCallParameter
+// OsForkProcess (
+//     ULONG Flags,
+//     PVOID FrameRestoreBase
 //     )
 //
 
@@ -53,29 +54,49 @@ ASSEMBLY_FILE_HEADER
 
 Routine Description:
 
-    This routine executes a system call which performs a full register
-    save/restore.
+    This routine forks the current process into two separate processes. The
+    child process begins executing in the middle of this function.
 
 Arguments:
 
-    SystemCallNumber - Supplies the system call number.
+    Flags - Supplies a bitfield of flags governing the behavior of the newly
+        forked process. See FORK_FLAG_* definitions.
 
-    SystemCallParameter - Supplies the system call parameter.
+    FrameRestoreBase - Supplies an optional pointer to a region of recent
+        stack. On vfork operations, the kernel will copy the stack region from
+        the supplied pointer up to the current stack pointer into a temporary
+        buffer. After the child execs or exits, the kernel will copy that
+        region back into the parent process' stack. This is needed so that the
+        stack can be used in between the C library and the final system call.
 
 Return Value:
 
-    STATUS_SUCCESS or positive integer on success.
+    In the child, returns 0 indicating success.
 
-    Error status code on failure.
+    In the parent, returns the process ID of the child on success, which is
+    always a positive value.
+
+    On failure, returns a KSTATUS code, which is a negative value.
 
 --*/
 
-FUNCTION OspSystemCallFull
-    mov     %r2, #1                 @ Set "full" flag for complete save/restore.
-    swi     #0x0                    @ Perform system call.
-    bx      %lr                     @ Return.
+EXPORTED_FUNCTION OsForkProcess
 
-END_FUNCTION OspSystemCallFull
+    //
+    // Push the two arguments into an OS_FORK_PROCESS structure on the stack.
+    // Also Save all non-volatiles because in the child process they will all
+    // be zeroed.
+    //
+
+    stmdb %sp!, {%r0-%r1, %r4-%r11, %lr}     @ Save args and non-volatiles.
+    CFI_ADJUST_CFA_OFFSET(44)                @ Let the debugger know.
+    mov   %r1, %sp                           @ Pass pointer as parameter.
+    ldr   %r0, =SystemCallForkProcess        @ Pass system call number.
+    bl    OsSystemCall                       @ Go make that system call.
+    add   %sp, #8                            @ Pop off the params structure.
+    ldmia %sp!, {%r4-%r11, %pc}              @ Restore non-volatiles and return.
+
+END_FUNCTION OsForkProcess
 
 //
 // INTN
@@ -106,7 +127,6 @@ Return Value:
 --*/
 
 FUNCTION OsSystemCall
-    eor     %r2, %r2, %r2           @ Clear "full" flag for fast system calls.
     swi     #0x0                    @ Perform system call.
     bx      %lr                     @ Return.
 
@@ -167,7 +187,7 @@ FUNCTION OspSignalHandler
     CFI_ADJUST_CFA_OFFSET(-SIGNAL_PARAMETERS_SIZE)
     mov     %r1, %sp            @ Pass a pointer to the signal context.
     mov     %r0, #SystemCallRestoreContext  @ Set up the system call number.
-    bl      OspSystemCallFull   @ Execute the system call to restore.
+    bl      OsSystemCall        @ Execute the system call to restore.
     DEBUGGER_BREAK              @ Execution should never get here.
 
 END_FUNCTION OspSignalHandler

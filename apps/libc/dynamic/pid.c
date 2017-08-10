@@ -391,13 +391,12 @@ Return Value:
 
 {
 
-    PROCESS_ID NewProcess;
-    KSTATUS Status;
+    INTN Result;
 
     ClpRunAtforkPrepareRoutines();
     fflush(NULL);
-    Status = OsForkProcess(0, &NewProcess);
-    if (NewProcess == 0) {
+    Result = OsForkProcess(0, NULL);
+    if (Result == 0) {
         ClpRunAtforkChildRoutines();
 
     //
@@ -409,12 +408,12 @@ Return Value:
         ClpRunAtforkParentRoutines();
     }
 
-    if (!KSUCCESS(Status)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        return -1;
+    if (Result >= 0) {
+        return Result;
     }
 
-    return NewProcess;
+    errno = ClConvertKstatusToErrorNumber(Result);
+    return -1;
 }
 
 LIBC_API

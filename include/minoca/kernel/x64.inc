@@ -114,6 +114,8 @@ Environment:
 // TODO: Fix these sizes.
 //
 
+#define SystemCallRestoreContext 1
+#define SystemCallForkProcess 2
 #define PROCESSOR_CONTEXT_SIZE 284
 #define SIGNAL_CONTEXT_SIZE 28
 

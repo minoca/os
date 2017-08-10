@@ -871,9 +871,7 @@ Return Value:
 
 VOID
 PspArchRestartSystemCall (
-    PTRAP_FRAME TrapFrame,
-    ULONG SystemCallNumber,
-    PVOID SystemCallParameter
+    PTRAP_FRAME TrapFrame
     );
 
 /*++
@@ -888,14 +886,6 @@ Arguments:
 
     TrapFrame - Supplies a pointer to the full trap frame saved by a system
         call in order to attempt dispatching a signal.
-
-    SystemCallNumber - Supplies the number of the system call that is
-        attempting to dispatch a pending signal. Supplied SystemCallInvalid if
-        the caller is not a system call.
-
-    SystemCallParameter - Supplies a pointer to the parameters supplied with
-        the system call that is attempting to dispatch a signal. Supply NULL if
-        the caller is not a system call.
 
 Return Value:
 

@@ -278,16 +278,23 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+//
+// Define the system call numbers. Note that the first few are defined in
+// assmebly as well, so if the top of this table changes arrangement those
+// first few would need upkeep as well. Please move any system call numbers
+// referenced from assembly to the top.
+//
+
 typedef enum _SYSTEM_CALL_NUMBER {
     SystemCallInvalid,
     SystemCallRestoreContext,
+    SystemCallForkProcess,
     SystemCallExitThread,
     SystemCallOpen,
     SystemCallClose,
     SystemCallPerformIo,
     SystemCallCreatePipe,
     SystemCallCreateThread,
-    SystemCallForkProcess,
     SystemCallExecuteImage,
     SystemCallChangeDirectory,
     SystemCallSetSignalHandler,
@@ -431,6 +438,30 @@ typedef enum _RESOURCE_USAGE_REQUEST {
 //
 // System call parameter structures
 //
+
+/*++
+
+Structure Description:
+
+    This structure defines the system call parameters for the fork call.
+
+Members:
+
+    Flags - Stores a bitfield of flags governing the behavior of the child.
+
+    FrameRestoreBase - Stores an optional pointer that is only used if the
+        VFORK flag is set in the child. In this case, the kernel will copy a
+        region of the stack from this supplied pointer to the current stack
+        pointer into temporary storage. When the child execs or exits, the
+        kernel will copy this region back into the process, "restoring" that
+        region of the stack after the child trashed it.
+
+--*/
+
+typedef struct _SYSTEM_CALL_FORK {
+    ULONG Flags;
+    PVOID FrameRestoreBase;
+} SYSCALL_STRUCT SYSTEM_CALL_FORK, *PSYSTEM_CALL_FORK;
 
 /*++
 
@@ -659,28 +690,12 @@ typedef struct _SYSTEM_CALL_CREATE_THREAD {
 
 Structure Description:
 
-    This structure defines the system call parameters for the fork call.
-
-Members:
-
-    Flags - Supplies a bitfield of flags governing the behavior of the child.
-
---*/
-
-typedef struct _SYSTEM_CALL_FORK {
-    ULONG Flags;
-} SYSCALL_STRUCT SYSTEM_CALL_FORK, *PSYSTEM_CALL_FORK;
-
-/*++
-
-Structure Description:
-
     This structure defines the system call parameters for the execute image
     system call.
 
 Members:
 
-    Environment - Supplies the image name, arguments, and environment.
+    Environment - Stores the image name, arguments, and environment.
 
 --*/
 
@@ -2510,13 +2525,13 @@ Members:
 --*/
 
 typedef union _SYSTEM_CALL_PARAMETER_UNION {
+    SYSTEM_CALL_FORK Fork;
     SYSTEM_CALL_EXIT_THREAD ExitThread;
     SYSTEM_CALL_OPEN Open;
     SYSTEM_CALL_PERFORM_IO PerformIo;
     SYSTEM_CALL_PERFORM_VECTORED_IO PerformVectoredIo;
     SYSTEM_CALL_CREATE_PIPE CreatePipe;
     SYSTEM_CALL_CREATE_THREAD CreateThread;
-    SYSTEM_CALL_FORK Fork;
     SYSTEM_CALL_EXECUTE_IMAGE ExecuteImage;
     SYSTEM_CALL_CHANGE_DIRECTORY ChangeDirectory;
     SYSTEM_CALL_SET_SIGNAL_HANDLER SetSignalHandler;
