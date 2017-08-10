@@ -165,12 +165,6 @@ Environment:
 #define EXCEPTION_STACK_CPSR 4
 
 //
-// Processor block offsets.
-//
-
-#define PROCESSOR_BLOCK_RUNNING_THREAD 0x14
-
-//
 // Define the offsets for members of the TRAP_FRAME structure.
 //
 
@@ -207,18 +201,6 @@ Environment:
 //
 
 #define PROCESSOR_CONTEXT_SIZE 192
-
-//
-// Thread structure offsets.
-//
-
-#define THREAD_SIGNAL_PENDING 84
-
-//
-// Define the thread signal pending state options.
-//
-
-#define ThreadSignalPending 2
 
 //
 // Define the instructions for DSB/ISB, which are different in ARMv6 vs ARMv7.
@@ -482,20 +464,6 @@ Environment:
     CFI_OFFSET(lr, 0)
 
     rfeia   %sp!                                @ Restore PC and CPSR.
-
-.endm
-
-//
-// This macro can be used to get the current thread out of the processor block.
-// It is used by the system call assembly routines and purposely avoids R0.
-//
-
-.macro ARM_GET_CURRENT_THREAD
-    mrs     %r2, CPSR               @ Get the original status register.
-    cpsid   i                       @ Disable interrupts.
-    mrc     p15, 0, %r1, c13, c0, 4 @ Get TPIDRPRW.
-    ldr     %r1, [%r1, #PROCESSOR_BLOCK_RUNNING_THREAD] @ Read at offset.
-    msr     CPSR, %r2               @ Restore interrupts.
 
 .endm
 

@@ -435,13 +435,13 @@ FUNCTION(ArSyscallHandlerAsm)
     // know how to unwind from here.
     //
 
-    subq    $TRAP_FRAME_SIZE, %rsp  # Allocate space for a trap frame.
-    movq    %rcx, TRAP_RIP(%rsp)    # Save the user RIP, saved by syscall.
-    movq    %r11, TRAP_RFLAGS(%rsp) # Save RFLAGS, put there by syscall.
-    movq    %r10, TRAP_RSP(%rsp)    # Save the user RSP.
-    movq    %rdi, TRAP_RDI(%rsp)    # Save first parameter in case of restart.
-    movq    %rsi, TRAP_RSI(%rsp)    # Save second parameter in case of restart.
-    CFI_DEF_CFA(%rsp, 0)
+    subq    $(TRAP_FRAME_SIZE + 16), %rsp  # Allocate frame, bool (aligned).
+    movq    %rcx, TRAP_RIP+16(%rsp) # Save the user RIP, saved by syscall.
+    movq    %r11, TRAP_RFLAGS+16(%rsp) # Save RFLAGS, put there by syscall.
+    movq    %r10, TRAP_RSP+16(%rsp) # Save the user RSP.
+    movq    %rdi, TRAP_RDI+16(%rsp) # Save first parameter in case of restart.
+    movq    %rsi, TRAP_RSI+16(%rsp) # Save second parameter in case of restart.
+    CFI_DEF_CFA(%rsp, 16)
     CFI_OFFSET(%rip, TRAP_RIP)
     CFI_OFFSET(%rsp, TRAP_RSP)
     CFI_OFFSET(%rdi, TRAP_RDI)
@@ -452,20 +452,24 @@ FUNCTION(ArSyscallHandlerAsm)
     // 1) this is a user mode trap frame and 2) it's incomplete.
     //
 
-    movq    $USER_DS, TRAP_CS(%rsp)
-    movq    %rsp, %rdx              # Move fake trap frame to 3rd parameter.
+    movq    $USER_DS, TRAP_CS+16(%rsp)
+    movq    %rsp, %rcx              # Move boolean to 4th parameter.
+    leaq    16(%rsp), %rdx          # Move trap frame pointer to 3rd parameter.
     call    KeSystemCallHandler     # Call out to the handler.
 
     //
-    // If a signal is pending, then save the full trap frame and attempt to
+    // See if there is a signal pending, as reported by the signal handler
+    // function. If there is, then save the full trap frame and attempt to
     // dispatch the signal. Note that the trap frame was allocated on the
     // kernel stack and may be copied out to user mode. Don't leak kernel stack
     // values.
     //
 
-    movq    %gs:(PROCESSOR_BLOCK_RUNNING_THREAD), %rcx # Get current thread.
-    cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%rcx) # Signal test.
-    jne     ArSyscallHandlerFastRestore # Exit via the fast restore path.
+    popq    %rcx                    # Get the signal pending boolean.
+    addq    $8, %rsp                # Pop the remaining alignment.
+    CFI_ADJUST_CFA_OFFSET(-16)      # Tell the debugger about the pops.
+    testl   %ecx, %ecx              # See if zero.
+    jz      ArSyscallHandlerRestore # Exit quickly if no signal pending.
 
     //
     // See if the trap frame is already complete from being upgraded by the
@@ -510,7 +514,7 @@ ArSyscallSignalDispatch:
     movq    %rsp, %rdi              # Set the trap frame as the first parameter.
     call    PsApplyPendingSignalsOrRestart # Dispatch signals or restart.
 
-ArSyscallHandlerFastRestore:
+ArSyscallHandlerRestore:
     cmpl    $USER_DS, TRAP_CS(%rsp) # Compare CS hint against non-full value.
     jne     ArSyscallFullRestore    # Go back and do a full restoration maybe.
 

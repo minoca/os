@@ -560,23 +560,26 @@ ArSystemCallHandlerAfterTrapSave:
     // necessary.
     //
 
+    subl    $4, %esp                # Make room for the boolean.
+    pushl   %esp                    # Push the boolean pointer parameter.
     pushl   %ebx                    # Push a pointer to the trap frame.
     pushl   %edx                    # Push system call parameter.
     pushl   %ecx                    # Push system call number.
-    CFI_ADJUST_CFA_OFFSET(12)       # Tell the debugger.
+    CFI_ADJUST_CFA_OFFSET(20)       # Tell the debugger.
     call    KeSystemCallHandler     # Call the main exception handler.
-    addl    $0xC, %esp              # Pop the parameters.
-    CFI_ADJUST_CFA_OFFSET(-12)      # Tell the debugger.
+    addl    $0x10, %esp             # Pop the parameters.
+    CFI_ADJUST_CFA_OFFSET(-16)      # Tell the debugger.
     movl    %eax, TRAP_EAX(%ebx)    # Save the return value in the trap frame.
 
     //
-    // If a signal is pending, then go attempt to dispatch it as the trap frame
-    // is already complete.
+    // See if there is a signal pending on the current thread, as returned by
+    // the system call handler.
     //
 
-    movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
-    cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
-    jnz     ArSystemCallHandlerExit
+    popl    %ecx                    # Get the signal pending boolean
+    CFI_ADJUST_CFA_OFFSET(-4)       # Tell the debugger.
+    testl   %ecx, %ecx              # See if it's zero.
+    jz      ArSystemCallHandlerExit # Skip the expensive signal stuff.
 
     //
     // Push the trap frame as the first parameter. The system call number and
@@ -671,22 +674,22 @@ FUNCTION(ArSysenterHandlerAsm)
     // Push the parameters for the system call handler and execute it.
     //
 
+    subl    $4, %esp                # Make room for the boolean.
+    pushl   %esp                    # Push the boolean pointer parameter.
     pushl   %ebx                    # Push a pointer to the sort-of trap frame.
     pushl   %edx                    # Push EDX, the system call parameter.
-    pushl   %ecx                    # Push saved ECX, the system call number.
+    pushl   %ecx                    # Push ECX, the system call number.
     call    KeSystemCallHandler     # Call out to the main service handler.
-    addl    $0xC, %esp              # Pop the system call parameter.
+    addl    $0x10, %esp             # Pop the function parameters.
 
     //
-    // If a signal is pending, then save the full trap frame and attempt to
-    // dispatch the signal. Note that the trap frame was allocated on the
-    // kernel stack and may be copied out to user mode. Don't leak kernel stack
-    // values.
+    // See if there is a signal pending on the current thread, as returned by
+    // the system call handler.
     //
 
-    movl    %fs:(PROCESSOR_BLOCK_RUNNING_THREAD), %ecx # Get current thread.
-    cmpl    $ThreadSignalPending, THREAD_SIGNAL_PENDING(%ecx) # Signal test.
-    jnz     ArSysenterHandlerRestore # Skip the expensive signal stuff.
+    popl    %ecx                    # Get the signal pending boolean
+    testl   %ecx, %ecx              # See if it's zero.
+    jz      ArSysenterHandlerRestore    # Skip the expensive signal stuff.
 
     //
     // See if the trap frame is already complete, as a result perhaps of the

@@ -212,8 +212,8 @@ Return Value:
 
 FUNCTION ArpSoftwareInterruptEntry
     srsdb   %sp!, #ARM_MODE_SVC                 @ Push lr and spsr.
-    sub     %sp, #(TRAP_FRAME_SIZE - 8)         @ Make space for rest of frame.
-    mov     %r2, %sp                            @ Get stack/trap frame param.
+    sub     %sp, #(TRAP_FRAME_SIZE - 8 + 4)     @ Make space for rest of frame.
+    add     %r2, %sp, #4                        @ Get stack/trap frame param.
     cps     #ARM_MODE_SYSTEM                    @ Switch to system mode.
     str     %lr, [%r2, #TRAP_USERLR]            @ Save usermode LR.
     str     %sp, [%r2, #TRAP_USERSP]            @ Save usermode SP.
@@ -227,11 +227,11 @@ FUNCTION ArpSoftwareInterruptEntry
     str     %r0, [%r2, #TRAP_R2]
     str     %r1, [%r2, #TRAP_R1]
 
-    CFI_OFFSET(r1, TRAP_R1)
-    CFI_OFFSET(r0, TRAP_R2)
-    CFI_OFFSET(sp, TRAP_USERSP + 8)
-    CFI_OFFSET(lr, TRAP_USERLR + 8)
-    CFI_OFFSET(pc, TRAP_PC + 8)
+    CFI_OFFSET(r1, TRAP_R1 + 4)
+    CFI_OFFSET(r0, TRAP_R2 + 4)
+    CFI_OFFSET(sp, TRAP_USERSP + 4)
+    CFI_OFFSET(lr, TRAP_USERLR + 4)
+    CFI_OFFSET(pc, TRAP_PC + 4)
 
     //
     // Set the exception CPSR to something wild as a hint that this trap frame
@@ -248,22 +248,26 @@ FUNCTION ArpSoftwareInterruptEntry
     // user mode, and R2 == SP == trap frame.
     //
 
+    mov     %r3, %sp                            @ Set boolean pointer parameter.
     bl      KeSystemCallHandler                 @ Handle system call.
+    ldmia   %sp!, {%r1}                         @ Pop signal pending boolean.
+
+    CFI_OFFSET(r1, TRAP_R1)
+    CFI_OFFSET(r0, TRAP_R2)
+    CFI_OFFSET(sp, TRAP_USERSP)
+    CFI_OFFSET(lr, TRAP_USERLR)
+    CFI_OFFSET(pc, TRAP_PC)
 
     //
-    // Determine whether or not a signal is pending on the thread. Use the
-    // special macro to get the current thread so that R0 is not trashed. Then
-    // scrub the volatiles that will no longer be used so that user mode does
-    // not get any leaked kernel mode values.
+    // Determine whether or not a signal is pending on the thread. Go do the
+    // slow full save if there is one.
     //
 
-    ARM_GET_CURRENT_THREAD                      @ Get current thread in R1.
+    eor     %r12, %r12                          @ Scrub volatile R12.
+    tst     %r1, %r1                            @ See if r1 is FALSE.
+    bne     ArpSoftwareInterruptSignalCheck     @ Jump to dispatch signal.
     eor     %r2, %r2                            @ Scrub volatile R2.
     eor     %r3, %r3                            @ Scrub volatile R3.
-    eor     %r12, %r12                          @ Scrub volatile R12.
-    ldr     %r1, [%r1, #THREAD_SIGNAL_PENDING]  @ Load signal pending status.
-    cmp     %r1, #ThreadSignalPending           @ Compare to signal pending.
-    beq     ArpSoftwareInterruptSignalCheck     @ Jump to dispatch signal.
 
 ArpSoftwareInterruptRestore:
 

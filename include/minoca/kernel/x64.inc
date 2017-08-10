@@ -62,19 +62,6 @@ Environment:
 //
 
 #define PROCESSOR_BLOCK_TSS 0x10
-#define PROCESSOR_BLOCK_RUNNING_THREAD 0x20
-
-//
-// Thread structure offsets.
-//
-
-#define THREAD_SIGNAL_PENDING 0x94
-
-//
-// Define the thread signal pending state options.
-//
-
-#define ThreadSignalPending 2
 
 //
 // Definition for the TRAP_FRAME structure and the exception stack directly

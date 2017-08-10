@@ -63,7 +63,6 @@ Environment:
 
 #define PROCESSOR_BLOCK_TSS 0x0C
 #define PROCESSOR_BLOCK_GDT 0x10
-#define PROCESSOR_BLOCK_RUNNING_THREAD 0x14
 
 //
 // Definition for the TRAP_FRAME structure and the exception stack directly
@@ -102,18 +101,6 @@ Environment:
 
 #define PROCESSOR_CONTEXT_SIZE 0x60
 #define SIGNAL_CONTEXT_SIZE 32
-
-//
-// Thread structure offsets.
-//
-
-#define THREAD_SIGNAL_PENDING 84
-
-//
-// Define the thread signal pending state options.
-//
-
-#define ThreadSignalPending 2
 
 //
 // Define the minimum and maximum external interrupt vectors.
@@ -263,3 +250,4 @@ Environment:
 #define CFI_OFFSET(_Register, _Offset) .cfi_offset _Register, _Offset
 #define CFI_UNDEFINED(_Register) .cfi_undefined _Register
 #define CFI_SAME_VALUE(_Register) .cfi_same_value _Register
+
