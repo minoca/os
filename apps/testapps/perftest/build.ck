@@ -54,6 +54,7 @@ function build() {
         "pthread.c",
         "read.c",
         "rename.c",
+        "signal.c",
         "stat.c",
         "write.c"
     ];

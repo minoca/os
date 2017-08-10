@@ -133,6 +133,18 @@ Author:
 #define FSTAT_TEST_DESCRIPTION \
     "Benchmarks the fstat() C library routine."
 
+#define SIGNAL_IGNORED_NAME "sigign"
+#define SIGNAL_IGNORED_DESCRIPTION \
+    "Benchmarks how many ignored signals can be raised."
+
+#define SIGNAL_HANDLED_NAME "sighand"
+#define SIGNAL_HANDLED_DESCRIPTION \
+    "Benchmarks how many handled signals can be raised."
+
+#define SIGNAL_RESTART_NAME "sarestart"
+#define SIGNAL_RESTART_DESCRIPTION \
+    "Benchmarks how many system call restarts can be made."
+
 //
 // Default test durations, in seconds.
 //
@@ -165,6 +177,9 @@ Author:
 #define MUTEX_CONTENDED_TEST_DEFAULT_DURATION 30
 #define STAT_TEST_DEFAULT_DURATION 30
 #define FSTAT_TEST_DEFAULT_DURATION 30
+#define SIGNAL_IGNORED_DEFAULT_DURATION 30
+#define SIGNAL_HANDLED_DEFAULT_DURATION 30
+#define SIGNAL_RESTART_DEFAULT_DURATION 30
 
 //
 // Define the number of variables supplied to an iteration of the execute test
@@ -207,6 +222,9 @@ typedef enum _PT_TEST_TYPE {
     PtTestMutexContended,
     PtTestStat,
     PtTestFstat,
+    PtTestSignalIgnored,
+    PtTestSignalHandled,
+    PtTestSignalRestart,
     PtTestTypeCount
 } PT_TEST_TYPE, *PPT_TEST_TYPE;
 
@@ -964,6 +982,31 @@ FstatMain (
 Routine Description:
 
     This routine performs the fstat performance benchmark tests.
+
+Arguments:
+
+    Test - Supplies a pointer to the performance test being executed.
+
+    Result - Supplies a pointer to a performance test result structure that
+        receives the tests results.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
+SignalMain (
+    PPT_TEST_INFORMATION Test,
+    PPT_TEST_RESULT Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs the signal performance benchmark test.
 
 Arguments:
 

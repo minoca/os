@@ -392,6 +392,27 @@ PT_TEST_INFORMATION PerformanceTests[PtTestTypeCount] = {
      PtTestFstat,
      PtResultIterations,
      FSTAT_TEST_DEFAULT_DURATION},
+
+    {SIGNAL_IGNORED_NAME,
+     SIGNAL_IGNORED_DESCRIPTION,
+     SignalMain,
+     PtTestSignalIgnored,
+     PtResultIterations,
+     SIGNAL_IGNORED_DEFAULT_DURATION},
+
+    {SIGNAL_HANDLED_NAME,
+     SIGNAL_HANDLED_DESCRIPTION,
+     SignalMain,
+     PtTestSignalHandled,
+     PtResultIterations,
+     SIGNAL_HANDLED_DEFAULT_DURATION},
+
+    {SIGNAL_RESTART_NAME,
+     SIGNAL_RESTART_DESCRIPTION,
+     SignalMain,
+     PtTestSignalRestart,
+     PtResultIterations,
+     SIGNAL_RESTART_DEFAULT_DURATION},
 };
 
 //
