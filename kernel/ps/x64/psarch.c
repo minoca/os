@@ -182,12 +182,6 @@ Return Value:
     PKTHREAD Thread;
 
     Thread = KeGetCurrentThread();
-
-    //
-    // TODO: Check signal apply for x64. Alignment? Can signal handling be
-    // all C?
-    //
-
     ContextSp = TrapFrame->Rsp - X64_RED_ZONE - sizeof(SIGNAL_CONTEXT_X64);
     ContextSp = ALIGN_RANGE_DOWN(ContextSp, FPU_CONTEXT_ALIGNMENT);
     Context = (PVOID)ContextSp;
@@ -225,6 +219,7 @@ Return Value:
                                sizeof(TRAP_FRAME));
 
     TrapFrame->Rsp = ContextSp;
+    TrapFrame->Rsi = TrapFrame->Rsp;
     if ((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
         Flags |= SIGNAL_CONTEXT_FLAG_FPU_VALID;
         if ((Thread->FpuFlags & THREAD_FPU_FLAG_OWNER) != 0) {
@@ -267,6 +262,7 @@ Return Value:
 
     Result &= MmUserWrite32(&(Context->Common.Flags), Flags);
     TrapFrame->Rsp -= sizeof(SIGNAL_PARAMETERS);
+    TrapFrame->Rdi = TrapFrame->Rsp;
     Status |= MmCopyToUserMode((PVOID)(TrapFrame->Rsp),
                                SignalParameters,
                                sizeof(SIGNAL_PARAMETERS));

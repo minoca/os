@@ -177,8 +177,13 @@ Return Value:
 --*/
 
 FUNCTION(OspSignalHandler)
-    int     $3                  # TODO: Check this, it's never been run!
+    pushq   %rsi                # Save signal context, align stack.
+    CFI_ADJUST_CFA_OFFSET(8)    # Account for the push.
     call    OspProcessSignal    # Call the processing routine.
+    movl    $SystemCallRestoreContext, %edi     # Set system call number.
+    popq    %rsi                # Pop signal context as parameter two.
+    CFI_ADJUST_CFA_OFFSET(-8)   # Account for the popl.
+    callq   OsSystemCall        # Restore to before the signal handler.
     int     $3                  # Execution should never get back here.
 
 END_FUNCTION(OspSignalHandler)

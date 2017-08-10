@@ -98,13 +98,14 @@ Environment:
 #define TRAP_FRAME_SIZE     192
 
 //
-// TODO: Fix these sizes.
+// Define the system call numbers used by assembly, and some relevant
+// structure sizes.
 //
 
 #define SystemCallRestoreContext 1
 #define SystemCallForkProcess 2
 #define PROCESSOR_CONTEXT_SIZE 284
-#define SIGNAL_CONTEXT_SIZE 28
+#define SIGNAL_CONTEXT_SIZE 48
 
 //
 // Define the minimum and maximum external interrupt vectors.

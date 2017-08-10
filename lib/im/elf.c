@@ -3987,7 +3987,7 @@ Return Value:
             ASSERT((SymbolImage != NULL) &&
                    (SymbolImage->TlsOffset != (UINTN)-1));
 
-            Address = SymbolImage->TlsOffset - SymbolValue + Addend;
+            Address = SymbolValue - SymbolImage->TlsOffset + Addend;
             break;
 
         //
