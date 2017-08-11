@@ -29,7 +29,7 @@
 
 DIRS = efi
 
-ifeq ($(ARCH), x86)
+ifneq (,$(filter x86 x64,$(ARCH)))
 
 DIRS += pcat
 

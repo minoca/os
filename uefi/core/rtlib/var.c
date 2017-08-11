@@ -134,6 +134,7 @@ typedef struct _EFI_VARIABLE_ENTRY {
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+EFIAPI
 EFI_STATUS
 EfiVariableBackendSetData (
     EFI_VARIABLE_BACKEND_PROTOCOL *This,
@@ -842,6 +843,7 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
+EFIAPI
 EFI_STATUS
 EfiVariableBackendSetData (
     EFI_VARIABLE_BACKEND_PROTOCOL *This,

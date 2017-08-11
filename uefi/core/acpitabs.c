@@ -101,7 +101,7 @@ Return Value:
         return NULL;
     }
 
-    Rsdt = (PRSDT)(Rsdp->RsdtAddress);
+    Rsdt = (PRSDT)(UINTN)(Rsdp->RsdtAddress);
     if (Rsdt == NULL) {
         return NULL;
     }

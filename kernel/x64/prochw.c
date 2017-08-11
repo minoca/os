@@ -99,11 +99,6 @@ ArMathFaultHandlerAsm (
     VOID
     );
 
-INTN
-ArSystemCallHandlerAsm (
-    VOID
-    );
-
 VOID
 ArpPageFaultHandlerAsm (
     VOID
@@ -1119,15 +1114,6 @@ Return Value:
                       ArMathFaultHandlerAsm,
                       0,
                       GATE_TYPE_INTERRUPT);
-
-        //
-        // Set up the system call handler.
-        //
-
-        ArpCreateGate(IdtTable + VECTOR_SYSTEM_CALL,
-                      ArSystemCallHandlerAsm,
-                      0,
-                      GATE_ACCESS_USER | GATE_TYPE_TRAP);
 
         //
         // Set up the spurious interrupt vector.

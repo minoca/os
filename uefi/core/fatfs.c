@@ -1513,8 +1513,8 @@ Return Value:
 
         File->CurrentOffset += BytesComplete;
         Status = EFI_SUCCESS;
-        if (!KSUCCESS(Status)) {
-            FatStatus = EFI_VOLUME_CORRUPTED;
+        if (!KSUCCESS(FatStatus)) {
+            Status = EFI_VOLUME_CORRUPTED;
         }
 
         *BufferSize = (UINTN)BytesComplete;

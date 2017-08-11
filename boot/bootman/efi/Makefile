@@ -26,6 +26,13 @@
 #
 ################################################################################
 
+##
+## Set this variable so that the sources file knows to use native 64-bit
+## libraries rather than x64-32 libraries.
+##
+
+USE_64BIT_LIBRARIES := yes
+
 include $(SRCDIR)/../sources
 
 BINARY := bootmefi.elf
@@ -45,6 +52,10 @@ EXTRA_LDFLAGS += -pie -nodefaultlibs -nostartfiles -Wl,--whole-archive
 
 ifeq ($(ARCH), x86)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_x86.x
+endif
+
+ifeq ($(ARCH), x64)
+LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_x64.x
 endif
 
 ifeq ($(ARCH), armv7)

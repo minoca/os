@@ -37,7 +37,15 @@ function build() {
     var lib;
     var sources;
     var sourcesConfig;
+    var x64Sources;
     var x86Sources;
+
+    x64Sources = [
+        "x64/archsup.S",
+        "x64/ioport.S",
+        "x86/archlib.c",
+        "x86/regacces.c"
+    ];
 
     x86Sources = [
         "x86/archlib.c",
@@ -67,6 +75,9 @@ function build() {
 
     } else if (arch == "x86") {
         sources = x86Sources;
+
+    } else if (arch == "x64") {
+        sources = x64Sources;
 
     } else {
         Core.raise(ValueError("Unknown Architecture"));

@@ -68,7 +68,7 @@ Author:
 
 #define CPU_STACK_ALIGNMENT 16
 
-#define EFIAPI
+#define EFIAPI __attribute__((ms_abi))
 
 //
 // ------------------------------------------------------ Data Type Definitions

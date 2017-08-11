@@ -136,6 +136,7 @@ Return Value:
 
 --*/
 
+EFIAPI
 EFI_STATUS
 EfiCoreStartImage (
     EFI_HANDLE ImageHandle,

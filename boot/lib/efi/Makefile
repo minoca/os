@@ -48,13 +48,16 @@ OBJS += dbgser.o   \
 X86_OBJS += x86/efia.o      \
             x86/efiarch.o
 
+X64_OBJS += x64/efia.o      \
+            x64/efiarch.o
+
 ARMV7_OBJS += armv7/efia.o      \
               armv7/efiarch.o   \
 
 ARMV6_OBJS += armv7/efia.o      \
               armv7/efiarch.o   \
 
-EXTRA_SRC_DIRS = x86 armv7
+EXTRA_SRC_DIRS = x86 x64 armv7
 
 include $(SRCROOT)/os/minoca.mk
 

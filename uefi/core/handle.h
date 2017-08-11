@@ -550,6 +550,7 @@ Return Value:
 
 --*/
 
+EFIAPI
 EFI_STATUS
 EfiCoreUninstallProtocolInterface (
     EFI_HANDLE Handle,

@@ -76,6 +76,23 @@ typedef struct _EFI_JUMP_BUFFER {
 
 #define EFI_JUMP_BUFFER_ALIGNMENT 4
 
+#elif defined(EFI_X64)
+
+typedef struct _EFI_JUMP_BUFFER {
+    UINT64 Rbx;
+    UINT64 Rbp;
+    UINT64 Rdi;
+    UINT64 Rsi;
+    UINT64 R12;
+    UINT64 R13;
+    UINT64 R14;
+    UINT64 R15;
+    UINT64 Rsp;
+    UINT64 Rip;
+} EFI_JUMP_BUFFER, *PEFI_JUMP_BUFFER;
+
+#define EFI_JUMP_BUFFER_ALIGNMENT 8
+
 #elif defined(EFI_ARM)
 
 typedef struct _EFI_JUMP_BUFFER {

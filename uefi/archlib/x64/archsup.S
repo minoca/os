@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -13,11 +13,11 @@ Module Name:
 
 Abstract:
 
-    This module implements x86 architecture specific support routines.
+    This module implements x64 architecture specific support routines.
 
 Author:
 
-    Evan Green 7-Apr-2014
+    Evan Green 11-Aug-2017
 
 Environment:
 
@@ -29,20 +29,13 @@ Environment:
 // ------------------------------------------------------------------ Includes
 //
 
-#include <minoca/kernel/x86.inc>
+#include <minoca/kernel/x64.inc>
 
 //
 // ---------------------------------------------------------------------- Code
 //
 
-//
-// .text specifies that this code belongs in the executable section.
-//
-// .code32 specifies that this is 32-bit protected mode code.
-//
-
-.text
-.code32
+ASSEMBLY_FILE_HEADER
 
 //
 // VOID
@@ -70,10 +63,8 @@ Return Value:
 --*/
 
 FUNCTION(EfiMemoryBarrier)
-    sub     $4, %esp
-    lock add $1, (%esp)
-    add     $4, %esp
-    ret
+    lock orq    $0, (%rsp)
+    retq
 
 END_FUNCTION(EfiMemoryBarrier)
 

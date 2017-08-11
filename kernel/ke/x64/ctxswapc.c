@@ -93,9 +93,9 @@ Return Value:
     Tss->Rsp[0] = (UINTN)NewThread->KernelStack + NewThread->KernelStackSize;
 
     //
-    // If the thread is using the FPU, save it. If the thread was using the FPU
-    // but is now context switching in a system call, then abandon the FPU
-    // state, as FPU state is volatile across function calls.
+    // If the thread is using the FPU, save it. Some FPU registers are
+    // non-volatile across function calls, so it cannot be assumed that if a
+    // system call is in progress that the FPU state can be reset.
     //
 
     if ((CurrentThread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
@@ -105,8 +105,7 @@ Return Value:
         // terminating.
         //
 
-        if ((CurrentThread->FpuContext != NULL) &&
-            ((CurrentThread->Flags & THREAD_FLAG_IN_SYSTEM_CALL) == 0)) {
+        if (CurrentThread->FpuContext != NULL) {
 
             //
             // Save the FPU state if it was used this iteration. A thread may

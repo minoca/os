@@ -127,6 +127,11 @@ function build() {
             "x64/prochw.c"
         ];
 
+        efiSources += [
+            "efi/x64/efia.S",
+            "efi/x64/efiarch.c"
+        ];
+
         pcatSources += [
             "pcat/x64/realmexe.S"
         ];

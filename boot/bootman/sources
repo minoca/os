@@ -35,11 +35,11 @@ OBJS     = bootman.o  \
            bootim.o   \
 
 ##
-## The boot manager is a 32-bit fish in a 64-bit pond. All of its libraries
-## need to be specially compiled 32-bit versions.
+## The PC/AT boot manager is a 32-bit fish in a 64-bit pond. All of its
+## libraries need to be specially compiled 32-bit versions.
 ##
 
-ifeq ($(ARCH),x64)
+ifeq ($(ARCH)$(USE_64BIT_LIBRARIES),x64)
 
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/boot/x6432/basertlb.a      \
              $(OBJROOT)/os/lib/rtl/kmode/x6432/krtl.a              \

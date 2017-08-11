@@ -322,6 +322,7 @@ CoreUnloadImageEnd:
     return Status;
 }
 
+EFIAPI
 EFI_STATUS
 EfiCoreStartImage (
     EFI_HANDLE ImageHandle,

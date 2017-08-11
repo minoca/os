@@ -1053,6 +1053,7 @@ CoreReinstallProtocolInterfaceEnd:
     return Status;
 }
 
+EFIAPI
 EFI_STATUS
 EfiCoreUninstallProtocolInterface (
     EFI_HANDLE Handle,

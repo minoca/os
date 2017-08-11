@@ -128,6 +128,7 @@ EfipGraphicsTextReset (
     BOOLEAN ExtendedVerification
     );
 
+EFIAPI
 EFI_STATUS
 EfipGraphicsTextStringOut (
     EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
@@ -584,6 +585,7 @@ Return Value:
     return This->SetMode(This, Console->GraphicsMode);
 }
 
+EFIAPI
 EFI_STATUS
 EfipGraphicsTextStringOut (
     EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
