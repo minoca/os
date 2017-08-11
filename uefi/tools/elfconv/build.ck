@@ -39,6 +39,7 @@ function build() {
 
     sources = [
         "elfc32.c",
+        "elfc64.c",
         "elfconv.c",
     ];
 

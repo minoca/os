@@ -29,6 +29,17 @@ Author:
 #include "elfimage.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro aligns a value up to the COFF alignment.
+//
+
+#define ELFCONV_COFF_ALIGN(_Value) \
+    (((_Value) + (ELFCONV_COFF_ALIGNMENT - 1)) & ~(ELFCONV_COFF_ALIGNMENT - 1))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -43,6 +54,12 @@ Author:
 //
 
 #define ELFCONV_HII_SECTION_NAME ".hii"
+
+//
+// Define the alignment used throughout the COFF file.
+//
+
+#define ELFCONV_COFF_ALIGNMENT 0x20
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -436,10 +453,6 @@ Return Value:
 
 --*/
 
-//
-// 32-bit ELF functions
-//
-
 BOOLEAN
 ElfconvInitializeElf32 (
     PELFCONV_CONTEXT Context,
@@ -467,3 +480,29 @@ Return Value:
 
 --*/
 
+BOOLEAN
+ElfconvInitializeElf64 (
+    PELFCONV_CONTEXT Context,
+    PELFCONV_FUNCTION_TABLE FunctionTable
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to bind an ELF conversion context to an ELF64 image.
+
+Arguments:
+
+    Context - Supplies a pointer to the ELF context.
+
+    FunctionTable - Supplies a pointer to the ELF conversion functions on
+        success.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the image is not a valid ELF64 image.
+
+--*/

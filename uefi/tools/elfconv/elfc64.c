@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp.
+Copyright (c) 2017 Minoca Corp.
 
     This file is licensed under the terms of the GNU General Public License
     version 3. Alternative licensing terms are available. Contact
@@ -9,16 +9,16 @@ Copyright (c) 2014 Minoca Corp.
 
 Module Name:
 
-    elfc32.c
+    elfc64.c
 
 Abstract:
 
-    This module implements support for converting an ELF32 image to a PE
+    This module implements support for converting an ELF64 image to a PE
     image.
 
 Author:
 
-    Evan Green 7-Mar-2014
+    Evan Green 1-Aug-2017
 
 Environment:
 
@@ -43,6 +43,13 @@ Environment:
 //
 // --------------------------------------------------------------------- Macros
 //
+
+//
+// This macro aligns a value up to the COFF alignment.
+//
+
+#define ELFCONV_COFF_ALIGN(_Value) \
+    (((_Value) + (ELFCONV_COFF_ALIGNMENT - 1)) & ~(ELFCONV_COFF_ALIGNMENT - 1))
 
 //
 // This macro returns a pointer to the base of the section header array given
@@ -95,8 +102,8 @@ Environment:
 typedef
 BOOLEAN
 (*PELFCONV_SECTION_FILTER_FUNCTION) (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     );
 
 /*++
@@ -124,70 +131,64 @@ Return Value:
 //
 
 BOOLEAN
-ElfconvScanSections32 (
+ElfconvScanSections64 (
     PELFCONV_CONTEXT Context
     );
 
 BOOLEAN
-ElfconvWriteSections32 (
+ElfconvWriteSections64 (
     PELFCONV_CONTEXT Context,
     ELFCONV_SECTION_FILTER FilterType
     );
 
 BOOLEAN
-ElfconvWriteRelocations32 (
+ElfconvWriteRelocations64 (
     PELFCONV_CONTEXT Context
     );
 
 BOOLEAN
-ElfconvWriteDebug32 (
-    PELFCONV_CONTEXT Context
-    );
-
-VOID
-ElfconvSetImageSize32 (
+ElfconvWriteDebug64 (
     PELFCONV_CONTEXT Context
     );
 
 VOID
-ElfconvCleanUp32 (
+ElfconvSetImageSize64 (
+    PELFCONV_CONTEXT Context
+    );
+
+VOID
+ElfconvCleanUp64 (
     PELFCONV_CONTEXT Context
     );
 
 BOOLEAN
-ElfconvIsTextSection32 (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
+ElfconvIsTextSection64 (
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     );
 
 BOOLEAN
-ElfconvIsDataSection32 (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
+ElfconvIsDataSection64 (
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     );
 
 BOOLEAN
-ElfconvIsHiiRsrcSection32 (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
+ElfconvIsHiiRsrcSection64 (
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     );
 
 BOOLEAN
-ElfconvIsDebugSection32 (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
-    );
-
-VOID
-ElfconvThumbMovtImmediatePatch (
-    UINT16 *Instruction,
-    UINT16 Address
+ElfconvIsDebugSection64 (
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     );
 
 BOOLEAN
-ElfconvConvertElfAddress32 (
+ElfconvConvertElfAddress64 (
     PELFCONV_CONTEXT Context,
-    UINT32 *Address
+    UINT64 *Address
     );
 
 //
@@ -199,7 +200,7 @@ ElfconvConvertElfAddress32 (
 //
 
 BOOLEAN
-ElfconvInitializeElf32 (
+ElfconvInitializeElf64 (
     PELFCONV_CONTEXT Context,
     PELFCONV_FUNCTION_TABLE FunctionTable
     )
@@ -208,7 +209,7 @@ ElfconvInitializeElf32 (
 
 Routine Description:
 
-    This routine attempts to bind an ELF conversion context to an ELF32 image.
+    This routine attempts to bind an ELF conversion context to an ELF64 image.
 
 Arguments:
 
@@ -221,45 +222,45 @@ Return Value:
 
     TRUE on success.
 
-    FALSE if the image is not a valid ELF32 image.
+    FALSE if the image is not a valid ELF64 image.
 
 --*/
 
 {
 
-    Elf32_Ehdr *ElfHeader;
+    Elf64_Ehdr *ElfHeader;
     BOOLEAN Result;
 
     Result = FALSE;
     ElfHeader = Context->InputFile;
-    if (Context->InputFileSize < sizeof(Elf32_Ehdr)) {
-        if ((ElfHeader->e_ident[EI_CLASS] != ELFCLASS32) ||
+    if (Context->InputFileSize < sizeof(Elf64_Ehdr)) {
+        if ((ElfHeader->e_ident[EI_CLASS] != ELFCLASS64) ||
             (ElfHeader->e_ident[EI_DATA] != ELFDATA2LSB) ||
             ((ElfHeader->e_type != ET_EXEC) && (ElfHeader->e_type != ET_DYN)) ||
-            ((ElfHeader->e_machine != EM_386) &&
-             (ElfHeader->e_machine != EM_ARM)) ||
+            ((ElfHeader->e_machine != EM_X86_64) &&
+             (ElfHeader->e_machine != EM_AARCH64)) ||
             (ElfHeader->e_version != EV_CURRENT)) {
 
             fprintf(stderr, "ELF Image not valid.\n");
-            goto InitializeElf32End;
+            goto InitializeElf64End;
         }
     }
 
     Context->CoffSectionsOffset = malloc(ElfHeader->e_shnum * sizeof(UINT32));
     if (Context->CoffSectionsOffset == NULL) {
-        goto InitializeElf32End;
+        goto InitializeElf64End;
     }
 
     memset(Context->CoffSectionsOffset, 0, ElfHeader->e_shnum * sizeof(UINT32));
-    FunctionTable->ScanSections = ElfconvScanSections32;
-    FunctionTable->WriteSections = ElfconvWriteSections32;
-    FunctionTable->WriteRelocations = ElfconvWriteRelocations32;
-    FunctionTable->WriteDebug = ElfconvWriteDebug32;
-    FunctionTable->SetImageSize = ElfconvSetImageSize32;
-    FunctionTable->CleanUp = ElfconvCleanUp32;
+    FunctionTable->ScanSections = ElfconvScanSections64;
+    FunctionTable->WriteSections = ElfconvWriteSections64;
+    FunctionTable->WriteRelocations = ElfconvWriteRelocations64;
+    FunctionTable->WriteDebug = ElfconvWriteDebug64;
+    FunctionTable->SetImageSize = ElfconvSetImageSize64;
+    FunctionTable->CleanUp = ElfconvCleanUp64;
     Result = TRUE;
 
-InitializeElf32End:
+InitializeElf64End:
     return Result;
 }
 
@@ -268,7 +269,7 @@ InitializeElf32End:
 //
 
 BOOLEAN
-ElfconvScanSections32 (
+ElfconvScanSections64 (
     PELFCONV_CONTEXT Context
     )
 
@@ -292,16 +293,17 @@ Return Value:
 
 {
 
-    UINT32 CoffEntry;
+    UINT64 CoffEntry;
+    EFI_IMAGE_DATA_DIRECTORY *DataDirectory;
     EFI_IMAGE_DOS_HEADER *DosHeader;
-    Elf32_Ehdr *ElfHeader;
-    Elf32_Shdr *ElfSection;
-    UINT32 Flags;
+    Elf64_Ehdr *ElfHeader;
+    Elf64_Shdr *ElfSection;
+    UINT64 Flags;
     BOOLEAN FoundText;
     EFI_IMAGE_OPTIONAL_HEADER_UNION *NtHeader;
     UINTN SectionIndex;
     CHAR8 *SectionName;
-    Elf32_Shdr *StringSection;
+    Elf64_Shdr *StringSection;
 
     CoffEntry = 0;
     Context->CoffOffset = 0;
@@ -311,10 +313,10 @@ Return Value:
     FoundText = FALSE;
     ElfHeader = Context->InputFile;
 
-    assert((ElfHeader->e_machine == EM_386) ||
-           (ElfHeader->e_machine == EM_ARM));
+    assert((ElfHeader->e_machine == EM_X86_64) ||
+           (ElfHeader->e_machine == EM_AARCH64));
 
-    Context->CoffOffset += sizeof(EFI_IMAGE_NT_HEADERS32);
+    Context->CoffOffset += sizeof(EFI_IMAGE_NT_HEADERS64);
     Context->TableOffset = Context->CoffOffset;
     Context->CoffOffset += ELFCONV_PE_SECTION_COUNT *
                            sizeof(EFI_IMAGE_SECTION_HEADER);
@@ -329,7 +331,7 @@ Return Value:
          SectionIndex += 1) {
 
         ElfSection = ELFCONV_ELF_SECTION(ElfHeader, SectionIndex);
-        if (ElfconvIsTextSection32(ElfHeader, ElfSection) != FALSE) {
+        if (ElfconvIsTextSection64(ElfHeader, ElfSection) != FALSE) {
             if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                 StringSection = ELFCONV_ELF_SECTION(ElfHeader,
                                                     ElfHeader->e_shstrndx);
@@ -391,10 +393,6 @@ Return Value:
         return FALSE;
     }
 
-    if (ElfHeader->e_machine != EM_ARM) {
-        Context->CoffOffset = ELFCONV_COFF_ALIGN(Context->CoffOffset);
-    }
-
     //
     // Find and wrangle data sections.
     //
@@ -405,7 +403,7 @@ Return Value:
          SectionIndex += 1) {
 
         ElfSection = ELFCONV_ELF_SECTION(ElfHeader, SectionIndex);
-        if (ElfconvIsDataSection32(ElfHeader, ElfSection) != FALSE) {
+        if (ElfconvIsDataSection64(ElfHeader, ElfSection) != FALSE) {
             if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                 StringSection = ELFCONV_ELF_SECTION(ElfHeader,
                                                     ElfHeader->e_shstrndx);
@@ -457,7 +455,7 @@ Return Value:
          SectionIndex += 1) {
 
         ElfSection = ELFCONV_ELF_SECTION(ElfHeader, SectionIndex);
-        if (ElfconvIsHiiRsrcSection32(ElfHeader, ElfSection) != FALSE) {
+        if (ElfconvIsHiiRsrcSection64(ElfHeader, ElfSection) != FALSE) {
             if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                 StringSection = ELFCONV_ELF_SECTION(ElfHeader,
                                                     ElfHeader->e_shstrndx);
@@ -528,14 +526,14 @@ Return Value:
     NtHeader = (EFI_IMAGE_OPTIONAL_HEADER_UNION *)(Context->CoffFile +
                                                    Context->NtHeaderOffset);
 
-    NtHeader->Pe32.Signature = EFI_IMAGE_NT_SIGNATURE;
+    NtHeader->Pe32Plus.Signature = EFI_IMAGE_NT_SIGNATURE;
     switch (ElfHeader->e_machine) {
-    case EM_386:
-        NtHeader->Pe32.FileHeader.Machine = EFI_IMAGE_MACHINE_IA32;
+    case EM_X86_64:
+        NtHeader->Pe32Plus.FileHeader.Machine = EFI_IMAGE_MACHINE_X64;
         break;
 
-    case EM_ARM:
-        NtHeader->Pe32.FileHeader.Machine = EFI_IMAGE_MACHINE_ARMTHUMB_MIXED;
+    case EM_AARCH64:
+        NtHeader->Pe32Plus.FileHeader.Machine = EFI_IMAGE_MACHINE_AARCH64;
         break;
 
     default:
@@ -545,38 +543,37 @@ Return Value:
         return FALSE;
     }
 
-    NtHeader->Pe32.OptionalHeader.Magic = EFI_IMAGE_NT_OPTIONAL_HDR32_MAGIC;
-    NtHeader->Pe32.FileHeader.NumberOfSections = ELFCONV_PE_SECTION_COUNT;
-    NtHeader->Pe32.FileHeader.TimeDateStamp = (UINT32)time(NULL);
-    Context->ImageTimestamp = NtHeader->Pe32.FileHeader.TimeDateStamp;
-    NtHeader->Pe32.FileHeader.PointerToSymbolTable = 0;
-    NtHeader->Pe32.FileHeader.NumberOfSymbols = 0;
-    NtHeader->Pe32.FileHeader.SizeOfOptionalHeader =
-                                         sizeof(NtHeader->Pe32.OptionalHeader);
+    NtHeader->Pe32Plus.OptionalHeader.Magic = EFI_IMAGE_NT_OPTIONAL_HDR64_MAGIC;
+    NtHeader->Pe32Plus.FileHeader.NumberOfSections = ELFCONV_PE_SECTION_COUNT;
+    NtHeader->Pe32Plus.FileHeader.TimeDateStamp = (UINT64)time(NULL);
+    Context->ImageTimestamp = NtHeader->Pe32Plus.FileHeader.TimeDateStamp;
+    NtHeader->Pe32Plus.FileHeader.PointerToSymbolTable = 0;
+    NtHeader->Pe32Plus.FileHeader.NumberOfSymbols = 0;
+    NtHeader->Pe32Plus.FileHeader.SizeOfOptionalHeader =
+                                     sizeof(NtHeader->Pe32Plus.OptionalHeader);
 
-    NtHeader->Pe32.FileHeader.Characteristics =
+    NtHeader->Pe32Plus.FileHeader.Characteristics =
                                            EFI_IMAGE_FILE_EXECUTABLE_IMAGE |
                                            EFI_IMAGE_FILE_LINE_NUMS_STRIPPED |
                                            EFI_IMAGE_FILE_LOCAL_SYMS_STRIPPED |
-                                           EFI_IMAGE_FILE_32BIT_MACHINE;
+                                           EFI_IMAGE_FILE_LARGE_ADDRESS_AWARE;
 
-    NtHeader->Pe32.OptionalHeader.SizeOfCode = Context->DataOffset -
-                                               Context->TextOffset;
+    NtHeader->Pe32Plus.OptionalHeader.SizeOfCode = Context->DataOffset -
+                                                   Context->TextOffset;
 
-    NtHeader->Pe32.OptionalHeader.SizeOfInitializedData =
+    NtHeader->Pe32Plus.OptionalHeader.SizeOfInitializedData =
                                Context->RelocationOffset - Context->DataOffset;
 
-    NtHeader->Pe32.OptionalHeader.SizeOfUninitializedData = 0;
-    NtHeader->Pe32.OptionalHeader.AddressOfEntryPoint = CoffEntry;
-    NtHeader->Pe32.OptionalHeader.BaseOfCode = Context->TextOffset;
-    NtHeader->Pe32.OptionalHeader.BaseOfData = Context->DataOffset;
-    NtHeader->Pe32.OptionalHeader.ImageBase = 0;
-    NtHeader->Pe32.OptionalHeader.SectionAlignment = ELFCONV_COFF_ALIGNMENT;
-    NtHeader->Pe32.OptionalHeader.FileAlignment = ELFCONV_COFF_ALIGNMENT;
-    NtHeader->Pe32.OptionalHeader.SizeOfImage = 0;
-    NtHeader->Pe32.OptionalHeader.SizeOfHeaders = Context->TextOffset;
-    NtHeader->Pe32.OptionalHeader.Subsystem = Context->SubsystemType;
-    NtHeader->Pe32.OptionalHeader.NumberOfRvaAndSizes =
+    NtHeader->Pe32Plus.OptionalHeader.SizeOfUninitializedData = 0;
+    NtHeader->Pe32Plus.OptionalHeader.AddressOfEntryPoint = CoffEntry;
+    NtHeader->Pe32Plus.OptionalHeader.BaseOfCode = Context->TextOffset;
+    NtHeader->Pe32Plus.OptionalHeader.ImageBase = 0;
+    NtHeader->Pe32Plus.OptionalHeader.SectionAlignment = ELFCONV_COFF_ALIGNMENT;
+    NtHeader->Pe32Plus.OptionalHeader.FileAlignment = ELFCONV_COFF_ALIGNMENT;
+    NtHeader->Pe32Plus.OptionalHeader.SizeOfImage = 0;
+    NtHeader->Pe32Plus.OptionalHeader.SizeOfHeaders = Context->TextOffset;
+    NtHeader->Pe32Plus.OptionalHeader.Subsystem = Context->SubsystemType;
+    NtHeader->Pe32Plus.OptionalHeader.NumberOfRvaAndSizes =
                                          EFI_IMAGE_NUMBER_OF_DIRECTORY_ENTRIES;
 
     //
@@ -595,7 +592,7 @@ Return Value:
                                    Flags);
 
     } else {
-        NtHeader->Pe32.FileHeader.NumberOfSections -= 1;
+        NtHeader->Pe32Plus.FileHeader.NumberOfSections -= 1;
     }
 
     if (Context->HiiRsrcOffset > Context->DataOffset) {
@@ -610,7 +607,7 @@ Return Value:
                                    Flags);
 
     } else {
-        NtHeader->Pe32.FileHeader.NumberOfSections -= 1;
+        NtHeader->Pe32Plus.FileHeader.NumberOfSections -= 1;
     }
 
     if (Context->RelocationOffset > Context->HiiRsrcOffset) {
@@ -624,15 +621,22 @@ Return Value:
                             Context->RelocationOffset - Context->HiiRsrcOffset,
                             Flags);
 
+        DataDirectory = &(NtHeader->Pe32Plus.OptionalHeader.DataDirectory[0]);
+        DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_RESOURCE].Size =
+                            Context->RelocationOffset - Context->HiiRsrcOffset;
+
+        DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_RESOURCE].VirtualAddress =
+                                                        Context->HiiRsrcOffset;
+
     } else {
-        NtHeader->Pe32.FileHeader.NumberOfSections -= 1;
+        NtHeader->Pe32Plus.FileHeader.NumberOfSections -= 1;
     }
 
     return TRUE;
 }
 
 BOOLEAN
-ElfconvWriteSections32 (
+ElfconvWriteSections64 (
     PELFCONV_CONTEXT Context,
     ELFCONV_SECTION_FILTER FilterType
     )
@@ -659,40 +663,38 @@ Return Value:
 
 {
 
-    UINT16 Address;
-    UINT32 AddressValue;
     VOID *Destination;
     ptrdiff_t Difference;
-    Elf32_Ehdr *ElfHeader;
-    Elf32_Shdr *ElfSection;
+    Elf64_Ehdr *ElfHeader;
+    Elf64_Shdr *ElfSection;
     PELFCONV_SECTION_FILTER_FUNCTION FilterFunction;
-    Elf32_Rel *Relocation;
+    Elf64_Rela *Relocation;
     UINT32 RelocationOffset;
-    Elf32_Shdr *RelocationSection;
+    Elf64_Shdr *RelocationSection;
     UINT32 SectionIndex;
     UINT32 SectionOffset;
-    Elf32_Sym *Symbol;
-    Elf32_Shdr *SymbolSectionHeader;
+    Elf64_Sym *Symbol;
+    Elf64_Shdr *SymbolSectionHeader;
     UINT8 *SymbolTable;
-    Elf32_Shdr *SymbolTableSection;
+    Elf64_Shdr *SymbolTableSection;
     UINT8 *Target;
 
     ElfHeader = Context->InputFile;
 
-    assert((ElfHeader->e_machine == EM_386) ||
-           (ElfHeader->e_machine == EM_ARM));
+    assert((ElfHeader->e_machine == EM_X86_64) ||
+           (ElfHeader->e_machine == EM_AARCH64));
 
     switch (FilterType) {
     case ElfconvSectionText:
-        FilterFunction = ElfconvIsTextSection32;
+        FilterFunction = ElfconvIsTextSection64;
         break;
 
     case ElfconvSectionData:
-        FilterFunction = ElfconvIsDataSection32;
+        FilterFunction = ElfconvIsDataSection64;
         break;
 
     case ElfconvSectionHii:
-        FilterFunction = ElfconvIsHiiRsrcSection32;
+        FilterFunction = ElfconvIsHiiRsrcSection64;
         break;
 
     default:
@@ -723,7 +725,7 @@ Return Value:
             case SHT_RELA:
                 if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                     Difference = Destination - (VOID *)(Context->CoffFile);
-                    printf("Copying section from ELF offset %x, size %x to "
+                    printf("Copying section from ELF offset %llx, size %llx to "
                            "COFF offset %lx.\n",
                            ElfSection->sh_offset,
                            ElfSection->sh_size,
@@ -740,7 +742,7 @@ Return Value:
             case SHT_NOBITS:
                 if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                     Difference = Destination - (VOID *)(Context->CoffFile);
-                    printf("Zeroing COFF offset %lx, size %x",
+                    printf("Zeroing COFF offset %lx, size %llx",
                            (long)Difference,
                            ElfSection->sh_size);
                 }
@@ -796,7 +798,7 @@ Return Value:
         // addend relocations.
         //
 
-        if ((RelocationSection->sh_type != SHT_REL) ||
+        if ((RelocationSection->sh_type == SHT_REL) ||
             (FilterFunction(ElfHeader, ElfSection) == FALSE)) {
 
             continue;
@@ -819,12 +821,12 @@ Return Value:
              RelocationOffset < RelocationSection->sh_size;
              RelocationOffset += RelocationSection->sh_entsize) {
 
-            Relocation = (Elf32_Rel *)((UINT8 *)ElfHeader +
-                                       RelocationSection->sh_offset +
-                                       RelocationOffset);
+            Relocation = (Elf64_Rela *)((UINT8 *)ElfHeader +
+                                        RelocationSection->sh_offset +
+                                        RelocationOffset);
 
-            Symbol = (Elf32_Sym *)(SymbolTable +
-                                   (ELF32_R_SYM(Relocation->r_info) *
+            Symbol = (Elf64_Sym *)(SymbolTable +
+                                   (ELF64_R_SYM(Relocation->r_info) *
                                     SymbolTableSection->sh_entsize));
 
             //
@@ -866,9 +868,9 @@ Return Value:
             // The relocation types are machine dependent.
             //
 
-            if (ElfHeader->e_machine == EM_386) {
-                switch (ELF32_R_TYPE(Relocation->r_info)) {
-                case R_386_NONE:
+            if (ElfHeader->e_machine == EM_X86_64) {
+                switch (ELF64_R_TYPE(Relocation->r_info)) {
+                case R_X86_64_NONE:
                     break;
 
                 //
@@ -876,118 +878,107 @@ Return Value:
                 // absolute virtuall address to an absolute COFF address.
                 //
 
-                case R_386_32:
-                    *(UINT32 *)Target =
-                                 *(UINT32 *)Target -
+                case R_X86_64_64:
+                    *(UINT64 *)Target =
+                                 *(UINT64 *)Target -
                                  SymbolSectionHeader->sh_addr +
                                  Context->CoffSectionsOffset[Symbol->st_shndx];
 
                     break;
 
                 //
-                // This is a relative relocation: Symbol - PC + Addend.
+                // 32-bit absolute relocation.
                 //
 
-                case R_386_PC32:
+                case R_X86_64_32:
                     *(UINT32 *)Target =
-                               *(UINT32 *)Target +
+                        (UINT32)((UINT64)(*(UINT32 *)Target) -
+                                 SymbolSectionHeader->sh_addr +
+                                 Context->CoffSectionsOffset[Symbol->st_shndx]);
+
+                    break;
+
+                //
+                // 32-bit signed absolute relocation.
+                //
+
+                case R_X86_64_32S:
+                    *(INT32 *)Target =
+                        (INT32)((INT64)(*(INT32 *)Target) -
+                                SymbolSectionHeader->sh_addr +
+                                Context->CoffSectionsOffset[Symbol->st_shndx]);
+
+                    break;
+
+                //
+                // This is a PC-relative relocation.
+                //
+
+                case R_X86_64_PC32:
+                    *(UINT32 *)Target =
+                        (UINT32)(*(UINT32 *)Target +
                                (Context->CoffSectionsOffset[Symbol->st_shndx] -
                                 SymbolSectionHeader->sh_addr) -
-                               (SectionOffset - ElfSection->sh_addr);
+                               (SectionOffset - ElfSection->sh_addr));
 
                     break;
 
                 default:
                     fprintf(stderr,
                             "Error: Unsupported relocation type %d.\n",
-                            ELF32_R_TYPE(Relocation->r_info));
+                            ELF64_R_TYPE(Relocation->r_info));
 
                     return FALSE;
                 }
 
             } else if (ElfHeader->e_machine == EM_ARM) {
-                switch (ELF32_R_TYPE(Relocation->r_info)) {
+                switch (ELF64_R_TYPE(Relocation->r_info)) {
+                case R_AARCH64_ADR_PREL_LO21:
+                case R_AARCH64_CONDBR19:
+                case R_AARCH64_LD_PREL_LO19:
+                    if (Relocation->r_addend != 0) {
+                        fprintf(stderr, "Error: Addends not supported.\n");
+                        return FALSE;
+                    }
 
-                //
-                // PC-relative relocations don't need modification.
-                //
-
-                case R_ARM_RBASE:
-                case R_ARM_PC24:
-                case R_ARM_REL32:
-                case R_ARM_XPC25:
-                case R_ARM_THM_PC22:
-                case R_ARM_THM_JUMP19:
-                case R_ARM_CALL:
-                case R_ARM_JMP24:
-                case R_ARM_THM_JUMP24:
-                case R_ARM_PREL31:
-                case R_ARM_MOVW_PREL_NC:
-                case R_ARM_MOVT_PREL:
-                case R_ARM_THM_MOVW_PREL_NC:
-                case R_ARM_THM_MOVT_PREL:
-                case R_ARM_THM_JMP6:
-                case R_ARM_THM_ALU_PREL_11_0:
-                case R_ARM_THM_PC12:
-                case R_ARM_REL32_NOI:
-                case R_ARM_ALU_PC_G0_NC:
-                case R_ARM_ALU_PC_G0:
-                case R_ARM_ALU_PC_G1_NC:
-                case R_ARM_ALU_PC_G1:
-                case R_ARM_ALU_PC_G2:
-                case R_ARM_LDR_PC_G1:
-                case R_ARM_LDR_PC_G2:
-                case R_ARM_LDRS_PC_G0:
-                case R_ARM_LDRS_PC_G1:
-                case R_ARM_LDRS_PC_G2:
-                case R_ARM_LDC_PC_G0:
-                case R_ARM_LDC_PC_G1:
-                case R_ARM_LDC_PC_G2:
-                case R_ARM_GOT_PREL:
-                case R_ARM_THM_JUMP11:
-                case R_ARM_THM_JUMP8:
-                case R_ARM_TLS_GD32:
-                case R_ARM_TLS_LDM32:
-                case R_ARM_TLS_IE32:
-                case R_ARM_GOT_BREL:
-                case R_ARM_BASE_PREL:
                     break;
 
-                //
-                // MOVW relocates the lower 16 bits of the address.
-                //
+                case R_AARCH64_CALL26:
+                case R_AARCH64_JUMP26:
+                    if (Relocation->r_addend != 0) {
 
-                case R_ARM_THM_MOVW_ABS_NC:
-                    Address =
-                        (UINT16)(Symbol->st_value -
+                        //
+                        // Allow certain relocations to get ignored since they
+                        // patch relative to the text section and there's only
+                        // one text section.
+                        //
+
+                        if (ELF64_ST_TYPE(Symbol->st_info) == STT_SECTION) {
+                            break;
+                        }
+
+                        fprintf(stderr, "Error: Addends not supported.\n");
+                        return FALSE;
+                    }
+
+                    break;
+
+                case R_AARCH64_ADR_PREL_PG_HI21:
+                case R_AARCH64_ADD_ABS_LO12_NC:
+                    fprintf(stderr, "Small memory model not supported.\n");
+                    return FALSE;
+
+                case R_AARCH64_ABS64:
+                    *(UINT64 *)Target =
+                                 *(UINT64 *)Target +
                                  SymbolSectionHeader->sh_addr +
-                                 Context->CoffSectionsOffset[Symbol->st_shndx]);
+                                 Context->CoffSectionsOffset[Symbol->st_shndx];
 
-                    ElfconvThumbMovtImmediatePatch((UINT16 *)Target, Address);
                     break;
 
-                //
-                // MOVT relocates the upper 16 bits of the address.
-                //
-
-                case R_ARM_THM_MOVT_ABS:
-                    AddressValue =
-                         (Symbol->st_value -
-                          SymbolSectionHeader->sh_addr +
-                          Context->CoffSectionsOffset[Symbol->st_shndx]) >> 16;
-
-                    Address = (UINT16)AddressValue;
-                    ElfconvThumbMovtImmediatePatch((UINT16 *)Target, Address);
-                    break;
-
-                //
-                // This is a 32 bit absolute relocation.
-                //
-
-                case R_ARM_ABS32:
-                case R_ARM_RABS32:
+                case R_AARCH64_ABS32:
                     *(UINT32 *)Target =
-                                 *(UINT32 *)Target -
+                                 *(UINT32 *)Target +
                                  SymbolSectionHeader->sh_addr +
                                  Context->CoffSectionsOffset[Symbol->st_shndx];
 
@@ -996,7 +987,7 @@ Return Value:
                 default:
                     fprintf(stderr,
                             "Error: Unsupported relocation type %d.\n",
-                            ELF32_R_TYPE(Relocation->r_info));
+                            ELF64_R_TYPE(Relocation->r_info));
 
                     return FALSE;
                 }
@@ -1019,7 +1010,7 @@ Return Value:
 }
 
 BOOLEAN
-ElfconvWriteRelocations32 (
+ElfconvWriteRelocations64 (
     PELFCONV_CONTEXT Context
     )
 
@@ -1044,36 +1035,33 @@ Return Value:
 
 {
 
-    UINT32 DestinationSectionIndex;
+    UINT64 DestinationSectionIndex;
     EFI_IMAGE_DATA_DIRECTORY *Directories;
     EFI_IMAGE_DATA_DIRECTORY *Directory;
-    Elf32_Dyn *DynamicSection;
-    Elf32_Phdr *DynamicSegment;
-    Elf32_Ehdr *ElfHeader;
-    UINT32 FixupOffset;
-    UINT32 Flags;
+    Elf64_Dyn *DynamicSection;
+    Elf64_Phdr *DynamicSegment;
+    Elf64_Ehdr *ElfHeader;
+    UINT64 FixupOffset;
+    UINT64 Flags;
     BOOLEAN FoundRelocations;
-    UINTN MovwOffset;
     EFI_IMAGE_OPTIONAL_HEADER_UNION *NtHeader;
-    Elf32_Rel *Relocation;
+    Elf64_Rela *Relocation;
     UINTN RelocationElementSize;
-    UINT32 RelocationIndex;
-    UINT32 RelocationOffset;
-    Elf32_Shdr *RelocationSectionHeader;
+    UINT64 RelocationIndex;
+    UINT64 RelocationOffset;
+    Elf64_Shdr *RelocationSectionHeader;
     UINTN RelocationSize;
     BOOLEAN Result;
-    Elf32_Shdr *SectionHeader;
+    Elf64_Shdr *SectionHeader;
     UINT32 SectionIndex;
-    UINT32 TargetAddress;
+    UINT64 TargetAddress;
     UINT8 *TargetPointer;
-    UINT32 TargetValue;
+    UINT64 TargetValue;
 
     ElfHeader = Context->InputFile;
 
-    assert((ElfHeader->e_machine == EM_386) ||
-           (ElfHeader->e_machine == EM_ARM));
-
-    MovwOffset = 0;
+    assert((ElfHeader->e_machine == EM_X86_64) ||
+           (ElfHeader->e_machine == EM_AARCH64));
 
     //
     // Loop across all sections looking for relocation sections.
@@ -1107,8 +1095,8 @@ Return Value:
         // Skip sections that are neither text nor data.
         //
 
-        if ((ElfconvIsTextSection32(ElfHeader, SectionHeader) == FALSE) &&
-            (ElfconvIsDataSection32(ElfHeader, SectionHeader) == FALSE)) {
+        if ((ElfconvIsTextSection64(ElfHeader, SectionHeader) == FALSE) &&
+            (ElfconvIsDataSection64(ElfHeader, SectionHeader) == FALSE)) {
 
             continue;
         }
@@ -1118,28 +1106,41 @@ Return Value:
              RelocationIndex < RelocationSectionHeader->sh_size;
              RelocationIndex += RelocationSectionHeader->sh_entsize) {
 
-            Relocation = (Elf32_Rel *)((UINT8 *)ElfHeader +
-                                       RelocationSectionHeader->sh_offset +
-                                       RelocationIndex);
+            Relocation = (Elf64_Rela *)((UINT8 *)ElfHeader +
+                                        RelocationSectionHeader->sh_offset +
+                                        RelocationIndex);
 
-            if (ElfHeader->e_machine == EM_386) {
-                switch (ELF32_R_TYPE(Relocation->r_info)) {
-                case R_386_NONE:
-                case R_386_PC32:
+            if (ElfHeader->e_machine == EM_X86_64) {
+                switch (ELF64_R_TYPE(Relocation->r_info)) {
+                case R_X86_64_NONE:
+                case R_X86_64_PC32:
                     break;
 
                 //
                 // Create a relative relocation entry from the absolute entry.
                 //
 
-                case R_386_32:
+                case R_X86_64_64:
                     DestinationSectionIndex = RelocationSectionHeader->sh_info;
                     FixupOffset =
                          Context->CoffSectionsOffset[DestinationSectionIndex] +
                          (Relocation->r_offset - SectionHeader->sh_addr);
 
                     ElfconvCoffAddFixup(Context,
-                                        FixupOffset,
+                                        (UINT32)FixupOffset,
+                                        EFI_IMAGE_REL_BASED_DIR64);
+
+                    break;
+
+                case R_X86_64_32:
+                case R_X86_64_32S:
+                    DestinationSectionIndex = RelocationSectionHeader->sh_info;
+                    FixupOffset =
+                         Context->CoffSectionsOffset[DestinationSectionIndex] +
+                         (Relocation->r_offset - SectionHeader->sh_addr);
+
+                    ElfconvCoffAddFixup(Context,
+                                        (UINT32)FixupOffset,
                                         EFI_IMAGE_REL_BASED_HIGHLOW);
 
                     break;
@@ -1147,124 +1148,55 @@ Return Value:
                 default:
                     fprintf(stderr,
                             "Error: Unsupported relocation type %d.\n",
-                            ELF32_R_TYPE(Relocation->r_info));
+                            ELF64_R_TYPE(Relocation->r_info));
 
                     return FALSE;
                 }
 
             } else if (ElfHeader->e_machine == EM_ARM) {
-                switch (ELF32_R_TYPE(Relocation->r_info)) {
+                switch (ELF64_R_TYPE(Relocation->r_info)) {
 
                 //
                 // PC-relative relocations don't need modification.
                 //
 
-                case R_ARM_RBASE:
-                case R_ARM_PC24:
-                case R_ARM_REL32:
-                case R_ARM_XPC25:
-                case R_ARM_THM_PC22:
-                case R_ARM_THM_JUMP19:
-                case R_ARM_CALL:
-                case R_ARM_JMP24:
-                case R_ARM_THM_JUMP24:
-                case R_ARM_PREL31:
-                case R_ARM_MOVW_PREL_NC:
-                case R_ARM_MOVT_PREL:
-                case R_ARM_THM_MOVW_PREL_NC:
-                case R_ARM_THM_MOVT_PREL:
-                case R_ARM_THM_JMP6:
-                case R_ARM_THM_ALU_PREL_11_0:
-                case R_ARM_THM_PC12:
-                case R_ARM_REL32_NOI:
-                case R_ARM_ALU_PC_G0_NC:
-                case R_ARM_ALU_PC_G0:
-                case R_ARM_ALU_PC_G1_NC:
-                case R_ARM_ALU_PC_G1:
-                case R_ARM_ALU_PC_G2:
-                case R_ARM_LDR_PC_G1:
-                case R_ARM_LDR_PC_G2:
-                case R_ARM_LDRS_PC_G0:
-                case R_ARM_LDRS_PC_G1:
-                case R_ARM_LDRS_PC_G2:
-                case R_ARM_LDC_PC_G0:
-                case R_ARM_LDC_PC_G1:
-                case R_ARM_LDC_PC_G2:
-                case R_ARM_GOT_PREL:
-                case R_ARM_THM_JUMP11:
-                case R_ARM_THM_JUMP8:
-                case R_ARM_TLS_GD32:
-                case R_ARM_TLS_LDM32:
-                case R_ARM_TLS_IE32:
-                case R_ARM_GOT_BREL:
-                case R_ARM_BASE_PREL:
+                case R_AARCH64_ADR_PREL_LO21:
+                case R_AARCH64_CONDBR19:
+                case R_AARCH64_LD_PREL_LO19:
+                case R_AARCH64_CALL26:
+                case R_AARCH64_JUMP26:
                     break;
 
-                //
-                // MOVW relocates the lower 16 bits of the address.
-                //
+                case R_AARCH64_ADR_PREL_PG_HI21:
+                case R_AARCH64_ADD_ABS_LO12_NC:
+                    fprintf(stderr, "Small memory model not supported.\n");
+                    return FALSE;
 
-                case R_ARM_THM_MOVW_ABS_NC:
+                case R_AARCH64_ABS64:
                     DestinationSectionIndex = RelocationSectionHeader->sh_info;
                     FixupOffset =
                          Context->CoffSectionsOffset[DestinationSectionIndex] +
                          (Relocation->r_offset - SectionHeader->sh_addr);
 
-                    Result = ElfconvCoffAddFixup(
-                                               Context,
-                                               FixupOffset,
-                                               EFI_IMAGE_REL_BASED_ARM_MOV32T);
-
-                    if (Result == FALSE) {
-                        return FALSE;
-                    }
-
-                    //
-                    // PE/COFF tracks MOVW/MOVT relocations as a single
-                    // 64-bit instruction. Track this address so that an error
-                    // can be logged if the next relocation is not a MOVT.
-                    //
-
-                    MovwOffset = FixupOffset;
-                    break;
-
-                //
-                // MOVT relocates the upper 16 bits of the address. This is
-                // already handled by the MOVW fixup.
-                //
-
-                case R_ARM_THM_MOVT_ABS:
-                    DestinationSectionIndex = RelocationSectionHeader->sh_info;
-                    FixupOffset =
-                         Context->CoffSectionsOffset[DestinationSectionIndex] +
-                         (Relocation->r_offset - SectionHeader->sh_addr);
-
-                    if (FixupOffset != MovwOffset + 4) {
-                        fprintf(stderr,
-                                "Error: PE requires MOVW+MOVT instruction "
-                                "sequences together.\n");
+                    if (!ElfconvCoffAddFixup(Context,
+                                             (UINT32)FixupOffset,
+                                             EFI_IMAGE_REL_BASED_DIR64)) {
 
                         return FALSE;
                     }
 
                     break;
 
-                //
-                // This is a 32 bit absolute relocation.
-                //
-
-                case R_ARM_ABS32:
-                case R_ARM_RABS32:
+                case R_AARCH64_ABS32:
                     DestinationSectionIndex = RelocationSectionHeader->sh_info;
                     FixupOffset =
                          Context->CoffSectionsOffset[DestinationSectionIndex] +
                          (Relocation->r_offset - SectionHeader->sh_addr);
 
-                    Result = ElfconvCoffAddFixup(Context,
-                                                 FixupOffset,
-                                                 EFI_IMAGE_REL_BASED_HIGHLOW);
+                    if (!ElfconvCoffAddFixup(Context,
+                                             (UINT32)FixupOffset,
+                                             EFI_IMAGE_REL_BASED_HIGHLOW)) {
 
-                    if (Result == FALSE) {
                         return FALSE;
                     }
 
@@ -1273,7 +1205,7 @@ Return Value:
                 default:
                     fprintf(stderr,
                             "Error: Unsupported ARM relocation type %d.\n",
-                            ELF32_R_TYPE(Relocation->r_info));
+                            ELF64_R_TYPE(Relocation->r_info));
 
                     return FALSE;
                 }
@@ -1312,7 +1244,7 @@ Return Value:
             }
 
             DynamicSection =
-                  (Elf32_Dyn *)((UINT8 *)ElfHeader + DynamicSegment->p_offset);
+                  (Elf64_Dyn *)((UINT8 *)ElfHeader + DynamicSegment->p_offset);
 
             while (DynamicSection->d_tag != DT_NULL) {
                 switch (DynamicSection->d_tag) {
@@ -1323,7 +1255,7 @@ Return Value:
                                (int)RelocationOffset);
                     }
 
-                    Result = ElfconvConvertElfAddress32(Context,
+                    Result = ElfconvConvertElfAddress64(Context,
                                                         &RelocationOffset);
 
                     if (Result == FALSE) {
@@ -1346,7 +1278,7 @@ Return Value:
                     RelocationSize = DynamicSection->d_un.d_val;
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                         printf("Relocation size %x.\n",
-                               (UINT32)RelocationSize);
+                               (UINT64)RelocationSize);
                     }
 
                     break;
@@ -1355,7 +1287,7 @@ Return Value:
                     RelocationElementSize = DynamicSection->d_un.d_val;
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                         printf("Relocation element size %x.\n",
-                               (UINT32)RelocationElementSize);
+                               (UINT64)RelocationElementSize);
                     }
 
                     break;
@@ -1373,20 +1305,26 @@ Return Value:
                        SectionIndex,
                        DynamicSegment->p_offset,
                        RelocationOffset,
-                       (UINT32)RelocationSize,
-                       (UINT32)RelocationElementSize);
+                       (UINT64)RelocationSize,
+                       (UINT64)RelocationElementSize);
             }
 
             for (RelocationIndex = 0;
                  RelocationIndex < RelocationSize;
                  RelocationIndex += RelocationElementSize) {
 
-                Relocation = (Elf32_Rel *)(Context->CoffFile +
-                                           RelocationOffset +
-                                           RelocationIndex);
+                Relocation = (Elf64_Rela *)(Context->CoffFile +
+                                            RelocationOffset +
+                                            RelocationIndex);
+
+                //
+                // TODO: Remove the x86/ARM32 stuff. Is this needed for x64?
+                //
+
+                assert(FALSE);
 
                 if (ElfHeader->e_machine == EM_386) {
-                    switch (ELF32_R_TYPE(Relocation->r_info)) {
+                    switch (ELF64_R_TYPE(Relocation->r_info)) {
 
                     //
                     // Relative relocations contain a default VA in them. First
@@ -1398,7 +1336,7 @@ Return Value:
 
                     case R_386_RELATIVE:
                         TargetAddress = Relocation->r_offset;
-                        Result = ElfconvConvertElfAddress32(Context,
+                        Result = ElfconvConvertElfAddress64(Context,
                                                             &TargetAddress);
 
                         if (Result == FALSE) {
@@ -1409,8 +1347,8 @@ Return Value:
                         }
 
                         TargetPointer = Context->CoffFile + TargetAddress;
-                        TargetValue = *(UINT32 *)TargetPointer;
-                        Result = ElfconvConvertElfAddress32(Context,
+                        TargetValue = *(UINT64 *)TargetPointer;
+                        Result = ElfconvConvertElfAddress64(Context,
                                                             &TargetValue);
 
                         if (Result == FALSE) {
@@ -1432,7 +1370,7 @@ Return Value:
                         // into the relocation's spot.
                         //
 
-                        *(UINT32 *)TargetPointer = TargetValue;
+                        *(UINT64 *)TargetPointer = TargetValue;
                         Result = ElfconvCoffAddFixup(
                                                   Context,
                                                   TargetAddress,
@@ -1448,15 +1386,15 @@ Return Value:
                         fprintf(stderr,
                                 "Bad 386 dynamic relocation type %d, offset "
                                 "%x, program header index %d.\n",
-                                ELF32_R_TYPE(Relocation->r_info),
-                                (UINT32)RelocationOffset,
+                                ELF64_R_TYPE(Relocation->r_info),
+                                (UINT64)RelocationOffset,
                                 SectionIndex);
 
                         return FALSE;
                     }
 
                 } else if (ElfHeader->e_machine == EM_ARM) {
-                    switch (ELF32_R_TYPE(Relocation->r_info)) {
+                    switch (ELF64_R_TYPE(Relocation->r_info)) {
                     case R_ARM_RBASE:
                         break;
 
@@ -1470,7 +1408,7 @@ Return Value:
 
                     case R_ARM_RELATIVE:
                         TargetAddress = Relocation->r_offset;
-                        Result = ElfconvConvertElfAddress32(Context,
+                        Result = ElfconvConvertElfAddress64(Context,
                                                             &TargetAddress);
 
                         if (Result == FALSE) {
@@ -1481,8 +1419,8 @@ Return Value:
                         }
 
                         TargetPointer = Context->CoffFile + TargetAddress;
-                        TargetValue = *(UINT32 *)TargetPointer;
-                        Result = ElfconvConvertElfAddress32(Context,
+                        TargetValue = *(UINT64 *)TargetPointer;
+                        Result = ElfconvConvertElfAddress64(Context,
                                                             &TargetValue);
 
                         if (Result == FALSE) {
@@ -1504,7 +1442,7 @@ Return Value:
                         // into the relocation's spot.
                         //
 
-                        *(UINT32 *)TargetPointer = TargetValue;
+                        *(UINT64 *)TargetPointer = TargetValue;
                         Result = ElfconvCoffAddFixup(
                                                   Context,
                                                   TargetAddress,
@@ -1520,8 +1458,8 @@ Return Value:
                         fprintf(stderr,
                                 "Bad ARM dynamic relocation type %d, offset "
                                 "%x, program header index %d.\n",
-                                ELF32_R_TYPE(Relocation->r_info),
-                                (UINT32)RelocationOffset,
+                                ELF64_R_TYPE(Relocation->r_info),
+                                (UINT64)RelocationOffset,
                                 SectionIndex);
 
                         return FALSE;
@@ -1552,12 +1490,12 @@ Return Value:
     NtHeader = (EFI_IMAGE_OPTIONAL_HEADER_UNION *)(Context->CoffFile +
                                                    Context->NtHeaderOffset);
 
-    Directories = &(NtHeader->Pe32.OptionalHeader.DataDirectory[0]);
+    Directories = &(NtHeader->Pe32Plus.OptionalHeader.DataDirectory[0]);
     Directory = &(Directories[EFI_IMAGE_DIRECTORY_ENTRY_BASERELOC]);
     Directory->Size = Context->CoffOffset - Context->RelocationOffset;
     if (Directory->Size == 0) {
         Directory->VirtualAddress = 0;
-        NtHeader->Pe32.FileHeader.NumberOfSections -= 1;
+        NtHeader->Pe32Plus.FileHeader.NumberOfSections -= 1;
 
     } else {
         Directory->VirtualAddress = Context->RelocationOffset;
@@ -1577,7 +1515,7 @@ Return Value:
 }
 
 BOOLEAN
-ElfconvWriteDebug32 (
+ElfconvWriteDebug64 (
     PELFCONV_CONTEXT Context
     )
 
@@ -1601,21 +1539,21 @@ Return Value:
 
 {
 
-    Elf32_Ehdr *ElfHeader;
-    Elf32_Shdr *ElfSection;
-    UINT32 Flags;
+    Elf64_Ehdr *ElfHeader;
+    Elf64_Shdr *ElfSection;
+    UINT64 Flags;
     VOID *NewBuffer;
     EFI_IMAGE_OPTIONAL_HEADER_UNION *NtHeader;
-    UINT32 SectionCount;
+    UINT64 SectionCount;
     UINTN SectionIndex;
     CHAR8 *SectionName;
-    UINT32 SectionOffset;
-    Elf32_Shdr *StringSection;
+    UINT64 SectionOffset;
+    Elf64_Shdr *StringSection;
 
     ElfHeader = Context->InputFile;
 
-    assert((ElfHeader->e_machine == EM_386) ||
-           (ElfHeader->e_machine == EM_ARM));
+    assert((ElfHeader->e_machine == EM_X86_64) ||
+           (ElfHeader->e_machine == EM_AARCH64));
 
     //
     // Find and wrangle debug sections.
@@ -1628,7 +1566,7 @@ Return Value:
          SectionIndex += 1) {
 
         ElfSection = ELFCONV_ELF_SECTION(ElfHeader, SectionIndex);
-        if (ElfconvIsDebugSection32(ElfHeader, ElfSection) == FALSE) {
+        if (ElfconvIsDebugSection64(ElfHeader, ElfSection) == FALSE) {
             continue;
         }
 
@@ -1685,7 +1623,7 @@ Return Value:
 
         memcpy(Context->StringTable,
                &(Context->StringTableSize),
-               sizeof(UINT32));
+               sizeof(UINT64));
 
         memcpy(Context->CoffFile + Context->CoffOffset,
                Context->StringTable,
@@ -1694,7 +1632,9 @@ Return Value:
         NtHeader = (EFI_IMAGE_OPTIONAL_HEADER_UNION *)(Context->CoffFile +
                                                        Context->NtHeaderOffset);
 
-        NtHeader->Pe32.FileHeader.PointerToSymbolTable = Context->CoffOffset;
+        NtHeader->Pe32Plus.FileHeader.PointerToSymbolTable =
+                                                           Context->CoffOffset;
+
         Context->CoffOffset += Context->StringTableSize;
     }
 
@@ -1702,7 +1642,7 @@ Return Value:
 }
 
 VOID
-ElfconvSetImageSize32 (
+ElfconvSetImageSize64 (
     PELFCONV_CONTEXT Context
     )
 
@@ -1729,12 +1669,12 @@ Return Value:
     NtHeader = (EFI_IMAGE_OPTIONAL_HEADER_UNION *)(Context->CoffFile +
                                                    Context->NtHeaderOffset);
 
-    NtHeader->Pe32.OptionalHeader.SizeOfImage = Context->CoffOffset;
+    NtHeader->Pe32Plus.OptionalHeader.SizeOfImage = Context->CoffOffset;
     return;
 }
 
 VOID
-ElfconvCleanUp32 (
+ElfconvCleanUp64 (
     PELFCONV_CONTEXT Context
     )
 
@@ -1765,9 +1705,9 @@ Return Value:
 }
 
 BOOLEAN
-ElfconvIsTextSection32 (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
+ElfconvIsTextSection64 (
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     )
 
 /*++
@@ -1806,9 +1746,9 @@ Return Value:
 }
 
 BOOLEAN
-ElfconvIsDataSection32 (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
+ElfconvIsDataSection64 (
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     )
 
 /*++
@@ -1833,7 +1773,7 @@ Return Value:
 
 {
 
-    if (ElfconvIsHiiRsrcSection32(ElfHeader, SectionHeader) != FALSE) {
+    if (ElfconvIsHiiRsrcSection64(ElfHeader, SectionHeader) != FALSE) {
         return FALSE;
     }
 
@@ -1854,9 +1794,9 @@ Return Value:
 }
 
 BOOLEAN
-ElfconvIsHiiRsrcSection32 (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
+ElfconvIsHiiRsrcSection64 (
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     )
 
 /*++
@@ -1882,7 +1822,7 @@ Return Value:
 {
 
     CHAR8 *SectionName;
-    Elf32_Shdr *StringSection;
+    Elf64_Shdr *StringSection;
 
     StringSection = ELFCONV_ELF_SECTION(ElfHeader, ElfHeader->e_shstrndx);
     SectionName = (CHAR8 *)ElfHeader + StringSection->sh_offset +
@@ -1896,9 +1836,9 @@ Return Value:
 }
 
 BOOLEAN
-ElfconvIsDebugSection32 (
-    Elf32_Ehdr *ElfHeader,
-    Elf32_Shdr *SectionHeader
+ElfconvIsDebugSection64 (
+    Elf64_Ehdr *ElfHeader,
+    Elf64_Shdr *SectionHeader
     )
 
 /*++
@@ -1926,7 +1866,7 @@ Return Value:
 
     CHAR8 **DebugSection;
     CHAR8 *SectionName;
-    Elf32_Shdr *StringSection;
+    Elf64_Shdr *StringSection;
 
     StringSection = ELFCONV_ELF_SECTION(ElfHeader, ElfHeader->e_shstrndx);
     SectionName = (CHAR8 *)ElfHeader + StringSection->sh_offset +
@@ -1944,61 +1884,10 @@ Return Value:
     return FALSE;
 }
 
-VOID
-ElfconvThumbMovtImmediatePatch (
-    UINT16 *Instruction,
-    UINT16 Address
-    )
-
-/*++
-
-Routine Description:
-
-    This routine updates an ARM MOVT or MOVW immediate instruction.
-
-Arguments:
-
-    Instruction - Supplies a pointer to the ARM MOVT or MOVW immediate
-        instruction.
-
-    Address - Supplies the new address to patch into the instruction.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    UINT16 Patch;
-
-    //
-    // Patch the first 16-bit chunk of the instruction.
-    //
-
-    Patch = (Address >> 12) & 0x000F;
-    if ((Address & (1 << 11)) != 0) {
-        Patch |= 1 << 10;
-    }
-
-    *Instruction = (*Instruction & ~0x040F) | Patch;
-
-    //
-    // Patch the second 16-bit chunk of the instruction.
-    //
-
-    Patch = Address & 0x000000FF;
-    Patch |= (Address << 4) & 0x00007000;
-    Instruction += 1;
-    *Instruction = (*Instruction & 0x70FF) | Patch;
-    return;
-}
-
 BOOLEAN
-ElfconvConvertElfAddress32 (
+ElfconvConvertElfAddress64 (
     PELFCONV_CONTEXT Context,
-    UINT32 *Address
+    UINT64 *Address
     )
 
 /*++
@@ -2025,9 +1914,9 @@ Return Value:
 
 {
 
-    Elf32_Ehdr *ElfHeader;
-    Elf32_Shdr *SectionHeader;
-    UINT32 SectionIndex;
+    Elf64_Ehdr *ElfHeader;
+    Elf64_Shdr *SectionHeader;
+    UINT64 SectionIndex;
 
     ElfHeader = Context->InputFile;
 

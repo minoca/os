@@ -292,6 +292,12 @@ Return Value:
             goto mainEnd;
         }
 
+    } else if (ElfClass == ELFCLASS64) {
+        if (ElfconvInitializeElf64(&Context, &FunctionTable) == FALSE) {
+            Status = EINVAL;
+            goto mainEnd;
+        }
+
     } else {
         fprintf(stderr, "Error: Unrecogized ei_class %d.\n", ElfClass);
         Status = EINVAL;
