@@ -30,7 +30,7 @@ Environment:
 //
 
 import os;
-from santa.build import shell;
+from santa.build import shell, make;
 from santa.config import config;
 from santa.file import chdir, mkdir, path, rmtree, cptree;
 from santa.lib.archive import Archive;
@@ -183,6 +183,11 @@ Return Value:
 
     chdir(vars.startdir);
     sources = vars.source;
+    if (!(sources is List)) {
+        sources = sources.split(null, -1);
+        vars.source = sources;
+    }
+
     for (source in sources) {
         if (!source.endsWith(".cpio.lz")) {
             if (verbose) {
@@ -245,6 +250,7 @@ Return Value:
 
     if ((os.isdir)(patchdir)) {
         patchman = PatchManager(vars.srcdir, patchdir);
+        patchman.markPatches(-1, false);
         patchman.applyTo(-1);
     }
 
@@ -301,15 +307,8 @@ Return Value:
 
 {
 
-    var count;
-    var parallel = "";
     var pkgdir;
     var vars = build.vars;
-
-    count = (os.nproc)();
-    if ((vars.flags.get("parallel") != false) && (count != 1)) {
-        parallel = "-j%d" % [count + 2];
-    }
 
     //
     // On Windows, remove the drive letter since too many things get fouled up
@@ -324,8 +323,8 @@ Return Value:
     }
 
     chdir(vars.builddir);
-    shell("make %s" % parallel);
-    shell("make install DESTDIR=%s" % [pkgdir]);
+    make(vars.flags.get("parallel") != false, "");
+    make(vars.flags.get("parallel") != false, "install DESTDIR=%s" % pkgdir);
     shell("rm -f $pkgdir/usr/lib/*.la");
     return;
 }

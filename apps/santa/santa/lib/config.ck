@@ -123,7 +123,7 @@ class ConfigFile {
     {
 
         this.__init();
-        _data = defaults;
+        _data = this._deepcopy(defaults);
         _metadata["filepath"] = filepath;
         _metadata["remainder"] = "";
         _metadata["loaded"] = false;
@@ -796,6 +796,51 @@ class ConfigFile {
 
         return _data;
     }
+
+    function
+    _deepcopy (
+        data
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine performs a deep copy of the given dict or list.
+
+    Arguments:
+
+        data - Supplies the element to copy.
+
+    Return Value:
+
+        Returns a copy of the data.
+
+    --*/
+
+    {
+
+        var copy;
+
+        if (data is Dict) {
+            copy = {};
+            for (element in data) {
+                copy[element] = this._deepcopy(data[element]);
+            }
+
+        } else if (data is List) {
+            copy = [];
+            for (element in data) {
+                copy.append(this._deepcopy(element));
+            }
+
+        } else {
+            copy = data;
+        }
+
+        return copy;
+    }
+
 }
 
 //

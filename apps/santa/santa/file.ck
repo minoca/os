@@ -442,6 +442,12 @@ Return Value:
         contents = (os.listdir)(source);
         if (!(os.isdir)(destination)) {
             (os.mkdir)(destination, 0775);
+
+        } else {
+            destination += "/" + (os.basename)(source);
+            if (!(os.isdir)(destination)) {
+                (os.mkdir)(destination, 0775);
+            }
         }
 
         for (element in contents) {
@@ -486,7 +492,7 @@ Return Value:
         }
 
         //
-        // If the destination is a directory, copy the source file inside of
+        // If the destination is a directory, copy the source file inside
         // the directory.
         //
 

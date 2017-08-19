@@ -27,11 +27,12 @@ Environment:
 
 --*/
 
-from menv import mconfig, staticLibrary;
+from menv import binplace, mconfig, staticLibrary;
 
 function build() {
     var arch = mconfig.arch;
     var archSources;
+    var entry;
     var entries;
     var includes;
     var lib;
@@ -67,10 +68,20 @@ function build() {
     lib = {
         "label": "libc_nonshared",
         "inputs": archSources + sources,
-        "includes": includes
+        "includes": includes,
+        "binplace": "bin"
     };
 
     entries = staticLibrary(lib);
+    for (index in 0..entries.length()) {
+        entry = entries[index];
+        if (entry.output.endsWith("crt0.o")) {
+            entries.removeAt(index);
+            entries += binplace(entry);
+            break;
+        }
+    }
+
     return entries;
 }
 

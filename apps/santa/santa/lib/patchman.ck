@@ -440,7 +440,6 @@ class PatchManager {
 
         this._loadConfig();
         this._loadPatches();
-
         if (patches is Int) {
             if (patches == -1) {
                 for (patch in _patches) {
@@ -468,7 +467,8 @@ class PatchManager {
     function
     commit (
         name,
-        message
+        message,
+        force
         )
 
     /*++
@@ -486,6 +486,9 @@ class PatchManager {
         message - Supplies an optional message to write at the front of the
             patch file.
 
+        force - Supplies a boolean indicating if the patch should be replaced
+            if one already exists for the given number.
+
     Return Value:
 
         None.
@@ -494,31 +497,46 @@ class PatchManager {
 
     {
 
+        var diff;
         var diffset = this.currentDiffSet();
         var file;
         var finalName = name.replace(" ", "-", -1);
+        var finalPath;
         var maxApplied = 0;
+        var patch;
+        var removePath;
         var number;
+
+        //
+        // Create the diff first.
+        //
+
+        if (this.files.length() == 0) {
+            Core.raise(ValueError("Empty diff"));
+        }
+
+        diff = diffset.unifiedDiff();
 
         //
         // Figure out what number this patch should have.
         //
 
-        for (patch in _patches) {
-            if ((patch > maxApplied) && (_patches[patch].applied)) {
-                maxApplied = patch;
+        number = 1;
+        while (true) {
+            patch = _patches.get(number);
+            if (patch == null) {
+                break;
             }
-        }
 
-        number = maxApplied + 1;
-        if (_patches.get(number)) {
-            Core.raise(ValueError("Patch %d already exists: %s. "
-                                  "Either apply it or remove it" %
-                                  [number, _patches[number].name]));
-        }
+            if (patch.applied == false) {
+                if (force == false) {
+                    Core.raise(ValueError("Patch %d already exists: %s. "
+                                          "Either apply it or remove it" %
+                                          [number, _patches[number].name]));
+                }
 
-        if (this.files.length() == 0) {
-            Core.raise(ValueError("Empty diff"));
+                break;
+            }
         }
 
         //
@@ -526,7 +544,8 @@ class PatchManager {
         //
 
         finalName = "%03d-%s.patch" % [number, finalName];
-        file = (io.open)(this.patchdir + "/" + finalName, "w");
+        finalPath = this.patchdir + "/" + finalName;
+        file = (io.open)(finalPath, "w");
         if (message) {
             file.write(message);
             if (!message.endsWith("\n")) {
@@ -534,7 +553,7 @@ class PatchManager {
             }
         }
 
-        file.write(diffset.unifiedDiff());
+        file.write(diff);
         file.close();
         _patches[number] = {
             "name": finalName,
@@ -542,13 +561,27 @@ class PatchManager {
         };
 
         this.files = {};
-        Core.print("Removing %s" % this.patchdir + "/current");
+        Core.print("Saved patch %s" % finalName);
 
         //
         // Remove the saved original files.
         //
 
         rmtree(this.patchdir + "/current");
+
+        //
+        // Remove the original patch if forced to.
+        //
+
+        if (patch != null) {
+            if (patch.name != finalName) {
+                finalPath = this.patchdir + "/" + patch.name;
+                (os.unlink)(finalPath);
+                Core.print("Removed patch %s" % finalPath);
+            }
+        }
+
+        return 0;
     }
 
     function
@@ -695,6 +728,74 @@ class PatchManager {
     }
 
     function
+    edit (
+        number
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine returns to just before the specified patch, adds the
+        files from the patch, then applies the patch.
+
+    Arguments:
+
+        number - Supplies the number of the patch to edit.
+
+    Return Value:
+
+        None.
+
+    --*/
+
+    {
+
+        var element;
+        var filePath;
+        var patchset;
+        var pathSplit = 1;
+
+        this._loadConfig();
+        this._loadPatches();
+        if (number < 1) {
+            Core.raise(ValueError("Supply a patch number starting at 1"));
+        }
+
+        if (this.files.length() != 0) {
+            Core.raise(ValueError("Current patchset is not empty"));
+        }
+
+        this.applyTo(number - 1);
+        element = _patches.get(number);
+        if (element.applied) {
+            Core.raise(ValueError("Patch should not be applied"));
+        }
+
+        patchset = (patch.PatchSet)(this.patchdir + "/" + element.name);
+
+        //
+        // Add all the files in the patch to the current changeset before they
+        // get molested.
+        //
+
+        for (file in patchset) {
+            filePath = this.srcdir + "/" +
+                       file.destinationFile.split("/", pathSplit)[-1];
+
+            this.add(filePath);
+        }
+
+        //
+        // Apply the patch, but don't mark it as applied.
+        //
+
+        patchset.apply(this.srcdir, 0, pathSplit);
+        return 0;
+    }
+
+
+    function
     _loadConfig (
         )
 
@@ -808,7 +909,7 @@ class PatchManager {
             if (element == null) {
                 element = {
                     "name": file,
-                    "applied": false
+                    "applied": true
                 };
 
                 _patches[number] = element;

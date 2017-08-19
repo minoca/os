@@ -260,6 +260,44 @@ Return Value:
     return;
 }
 
+function
+make (
+    parallel,
+    arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs a make command.
+
+Arguments:
+
+    parallel - Supplies a boolean indicating if the job should run in parallel.
+
+    arguments - Supplies additional arguments to pass to make.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    var count;
+    var jobs = "";
+
+    count = (os.nproc)();
+    if ((parallel) && (count != 1)) {
+        jobs = "-j%d " % [count + 2];
+    }
+
+    shell("make %s%s" % [jobs, arguments]);
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

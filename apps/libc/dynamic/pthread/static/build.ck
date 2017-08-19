@@ -46,6 +46,7 @@ function build() {
         "label": "libpthread_nonshared",
         "inputs": sources,
         "includes": includes,
+        "binplace": "bin",
     };
 
     entries = staticLibrary(lib);

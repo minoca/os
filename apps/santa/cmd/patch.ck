@@ -69,8 +69,9 @@ var deleteLongOptions = [
     "shift"
 ];
 
-var commitShortOptions = "hm:";
+var commitShortOptions = "fhm:";
 var commitLongOptions = [
+    "force",
     "help",
     "message="
 ];
@@ -86,6 +87,7 @@ var usage =
     "       santa patch commit [options] <name>\n"
     "       santa patch delete [--shift] [numbers...]\n"
     "       santa patch info\n"
+    "       santa patch edit <number>\n"
     "The santa patch command is a suite of commands designed to help manage a\n"
     "set of patches for a package.\n"
     "Use santa patch start to begin working on a new source directory,\n"
@@ -107,10 +109,16 @@ var usage =
     "directory containing the differences between all added files and their \n"
     "current contents in the source directory. The new patch is marked as \n"
     "applied, and the set of files added is cleared.\n"
+    "Specify -m to add a commit message.\n"
+    "Specify -f to replace a patch that already exists for that number.\n"
     "Use santa patch delete to remove one or more patches from the patch\n"
     "directory. If --shift is specified, the remaining patches will be\n"
     "renamed to fill in the gap.\n"
-    "Use santa patch info to get information on the current patch";
+    "Use santa patch info to get information on the current patch\n"
+    "Use santa patch edit to revert to the change before the specified \n"
+    "number, add the files from the numbered patch, and apply the patch. \n"
+    "This is useful if you want to modify an existing patch, as the working \n"
+    "state can be changed and the committed.\n";
 
 //
 // ------------------------------------------------------------------ Functions
@@ -141,6 +149,7 @@ Return Value:
 
     var applied = true;
     var command;
+    var force = false;
     var manager = PatchManager.load();
     var message;
     var name;
@@ -274,7 +283,10 @@ Return Value:
         for (option in options[0]) {
             name = option[0];
             value = option[1];
-            if ((name == "-h") || (name == "--help")) {
+            if ((name == "-f") || (name == "--force")) {
+                force = true;
+
+            } else if ((name == "-h") || (name == "--help")) {
                 Core.print(usage);
                 return 1;
 
@@ -292,7 +304,7 @@ Return Value:
                                   "Try --help for usage"));
         }
 
-        manager.commit(args[0], message);
+        manager.commit(args[0], message, force);
 
     //
     // Remove a patch from the directory.
@@ -338,6 +350,19 @@ Return Value:
 
         Core.print("Current Diff:");
         Core.print(manager.currentDiffSet().unifiedDiff());
+
+    //
+    // Revert to before the specified path, then re-add the changes of the
+    // patch.
+    //
+
+    } else if (command == "edit") {
+        if (args.length() != 3) {
+            Core.raise(ValueError("Expected exactly one argument. "
+                                  "Try --help for usage"));
+        }
+
+        manager.edit(Int.fromString(args[2]));
 
     } else {
         Core.raise(ValueError("Unknown command %s" % command));

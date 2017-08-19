@@ -60,7 +60,7 @@ from santa.lib.config import ConfigFile;
 
 var packageDefaultStatus = {
     "status": {
-        "extracted", false,
+        "extracted": false,
         "files": []
     },
 
@@ -173,7 +173,7 @@ class Package {
 
         this.status = _config.status;
         this.info = _config.info;
-        if (path != null) {
+        if ((this.info.length() == 0) && (path != null)) {
 
             //
             // Save the path and extract the info initially.
@@ -186,10 +186,6 @@ class Package {
             this.info = (json.loads)(memberFile.readall());
             memberFile.close();
             archive.close();
-            this.status = {
-                "extracted": false,
-                "files": []
-            };
         }
 
         _label = "%s-%s" % [this.info.name, this.info.version];

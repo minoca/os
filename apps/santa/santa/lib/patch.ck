@@ -531,7 +531,7 @@ class PatchFile {
         var path;
 
         if (_targetPath) {
-            return (io.open)(_targetPath, mode);
+            return this._openPath(_targetPath, mode);
         }
 
         path = this.sourceFile;
@@ -540,7 +540,7 @@ class PatchFile {
         }
 
         try {
-            file = (io.open)(path, mode);
+            file = this._openPath(path, mode);
             _targetPath = path;
             return file;
 
@@ -551,7 +551,7 @@ class PatchFile {
                     path = path.split("/", pathSplit)[-1];
                 }
 
-                file = (io.open)(path, mode);
+                file = this._openPath(path, mode);
                 _targetPath = path;
                 return file;
             }
@@ -560,6 +560,49 @@ class PatchFile {
         }
 
         Core.raise(RuntimeError("Execution should never get here"));
+    }
+
+    function
+    _openPath (
+        targetPath,
+        mode
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine opens a target file path. If the open comes back with
+        permission denied, this routine tries to gain permissions.
+
+    Arguments:
+
+        targetPath - Supplies the path to open.
+
+        mode - Supplies the mode to open with.
+
+    Return Value:
+
+        Returns an open file.
+
+    --*/
+
+    {
+
+        var perms;
+
+        try {
+            return (io.open)(targetPath, mode);
+
+        } except IoError as e {
+            if ((e.errno != os.EPERM) && (e.errno != os.EACCES)) {
+                Core.raise(e);
+            }
+        }
+
+        perms = (os.stat)(_targetPath).st_mode & 03777;
+        (os.chmod)(_targetPath, perms | 0220);
+        return (io.open)(_targetPath, mode);
     }
 
     function

@@ -431,9 +431,11 @@ class Build {
         var conffiles;
         var depends;
         var env = this.env;
+        var envPath;
         var finalPath;
         var flags;
         var flagsDict;
+        var pathSeparator = ":";
         var supportedOses;
         var targetOs;
         var vars = this.vars;
@@ -487,11 +489,11 @@ class Build {
             flags = vars.flags.split(null, -1);
             flagsDict = {};
             for (flag in flags) {
-                if (flags[0] == "!") {
-                    flagsDict[flags[1...-1]] = false;
+                if (flag[0] == "!") {
+                    flagsDict[flag[1...-1]] = false;
 
                 } else {
-                    flagsDict[flags] = true;
+                    flagsDict[flag] = true;
                 }
             }
 
@@ -628,6 +630,26 @@ class Build {
         env.builddir = finalPath;
         vars.buildsysroot = path(vars.buildsysroot);
         env.buildsysroot = vars.buildsysroot;
+
+        //
+        // Add the build sysroot to the path.
+        //
+
+        try {
+            envPath = (os.getenv)("PATH");
+            if (envPath.contains(";")) {
+                pathSeparator = ";";
+            }
+
+            envPath = "%s/bin%s%s/usr/bin%s%s" %
+                      [vars.buildsysroot, pathSeparator,
+                       vars.buildsysroot, pathSeparator,
+                       envPath];
+
+            env.PATH = envPath;
+
+        } except KeyError {}
+
         vars.sysroot = path(vars.sysroot);
         env.sysroot = vars.sysroot;
         return;
@@ -1038,21 +1060,35 @@ class Build {
         for (subpackage in subpackages) {
 
             //
+            // Create a copy of the variables that can be changed by
+            // the subpackage.
+            //
+
+            this.vars = vars.copy();
+
+            //
             // Concoct a modifier portion from the subpackage name to get the
             // name of the function to call.
             //
 
-            modifier = subpackage.rsplit("-", 1);
-            if (modifier.length() == 2) {
+            modifier = subpackage.rsplit("-", -1);
+            if ((modifier.length() == 2) && (modifier[0] == vars.name)) {
                 modifier = modifier[1];
+                this.vars.name = "%s-%s" % [vars.name, modifier];
 
             } else if ((subpackage.startsWith(vars.name)) &&
                        (subpackage.length() > vars.name.length())) {
 
-                modifier = subpackage[(vars.name.length())...-1];
+                modifier = subpackage[(vars.name.length() + 1)...-1];
+                this.vars.name = "%s-%s" % [vars.name, modifier];
 
             } else {
                 modifier = subpackage;
+                this.vars.name = subpackage;
+            }
+
+            for (character in ["-", "+"]) {
+                modifier = modifier.replace(character, "_", -1);
             }
 
             if (modifier.length() == 0) {
@@ -1064,17 +1100,9 @@ class Build {
             pkgdir = "%s/subpkg-%s" % [vars.pkgdir, modifier];
             mkdir(pkgdir);
             _subpackageDirectories.append(pkgdir);
-            vars.subpkgdir = pkgdir;
+            this.vars.subpkgdir = pkgdir;
             this.env.subpkgdir = pkgdir;
             (os.setenv)("subpkgdir", pkgdir);
-
-            //
-            // Create a copy of the variables that can be changed by
-            // the subpackage.
-            //
-
-            this.vars = vars.copy();
-            this.vars.name = "%s-%s" % [vars.name, modifier];
 
             //
             // Get the package function associated with the submodule.

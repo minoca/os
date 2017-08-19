@@ -43,6 +43,7 @@ function build() {
         "apps/libc/crypt:libcrypt",
         "apps/libc/dynamic/pthread/static:libpthread_nonshared",
         "apps/libc/static:libc_nonshared",
+        "kernel:kernel-version",
     ];
 
     apps = [
@@ -69,6 +70,7 @@ function build() {
 
     allApps = testApps + libc + apps;
     entries = group("all_apps", allApps);
+    entries += group("libc", libc);
     return entries;
 }
 
