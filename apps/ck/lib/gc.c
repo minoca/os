@@ -192,8 +192,11 @@ Return Value:
 
 {
 
+    UINTN Hysteresis;
     UINTN Index;
     CK_OBJECT KissHead;
+    UINTN Minimum;
+    UINTN NextThreshold;
 
     //
     // Reset the number of bytes allocated, and have the kiss functions count
@@ -236,14 +239,30 @@ Return Value:
     // 1024 to avoid the divide. It looks nearly the same as percent times 10.
     //
 
-    Vm->NextGarbageCollection =
-             Vm->BytesAllocated +
-             (Vm->BytesAllocated * Vm->Configuration.HeapGrowthPercent / 1024);
+    Hysteresis = Vm->BytesAllocated * Vm->Configuration.HeapGrowthPercent /
+                 1024;
 
-    if (Vm->NextGarbageCollection < Vm->Configuration.MinimumHeapSize) {
-        Vm->NextGarbageCollection = Vm->Configuration.MinimumHeapSize;
+    NextThreshold = Vm->BytesAllocated + Hysteresis;
+
+    //
+    // Avoid ratcheting down the threshold little by little. Go down by the
+    // same chunk as going up.
+    //
+
+    if (NextThreshold < Vm->NextGarbageCollection) {
+        if (Vm->BytesAllocated > Hysteresis) {
+            Minimum = Vm->BytesAllocated - Hysteresis;
+            if (NextThreshold > Minimum) {
+                NextThreshold = Vm->NextGarbageCollection;
+            }
+        }
     }
 
+    if (NextThreshold < Vm->Configuration.MinimumHeapSize) {
+        NextThreshold = Vm->Configuration.MinimumHeapSize;
+    }
+
+    Vm->NextGarbageCollection = NextThreshold;
     return;
 }
 

@@ -145,7 +145,8 @@ CK_CONFIGURATION CkDefaultConfiguration = {
     CkpDefaultUnhandledException,
     CK_INITIAL_HEAP_DEFAULT,
     CK_MINIMUM_HEAP_DEFAULT,
-    CK_HEAP_GROWTH_DEFAULT
+    CK_HEAP_GROWTH_DEFAULT,
+    0
 };
 
 //
