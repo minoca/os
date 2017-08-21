@@ -93,39 +93,37 @@ extern "C" {
 // link-local address.
 //
 
-#define IN6_IS_ADDR_LINKLOCAL(_Address)                                \
-    ((*((uint32_t *)&((_Address)->s6_addr[0])) == htonl(0xFE800000) && \
-     (*((uint32_t *)&((_Address)->s6_addr[4])) == 0)))
+#define IN6_IS_ADDR_LINKLOCAL(_Address)                       \
+    (((_Address)->s6_u.s6u_addr32[0] == htonl(0xFE800000)) && \
+     ((_Address)->s6_u.s6u_addr32[1] == 0))
 
 //
 // This macros determines whether or not the given IPv6 address is a unicast
 // site-local address.
 //
 
-#define IN6_IS_ADDR_SITELOCAL(_Address)         \
-    (((_Address)->s6_addr[0] == 0xFE) &&        \
-     (((_Address)->s6_addr[1] & 0xC0) == 0xC0))
+#define IN6_IS_ADDR_SITELOCAL(_Address) \
+    (((_Address)->s6_u.s6u_addr32[0] & htonl(0xFFC00000)) == htonl(0xFEC00000))
 
 //
 // This macros determines whether or not the given IPv6 address is an IPv4
 // mapped address.
 //
 
-#define IN6_IS_ADDR_V4MAPPED(_Address)                                  \
-    (((_Address)->s6_u.s6u_addr32[0] == 0) &&                           \
-     ((_Address)->s6_u.s6u_addr32[1] == 0) &&                           \
-     ((_Address)->s6_u.s6u_addr32[2] == 0) &&                           \
-     ((_Address)->s6_u.s6u_addr32[3] == htonl(0x0000FFFF)))
+#define IN6_IS_ADDR_V4MAPPED(_Address)                      \
+    (((_Address)->s6_u.s6u_addr32[0] == 0) &&               \
+     ((_Address)->s6_u.s6u_addr32[1] == 0) &&               \
+     ((_Address)->s6_u.s6u_addr32[2] == htonl(0x0000FFFF)))
 
 //
 // This macros determines whether or not the given IPv6 address is an IPv4
 // compatible address.
 //
 
-#define IN6_IS_ADDR_V4COMPAT(_Address)                                  \
-    (((_Address)->s6_u.s6u_addr32[0] == 0) &&                           \
-     ((_Address)->s6_u.s6u_addr32[1] == 0) &&                           \
-     ((_Address)->s6_u.s6u_addr32[2] == 0) &&                           \
+#define IN6_IS_ADDR_V4COMPAT(_Address)                    \
+    (((_Address)->s6_u.s6u_addr32[0] == 0) &&             \
+     ((_Address)->s6_u.s6u_addr32[1] == 0) &&             \
+     ((_Address)->s6_u.s6u_addr32[2] == 0) &&             \
      (((_Address)->s6_u.s6u_addr32[3] & ~htonl(1)) != 0))
 
 //
@@ -133,27 +131,27 @@ extern "C" {
 // node-local address.
 //
 
-#define IN6_IS_ADDR_MC_NODELOCAL(_Address)     \
-    (IN6_IS_ADDR_MULTICAST(_Address) &&        \
-     (((_Address)->s6_addr[1] & 0x0F) == 0x1))
+#define IN6_IS_ADDR_MC_NODELOCAL(_Address)      \
+    (IN6_IS_ADDR_MULTICAST(_Address) &&         \
+     (((_Address)->s6_addr[1] & 0x0F) == 0x01))
 
 //
 // This macros determines whether or not the given IPv6 address is a multicast
 // link-local address.
 //
 
-#define IN6_IS_ADDR_MC_LINKLOCAL(_Address)     \
-    (IN6_IS_ADDR_MULTICAST(_Address) &&        \
-     (((_Address)->s6_addr[1] & 0x0F) == 0x2))
+#define IN6_IS_ADDR_MC_LINKLOCAL(_Address)      \
+    (IN6_IS_ADDR_MULTICAST(_Address) &&         \
+     (((_Address)->s6_addr[1] & 0x0F) == 0x02))
 
 //
 // This macros determines whether or not the given IPv6 address is a multicast
 // site-local address.
 //
 
-#define IN6_IS_ADDR_MC_SITELOCAL(_Address)     \
-    (IN6_IS_ADDR_MULTICAST(_Address) &&        \
-     (((_Address)->s6_addr[1] & 0x0F) == 0x5))
+#define IN6_IS_ADDR_MC_SITELOCAL(_Address)      \
+    (IN6_IS_ADDR_MULTICAST(_Address) &&         \
+     (((_Address)->s6_addr[1] & 0x0F) == 0x05))
 
 //
 // This macros determines whether or not the given IPv6 address is a multicast
@@ -162,7 +160,7 @@ extern "C" {
 
 #define IN6_IS_ADDR_MC_ORGLOCAL(_Address)       \
     (IN6_IS_ADDR_MULTICAST(_Address) &&         \
-     (((_Address)->s6_addr[1] & 0x0F) == 0x8))
+     (((_Address)->s6_addr[1] & 0x0F) == 0x08))
 
 //
 // This macros determines whether or not the given IPv6 address is a multicast
@@ -171,7 +169,7 @@ extern "C" {
 
 #define IN6_IS_ADDR_MC_GLOBAL(_Address)         \
     (IN6_IS_ADDR_MULTICAST(_Address) &&         \
-     (((_Address)->s6_addr[1] & 0x0F) == 0xE))
+     (((_Address)->s6_addr[1] & 0x0F) == 0x0E))
 
 //
 // This macro returns non-zero if the two given IPv6 addresses are the same.
