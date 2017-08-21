@@ -187,6 +187,29 @@ NetlinkpLeaveMulticastGroup (
 LIST_ENTRY NetlinkMulticastSocketList;
 PSHARED_EXCLUSIVE_LOCK NetlinkMulticastLock;
 
+NET_NETWORK_ENTRY NetNetlinkNetwork = {
+    {NULL, NULL},
+    NetDomainNetlink,
+    INVALID_PROTOCOL_NUMBER,
+    {
+        NetlinkpInitializeLink,
+        NetlinkpDestroyLink,
+        NetlinkpInitializeSocket,
+        NULL,
+        NetlinkpBindToAddress,
+        NetlinkpListen,
+        NetlinkpConnect,
+        NetlinkpDisconnect,
+        NetlinkpClose,
+        NetlinkpSend,
+        NetlinkpProcessReceivedData,
+        NetlinkpPrintAddress,
+        NetlinkpGetSetInformation,
+        NULL,
+        NULL
+    }
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -214,7 +237,6 @@ Return Value:
 
 {
 
-    NET_NETWORK_ENTRY NetworkEntry;
     KSTATUS Status;
 
     INITIALIZE_LIST_HEAD(&NetlinkMulticastSocketList);
@@ -229,22 +251,7 @@ Return Value:
     // Register the netlink handlers with the core networking library.
     //
 
-    RtlZeroMemory(&NetworkEntry, sizeof(NET_NETWORK_ENTRY));
-    NetworkEntry.Domain = NetDomainNetlink;
-    NetworkEntry.ParentProtocolNumber = INVALID_PROTOCOL_NUMBER;
-    NetworkEntry.Interface.InitializeLink = NetlinkpInitializeLink;
-    NetworkEntry.Interface.DestroyLink = NetlinkpDestroyLink;
-    NetworkEntry.Interface.InitializeSocket = NetlinkpInitializeSocket;
-    NetworkEntry.Interface.BindToAddress = NetlinkpBindToAddress;
-    NetworkEntry.Interface.Listen = NetlinkpListen;
-    NetworkEntry.Interface.Connect = NetlinkpConnect;
-    NetworkEntry.Interface.Disconnect = NetlinkpDisconnect;
-    NetworkEntry.Interface.Close = NetlinkpClose;
-    NetworkEntry.Interface.Send = NetlinkpSend;
-    NetworkEntry.Interface.ProcessReceivedData = NetlinkpProcessReceivedData;
-    NetworkEntry.Interface.PrintAddress = NetlinkpPrintAddress;
-    NetworkEntry.Interface.GetSetInformation = NetlinkpGetSetInformation;
-    Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
+    Status = NetRegisterNetworkLayer(&NetNetlinkNetwork, NULL);
     if (!KSUCCESS(Status)) {
 
         ASSERT(FALSE);

@@ -422,6 +422,29 @@ ULONG NetIp4FragmentCount;
 PQUEUED_LOCK NetIp4FragmentedPacketLock;
 RED_BLACK_TREE NetIp4FragmentedPacketTree;
 
+NET_NETWORK_ENTRY NetIp4Network = {
+    {NULL, NULL},
+    NetDomainIp4,
+    IP4_PROTOCOL_NUMBER,
+    {
+        NetpIp4InitializeLink,
+        NetpIp4DestroyLink,
+        NetpIp4InitializeSocket,
+        NetpIp4DestroySocket,
+        NetpIp4BindToAddress,
+        NetpIp4Listen,
+        NetpIp4Connect,
+        NetpIp4Disconnect,
+        NetpIp4Close,
+        NetpIp4Send,
+        NetpIp4ProcessReceivedData,
+        NetpIp4PrintAddress,
+        NetpIp4GetSetInformation,
+        NetpIp4CopyInformation,
+        NetpIp4GetAddressType
+    }
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -449,7 +472,6 @@ Return Value:
 
 {
 
-    NET_NETWORK_ENTRY NetworkEntry;
     KSTATUS Status;
 
     //
@@ -473,25 +495,7 @@ Return Value:
     // Register the IPv4 handlers with the core networking library.
     //
 
-    RtlZeroMemory(&NetworkEntry, sizeof(NET_NETWORK_ENTRY));
-    NetworkEntry.Domain = NetDomainIp4;
-    NetworkEntry.ParentProtocolNumber = IP4_PROTOCOL_NUMBER;
-    NetworkEntry.Interface.InitializeLink = NetpIp4InitializeLink;
-    NetworkEntry.Interface.DestroyLink = NetpIp4DestroyLink;
-    NetworkEntry.Interface.InitializeSocket = NetpIp4InitializeSocket;
-    NetworkEntry.Interface.DestroySocket = NetpIp4DestroySocket;
-    NetworkEntry.Interface.BindToAddress = NetpIp4BindToAddress;
-    NetworkEntry.Interface.Listen = NetpIp4Listen;
-    NetworkEntry.Interface.Connect = NetpIp4Connect;
-    NetworkEntry.Interface.Disconnect = NetpIp4Disconnect;
-    NetworkEntry.Interface.Close = NetpIp4Close;
-    NetworkEntry.Interface.Send = NetpIp4Send;
-    NetworkEntry.Interface.ProcessReceivedData = NetpIp4ProcessReceivedData;
-    NetworkEntry.Interface.PrintAddress = NetpIp4PrintAddress;
-    NetworkEntry.Interface.GetSetInformation = NetpIp4GetSetInformation;
-    NetworkEntry.Interface.CopyInformation = NetpIp4CopyInformation;
-    NetworkEntry.Interface.GetAddressType = NetpIp4GetAddressType;
-    Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
+    Status = NetRegisterNetworkLayer(&NetIp4Network, NULL);
     if (!KSUCCESS(Status)) {
 
         ASSERT(FALSE);
