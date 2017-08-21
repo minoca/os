@@ -206,6 +206,7 @@ NET_NETWORK_ENTRY NetNetlinkNetwork = {
         NetlinkpPrintAddress,
         NetlinkpGetSetInformation,
         NULL,
+        NULL,
         NULL
     }
 };

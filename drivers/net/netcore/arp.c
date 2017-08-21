@@ -43,7 +43,6 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip4.h>
-#include "ethernet.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -134,6 +133,13 @@ NetpArpPrintAddress (
     );
 
 KSTATUS
+NetpArpSendRequest (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    PNETWORK_ADDRESS QueryAddress
+    );
+
+KSTATUS
 NetpArpSendReply (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
@@ -192,6 +198,7 @@ Return Value:
     NetworkEntry.Interface.DestroyLink = NetpArpDestroyLink;
     NetworkEntry.Interface.ProcessReceivedData = NetpArpProcessReceivedData;
     NetworkEntry.Interface.PrintAddress = NetpArpPrintAddress;
+    NetworkEntry.Interface.SendTranslationRequest = NetpArpSendRequest;
     Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
     if (!KSUCCESS(Status)) {
 
@@ -200,181 +207,6 @@ Return Value:
     }
 
     return;
-}
-
-KSTATUS
-NetpArpSendRequest (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PNETWORK_ADDRESS QueryAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine allocates, assembles, and sends an ARP request to translate
-    the given network address into a physical address. This routine returns
-    as soon as the ARP request is successfully queued for transmission.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to send the request down.
-
-    LinkAddress - Supplies the source address of the request.
-
-    QueryAddress - Supplies the network address to ask about.
-
-Return Value:
-
-    STATUS_SUCCESS if the request was successfully sent off.
-
-    STATUS_INSUFFICIENT_RESOURCES if the transmission buffer couldn't be
-    allocated.
-
-    Other errors on other failures.
-
---*/
-
-{
-
-    PARP_PACKET ArpPacket;
-    PUCHAR CurrentPointer;
-    ULONG Flags;
-    BOOL LockHeld;
-    PNET_PACKET_BUFFER NetPacket;
-    NET_PACKET_LIST NetPacketList;
-    PNET_DATA_LINK_SEND Send;
-    KSTATUS Status;
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    NET_INITIALIZE_PACKET_LIST(&NetPacketList);
-    LockHeld = FALSE;
-
-    //
-    // Allocate a buffer to send down to the network card.
-    //
-
-    Flags = NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS |
-            NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS |
-            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
-            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
-
-    ArpPacket = NULL;
-    Status = NetAllocateBuffer(0,
-                               ARP_ETHERNET_IP4_SIZE,
-                               0,
-                               Link,
-                               Flags,
-                               &NetPacket);
-
-    if (!KSUCCESS(Status)) {
-        goto ArpSendRequestEnd;
-    }
-
-    NET_ADD_PACKET_TO_LIST(NetPacket, &NetPacketList);
-    ArpPacket = NetPacket->Buffer + NetPacket->DataOffset;
-    ArpPacket->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
-
-    ASSERT(QueryAddress->Domain == NetDomainIp4);
-
-    ArpPacket->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
-    ArpPacket->ProtocolAddressLength = IP4_ADDRESS_SIZE;
-    ArpPacket->HardwareAddressLength = ETHERNET_ADDRESS_SIZE;
-    ArpPacket->Operation = CPU_TO_NETWORK16(ARP_OPERATION_REQUEST);
-
-    //
-    // Copy the sender's hardware address.
-    //
-
-    CurrentPointer = (PUCHAR)(ArpPacket + 1);
-    RtlCopyMemory(CurrentPointer,
-                  &(LinkAddress->PhysicalAddress.Address),
-                  ETHERNET_ADDRESS_SIZE);
-
-    CurrentPointer += ETHERNET_ADDRESS_SIZE;
-
-    //
-    // Make sure the link is still configured before copying its network
-    // addresses. This assumes that the physical address does not change for
-    // the lifetime of a link address entry, configured or not.
-    //
-
-    KeAcquireQueuedLock(Link->QueuedLock);
-    LockHeld = TRUE;
-    if (LinkAddress->Configured == FALSE) {
-        Status = STATUS_NO_NETWORK_CONNECTION;
-        goto ArpSendRequestEnd;
-    }
-
-    //
-    // Copy the sender's network address.
-    //
-
-    ASSERT(LinkAddress->Address.Domain == NetDomainIp4);
-
-    RtlCopyMemory(CurrentPointer,
-                  &(LinkAddress->Address.Address),
-                  IP4_ADDRESS_SIZE);
-
-    CurrentPointer += IP4_ADDRESS_SIZE;
-    KeReleaseQueuedLock(Link->QueuedLock);
-    LockHeld = FALSE;
-
-    //
-    // Zero out the target hardware address.
-    //
-
-    RtlZeroMemory(CurrentPointer, ETHERNET_ADDRESS_SIZE);
-    CurrentPointer += ETHERNET_ADDRESS_SIZE;
-
-    //
-    // Copy the target network address.
-    //
-
-    RtlCopyMemory(CurrentPointer, &(QueryAddress->Address), IP4_ADDRESS_SIZE);
-    CurrentPointer += IP4_ADDRESS_SIZE;
-
-    ASSERT(((UINTN)CurrentPointer - (UINTN)ArpPacket) == ARP_ETHERNET_IP4_SIZE);
-
-    //
-    // Debug print the request.
-    //
-
-    if (NetArpDebug != FALSE) {
-        RtlDebugPrint("ARP TX: Who has ");
-        NetDebugPrintAddress(QueryAddress);
-        RtlDebugPrint("? Tell ");
-        NetDebugPrintAddress(&(LinkAddress->PhysicalAddress));
-        RtlDebugPrint("\n");
-    }
-
-    //
-    // Send the request off to the link.
-    //
-
-    Send = Link->DataLinkEntry->Interface.Send;
-    Status = Send(Link->DataLinkContext,
-                  &NetPacketList,
-                  &(LinkAddress->PhysicalAddress),
-                  NULL,
-                  ARP_PROTOCOL_NUMBER);
-
-    if (!KSUCCESS(Status)) {
-        goto ArpSendRequestEnd;
-    }
-
-ArpSendRequestEnd:
-    if (LockHeld != FALSE) {
-        KeReleaseQueuedLock(Link->QueuedLock);
-    }
-
-    if (!KSUCCESS(Status)) {
-        NetDestroyBufferList(&NetPacketList);
-    }
-
-    return Status;
 }
 
 //
@@ -649,6 +481,181 @@ Return Value:
     //
 
     return 0;
+}
+
+KSTATUS
+NetpArpSendRequest (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    PNETWORK_ADDRESS QueryAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates, assembles, and sends an ARP request to translate
+    the given network address into a physical address. This routine returns
+    as soon as the ARP request is successfully queued for transmission.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to send the request down.
+
+    LinkAddress - Supplies a pointer to the the source address of the request.
+
+    QueryAddress - Supplies a pointer to the network address to ask about.
+
+Return Value:
+
+    STATUS_SUCCESS if the request was successfully sent off.
+
+    STATUS_INSUFFICIENT_RESOURCES if the transmission buffer couldn't be
+    allocated.
+
+    Other errors on other failures.
+
+--*/
+
+{
+
+    PARP_PACKET ArpPacket;
+    PUCHAR CurrentPointer;
+    ULONG Flags;
+    BOOL LockHeld;
+    PNET_PACKET_BUFFER NetPacket;
+    NET_PACKET_LIST NetPacketList;
+    PNET_DATA_LINK_SEND Send;
+    KSTATUS Status;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    NET_INITIALIZE_PACKET_LIST(&NetPacketList);
+    LockHeld = FALSE;
+
+    //
+    // Allocate a buffer to send down to the network card.
+    //
+
+    Flags = NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
+
+    ArpPacket = NULL;
+    Status = NetAllocateBuffer(0,
+                               ARP_ETHERNET_IP4_SIZE,
+                               0,
+                               Link,
+                               Flags,
+                               &NetPacket);
+
+    if (!KSUCCESS(Status)) {
+        goto ArpSendRequestEnd;
+    }
+
+    NET_ADD_PACKET_TO_LIST(NetPacket, &NetPacketList);
+    ArpPacket = NetPacket->Buffer + NetPacket->DataOffset;
+    ArpPacket->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
+
+    ASSERT(QueryAddress->Domain == NetDomainIp4);
+
+    ArpPacket->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
+    ArpPacket->ProtocolAddressLength = IP4_ADDRESS_SIZE;
+    ArpPacket->HardwareAddressLength = ETHERNET_ADDRESS_SIZE;
+    ArpPacket->Operation = CPU_TO_NETWORK16(ARP_OPERATION_REQUEST);
+
+    //
+    // Copy the sender's hardware address.
+    //
+
+    CurrentPointer = (PUCHAR)(ArpPacket + 1);
+    RtlCopyMemory(CurrentPointer,
+                  &(LinkAddress->PhysicalAddress.Address),
+                  ETHERNET_ADDRESS_SIZE);
+
+    CurrentPointer += ETHERNET_ADDRESS_SIZE;
+
+    //
+    // Make sure the link is still configured before copying its network
+    // addresses. This assumes that the physical address does not change for
+    // the lifetime of a link address entry, configured or not.
+    //
+
+    KeAcquireQueuedLock(Link->QueuedLock);
+    LockHeld = TRUE;
+    if (LinkAddress->Configured == FALSE) {
+        Status = STATUS_NO_NETWORK_CONNECTION;
+        goto ArpSendRequestEnd;
+    }
+
+    //
+    // Copy the sender's network address.
+    //
+
+    ASSERT(LinkAddress->Address.Domain == NetDomainIp4);
+
+    RtlCopyMemory(CurrentPointer,
+                  &(LinkAddress->Address.Address),
+                  IP4_ADDRESS_SIZE);
+
+    CurrentPointer += IP4_ADDRESS_SIZE;
+    KeReleaseQueuedLock(Link->QueuedLock);
+    LockHeld = FALSE;
+
+    //
+    // Zero out the target hardware address.
+    //
+
+    RtlZeroMemory(CurrentPointer, ETHERNET_ADDRESS_SIZE);
+    CurrentPointer += ETHERNET_ADDRESS_SIZE;
+
+    //
+    // Copy the target network address.
+    //
+
+    RtlCopyMemory(CurrentPointer, &(QueryAddress->Address), IP4_ADDRESS_SIZE);
+    CurrentPointer += IP4_ADDRESS_SIZE;
+
+    ASSERT(((UINTN)CurrentPointer - (UINTN)ArpPacket) == ARP_ETHERNET_IP4_SIZE);
+
+    //
+    // Debug print the request.
+    //
+
+    if (NetArpDebug != FALSE) {
+        RtlDebugPrint("ARP TX: Who has ");
+        NetDebugPrintAddress(QueryAddress);
+        RtlDebugPrint("? Tell ");
+        NetDebugPrintAddress(&(LinkAddress->PhysicalAddress));
+        RtlDebugPrint("\n");
+    }
+
+    //
+    // Send the request off to the link.
+    //
+
+    Send = Link->DataLinkEntry->Interface.Send;
+    Status = Send(Link->DataLinkContext,
+                  &NetPacketList,
+                  &(LinkAddress->PhysicalAddress),
+                  NULL,
+                  ARP_PROTOCOL_NUMBER);
+
+    if (!KSUCCESS(Status)) {
+        goto ArpSendRequestEnd;
+    }
+
+ArpSendRequestEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseQueuedLock(Link->QueuedLock);
+    }
+
+    if (!KSUCCESS(Status)) {
+        NetDestroyBufferList(&NetPacketList);
+    }
+
+    return Status;
 }
 
 KSTATUS

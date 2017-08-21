@@ -441,7 +441,8 @@ NET_NETWORK_ENTRY NetIp4Network = {
         NetpIp4PrintAddress,
         NetpIp4GetSetInformation,
         NetpIp4CopyInformation,
-        NetpIp4GetAddressType
+        NetpIp4GetAddressType,
+        NULL
     }
 };
 
@@ -472,6 +473,7 @@ Return Value:
 
 {
 
+    PNET_NETWORK_ENTRY ArpNetwork;
     KSTATUS Status;
 
     //
@@ -490,6 +492,24 @@ Return Value:
 
         goto Ip4InitializeEnd;
     }
+
+    //
+    // Override the IPv4 network translation request routine with ARP's. The
+    // ARP protocol handles the translation and is required for IPv4. As such,
+    // it should never disappear, making it safe for IPv4 to use its
+    // translation routine.
+    //
+
+    ArpNetwork = NetGetNetworkEntry(ARP_PROTOCOL_NUMBER);
+    if (ArpNetwork == NULL) {
+
+        ASSERT(FALSE);
+
+        goto Ip4InitializeEnd;
+    }
+
+    NetIp4Network.Interface.SendTranslationRequest =
+                                  ArpNetwork->Interface.SendTranslationRequest;
 
     //
     // Register the IPv4 handlers with the core networking library.
@@ -2636,7 +2656,8 @@ Return Value:
     // translated.
     //
 
-    Status = NetTranslateNetworkAddress(NetworkAddress,
+    Status = NetTranslateNetworkAddress(Socket->Network,
+                                        NetworkAddress,
                                         Link,
                                         LinkAddress,
                                         PhysicalAddress);

@@ -32,7 +32,6 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include "netcore.h"
-#include "arp.h"
 #include "dhcp.h"
 
 //
@@ -1379,6 +1378,7 @@ Return Value:
 NET_API
 KSTATUS
 NetTranslateNetworkAddress (
+    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS NetworkAddress,
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
@@ -1392,6 +1392,8 @@ Routine Description:
     This routine translates a network level address to a physical address.
 
 Arguments:
+
+    Network - Supplies a pointer to the network requesting translation.
 
     NetworkAddress - Supplies a pointer to the network address to translate.
 
@@ -1414,6 +1416,9 @@ Return Value:
     ULONGLONG EndTime;
     KSTATUS Status;
     ULONGLONG TimeDelta;
+
+    ASSERT(Network->Domain == NetworkAddress->Domain);
+    ASSERT(Network->Interface.SendTranslationRequest != NULL);
 
     EndTime = 0;
 
@@ -1442,7 +1447,10 @@ Return Value:
             EndTime = KeGetRecentTimeCounter() +
                       KeConvertMicrosecondsToTimeTicks(TimeDelta);
 
-            Status = NetpArpSendRequest(Link, LinkAddress, NetworkAddress);
+            Status = Network->Interface.SendTranslationRequest(Link,
+                                                               LinkAddress,
+                                                               NetworkAddress);
+
             if (!KSUCCESS(Status)) {
                 return Status;
             }
@@ -1466,11 +1474,14 @@ Return Value:
                                 ADDRESS_TRANSLATION_RETRY_INTERVAL);
 
         //
-        // On timeouts, re-send the ARP request.
+        // On timeouts, re-send the translation request.
         //
 
         if (Status == STATUS_TIMEOUT) {
-            Status = NetpArpSendRequest(Link, LinkAddress, NetworkAddress);
+            Status = Network->Interface.SendTranslationRequest(Link,
+                                                               LinkAddress,
+                                                               NetworkAddress);
+
             if (!KSUCCESS(Status)) {
                 return Status;
             }

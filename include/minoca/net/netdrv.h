@@ -2114,6 +2114,41 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PNET_NETWORK_SEND_TRANSLATION_REQUEST) (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    PNETWORK_ADDRESS QueryAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates, assembles, and sends a request to translate
+    the given network address into a physical address. This routine returns
+    as soon as the request is successfully queued for transmission.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to send the request down.
+
+    LinkAddress - Supplies the source address of the request.
+
+    QueryAddress - Supplies the network address to ask about.
+
+Return Value:
+
+    STATUS_SUCCESS if the request was successfully sent off.
+
+    STATUS_INSUFFICIENT_RESOURCES if the transmission buffer couldn't be
+    allocated.
+
+    Other errors on other failures.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -2167,6 +2202,11 @@ Members:
         mulitcast). This function is optional if unicast is the only supported
         address type.
 
+    SendTranslationRequest - Stores a pointer to a function used to translate
+        a network address into its associated physical address. This function
+        is optional is network to physical address translation is not required
+        for the network.
+
 --*/
 
 typedef struct _NET_NETWORK_INTERFACE {
@@ -2185,6 +2225,7 @@ typedef struct _NET_NETWORK_INTERFACE {
     PNET_NETWORK_GET_SET_INFORMATION GetSetInformation;
     PNET_NETWORK_COPY_INFORMATION CopyInformation;
     PNET_NETWORK_GET_ADDRESS_TYPE GetAddressType;
+    PNET_NETWORK_SEND_TRANSLATION_REQUEST SendTranslationRequest;
 } NET_NETWORK_INTERFACE, *PNET_NETWORK_INTERFACE;
 
 /*++
@@ -2947,6 +2988,7 @@ Return Value:
 NET_API
 KSTATUS
 NetTranslateNetworkAddress (
+    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS NetworkAddress,
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
@@ -2960,6 +3002,8 @@ Routine Description:
     This routine translates a network level address to a physical address.
 
 Arguments:
+
+    Network - Supplies a pointer to the network requesting translation.
 
     NetworkAddress - Supplies a pointer to the network address to translate.
 

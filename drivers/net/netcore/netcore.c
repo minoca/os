@@ -364,8 +364,8 @@ Return Value:
     //
 
     NetpEthernetInitialize();
-    NetpIp4Initialize();
     NetpArpInitialize();
+    NetpIp4Initialize();
     NetpUdpInitialize();
     NetpTcpInitialize();
     NetpRawInitialize();
