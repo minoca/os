@@ -951,15 +951,6 @@ Return Value:
     KSTATUS Status;
 
     //
-    // Currently only IPv4 addresses are supported.
-    //
-
-    if (Address->Domain != NetDomainIp4) {
-        Status = STATUS_NOT_SUPPORTED;
-        goto TcpBindToAddressEnd;
-    }
-
-    //
     // Pass the request down to the network layer.
     //
 

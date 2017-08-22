@@ -1904,6 +1904,8 @@ Return Value:
     ASSERT((LocalInformation != NULL) || (RemoteAddress != NULL));
     ASSERT((BindingType == SocketFullyBound) || (LocalInformation != NULL));
     ASSERT((BindingType != SocketFullyBound) || (RemoteAddress != NULL));
+    ASSERT((RemoteAddress == NULL) ||
+           (RemoteAddress->Domain == Socket->KernelSocket.Domain));
 
     LockHeld = FALSE;
     Protocol = Socket->Protocol;
@@ -2949,15 +2951,7 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    //
-    // Currently only IPv4 is supported.
-    //
-
     Domain = Information->Domain;
-    if (Domain != NetDomainIp4) {
-        return STATUS_INVALID_CONFIGURATION;
-    }
-
     KeAcquireQueuedLock(Link->QueuedLock);
 
     //

@@ -1139,6 +1139,7 @@ Return Value:
     ULONG TimeToLive;
     ULONG TotalLength;
 
+    ASSERT(Destination->Domain == Socket->KernelSocket.Domain);
     ASSERT((Socket->KernelSocket.Type == NetSocketRaw) ||
            (Socket->KernelSocket.Protocol ==
             Socket->Protocol->ParentProtocolNumber));

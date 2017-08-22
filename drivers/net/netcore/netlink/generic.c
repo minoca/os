@@ -1596,6 +1596,10 @@ Return Value:
         }
 
         Destination = &(Socket->RemoteAddress);
+
+    } else if (Destination->Domain != Socket->KernelSocket.Domain) {
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
+        goto GenericSendEnd;
     }
 
     //

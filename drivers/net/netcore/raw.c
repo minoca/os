@@ -707,15 +707,6 @@ Return Value:
     }
 
     //
-    // Currently only IPv4 addresses are supported.
-    //
-
-    if (Address->Domain != NetDomainIp4) {
-        Status = STATUS_NOT_SUPPORTED;
-        goto RawBindToAddressEnd;
-    }
-
-    //
     // The port doesn't make a difference on raw sockets. Set it to the
     // protocol value, which is storked in the kernel socket.
     //
@@ -1064,6 +1055,10 @@ Return Value:
         }
 
         Destination = &(Socket->RemoteAddress);
+
+    } else if (Destination->Domain != Socket->KernelSocket.Domain) {
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
+        goto RawSendEnd;
     }
 
     //

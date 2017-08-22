@@ -663,9 +663,6 @@ Return Value:
         } else if (Status == STATUS_TIMEOUT) {
             errno = ETIMEDOUT;
 
-        } else if (Status == STATUS_UNEXPECTED_TYPE) {
-            errno = EAFNOSUPPORT;
-
         } else {
             errno = ClConvertKstatusToErrorNumber(Status);
         }

@@ -677,15 +677,6 @@ Return Value:
     }
 
     //
-    // Currently only IPv4 addresses are supported.
-    //
-
-    if (Address->Domain != NetDomainIp4) {
-        Status = STATUS_NOT_SUPPORTED;
-        goto UdpBindToAddressEnd;
-    }
-
-    //
     // Pass the request down to the network layer.
     //
 
@@ -1002,6 +993,10 @@ Return Value:
         }
 
         Destination = &(Socket->RemoteAddress);
+
+    } else if (Destination->Domain != Socket->KernelSocket.Domain) {
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
+        goto UdpSendEnd;
     }
 
     //

@@ -1051,7 +1051,7 @@ Return Value:
     UnixSocket = (PUNIX_SOCKET)Socket;
     KeAcquireQueuedLock(UnixSocket->Lock);
     if (Address->Domain != NetDomainLocal) {
-        Status = STATUS_UNEXPECTED_TYPE;
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
         goto UnixSocketConnectEnd;
     }
 
@@ -1412,7 +1412,7 @@ Return Value:
         }
 
         if (Destination->Domain != NetDomainLocal) {
-            Status = STATUS_UNEXPECTED_TYPE;
+            Status = STATUS_DOMAIN_NOT_SUPPORTED;
             goto UnixSocketSendDataEnd;
         }
 
@@ -1659,7 +1659,7 @@ Return Value:
         KeAcquireQueuedLock(RemoteUnixSocket->Lock);
         if (RemoteUnixSocket->KernelSocket.Type != Socket->Type) {
             KeReleaseQueuedLock(RemoteUnixSocket->Lock);
-            Status = STATUS_UNEXPECTED_TYPE;
+            Status = STATUS_DOMAIN_NOT_SUPPORTED;
             goto UnixSocketSendDataEnd;
         }
 

@@ -778,6 +778,13 @@ Return Value:
 
     NET_RECEIVE_CONTEXT ReceiveContext;
 
+    //
+    // Upper layers should have failed on destination address's that do not
+    // match the socket's domain.
+    //
+
+    ASSERT(Destination->Domain == Socket->KernelSocket.Domain);
+
     ReceiveContext.Link = Socket->Link;
     ReceiveContext.Protocol = Socket->Protocol;
     ReceiveContext.Network = Socket->Network;

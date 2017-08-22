@@ -1617,7 +1617,7 @@ Return Value:
     //
     // If the port is non-zero and less than or equal to the maximum port that
     // requires a permission check, make sure the thread as the right
-    // privilege. Some protocols do not have this geneirc port restriction and
+    // privilege. Some protocols do not have this generic port restriction and
     // can opt out of the check.
     //
 
@@ -1631,6 +1631,15 @@ Return Value:
         if (!KSUCCESS(Status)) {
             goto BindToAddressEnd;
         }
+    }
+
+    //
+    // The address's domain must match the socket's domain.
+    //
+
+    if (Address->Domain != Socket->Domain) {
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
+        goto BindToAddressEnd;
     }
 
     Status = NetSocket->Protocol->Interface.BindToAddress(NetSocket,
@@ -1817,7 +1826,17 @@ Return Value:
         RtlDebugPrint("...\n");
     }
 
-    Status = NetSocket->Protocol->Interface.Connect(NetSocket, Address);
+    //
+    // The remote connection address's domain must match the socket's domain.
+    //
+
+    if (Address->Domain == Socket->Domain) {
+        Status = NetSocket->Protocol->Interface.Connect(NetSocket, Address);
+
+    } else {
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
+    }
+
     if (NetGlobalDebug != FALSE) {
         RtlDebugPrint("Net: Connect socket 0x%x to ", NetSocket);
         NetDebugPrintAddress(Address);
