@@ -321,6 +321,15 @@ NetpUdpUserControl (
     UINTN ContextBufferSize
     );
 
+USHORT
+NetpUdpChecksumData (
+    PNET_NETWORK_ENTRY Network,
+    PVOID Data,
+    ULONG DataLength,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -951,12 +960,10 @@ Return Value:
     PNET_SOCKET_LINK_OVERRIDE LinkOverride;
     NET_SOCKET_LINK_OVERRIDE LinkOverrideBuffer;
     NETWORK_ADDRESS LocalAddress;
-    USHORT NetworkLocalPort;
-    USHORT NetworkRemotePort;
     PNET_PACKET_BUFFER Packet;
     NET_PACKET_LIST PacketList;
     UINTN Size;
-    USHORT SourcePort;
+    PNETWORK_ADDRESS Source;
     KSTATUS Status;
     PUDP_HEADER UdpHeader;
     PUDP_SOCKET UdpSocket;
@@ -1100,7 +1107,7 @@ Return Value:
         Link = LinkOverrideBuffer.LinkInformation.Link;
         HeaderSize = LinkOverrideBuffer.PacketSizeInformation.HeaderSize;
         FooterSize = LinkOverrideBuffer.PacketSizeInformation.FooterSize;
-        SourcePort = LinkOverrideBuffer.LinkInformation.SendAddress.Port;
+        Source = &(LinkOverrideBuffer.LinkInformation.SendAddress);
 
     } else {
 
@@ -1109,11 +1116,8 @@ Return Value:
         Link = Socket->Link;
         HeaderSize = Socket->PacketSizeInformation.HeaderSize;
         FooterSize = Socket->PacketSizeInformation.FooterSize;
-        SourcePort = Socket->LocalSendAddress.Port;
+        Source = &(Socket->LocalSendAddress);
     }
-
-    NetworkLocalPort = CPU_TO_NETWORK16(SourcePort);
-    NetworkRemotePort = CPU_TO_NETWORK16(Destination->Port);
 
     //
     // Allocate a buffer for the packet.
@@ -1154,14 +1158,21 @@ Return Value:
 
     Packet->DataOffset -= sizeof(UDP_HEADER);
     UdpHeader = (PUDP_HEADER)(Packet->Buffer + Packet->DataOffset);
-    UdpHeader->SourcePort = NetworkLocalPort;
-    UdpHeader->DestinationPort = NetworkRemotePort;
+    UdpHeader->SourcePort = CPU_TO_NETWORK16(Source->Port);
+    UdpHeader->DestinationPort = CPU_TO_NETWORK16(Destination->Port);
     UdpHeader->Length = CPU_TO_NETWORK16(Size + sizeof(UDP_HEADER));
     UdpHeader->Checksum = 0;
     if ((Link->Properties.Capabilities &
         NET_LINK_CAPABILITY_TRANSMIT_UDP_CHECKSUM_OFFLOAD) != 0) {
 
         Packet->Flags |= NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD;
+
+    } else if (Socket->KernelSocket.Domain == NetDomainIp6) {
+        UdpHeader->Checksum = NetpUdpChecksumData(Socket->Network,
+                                                  UdpHeader,
+                                                  Size + sizeof(UDP_HEADER),
+                                                  Source,
+                                                  Destination);
     }
 
     //
@@ -1226,6 +1237,7 @@ Return Value:
 
 {
 
+    USHORT Checksum;
     PUDP_HEADER Header;
     USHORT Length;
     PNET_PACKET_BUFFER Packet;
@@ -1250,6 +1262,33 @@ Return Value:
     ReceiveContext->Source->Port = NETWORK_TO_CPU16(Header->SourcePort);
     ReceiveContext->Destination->Port =
                                      NETWORK_TO_CPU16(Header->DestinationPort);
+
+    //
+    // The UDP checksum is not optional on IPv6. Validate it.
+    //
+
+    if (ReceiveContext->Network->Domain == NetDomainIp6) {
+        if (Header->Checksum == 0) {
+            RtlDebugPrint("UDP: Ignoring packet with IPv6 checksum of 0.\n");
+            return;
+        }
+
+        Checksum = NetpUdpChecksumData(ReceiveContext->Network,
+                                       Header,
+                                       Length,
+                                       ReceiveContext->Source,
+                                       ReceiveContext->Destination);
+
+        if (Checksum != 0xFFFF) {
+            RtlDebugPrint("UDP: Ignoring packet with bad checksum 0x%04x "
+                          "headed for port %d from port %d\n.",
+                          Checksum,
+                          ReceiveContext->Source->Port,
+                          ReceiveContext->Destination->Port);
+
+            return;
+        }
+    }
 
     //
     // Find all the sockets willing to take this packet.
@@ -2054,4 +2093,58 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+USHORT
+NetpUdpChecksumData (
+    PNET_NETWORK_ENTRY Network,
+    PVOID Data,
+    ULONG DataLength,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the checksum for a UDP packet.
+
+Arguments:
+
+    Network - Supplies a pointer to the network to which the data and addresses
+        belong.
+
+    Data - Supplies a pointer to the beginning of the UDP header.
+
+    DataLength - Supplies the length of the header, options, and data, in bytes.
+
+    SourceAddress - Supplies a pointer to the source address of the packet,
+        used to compute the pseudo header.
+
+    DestinationAddress - Supplies a pointer to the destination address of the
+        packet, used to compute the pseudo header used in the checksum.
+
+Return Value:
+
+    Returns the checksum for the given packet.
+
+--*/
+
+{
+
+    USHORT Checksum;
+
+    Checksum = NetChecksumPseudoHeaderAndData(Network,
+                                              Data,
+                                              DataLength,
+                                              SourceAddress,
+                                              DestinationAddress,
+                                              SOCKET_INTERNET_PROTOCOL_UDP);
+
+    if (Checksum == 0) {
+        Checksum = 0xFFFF;
+    }
+
+    return Checksum;
+}
 

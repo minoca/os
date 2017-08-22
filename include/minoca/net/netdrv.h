@@ -932,11 +932,14 @@ Members:
     ProcessReceivedPacket - Stores a pointer to a function used to process
         received data link layer packets.
 
-    GetBroadcastAddress - Stores a pointer to a function used to retrieve the
-        data link layer's physical broadcast address.
+    ConvertToPhysicalAddress - Stores a pointer to a function used to convert a
+        network layer address into a data link layer physical address.
 
     PrintAddress - Stores a pointer to a function used to convert a data link
         address into a string representation.
+
+    GetPacketSizeInformation - Stores a pointer to a function that returns the
+        required packet size information for a link.
 
 --*/
 
@@ -2149,6 +2152,39 @@ Return Value:
 
 --*/
 
+typedef
+ULONG
+(*PNET_NETWORK_CHECKSUM_PSEUDO_HEADER) (
+    PNETWORK_ADDRESS Source,
+    PNETWORK_ADDRESS Destination,
+    ULONG PacketLength,
+    UCHAR Protocol
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the network's pseudo-header checksum as the one's
+    complement sum of all 32-bit words in the header. The pseudo-header is
+    folded into a 16-bit checksum by the caller.
+
+Arguments:
+
+    Source - Supplies a pointer to the source address.
+
+    Destination - Supplies a pointer to the destination address.
+
+    PacketLength - Supplies the packet length to include in the pseudo-header.
+
+    Protocol - Supplies the protocol value used in the pseudo header.
+
+Return Value:
+
+    Returns the checksum of the pseudo-header.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -2207,6 +2243,10 @@ Members:
         is optional is network to physical address translation is not required
         for the network.
 
+    ChecksumPseudoHeader - Stores a pointer to a function used to compute the
+        one's complement sum of all 32-bit values in the network's
+        pseudo-header that is prepended to protocol checksums (e.g. TCP, UDP).
+
 --*/
 
 typedef struct _NET_NETWORK_INTERFACE {
@@ -2226,6 +2266,7 @@ typedef struct _NET_NETWORK_INTERFACE {
     PNET_NETWORK_COPY_INFORMATION CopyInformation;
     PNET_NETWORK_GET_ADDRESS_TYPE GetAddressType;
     PNET_NETWORK_SEND_TRANSLATION_REQUEST SendTranslationRequest;
+    PNET_NETWORK_CHECKSUM_PSEUDO_HEADER ChecksumPseudoHeader;
 } NET_NETWORK_INTERFACE, *PNET_NETWORK_INTERFACE;
 
 /*++
@@ -3335,6 +3376,75 @@ Return Value:
     Ascending if the first node is less than the second node.
 
     Descending if the second node is less than the first node.
+
+--*/
+
+NET_API
+USHORT
+NetChecksumData (
+    PVOID Data,
+    ULONG DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the given data's checksum as the one's complement of
+    the one's complement sum of all 16-bit words in the data.
+
+Arguments:
+
+    Data - Supplies a pointer to the beginning of the data to checksum.
+
+    DataLength - Supplies the length of the data to checksum.
+
+Return Value:
+
+    Returns the checksum for the given data.
+
+--*/
+
+NET_API
+USHORT
+NetChecksumPseudoHeaderAndData (
+    PNET_NETWORK_ENTRY Network,
+    PVOID Data,
+    ULONG DataLength,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress,
+    UCHAR Protocol
+    );
+
+/*++
+
+Routine Description:
+
+    This routine computes the given data's checksum as the one's complement of
+    the one's complement sum of all 16-bit words in the data and a network
+    specific pseudo-header generated from the given addresses, protocol and
+    data length.
+
+Arguments:
+
+    Network - Supplies a pointer to the network to which the data and addresses
+        belong.
+
+    Data - Supplies a pointer to the beginning of the data to checksum.
+
+    DataLength - Supplies the length of the data to checksum.
+
+    SourceAddress - Supplies a pointer to the source address of the data, used
+        to compute the pseudo-header.
+
+    DestinationAddress - Supplies a pointer to the destination address of the
+        data, used to compute the pseudo-header.
+
+    Protocol - Supplies a protocol value used in the pseudo-header.
+
+Return Value:
+
+    Returns the checksum for the given data and generated pseudo-header.
 
 --*/
 

@@ -202,6 +202,13 @@ NetpDebugPrintNetworkAddress (
     PNETWORK_ADDRESS Address
     );
 
+USHORT
+NetpChecksumData (
+    PVOID Data,
+    ULONG DataLength,
+    ULONG Sum
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -3538,6 +3545,106 @@ Return Value:
     return ComparisonResultSame;
 }
 
+NET_API
+USHORT
+NetChecksumData (
+    PVOID Data,
+    ULONG DataLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the given data's checksum as the one's complement of
+    the one's complement sum of all 16-bit words in the data.
+
+Arguments:
+
+    Data - Supplies a pointer to the beginning of the data to checksum.
+
+    DataLength - Supplies the length of the data to checksum.
+
+Return Value:
+
+    Returns the checksum for the given data.
+
+--*/
+
+{
+
+    return NetpChecksumData(Data, DataLength, 0);
+}
+
+NET_API
+USHORT
+NetChecksumPseudoHeaderAndData (
+    PNET_NETWORK_ENTRY Network,
+    PVOID Data,
+    ULONG DataLength,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress,
+    UCHAR Protocol
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the given data's checksum as the one's complement of
+    the one's complement sum of all 16-bit words in the data and a network
+    specific pseudo-header generated from the given addresses, protocol and
+    data length.
+
+Arguments:
+
+    Network - Supplies a pointer to the network to which the data and addresses
+        belong.
+
+    Data - Supplies a pointer to the beginning of the data to checksum.
+
+    DataLength - Supplies the length of the data to checksum.
+
+    SourceAddress - Supplies a pointer to the source address of the data, used
+        to compute the pseudo-header.
+
+    DestinationAddress - Supplies a pointer to the destination address of the
+        data, used to compute the pseudo-header.
+
+    Protocol - Supplies a protocol value used in the pseudo-header.
+
+Return Value:
+
+    Returns the checksum for the given data and generated pseudo-header.
+
+--*/
+
+{
+
+    ULONG PseudoSum;
+
+    ASSERT(SourceAddress != NULL);
+    ASSERT(DestinationAddress != NULL);
+
+    if (Network->Interface.ChecksumPseudoHeader == NULL) {
+        RtlDebugPrint("NET: unimplemented pseudo-header checksum routine for "
+                      "network domain %d\n",
+                      Network->Domain);
+
+        ASSERT(FALSE);
+
+        PseudoSum = 0;
+
+    } else {
+        PseudoSum = Network->Interface.ChecksumPseudoHeader(SourceAddress,
+                                                            DestinationAddress,
+                                                            DataLength,
+                                                            Protocol);
+    }
+
+    return NetpChecksumData(Data, DataLength, PseudoSum);
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -4641,5 +4748,89 @@ Return Value:
     StringBuffer[NET_PRINT_ADDRESS_STRING_LENGTH - 1] = '\0';
     RtlDebugPrint("%s", StringBuffer);
     return;
+}
+
+USHORT
+NetpChecksumData (
+    PVOID Data,
+    ULONG DataLength,
+    ULONG Sum
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the given data's checksum as the one's complement of
+    the one's complement sum of all 16-bit words in the data.
+
+Arguments:
+
+    Data - Supplies a pointer to the beginning of the data to checksum.
+
+    DataLength - Supplies the length of the data to checksum.
+
+    Sum - Supplies a starting 32-bit sum value. This can be used to apply a
+        pre-computed pseudo-header to the checksum.
+
+Return Value:
+
+    Returns the checksum for the given data.
+
+--*/
+
+{
+
+    PUCHAR BytePointer;
+    PULONG LongPointer;
+    ULONG NextValue;
+    USHORT ShortOne;
+    PUSHORT ShortPointer;
+    USHORT ShortTwo;
+
+    LongPointer = (PULONG)Data;
+    while (DataLength >= sizeof(ULONG)) {
+        NextValue = *LongPointer;
+        LongPointer += 1;
+        Sum += NextValue;
+        if (Sum < NextValue) {
+            Sum += 1;
+        }
+
+        DataLength -= sizeof(ULONG);
+    }
+
+    BytePointer = (PUCHAR)LongPointer;
+    if ((DataLength & sizeof(USHORT)) != 0) {
+        ShortPointer = (PUSHORT)BytePointer;
+        NextValue = (USHORT)*ShortPointer;
+        Sum += NextValue;
+        if (Sum < NextValue) {
+            Sum += 1;
+        }
+
+        BytePointer += sizeof(USHORT);
+    }
+
+    if ((DataLength & sizeof(UCHAR)) != 0) {
+        NextValue = (UCHAR)*BytePointer;
+        Sum += NextValue;
+        if (Sum < NextValue) {
+            Sum += 1;
+        }
+    }
+
+    //
+    // Fold the 32-bit value down to 16-bits.
+    //
+
+    ShortOne = (USHORT)Sum;
+    ShortTwo = (USHORT)(Sum >> 16);
+    ShortTwo += ShortOne;
+    if (ShortTwo < ShortOne) {
+        ShortTwo += 1;
+    }
+
+    return (USHORT)~ShortTwo;
 }
 

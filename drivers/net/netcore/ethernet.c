@@ -650,7 +650,7 @@ Return Value:
     // A multicast MAC address depends on the domain of the given network
     // address. This conversion is done at the physical layer because the
     // network layer shouldn't need to know anything about the underlying
-    // physical layer and the conversion algorithm is specific the the physical
+    // physical layer and the conversion algorithm is specific to the physical
     // layer's address type.
     //
 

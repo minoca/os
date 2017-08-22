@@ -331,10 +331,12 @@ NetpIp4GetAddressType (
     PNETWORK_ADDRESS Address
     );
 
-USHORT
-NetpIp4ChecksumData (
-    PVOID Data,
-    ULONG Length
+ULONG
+NetpIp4ChecksumPseudoHeader (
+    PNETWORK_ADDRESS Source,
+    PNETWORK_ADDRESS Destination,
+    ULONG PacketLength,
+    UCHAR Protocol
     );
 
 KSTATUS
@@ -442,7 +444,8 @@ NET_NETWORK_ENTRY NetIp4Network = {
         NetpIp4GetSetInformation,
         NetpIp4CopyInformation,
         NetpIp4GetAddressType,
-        NULL
+        NULL,
+        NetpIp4ChecksumPseudoHeader
     }
 };
 
@@ -1354,8 +1357,8 @@ Return Value:
                 if ((Link->Properties.Capabilities &
                      NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD) == 0) {
 
-                    Checksum = NetpIp4ChecksumData((PSHORT)Header,
-                                                   sizeof(IP4_HEADER));
+                    Checksum = NetChecksumData((PSHORT)Header,
+                                               sizeof(IP4_HEADER));
 
                     Header->HeaderChecksum = Checksum;
 
@@ -1426,9 +1429,7 @@ Return Value:
             if ((Link->Properties.Capabilities &
                  NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD) == 0) {
 
-                Checksum = NetpIp4ChecksumData((PVOID)Header,
-                                               sizeof(IP4_HEADER));
-
+                Checksum = NetChecksumData((PVOID)Header, sizeof(IP4_HEADER));
                 Header->HeaderChecksum = Checksum;
 
             } else {
@@ -1628,7 +1629,7 @@ Return Value:
     if (((Packet->Flags & NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD) == 0) ||
         ((Packet->Flags & NET_PACKET_FLAG_IP_CHECKSUM_FAILED) != 0)) {
 
-        ComputedChecksum = NetpIp4ChecksumData((PVOID)Header, HeaderSize);
+        ComputedChecksum = NetChecksumData((PVOID)Header, HeaderSize);
         if (ComputedChecksum != 0) {
             RtlDebugPrint("Invalid IPv4 header checksum. Computed checksum: "
                           "0x%04x, should have been zero.\n",
@@ -2441,84 +2442,69 @@ Return Value:
     return NetAddressUnknown;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-USHORT
-NetpIp4ChecksumData (
-    PVOID Data,
-    ULONG Length
+ULONG
+NetpIp4ChecksumPseudoHeader (
+    PNETWORK_ADDRESS Source,
+    PNETWORK_ADDRESS Destination,
+    ULONG PacketLength,
+    UCHAR Protocol
     )
 
 /*++
 
 Routine Description:
 
-    This routine checksums a section of data for use in an IP datagram
-    checksum and returns it in network byte order.
+    This routine computes the network's pseudo-header checksum as the one's
+    complement sum of all 32-bit words in the header. The pseudo-header is
+    folded into a 16-bit checksum by the caller.
 
 Arguments:
 
-    Data - Supplies a pointer to the data to checksum.
+    Source - Supplies a pointer to the source address.
 
-    Length - Supplies the number of bytes to checksum. This must be an even
-        number.
+    Destination - Supplies a pointer to the destination address.
+
+    PacketLength - Supplies the packet length to include in the pseudo-header.
+
+    Protocol - Supplies the protocol value used in the pseudo header.
 
 Return Value:
 
-    Returns the checksum of the data.
+    Returns the checksum of the pseudo-header.
 
 --*/
 
 {
 
-    PUCHAR BytePointer;
-    PULONG LongPointer;
+    ULONG Checksum;
+    PIP4_ADDRESS Ip4Address;
     ULONG NextValue;
-    USHORT ShortOne;
-    PUSHORT ShortPointer;
-    USHORT ShortTwo;
-    ULONG Sum;
 
-    ASSERT((Length & 0x1) == 0);
+    ASSERT(Source->Domain == NetDomainIp4);
+    ASSERT(Destination->Domain == NetDomainIp4);
 
-    Sum = 0;
-    LongPointer = (PULONG)Data;
-    while (Length >= sizeof(ULONG)) {
-        NextValue = *LongPointer;
-        LongPointer += 1;
-        Sum += NextValue;
-        if (Sum < NextValue) {
-            Sum += 1;
-        }
-
-        Length -= sizeof(ULONG);
+    Ip4Address = (PIP4_ADDRESS)Source;
+    Checksum = Ip4Address->Address;
+    Ip4Address = (PIP4_ADDRESS)Destination;
+    Checksum += Ip4Address->Address;
+    if (Checksum < Ip4Address->Address) {
+        Checksum += 1;
     }
 
-    BytePointer = (PUCHAR)LongPointer;
-    if (Length == sizeof(USHORT)) {
-        ShortPointer = (PUSHORT)BytePointer;
-        NextValue = (USHORT)*ShortPointer;
-        Sum += NextValue;
-        if (Sum < NextValue) {
-            Sum += 1;
-        }
+    NextValue = (CPU_TO_NETWORK16((USHORT)PacketLength) << 16) |
+                (Protocol << 8);
+
+    Checksum += NextValue;
+    if (Checksum < NextValue) {
+        Checksum += 1;
     }
 
-    //
-    // Fold the 32-bit value down to 16-bits.
-    //
-
-    ShortOne = (USHORT)Sum;
-    ShortTwo = (USHORT)(Sum >> 16);
-    ShortTwo += ShortOne;
-    if (ShortTwo < ShortOne) {
-        ShortTwo += 1;
-    }
-
-    return (USHORT)~ShortTwo;
+    return Checksum;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 KSTATUS
 NetpIp4TranslateNetworkAddress (
@@ -3034,7 +3020,7 @@ Return Value:
         NewHeader->SourceAddress = Header->SourceAddress;
         NewHeader->DestinationAddress = Header->DestinationAddress;
         NewHeader->HeaderChecksum = 0;
-        Checksum = NetpIp4ChecksumData((PSHORT)Header, sizeof(IP4_HEADER));
+        Checksum = NetChecksumData((PSHORT)Header, sizeof(IP4_HEADER));
         NewHeader->HeaderChecksum = Checksum;
 
     //

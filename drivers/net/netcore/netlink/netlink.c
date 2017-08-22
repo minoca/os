@@ -207,6 +207,7 @@ NET_NETWORK_ENTRY NetNetlinkNetwork = {
         NetlinkpGetSetInformation,
         NULL,
         NULL,
+        NULL,
         NULL
     }
 };

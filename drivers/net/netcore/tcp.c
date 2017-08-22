@@ -40,7 +40,6 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
-#include <minoca/net/ip4.h>
 #include "tcp.h"
 
 //
@@ -215,14 +214,6 @@ NetpTcpFillOutHeader (
     ULONG OptionsLength,
     USHORT NonUrgentOffset,
     ULONG DataLength
-    );
-
-USHORT
-NetpTcpChecksumData (
-    PVOID Data,
-    ULONG DataLength,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
     );
 
 BOOL
@@ -2228,15 +2219,39 @@ Return Value:
     }
 
     Packet->DataOffset += HeaderLength;
-
-    //
-    // Fill out the source and destination ports and look for an eligible socket
-    // before doing any more work.
-    //
-
     ReceiveContext->Source->Port = NETWORK_TO_CPU16(Header->SourcePort);
     ReceiveContext->Destination->Port =
                                      NETWORK_TO_CPU16(Header->DestinationPort);
+
+    //
+    // Ensure the checksum comes out correctly. Skip this if checksum was
+    // offloaded and it was valid.
+    //
+
+    if (((Packet->Flags & NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD) == 0) ||
+        ((Packet->Flags & NET_PACKET_FLAG_TCP_CHECKSUM_FAILED) != 0)) {
+
+        Checksum = NetChecksumPseudoHeaderAndData(ReceiveContext->Network,
+                                                  Header,
+                                                  Length,
+                                                  ReceiveContext->Source,
+                                                  ReceiveContext->Destination,
+                                                  SOCKET_INTERNET_PROTOCOL_TCP);
+
+        if (Checksum != 0) {
+            RtlDebugPrint("TCP ignoring packet with bad checksum 0x%04x headed "
+                          "for port %d from port %d.\n",
+                          Checksum,
+                          ReceiveContext->Destination->Port,
+                          ReceiveContext->Source->Port);
+
+            return;
+        }
+    }
+
+    //
+    // Look for an eligible socket.
+    //
 
     Socket = NULL;
     Status = NetFindSocket(ReceiveContext, &Socket);
@@ -2249,30 +2264,6 @@ Return Value:
     }
 
     TcpSocket = (PTCP_SOCKET)Socket;
-
-    //
-    // Ensure the checksum comes out correctly. Skip this if checksum was
-    // offloaded and it was valid.
-    //
-
-    if (((Packet->Flags & NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD) == 0) ||
-        ((Packet->Flags & NET_PACKET_FLAG_TCP_CHECKSUM_FAILED) != 0)) {
-
-        Checksum = NetpTcpChecksumData(Header,
-                                       Length,
-                                       ReceiveContext->Source,
-                                       ReceiveContext->Destination);
-
-        if (Checksum != 0) {
-            RtlDebugPrint("TCP ignoring packet with bad checksum 0x%04x headed "
-                          "for port %d from port %d.\n",
-                          Checksum,
-                          ReceiveContext->Destination->Port,
-                          ReceiveContext->Source->Port);
-
-            return;
-        }
-    }
 
     //
     // This is a valid TCP packet. Handle it.
@@ -4879,6 +4870,7 @@ Return Value:
 {
 
     PVOID Buffer;
+    USHORT Checksum;
     PNETWORK_ADDRESS DestinationAddress;
     PTCP_HEADER Header;
     ULONG PacketSize;
@@ -4929,10 +4921,14 @@ Return Value:
     if ((Socket->NetSocket.Link->Properties.Capabilities &
          NET_LINK_CAPABILITY_TRANSMIT_TCP_CHECKSUM_OFFLOAD) == 0) {
 
-        Header->Checksum = NetpTcpChecksumData(Header,
-                                               PacketSize,
-                                               SourceAddress,
-                                               DestinationAddress);
+        Checksum = NetChecksumPseudoHeaderAndData(Socket->NetSocket.Network,
+                                                  Header,
+                                                  PacketSize,
+                                                  SourceAddress,
+                                                  DestinationAddress,
+                                                  SOCKET_INTERNET_PROTOCOL_TCP);
+
+        Header->Checksum = Checksum;
 
     } else {
         Packet->Flags |= NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD;
@@ -4988,119 +4984,6 @@ Return Value:
     }
 
     return;
-}
-
-USHORT
-NetpTcpChecksumData (
-    PVOID Data,
-    ULONG DataLength,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine computes the checksum for a TCP packet and returns it in
-    network byte order.
-
-Arguments:
-
-    Data - Supplies a pointer to the beginning of the TCP header.
-
-    DataLength - Supplies the length of the header, options, and data, in bytes.
-
-    SourceAddress - Supplies a pointer to the source address of the packet,
-        used to compute the pseudo header.
-
-    DestinationAddress - Supplies a pointer to the destination address of the
-        packet, used to compute the pseudo header used in the checksum.
-
-Return Value:
-
-    Returns the checksum for the given packet.
-
---*/
-
-{
-
-    PUCHAR BytePointer;
-    PIP4_ADDRESS Ip4Address;
-    PULONG LongPointer;
-    ULONG NextValue;
-    USHORT ShortOne;
-    PUSHORT ShortPointer;
-    USHORT ShortTwo;
-    ULONG Sum;
-
-    Sum = 0;
-
-    ASSERT(SourceAddress->Domain == NetDomainIp4);
-    ASSERT(DestinationAddress->Domain == SourceAddress->Domain);
-
-    Ip4Address = (PIP4_ADDRESS)SourceAddress;
-    Sum = Ip4Address->Address;
-    Ip4Address = (PIP4_ADDRESS)DestinationAddress;
-    Sum += Ip4Address->Address;
-    if (Sum < Ip4Address->Address) {
-        Sum += 1;
-    }
-
-    ASSERT(DataLength < MAX_USHORT);
-
-    NextValue = (RtlByteSwapUshort((USHORT)DataLength) << 16) |
-                (SOCKET_INTERNET_PROTOCOL_TCP << 8);
-
-    Sum += NextValue;
-    if (Sum < NextValue) {
-        Sum += 1;
-    }
-
-    LongPointer = (PULONG)Data;
-    while (DataLength >= sizeof(ULONG)) {
-        NextValue = *LongPointer;
-        LongPointer += 1;
-        Sum += NextValue;
-        if (Sum < NextValue) {
-            Sum += 1;
-        }
-
-        DataLength -= sizeof(ULONG);
-    }
-
-    BytePointer = (PUCHAR)LongPointer;
-    if ((DataLength & sizeof(USHORT)) != 0) {
-        ShortPointer = (PUSHORT)BytePointer;
-        NextValue = (USHORT)*ShortPointer;
-        Sum += NextValue;
-        if (Sum < NextValue) {
-            Sum += 1;
-        }
-
-        BytePointer += sizeof(USHORT);
-    }
-
-    if ((DataLength & sizeof(UCHAR)) != 0) {
-        NextValue = (UCHAR)*BytePointer;
-        Sum += NextValue;
-        if (Sum < NextValue) {
-            Sum += 1;
-        }
-    }
-
-    //
-    // Fold the 32-bit value down to 16-bits.
-    //
-
-    ShortOne = (USHORT)Sum;
-    ShortTwo = (USHORT)(Sum >> 16);
-    ShortTwo += ShortOne;
-    if (ShortTwo < ShortOne) {
-        ShortTwo += 1;
-    }
-
-    return (USHORT)~ShortTwo;
 }
 
 BOOL
