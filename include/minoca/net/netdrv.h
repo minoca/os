@@ -655,9 +655,10 @@ Members:
         structures in this structure. This lock must only be called at low
         level.
 
-    LinkAddressList - Stores the head of the list of link layer addresses owned
-        by this link. For example, in IPv4 this would be the list of IP
-        addresses this link responds to. These entries are of type
+    LinkAddressArray - Stores an array of link layer address lists owned by
+        this link. Each list contains addresses for each socket network type.
+        For example, the IPv4 entry contains all the IPv4 addresses the link
+        responds to (typically one). The list entries are of type
         NET_LINK_ADDRESS_ENTRY.
 
     LinkUp - Stores a boolean indicating whether the link is active (TRUE) or
@@ -685,7 +686,7 @@ typedef struct _NET_LINK {
     LIST_ENTRY ListEntry;
     volatile ULONG ReferenceCount;
     PQUEUED_LOCK QueuedLock;
-    LIST_ENTRY LinkAddressList;
+    LIST_ENTRY LinkAddressArray[NetDomainSocketNetworkCount];
     BOOL LinkUp;
     ULONGLONG LinkSpeed;
     PNET_DATA_LINK_ENTRY DataLinkEntry;
@@ -2977,8 +2978,8 @@ Arguments:
     Link - Supplies a pointer to the physical link that has the new network
         address.
 
-    Address - Supplies an optional pointer to the address to assign to the link
-        address entry.
+    Address - Supplies a pointer to the address to assign to the link address
+        entry. At least the network domain needs to be filled in.
 
     Subnet - Supplies an optional pointer to the subnet mask to assign to the
         link address entry.

@@ -267,6 +267,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PNET_NETWORK_ENTRY CurrentNetwork;
     PNET_DATA_LINK_ENTRY FoundDataLink;
+    ULONG Index;
     PLIST_ENTRY LastEntry;
     PNET_LINK Link;
     BOOL LockHeld;
@@ -312,7 +313,10 @@ Return Value:
         goto AddLinkEnd;
     }
 
-    INITIALIZE_LIST_HEAD(&(Link->LinkAddressList));
+    for (Index = 0; Index < NetDomainSocketNetworkCount; Index += 1) {
+        INITIALIZE_LIST_HEAD(&(Link->LinkAddressArray[Index]));
+    }
+
     Link->AddressTranslationEvent = KeCreateEvent(NULL);
     if (Link->AddressTranslationEvent == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -575,6 +579,7 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     NET_DOMAIN_TYPE Domain;
+    ULONG Index;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     BOOL OriginalLinkUp;
     KSTATUS Status;
@@ -620,7 +625,6 @@ Return Value:
     if (LinkUp != FALSE) {
 
         ASSERT(Link->LinkUp != FALSE);
-        ASSERT(LIST_EMPTY(&(Link->LinkAddressList)) == FALSE);
 
         //
         // If the link had previously gone down then the address translation
@@ -630,22 +634,28 @@ Return Value:
         KeSignalEvent(Link->AddressTranslationEvent, SignalOptionUnsignal);
 
         //
-        // Request an address for the first link.
+        // Request an address for each link address entry.
         //
 
-        LinkAddress = LIST_VALUE(Link->LinkAddressList.Next,
-                                 NET_LINK_ADDRESS_ENTRY,
-                                 ListEntry);
+        for (Index = 0; Index < NetDomainSocketNetworkCount; Index += 1) {
+            CurrentEntry = Link->LinkAddressArray[Index].Next;
+            while (CurrentEntry != &(Link->LinkAddressArray[Index])) {
+                LinkAddress = LIST_VALUE(CurrentEntry,
+                                         NET_LINK_ADDRESS_ENTRY,
+                                         ListEntry);
 
-        Status = NetpDhcpBeginAssignment(Link, LinkAddress);
-        if (!KSUCCESS(Status)) {
+                CurrentEntry = CurrentEntry->Next;
+                Status = NetpDhcpBeginAssignment(Link, LinkAddress);
+                if (!KSUCCESS(Status)) {
 
-            //
-            // TODO: Handle failed DHCP.
-            //
+                    //
+                    // TODO: Handle failed DHCP.
+                    //
 
-            ASSERT(FALSE);
+                    ASSERT(FALSE);
 
+                }
+            }
         }
 
     //
@@ -703,43 +713,47 @@ Return Value:
         //
 
         KeAcquireQueuedLock(Link->QueuedLock);
-        CurrentEntry = Link->LinkAddressList.Next;
-        while (CurrentEntry != &(Link->LinkAddressList)) {
-            LinkAddress = LIST_VALUE(CurrentEntry,
-                                     NET_LINK_ADDRESS_ENTRY,
-                                     ListEntry);
+        for (Index = 0; Index < NetDomainSocketNetworkCount; Index += 1) {
+            CurrentEntry = Link->LinkAddressArray[Index].Next;
+            while (CurrentEntry != &(Link->LinkAddressArray[Index])) {
+                LinkAddress = LIST_VALUE(CurrentEntry,
+                                         NET_LINK_ADDRESS_ENTRY,
+                                         ListEntry);
 
-            CurrentEntry = CurrentEntry->Next;
-            if (LinkAddress->Configured == FALSE) {
-                continue;
+                CurrentEntry = CurrentEntry->Next;
+                if (LinkAddress->Configured == FALSE) {
+                    continue;
+                }
+
+                //
+                // If the link address was configured via DHCP, then release
+                // the IP address.
+                //
+
+                if (LinkAddress->StaticAddress == FALSE) {
+
+                    //
+                    // Zero out the network address, except the network type
+                    // which is needed to reconfigure the link. The rest of the
+                    // state can be left stale.
+                    //
+
+                    Domain = LinkAddress->Address.Domain;
+                    RtlZeroMemory(&(LinkAddress->Address),
+                                  sizeof(NETWORK_ADDRESS));
+
+                    LinkAddress->Address.Domain = Domain;
+
+                    //
+                    // Notify DHCP that the link and link address combination
+                    // is now invalid. It may have saved state.
+                    //
+
+                    NetpDhcpCancelLease(Link, LinkAddress);
+                }
+
+                LinkAddress->Configured = FALSE;
             }
-
-            //
-            // If the link address was configured via DHCP, then release the IP
-            // address.
-            //
-
-            if (LinkAddress->StaticAddress == FALSE) {
-
-                //
-                // Zero out the network address, except the network type which
-                // is needed to reconfigure the link. The rest of the state can
-                // be left stale.
-                //
-
-                Domain = LinkAddress->Address.Domain;
-                RtlZeroMemory(&(LinkAddress->Address), sizeof(NETWORK_ADDRESS));
-                LinkAddress->Address.Domain = Domain;
-
-                //
-                // Notify DHCP that the link and link address combination is
-                // now invalid. It may have saved state.
-                //
-
-                NetpDhcpCancelLease(Link, LinkAddress);
-            }
-
-            LinkAddress->Configured = FALSE;
         }
 
         KeReleaseQueuedLock(Link->QueuedLock);
@@ -1081,14 +1095,19 @@ Return Value:
 
 {
 
+    PLIST_ENTRY CurrentAddressEntry;
     PNET_LINK CurrentLink;
     PNET_LINK_ADDRESS_ENTRY CurrentLinkAddressEntry;
     PLIST_ENTRY CurrentLinkEntry;
+    NET_DOMAIN_TYPE Domain;
     PNET_LINK_ADDRESS_ENTRY FoundAddress;
+    PLIST_ENTRY LinkAddressList;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT(RemoteAddress->Domain < NetDomainSocketNetworkCount);
 
+    Domain = RemoteAddress->Domain;
     KeAcquireSharedExclusiveLockShared(NetLinkListLock);
     if (LIST_EMPTY(&NetLinkList)) {
         Status = STATUS_NO_NETWORK_CONNECTION;
@@ -1111,31 +1130,46 @@ Return Value:
         }
 
         //
+        // If the domain's link address list is empty, try another link.
+        //
+
+        LinkAddressList = &(CurrentLink->LinkAddressArray[Domain]);
+        if (LIST_EMPTY(LinkAddressList) != FALSE) {
+            continue;
+        }
+
+        //
         // TODO: Properly determine the route for this destination, rather
-        // than just connecting through the first working network link and first
-        // address inside it. Make sure to not use the routing tables if
+        // than just connecting through the first working network link and
+        // first address inside it. Make sure to not use the routing tables if
         // SOCKET_IO_DONT_ROUTE is set at time of send/receive.
         //
 
         KeAcquireQueuedLock(CurrentLink->QueuedLock);
+        if (LIST_EMPTY(LinkAddressList) == FALSE) {
+            CurrentAddressEntry = LinkAddressList->Next;
+            while (CurrentAddressEntry != LinkAddressList) {
+                CurrentLinkAddressEntry = LIST_VALUE(CurrentAddressEntry,
+                                                     NET_LINK_ADDRESS_ENTRY,
+                                                     ListEntry);
 
-        ASSERT(!LIST_EMPTY(&(CurrentLink->LinkAddressList)));
+                if (CurrentLinkAddressEntry->Configured != FALSE) {
+                    FoundAddress = CurrentLinkAddressEntry;
+                    RtlCopyMemory(&(LinkResult->ReceiveAddress),
+                                  &(FoundAddress->Address),
+                                  sizeof(NETWORK_ADDRESS));
 
-        CurrentLinkAddressEntry = LIST_VALUE(CurrentLink->LinkAddressList.Next,
-                                             NET_LINK_ADDRESS_ENTRY,
-                                             ListEntry);
+                    RtlCopyMemory(&(LinkResult->SendAddress),
+                                  &(FoundAddress->Address),
+                                  sizeof(NETWORK_ADDRESS));
 
-        if (CurrentLinkAddressEntry->Configured != FALSE) {
-            FoundAddress = CurrentLinkAddressEntry;
-            RtlCopyMemory(&(LinkResult->ReceiveAddress),
-                          &(FoundAddress->Address),
-                          sizeof(NETWORK_ADDRESS));
+                    ASSERT(LinkResult->SendAddress.Port == 0);
 
-            RtlCopyMemory(&(LinkResult->SendAddress),
-                          &(FoundAddress->Address),
-                          sizeof(NETWORK_ADDRESS));
+                    break;
+                }
 
-            ASSERT(LinkResult->SendAddress.Port == 0);
+                CurrentAddressEntry = CurrentAddressEntry->Next;
+            }
         }
 
         KeReleaseQueuedLock(CurrentLink->QueuedLock);
@@ -1245,8 +1279,8 @@ Arguments:
     Link - Supplies a pointer to the physical link that has the new network
         address.
 
-    Address - Supplies an optional pointer to the address to assign to the link
-        address entry.
+    Address - Supplies a pointer to the address to assign to the link address
+        entry. At least the network domain needs to be filled in.
 
     Subnet - Supplies an optional pointer to the subnet mask to assign to the
         link address entry.
@@ -1275,6 +1309,8 @@ Return Value:
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT(Address != NULL);
+    ASSERT(NET_IS_SOCKET_NETWORK_DOMAIN(Address->Domain) != FALSE);
 
     LinkAddress = MmAllocatePagedPool(sizeof(NET_LINK_ADDRESS_ENTRY),
                                       NET_CORE_ALLOCATION_TAG);
@@ -1289,12 +1325,7 @@ Return Value:
     //
 
     RtlZeroMemory(LinkAddress, sizeof(NET_LINK_ADDRESS_ENTRY));
-    if (Address != NULL) {
-        RtlCopyMemory(&(LinkAddress->Address),
-                      Address,
-                      sizeof(NETWORK_ADDRESS));
-    }
-
+    RtlCopyMemory(&(LinkAddress->Address), Address, sizeof(NETWORK_ADDRESS));
     if (Subnet != NULL) {
         RtlCopyMemory(&(LinkAddress->Subnet), Subnet, sizeof(NETWORK_ADDRESS));
     }
@@ -1314,23 +1345,25 @@ Return Value:
                   sizeof(NETWORK_ADDRESS));
 
     //
-    // If an address, subnet, and default gateway were supplied, then this link
-    // address entry is as good as configured.
+    // If a subnet and default gateway were supplied, then this link address
+    // entry is as good as configured.
     //
 
     ASSERT(LinkAddress->Configured == FALSE);
 
-    if ((Address != NULL) && (Subnet != NULL) && (DefaultGateway != NULL)) {
+    if ((Subnet != NULL) && (DefaultGateway != NULL)) {
         LinkAddress->StaticAddress = StaticAddress;
         LinkAddress->Configured = TRUE;
     }
 
     //
-    // Everything's good to go, add the address to the link's list.
+    // Everything's good to go, add the address to the link's domain list.
     //
 
     KeAcquireQueuedLock(Link->QueuedLock);
-    INSERT_AFTER(&(LinkAddress->ListEntry), &(Link->LinkAddressList));
+    INSERT_AFTER(&(LinkAddress->ListEntry),
+                 &(Link->LinkAddressArray[Address->Domain]));
+
     KeReleaseQueuedLock(Link->QueuedLock);
     Status = STATUS_SUCCESS;
 
@@ -1659,6 +1692,7 @@ Return Value:
     COMPARISON_RESULT ComparisonResult;
     PNET_LINK_ADDRESS_ENTRY CurrentAddress;
     PLIST_ENTRY CurrentAddressEntry;
+    PLIST_ENTRY LinkAddressList;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -1667,12 +1701,13 @@ Return Value:
     *AddressEntry = NULL;
 
     //
-    // Loop over all the addresses owned by this link.
+    // Loop over all the addresses owned by this link for the matching domain.
     //
 
+    LinkAddressList = &(Link->LinkAddressArray[Address->Domain]);
     KeAcquireQueuedLock(Link->QueuedLock);
-    CurrentAddressEntry = Link->LinkAddressList.Next;
-    while (CurrentAddressEntry != &(Link->LinkAddressList)) {
+    CurrentAddressEntry = LinkAddressList->Next;
+    while (CurrentAddressEntry != LinkAddressList) {
         CurrentAddress = LIST_VALUE(CurrentAddressEntry,
                                     NET_LINK_ADDRESS_ENTRY,
                                     ListEntry);
@@ -2944,9 +2979,9 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
     ULONG DnsServerIndex;
     NET_DOMAIN_TYPE Domain;
+    PLIST_ENTRY LinkAddressList;
     BOOL OriginalConfiguredState;
     BOOL SameAddress;
     BOOL StaticAddress;
@@ -2977,23 +3012,19 @@ Return Value:
     //
 
     } else {
-        CurrentEntry = Link->LinkAddressList.Next;
-        while (CurrentEntry != &(Link->LinkAddressList)) {
-            LinkAddressEntry = LIST_VALUE(CurrentEntry,
-                                          NET_LINK_ADDRESS_ENTRY,
-                                          ListEntry);
-
-            if (LinkAddressEntry->Address.Domain == Information->Domain) {
-                break;
-            }
-
-            CurrentEntry = CurrentEntry->Next;
-        }
-
-        if (CurrentEntry == &(Link->LinkAddressList)) {
+        LinkAddressList = &(Link->LinkAddressArray[Information->Domain]);
+        if (LIST_EMPTY(LinkAddressList) != FALSE) {
             Status = STATUS_INVALID_CONFIGURATION;
             goto GetSetNetworkDeviceInformationEnd;
         }
+
+        //
+        // TODO: Allow the caller to pick an alternate link address entry.
+        //
+
+        LinkAddressEntry = LIST_VALUE(LinkAddressList->Next,
+                                      NET_LINK_ADDRESS_ENTRY,
+                                      ListEntry);
     }
 
     if (Set != FALSE) {
@@ -3674,23 +3705,26 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PNET_NETWORK_ENTRY CurrentNetwork;
+    ULONG Index;
     PNET_LINK_ADDRESS_ENTRY LinkAddressEntry;
 
     ASSERT(Link->ReferenceCount == 0);
     ASSERT(Link->ListEntry.Next == NULL);
 
     //
-    // Destroy all the link address entries. Don't bother to lock the list as
+    // Destroy all the link address entries. Don't bother to lock the lists as
     // all the references are gone.
     //
 
-    while (LIST_EMPTY(&(Link->LinkAddressList)) == FALSE) {
-        LinkAddressEntry = LIST_VALUE(Link->LinkAddressList.Next,
-                                      NET_LINK_ADDRESS_ENTRY,
-                                      ListEntry);
+    for (Index = 0; Index < NetDomainSocketNetworkCount; Index += 1) {
+        while (LIST_EMPTY(&(Link->LinkAddressArray[Index])) == FALSE) {
+            LinkAddressEntry = LIST_VALUE(Link->LinkAddressArray[Index].Next,
+                                          NET_LINK_ADDRESS_ENTRY,
+                                          ListEntry);
 
-        LIST_REMOVE(&(LinkAddressEntry->ListEntry));
-        MmFreePagedPool(LinkAddressEntry);
+            LIST_REMOVE(&(LinkAddressEntry->ListEntry));
+            MmFreePagedPool(LinkAddressEntry);
+        }
     }
 
     KeDestroyEvent(Link->AddressTranslationEvent);

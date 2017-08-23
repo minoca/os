@@ -293,6 +293,7 @@ typedef enum _NET_DOMAIN_TYPE {
     NetDomainIp4,
     NetDomainIp6,
     NetDomainNetlink,
+    NetDomainSocketNetworkCount,
     NetDomainArp = NET_DOMAIN_LOW_LEVEL_NETWORK_BASE,
     NetDomainEapol,
     NetDomainEthernet = NET_DOMAIN_PHYSICAL_BASE,

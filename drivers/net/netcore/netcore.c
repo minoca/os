@@ -31,7 +31,6 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include "netcore.h"
-#include "ethernet.h"
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -1023,7 +1023,7 @@ Return Value:
 
     //
     // If the network device is present in the query, then consider it "up". It
-    // is only "running" if it fully configured and ready to receive traffic.
+    // is only "running" if it's fully configured and ready to receive traffic.
     //
 
     NewLinkInterface->ifa_flags = IFF_UP;

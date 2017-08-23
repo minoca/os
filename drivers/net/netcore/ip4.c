@@ -2376,6 +2376,7 @@ Return Value:
 {
 
     PIP4_ADDRESS Ip4Address;
+    PLIST_ENTRY LinkAddressList;
     PIP4_ADDRESS LocalAddress;
     volatile ULONG LocalIpAddress;
     PIP4_ADDRESS SubnetAddress;
@@ -2401,21 +2402,19 @@ Return Value:
 
     //
     // Check to see if this is the local IP address. This requires getting the
-    // link address entry for the current domain (if not supplied). Normally
-    // this requires acquiring a lock and searching over the link's list of
-    // network address entries. That is costly on every DGRAM packet receive.
-    // The network address entry list needs to be reconsidered anyway, so just
-    // grab the first one off the list (as only IPv4 is present anyway).
-    //
-    // TODO: Replace link address list with an array for constant lookup.
+    // link address entry for the current domain (if not supplied). Under most
+    // normal circumstances, a link has exactly one IPv4 address, grab it with
+    // a constant time lookup.
     //
 
     if (LinkAddressEntry == NULL) {
-        LinkAddressEntry = LIST_VALUE(Link->LinkAddressList.Next,
+        LinkAddressList = &(Link->LinkAddressArray[NetDomainIp4]);
+
+        ASSERT(LIST_EMPTY(LinkAddressList) == FALSE);
+
+        LinkAddressEntry = LIST_VALUE(LinkAddressList->Next,
                                       NET_LINK_ADDRESS_ENTRY,
                                       ListEntry);
-
-        ASSERT(LinkAddressEntry->Address.Domain == NetDomainIp4);
     }
 
     LocalAddress = (PIP4_ADDRESS)&(LinkAddressEntry->Address);
