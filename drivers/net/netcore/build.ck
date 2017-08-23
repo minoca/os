@@ -43,6 +43,7 @@ function build() {
         "ethernet.c",
         "igmp.c",
         "ip4.c",
+        "ip6.c",
         "netcore.c",
         "netlink/netlink.c",
         "netlink/genctrl.c",

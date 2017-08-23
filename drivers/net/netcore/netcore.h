@@ -406,6 +406,27 @@ Return Value:
 --*/
 
 VOID
+NetpIp6Initialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for IPv6 packets.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
 NetpArpInitialize (
     VOID
     );
