@@ -42,6 +42,7 @@ Environment:
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip4.h>
 #include <minoca/net/igmp.h>
+#include "dhcp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -340,6 +341,13 @@ NetpIp4ChecksumPseudoHeader (
     );
 
 KSTATUS
+NetpIp4ConfigureLinkAddress (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    BOOL Configure
+    );
+
+KSTATUS
 NetpIp4TranslateNetworkAddress (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS NetworkAddress,
@@ -445,7 +453,8 @@ NET_NETWORK_ENTRY NetIp4Network = {
         NetpIp4CopyInformation,
         NetpIp4GetAddressType,
         NULL,
-        NetpIp4ChecksumPseudoHeader
+        NetpIp4ChecksumPseudoHeader,
+        NetpIp4ConfigureLinkAddress
     }
 };
 
@@ -809,8 +818,7 @@ Return Value:
     if (Link != NULL) {
         Port = Address->Port;
         Address->Port = 0;
-        Status = NetFindLinkForLocalAddress(Socket->Network,
-                                            Address,
+        Status = NetFindLinkForLocalAddress(Address,
                                             Link,
                                             &LocalInformation);
 
@@ -838,8 +846,7 @@ Return Value:
 
             Port = Address->Port;
             Address->Port = 0;
-            Status = NetFindLinkForLocalAddress(Socket->Network,
-                                                Address,
+            Status = NetFindLinkForLocalAddress(Address,
                                                 NULL,
                                                 &LocalInformation);
 
@@ -2501,6 +2508,49 @@ Return Value:
     return Checksum;
 }
 
+KSTATUS
+NetpIp4ConfigureLinkAddress (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    BOOL Configure
+    )
+
+/*++
+
+Routine Description:
+
+    This routine configures or dismantles the given link address for use over
+    the network on the given link.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to which the address entry belongs.
+
+    LinkAddress - Supplies a pointer to the link address entry to configure.
+
+    Configure - Supplies a boolean indicating whether or not the link address
+        should be configured for use (TRUE) or taken out of service (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    if (Configure != FALSE) {
+        Status = NetpDhcpBeginAssignment(Link, LinkAddress);
+
+    } else {
+        Status = NetpDhcpCancelLease(Link, LinkAddress);
+    }
+
+    return Status;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -3824,8 +3874,7 @@ Return Value:
     RtlZeroMemory(&LocalAddress, sizeof(IP4_ADDRESS));
     LocalAddress.Domain = NetDomainIp4;
     LocalAddress.Address = Request->Interface;
-    Status = NetFindLinkForLocalAddress(Network,
-                                        (PNETWORK_ADDRESS)&LocalAddress,
+    Status = NetFindLinkForLocalAddress((PNETWORK_ADDRESS)&LocalAddress,
                                         NULL,
                                         LinkResult);
 

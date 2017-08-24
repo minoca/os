@@ -389,7 +389,6 @@ Return Value:
         }
 
         Status = NetFindEntryForAddress(Link,
-                                        NULL,
                                         &TargetNetworkAddress,
                                         &LinkAddressEntry);
 

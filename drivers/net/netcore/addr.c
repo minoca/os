@@ -32,7 +32,6 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include "netcore.h"
-#include "dhcp.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -581,8 +580,8 @@ Return Value:
     NET_DOMAIN_TYPE Domain;
     ULONG Index;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    PNET_NETWORK_ENTRY Network;
     BOOL OriginalLinkUp;
-    KSTATUS Status;
     PADDRESS_TRANSLATION_ENTRY Translation;
     PRED_BLACK_TREE Tree;
     PRED_BLACK_TREE_NODE TreeNode;
@@ -618,8 +617,8 @@ Return Value:
     }
 
     //
-    // If the link is now up, then use DHCP to get an address. It is assumed
-    // that the link will not go down before handing off to DHCP.
+    // If the link is now up, then invoke the network layer to get an address
+    // asynchronously.
     //
 
     if (LinkUp != FALSE) {
@@ -637,6 +636,7 @@ Return Value:
         // Request an address for each link address entry.
         //
 
+        KeAcquireQueuedLock(Link->QueuedLock);
         for (Index = 0; Index < NetDomainSocketNetworkCount; Index += 1) {
             CurrentEntry = Link->LinkAddressArray[Index].Next;
             while (CurrentEntry != &(Link->LinkAddressArray[Index])) {
@@ -645,18 +645,14 @@ Return Value:
                                          ListEntry);
 
                 CurrentEntry = CurrentEntry->Next;
-                Status = NetpDhcpBeginAssignment(Link, LinkAddress);
-                if (!KSUCCESS(Status)) {
-
-                    //
-                    // TODO: Handle failed DHCP.
-                    //
-
-                    ASSERT(FALSE);
-
-                }
+                Network = LinkAddress->Network;
+                Network->Interface.ConfigureLinkAddress(Link,
+                                                        LinkAddress,
+                                                        TRUE);
             }
         }
+
+        KeReleaseQueuedLock(Link->QueuedLock);
 
     //
     // The link has gone down. Sockets can no longer take references on the
@@ -745,11 +741,14 @@ Return Value:
                     LinkAddress->Address.Domain = Domain;
 
                     //
-                    // Notify DHCP that the link and link address combination
-                    // is now invalid. It may have saved state.
+                    // Notify the network layer that the link and link address
+                    // combination is now invalid. It may have saved state.
                     //
 
-                    NetpDhcpCancelLease(Link, LinkAddress);
+                    Network = LinkAddress->Network;
+                    Network->Interface.ConfigureLinkAddress(Link,
+                                                            LinkAddress,
+                                                            FALSE);
                 }
 
                 LinkAddress->Configured = FALSE;
@@ -942,7 +941,6 @@ Return Value:
 NET_API
 KSTATUS
 NetFindLinkForLocalAddress (
-    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS LocalAddress,
     PNET_LINK Link,
     PNET_LINK_LOCAL_ADDRESS LinkResult
@@ -958,9 +956,6 @@ Routine Description:
     succeed.
 
 Arguments:
-
-    Network - Supplies a pointer to the network entry to which the address
-        belongs.
 
     LocalAddress - Supplies a pointer to the local address to test against.
 
@@ -1007,10 +1002,7 @@ Return Value:
             goto FindLinkForLocalAddress;
         }
 
-        Status = NetFindEntryForAddress(Link,
-                                        Network,
-                                        LocalAddress,
-                                        &LinkAddress);
+        Status = NetFindEntryForAddress(Link, LocalAddress, &LinkAddress);
 
     //
     // There is no specific link, so scan through them all.
@@ -1031,7 +1023,6 @@ Return Value:
             }
 
             Status = NetFindEntryForAddress(CurrentLink,
-                                            Network,
                                             LocalAddress,
                                             &LinkAddress);
 
@@ -1305,7 +1296,10 @@ Return Value:
 
 {
 
+    PLIST_ENTRY CurrentEntry;
+    PNET_NETWORK_ENTRY CurrentNetwork;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    PNET_NETWORK_ENTRY Network;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -1321,10 +1315,34 @@ Return Value:
     }
 
     //
+    // Get the network entry to use for the given address.
+    //
+
+    Network = NULL;
+    KeAcquireSharedExclusiveLockShared(NetPluginListLock);
+    CurrentEntry = NetNetworkList.Next;
+    while (CurrentEntry != &NetNetworkList) {
+        CurrentNetwork = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
+        if (CurrentNetwork->Domain == Address->Domain) {
+            Network = CurrentNetwork;
+            break;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    KeReleaseSharedExclusiveLockShared(NetPluginListLock);
+    if (Network == NULL) {
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
+        goto CreateLinkAddressEnd;
+    }
+
+    //
     // Copy in the initial addressing parameters if supplied.
     //
 
     RtlZeroMemory(LinkAddress, sizeof(NET_LINK_ADDRESS_ENTRY));
+    LinkAddress->Network = Network;
     RtlCopyMemory(&(LinkAddress->Address), Address, sizeof(NETWORK_ADDRESS));
     if (Subnet != NULL) {
         RtlCopyMemory(&(LinkAddress->Subnet), Subnet, sizeof(NETWORK_ADDRESS));
@@ -1654,7 +1672,6 @@ NET_API
 KSTATUS
 NetFindEntryForAddress (
     PNET_LINK Link,
-    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS Address,
     PNET_LINK_ADDRESS_ENTRY *AddressEntry
     )
@@ -1669,9 +1686,6 @@ Routine Description:
 Arguments:
 
     Link - Supplies the link whose address entries should be searched.
-
-    Network - Supplies an optional pointer to the network entry to which the
-        address belongs.
 
     Address - Supplies the address to search for.
 
@@ -1693,6 +1707,7 @@ Return Value:
     PNET_LINK_ADDRESS_ENTRY CurrentAddress;
     PLIST_ENTRY CurrentAddressEntry;
     PLIST_ENTRY LinkAddressList;
+    PNET_NETWORK_ENTRY Network;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -1715,14 +1730,13 @@ Return Value:
         CurrentAddressEntry = CurrentAddressEntry->Next;
 
         //
-        // If the network is known, classify the address type using this link
-        // address entry. It is necessary to classify the address for each link
-        // address entry in case it is the subnet broadcast address.
+        // If the network supports it, classify the address type using this
+        // link address entry. It is necessary to classify the address for each
+        // link address entry in case it is the subnet broadcast address.
         //
 
-        if ((Network != NULL) &&
-            (Network->Interface.GetAddressType != NULL)) {
-
+        Network = CurrentAddress->Network;
+        if (Network->Interface.GetAddressType != NULL) {
             AddressType = Network->Interface.GetAddressType(Link,
                                                             CurrentAddress,
                                                             Address);
@@ -2982,6 +2996,7 @@ Return Value:
     ULONG DnsServerIndex;
     NET_DOMAIN_TYPE Domain;
     PLIST_ENTRY LinkAddressList;
+    PNET_NETWORK_ENTRY Network;
     BOOL OriginalConfiguredState;
     BOOL SameAddress;
     BOOL StaticAddress;
@@ -3157,7 +3172,10 @@ Return Value:
             if (((Information->Flags & NETWORK_DEVICE_FLAG_CONFIGURED) == 0) &&
                 (StaticAddress == FALSE)) {
 
-                NetpDhcpCancelLease(Link, LinkAddressEntry);
+                Network = LinkAddressEntry->Network;
+                Network->Interface.ConfigureLinkAddress(Link,
+                                                        LinkAddressEntry,
+                                                        FALSE);
             }
 
             //

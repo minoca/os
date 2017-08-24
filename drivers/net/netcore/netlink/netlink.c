@@ -208,6 +208,7 @@ NET_NETWORK_ENTRY NetNetlinkNetwork = {
         NULL,
         NULL,
         NULL,
+        NULL,
         NULL
     }
 };

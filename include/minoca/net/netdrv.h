@@ -309,6 +309,10 @@ typedef enum _NET_ADDRESS_TYPE {
     NetAddressMulticast
 } NET_ADDRESS_TYPE, *PNET_ADDRESS_TYPE;
 
+typedef struct _NET_PROTOCOL_ENTRY NET_PROTOCOL_ENTRY, *PNET_PROTOCOL_ENTRY;
+typedef struct _NET_NETWORK_ENTRY NET_NETWORK_ENTRY, *PNET_NETWORK_ENTRY;
+typedef struct _NET_RECEIVE_CONTEXT NET_RECEIVE_CONTEXT, *PNET_RECEIVE_CONTEXT;
+
 /*++
 
 Structure Description:
@@ -351,6 +355,10 @@ Members:
     ListEntry - Stores pointers to the next and previous addresses owned by the
         link.
 
+    Network - Stores a pointer to the network associated with the link address
+        entry. This contains an interface that can be used to drive network
+        specific link address configuration (e.g. DHCP, NDP, DHCPv6).
+
     Configured - Stores a boolean indicating whether or not the network link
         address is configured.
 
@@ -381,6 +389,7 @@ Members:
 
 typedef struct _NET_LINK_ADDRESS_ENTRY {
     LIST_ENTRY ListEntry;
+    PNET_NETWORK_ENTRY Network;
     BOOL Configured;
     BOOL StaticAddress;
     NETWORK_ADDRESS Address;
@@ -1003,10 +1012,6 @@ typedef struct _NET_LINK_LOCAL_ADDRESS {
     NETWORK_ADDRESS ReceiveAddress;
     NETWORK_ADDRESS SendAddress;
 } NET_LINK_LOCAL_ADDRESS, *PNET_LINK_LOCAL_ADDRESS;
-
-typedef struct _NET_PROTOCOL_ENTRY NET_PROTOCOL_ENTRY, *PNET_PROTOCOL_ENTRY;
-typedef struct _NET_NETWORK_ENTRY NET_NETWORK_ENTRY, *PNET_NETWORK_ENTRY;
-typedef struct _NET_RECEIVE_CONTEXT NET_RECEIVE_CONTEXT, *PNET_RECEIVE_CONTEXT;
 
 /*++
 
@@ -2186,6 +2191,36 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PNET_NETWORK_CONFIGURE_LINK_ADDRESS) (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    BOOL Configure
+    );
+
+/*++
+
+Routine Description:
+
+    This routine configures or dismantles the given link address for use over
+    the network on the given link.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to which the address entry belongs.
+
+    LinkAddress - Supplies a pointer to the link address entry to configure.
+
+    Configure - Supplies a boolean indicating whether or not the link address
+        should be configured for use (TRUE) or taken out of service (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -2248,6 +2283,11 @@ Members:
         one's complement sum of all 32-bit values in the network's
         pseudo-header that is prepended to protocol checksums (e.g. TCP, UDP).
 
+    ConfigureLinkAddress - Stores a pointer to a function used to configure a
+        link address entry for use on this network. This involves invoking a
+        network-specific protocol to validate or assign an address for the link
+        address entry (e.g. DHCP, NDP, DHCPv6).
+
 --*/
 
 typedef struct _NET_NETWORK_INTERFACE {
@@ -2268,6 +2308,7 @@ typedef struct _NET_NETWORK_INTERFACE {
     PNET_NETWORK_GET_ADDRESS_TYPE GetAddressType;
     PNET_NETWORK_SEND_TRANSLATION_REQUEST SendTranslationRequest;
     PNET_NETWORK_CHECKSUM_PSEUDO_HEADER ChecksumPseudoHeader;
+    PNET_NETWORK_CONFIGURE_LINK_ADDRESS ConfigureLinkAddress;
 } NET_NETWORK_INTERFACE, *PNET_NETWORK_INTERFACE;
 
 /*++
@@ -2861,7 +2902,6 @@ Return Value:
 NET_API
 KSTATUS
 NetFindLinkForLocalAddress (
-    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS LocalAddress,
     PNET_LINK Link,
     PNET_LINK_LOCAL_ADDRESS LinkResult
@@ -2877,9 +2917,6 @@ Routine Description:
     succeed.
 
 Arguments:
-
-    Network - Supplies a pointer to the network entry to which the address
-        belongs.
 
     LocalAddress - Supplies a pointer to the local address to test against.
 
@@ -3098,7 +3135,6 @@ NET_API
 KSTATUS
 NetFindEntryForAddress (
     PNET_LINK Link,
-    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS Address,
     PNET_LINK_ADDRESS_ENTRY *AddressEntry
     );
@@ -3113,9 +3149,6 @@ Routine Description:
 Arguments:
 
     Link - Supplies the link whose address entries should be searched.
-
-    Network - Supplies an optional pointer to the network entry to which the
-        address belongs.
 
     Address - Supplies the address to search for.
 

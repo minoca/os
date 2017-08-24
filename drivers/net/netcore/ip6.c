@@ -165,6 +165,13 @@ NetpIp6ChecksumPseudoHeader (
     UCHAR Protocol
     );
 
+KSTATUS
+NetpIp6ConfigureLinkAddress (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    BOOL Configure
+    );
+
 USHORT
 NetpIp6ChecksumData (
     PSHORT Data,
@@ -207,7 +214,8 @@ NET_NETWORK_ENTRY NetIp6Network = {
         NULL,
         NetpIp6GetAddressType,
         NetpIp6SendTranslationRequest,
-        NetpIp6ChecksumPseudoHeader
+        NetpIp6ChecksumPseudoHeader,
+        NetpIp6ConfigureLinkAddress
     }
 };
 
@@ -531,8 +539,7 @@ Return Value:
     if (Link != NULL) {
         Port = Address->Port;
         Address->Port = 0;
-        Status = NetFindLinkForLocalAddress(Socket->Network,
-                                            Address,
+        Status = NetFindLinkForLocalAddress(Address,
                                             Link,
                                             &LocalInformation);
 
@@ -558,8 +565,7 @@ Return Value:
         if (IP6_IS_ANY_ADDRESS(Ip6Address) == FALSE) {
             Port = Address->Port;
             Address->Port = 0;
-            Status = NetFindLinkForLocalAddress(Socket->Network,
-                                                Address,
+            Status = NetFindLinkForLocalAddress(Address,
                                                 NULL,
                                                 &LocalInformation);
 
@@ -1646,6 +1652,46 @@ Return Value:
     }
 
     return Checksum;
+}
+
+KSTATUS
+NetpIp6ConfigureLinkAddress (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    BOOL Configure
+    )
+
+/*++
+
+Routine Description:
+
+    This routine configures or dismantles the given link address for use over
+    the network on the given link.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to which the address entry belongs.
+
+    LinkAddress - Supplies a pointer to the link address entry to configure.
+
+    Configure - Supplies a boolean indicating whether or not the link address
+        should be configured for use (TRUE) or taken out of service (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    //
+    // TODO: Implement NDP and DHCPv6.
+    //
+
+    ASSERT(FALSE);
+
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 //
