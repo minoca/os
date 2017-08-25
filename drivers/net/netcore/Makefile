@@ -34,23 +34,25 @@ BINARYTYPE = driver
 BINPLACE = bin
 
 OBJS = addr.o            \
-       arp.o             \
        buf.o             \
-       dhcp.o            \
        ethernet.o        \
-       igmp.o            \
-       ip4.o             \
-       ip6.o             \
        netcore.o         \
        raw.o             \
        tcp.o             \
        tcpcong.o         \
        udp.o             \
+       ipv4/arp.o        \
+       ipv4/dhcp.o       \
+       ipv4/igmp.o       \
+       ipv4/ip4.o        \
+       ipv6/ip6.o        \
        netlink/netlink.o \
        netlink/genctrl.o \
        netlink/generic.o \
 
-EXTRA_SRC_DIRS = netlink
+EXTRA_SRC_DIRS = ipv4    \
+                 ipv6    \
+                 netlink
 
 DYNLIBS = $(BINROOT)/kernel             \
 

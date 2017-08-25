@@ -37,13 +37,13 @@ function build() {
 
     sources = [
         "addr.c",
-        "arp.c",
         "buf.c",
-        "dhcp.c",
         "ethernet.c",
-        "igmp.c",
-        "ip4.c",
-        "ip6.c",
+        "ipv4/arp.c",
+        "ipv4/dhcp.c",
+        "ipv4/igmp.c",
+        "ipv4/ip4.c",
+        "ipv6/ip6.c",
         "netcore.c",
         "netlink/netlink.c",
         "netlink/genctrl.c",
