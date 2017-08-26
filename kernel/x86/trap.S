@@ -723,7 +723,7 @@ FUNCTION(ArSysenterHandlerAsm)
     movl    %edi, TRAP_EDI(%ebx) # Save EDI. It is non-volatile.
     movl    %ebp, TRAP_EBP(%ebx) # Save EBP. It is non-volatile.
     movl    $0x0, TRAP_ERRORCODE(%ebx) # Scrub the error code.
-    movl    $0x0, TRAP_EFLAGS(%ebx) # Scrub the EFLAGS.
+    movl    $(IA32_EFLAG_ALWAYS_1 | IA32_EFLAG_IF), TRAP_EFLAGS(%ebx)
 
 ArSysenterSignalDispatch:
 
