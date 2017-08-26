@@ -242,10 +242,9 @@ FUNCTION ArpSoftwareInterruptEntry
     str     %r3, [%r2, #TRAP_EXCEPTION_CPSR]    @ Save into exception CPSR.
 
     //
-    // The system call routine takes three parameters: the system call number,
-    // system call parameter, and a pointer to the trap frame. The number was
-    // moved from R2 into R0 early in the function, the parameter is in R1 from
-    // user mode, and R2 == SP == trap frame.
+    // The system call routine takes four parameters: the system call number,
+    // system call parameter, a pointer to the trap frame, and a pointer to an
+    // outgoing boolean.
     //
 
     mov     %r3, %sp                            @ Set boolean pointer parameter.
@@ -304,7 +303,7 @@ ArpSoftwareInterruptRestore:
     CFI_UNDEFINED(pc)
 
     //
-    // Clear the remainig volatile register to avoid leaking kernel state.
+    // Clear the remaining volatile register to avoid leaking kernel state.
     //
 
     eor     %r1, %r1

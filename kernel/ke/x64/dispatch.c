@@ -93,21 +93,18 @@ Return Value:
         ArDisableInterrupts();
 
         //
-        // If there is no handler yet, go into the kernel debugger.
+        // If there is no handler or debugger yet, go into the kernel debugger.
         //
 
-        if (Thread->OwningProcess->SignalHandlerRoutine == NULL) {
+        if ((Thread->OwningProcess->SignalHandlerRoutine == NULL) &&
+            (Thread->OwningProcess->DebugData == NULL)) {
+
             KdDebugExceptionHandler(EXCEPTION_SINGLE_STEP, NULL, TrapFrame);
         }
 
         KeBeginCycleAccounting(PreviousPeriod);
 
     } else {
-
-        //
-        // TODO: On x64, does syscall clear the TF flag?
-        //
-
         KdDebugExceptionHandler(EXCEPTION_SINGLE_STEP, NULL, TrapFrame);
     }
 

@@ -306,7 +306,6 @@ Return Value:
 --*/
 
 FUNCTION(ArDoubleFaultHandlerAsm)
-    pushq   $0                      # Push a dummy error code.
     call    ArGenerateTrapFrame     # Create a local trap frame.
     CFI_TRAP_FRAME_PUSHED           # Set unwind info for the debugger.
     movq    %rsp, %rdi              # 1st parameter is trap frame pointer.
