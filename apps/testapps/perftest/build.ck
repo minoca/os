@@ -29,7 +29,6 @@ from menv import application, sharedLibrary;
 
 function build() {
     var app;
-    var dynlibs;
     var entries;
     var includes;
     var libSources;
@@ -63,17 +62,13 @@ function build() {
         "perflib/perflib.c"
     ];
 
-    dynlibs = [
-        "apps/osbase:libminocaos"
-    ];
-
     includes = [
         "$S/apps/libc/include"
     ];
 
     app = {
         "label": "perftest",
-        "inputs": sources + dynlibs,
+        "inputs": sources,
         "orderonly": [":perflib"],
         "includes": includes
     };

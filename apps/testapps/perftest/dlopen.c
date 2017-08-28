@@ -193,8 +193,13 @@ Return Value:
     //
 
     while (PtIsTimedTestRunning() != 0) {
-        Handle = dlopen(LibraryName, 0);
+        Handle = dlopen(LibraryName, RTLD_NOW | RTLD_GLOBAL);
         if (Handle == NULL) {
+            fprintf(stderr,
+                    "Failed to open %s: %s\n",
+                    LibraryName,
+                    dlerror());
+
             Result->Status = ENOENT;
             break;
         }

@@ -54,8 +54,6 @@ OBJS = copy.o     \
        stat.o     \
        write.o    \
 
-DYNLIBS = -lminocaos
-
 DIRS = perflib
 
 include $(SRCROOT)/os/minoca.mk
