@@ -104,12 +104,6 @@ Environment:
 #define IGMP_MAX_GROUP_RECORD_COUNT MAX_USHORT
 
 //
-// Define the IPv4 address to which all IGMP general query messages are sent.
-//
-
-#define IGMP_ALL_SYSTEMS_ADDRESS CPU_TO_NETWORK32(0xE0000001)
-
-//
 // Define the IPv4 address to which all IGMPv2 leave messages are sent.
 //
 
@@ -3238,14 +3232,12 @@ Return Value:
     ULONG Index;
     PNET_PACKET_SIZE_INFORMATION LinkSizeInformation;
     ULONG MaxPacketSize;
-    PIGMP_MULTICAST_GROUP NewGroup;
     PIGMP_LINK NewIgmpLink;
     IGMP_LINK SearchLink;
     KSTATUS Status;
     BOOL TreeLockHeld;
 
     IgmpLink = NULL;
-    NewGroup = NULL;
     NewIgmpLink = NULL;
     TreeLockHeld = FALSE;
 
@@ -3331,46 +3323,6 @@ Return Value:
     }
 
     //
-    // All multicast hosts are supposed to join the all systems group (but
-    // never report the membership). This is supposed to be done on
-    // initialization, but opt to do it the first indication that multicast
-    // is being used. This saves the system from processing multicast queries
-    // where there is nothing to report.
-    //
-
-    NewGroup = NetpIgmpCreateGroup(NewIgmpLink, IGMP_ALL_SYSTEMS_ADDRESS);
-    if (NewGroup == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateOrLookupLinkEnd;
-    }
-
-    //
-    // The group now has a reference on the IGMP link. Destroying the group
-    // will destroy the link. Prevent cleanup from releasing a link reference.
-    //
-
-    IgmpLink = NewIgmpLink;
-    NewIgmpLink = NULL;
-
-    //
-    // The group must be inserted directly, before the link is added to the
-    // tree. It cannot go through the normal join path for two reasons. 1) The
-    // normal join path updates the link's address filters. At this point, two
-    // threads may be racing to create the IGMP link; the address filters
-    // should not be updated until one is a clear winner. 2) If the all systems
-    // group creation/join were to happen after the new link wins the insert
-    // race, it may still fail, which would break IGMP link dereference. The
-    // dereference path is carefully implemented to synchronously remove the
-    // all systems group and assumes that the last group to remain is the all
-    // systems group. If the all systems group never got added but another
-    // group did, then asserts would fire.
-    //
-
-    INSERT_BEFORE(&(NewGroup->ListEntry), &(IgmpLink->MulticastGroupList));
-    IgmpLink->MulticastGroupCount = 1;
-    NewGroup->JoinCount = 1;
-
-    //
     // Attempt to insert the new IGMP link into the tree. If an existing link
     // is found, use that one and destroy the new one.
     //
@@ -3380,28 +3332,9 @@ Return Value:
     TreeLockHeld = TRUE;
     FoundNode = RtlRedBlackTreeSearch(&NetIgmpLinkTree, &(SearchLink.Node));
     if (FoundNode == NULL) {
-
-        //
-        // Before this IGMP link hits the tree and another group can take a
-        // reference on it, make sure the all systems group gets set in the
-        // hardware filter. This is necessary in case the first group being
-        // joined is the all systems group. That join request would be the
-        // second request and would not update the filters.
-        //
-
-        KeAcquireQueuedLock(IgmpLink->Lock);
-        Status = NetpIgmpUpdateAddressFilters(IgmpLink);
-        KeReleaseQueuedLock(IgmpLink->Lock);
-        if (!KSUCCESS(Status)) {
-            LIST_REMOVE(&(NewGroup->ListEntry));
-            NewGroup->JoinCount = 0;
-            IgmpLink->MulticastGroupCount = 0;
-            IgmpLink = NULL;
-            goto CreateOrLookupLinkEnd;
-        }
-
-        RtlRedBlackTreeInsert(&NetIgmpLinkTree, &(IgmpLink->Node));
-        NewGroup = NULL;
+        RtlRedBlackTreeInsert(&NetIgmpLinkTree, &(NewIgmpLink->Node));
+        IgmpLink = NewIgmpLink;
+        NewIgmpLink = NULL;
 
     } else {
         IgmpLink = RED_BLACK_TREE_VALUE(FoundNode, IGMP_LINK, Node);
@@ -3410,15 +3343,10 @@ Return Value:
     NetpIgmpLinkAddReference(IgmpLink);
     KeReleaseSharedExclusiveLockExclusive(NetIgmpLinkLock);
     TreeLockHeld = FALSE;
-    Status = STATUS_SUCCESS;
 
 CreateOrLookupLinkEnd:
     if (TreeLockHeld != FALSE) {
         KeReleaseSharedExclusiveLockExclusive(NetIgmpLinkLock);
-    }
-
-    if (NewGroup != NULL) {
-        NetpIgmpGroupReleaseReference(NewGroup);
     }
 
     if (NewIgmpLink != NULL) {
@@ -3570,15 +3498,12 @@ Return Value:
 
 {
 
-    PIGMP_MULTICAST_GROUP Group;
     ULONG OldReferenceCount;
-    KSTATUS Status;
 
     //
     // Acquire the tree lock exclusively before decrementing the reference
     // count. This is necessary to make the decrement and removal from the tree
-    // atomic. The link is removed from the tree when its reference count
-    // reaches 2 and the all systems group has a join count of 1.
+    // atomic.
     //
 
     KeAcquireSharedExclusiveLockExclusive(NetIgmpLinkLock);
@@ -3587,94 +3512,19 @@ Return Value:
     ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x10000000));
 
     //
-    // If the third reference was just released, then the last two references
-    // are from the all systems group and from creation. No other multicast
-    // groups have a reference on the link and as the tree lock is held
-    // exclusively, no other thread has a reference on the link. Therefore, if
-    // the all systems group is only around due to the implicit join, then the
-    // link can be removed from the tree and the all systems group can be
-    // destroyed.
+    // If the second reference was just released, then the last references is
+    // from creation. No multicast groups have a reference on the link and as
+    // the tree lock is held exclusively, no other threads have references on
+    // the link. Therefore, the link can be removed from the tree.
     //
 
-    if (OldReferenceCount == 3) {
-        Group = LIST_VALUE(IgmpLink->MulticastGroupList.Next,
-                           IGMP_MULTICAST_GROUP,
-                           ListEntry);
+    if (OldReferenceCount == 2) {
 
-        //
-        // This better be the only group and be the all systems group. And
-        // since no other thread should have access to the IGMP link, the lock
-        // should not be held - meaning the join count won't be changing.
-        //
-
-        ASSERT(IgmpLink->MulticastGroupCount == 1);
-        ASSERT(Group->Address == IGMP_ALL_SYSTEMS_ADDRESS);
-        ASSERT(KeIsQueuedLockHeld(IgmpLink->Lock) == FALSE);
-
-        //
-        // If only the implicit join is left, remove the group from the link
-        // and update the address filters. On success, the link should have no
-        // more multicast filters set. Remove it from the tree. On failure,
-        // act like nothing happened and leave the group and link alone.
-        //
-
-        if (Group->JoinCount == 1) {
-            KeAcquireQueuedLock(IgmpLink->Lock);
-            LIST_REMOVE(&(Group->ListEntry));
-            IgmpLink->MulticastGroupCount -= 1;
-            Status = NetpIgmpUpdateAddressFilters(IgmpLink);
-            if (!KSUCCESS(Status)) {
-                INSERT_BEFORE(&(Group->ListEntry),
-                              &(IgmpLink->MulticastGroupList));
-
-                IgmpLink->MulticastGroupCount += 1;
-                Group = NULL;
-
-            } else {
-
-                ASSERT(IgmpLink->MulticastGroupCount == 0);
-
-                RtlRedBlackTreeRemove(&NetIgmpLinkTree, &(IgmpLink->Node));
-                IgmpLink->Node.Parent = NULL;
-                Group->JoinCount -= 1;
-            }
-
-            KeReleaseQueuedLock(IgmpLink->Lock);
-
-        //
-        // Otherwise the all systems group is still in use. When the group is
-        // left, the link will be looked up, bumping the reference count to 3.
-        // Then the group will be left and the link will be dereferenced,
-        // invoking this code path again, but with the group's join count at 1.
-        //
-
-        } else {
-            Group = NULL;
-        }
-
-        KeReleaseSharedExclusiveLockExclusive(NetIgmpLinkLock);
-
-        //
-        // If the group and link got removed, destroy the group. This should
-        // release the 2nd to last reference on the link.
-        //
-
-        if (Group != NULL) {
-            NetpIgmpGroupReleaseReference(Group);
-        }
-
-    //
-    // If this is the second to last reference, then the only remaining
-    // reference is the one added by creation. No multicast groups have a
-    // reference on the link and it should have already been removed from the
-    // link tree.
-    //
-
-    } else if (OldReferenceCount == 2) {
-
+        ASSERT(LIST_EMPTY(&(IgmpLink->MulticastGroupList)) != FALSE);
         ASSERT(IgmpLink->MulticastGroupCount == 0);
-        ASSERT(IgmpLink->Node.Parent == NULL);
 
+        RtlRedBlackTreeRemove(&NetIgmpLinkTree, &(IgmpLink->Node));
+        IgmpLink->Node.Parent = NULL;
         KeReleaseSharedExclusiveLockExclusive(NetIgmpLinkLock);
         NetpIgmpLinkReleaseReference(IgmpLink);
 

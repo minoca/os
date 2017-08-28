@@ -34,6 +34,12 @@ Author:
 //
 
 //
+// Define the IPv4 address to which all IGMP general query messages are sent.
+//
+
+#define IGMP_ALL_SYSTEMS_ADDRESS CPU_TO_NETWORK32(0xE0000001)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

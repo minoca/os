@@ -182,9 +182,9 @@ Return Value:
                            ListEntry);
 
         LIST_REMOVE(&(Group->ListEntry));
-        NetpLeaveLinkMulticastGroup(Group->Link,
-                                    Group->LinkAddress,
-                                    &(Group->MulticastAddress));
+        NetLeaveLinkMulticastGroup(Group->Link,
+                                   Group->LinkAddress,
+                                   &(Group->MulticastAddress));
 
         NetpDestroySocketMulticastGroup(Group);
     }
@@ -292,9 +292,9 @@ Return Value:
     // leave requests.
     //
 
-    Status = NetpJoinLinkMulticastGroup(LinkResult.Link,
-                                        LinkResult.LinkAddress,
-                                        &(Request->MulticastAddress));
+    Status = NetJoinLinkMulticastGroup(LinkResult.Link,
+                                       LinkResult.LinkAddress,
+                                       &(Request->MulticastAddress));
 
     if (!KSUCCESS(Status)) {
         goto SocketJoinMulticastGroupEnd;
@@ -351,9 +351,9 @@ Return Value:
 {
 
     PNET_SOCKET_MULTICAST_GROUP Group;
-    PNET_NETWORK_ENTRY Network;
     NET_LINK_LOCAL_ADDRESS LinkResult;
     BOOL LockHeld;
+    PNET_NETWORK_ENTRY Network;
     KSTATUS Status;
 
     Group = NULL;
@@ -411,9 +411,9 @@ Return Value:
     // individual socket's lock.
     //
 
-    Status = NetpLeaveLinkMulticastGroup(Group->Link,
-                                         Group->LinkAddress,
-                                         &(Group->MulticastAddress));
+    Status = NetLeaveLinkMulticastGroup(Group->Link,
+                                        Group->LinkAddress,
+                                        &(Group->MulticastAddress));
 
     if (!KSUCCESS(Status)) {
         goto SocketLeaveMulticastGroupEnd;
@@ -585,8 +585,9 @@ GetSocketMulticastInterface:
     return Status;
 }
 
+NET_API
 KSTATUS
-NetpJoinLinkMulticastGroup (
+NetJoinLinkMulticastGroup (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS MulticastAddress
@@ -718,7 +719,7 @@ Return Value:
     Request.MulticastAddress = MulticastAddress;
     Status = Network->Interface.JoinLeaveMulticastGroup(&Request, TRUE);
     if (!KSUCCESS(Status)) {
-        NetpLeaveLinkMulticastGroup(Link, LinkAddress, MulticastAddress);
+        NetLeaveLinkMulticastGroup(Link, LinkAddress, MulticastAddress);
         goto LinkJoinMulticastGroupEnd;
     }
 
@@ -734,8 +735,9 @@ LinkJoinMulticastGroupEnd:
     return Status;
 }
 
+NET_API
 KSTATUS
-NetpLeaveLinkMulticastGroup (
+NetLeaveLinkMulticastGroup (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS MulticastAddress

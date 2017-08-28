@@ -453,6 +453,7 @@ Return Value:
 
     PNET_LINK_ADDRESS_ENTRY AddressEntry;
     IP4_ADDRESS InitialAddress;
+    IP4_ADDRESS MulticastAddress;
     KSTATUS Status;
 
     //
@@ -470,6 +471,21 @@ Return Value:
                                        NULL,
                                        FALSE,
                                        &AddressEntry);
+
+    if (!KSUCCESS(Status)) {
+        goto Ip4InitializeLinkEnd;
+    }
+
+    //
+    // Every IPv4 node should join the all systems multicast group.
+    //
+
+    RtlZeroMemory(&MulticastAddress, sizeof(IP4_ADDRESS));
+    MulticastAddress.Domain = NetDomainIp4;
+    MulticastAddress.Address = IGMP_ALL_SYSTEMS_ADDRESS;
+    Status = NetJoinLinkMulticastGroup(Link,
+                                       AddressEntry,
+                                       (PNETWORK_ADDRESS)&MulticastAddress);
 
     if (!KSUCCESS(Status)) {
         goto Ip4InitializeLinkEnd;
