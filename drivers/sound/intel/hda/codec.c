@@ -734,6 +734,7 @@ Return Value:
     }
 
     InputRightGainMute = 0;
+    OutputLeftGainMute = 0;
     OutputRightGainMute = 0;
 
     //

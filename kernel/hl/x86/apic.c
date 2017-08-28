@@ -754,8 +754,16 @@ Return Value:
 {
 
     ULONG LogicalDestination;
+    ULONG OriginalVector;
     KSTATUS Status;
 
+    //
+    // Intel says the destination format register must be set before the
+    // APIC is software enabled.
+    //
+
+    OriginalVector = READ_LOCAL_APIC(ApicSpuriousVector);
+    WRITE_LOCAL_APIC(ApicSpuriousVector, VECTOR_SPURIOUS_INTERRUPT);
     switch (Target->Addressing) {
 
     //
@@ -783,6 +791,7 @@ Return Value:
         WRITE_LOCAL_APIC(ApicDestinationFormat, APIC_LOGICAL_CLUSTERED);
         LogicalDestination = Target->U.Cluster.Id << APIC_MAX_CLUSTER_SIZE;
         LogicalDestination |= Target->U.Cluster.Mask;
+        LogicalDestination <<= APIC_DESTINATION_SHIFT;
         WRITE_LOCAL_APIC(ApicLogicalDestination, LogicalDestination);
         if (READ_LOCAL_APIC(ApicLogicalDestination) != LogicalDestination) {
             Status = STATUS_NOT_SUPPORTED;
@@ -799,6 +808,7 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 SetProcessorTargetingEnd:
+    WRITE_LOCAL_APIC(ApicSpuriousVector, OriginalVector);
     return Status;
 }
 

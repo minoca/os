@@ -224,6 +224,7 @@ Return Value:
     ULONG Processor;
     KSTATUS Status;
     INTERRUPT_HARDWARE_TARGET Target;
+    PINTERRUPT_HARDWARE_TARGET TargetPointer;
     ULONG Vector;
 
     ASSERT((KeGetRunLevel() >= RunLevelDispatch) ||
@@ -231,6 +232,7 @@ Return Value:
 
     Processor = KeGetCurrentProcessorNumber();
     Controller = HlProcessorTargets[Processor].Controller;
+    TargetPointer = &Target;
 
     //
     // Compute the interrupt target in terms the hardware can understand.
@@ -254,7 +256,7 @@ Return Value:
         break;
 
     case ProcessorTargetSingleProcessor:
-        Target = HlProcessorTargets[Processors->U.Number].Target;
+        TargetPointer = &(HlProcessorTargets[Processors->U.Number].Target);
         break;
 
     case ProcessorTargetAny:
@@ -274,7 +276,7 @@ Return Value:
                                                     Controller->PrivateContext,
                                                     IpiLine,
                                                     Vector,
-                                                    &Target);
+                                                    TargetPointer);
 
     if (Enabled != FALSE) {
         ArEnableInterrupts();
@@ -785,6 +787,7 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
+    ULONG PhysicalId;
     PVOID PrivateContext;
     ULONG ProcessorIndex;
     ULONG SearchIndex;
@@ -869,6 +872,7 @@ Return Value:
 
     Controller = HlProcessorTargets[ProcessorIndex].Controller;
     SetAddressing = Controller->FunctionTable.SetLocalUnitAddressing;
+    PhysicalId = HlProcessorTargets[ProcessorIndex].PhysicalId;
     PrivateContext = Controller->PrivateContext;
     Targeting = &(HlProcessorTargets[ProcessorIndex].Target);
 
@@ -890,7 +894,8 @@ Return Value:
     //
 
     Status = STATUS_NOT_SUPPORTED;
-    if ((HlMaxProcessors < HlLogicalFlatLimit) &&
+    if ((HlLogicalFlatLimit != 0) &&
+        (HlMaxProcessors <= HlLogicalFlatLimit) &&
         (HlLogicalClusteredMode == FALSE)) {
 
         ASSERT(HlLogicalFlatLimit <= 32);
@@ -910,10 +915,8 @@ Return Value:
         (ProcessorIndex < HlMaxClusters * HlMaxClusterSize)) {
 
         Targeting->Addressing = InterruptAddressingLogicalClustered;
-        Targeting->U.Cluster.Id = Targeting->U.PhysicalId / HlMaxClusterSize;
-        Targeting->U.Cluster.Mask =
-                             1 << (Targeting->U.PhysicalId % HlMaxClusterSize);
-
+        Targeting->U.Cluster.Id = PhysicalId / HlMaxClusterSize;
+        Targeting->U.Cluster.Mask = 1 << (PhysicalId % HlMaxClusterSize);
         Status = SetAddressing(PrivateContext, Targeting);
 
         //
@@ -934,7 +937,7 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         Targeting->Addressing = InterruptAddressingPhysical;
-        Targeting->U.PhysicalId = HlProcessorTargets[ProcessorIndex].PhysicalId;
+        Targeting->U.PhysicalId = PhysicalId;
         Status = SetAddressing(PrivateContext, Targeting);
         if (!KSUCCESS(Status)) {
             KeCrashSystem(CRASH_HARDWARE_LAYER_FAILURE,
