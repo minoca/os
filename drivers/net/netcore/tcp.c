@@ -7735,20 +7735,9 @@ Return Value:
     }
 
     NewTcpSocket->LingerTimeout = ListeningSocket->LingerTimeout;
-
-    //
-    // Copy any network specific socket options.
-    //
-
-    if (NewTcpSocket->NetSocket.Network->Interface.CopyInformation != NULL) {
-        Status = NewTcpSocket->NetSocket.Network->Interface.CopyInformation(
-                                                &(NewTcpSocket->NetSocket),
-                                                &(ListeningSocket->NetSocket));
-
-        if (!KSUCCESS(Status)) {
-            goto TcpHandleIncomingConnectionEnd;
-        }
-    }
+    NewTcpSocket->NetSocket.HopLimit = ListeningSocket->NetSocket.HopLimit;
+    NewTcpSocket->NetSocket.DifferentiatedServicesCodePoint =
+                    ListeningSocket->NetSocket.DifferentiatedServicesCodePoint;
 
     //
     // Re-parse any options coming from the SYN packet and set up the sequence

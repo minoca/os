@@ -172,10 +172,10 @@ NetpIp6ConfigureLinkAddress (
     BOOL Configure
     );
 
-USHORT
-NetpIp6ChecksumData (
-    PSHORT Data,
-    ULONG Length
+KSTATUS
+NetpIp6JoinLeaveMulticastGroup (
+    PNET_NETWORK_MULTICAST_REQUEST Request,
+    BOOL Join
     );
 
 KSTATUS
@@ -211,11 +211,11 @@ NET_NETWORK_ENTRY NetIp6Network = {
         NetpIp6ProcessReceivedData,
         NetpIp6PrintAddress,
         NetpIp6GetSetInformation,
-        NULL,
         NetpIp6GetAddressType,
         NetpIp6SendTranslationRequest,
         NetpIp6ChecksumPseudoHeader,
-        NetpIp6ConfigureLinkAddress
+        NetpIp6ConfigureLinkAddress,
+        NetpIp6JoinLeaveMulticastGroup
     }
 };
 
@@ -300,9 +300,9 @@ Return Value:
     PhysicalAddress = &(Link->Properties.PhysicalAddress);
 
     //
-    // This current only supports creating an EUI-64 based interface identifier
-    // from 48-bit MAC addresses. If a different data link layer is added, this
-    // work probably needs to be farmed out to each data link layer.
+    // This currently only supports creating an EUI-64 based interface
+    // identifier from 48-bit MAC addresses. If a different data link layer is
+    // added, this work probably needs to be farmed out to each data link layer.
     //
 
     ASSERT((PhysicalAddress->Domain == NetDomainEthernet) ||
@@ -451,7 +451,7 @@ Return Value:
         NewSocket->PacketSizeInformation.HeaderSize += sizeof(IP6_HEADER);
     }
 
-    return STATUS_SUCCESS;
+    return NetInitializeMulticastSocket(NewSocket);
 }
 
 VOID
@@ -478,6 +478,7 @@ Return Value:
 
 {
 
+    NetDestroyMulticastSocket(Socket);
     return;
 }
 
@@ -1502,7 +1503,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link to which the address is bound.
+    Link - Supplies an optional pointer to the network link to which the
+        address is bound.
 
     LinkAddressEntry - Supplies an optional pointer to a network link address
         entry to use while classifying the address.
@@ -1687,6 +1689,43 @@ Return Value:
 
     //
     // TODO: Implement NDP and DHCPv6.
+    //
+
+    ASSERT(FALSE);
+
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+KSTATUS
+NetpIp6JoinLeaveMulticastGroup (
+    PNET_NETWORK_MULTICAST_REQUEST Request,
+    BOOL Join
+    )
+
+/*++
+
+Routine Description:
+
+    This routine joins or leaves a multicast group using a network-specific
+    protocol.
+
+Arguments:
+
+    Request - Supplies a pointer to the multicast group join/leave request.
+
+    Join - Supplies a boolean indicating whether to join (TRUE) or leave
+        (FALSE) the multicast group.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    //
+    // TODO: Implement MLD.
     //
 
     ASSERT(FALSE);

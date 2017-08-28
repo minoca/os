@@ -327,6 +327,8 @@ Return Value:
                               0,
                               NetpCompareAddressTranslationEntries);
 
+    INITIALIZE_LIST_HEAD(&(Link->MulticastGroupList));
+
     //
     // Find the appropriate data link layer and initialize it for this link.
     //

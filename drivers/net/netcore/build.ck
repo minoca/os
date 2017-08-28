@@ -44,6 +44,7 @@ function build() {
         "ipv4/igmp.c",
         "ipv4/ip4.c",
         "ipv6/ip6.c",
+        "mcast.c",
         "netcore.c",
         "netlink/netlink.c",
         "netlink/genctrl.c",

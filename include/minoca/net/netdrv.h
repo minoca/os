@@ -191,13 +191,14 @@ Author:
 #define NET_SOCKET_FLAG_FORKED_LISTENER         0x00000080
 #define NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED 0x00000100
 #define NET_SOCKET_FLAG_KERNEL                  0x00000200
+#define NET_SOCKET_FLAG_MULTICAST_LOOPBACK      0x00000400
 
 //
 // Define the set of network socket flags that should be carried over to a
 // copied socket after a spawned connection.
 //
 
-#define NET_SOCKET_FLAGS_INHERIT_MASK       0x0000000F
+#define NET_SOCKET_FLAGS_INHERIT_MASK           0x0000040F
 
 //
 // Define the network buffer allocation flags.
@@ -644,6 +645,33 @@ typedef struct _NET_LINK_PROPERTIES {
     NET_DEVICE_LINK_INTERFACE Interface;
 } NET_LINK_PROPERTIES, *PNET_LINK_PROPERTIES;
 
+/*++
+
+Structure Description:
+
+    This structure defines a multicast group for a link.
+
+Members:
+
+    ListEntry - Stores an entry into a link's list of multicast groups.
+
+    LinkAddress - Stores a pointer to the link address on which the link is
+        joined to the multicast group.
+
+    JoinCount - Stores the number of times a join request has been made for
+        this multicast group.
+
+    Address - Stores the multicast address of the group.
+
+--*/
+
+typedef struct _NET_LINK_MULTICAST_GROUP {
+    LIST_ENTRY ListEntry;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    ULONG JoinCount;
+    NETWORK_ADDRESS Address;
+} NET_LINK_MULTICAST_GROUP, *PNET_LINK_MULTICAST_GROUP;
+
 typedef struct _NET_DATA_LINK_ENTRY NET_DATA_LINK_ENTRY, *PNET_DATA_LINK_ENTRY;
 
 /*++
@@ -689,6 +717,9 @@ Members:
     AddressTranslationTree - Stores the tree containing translations between
         network addresses and physical addresses, keyed by network address.
 
+    MulticastGroupList - Stores a list of the multicast groups to which this
+        link belongs.
+
 --*/
 
 typedef struct _NET_LINK {
@@ -703,6 +734,7 @@ typedef struct _NET_LINK {
     NET_LINK_PROPERTIES Properties;
     PKEVENT AddressTranslationEvent;
     RED_BLACK_TREE AddressTranslationTree;
+    LIST_ENTRY MulticastGroupList;
 } NET_LINK, *PNET_LINK;
 
 typedef
@@ -1017,6 +1049,83 @@ typedef struct _NET_LINK_LOCAL_ADDRESS {
 
 Structure Description:
 
+    This structure defines a multicast group join/leave request.
+
+Members:
+
+    MulticastAddress - Stores the multicast address of the group to join or
+        leave.
+
+    InterfaceAddress - Stores the address of the link interface over which the
+        multicast join/leave is requested.
+
+    InterfaceId- Stores the ID of the link interface over which the multicast
+        join/leave is requested.
+
+--*/
+
+typedef struct _NET_SOCKET_MULTICAST_REQUEST {
+    NETWORK_ADDRESS MulticastAddress;
+    NETWORK_ADDRESS InterfaceAddress;
+    DEVICE_ID InterfaceId;
+} NET_SOCKET_MULTICAST_REQUEST, *PNET_SOCKET_MULTICAST_REQUEST;
+
+/*++
+
+Structure Description:
+
+    This structure defines a multicast group for a socket.
+
+Members:
+
+    ListEntry - Stores pointers to the previous and next multicast groups in
+        the socket's list.
+
+    Link - Supplies a pointer to the network link to which the multicast group
+        is attached.
+
+    LinkAddress - Supplies a pointer to the link address entry with which the
+        multicast group is associated.
+
+    MulitcastAddress - Stores the multicast address of the group.
+
+--*/
+
+typedef struct _NET_SOCKET_MULTICAST_GROUP {
+    LIST_ENTRY ListEntry;
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    NETWORK_ADDRESS MulticastAddress;
+} NET_SOCKET_MULTICAST_GROUP, *PNET_SOCKET_MULTICAST_GROUP;
+
+/*++
+
+Structure Description:
+
+    This structure defines a core networking socket link override. This stores
+    all the socket and link specific information needed to send a packet. This
+    can be used to send data from a link on behalf of a socket if the socket
+    is not yet bound to a link.
+
+Members:
+
+    LinkInformation - Stores the local address and its associated link and link
+        address entry.
+
+    PacketSizeInformation - Stores the packet size information bound by the
+        protocol, network and link layers.
+
+--*/
+
+typedef struct _NET_SOCKET_LINK_OVERRIDE {
+    NET_LINK_LOCAL_ADDRESS LinkInformation;
+    NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
+} NET_SOCKET_LINK_OVERRIDE, *PNET_SOCKET_LINK_OVERRIDE;
+
+/*++
+
+Structure Description:
+
     This structure defines a core networking library socket.
 
 Members:
@@ -1073,8 +1182,25 @@ Members:
         accepted connections that are allowed to accumulate before connections
         are refused. In the sockets API this is known as the backlog count.
 
-    NetworkSocketInformation - Stores an optional pointer to the network
-        layer's socket information.
+    HopLimit - Stores the hop limit (a.k.a. time-to-live) that is to be set in
+        the IP headers of every packet sent by this socket.
+
+    DifferentiatedServicesCodePoint - Stores the differentiated services code
+        point that is to be set in the IP header of every packet sent by this
+        socket.
+
+    MulticastHopLimit - Stores the hop limit (a.k.a. time-to-live) that is to
+        be set in the IP header of every multicast packet sent by this socket.
+
+    MulticastInterface - Stores the interface over which to send all multicast
+        packets. If this is not initialized, then a default interface is chosen
+        just as it would be for unicast packets.
+
+    MulticastLock - Supplies a pointer to the queued lock that protects access
+        to the multicast information.
+
+    MulticastGroupList - Stores the head of the list of multicast groups to
+        which the socket belongs.
 
 --*/
 
@@ -1100,32 +1226,13 @@ typedef struct _NET_SOCKET {
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     ULONG SendPacketCount;
     ULONG MaxIncomingConnections;
-    PVOID NetworkSocketInformation;
+    UCHAR HopLimit;
+    UCHAR DifferentiatedServicesCodePoint;
+    UCHAR MulticastHopLimit;
+    NET_SOCKET_LINK_OVERRIDE MulticastInterface;
+    volatile PQUEUED_LOCK MulticastLock;
+    LIST_ENTRY MulticastGroupList;
 } NET_SOCKET, *PNET_SOCKET;
-
-/*++
-
-Structure Description:
-
-    This structure defines a core networking socket link override. This stores
-    all the socket and link specific information needed to send a packet. This
-    can be used to send data from a link on behalf of a socket if the socket
-    is not yet bound to a link.
-
-Members:
-
-    LinkInformation - Stores the local address and its associated link and link
-        address entry.
-
-    PacketSizeInformation - Stores the packet size information bound by the
-        protocol, network and link layers.
-
---*/
-
-typedef struct _NET_SOCKET_LINK_OVERRIDE {
-    NET_LINK_LOCAL_ADDRESS LinkInformation;
-    NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
-} NET_SOCKET_LINK_OVERRIDE, *PNET_SOCKET_LINK_OVERRIDE;
 
 typedef
 KSTATUS
@@ -1688,6 +1795,34 @@ struct _NET_PROTOCOL_ENTRY {
     NET_PROTOCOL_INTERFACE Interface;
 };
 
+/*++
+
+Structure Description:
+
+    This structure defines a request to join or leave a multicast group. It is
+    supplies to the network layer, as most networks have a specific protocol
+    used to join or leave a multicast group.
+
+Members:
+
+    Link - Stores a pointer to the link on which to join the multicast group or
+        the link to leave the multicast group.
+
+    LinkAddress - Stores a pointer to the link address entry on which to join
+        the multicast group or the link address entry to leave the multicast
+        group.
+
+    MulticastAddress - Stores a pointer to the address of the multicast group
+        to join or leave.
+
+--*/
+
+typedef struct _NET_NETWORK_MULTICAST_REQUEST {
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    PNETWORK_ADDRESS MulticastAddress;
+} NET_NETWORK_MULTICAST_REQUEST, *PNET_NETWORK_MULTICAST_REQUEST;
+
 typedef
 KSTATUS
 (*PNET_NETWORK_INITIALIZE_LINK) (
@@ -2066,34 +2201,6 @@ Return Value:
 --*/
 
 typedef
-KSTATUS
-(*PNET_NETWORK_COPY_INFORMATION) (
-    PNET_SOCKET DestinationSocket,
-    PNET_SOCKET SourceSocket
-    );
-
-/*++
-
-Routine Description:
-
-    This routine copies socket information properties from the source socket to
-    the destination socket.
-
-Arguments:
-
-    DestinationSocket - Supplies a pointer to the socket whose information will
-        be overwritten with the source socket's information.
-
-    SourceSocket - Supplies a pointer to the socket whose information will
-        be copied to the destination socket.
-
-Return Value:
-
-    Status code.
-
---*/
-
-typedef
 NET_ADDRESS_TYPE
 (*PNET_NETWORK_GET_ADDRESS_TYPE) (
     PNET_LINK Link,
@@ -2110,7 +2217,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link to which the address is bound.
+    Link - Supplies an optional pointer to the network link to which the
+        address is bound.
 
     LinkAddressEntry - Supplies an optional pointer to a network link address
         entry to use while classifying the address.
@@ -2221,6 +2329,33 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PNET_NETWORK_JOIN_LEAVE_MULTICAST_GROUP) (
+    PNET_NETWORK_MULTICAST_REQUEST Request,
+    BOOL Join
+    );
+
+/*++
+
+Routine Description:
+
+    This routine joins or leaves a multicast group using a network-specific
+    protocol.
+
+Arguments:
+
+    Request - Supplies a pointer to the multicast group join/leave request.
+
+    Join - Supplies a boolean indicating whether to join (TRUE) or leave
+        (FALSE) the multicast group.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -2288,6 +2423,10 @@ Members:
         network-specific protocol to validate or assign an address for the link
         address entry (e.g. DHCP, NDP, DHCPv6).
 
+    JoinLeaveMulticastGroup - Stores a pointer to a function used to join
+        or leave a multicast group using a network-specific protocol (e.g.
+        IGMP, MLD).
+
 --*/
 
 typedef struct _NET_NETWORK_INTERFACE {
@@ -2304,11 +2443,11 @@ typedef struct _NET_NETWORK_INTERFACE {
     PNET_NETWORK_PROCESS_RECEIVED_DATA ProcessReceivedData;
     PNET_NETWORK_PRINT_ADDRESS PrintAddress;
     PNET_NETWORK_GET_SET_INFORMATION GetSetInformation;
-    PNET_NETWORK_COPY_INFORMATION CopyInformation;
     PNET_NETWORK_GET_ADDRESS_TYPE GetAddressType;
     PNET_NETWORK_SEND_TRANSLATION_REQUEST SendTranslationRequest;
     PNET_NETWORK_CHECKSUM_PSEUDO_HEADER ChecksumPseudoHeader;
     PNET_NETWORK_CONFIGURE_LINK_ADDRESS ConfigureLinkAddress;
+    PNET_NETWORK_JOIN_LEAVE_MULTICAST_GROUP JoinLeaveMulticastGroup;
 } NET_NETWORK_INTERFACE, *PNET_NETWORK_INTERFACE;
 
 /*++
@@ -3572,6 +3711,157 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+NET_API
+KSTATUS
+NetInitializeMulticastSocket (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes a network socket's multicast information.
+
+Arguments:
+
+    Socket - Supplies a pointer to the network socket to initialize.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+VOID
+NetDestroyMulticastSocket (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys all the multicast state associated with the given
+    socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket whose multicast state is to be
+        destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+KSTATUS
+NetJoinSocketMulticastGroup (
+    PNET_SOCKET Socket,
+    PNET_SOCKET_MULTICAST_REQUEST Request
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds the given socket to a multicast group.
+
+Arguments:
+
+    Socket - Supplies a pointer to a socket.
+
+    Request - Supplies a pointer to the multicast join request. This stores
+        the address of the multicast group to join along with interface
+        information to indicate which link should join the group.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetLeaveSocketMulticastGroup (
+    PNET_SOCKET Socket,
+    PNET_SOCKET_MULTICAST_REQUEST Request
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes the given socket from a multicast group.
+
+Arguments:
+
+    Socket - Supplies a pointer to a socket.
+
+    Request - Supplies a pointer to the multicast leave request. This stores
+        the multicast group address to leave and the address of the interface
+        on which the socket joined the group.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetSetSocketMulticastInterface (
+    PNET_SOCKET Socket,
+    PNET_SOCKET_MULTICAST_REQUEST Request
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets a socket's default multicast interface.
+
+Arguments:
+
+    Socket - Supplies a pointer a socket.
+
+    Request - Supplies a pointer to the request which dictates the default
+        interface.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetGetSocketMulticastInterface (
+    PNET_SOCKET Socket,
+    PNET_SOCKET_MULTICAST_REQUEST Request
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets a socket's default multicast interface.
+
+Arguments:
+
+    Socket - Supplies a pointer a socket.
+
+    Request - Supplies a pointer that receives the current interface.
+
+Return Value:
+
+    Status code.
 
 --*/
 

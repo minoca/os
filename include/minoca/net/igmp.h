@@ -49,11 +49,11 @@ Values:
     SocketIgmpOptionInvalid - Indicates an invalid IGMP socket option.
 
     SocketIgmpOptionJoinMulticastGroup - Indicates a request to join a
-        multicast group. This option takes a SOCKET_IGMP_MULTICAST_REQUEST
+        multicast group. This option takes a NET_NETWORK_MULTICAST_REQUEST
         structure.
 
     SocketIgmpOptionLeaveMulticastGroup - Indicates a request to leave a
-        multicast group. This option takes a SOCKET_IGMP_MULTICAST_REQUEST
+        multicast group. This option takes a NET_NETWORK_MULTICAST_REQUEST
         structure.
 
 --*/
@@ -63,31 +63,6 @@ typedef enum _SOCKET_IGMP_OPTION {
     SocketIgmpOptionJoinMulticastGroup,
     SocketIgmpOptionLeaveMulticastGroup
 } SOCKET_IGMP_OPTION, *PSOCKET_IGMP_OPTION;
-
-/*++
-
-Structure Description:
-
-    This structure defines an IGMP request to join or leave a multicast group.
-
-Members:
-
-    Link - Supplies a pointer to the network link associated with the multicast
-        group. Requests will send IGMP notifications over this link and update
-        the address filters in this link's physical layer.
-
-    LinkAddress - Supplies a pointer to the link address entry with which the
-        multicast group is associated.
-
-    MulticastAddress - Supplies the IPv4 multicast group address.
-
---*/
-
-typedef struct _SOCKET_IGMP_MULTICAST_REQUEST {
-    PNET_LINK Link;
-    PNET_LINK_ADDRESS_ENTRY LinkAddress;
-    ULONG MulticastAddress;
-} SOCKET_IGMP_MULTICAST_REQUEST, *PSOCKET_IGMP_MULTICAST_REQUEST;
 
 //
 // -------------------------------------------------------------------- Globals

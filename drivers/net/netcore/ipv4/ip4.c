@@ -75,12 +75,6 @@ Environment:
 #define IP4_MAX_FRAGMENT_COUNT 1000
 
 //
-// Define IPv4 the socket information flags.
-//
-
-#define IP4_SOCKET_FLAG_MULTICAST_LOOPBACK 0x00000001
-
-//
 // --------------------------------------------------------------------- Macros
 //
 
@@ -161,77 +155,6 @@ typedef struct _IP4_FRAGMENT_ENTRY {
     USHORT Offset;
     BOOL LastFragment;
 } IP4_FRAGMENT_ENTRY, *PIP4_FRAGMENT_ENTRY;
-
-/*++
-
-Structure Description:
-
-    This structure defines a multicast group for an IPv4 socket.
-
-Members:
-
-    ListEntry - Stores pointers to the previous and next multicast groups in
-        the socket's list.
-
-    Link - Supplies a pointer to the network link to which the multicast group
-        is attached.
-
-    LinkAddress - Supplies a pointer to the link address entry with which the
-        multicast group is associated.
-
-    Address - Stores the IPv4 multicast address of the group.
-
---*/
-
-typedef struct _IP4_MULTICAST_GROUP {
-    LIST_ENTRY ListEntry;
-    PNET_LINK Link;
-    PNET_LINK_ADDRESS_ENTRY LinkAddress;
-    ULONG MulticastAddress;
-} IP4_MULTICAST_GROUP, *PIP4_MULTICAST_GROUP;
-
-/*++
-
-Structure Description:
-
-    This structure defines the IP4 socket option information.
-
-Members:
-
-    Flags - Stores a bitmask of IPv4 socket information flags. See
-        IP4_SOCKET_FLAG_* for definitions.
-
-    TimeToLive - Stores the time-to-live that is to be set in the IPv4 header
-        for every packet sent by this socket.
-
-    DifferentiatedServicesCodePoint - Stores the differentiated services code
-        point that is to be set in the IPv4 header for every packet sent by
-        this socket.
-
-    MulticastTimeToLive - Stores the time-to-live that is to be set in the IPv4
-        header for every multicast packet sent by this socket.
-
-    MulticastInterface - Stores the interface over which to send all multicast
-        packets. If this is not initialized, then a default interface is chosen
-        just as it would be for unicast packets.
-
-    MulticastLock - Supplies a pointer to the queued lock that protects access
-        to the multicast information.
-
-    MulticastGroupList - Stores the head of the list of multicast groups to
-        which the socket belongs.
-
---*/
-
-typedef struct _IP4_SOCKET_INFORMATION {
-    volatile ULONG Flags;
-    UCHAR TimeToLive;
-    UCHAR DifferentiatedServicesCodePoint;
-    UCHAR MulticastTimeToLive;
-    NET_SOCKET_LINK_OVERRIDE MulticastInterface;
-    volatile PQUEUED_LOCK MulticastLock;
-    LIST_ENTRY MulticastGroupList;
-} IP4_SOCKET_INFORMATION, *PIP4_SOCKET_INFORMATION;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -319,12 +242,6 @@ NetpIp4GetSetInformation (
     BOOL Set
     );
 
-KSTATUS
-NetpIp4CopyInformation (
-    PNET_SOCKET DestinationSocket,
-    PNET_SOCKET SourceSocket
-    );
-
 NET_ADDRESS_TYPE
 NetpIp4GetAddressType (
     PNET_LINK Link,
@@ -345,6 +262,12 @@ NetpIp4ConfigureLinkAddress (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     BOOL Configure
+    );
+
+KSTATUS
+NetpIp4JoinLeaveMulticastGroup (
+    PNET_NETWORK_MULTICAST_REQUEST Request,
+    BOOL Join
     );
 
 KSTATUS
@@ -384,40 +307,6 @@ NetpIp4DestroyFragmentedPacketNode (
     PIP4_FRAGMENTED_PACKET_NODE PacketNode
     );
 
-KSTATUS
-NetpIp4JoinMulticastGroup (
-    PNET_SOCKET Socket,
-    PSOCKET_IP4_MULTICAST_REQUEST Request
-    );
-
-KSTATUS
-NetpIp4LeaveMulticastGroup (
-    PNET_SOCKET Socket,
-    PSOCKET_IP4_MULTICAST_REQUEST Request
-    );
-
-VOID
-NetpIp4DestroyMulticastGroups (
-    PNET_SOCKET Socket
-    );
-
-KSTATUS
-NetpIp4FindLinkForMulticastRequest (
-    PNET_NETWORK_ENTRY Network,
-    PSOCKET_IP4_MULTICAST_REQUEST Request,
-    PNET_LINK_LOCAL_ADDRESS LinkResult
-    );
-
-KSTATUS
-NetpIp4AcquireMulticastLock (
-    PIP4_SOCKET_INFORMATION SocketInformation
-    );
-
-VOID
-NetpIp4ReleaseMulticastLock (
-    PIP4_SOCKET_INFORMATION SocketInformation
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -450,11 +339,11 @@ NET_NETWORK_ENTRY NetIp4Network = {
         NetpIp4ProcessReceivedData,
         NetpIp4PrintAddress,
         NetpIp4GetSetInformation,
-        NetpIp4CopyInformation,
         NetpIp4GetAddressType,
         NULL,
         NetpIp4ChecksumPseudoHeader,
-        NetpIp4ConfigureLinkAddress
+        NetpIp4ConfigureLinkAddress,
+        NetpIp4JoinLeaveMulticastGroup,
     }
 };
 
@@ -660,7 +549,6 @@ Return Value:
 {
 
     ULONG MaxPacketSize;
-    PIP4_SOCKET_INFORMATION SocketInformation;
 
     //
     // If this is coming from the raw protocol and the network protocol is the
@@ -704,25 +592,18 @@ Return Value:
     }
 
     //
-    // Allocate and initialize a socket information structure for this socket.
+    // Set IPv4 specific socket setting defaults.
     //
 
-    SocketInformation = MmAllocatePagedPool(sizeof(IP4_SOCKET_INFORMATION),
-                                            IP4_ALLOCATION_TAG);
+    NewSocket->HopLimit = IP4_INITIAL_TIME_TO_LIVE;
+    NewSocket->DifferentiatedServicesCodePoint = 0;
+    NewSocket->MulticastHopLimit = IP4_INITIAL_MULTICAST_TIME_TO_LIVE;
 
-    if (SocketInformation == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
-    }
+    //
+    // Initialize the socket's multicast fields.
+    //
 
-    RtlZeroMemory(SocketInformation, sizeof(IP4_SOCKET_INFORMATION));
-    SocketInformation->Flags = IP4_SOCKET_FLAG_MULTICAST_LOOPBACK;
-    SocketInformation->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;
-    SocketInformation->MulticastTimeToLive = IP4_INITIAL_MULTICAST_TIME_TO_LIVE;
-    SocketInformation->DifferentiatedServicesCodePoint = 0;
-    SocketInformation->MulticastLock = NULL;
-    INITIALIZE_LIST_HEAD(&(SocketInformation->MulticastGroupList));
-    NewSocket->NetworkSocketInformation = SocketInformation;
-    return STATUS_SUCCESS;
+    return NetInitializeMulticastSocket(NewSocket);
 }
 
 VOID
@@ -749,12 +630,7 @@ Return Value:
 
 {
 
-    if (Socket->NetworkSocketInformation != NULL) {
-        NetpIp4DestroyMulticastGroups(Socket);
-        MmFreePagedPool(Socket->NetworkSocketInformation);
-        Socket->NetworkSocketInformation = NULL;
-    }
-
+    NetDestroyMulticastSocket(Socket);
     return;
 }
 
@@ -1143,7 +1019,6 @@ Return Value:
     NET_RECEIVE_CONTEXT ReceiveContext;
     PIP4_ADDRESS RemoteAddress;
     PNET_DATA_LINK_SEND Send;
-    PIP4_SOCKET_INFORMATION SocketInformation;
     PNETWORK_ADDRESS Source;
     KSTATUS Status;
     ULONG TimeToLive;
@@ -1154,26 +1029,22 @@ Return Value:
            (Socket->KernelSocket.Protocol ==
             Socket->Protocol->ParentProtocolNumber));
 
-    SocketInformation = Socket->NetworkSocketInformation;
-
-    ASSERT(SocketInformation != NULL);
-
     //
     // Multicast packets must use the multicast time-to-live, which defaults to
     // 1 (rather than 63) as multicast packets aren't typically meant to go
     // beyond the local network.
     //
 
-    TimeToLive = SocketInformation->TimeToLive;
+    TimeToLive = Socket->HopLimit;
     RemoteAddress = (PIP4_ADDRESS)Destination;
     if (IP4_IS_MULTICAST_ADDRESS(RemoteAddress->Address) != FALSE) {
-        TimeToLive = SocketInformation->MulticastTimeToLive;
+        TimeToLive = Socket->MulticastHopLimit;
 
         //
         // Also use the multicast interface information if it is present.
         //
 
-        MulticastInterface = &(SocketInformation->MulticastInterface);
+        MulticastInterface = &(Socket->MulticastInterface);
         if (MulticastInterface->LinkInformation.Link != NULL) {
             LinkOverride = MulticastInterface;
         }
@@ -1333,9 +1204,7 @@ Return Value:
                      IP4_VERSION | (UCHAR)(sizeof(IP4_HEADER) / sizeof(ULONG));
 
                 Header->Type = 0;
-                Header->Type |=
-                            SocketInformation->DifferentiatedServicesCodePoint;
-
+                Header->Type |= Socket->DifferentiatedServicesCodePoint;
                 TotalLength = Fragment->FooterOffset - Fragment->DataOffset;
                 Header->TotalLength = CPU_TO_NETWORK16(TotalLength);
                 Header->Identification =
@@ -1418,7 +1287,7 @@ Return Value:
                                                      sizeof(ULONG));
 
             Header->Type = 0;
-            Header->Type |= SocketInformation->DifferentiatedServicesCodePoint;
+            Header->Type |= Socket->DifferentiatedServicesCodePoint;
             TotalLength = Packet->FooterOffset - Packet->DataOffset;
             Header->TotalLength = CPU_TO_NETWORK16(TotalLength);
             Header->Identification = CPU_TO_NETWORK16(Socket->SendPacketCount);
@@ -1490,8 +1359,7 @@ Return Value:
     //
 
     if ((IP4_IS_MULTICAST_ADDRESS(RemoteAddress->Address) != FALSE) &&
-        ((SocketInformation->Flags &
-          IP4_SOCKET_FLAG_MULTICAST_LOOPBACK) != 0)) {
+        ((Socket->Flags & NET_SOCKET_FLAG_MULTICAST_LOOPBACK) != 0)) {
 
         RtlZeroMemory(&ReceiveContext, sizeof(NET_RECEIVE_CONTEXT));
         ReceiveContext.Link = Link;
@@ -1926,29 +1794,19 @@ Return Value:
     UCHAR ByteOption;
     ULONG Flags;
     ULONG IntegerOption;
-    SOCKET_IP4_MULTICAST_REQUEST InterfaceRequest;
-    PIP4_ADDRESS Ip4Address;
+    PIP4_ADDRESS InterfaceAddress;
+    PSOCKET_IP4_MULTICAST_REQUEST InterfaceRequest;
+    PSOCKET_IP4_MULTICAST_REQUEST Ip4MulticastRequest;
     SOCKET_IP4_OPTION Ip4Option;
-    PNET_LINK_LOCAL_ADDRESS LinkInformation;
-    NET_LINK_LOCAL_ADDRESS LinkResult;
-    PNET_SOCKET_LINK_OVERRIDE MulticastInterface;
-    PSOCKET_IP4_MULTICAST_REQUEST MulticastRequest;
-    NET_SOCKET_LINK_OVERRIDE NewInterface;
-    PNET_LINK OldInterfaceLink;
+    PIP4_ADDRESS MulticastAddress;
+    NET_SOCKET_MULTICAST_REQUEST MulticastRequest;
     PNET_PROTOCOL_ENTRY Protocol;
     UINTN RequiredSize;
-    PIP4_SOCKET_INFORMATION SocketInformation;
     PVOID Source;
     KSTATUS Status;
 
     if (InformationType != SocketInformationIp4) {
         Status = STATUS_INVALID_PARAMETER;
-        goto Ip4GetSetInformationEnd;
-    }
-
-    SocketInformation = Socket->NetworkSocketInformation;
-    if (SocketInformation == NULL) {
-        Status = STATUS_NOT_INITIALIZED;
         goto Ip4GetSetInformationEnd;
     }
 
@@ -2017,11 +1875,11 @@ Return Value:
                 break;
             }
 
-            SocketInformation->TimeToLive = (UCHAR)IntegerOption;
+            Socket->HopLimit = (UCHAR)IntegerOption;
 
         } else {
             Source = &IntegerOption;
-            IntegerOption = SocketInformation->TimeToLive;
+            IntegerOption = Socket->HopLimit;
         }
 
         break;
@@ -2042,12 +1900,11 @@ Return Value:
             }
 
             IntegerOption &= IP4_TYPE_DSCP_MASK;
-            SocketInformation->DifferentiatedServicesCodePoint =
-                                                          (UCHAR)IntegerOption;
+            Socket->DifferentiatedServicesCodePoint = (UCHAR)IntegerOption;
 
         } else {
             Source = &IntegerOption;
-            IntegerOption = SocketInformation->DifferentiatedServicesCodePoint;
+            IntegerOption = Socket->DifferentiatedServicesCodePoint;
         }
 
         break;
@@ -2075,17 +1932,24 @@ Return Value:
             break;
         }
 
-        MulticastRequest = (PSOCKET_IP4_MULTICAST_REQUEST)Data;
-        if (!IP4_IS_MULTICAST_ADDRESS(MulticastRequest->Address)) {
+        Ip4MulticastRequest = (PSOCKET_IP4_MULTICAST_REQUEST)Data;
+        if (!IP4_IS_MULTICAST_ADDRESS(Ip4MulticastRequest->Address)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        RtlZeroMemory(&MulticastRequest, sizeof(NET_SOCKET_MULTICAST_REQUEST));
+        MulticastAddress = (PIP4_ADDRESS)&(MulticastRequest.MulticastAddress);
+        MulticastAddress->Domain = NetDomainIp4;
+        MulticastAddress->Address = Ip4MulticastRequest->Address;
+        InterfaceAddress = (PIP4_ADDRESS)&(MulticastRequest.InterfaceAddress);
+        InterfaceAddress->Domain = NetDomainIp4;
+        InterfaceAddress->Address = Ip4MulticastRequest->Interface;
         if (Ip4Option == SocketIp4OptionJoinMulticastGroup) {
-            Status = NetpIp4JoinMulticastGroup(Socket, MulticastRequest);
+            Status = NetJoinSocketMulticastGroup(Socket, &MulticastRequest);
 
         } else {
-            Status = NetpIp4LeaveMulticastGroup(Socket, MulticastRequest);
+            Status = NetLeaveSocketMulticastGroup(Socket, &MulticastRequest);
         }
 
         goto Ip4GetSetInformationEnd;
@@ -2100,11 +1964,11 @@ Return Value:
             }
 
             ByteOption = *((PUCHAR)Data);
-            SocketInformation->MulticastTimeToLive = ByteOption;
+            Socket->MulticastHopLimit = ByteOption;
 
         } else {
             Source = &ByteOption;
-            ByteOption = SocketInformation->MulticastTimeToLive;
+            ByteOption = Socket->MulticastHopLimit;
         }
 
         break;
@@ -2122,8 +1986,14 @@ Return Value:
         // to determine which one was supplied.
         //
 
-        MulticastInterface = &(SocketInformation->MulticastInterface);
+        MulticastAddress = (PIP4_ADDRESS)&(MulticastRequest.MulticastAddress);
+        InterfaceAddress = (PIP4_ADDRESS)&(MulticastRequest.InterfaceAddress);
         if (Set != FALSE) {
+            RtlZeroMemory(&MulticastRequest,
+                          sizeof(NET_SOCKET_MULTICAST_REQUEST));
+
+            MulticastAddress->Domain = NetDomainIp4;
+            InterfaceAddress->Domain = NetDomainIp4;
 
             //
             // The size accounts for one IPv4 address, but not two. Interpret
@@ -2131,86 +2001,36 @@ Return Value:
             //
 
             if (*DataSize < sizeof(SOCKET_IP4_MULTICAST_REQUEST)) {
-                RtlZeroMemory(&InterfaceRequest, sizeof(InterfaceRequest));
-                InterfaceRequest.Interface = *((PULONG)Data);
+                InterfaceAddress->Address = *((PULONG)Data);
 
             //
             // Otherwise interpret it as a multicast request structure.
             //
 
             } else {
-
-                ASSERT(*DataSize >= sizeof(SOCKET_IP4_MULTICAST_REQUEST));
-
                 RequiredSize = sizeof(SOCKET_IP4_MULTICAST_REQUEST);
-                RtlCopyMemory(&InterfaceRequest, Data, RequiredSize);
+                InterfaceRequest = Data;
+                MulticastAddress->Address = InterfaceRequest->Address;
+                InterfaceAddress->Address = InterfaceRequest->Interface;
             }
 
-            //
-            // The any address resets the multicast interface to the default.
-            //
-
-            if (InterfaceRequest.Interface == 0) {
-                RtlZeroMemory(&NewInterface, sizeof(NET_SOCKET_LINK_OVERRIDE));
-
-            //
-            // Otherwise the net link for the supplied interface is found.
-            //
-
-            } else {
-                Status = NetpIp4FindLinkForMulticastRequest(Socket->Network,
-                                                            &InterfaceRequest,
-                                                            &LinkResult);
-
-                if (!KSUCCESS(Status)) {
-                    break;
-                }
-
-                NetInitializeSocketLinkOverride(Socket,
-                                                &LinkResult,
-                                                &NewInterface);
-            }
-
-            //
-            // Acquire the multicast lock and smash in the new interface.
-            //
-
-            Status = NetpIp4AcquireMulticastLock(SocketInformation);
+            Status = NetSetSocketMulticastInterface(Socket, &MulticastRequest);
             if (!KSUCCESS(Status)) {
-                if (NewInterface.LinkInformation.Link != NULL) {
-                    NetLinkReleaseReference(NewInterface.LinkInformation.Link);
-                }
-
                 break;
-            }
-
-            OldInterfaceLink = MulticastInterface->LinkInformation.Link;
-            RtlCopyMemory(MulticastInterface,
-                          &NewInterface,
-                          sizeof(NET_SOCKET_LINK_OVERRIDE));
-
-            NetpIp4ReleaseMulticastLock(SocketInformation);
-            if (OldInterfaceLink != NULL) {
-                NetLinkReleaseReference(OldInterfaceLink);
             }
 
         //
         // A get request only ever returns the IPv4 address of the interface.
-        // This must acquire the lock as the set call copies the address into
-        // place byte by byte. Avoid a torn read.
         //
 
         } else {
-            LinkInformation = &(MulticastInterface->LinkInformation);
-            Ip4Address = (PIP4_ADDRESS)&(LinkInformation->SendAddress);
-            Source = &IntegerOption;
-            Status = NetpIp4AcquireMulticastLock(SocketInformation);
+            Status = NetGetSocketMulticastInterface(Socket, &MulticastRequest);
             if (!KSUCCESS(Status)) {
                 break;
             }
 
-            IntegerOption = Ip4Address->Address;
-            NetpIp4ReleaseMulticastLock(SocketInformation);
+            IntegerOption = InterfaceAddress->Address;
+            Source = &IntegerOption;
         }
 
         break;
@@ -2226,19 +2046,18 @@ Return Value:
         if (Set != FALSE) {
             ByteOption = *((PUCHAR)Data);
             if (ByteOption != FALSE) {
-                RtlAtomicOr32(&(SocketInformation->Flags),
-                              IP4_SOCKET_FLAG_MULTICAST_LOOPBACK);
+                RtlAtomicOr32(&(Socket->Flags),
+                              NET_SOCKET_FLAG_MULTICAST_LOOPBACK);
 
             } else {
-                RtlAtomicAnd32(&(SocketInformation->Flags),
-                               ~IP4_SOCKET_FLAG_MULTICAST_LOOPBACK);
+                RtlAtomicAnd32(&(Socket->Flags),
+                               ~NET_SOCKET_FLAG_MULTICAST_LOOPBACK);
             }
 
         } else {
             Source = &ByteOption;
             ByteOption = FALSE;
-            Flags = SocketInformation->Flags;
-            if ((Flags & IP4_SOCKET_FLAG_MULTICAST_LOOPBACK) != 0) {
+            if ((Socket->Flags & NET_SOCKET_FLAG_MULTICAST_LOOPBACK) != 0) {
                 ByteOption = TRUE;
             }
         }
@@ -2291,66 +2110,6 @@ Ip4GetSetInformationEnd:
     return Status;
 }
 
-KSTATUS
-NetpIp4CopyInformation (
-    PNET_SOCKET DestinationSocket,
-    PNET_SOCKET SourceSocket
-    )
-
-/*++
-
-Routine Description:
-
-    This routine copies socket information properties from the source socket to
-    the destination socket.
-
-Arguments:
-
-    DestinationSocket - Supplies a pointer to the socket whose information will
-        be overwritten with the source socket's information.
-
-    SourceSocket - Supplies a pointer to the socket whose information will
-        be copied to the destination socket.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PIP4_SOCKET_INFORMATION DestinationInformation;
-
-    if ((DestinationSocket->NetworkSocketInformation == NULL) ||
-        (SourceSocket->NetworkSocketInformation == NULL)) {
-
-        return STATUS_NOT_INITIALIZED;
-    }
-
-    //
-    // Copy all of the socket information. This routine is invoked when a
-    // connection is accepted and the listening socket is forked.
-    //
-
-    RtlCopyMemory(DestinationSocket->NetworkSocketInformation,
-                  SourceSocket->NetworkSocketInformation,
-                  sizeof(IP4_SOCKET_INFORMATION));
-
-    //
-    // Reset the multicast information. The new socket should not inherit that
-    // information.
-    //
-
-    DestinationInformation = DestinationSocket->NetworkSocketInformation;
-    DestinationInformation->MulticastLock = NULL;
-    RtlZeroMemory(&(DestinationInformation->MulticastInterface),
-                  sizeof(NET_SOCKET_LINK_OVERRIDE));
-
-    INITIALIZE_LIST_HEAD(&(DestinationInformation->MulticastGroupList));
-    return STATUS_SUCCESS;
-}
-
 NET_ADDRESS_TYPE
 NetpIp4GetAddressType (
     PNET_LINK Link,
@@ -2367,7 +2126,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link to which the address is bound.
+    Link - Supplies an optional pointer to the network link to which the
+        address is bound.
 
     LinkAddressEntry - Supplies an optional pointer to a network link address
         entry to use while classifying the address.
@@ -2415,6 +2175,10 @@ Return Value:
     //
 
     if (LinkAddressEntry == NULL) {
+        if (Link == NULL) {
+            return NetAddressUnknown;
+        }
+
         LinkAddressList = &(Link->LinkAddressArray[NetDomainIp4]);
 
         ASSERT(LIST_EMPTY(LinkAddressList) == FALSE);
@@ -2547,6 +2311,70 @@ Return Value:
     } else {
         Status = NetpDhcpCancelLease(Link, LinkAddress);
     }
+
+    return Status;
+}
+
+KSTATUS
+NetpIp4JoinLeaveMulticastGroup (
+    PNET_NETWORK_MULTICAST_REQUEST Request,
+    BOOL Join
+    )
+
+/*++
+
+Routine Description:
+
+    This routine joins or leaves a multicast group using a network-specific
+    protocol.
+
+Arguments:
+
+    Request - Supplies a pointer to the multicast group join/leave request.
+
+    Join - Supplies a boolean indicating whether to join (TRUE) or leave
+        (FALSE) the multicast group.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN Option;
+    PNET_PROTOCOL_ENTRY Protocol;
+    UINTN RequestSize;
+    KSTATUS Status;
+
+    //
+    // This isn't going to get very far without IGMP support.
+    //
+
+    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
+    if (Protocol == NULL) {
+        return STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+    }
+
+    //
+    // IGMP actually doesn't depend on a socket to join/leave a multicast
+    // group. Don't bother passing one around.
+    //
+
+    Option = SocketIgmpOptionLeaveMulticastGroup;
+    if (Join != FALSE) {
+        Option = SocketIgmpOptionJoinMulticastGroup;
+    }
+
+    RequestSize = sizeof(NET_NETWORK_MULTICAST_REQUEST);
+    Status = Protocol->Interface.GetSetInformation(
+                                           NULL,
+                                           SocketInformationIgmp,
+                                           Option,
+                                           Request,
+                                           &RequestSize,
+                                           TRUE);
 
     return Status;
 }
@@ -3415,570 +3243,6 @@ Return Value:
     }
 
     MmFreePagedPool(PacketNode);
-    return;
-}
-
-KSTATUS
-NetpIp4JoinMulticastGroup (
-    PNET_SOCKET Socket,
-    PSOCKET_IP4_MULTICAST_REQUEST Request
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds the given socket to a multicast group.
-
-Arguments:
-
-    Socket - Supplies a pointer to a socket.
-
-    Request - Supplies a pointer to the multicast join request. This stores
-        the multicast group address to join and the address of the interface on
-        which to join it.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PLIST_ENTRY CurrentEntry;
-    PIP4_MULTICAST_GROUP Group;
-    SOCKET_IGMP_MULTICAST_REQUEST IgmpRequest;
-    NET_LINK_LOCAL_ADDRESS LinkResult;
-    BOOL LockHeld;
-    PIP4_MULTICAST_GROUP NewGroup;
-    PNET_PROTOCOL_ENTRY Protocol;
-    UINTN RequestSize;
-    PIP4_SOCKET_INFORMATION SocketInformation;
-    KSTATUS Status;
-
-    LinkResult.Link = NULL;
-    LockHeld = FALSE;
-    NewGroup = NULL;
-    SocketInformation = Socket->NetworkSocketInformation;
-
-    //
-    // This isn't going to get very far without IGMP. Fail immediately if it's
-    // not present.
-    //
-
-    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
-    if (Protocol == NULL) {
-        Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-        goto JoinMulticastGroupEnd;
-    }
-
-    //
-    // Attempt to find a network link that can reach the multicast address, or
-    // find the one specified by the request.
-    //
-
-    Status = NetpIp4FindLinkForMulticastRequest(Socket->Network,
-                                                Request,
-                                                &LinkResult);
-
-    if (!KSUCCESS(Status)) {
-        Status = STATUS_NO_SUCH_DEVICE;
-        goto JoinMulticastGroupEnd;
-    }
-
-    Status = NetpIp4AcquireMulticastLock(SocketInformation);
-    if (!KSUCCESS(Status)) {
-        goto JoinMulticastGroupEnd;
-    }
-
-    LockHeld = TRUE;
-
-    //
-    // Check to see if this socket already joined the group.
-    //
-
-    CurrentEntry = SocketInformation->MulticastGroupList.Next;
-    while (CurrentEntry != &(SocketInformation->MulticastGroupList)) {
-        Group = LIST_VALUE(CurrentEntry, IP4_MULTICAST_GROUP, ListEntry);
-        if ((Group->MulticastAddress == Request->Address) &&
-            (Group->Link == LinkResult.Link) &&
-            (Group->LinkAddress == LinkResult.LinkAddress)) {
-
-            Status = STATUS_ADDRESS_IN_USE;
-            goto JoinMulticastGroupEnd;
-        }
-
-        CurrentEntry = CurrentEntry->Next;
-    }
-
-    //
-    // Prepare for success and allocate a new IPv4 multicast group.
-    //
-
-    NewGroup = MmAllocatePagedPool(sizeof(IP4_MULTICAST_GROUP),
-                                   IP4_ALLOCATION_TAG);
-
-    if (NewGroup == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto JoinMulticastGroupEnd;
-    }
-
-    //
-    // Ask IGMP to join the multicast group. A multithreaded request for this
-    // socket to join or leave a muliticast group is highly unlikely, so don't
-    // fret too much about holding the lock.
-    //
-
-    IgmpRequest.Link = LinkResult.Link;
-    IgmpRequest.LinkAddress = LinkResult.LinkAddress;
-    IgmpRequest.MulticastAddress = Request->Address;
-    RequestSize = sizeof(SOCKET_IGMP_MULTICAST_REQUEST);
-    Status = Protocol->Interface.GetSetInformation(
-                                            Socket,
-                                            SocketInformationIgmp,
-                                            SocketIgmpOptionJoinMulticastGroup,
-                                            &IgmpRequest,
-                                            &RequestSize,
-                                            TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto JoinMulticastGroupEnd;
-    }
-
-    NewGroup->MulticastAddress = Request->Address;
-    NewGroup->Link = LinkResult.Link;
-    NewGroup->LinkAddress = LinkResult.LinkAddress;
-    INSERT_BEFORE(&(NewGroup->ListEntry),
-                  &(SocketInformation->MulticastGroupList));
-
-    //
-    // Make sure to take the link's reference from the link result.
-    //
-
-    LinkResult.Link = NULL;
-
-JoinMulticastGroupEnd:
-    if (LockHeld != FALSE) {
-        NetpIp4ReleaseMulticastLock(SocketInformation);
-    }
-
-    if (LinkResult.Link != NULL) {
-        NetLinkReleaseReference(LinkResult.Link);
-    }
-
-    if (!KSUCCESS(Status)) {
-        if (NewGroup != NULL) {
-            MmFreePagedPool(NewGroup);
-        }
-    }
-
-    return Status;
-}
-
-KSTATUS
-NetpIp4LeaveMulticastGroup (
-    PNET_SOCKET Socket,
-    PSOCKET_IP4_MULTICAST_REQUEST Request
-    )
-
-/*++
-
-Routine Description:
-
-    This routine removes the given socket from a multicast group.
-
-Arguments:
-
-    Socket - Supplies a pointer to a socket.
-
-    Request - Supplies a pointer to the multicast leave request. This stores
-        the multicast group address to leave and the address of the interface
-        on which the socket joined the group.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PLIST_ENTRY CurrentEntry;
-    PIP4_MULTICAST_GROUP DestroyGroup;
-    PIP4_MULTICAST_GROUP Group;
-    SOCKET_IGMP_MULTICAST_REQUEST IgmpRequest;
-    NET_LINK_LOCAL_ADDRESS LinkResult;
-    BOOL LockHeld;
-    PNET_PROTOCOL_ENTRY Protocol;
-    UINTN RequestSize;
-    PIP4_SOCKET_INFORMATION SocketInformation;
-    KSTATUS Status;
-
-    DestroyGroup = NULL;
-    LinkResult.Link = NULL;
-    LockHeld = FALSE;
-
-    //
-    // If the multicast lock is not allocated or the list is empty, then this
-    // socket never joined any multicast groups.
-    //
-
-    SocketInformation = Socket->NetworkSocketInformation;
-    if (LIST_EMPTY(&(SocketInformation->MulticastGroupList)) != FALSE) {
-        Status = STATUS_INVALID_ADDRESS;
-        goto LeaveMulticastGroupEnd;
-    }
-
-    ASSERT(SocketInformation->MulticastLock != NULL);
-
-    //
-    // Attempt to find a network link that can reach the multicast address, or
-    // find the one specified by the request.
-    //
-
-    Status = NetpIp4FindLinkForMulticastRequest(Socket->Network,
-                                                Request,
-                                                &LinkResult);
-
-    if (!KSUCCESS(Status)) {
-        Status = STATUS_NO_SUCH_DEVICE;
-        goto LeaveMulticastGroupEnd;
-    }
-
-    //
-    // Search through the multicast groups for a matching entry.
-    //
-
-    Status = NetpIp4AcquireMulticastLock(SocketInformation);
-    if (!KSUCCESS(Status)) {
-        goto LeaveMulticastGroupEnd;
-    }
-
-    LockHeld = TRUE;
-    Status = STATUS_INVALID_ADDRESS;
-    CurrentEntry = SocketInformation->MulticastGroupList.Next;
-    while (CurrentEntry != &(SocketInformation->MulticastGroupList)) {
-        Group = LIST_VALUE(CurrentEntry, IP4_MULTICAST_GROUP, ListEntry);
-        if ((Group->MulticastAddress == Request->Address) &&
-            (Group->Link == LinkResult.Link) &&
-            (Group->LinkAddress == LinkResult.LinkAddress)) {
-
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-        CurrentEntry = CurrentEntry->Next;
-    }
-
-    if (!KSUCCESS(Status)) {
-        goto LeaveMulticastGroupEnd;
-    }
-
-    //
-    // Remove the group from the list and mark the group for destruction.
-    //
-
-    LIST_REMOVE(&(Group->ListEntry));
-    NetpIp4ReleaseMulticastLock(SocketInformation);
-    LockHeld = FALSE;
-    DestroyGroup = Group;
-
-    //
-    // Now notify IGMP that this socket has left the group. IGMP should not be
-    // failing at this point.
-    //
-
-    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
-    if (Protocol == NULL) {
-        Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-        goto LeaveMulticastGroupEnd;
-    }
-
-    IgmpRequest.Link = Group->Link;
-    IgmpRequest.LinkAddress = Group->LinkAddress;
-    IgmpRequest.MulticastAddress = Group->MulticastAddress;
-    RequestSize = sizeof(SOCKET_IGMP_MULTICAST_REQUEST);
-    Status = Protocol->Interface.GetSetInformation(
-                                           Socket,
-                                           SocketInformationIgmp,
-                                           SocketIgmpOptionLeaveMulticastGroup,
-                                           &IgmpRequest,
-                                           &RequestSize,
-                                           TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto LeaveMulticastGroupEnd;
-    }
-
-LeaveMulticastGroupEnd:
-    if (LockHeld != FALSE) {
-        NetpIp4ReleaseMulticastLock(SocketInformation);
-    }
-
-    if (LinkResult.Link != NULL) {
-        NetLinkReleaseReference(LinkResult.Link);
-    }
-
-    if (DestroyGroup != NULL) {
-        NetLinkReleaseReference(Group->Link);
-        MmFreePagedPool(Group);
-    }
-
-    return Status;
-}
-
-VOID
-NetpIp4DestroyMulticastGroups (
-    PNET_SOCKET Socket
-    )
-
-/*++
-
-Routine Description:
-
-    This routine destroys all multicast groups that the given socket joined. It
-    notifies IGMP that the socket is leaving the group and then destroys the
-    group structure.
-
-Arguments:
-
-    Socket - Supplies a pointer to the socket meant to destroy its multicast
-        groups.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PIP4_MULTICAST_GROUP Group;
-    PLIST_ENTRY MulticastGroupList;
-    PNET_PROTOCOL_ENTRY Protocol;
-    SOCKET_IGMP_MULTICAST_REQUEST Request;
-    UINTN RequestSize;
-    PIP4_SOCKET_INFORMATION SocketInformation;
-
-    ASSERT(Socket->NetworkSocketInformation != NULL);
-
-    SocketInformation = Socket->NetworkSocketInformation;
-    MulticastGroupList = &(SocketInformation->MulticastGroupList);
-    if (LIST_EMPTY(MulticastGroupList) != FALSE) {
-        goto DestroyMulticastGroupsEnd;
-    }
-
-    ASSERT(SocketInformation->MulticastLock != NULL);
-
-    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_IGMP);
-    if (Protocol == NULL) {
-        goto DestroyMulticastGroupsEnd;
-    }
-
-    //
-    // Run through the local list, leave each multicast group and destroy the
-    // group structures.
-    //
-
-    while (LIST_EMPTY(MulticastGroupList) == FALSE) {
-        Group = LIST_VALUE(MulticastGroupList->Next,
-                           IP4_MULTICAST_GROUP,
-                           ListEntry);
-
-        LIST_REMOVE(&(Group->ListEntry));
-        Request.Link = Group->Link;
-        Request.LinkAddress = Group->LinkAddress;
-        Request.MulticastAddress = Group->MulticastAddress;
-        RequestSize = sizeof(SOCKET_IGMP_MULTICAST_REQUEST);
-        Protocol->Interface.GetSetInformation(
-                                           Socket,
-                                           SocketInformationIgmp,
-                                           SocketIgmpOptionLeaveMulticastGroup,
-                                           &Request,
-                                           &RequestSize,
-                                           TRUE);
-
-        NetLinkReleaseReference(Group->Link);
-        MmFreePagedPool(Group);
-    }
-
-DestroyMulticastGroupsEnd:
-    if (SocketInformation->MulticastLock != NULL) {
-        KeDestroyQueuedLock(SocketInformation->MulticastLock);
-    }
-
-    return;
-}
-
-KSTATUS
-NetpIp4FindLinkForMulticastRequest (
-    PNET_NETWORK_ENTRY Network,
-    PSOCKET_IP4_MULTICAST_REQUEST Request,
-    PNET_LINK_LOCAL_ADDRESS LinkResult
-    )
-
-/*++
-
-Routine Description:
-
-    This routine searches for a network link that matches the given multicast
-    request. If the any address is supplied, then the multicast address will be
-    used to find a link that can reach it. A reference is taken on the returned
-    network link. The caller is responsible for releasing the reference.
-
-Arguments:
-
-    Network - Supplies a pointer to the network to which the address belongs.
-        This should be a pointer to the IPv4 network entry.
-
-    Request - Supplies the multicast request for which a link needs to be
-        found.
-
-    LinkResult - Supplies a pointer that receives the link information,
-        including the link, link address entry, and associated local address.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    IP4_ADDRESS LocalAddress;
-    IP4_ADDRESS RemoteAddress;
-    KSTATUS Status;
-
-    //
-    // If the any address is supplied, find a link that can reach the multicast
-    // address.
-    //
-
-    if (Request->Interface == 0) {
-        RtlZeroMemory(&RemoteAddress, sizeof(IP4_ADDRESS));
-        RemoteAddress.Domain = NetDomainIp4;
-        RemoteAddress.Address = Request->Address;
-        Status = NetFindLinkForRemoteAddress((PNETWORK_ADDRESS)&RemoteAddress,
-                                             LinkResult);
-
-        if (KSUCCESS(Status)) {
-            goto FindLinkForMulticastRequest;
-        }
-    }
-
-    //
-    // Otherwise a link that matches the given IPv4 address must be found.
-    //
-
-    RtlZeroMemory(&LocalAddress, sizeof(IP4_ADDRESS));
-    LocalAddress.Domain = NetDomainIp4;
-    LocalAddress.Address = Request->Interface;
-    Status = NetFindLinkForLocalAddress((PNETWORK_ADDRESS)&LocalAddress,
-                                        NULL,
-                                        LinkResult);
-
-    if (!KSUCCESS(Status)) {
-        goto FindLinkForMulticastRequest;
-    }
-
-FindLinkForMulticastRequest:
-    return Status;
-}
-
-KSTATUS
-NetpIp4AcquireMulticastLock (
-    PIP4_SOCKET_INFORMATION SocketInformation
-    )
-
-/*++
-
-Routine Description:
-
-    This routine acquires the given socket information's multicast lock,
-    allocating it on the fly if it does not already exist. This is done so most
-    sockets don't have to allocate the lock, as most sockets don't perform
-    multicast actions.
-
-Arguments:
-
-    SocketInformation - Supplies a pointer to the IPv4 socket information whose
-        multicast lock is to be acquired.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PQUEUED_LOCK NewLock;
-    PQUEUED_LOCK OldLock;
-    KSTATUS Status;
-
-    //
-    // If there is no multicast lock. Create one before going any further. This
-    // is done on the fly so that most sockets don't need to allocate the lock
-    // resource.
-    //
-
-    if (SocketInformation->MulticastLock == NULL) {
-        NewLock = KeCreateQueuedLock();
-        if (NewLock == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto AcquireMulticastLockEnd;
-        }
-
-        //
-        // Try to exchange the lock into place.
-        //
-
-        OldLock = (PQUEUED_LOCK)RtlAtomicCompareExchange(
-                                   (PUINTN)&(SocketInformation->MulticastLock),
-                                   (UINTN)NewLock,
-                                   (UINTN)NULL);
-
-        if (OldLock != NULL) {
-            KeDestroyQueuedLock(NewLock);
-        }
-    }
-
-    ASSERT(SocketInformation->MulticastLock != NULL);
-
-    KeAcquireQueuedLock(SocketInformation->MulticastLock);
-    Status = STATUS_SUCCESS;
-
-AcquireMulticastLockEnd:
-    return Status;
-}
-
-VOID
-NetpIp4ReleaseMulticastLock (
-    PIP4_SOCKET_INFORMATION SocketInformation
-    )
-
-/*++
-
-Routine Description:
-
-    This routine releases the multicast lock for the given socket information.
-
-Arguments:
-
-    SocketInformation - Supplies a pointer to an IPv4 sockets information.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ASSERT(SocketInformation->MulticastLock != NULL);
-
-    KeReleaseQueuedLock(SocketInformation->MulticastLock);
     return;
 }
 

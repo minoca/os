@@ -36,6 +36,7 @@ BINPLACE = bin
 OBJS = addr.o            \
        buf.o             \
        ethernet.o        \
+       mcast.o           \
        netcore.o         \
        raw.o             \
        tcp.o             \

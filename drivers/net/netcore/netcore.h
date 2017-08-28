@@ -268,6 +268,71 @@ Return Value:
 
 --*/
 
+KSTATUS
+NetpJoinLinkMulticastGroup (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    PNETWORK_ADDRESS MulticastAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine joins the multicast group on a link. If this is the first
+    request to join the supplied multicast group on the link, then the hardware
+    is reprogrammed to include messages to the multicast group's physical layer
+    address and the network is invoked to announce the join via a
+    network-specific protocol.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link joining the multicast group.
+
+    LinkAddress - Supplies a pointer to the link address entry via which the
+        link will join the group.
+
+    MulticastAddress - Supplies a pointer to the multicast address of the group
+        to join.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+NetpLeaveLinkMulticastGroup (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    PNETWORK_ADDRESS MulticastAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes a link from a multicast. If this is the last request
+    to leave a multicast group on the link, then the hardware is reprogrammed
+    to filter out messages to the multicast group and a network-specific
+    protocol is invoked to announce the link is leaving the group.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link leaving the multicast group.
+
+    LinkAddress - Supplies a pointer to the link address entry via which the
+        link will leave the group.
+
+    MulticastAddress - Supplies a pointer to the multicast address of the group
+        to leave.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 //
 // Prototypes to the entry points for built in protocols.
 //

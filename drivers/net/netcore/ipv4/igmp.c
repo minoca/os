@@ -64,14 +64,14 @@ Environment:
 //
 
 //
-// Define the allocation tag used by the UDP socket protocol.
+// Define the allocation tag used by IGMP.
 //
 
-#define IGMP_PROTOCOL_ALLOCATION_TAG 0x706d6749 // 'pmgI'
+#define IGMP_ALLOCATION_TAG 0x706d6749 // 'pmgI'
 
 //
 // Define the size of an IGMP IPv4 header. Each packet should include the
-// router alter option.
+// router alert option.
 //
 
 #define IGMP_IP4_HEADER_SIZE (sizeof(IP4_HEADER) + sizeof(ULONG))
@@ -104,8 +104,7 @@ Environment:
 #define IGMP_MAX_GROUP_RECORD_COUNT MAX_USHORT
 
 //
-// Define the source IPv4 address for all IGMP general query messages -
-// 224.0.0.1.
+// Define the IPv4 address to which all IGMP general query messages are sent.
 //
 
 #define IGMP_ALL_SYSTEMS_ADDRESS CPU_TO_NETWORK32(0xE0000001)
@@ -288,8 +287,8 @@ Members:
 
     Type - Stores the group record type.
 
-    DataLength - Stores the length of auxiliary data that starts at the end of
-        the source address array.
+    DataLength - Stores the length of auxiliary data, in 32-bit words, that
+        starts at the end of the source address array.
 
     SourceAddressCount - Stores the number of source address entries in the
         array that starts at the end of this structure.
@@ -560,12 +559,12 @@ NetpIgmpUserControl (
 
 KSTATUS
 NetpIgmpJoinMulticastGroup (
-    PSOCKET_IGMP_MULTICAST_REQUEST Request
+    PNET_NETWORK_MULTICAST_REQUEST Request
     );
 
 KSTATUS
 NetpIgmpLeaveMulticastGroup (
-    PSOCKET_IGMP_MULTICAST_REQUEST Request
+    PNET_NETWORK_MULTICAST_REQUEST Request
     );
 
 VOID
@@ -718,12 +717,6 @@ NetpIgmpInitializeTimer (
 VOID
 NetpIgmpDestroyTimer (
     PIGMP_TIMER Timer
-    );
-
-USHORT
-NetpIgmpChecksumData (
-    PVOID Data,
-    ULONG Length
     );
 
 //
@@ -1182,7 +1175,7 @@ Return Value:
     // Validate the IGMP checksum.
     //
 
-    ComputedChecksum = NetpIgmpChecksumData((PVOID)Header, Length);
+    ComputedChecksum = NetChecksumData((PVOID)Header, Length);
     if (ComputedChecksum != 0) {
         RtlDebugPrint("IGMP: Invalid checksum. Computed checksum: 0x%04x, "
                       "should have been zero.\n",
@@ -1371,7 +1364,8 @@ Return Value:
 {
 
     SOCKET_IGMP_OPTION IgmpOption;
-    PSOCKET_IGMP_MULTICAST_REQUEST MulticastRequest;
+    PIP4_ADDRESS MulticastAddress;
+    PNET_NETWORK_MULTICAST_REQUEST MulticastRequest;
     UINTN RequiredSize;
     PVOID Source;
     KSTATUS Status;
@@ -1393,15 +1387,18 @@ Return Value:
             break;
         }
 
-        RequiredSize = sizeof(SOCKET_IGMP_MULTICAST_REQUEST);
+        RequiredSize = sizeof(NET_NETWORK_MULTICAST_REQUEST);
         if (*DataSize < RequiredSize) {
             *DataSize = RequiredSize;
             Status = STATUS_BUFFER_TOO_SMALL;
             break;
         }
 
-        MulticastRequest = (PSOCKET_IGMP_MULTICAST_REQUEST)Data;
-        if (!IP4_IS_MULTICAST_ADDRESS(MulticastRequest->MulticastAddress)) {
+        MulticastRequest = (PNET_NETWORK_MULTICAST_REQUEST)Data;
+        MulticastAddress = (PIP4_ADDRESS)MulticastRequest->MulticastAddress;
+        if ((MulticastAddress->Domain != NetDomainIp4) ||
+            (!IP4_IS_MULTICAST_ADDRESS(MulticastAddress->Address))) {
+
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -1508,7 +1505,7 @@ Return Value:
 
 KSTATUS
 NetpIgmpJoinMulticastGroup (
-    PSOCKET_IGMP_MULTICAST_REQUEST Request
+    PNET_NETWORK_MULTICAST_REQUEST Request
     )
 
 /*++
@@ -1539,10 +1536,12 @@ Return Value:
     PIGMP_MULTICAST_GROUP Group;
     PIGMP_LINK IgmpLink;
     BOOL LinkLockHeld;
+    PIP4_ADDRESS MulticastAddress;
     PIGMP_MULTICAST_GROUP NewGroup;
     KSTATUS Status;
 
     LinkLockHeld = FALSE;
+    MulticastAddress = (PIP4_ADDRESS)Request->MulticastAddress;
     NewGroup = NULL;
 
     //
@@ -1575,7 +1574,7 @@ Return Value:
         CurrentEntry = IgmpLink->MulticastGroupList.Next;
         while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
             Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
-            if (Group->Address == Request->MulticastAddress) {
+            if (Group->Address == MulticastAddress->Address) {
                 Status = STATUS_SUCCESS;
                 break;
             }
@@ -1588,7 +1587,7 @@ Return Value:
                 KeReleaseQueuedLock(IgmpLink->Lock);
                 LinkLockHeld = FALSE;
                 NewGroup = NetpIgmpCreateGroup(IgmpLink,
-                                               Request->MulticastAddress);
+                                               MulticastAddress->Address);
 
                 if (NewGroup == NULL) {
                     Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1599,7 +1598,7 @@ Return Value:
             }
 
             //
-            // Add the newly allocate group to the link's list.
+            // Add the newly allocated group to the link's list.
             //
 
             INSERT_BEFORE(&(NewGroup->ListEntry),
@@ -1672,7 +1671,7 @@ JoinMulticastGroupEnd:
 
 KSTATUS
 NetpIgmpLeaveMulticastGroup (
-    PSOCKET_IGMP_MULTICAST_REQUEST Request
+    PNET_NETWORK_MULTICAST_REQUEST Request
     )
 
 /*++
@@ -1703,10 +1702,12 @@ Return Value:
     PIGMP_LINK IgmpLink;
     BOOL LinkLockHeld;
     BOOL LinkUp;
+    PIP4_ADDRESS MulticastAddress;
     KSTATUS Status;
 
     LinkLockHeld = FALSE;
     IgmpLink = NULL;
+    MulticastAddress = (PIP4_ADDRESS)Request->MulticastAddress;
 
     //
     // Now see if there is an IGMP link for the given network link.
@@ -1729,7 +1730,7 @@ Return Value:
     CurrentEntry = IgmpLink->MulticastGroupList.Next;
     while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
         Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
-        if (Group->Address == Request->MulticastAddress) {
+        if (Group->Address == MulticastAddress->Address) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -2669,7 +2670,7 @@ Return Value:
     Header->Type = Type;
     Header->MaxResponseCode = 0;
     Header->Checksum = 0;
-    Header->Checksum = NetpIgmpChecksumData((PVOID)Header, BufferSize);
+    Header->Checksum = NetChecksumData((PVOID)Header, BufferSize);
     NET_INITIALIZE_PACKET_LIST(&NetPacketList);
     NET_ADD_PACKET_TO_LIST(Packet, &NetPacketList);
     NetpIgmpSendPackets(Group->IgmpLink,
@@ -2822,7 +2823,7 @@ Return Value:
     Header->Type = Type;
     Header->MaxResponseCode = 0;
     Header->Checksum = 0;
-    Header->Checksum = NetpIgmpChecksumData((PVOID)Header, BufferSize);
+    Header->Checksum = NetChecksumData((PVOID)Header, BufferSize);
     NET_INITIALIZE_PACKET_LIST(&NetPacketList);
     NET_ADD_PACKET_TO_LIST(Packet, &NetPacketList);
     NetpIgmpSendPackets(Group->IgmpLink,
@@ -2987,7 +2988,7 @@ Return Value:
                       (PIGMP_GROUP_RECORD_V3)((PUCHAR)GroupRecord + GroupSize);
         }
 
-        Header->Checksum = NetpIgmpChecksumData((PVOID)Header, BufferSize);
+        Header->Checksum = NetChecksumData((PVOID)Header, BufferSize);
         NET_ADD_PACKET_TO_LIST(Packet, &NetPacketList);
     }
 
@@ -3103,9 +3104,7 @@ Return Value:
         if ((Link->Properties.Capabilities &
              NET_LINK_CAPABILITY_TRANSMIT_IP_CHECKSUM_OFFLOAD) == 0) {
 
-             Checksum = NetpIgmpChecksumData((PVOID)Header,
-                                             IGMP_IP4_HEADER_SIZE);
-
+             Checksum = NetChecksumData((PVOID)Header, IGMP_IP4_HEADER_SIZE);
              Header->HeaderChecksum = Checksum;
 
         } else {
@@ -3263,7 +3262,7 @@ Return Value:
     }
 
     NewIgmpLink = MmAllocatePagedPool(sizeof(IGMP_LINK),
-                                      IGMP_PROTOCOL_ALLOCATION_TAG);
+                                      IGMP_ALLOCATION_TAG);
 
     if (NewIgmpLink == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -3768,7 +3767,7 @@ Return Value:
     KSTATUS Status;
 
     Group = MmAllocatePagedPool(sizeof(IGMP_MULTICAST_GROUP),
-                                IGMP_PROTOCOL_ALLOCATION_TAG);
+                                IGMP_ALLOCATION_TAG);
 
     if (Group == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -3932,7 +3931,7 @@ Return Value:
 
     KSTATUS Status;
 
-    Timer->Timer = KeCreateTimer(IGMP_PROTOCOL_ALLOCATION_TAG);
+    Timer->Timer = KeCreateTimer(IGMP_ALLOCATION_TAG);
     if (Timer->Timer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeTimerEnd;
@@ -3948,7 +3947,7 @@ Return Value:
                                        WorkPriorityNormal,
                                        WorkRoutine,
                                        WorkParameter,
-                                       IGMP_PROTOCOL_ALLOCATION_TAG);
+                                       IGMP_ALLOCATION_TAG);
 
     if (Timer->WorkItem == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -4003,79 +4002,5 @@ Return Value:
     }
 
     return;
-}
-
-USHORT
-NetpIgmpChecksumData (
-    PVOID Data,
-    ULONG Length
-    )
-
-/*++
-
-Routine Description:
-
-    This routine checksums a section of data for IGMP processing.
-
-Arguments:
-
-    Data - Supplies a pointer to the data to checksum.
-
-    Length - Supplies the number of bytes to checksum. This must be an even
-        number.
-
-Return Value:
-
-    Returns the checksum of the data.
-
---*/
-
-{
-
-    PUCHAR BytePointer;
-    PULONG LongPointer;
-    ULONG NextValue;
-    USHORT ShortOne;
-    PUSHORT ShortPointer;
-    USHORT ShortTwo;
-    ULONG Sum;
-
-    ASSERT((Length & 0x1) == 0);
-
-    Sum = 0;
-    LongPointer = (PULONG)Data;
-    while (Length >= sizeof(ULONG)) {
-        NextValue = *LongPointer;
-        LongPointer += 1;
-        Sum += NextValue;
-        if (Sum < NextValue) {
-            Sum += 1;
-        }
-
-        Length -= sizeof(ULONG);
-    }
-
-    BytePointer = (PUCHAR)LongPointer;
-    if (Length == sizeof(USHORT)) {
-        ShortPointer = (PUSHORT)BytePointer;
-        NextValue = (USHORT)*ShortPointer;
-        Sum += NextValue;
-        if (Sum < NextValue) {
-            Sum += 1;
-        }
-    }
-
-    //
-    // Fold the 32-bit value down to 16-bits.
-    //
-
-    ShortOne = (USHORT)Sum;
-    ShortTwo = (USHORT)(Sum >> 16);
-    ShortTwo += ShortOne;
-    if (ShortTwo < ShortOne) {
-        ShortTwo += 1;
-    }
-
-    return (USHORT)~ShortTwo;
 }
 
