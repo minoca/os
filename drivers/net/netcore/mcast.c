@@ -633,10 +633,14 @@ Return Value:
     NewGroup = NULL;
 
     //
-    // This isn't going to get very far without network multicast support.
+    // This isn't going to get very far without network multicast support or
+    // hardware filtering/promiscuous support.
     //
 
-    if (Network->Interface.JoinLeaveMulticastGroup == NULL) {
+    if ((Network->Interface.JoinLeaveMulticastGroup == NULL) ||
+        ((Link->Properties.Capabilities &
+          NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0)) {
+
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
         goto LinkJoinMulticastGroupEnd;
     }

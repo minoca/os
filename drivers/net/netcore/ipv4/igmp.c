@@ -187,6 +187,7 @@ Environment:
 
 #define IGMP_MULTICAST_GROUP_FLAG_LAST_REPORT  0x00000001
 #define IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE 0x00000002
+#define IGMP_MULTICAST_GROUP_FLAG_LEAVE_SENT   0x00000004
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -423,10 +424,11 @@ Members:
 
     SendCount - Stores the number of pending report or leave messages to be
         sending. This number should always be less than or equal to the
-        robustness value.
+        robustness value. Updates are protected by the IGMP link's queued lock.
 
     Flags - Stores a bitmask of multicast group flags. See
-        IGMP_MULTICAST_GROUP_FLAG_* for definitions.
+        IGMP_MULTICAST_GROUP_FLAG_* for definitions. Updates are protected by
+        the IGMP link's queued lock.
 
     JoinCount - Stores the number of times a join request has been made for
         this multicast group. This is protected by the IGMP link's queued lock.
@@ -443,8 +445,8 @@ Members:
 typedef struct _IGMP_MULTICAST_GROUP {
     LIST_ENTRY ListEntry;
     volatile ULONG ReferenceCount;
-    volatile ULONG SendCount;
-    volatile ULONG Flags;
+    ULONG SendCount;
+    ULONG Flags;
     ULONG JoinCount;
     ULONG Address;
     PIGMP_LINK IgmpLink;
@@ -678,12 +680,18 @@ NetpIgmpCompareLinkEntries (
 PIGMP_MULTICAST_GROUP
 NetpIgmpCreateGroup (
     PIGMP_LINK IgmpLink,
-    ULONG GroupAddress
+    PIP4_ADDRESS GroupAddress
     );
 
 VOID
 NetpIgmpDestroyGroup (
     PIGMP_MULTICAST_GROUP Group
+    );
+
+PIGMP_MULTICAST_GROUP
+NetpIgmpLookupGroup (
+    PIGMP_LINK IgmpLink,
+    PIP4_ADDRESS GroupAddress
     );
 
 VOID
@@ -1521,16 +1529,16 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
     PIGMP_MULTICAST_GROUP Group;
+    PIP4_ADDRESS GroupAddress;
     PIGMP_LINK IgmpLink;
     BOOL LinkLockHeld;
-    PIP4_ADDRESS MulticastAddress;
     PIGMP_MULTICAST_GROUP NewGroup;
     KSTATUS Status;
 
+    Group = NULL;
     LinkLockHeld = FALSE;
-    MulticastAddress = (PIP4_ADDRESS)Request->MulticastAddress;
+    GroupAddress = (PIP4_ADDRESS)Request->MulticastAddress;
     NewGroup = NULL;
 
     //
@@ -1555,74 +1563,67 @@ Return Value:
     // group is still not found, add the newly allocated group.
     //
 
-    NewGroup = NULL;
-    Status = STATUS_NOT_FOUND;
+    Status = STATUS_SUCCESS;
     while (TRUE) {
         KeAcquireQueuedLock(IgmpLink->Lock);
         LinkLockHeld = TRUE;
-        CurrentEntry = IgmpLink->MulticastGroupList.Next;
-        while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
-            Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
-            if (Group->Address == MulticastAddress->Address) {
-                Status = STATUS_SUCCESS;
-                break;
-            }
-
-            CurrentEntry = CurrentEntry->Next;
+        Group = NetpIgmpLookupGroup(IgmpLink, GroupAddress);
+        if (Group != NULL) {
+            Group->JoinCount += 1;
+            goto JoinMulticastGroupEnd;
         }
 
-        if (!KSUCCESS(Status)) {
+        if (NewGroup == NULL) {
+            KeReleaseQueuedLock(IgmpLink->Lock);
+            LinkLockHeld = FALSE;
+            NewGroup = NetpIgmpCreateGroup(IgmpLink, GroupAddress);
             if (NewGroup == NULL) {
-                KeReleaseQueuedLock(IgmpLink->Lock);
-                LinkLockHeld = FALSE;
-                NewGroup = NetpIgmpCreateGroup(IgmpLink,
-                                               MulticastAddress->Address);
-
-                if (NewGroup == NULL) {
-                    Status = STATUS_INSUFFICIENT_RESOURCES;
-                    goto JoinMulticastGroupEnd;
-                }
-
-                continue;
+                Status = STATUS_INSUFFICIENT_RESOURCES;
+                goto JoinMulticastGroupEnd;
             }
 
-            //
-            // Add the newly allocated group to the link's list.
-            //
-
-            INSERT_BEFORE(&(NewGroup->ListEntry),
-                          &(IgmpLink->MulticastGroupList));
-
-            IgmpLink->MulticastGroupCount += 1;
-            Group = NewGroup;
+            continue;
         }
 
+        //
+        // Add the newly allocated group to the link's list.
+        //
+
+        INSERT_BEFORE(&(NewGroup->ListEntry), &(IgmpLink->MulticastGroupList));
+        IgmpLink->MulticastGroupCount += 1;
         break;
     }
 
-    Status = STATUS_SUCCESS;
-
     //
-    // If the group was found and it had been previously joined, then the
-    // multicast membership has already been reported.
+    // Initialize the send count to the robustness variable. This will cause
+    // multiple join messages to be sent, up to the robustness count.
     //
 
-    Group->JoinCount += 1;
-    if (Group->JoinCount > 1) {
+    NewGroup->SendCount = IgmpLink->RobustnessVariable;
 
-        ASSERT(Group != NewGroup);
+    //
+    // An initial join sends state change messages and at least one message
+    // will be sent, so start the group as the last reporter.
+    //
 
-        goto JoinMulticastGroupEnd;
-    }
+    NewGroup->Flags |= IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE |
+                       IGMP_MULTICAST_GROUP_FLAG_LAST_REPORT;
 
-    ASSERT(Group == NewGroup);
+    //
+    // Take an extra reference on the new group so that it is not destroyed
+    // while sending the report. Once the lock is released, a leave request
+    // could run through and attempt to take it down.
+    //
 
-    NewGroup = NULL;
+    NetpIgmpGroupAddReference(NewGroup);
     KeReleaseQueuedLock(IgmpLink->Lock);
     LinkLockHeld = FALSE;
-    RtlAtomicOr32(&(Group->Flags), IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE);
-    RtlAtomicExchange32(&(Group->SendCount), IgmpLink->RobustnessVariable);
-    NetpIgmpSendGroupReport(Group);
+
+    //
+    // Actually send out the group's join IGMP state change messages.
+    //
+
+    NetpIgmpSendGroupReport(NewGroup);
 
 JoinMulticastGroupEnd:
     if (LinkLockHeld != FALSE) {
@@ -1634,7 +1635,11 @@ JoinMulticastGroupEnd:
     }
 
     if (NewGroup != NULL) {
-        NetpIgmpDestroyGroup(NewGroup);
+        NetpIgmpGroupReleaseReference(NewGroup);
+    }
+
+    if (Group != NULL) {
+        NetpIgmpGroupReleaseReference(Group);
     }
 
     return Status;
@@ -1668,7 +1673,6 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
     PIGMP_MULTICAST_GROUP Group;
     PIGMP_LINK IgmpLink;
     BOOL LinkLockHeld;
@@ -1676,8 +1680,9 @@ Return Value:
     PIP4_ADDRESS MulticastAddress;
     KSTATUS Status;
 
-    LinkLockHeld = FALSE;
+    Group = NULL;
     IgmpLink = NULL;
+    LinkLockHeld = FALSE;
     MulticastAddress = (PIP4_ADDRESS)Request->MulticastAddress;
 
     //
@@ -1695,32 +1700,22 @@ Return Value:
     // found then the request fails.
     //
 
-    Status = STATUS_INVALID_ADDRESS;
     KeAcquireQueuedLock(IgmpLink->Lock);
     LinkLockHeld = TRUE;
-    CurrentEntry = IgmpLink->MulticastGroupList.Next;
-    while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
-        Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
-        if (Group->Address == MulticastAddress->Address) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-        CurrentEntry = CurrentEntry->Next;
-    }
-
-    if (!KSUCCESS(Status)) {
+    Group = NetpIgmpLookupGroup(IgmpLink, MulticastAddress);
+    if (Group == NULL) {
+        Status = STATUS_INVALID_ADDRESS;
         goto LeaveMulticastGroupEnd;
     }
 
     //
-    // If this is not the last reference on the group, the call is successful,
-    // but takes no further action. The link as whole remains joined to the
+    // If this is not the last leave request for the group, the call is
+    // successful, but takes no further action. The link remains joined to the
     // multicast group.
     //
 
-    if (Group->JoinCount > 1) {
-        Group->JoinCount -= 1;
+    Group->JoinCount -= 1;
+    if (Group->JoinCount != 0) {
         goto LeaveMulticastGroupEnd;
     }
 
@@ -1729,7 +1724,20 @@ Return Value:
     //
 
     LIST_REMOVE(&(Group->ListEntry));
+    Group->ListEntry.Next = NULL;
     IgmpLink->MulticastGroupCount -= 1;
+
+    //
+    // The number of leave messages sent is dictated by the robustness variable.
+    //
+
+    Group->SendCount = IgmpLink->RobustnessVariable;
+
+    //
+    // Leave messages are state change messages.
+    //
+
+    Group->Flags |= IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE;
 
     //
     // Release the lock and flush out any reports that may be in the works.
@@ -1743,14 +1751,10 @@ Return Value:
     KeFlushWorkItem(Group->Timer.WorkItem);
 
     //
-    // Now that the work item is flushed out. Officially mark that this group
-    // is not joined. Otherwise the work item may prematurely send leave
-    // messages.
+    // The send count should not have been modified.
     //
 
-    ASSERT(Group->JoinCount == 1);
-
-    Group->JoinCount = 0;
+    ASSERT(Group->SendCount == IgmpLink->RobustnessVariable);
 
     //
     // If the link is up, start sending leave messages, up to the robustness
@@ -1760,8 +1764,6 @@ Return Value:
 
     NetGetLinkState(IgmpLink->Link, &LinkUp, NULL);
     if (LinkUp != FALSE) {
-        RtlAtomicOr32(&(Group->Flags), IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE);
-        RtlAtomicExchange32(&(Group->SendCount), IgmpLink->RobustnessVariable);
         NetpIgmpSendGroupLeave(Group);
 
     //
@@ -1780,6 +1782,10 @@ LeaveMulticastGroupEnd:
 
     if (IgmpLink != NULL) {
         NetpIgmpLinkReleaseReference(IgmpLink);
+    }
+
+    if (Group != NULL) {
+        NetpIgmpGroupReleaseReference(Group);
     }
 
     return Status;
@@ -1979,10 +1985,11 @@ Return Value:
             if ((Query->GroupAddress == 0) ||
                 (Query->GroupAddress == Group->Address)) {
 
-                RtlAtomicAnd32(&(Group->Flags),
-                               ~IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE);
+                Group->Flags &= ~IGMP_MULTICAST_GROUP_FLAG_STATE_CHANGE;
+                if (Group->SendCount == 0) {
+                    Group->SendCount = 1;
+                }
 
-                RtlAtomicCompareExchange(&(Group->SendCount), 1, 0);
                 NetpIgmpQueueReportTimer(&(Group->Timer),
                                          CurrentTime,
                                          MaxResponseTime);
@@ -2123,9 +2130,7 @@ Return Value:
         Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
         if (Report->GroupAddress == Group->Address) {
             KeCancelTimer(Group->Timer.Timer);
-            RtlAtomicAnd32(&(Group->Flags),
-                           ~IGMP_MULTICAST_GROUP_FLAG_LAST_REPORT);
-
+            Group->Flags &= ~IGMP_MULTICAST_GROUP_FLAG_LAST_REPORT;
             break;
         }
 
@@ -2275,13 +2280,14 @@ Return Value:
     PIGMP_MULTICAST_GROUP Group;
 
     //
-    // If there are no more sockets joined to the group, then send leave
-    // messages. The group will be destroyed after the last leave message, so
-    // don't touch the group structure after the call to send a leave message.
+    // The worker thread should only send leave messages after the first leave
+    // message is sent by the initial leave request. The group will be
+    // destroyed after the last leave message, so don't touch the group
+    // structure after the call to send a leave message.
     //
 
     Group = (PIGMP_MULTICAST_GROUP)Parameter;
-    if (Group->JoinCount == 0) {
+    if ((Group->Flags & IGMP_MULTICAST_GROUP_FLAG_LEAVE_SENT) != 0) {
         NetpIgmpSendGroupLeave(Group);
 
     //
@@ -2537,7 +2543,6 @@ Return Value:
     PNET_PACKET_BUFFER Packet;
     PIGMP_MESSAGE Report;
     PIGMP_REPORT_V3 ReportV3;
-    ULONG SendCount;
     KSTATUS Status;
     UCHAR Type;
 
@@ -2637,22 +2642,24 @@ Return Value:
                         (PNETWORK_ADDRESS)&DestinationAddress,
                         &NetPacketList);
 
-    RtlAtomicOr32(&(Group->Flags), IGMP_MULTICAST_GROUP_FLAG_LAST_REPORT);
-
     //
-    // Queue the report to be sent again if necessary.
+    // Note that this link sent the last report for this group, making it on
+    // the hook for sending the leave messages. Also test to see whether more
+    // join messages need to be sent.
     //
 
-    SendCount = RtlAtomicAdd32(&(Group->SendCount), -1);
-
-    ASSERT((SendCount != 0) && (SendCount < 0x10000000));
-
-    if (SendCount > 1) {
-        NetpIgmpQueueReportTimer(&(Group->Timer),
-                                 KeGetRecentTimeCounter(),
-                                 IGMP_DEFAULT_UNSOLICITED_REPORT_INTERVAL);
+    KeAcquireQueuedLock(Group->IgmpLink->Lock);
+    Group->Flags |= IGMP_MULTICAST_GROUP_FLAG_LAST_REPORT;
+    if (Group->ListEntry.Next != NULL) {
+        Group->SendCount -= 1;
+        if (Group->SendCount > 0) {
+            NetpIgmpQueueReportTimer(&(Group->Timer),
+                                     KeGetRecentTimeCounter(),
+                                     IGMP_DEFAULT_UNSOLICITED_REPORT_INTERVAL);
+        }
     }
 
+    KeReleaseQueuedLock(Group->IgmpLink->Lock);
     return;
 }
 
@@ -2690,7 +2697,6 @@ Return Value:
     NET_PACKET_LIST NetPacketList;
     PNET_PACKET_BUFFER Packet;
     PIGMP_REPORT_V3 ReportV3;
-    ULONG SendCount;
     KSTATUS Status;
     UCHAR Type;
 
@@ -2791,20 +2797,28 @@ Return Value:
                         &NetPacketList);
 
     //
-    // Queue the leave message to be sent again if necessary.
+    // Note that a leave message has now been sent, allowing the worker to send
+    // more leave messages. If the worker were to send leave messages before
+    // an initial leave message is sent by the leave request, it may be doing
+    // so on behalf of a previous join message. This messes up the send count
+    // and reference counting.
     //
 
-    SendCount = RtlAtomicAdd32(&(Group->SendCount), -1);
+    KeAcquireQueuedLock(Group->IgmpLink->Lock);
+    Group->Flags |= IGMP_MULTICAST_GROUP_FLAG_LEAVE_SENT;
 
-    ASSERT((SendCount != 0) && (SendCount < 0x10000000));
+    ASSERT(Group->SendCount > 0);
 
-    if (SendCount > 1) {
+    Group->SendCount -= 1;
+    if (Group->SendCount > 0) {
         NetpIgmpQueueReportTimer(&(Group->Timer),
                                  KeGetRecentTimeCounter(),
                                  IGMP_DEFAULT_UNSOLICITED_REPORT_INTERVAL);
 
         DestroyGroup = FALSE;
     }
+
+    KeReleaseQueuedLock(Group->IgmpLink->Lock);
 
 SendGroupLeaveEnd:
     if (DestroyGroup != FALSE) {
@@ -3140,22 +3154,7 @@ Return Value:
     IgmpLink = NULL;
     NewIgmpLink = NULL;
     TreeLockHeld = FALSE;
-
-    //
-    // If the link does not support promiscuous mode, then don't allow the
-    // create to go any further.
-    //
-
-    if ((Link->Properties.Capabilities &
-         NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
-        Status = STATUS_NOT_SUPPORTED;
-        goto CreateOrLookupLinkEnd;
-    }
-
-    NewIgmpLink = MmAllocatePagedPool(sizeof(IGMP_LINK),
-                                      IGMP_ALLOCATION_TAG);
-
+    NewIgmpLink = MmAllocatePagedPool(sizeof(IGMP_LINK), IGMP_ALLOCATION_TAG);
     if (NewIgmpLink == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateOrLookupLinkEnd;
@@ -3489,7 +3488,7 @@ Return Value:
 PIGMP_MULTICAST_GROUP
 NetpIgmpCreateGroup (
     PIGMP_LINK IgmpLink,
-    ULONG GroupAddress
+    PIP4_ADDRESS GroupAddress
     )
 
 /*++
@@ -3503,7 +3502,8 @@ Arguments:
     IgmpLink - Supplies a pointer to the IGMP link to which the multicast group
         will belong.
 
-    GroupAddress - Supplies the IPv4 multicast address for the group.
+    GroupAddress - Supplies a pointer to the IPv4 multicast address for the
+        group.
 
 Return Value:
 
@@ -3526,9 +3526,10 @@ Return Value:
 
     RtlZeroMemory(Group, sizeof(IGMP_MULTICAST_GROUP));
     Group->ReferenceCount = 1;
+    Group->JoinCount = 1;
     NetpIgmpLinkAddReference(IgmpLink);
     Group->IgmpLink = IgmpLink;
-    Group->Address = GroupAddress;
+    Group->Address = GroupAddress->Address;
     Status = NetpIgmpInitializeTimer(&(Group->Timer),
                                      NetpIgmpGroupTimeoutWorker,
                                      Group);
@@ -3577,6 +3578,53 @@ Return Value:
     NetpIgmpLinkReleaseReference(Group->IgmpLink);
     MmFreePagedPool(Group);
     return;
+}
+
+PIGMP_MULTICAST_GROUP
+NetpIgmpLookupGroup (
+    PIGMP_LINK IgmpLink,
+    PIP4_ADDRESS GroupAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine finds a multicast group with the given address that the given
+    link has joined. It takes a reference on the found group.
+
+Arguments:
+
+    IgmpLink - Supplies a pointer to the IGMP link that owns the group to find.
+
+    GroupAddress - Supplies a pointer to the IPv4 multicast address of the
+        group.
+
+Return Value:
+
+    Returns a pointer to a multicast group on success or NULL on failure.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PIGMP_MULTICAST_GROUP Group;
+
+    ASSERT(KeIsQueuedLockHeld(IgmpLink->Lock) != FALSE);
+
+    CurrentEntry = IgmpLink->MulticastGroupList.Next;
+    while (CurrentEntry != &(IgmpLink->MulticastGroupList)) {
+        Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
+        if (Group->Address == GroupAddress->Address) {
+            NetpIgmpGroupAddReference(Group);
+            return Group;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    return NULL;
 }
 
 VOID
