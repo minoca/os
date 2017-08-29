@@ -217,6 +217,7 @@ FUNCTION ArpSoftwareInterruptEntry
     cps     #ARM_MODE_SYSTEM                    @ Switch to system mode.
     str     %lr, [%r2, #TRAP_USERLR]            @ Save usermode LR.
     str     %sp, [%r2, #TRAP_USERSP]            @ Save usermode SP.
+
     cpsie   i, #ARM_MODE_SVC                    @ Enable interrupts, svc mode.
 
     //
@@ -264,9 +265,9 @@ FUNCTION ArpSoftwareInterruptEntry
 
     eor     %r12, %r12                          @ Scrub volatile R12.
     tst     %r1, %r1                            @ See if r1 is FALSE.
+    eor     %r3, %r3                            @ Scrub volatile R3.
     bne     ArpSoftwareInterruptSignalCheck     @ Jump to dispatch signal.
     eor     %r2, %r2                            @ Scrub volatile R2.
-    eor     %r3, %r3                            @ Scrub volatile R3.
 
 ArpSoftwareInterruptRestore:
 

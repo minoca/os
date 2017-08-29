@@ -341,18 +341,37 @@ Return Value:
     PsSetSignalMask(&SignalMask, NULL);
 
     //
-    // Sanitize the CPSR. Preserve the current trap frame's SVC SP and LR; they
-    // were zero'd in the context and the SVC SP is needed for restoring the
-    // trap frame. Also preserve the exception CPSR. It was possibly bogus in
-    // the saved context.
+    // Sanitize the CPSR.
     //
 
     Frame.Cpsr &= ~(ARM_MODE_MASK | PSR_FLAG_IRQ | PSR_FLAG_FIQ |
                     PSR_FLAG_ALIGNMENT);
 
     Frame.Cpsr |= ARM_MODE_USER;
-    Frame.SvcSp = TrapFrame->SvcSp;
-    Frame.SvcLink = TrapFrame->SvcLink;
+
+    //
+    // Set the SVC stack pointer to what it should be for this thread's stack.
+    // Restoring user mode signal context should always be done while servicing
+    // a system call (eg not during a page fault or interrupt). So the trap
+    // frame itself should be at the end of the stack.
+    //
+
+    Frame.SvcSp = (UINTN)TrapFrame;
+
+    ASSERT(Frame.SvcSp ==
+           ((UINTN)Thread->KernelStack + Thread->KernelStackSize -
+            sizeof(TRAP_FRAME)));
+
+    //
+    // Scrub SVC link since execution is going back to user mode.
+    //
+
+    Frame.SvcLink = 0;
+
+    //
+    // Promote the trap frame to "complete".
+    //
+
     Frame.ExceptionCpsr = 0;
     RtlCopyMemory(TrapFrame, &Frame, sizeof(TRAP_FRAME));
     if (((Flags & SIGNAL_CONTEXT_FLAG_FPU_VALID) != 0) &&
