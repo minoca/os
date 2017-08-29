@@ -668,7 +668,7 @@ Return Value:
             Request.FieldsToSet = FILE_PROPERTY_FIELD_FILE_SIZE;
             Request.FileProperties = &FileProperties;
             FileProperties.Size = Parameters->Size;
-            Status = IoSetFileInformation(FALSE, IoHandle, &Request);
+            Status = IoSetFileInformation(TRUE, IoHandle, &Request);
             if (!KSUCCESS(Status)) {
                 goto SysMapOrUnmapMemoryEnd;
             }
