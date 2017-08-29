@@ -1172,8 +1172,6 @@ Return Value:
         }
     }
 
-    ASSERT(Source->ResidentSet == Destination->ResidentSet + 1);
-
     //
     // Invalidate the entire TLB as all the source process's writable image
     // sections were converted to read-only image sections.
