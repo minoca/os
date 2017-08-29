@@ -992,7 +992,7 @@ Return Value:
             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0);
 
     PromiscuousMode = FALSE;
-    if (LIST_EMPTY(&(Link->MulticastGroupList)) != FALSE) {
+    if (LIST_EMPTY(&(Link->MulticastGroupList)) == FALSE) {
         PromiscuousMode = TRUE;
     }
 

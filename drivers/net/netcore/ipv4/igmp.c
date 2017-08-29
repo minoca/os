@@ -642,11 +642,6 @@ NetpIgmpSendPackets (
     PNET_PACKET_LIST PacketList
     );
 
-KSTATUS
-NetpIgmpUpdateAddressFilters (
-    PIGMP_LINK IgmpLink
-    );
-
 PIGMP_LINK
 NetpIgmpCreateOrLookupLink (
     PNET_LINK Link,
@@ -1609,8 +1604,7 @@ Return Value:
 
     //
     // If the group was found and it had been previously joined, then the
-    // multicast membership has already been reported and the hardware has
-    // already been programmed.
+    // multicast membership has already been reported.
     //
 
     Group->JoinCount += 1;
@@ -1622,23 +1616,6 @@ Return Value:
     }
 
     ASSERT(Group == NewGroup);
-
-    //
-    // Otherwise the hardware filters needs to be updated and a membership
-    // report needs to be sent. The filters are updated with the lock held as
-    // the each group's address needs to be sent to the hardware. This also
-    // makes it necessary to have the new group already on the link. It would
-    // also be bad to have a second join call run through before the hardware
-    // is initialized.
-    //
-
-    Status = NetpIgmpUpdateAddressFilters(IgmpLink);
-    if (!KSUCCESS(Status)) {
-        Group->JoinCount = 0;
-        LIST_REMOVE(&(Group->ListEntry));
-        IgmpLink->MulticastGroupCount -= 1;
-        goto JoinMulticastGroupEnd;
-    }
 
     NewGroup = NULL;
     KeReleaseQueuedLock(IgmpLink->Lock);
@@ -1753,17 +1730,6 @@ Return Value:
 
     LIST_REMOVE(&(Group->ListEntry));
     IgmpLink->MulticastGroupCount -= 1;
-
-    //
-    // Now that the group is out of the list, update the filters.
-    //
-
-    Status = NetpIgmpUpdateAddressFilters(IgmpLink);
-    if (!KSUCCESS(Status)) {
-        INSERT_BEFORE(&(Group->ListEntry), &(IgmpLink->MulticastGroupList));
-        IgmpLink->MulticastGroupCount += 1;
-        goto LeaveMulticastGroupEnd;
-    }
 
     //
     // Release the lock and flush out any reports that may be in the works.
@@ -3126,72 +3092,6 @@ Return Value:
                                         IP4_PROTOCOL_NUMBER);
 
     return;
-}
-
-KSTATUS
-NetpIgmpUpdateAddressFilters (
-    PIGMP_LINK IgmpLink
-    )
-
-/*++
-
-Routine Description:
-
-    This routine updates the given links address filtering based on the
-    multicast groups to which the link is currently joined. It will gather
-    a list of all the physical layer addresses that need to be enabled and pass
-    them to the hardware for it to update its filters. It falls back to
-    enabling promiscuous mode if the link does not support multicast address
-    filtering.
-
-Arguments:
-
-    IgmpLink - Supplies a pointer to the IGMP link whose filters are to be
-        updated.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PNET_DEVICE_LINK_GET_SET_INFORMATION GetSetInformation;
-    PNET_LINK Link;
-    ULONG PromiscuousMode;
-    UINTN PromiscuousModeSize;
-    KSTATUS Status;
-
-    ASSERT(KeIsQueuedLockHeld(IgmpLink->Lock) != FALSE);
-
-    Link = IgmpLink->Link;
-    GetSetInformation = Link->Properties.Interface.GetSetInformation;
-
-    //
-    // Set the link into promiscuous mode if there are any groups. Otherwise
-    // turn it off. Promiscuous must be supported for the link to have made it
-    // this far in IGMP.
-    //
-    // TODO: Implement real multicast address filtering.
-    //
-
-    ASSERT((Link->Properties.Capabilities &
-            NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0);
-
-    PromiscuousMode = FALSE;
-    if (IgmpLink->MulticastGroupCount != 0) {
-        PromiscuousMode = TRUE;
-    }
-
-    PromiscuousModeSize = sizeof(ULONG);
-    Status = GetSetInformation(Link->Properties.DeviceContext,
-                               NetLinkInformationPromiscuousMode,
-                               &PromiscuousMode,
-                               &PromiscuousModeSize,
-                               TRUE);
-
-    return Status;
 }
 
 PIGMP_LINK
