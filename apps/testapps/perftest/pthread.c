@@ -149,7 +149,9 @@ Return Value:
             // to support on the system. Allow memory failures.
             //
 
-            if ((JoinThread == 0) && (Status == ENOMEM)) {
+            if ((JoinThread == 0) &&
+                ((Status == ENOMEM) || (Status == EAGAIN))) {
+
                 continue;
             }
 
