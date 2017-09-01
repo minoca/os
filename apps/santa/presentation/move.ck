@@ -33,7 +33,7 @@ Environment:
 //
 
 from santa.config import config;
-from santa.file import cptree, mv, exists, rmdir;
+from santa.file import cptree, mv, exists, isdir, mkdir, rmdir;
 from santa.presentation import Presentation, PresentationError;
 
 //

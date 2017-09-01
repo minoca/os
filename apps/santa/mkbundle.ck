@@ -34,6 +34,9 @@ from app import argv;
 from bundle import create;
 
 import santa;
+from santa.config import loadConfig;
+from santa.modules import enumerateCommands, enumerateContainmentTypes,
+    enumeratePresentationTypes, initModuleSupport;
 
 import io;
 import os;
@@ -94,6 +97,20 @@ Return Value:
         Core.raise(ValueError("Usage: %s output_file" % [argv[0]]));
     }
 
+    //
+    // Perform enough app-wide init to do the enumerations below.
+    //
+
+    loadConfig(null, {});
+    initModuleSupport();
+
+    //
+    // Load up all the various modules to pull in the full module graph.
+    //
+
+    enumerateCommands();
+    enumerateContainmentTypes();
+    enumeratePresentationTypes();
     modules = [];
     for (key in Core.modules()) {
         if (!ignoredModules.contains(key)) {

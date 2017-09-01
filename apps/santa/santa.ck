@@ -166,7 +166,7 @@ Return Value:
 
     loadConfig(configpath, override);
     initModuleSupport();
-    if (args.length() == 0) {
+    if (!help && (args.length() == 0)) {
         help = true;
         Core.print("Error: expected a command.");
     }
@@ -221,6 +221,6 @@ Return Value:
 }
 
 if ((os.basename)(argv[0]).contains("santa")) {
-    main();
+    (os.exit)(main());
 }
 

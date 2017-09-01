@@ -60,6 +60,7 @@ function build() {
         "apps/profile:profile",
         "apps/setup:msetup",
         "apps/setup:build_msetup",
+        "apps/santa:build_santa",
         "apps/swiss:swiss",
         "apps/swiss:build_swiss",
         "apps/tzcomp:tz_files",

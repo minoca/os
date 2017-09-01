@@ -537,6 +537,8 @@ class PatchManager {
 
                 break;
             }
+
+            number += 1;
         }
 
         //

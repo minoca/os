@@ -795,8 +795,9 @@ class Build {
         //
 
         (os.chdir)(dirname);
-        Core.setModulePath(modulePath + [dirname]);
         _startDirectory = (os.getcwd)();
+        this.filePath = _startDirectory + "/" + basename;
+        Core.setModulePath([_startDirectory] + modulePath);
         _module = Core.importModule(basename[0..-3]);
         _module.run();
 

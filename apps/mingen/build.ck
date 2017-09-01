@@ -35,8 +35,6 @@ function build() {
     var bootstrapTool;
     var config;
     var entries;
-    var includes;
-    var libs;
     var sources;
     var tool;
 

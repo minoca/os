@@ -37,6 +37,7 @@ APPS = banner   \
        mount    \
        netcon   \
        profile  \
+       santa    \
        setup    \
        swiss    \
        testapps \
@@ -58,5 +59,5 @@ libc: osbase
 $(APPS): libc lib netlink
 lib: libc
 netlink: libc
-setup mingen: ck
+setup santa mingen: ck
 

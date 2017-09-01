@@ -590,6 +590,42 @@ Return Value:
 }
 
 function
+defaultPackagelang (
+    build
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the default lang subpackage function, which pulls
+    out language files.
+
+Arguments:
+
+    build - Supplies the build manager object.
+
+Return Value:
+
+    Returns true if the package has contents and should be created.
+
+    Returns false if it turns out there's no need to create the package.
+
+--*/
+
+{
+
+    build.vars.description = "Languages for package " + build.vars.name;
+    build.vars.section = "lang";
+    shell("for d in ${langdir:-/usr/share/locale}; do\n"
+          "  mkdir -p \"$subpkgdir\"/${d%/*}\n"
+          "  mv \"$pkgdir\"/\"$d\" \"$subpkgdir\"/\"$d\"\n"
+          "done");
+
+    return true;
+}
+
+function
 defaultClean (
     build
     )
