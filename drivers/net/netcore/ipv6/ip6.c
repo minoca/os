@@ -1514,21 +1514,235 @@ Return Value:
 
 {
 
+    UCHAR ByteOption;
+    ULONG IntegerOption;
+    PIP6_ADDRESS InterfaceAddress;
+    PSOCKET_IP6_MULTICAST_REQUEST Ip6MulticastRequest;
     SOCKET_IP6_OPTION Ip6Option;
+    PIP6_ADDRESS MulticastAddress;
+    NET_SOCKET_MULTICAST_REQUEST MulticastRequest;
+    PNET_PROTOCOL_ENTRY Protocol;
+    UINTN RequiredSize;
+    PVOID Source;
     KSTATUS Status;
 
     if (InformationType != SocketInformationIp6) {
-        return STATUS_INVALID_PARAMETER;
+        Status = STATUS_INVALID_PARAMETER;
+        goto Ip6GetSetInformationEnd;
     }
 
+    RequiredSize = 0;
+    Source = NULL;
     Status = STATUS_SUCCESS;
-    Ip6Option = (SOCKET_IP6_OPTION)Option;
+    Protocol = Socket->Protocol;
+    Ip6Option = (SOCKET_IP4_OPTION)Option;
     switch (Ip6Option) {
+    case SocketIp6OptionUnicastHops:
+        RequiredSize = sizeof(ULONG);
+        if (Set != FALSE) {
+            if (*DataSize < RequiredSize) {
+                *DataSize = RequiredSize;
+                Status = STATUS_BUFFER_TOO_SMALL;
+                break;
+            }
+
+            IntegerOption = *((PULONG)Data);
+            if (IntegerOption > MAX_UCHAR) {
+                Status = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            Socket->HopLimit = (UCHAR)IntegerOption;
+
+        } else {
+            Source = &IntegerOption;
+            IntegerOption = Socket->HopLimit;
+        }
+
+        break;
+
+    case SocketIp6OptionJoinMulticastGroup:
+    case SocketIp6OptionLeaveMulticastGroup:
+        if (Set == FALSE) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            break;
+        }
+
+        //
+        // This is not allowed on connection based protocols.
+        //
+
+        if ((Protocol->Flags & NET_PROTOCOL_FLAG_CONNECTION_BASED) != 0) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            break;
+        }
+
+        RequiredSize = sizeof(SOCKET_IP6_MULTICAST_REQUEST);
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        Ip6MulticastRequest = (PSOCKET_IP6_MULTICAST_REQUEST)Data;
+        if (!IP6_IS_MULTICAST_ADDRESS(Ip6MulticastRequest->Address)) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        RtlZeroMemory(&MulticastRequest, sizeof(NET_SOCKET_MULTICAST_REQUEST));
+        MulticastAddress = (PIP6_ADDRESS)&(MulticastRequest.MulticastAddress);
+        MulticastAddress->Domain = NetDomainIp6;
+        RtlCopyMemory(MulticastAddress->Address,
+                      Ip6MulticastRequest->Address,
+                      IP6_ADDRESS_SIZE);
+
+        InterfaceAddress = (PIP6_ADDRESS)&(MulticastRequest.InterfaceAddress);
+        InterfaceAddress->Domain = NetDomainIp6;
+        MulticastRequest.InterfaceId = Ip6MulticastRequest->Interface;
+        if (Ip6Option == SocketIp6OptionJoinMulticastGroup) {
+            Status = NetJoinSocketMulticastGroup(Socket, &MulticastRequest);
+
+        } else {
+            Status = NetLeaveSocketMulticastGroup(Socket, &MulticastRequest);
+        }
+
+        goto Ip6GetSetInformationEnd;
+
+    case SocketIp6OptionMulticastHops:
+        RequiredSize = sizeof(UCHAR);
+        if (Set != FALSE) {
+            if (*DataSize < RequiredSize) {
+                *DataSize = RequiredSize;
+                Status = STATUS_BUFFER_TOO_SMALL;
+                break;
+            }
+
+            ByteOption = *((PUCHAR)Data);
+            Socket->MulticastHopLimit = ByteOption;
+
+        } else {
+            Source = &ByteOption;
+            ByteOption = Socket->MulticastHopLimit;
+        }
+
+        break;
+
+    case SocketIp6OptionMulticastInterface:
+        RequiredSize = sizeof(ULONG);
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        //
+        // Multiple structure types are allowed for the set. The size is used
+        // to determine which one was supplied.
+        //
+
+        MulticastAddress = (PIP6_ADDRESS)&(MulticastRequest.MulticastAddress);
+        InterfaceAddress = (PIP6_ADDRESS)&(MulticastRequest.InterfaceAddress);
+        if (Set != FALSE) {
+            RtlZeroMemory(&MulticastRequest,
+                          sizeof(NET_SOCKET_MULTICAST_REQUEST));
+
+            MulticastAddress->Domain = NetDomainIp6;
+            InterfaceAddress->Domain = NetDomainIp6;
+            MulticastRequest.InterfaceId = *((PULONG)Data);
+            Status = NetSetSocketMulticastInterface(Socket, &MulticastRequest);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+
+        //
+        // A get request only ever returns the IPv6 address of the interface.
+        //
+
+        } else {
+            Status = NetGetSocketMulticastInterface(Socket, &MulticastRequest);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+
+            IntegerOption = MulticastRequest.InterfaceId;
+            Source = &IntegerOption;
+        }
+
+        break;
+
+    case SocketIp6OptionMulticastLoopback:
+        RequiredSize = sizeof(UCHAR);
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        if (Set != FALSE) {
+            ByteOption = *((PUCHAR)Data);
+            if (ByteOption != FALSE) {
+                RtlAtomicOr32(&(Socket->Flags),
+                              NET_SOCKET_FLAG_MULTICAST_LOOPBACK);
+
+            } else {
+                RtlAtomicAnd32(&(Socket->Flags),
+                               ~NET_SOCKET_FLAG_MULTICAST_LOOPBACK);
+            }
+
+        } else {
+            Source = &ByteOption;
+            ByteOption = FALSE;
+            if ((Socket->Flags & NET_SOCKET_FLAG_MULTICAST_LOOPBACK) != 0) {
+                ByteOption = TRUE;
+            }
+        }
+
+        break;
+
     default:
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
         break;
     }
 
+    if (!KSUCCESS(Status)) {
+        goto Ip6GetSetInformationEnd;
+    }
+
+    //
+    // Truncate all copies for get requests down to the required size and
+    // always return the required size on set requests.
+    //
+
+    if (*DataSize > RequiredSize) {
+        *DataSize = RequiredSize;
+    }
+
+    //
+    // For get requests, copy the gathered information to the supplied data
+    // buffer.
+    //
+
+    if (Set == FALSE) {
+
+        ASSERT(Source != NULL);
+
+        RtlCopyMemory(Data, Source, *DataSize);
+
+        //
+        // If the copy truncated the data, report that the given buffer was too
+        // small. The caller can choose to ignore this if the truncated data is
+        // enough.
+        //
+
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto Ip6GetSetInformationEnd;
+        }
+    }
+
+Ip6GetSetInformationEnd:
     return Status;
 }
 
