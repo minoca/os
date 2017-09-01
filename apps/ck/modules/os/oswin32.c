@@ -32,6 +32,7 @@ Environment:
 #define _WIN32_WINNT 0x0601
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -378,9 +379,40 @@ Return Value:
 
 {
 
+    DIR *Directory;
+    struct dirent *DirectoryEntry;
     INT Result;
     INT Try;
 
+    //
+    // See if the directory is empty. If it isn't, then don't spend all this
+    // time spinning waiting for something to happen that won't.
+    //
+
+    Directory = opendir(Path);
+    if (Directory == NULL) {
+        return -1;
+    }
+
+    while (TRUE) {
+        errno = 0;
+        DirectoryEntry = readdir(Directory);
+        if (DirectoryEntry == NULL) {
+            break;
+        }
+
+        if ((strcmp(DirectoryEntry->d_name, ".") == 0) ||
+            (strcmp(DirectoryEntry->d_name, "..") == 0)) {
+
+            continue;
+        }
+
+        closedir(Directory);
+        errno = ENOTEMPTY;
+        return -1;
+    }
+
+    closedir(Directory);
     for (Try = 0; Try < UNLINK_RETRY_COUNT * 2; Try += 1) {
 
         //
