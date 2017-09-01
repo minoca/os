@@ -490,6 +490,13 @@ Return Value:
         NewSocket->PacketSizeInformation.HeaderSize += sizeof(IP6_HEADER);
     }
 
+    //
+    // Set IPv6 specific socket setting defaults.
+    //
+
+    NewSocket->HopLimit = IP6_DEFAULT_HOP_LIMIT;
+    NewSocket->DifferentiatedServicesCodePoint = 0;
+    NewSocket->MulticastHopLimit = IP6_DEFAULT_MULTICAST_HOP_LIMIT;
     return NetInitializeMulticastSocket(NewSocket);
 }
 
@@ -859,14 +866,20 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
+    ULONG DataOffset;
+    ULONG FooterOffset;
     PIP6_HEADER Header;
+    UCHAR HopLimit;
     PNET_LINK Link;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     PIP6_ADDRESS LocalAddress;
     ULONG MaxPacketSize;
+    PNET_SOCKET_LINK_OVERRIDE MulticastInterface;
     PNET_PACKET_BUFFER Packet;
+    ULONG PacketFlags;
     PNETWORK_ADDRESS PhysicalNetworkAddress;
     NETWORK_ADDRESS PhysicalNetworkAddressBuffer;
+    NET_RECEIVE_CONTEXT ReceiveContext;
     PIP6_ADDRESS RemoteAddress;
     PNET_DATA_LINK_SEND Send;
     PNETWORK_ADDRESS Source;
@@ -878,6 +891,27 @@ Return Value:
     ASSERT((Socket->KernelSocket.Type == NetSocketRaw) ||
            (Socket->KernelSocket.Protocol ==
             Socket->Protocol->ParentProtocolNumber));
+
+    //
+    // Multicast packets must use the multicast hop limit, which default to 1
+    // rather than 64, as multicast packets aren't typically meant to go beyond
+    // the local network.
+    //
+
+    HopLimit = Socket->HopLimit;
+    RemoteAddress = (PIP6_ADDRESS)Destination;
+    if (IP6_IS_MULTICAST_ADDRESS(RemoteAddress->Address) != FALSE) {
+        HopLimit = Socket->MulticastHopLimit;
+
+        //
+        // Also use the multicast interface information if it is present.
+        //
+
+        MulticastInterface = &(Socket->MulticastInterface);
+        if (MulticastInterface->LinkInformation.Link != NULL) {
+            LinkOverride = MulticastInterface;
+        }
+    }
 
     //
     // If an override was supplied, prefer that link and link address.
@@ -901,7 +935,6 @@ Return Value:
     }
 
     LocalAddress = (PIP6_ADDRESS)Source;
-    RemoteAddress = (PIP6_ADDRESS)Destination;
 
     //
     // There better be a link and link address.
@@ -1008,7 +1041,7 @@ Return Value:
                    SOCKET_INTERNET_PROTOCOL_RAW);
 
             Header->NextHeader = Socket->KernelSocket.Protocol;
-            Header->HopLimit = IP6_DEFAULT_HOP_LIMIT;
+            Header->HopLimit = HopLimit;
             RtlCopyMemory(&(Header->SourceAddress),
                           &(LocalAddress->Address),
                           IP6_ADDRESS_SIZE);
@@ -1055,6 +1088,46 @@ Return Value:
                 Packet->FooterOffset -= sizeof(IP6_HEADER);
                 Packet->DataSize -= sizeof(IP6_HEADER);
             }
+        }
+    }
+
+    //
+    // If this is a multicast address and the loopback bit is set, send the
+    // packets back up the stack before sending them down. This needs to be
+    // done first because the physical layer releases the packet structures
+    // when it's finished with them.
+    //
+
+    if ((IP6_IS_MULTICAST_ADDRESS(RemoteAddress->Address) != FALSE) &&
+        ((Socket->Flags & NET_SOCKET_FLAG_MULTICAST_LOOPBACK) != 0)) {
+
+        RtlZeroMemory(&ReceiveContext, sizeof(NET_RECEIVE_CONTEXT));
+        ReceiveContext.Link = Link;
+        ReceiveContext.Network = Socket->Network;
+        CurrentEntry = PacketList->Head.Next;
+        while (CurrentEntry != &(PacketList->Head)) {
+            Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
+            CurrentEntry = CurrentEntry->Next;
+
+            //
+            // Save and restore the data and footer offsets as the higher
+            // level protocols modify them as the packet moves up the stack.
+            // Also save and restore the flags and set the checksum offload
+            // flags, as if the hardware already checked the packet. It would
+            // be silly for the receive path to validate checksums that were
+            // just calculated or to validate checksums that were not yet
+            // calculated due to offloading.
+            //
+
+            DataOffset = Packet->DataOffset;
+            FooterOffset = Packet->FooterOffset;
+            ReceiveContext.Packet = Packet;
+            PacketFlags = Packet->Flags;
+            Packet->Flags |= NET_PACKET_FLAG_CHECKSUM_OFFLOAD_MASK;
+            NetpIp6ProcessReceivedData(&ReceiveContext);
+            Packet->DataOffset = DataOffset;
+            Packet->FooterOffset = FooterOffset;
+            Packet->Flags = PacketFlags;
         }
     }
 

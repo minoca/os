@@ -94,7 +94,8 @@ Author:
 //
 
 #define IP6_DEFAULT_HOP_LIMIT 64
-#define IP6_MAX_HOP_LIMIT 0xFFFF
+#define IP6_DEFAULT_MULTICAST_HOP_LIMIT 1
+#define IP6_MAX_HOP_LIMIT 0xFF
 
 //
 // Define the size of an IPv6 address, in bytes.
