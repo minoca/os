@@ -41,6 +41,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip4.h>
+#include <minoca/net/ip6.h>
 #include <minoca/kernel/acpi.h>
 #include <minoca/fw/smbios.h>
 #include "ethernet.h"
@@ -155,6 +156,14 @@ ULONG EthernetDebugFlags = 0;
 
 UCHAR NetEthernetIp4MulticastBase[ETHERNET_ADDRESS_SIZE] =
     {0x01, 0x00, 0x5E, 0x00, 0x00, 0x00};
+
+//
+// Stores the base MAC address for all IPv6 multicast addresses. The last four
+// bytes are taken from last four bytes of the IPv6 address.
+//
+
+UCHAR NetEthernetIp6MulticastBase[ETHERNET_ADDRESS_SIZE] =
+    {0x33, 0x33, 0x00, 0x00, 0x00, 0x00};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -626,6 +635,7 @@ Return Value:
     ULONG Ip4AddressMask;
     PUCHAR Ip4BytePointer;
     PIP4_ADDRESS Ip4Multicast;
+    PIP6_ADDRESS Ip6Multicast;
     KSTATUS Status;
 
     BytePointer = (PUCHAR)(PhysicalAddress->Address);
@@ -685,6 +695,23 @@ Return Value:
             BytePointer[3] |= Ip4BytePointer[1];
             BytePointer[4] = Ip4BytePointer[2];
             BytePointer[5] = Ip4BytePointer[3];
+            break;
+
+        case NetDomainIp6:
+
+            //
+            // The IPv6 multicast MAC address is formed by taking the last four
+            // bytes of the IPv6 address and prepending them with two bytes of
+            // 0x33.
+            //
+
+            Ip6Multicast = (PIP6_ADDRESS)NetworkAddress;
+            BytePointer[0] = NetEthernetIp6MulticastBase[0];
+            BytePointer[1] = NetEthernetIp6MulticastBase[1];
+            BytePointer[2] = Ip6Multicast->Address[12];
+            BytePointer[3] = Ip6Multicast->Address[13];
+            BytePointer[4] = Ip6Multicast->Address[14];
+            BytePointer[5] = Ip6Multicast->Address[15];
             break;
 
         default:

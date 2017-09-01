@@ -357,6 +357,27 @@ Return Value:
 --*/
 
 VOID
+NetpIcmp6Initialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for the ICMPv6 protocol.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
 NetpNetlinkGenericInitialize (
     ULONG Phase
     );

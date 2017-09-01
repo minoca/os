@@ -2384,13 +2384,12 @@ Return Value:
     }
 
     RequestSize = sizeof(NET_NETWORK_MULTICAST_REQUEST);
-    Status = Protocol->Interface.GetSetInformation(
-                                           NULL,
-                                           SocketInformationIgmp,
-                                           Option,
-                                           Request,
-                                           &RequestSize,
-                                           TRUE);
+    Status = Protocol->Interface.GetSetInformation(NULL,
+                                                   SocketInformationIgmp,
+                                                   Option,
+                                                   Request,
+                                                   &RequestSize,
+                                                   TRUE);
 
     return Status;
 }

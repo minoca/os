@@ -36,6 +36,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip6.h>
+#include <minoca/net/icmp6.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -220,6 +221,25 @@ NET_NETWORK_ENTRY NetIp6Network = {
 };
 
 //
+// Store well-known IPv6 addresses.
+//
+
+const UCHAR NetIp6AllNodesMulticastAddress[IP6_ADDRESS_SIZE] = {
+    0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+};
+
+const UCHAR NetIp6AllRoutersMulticastAddress[IP6_ADDRESS_SIZE] = {
+    0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02
+};
+
+const UCHAR NetIp6AllMld2RoutersMulticastAddress[IP6_ADDRESS_SIZE] = {
+    0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -289,6 +309,7 @@ Return Value:
     PNET_LINK_ADDRESS_ENTRY AddressEntry;
     IP6_ADDRESS InitialAddress;
     PUCHAR MacAddress;
+    IP6_ADDRESS MulticastAddress;
     PNETWORK_ADDRESS PhysicalAddress;
     KSTATUS Status;
 
@@ -329,6 +350,24 @@ Return Value:
                                        NULL,
                                        FALSE,
                                        &AddressEntry);
+
+    if (!KSUCCESS(Status)) {
+        goto Ip6InitializeLinkEnd;
+    }
+
+    //
+    // Every IPv6 node should join the all-nodes multicast group.
+    //
+
+    RtlZeroMemory(&MulticastAddress, sizeof(IP6_ADDRESS));
+    MulticastAddress.Domain = NetDomainIp6;
+    RtlCopyMemory(MulticastAddress.Address,
+                  NetIp6AllNodesMulticastAddress,
+                  IP6_ADDRESS_SIZE);
+
+    Status = NetJoinLinkMulticastGroup(Link,
+                                       AddressEntry,
+                                       (PNETWORK_ADDRESS)&MulticastAddress);
 
     if (!KSUCCESS(Status)) {
         goto Ip6InitializeLinkEnd;
@@ -1532,11 +1571,11 @@ Return Value:
     }
 
     Ip6Address = (PIP6_ADDRESS)Address;
-    if (IP6_IS_ANY_ADDRESS(Ip6Address) != FALSE) {
+    if (IP6_IS_ANY_ADDRESS(Ip6Address->Address) != FALSE) {
         return NetAddressAny;
     }
 
-    if (IP6_IS_MULTICAST_ADDRESS(Ip6Address) != FALSE) {
+    if (IP6_IS_MULTICAST_ADDRESS(Ip6Address->Address) != FALSE) {
         return NetAddressMulticast;
     }
 
@@ -1730,13 +1769,39 @@ Return Value:
 
 {
 
+    UINTN Option;
+    PNET_PROTOCOL_ENTRY Protocol;
+    UINTN RequestSize;
+    KSTATUS Status;
+
     //
-    // TODO: Implement MLD.
+    // This isn't going to get very far without ICMPv6 support.
     //
 
-    ASSERT(FALSE);
+    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_ICMP6);
+    if (Protocol == NULL) {
+        return STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+    }
 
-    return STATUS_NOT_IMPLEMENTED;
+    //
+    // ICMPv6 actually doesn't depend on a socket to join/leave a multicast
+    // group. Don't bother passing one around.
+    //
+
+    Option = SocketIcmp6OptionLeaveMulticastGroup;
+    if (Join != FALSE) {
+        Option = SocketIcmp6OptionJoinMulticastGroup;
+    }
+
+    RequestSize = sizeof(NET_NETWORK_MULTICAST_REQUEST);
+    Status = Protocol->Interface.GetSetInformation(NULL,
+                                                   SocketInformationIcmp6,
+                                                   Option,
+                                                   Request,
+                                                   &RequestSize,
+                                                   TRUE);
+
+    return Status;
 }
 
 //
@@ -1803,7 +1868,7 @@ Return Value:
     //
 
     Status = STATUS_SUCCESS;
-    if (IP6_IS_MULTICAST_ADDRESS(Ip6Address) != FALSE) {
+    if (IP6_IS_MULTICAST_ADDRESS(Ip6Address->Address) != FALSE) {
         AddressType = NetAddressMulticast;
         goto Ip6TranslateNetworkAddressEnd;
     }

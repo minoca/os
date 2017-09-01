@@ -46,7 +46,9 @@ OBJS = addr.o            \
        ipv4/dhcp.o       \
        ipv4/igmp.o       \
        ipv4/ip4.o        \
+       ipv6/icmp6.o      \
        ipv6/ip6.o        \
+       ipv6/mld.o        \
        netlink/netlink.o \
        netlink/genctrl.o \
        netlink/generic.o \

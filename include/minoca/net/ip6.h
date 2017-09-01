@@ -29,11 +29,11 @@ Author:
 // address.
 //
 
-#define IP6_IS_ANY_ADDRESS(_Ip6Address)                \
-    ((*((PULONG)&((_Ip6Address)->Address[0])) == 0) && \
-     (*((PULONG)&((_Ip6Address)->Address[4])) == 0) && \
-     (*((PULONG)&((_Ip6Address)->Address[8])) == 0) && \
-     (*((PULONG)&((_Ip6Address)->Address[12])) == 0))
+#define IP6_IS_ANY_ADDRESS(_Ip6Address)     \
+    ((*((PULONG)&(_Ip6Address[0])) == 0) && \
+     (*((PULONG)&(_Ip6Address[4])) == 0) && \
+     (*((PULONG)&(_Ip6Address[8])) == 0) && \
+     (*((PULONG)&(_Ip6Address[12])) == 0))
 
 //
 // This macros determines whether or not the given IPv6 address is a multicast
@@ -41,7 +41,7 @@ Author:
 //
 
 #define IP6_IS_MULTICAST_ADDRESS(_Ip6Address) \
-    ((_Ip6Address)->Address[0] == 0xFF)
+    ((_Ip6Address[0]) == 0xFF)
 
 //
 // This macros determines whether or not the given IPv6 address is a multicast
@@ -50,17 +50,16 @@ Author:
 
 #define IP6_IS_MULTICAST_LINK_LOCAL_ADDRESS(_Ip6Address) \
     (IN6_IS_ADDR_MULTICAST(_Ip6Address) &&               \
-     (((_Ip6Address)->Address[1] & 0x0F) == 0x2))
+     (((_Ip6Address[1]) & 0x0F) == 0x2))
 
 //
 // This macros determines whether or not the given IPv6 address is a unicast
 // link-local address.
 //
 
-#define IP6_IS_UNICAST_LINK_LOCAL_ADDRESS(_Ip6Address) \
-    ((*((PULONG)&((_Ip6Address)->Address[0])) ==       \
-      CPU_TO_NETWORK32(0xFE800000)) &&                 \
-     (*((PULONG)&((_Ip6Address)->Address[4])) == 0))
+#define IP6_IS_UNICAST_LINK_LOCAL_ADDRESS(_Ip6Address)                 \
+    ((*((PULONG)&(_Ip6Address[0])) == CPU_TO_NETWORK32(0xFE800000)) && \
+     (*((PULONG)&(_Ip6Address[4])) == 0))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -102,6 +101,22 @@ Author:
 //
 
 #define IP6_ADDRESS_SIZE 16
+
+//
+// Define the IPv6 extension header options types.
+//
+
+#define IP6_OPTION_TYPE_PAD1 0
+#define IP6_OPTION_TYPE_PADN 1
+#define IP6_OPTION_TYPE_ROUTER_ALERT 5
+
+//
+// Define the IPv6 router alert codes.
+//
+
+#define IP6_ROUTER_ALERT_CODE_MLD 0
+#define IP6_ROUTER_ALERT_CODE_RSVP 1
+#define IP6_ROUTER_ALERT_CODE_ACTIVE_NETWORK 2
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -173,6 +188,47 @@ typedef struct _IP6_HEADER {
     BYTE DestinationAddress[IP6_ADDRESS_SIZE];
 } PACKED IP6_HEADER, *PIP6_HEADER;
 
+/*++
+
+Structure Description:
+
+    This structure defines the header common to all IPv6 extension headers.
+
+Members:
+
+    NextHeader - Stores the type of the header following this extension header.
+
+    Length - Stores the length of the extension header, not including the first
+        8 bytes; all extension headers must be an integer multiple of 8 bytes.
+
+--*/
+
+typedef struct _IP6_EXTENSION_HEADER {
+    UCHAR NextHeader;
+    UCHAR Length;
+} PACKED IP6_EXTENSION_HEADER, *PIP6_EXTENSION_HEADER;
+
+/*++
+
+Structure Description:
+
+    This structure defines an IPv6 extension header option. The variable-length
+    option data immediately follows this structure.
+
+Members:
+
+    Type - Stores the type of IPv6 option. See IP6_OPTION_TYPE_* for
+        definitions.
+
+    Length - Stores the length of the IPv6 option, in bytes.
+
+--*/
+
+typedef struct _IP6_OPTION {
+    UCHAR Type;
+    UCHAR Length;
+} PACKED IP6_OPTION, *PIP6_OPTION;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -180,3 +236,4 @@ typedef struct _IP6_HEADER {
 //
 // -------------------------------------------------------- Function Prototypes
 //
+

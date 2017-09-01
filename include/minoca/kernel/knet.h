@@ -212,12 +212,14 @@ Author:
 // Define common internet protocol numbers, as defined by the IANA.
 //
 
+#define SOCKET_INTERNET_PROTOCOL_HOPOPT 0
 #define SOCKET_INTERNET_PROTOCOL_ICMP 1
 #define SOCKET_INTERNET_PROTOCOL_IGMP 2
 #define SOCKET_INTERNET_PROTOCOL_IPV4 4
 #define SOCKET_INTERNET_PROTOCOL_TCP 6
 #define SOCKET_INTERNET_PROTOCOL_UDP 17
 #define SOCKET_INTERNET_PROTOCOL_IPV6 41
+#define SOCKET_INTERNET_PROTOCOL_ICMP6 58
 
 //
 // Define non-IANA protocol numbers starting with the raw protocol at 255, the
@@ -339,6 +341,7 @@ typedef enum _SOCKET_INFORMATION_TYPE {
     SocketInformationIp6 = SOCKET_INTERNET_PROTOCOL_IPV6,
     SocketInformationTcp = SOCKET_INTERNET_PROTOCOL_TCP,
     SocketInformationUdp = SOCKET_INTERNET_PROTOCOL_UDP,
+    SocketInformationIcmp6 = SOCKET_INTERNET_PROTOCOL_ICMP6,
     SocketInformationRaw = SOCKET_INTERNET_PROTOCOL_RAW,
     SocketInformationNetlink = SOCKET_INTERNET_PROTOCOL_NETLINK,
     SocketInformationNetlinkGeneric = SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC
