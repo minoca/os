@@ -73,6 +73,18 @@ Author:
 #define IP6_VERSION 6
 
 //
+// Define the bits for the header member that stores the version, traffic
+// class, and flow label.
+//
+
+#define IP6_VERSION_MASK        0xF0000000
+#define IP6_VERSION_SHIFT       28
+#define IP6_TRAFFIC_CLASS_MASK  0x0FF00000
+#define IP6_TRAFFIC_CLASS_SHIFT 20
+#define IP6_FLOW_LABEL_MASK     0x000FFFFF
+#define IP6_FLOW_LABEL_SHIFT    0
+
+//
 // Define the maximum payload length that can be stored in an IPv6 header.
 //
 
@@ -117,7 +129,7 @@ Members:
 typedef struct _IP6_ADDRESS {
     union {
         struct {
-            NET_DOMAIN_TYPE Network;
+            NET_DOMAIN_TYPE Domain;
             ULONG Port;
             UCHAR Address[IP6_ADDRESS_SIZE];
         };
@@ -135,12 +147,7 @@ Structure Description:
 
 Members:
 
-    Version - Stores the version number.
-
-    TrafficClass - Stores the packet's traffic classification information.
-
-    FlowLabel - Stores a label used by routers to help identify groups of
-        packets to be sent on the same path.
+    VersionClassFlow - Stores the version number, traffic class, and flow label.
 
     PayloadLength - Store the length of the rest of the packet, in bytes. This
         does not include the IPv6 header.
@@ -158,12 +165,7 @@ Members:
 --*/
 
 typedef struct _IP6_HEADER {
-    struct {
-        ULONG Version:4;
-        ULONG TrafficClass:8;
-        ULONG FlowLabel:20;
-    };
-
+    ULONG VersionClassFlow;
     USHORT PayloadLength;
     UCHAR NextHeader;
     UCHAR HopLimit;

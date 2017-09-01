@@ -310,7 +310,7 @@ Return Value:
 
     MacAddress = (PUCHAR)PhysicalAddress->Address;
     RtlZeroMemory((PNETWORK_ADDRESS)&InitialAddress, sizeof(NETWORK_ADDRESS));
-    InitialAddress.Network = NetDomainIp6;
+    InitialAddress.Domain = NetDomainIp6;
     InitialAddress.Address[15] = MacAddress[5];
     InitialAddress.Address[14] = MacAddress[4];
     InitialAddress.Address[13] = MacAddress[3];
@@ -833,6 +833,7 @@ Return Value:
     PNETWORK_ADDRESS Source;
     KSTATUS Status;
     ULONG TotalLength;
+    ULONG VersionClassFlow;
 
     ASSERT(Destination->Domain == Socket->KernelSocket.Domain);
     ASSERT((Socket->KernelSocket.Type == NetSocketRaw) ||
@@ -958,9 +959,10 @@ Return Value:
             // Fill out that IPv6 header.
             //
 
-            Header->Version = IP6_VERSION;
-            Header->TrafficClass = 0;
-            Header->FlowLabel = 0;
+            VersionClassFlow = (IP6_VERSION << IP6_VERSION_SHIFT) &
+                               IP6_VERSION_MASK;
+
+            Header->VersionClassFlow = CPU_TO_NETWORK32(VersionClassFlow);
             Header->PayloadLength = CPU_TO_NETWORK16(TotalLength);
 
             ASSERT(Socket->KernelSocket.Protocol !=
@@ -1078,6 +1080,8 @@ Return Value:
     PNET_PROTOCOL_ENTRY ProtocolEntry;
     IP6_ADDRESS SourceAddress;
     USHORT TotalLength;
+    ULONG Version;
+    ULONG VersionClassFlow;
 
     Packet = ReceiveContext->Packet;
     PacketLength = Packet->FooterOffset - Packet->DataOffset;
@@ -1096,8 +1100,10 @@ Return Value:
     //
 
     Header = (PIP6_HEADER)(Packet->Buffer + Packet->DataOffset);
-    if (Header->Version != IP6_VERSION) {
-        RtlDebugPrint("Invalid IPv6 version. Byte: 0x%02x.\n", Header->Version);
+    VersionClassFlow = NETWORK_TO_CPU32(Header->VersionClassFlow);
+    Version = (VersionClassFlow & IP6_VERSION_MASK) >> IP6_VERSION_SHIFT;
+    if (Version != IP6_VERSION) {
+        RtlDebugPrint("Invalid IPv6 version. Byte: 0x%02x.\n", Version);
         goto Ip6ProcessReceivedDataEnd;
     }
 
@@ -1121,12 +1127,12 @@ Return Value:
 
     RtlZeroMemory(&SourceAddress, sizeof(NETWORK_ADDRESS));
     RtlZeroMemory(&DestinationAddress, sizeof(NETWORK_ADDRESS));
-    SourceAddress.Network = NetDomainIp6;
+    SourceAddress.Domain = NetDomainIp6;
     RtlCopyMemory(&(SourceAddress.Address),
                   &(Header->SourceAddress),
                   IP6_ADDRESS_SIZE);
 
-    DestinationAddress.Network = NetDomainIp6;
+    DestinationAddress.Domain = NetDomainIp6;
     RtlCopyMemory(&(DestinationAddress.Address),
                   &(Header->DestinationAddress),
                   IP6_ADDRESS_SIZE);
@@ -1621,8 +1627,8 @@ Return Value:
     PULONG LongPointer;
     ULONG NextValue;
 
-    ASSERT(Source->Domain == NetDomainIp4);
-    ASSERT(Destination->Domain == NetDomainIp4);
+    ASSERT(Source->Domain == NetDomainIp6);
+    ASSERT(Destination->Domain == NetDomainIp6);
 
     Checksum = 0;
     LongPointer = (PULONG)&(Source->Address);
