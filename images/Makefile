@@ -59,29 +59,30 @@ $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 
 $(BINROOT)/pc.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && $(MSETUP) -ql pc -i $< $(MSETUP_DEBUG) -d $@ -a0 \
+	@cd $(BINROOT) && $(MSETUP) -ql pc32 -i $< $(MSETUP_DEBUG) -d $@ -a0 \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/pcefi.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && $(MSETUP) -ql pcefi -i $< $(MSETUP_DEBUG) -d $@ -a0 \
+	@cd $(BINROOT) && $(MSETUP) -ql pc32efi -i $< $(MSETUP_DEBUG) -d $@ -a0 \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/pctiny.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && $(MSETUP) -ql pc-tiny -i $< $(MSETUP_DEBUG) -d $@ -a0 \
+	@cd $(BINROOT) && $(MSETUP) -ql pc32-tiny -i $< $(MSETUP_DEBUG) -d $@ -a0 \
 	    $(MSETUP_TINY_IMAGE_SIZE)
 
 endif
 
 ##
 ## Build x64 images.
-## TODO: Set platform back to pc and add pcefi once x64 compiles to match x86.
 ##
 
 ifeq (x64, $(ARCH)$(VARIANT))
 
 IMAGES += $(BINROOT)/pc.img \
+          $(BINROOT)/pcefi.img \
+          $(BINROOT)/pctiny.img \
 
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
@@ -93,6 +94,16 @@ $(BINROOT)/pc.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
 	@cd $(BINROOT) && $(MSETUP) -ql pc64 -i $< $(MSETUP_DEBUG) -d $@ -a0 \
 	    $(MSETUP_IMAGE_SIZE)
+
+$(BINROOT)/pcefi.img: $(INSTALL_IMAGE)
+	@echo Building - $(notdir $@)
+	@cd $(BINROOT) && $(MSETUP) -ql pc64efi -i $< $(MSETUP_DEBUG) -d $@ -a0 \
+	    $(MSETUP_IMAGE_SIZE)
+
+$(BINROOT)/pctiny.img: $(INSTALL_IMAGE)
+	@echo Building - $(notdir $@)
+	@cd $(BINROOT) && $(MSETUP) -ql pc64-tiny -i $< $(MSETUP_DEBUG) -d $@ -a0 \
+	    $(MSETUP_TINY_IMAGE_SIZE)
 
 endif
 

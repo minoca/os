@@ -164,10 +164,20 @@ Return Value:
         }
 
         if (FirmwareType == SystemFirmwareEfi) {
-            *Fallback = SetupRecipePcEfi;
+            if (sizeof(PVOID) == 8) {
+                *Fallback = SetupRecipePc64Efi;
+
+            } else {
+                *Fallback = SetupRecipePc32Efi;
+            }
 
         } else if (FirmwareType == SystemFirmwarePcat) {
-            *Fallback = SetupRecipePc;
+            if (sizeof(PVOID) == 8) {
+                *Fallback = SetupRecipePc64;
+
+            } else {
+                *Fallback = SetupRecipePc32;
+            }
 
         } else {
             *Fallback = SetupRecipeNone;

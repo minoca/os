@@ -197,8 +197,8 @@ SETUP_RECIPE SetupRecipes[] = {
     },
 
     {
-        SetupRecipePc,
-        "pc",
+        SetupRecipePc32,
+        "pc32",
         "Standard x86 BIOS PC",
         NULL,
         0,
@@ -206,8 +206,17 @@ SETUP_RECIPE SetupRecipes[] = {
     },
 
     {
-        SetupRecipePcEfi,
-        "pcefi",
+        SetupRecipePc64,
+        "pc64",
+        "Standard x86-64 BIOS PC",
+        NULL,
+        0,
+        "x64"
+    },
+
+    {
+        SetupRecipePc32Efi,
+        "pc32efi",
         "Standard x86 UEFI-based PC",
         NULL,
         0,
@@ -215,22 +224,27 @@ SETUP_RECIPE SetupRecipes[] = {
     },
 
     {
-        SetupRecipePcTiny,
-        "pc-tiny",
-        "Minimal PC installation for Qemu",
+        SetupRecipePc64Efi,
+        "pc64efi",
+        "Standard x86-64 UEFI-based PC",
+        NULL,
+        0,
+        "x64"
+    },
+
+    {
+        SetupRecipePc32Tiny,
+        "pc32-tiny",
+        "Minimal PC 32-bit installation for Qemu",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
         "x86"
     },
 
-    //
-    // TODO: Remove this once x64 compiles enough to match the x86 builds.
-    //
-
     {
-        SetupRecipePcTiny,
-        "pc64",
-        "Temporary x86-64 PC target",
+        SetupRecipePc64Tiny,
+        "pc64-tiny",
+        "Minimal PC 64-bit installation for Qemu",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
         "x64"

@@ -191,17 +191,6 @@ var SystemFilesX86Pcat = [
 ];
 
 //
-// TODO: Remove this once the whole world compiles for x64.
-//
-
-if (arch == "x64") {
-    SystemFiles = [
-        "kernel",
-        "libminocaos.so.1"
-    ];
-}
-
-//
 // Copy commands
 //
 
@@ -260,14 +249,6 @@ var TotalCopy = [
     UserSkelCopy,
     UserAppsCopy
 ];
-
-//
-// TODO: Remove this once the whole world compiles for x64.
-//
-
-if (arch == "x64") {
-    TotalBootCopy = [];
-}
 
 //
 // Partition descriptions
@@ -787,71 +768,6 @@ if ((plat == "install-x86") || (plat == "install-x64")) {
         "videocon.drv",
     ];
 
-    //
-    // TODO: Remove this once the whole world compiles for x64.
-    //
-
-    if (plat == "install-x64") {
-        Files = [
-            "acpi.drv",
-            "ahci.drv",
-            "ata.drv",
-            "atl1c.drv",
-            "bootman.bin",
-            //"bootmefi.efi",
-            "dev2drv.set",
-            "devmap.set",
-            "devrem.drv",
-            "dwceth.drv",
-            "e100.drv",
-            "e1000.drv",
-            "ehci.drv",
-            "fat.drv",
-            "fatboot.bin",
-            "i8042.drv",
-            "init.set",
-            "init.sh",
-            "install.ck",
-            "intelhda.drv",
-            "kernel",
-            "kernel-version",
-            "libc.so.1",
-            "libcrypt.so.1",
-            "libminocaos.so.1",
-            "loader",
-            //"loadefi",
-            "mbr.bin",
-            "net80211.drv",
-            "netcore.drv",
-            "null.drv",
-            "onering.drv",
-            "part.drv",
-            "pci.drv",
-            "pcnet32.drv",
-            "qrkhostb.drv",
-            "rtl81xx.drv",
-            "rtlw81xx.drv",
-            "rtlw8188eufw.bin",
-            "rtlw8188cufwUMC.bin",
-            "rtlw8192cufw.bin",
-            "sd.drv",
-            "ser16550.drv",
-            "smsc95xx.drv",
-            "sound.drv",
-            "special.drv",
-            "uhci.drv",
-            "usbcomp.drv",
-            "usbcore.drv",
-            "usbhid.drv",
-            "usbhub.drv",
-            "usbkbd.drv",
-            "usbmass.drv",
-            "usbmouse.drv",
-            "usrinput.drv",
-            "videocon.drv",
-        ];
-    }
-
     Files += [
         "skel/"
     ];
@@ -1021,10 +937,9 @@ if (plat == "panda-usb") {
 
 //
 // PC (BIOS) image
-// TODO: Remove pc64 once x64 compiles enough to match x86.
 //
 
-if ((plat == "pc") || (plat == "pc64")) {
+if ((plat == "pc32") || (plat == "pc64")) {
 
     //
     // Copy the firmware to the system partition for recovery if needed.
@@ -1080,7 +995,7 @@ if ((plat == "pc") || (plat == "pc64")) {
 // PC (UEFI) image
 //
 
-if (plat == "pcefi") {
+if ((plat == "pc32efi") || (plat == "pc64efi")) {
 
     //
     // Add the BIOS files anyway for machines with a BIOS compatibility module.
@@ -1096,7 +1011,7 @@ if (plat == "pcefi") {
 // PC (tiny) image
 //
 
-if (plat == "pc-tiny") {
+if ((plat == "pc32-tiny") || (plat == "pc64-tiny")) {
 
     //
     // Completely clobber the drivers list with one that fits x86 Qemu

@@ -31,42 +31,20 @@ function buildImage(name, msetupFlags) {
     var entry;
     var installDeps;
 
-    if (mconfig.arch == "x64") {
-        installDeps = [
-            "apps/posix:skel",
-            "apps/tzcomp:tz_files",
-            "apps/testapps:testapps",
-            "kernel:kernel",
-            "kernel:devmap.set",
-            "kernel:dev2drv.set",
-            "kernel:init.set",
-            "kernel:init.sh",
-            "boot/loader:loader",
-            "boot/bootman:bootman.bin",
-            "boot/fatboot:fatboot.bin",
-            "boot/mbr:mbr.bin",
-            "apps/libc/dynamic:libc",
-            "apps/osbase:libminocaos",
-            "drivers:drivers",
-            "apps/setup:build_msetup"
-        ];
-
-    } else {
-        installDeps = [
-            "apps:all_apps",
-            "apps/posix:skel",
-            "apps/tzcomp:tz_files",
-            "kernel:kernel",
-            "kernel:devmap.set",
-            "kernel:dev2drv.set",
-            "kernel:init.set",
-            "kernel:init.sh",
-            "boot:boot_apps",
-            "drivers:drivers",
-            "uefi:platfw",
-            "apps/setup:build_msetup"
-        ];
-    }
+    installDeps = [
+        "apps:all_apps",
+        "apps/posix:skel",
+        "apps/tzcomp:tz_files",
+        "kernel:kernel",
+        "kernel:devmap.set",
+        "kernel:dev2drv.set",
+        "kernel:init.set",
+        "kernel:init.sh",
+        "boot:boot_apps",
+        "drivers:drivers",
+        "uefi:platfw",
+        "apps/setup:build_msetup"
+    ];
 
     entry = {
         "type": "target",
@@ -126,19 +104,19 @@ function build() {
 
         } else {
             flags = commonImageFlags + [
-                "-lpc",
+                "-lpc32",
                 imageSize
             ];
 
             entries += buildImage("pc.img", flags);
             flags = commonImageFlags + [
-                "-lpcefi",
+                "-lpc32efi",
                 imageSize
             ];
 
             entries += buildImage("pcefi.img", flags);
             flags = commonImageFlags + [
-                "-lpc-tiny",
+                "-lpc32-tiny",
                 tinyImageSize
             ];
 
@@ -152,6 +130,18 @@ function build() {
         ];
 
         entries += buildImage("pc.img", flags);
+        flags = commonImageFlags + [
+            "-lpc64efi",
+            imageSize
+        ];
+
+        entries += buildImage("pcefi.img", flags);
+        flags = commonImageFlags + [
+            "-lpc64-tiny",
+            tinyImageSize
+        ];
+
+        entries += buildImage("pctiny.img", flags);
 
     } else if (arch == "armv7") {
         flags = commonImageFlags + [imageSize];
