@@ -1022,6 +1022,7 @@ Return Value:
 
     SetupFileClose(Destination);
     Destination = NULL;
+    Result = 0;
 
 UpdateBootVolumeEnd:
     if (BootConfigurationInitialized != FALSE) {
