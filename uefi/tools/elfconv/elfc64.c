@@ -339,7 +339,7 @@ Return Value:
                 SectionName = (CHAR8 *)ElfHeader + StringSection->sh_offset +
                               ElfSection->sh_name;
 
-                printf("Found text section %s: Offset 0x%x, size 0x%x.\n",
+                printf("Found text section %s: Offset 0x%llx, size 0x%llx.\n",
                        SectionName,
                        ElfSection->sh_offset,
                        ElfSection->sh_size);
@@ -411,7 +411,7 @@ Return Value:
                 SectionName = (CHAR8 *)ElfHeader + StringSection->sh_offset +
                               ElfSection->sh_name;
 
-                printf("Found data section %s: Offset 0x%x, size 0x%x.\n",
+                printf("Found data section %s: Offset 0x%llx, size 0x%llx.\n",
                        SectionName,
                        ElfSection->sh_offset,
                        ElfSection->sh_size);
@@ -463,7 +463,7 @@ Return Value:
                 SectionName = (CHAR8 *)ElfHeader + StringSection->sh_offset +
                               ElfSection->sh_name;
 
-                printf("Found rsrc section %s: Offset 0x%x, size 0x%x.\n",
+                printf("Found rsrc section %s: Offset 0x%llx, size 0x%llx.\n",
                        SectionName,
                        ElfSection->sh_offset,
                        ElfSection->sh_size);
@@ -742,7 +742,7 @@ Return Value:
             case SHT_NOBITS:
                 if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                     Difference = Destination - (VOID *)(Context->CoffFile);
-                    printf("Zeroing COFF offset %lx, size %llx",
+                    printf("Zeroing COFF offset %lx, size %llx\n",
                            (long)Difference,
                            ElfSection->sh_size);
                 }
@@ -757,7 +757,7 @@ Return Value:
 
             default:
                 fprintf(stderr,
-                        "Warning: Unknown section type %x.\n",
+                        "Warning: Unknown section type %llx.\n",
                         ElfSection->sh_type);
 
                 break;
@@ -1221,7 +1221,7 @@ Return Value:
 
     //
     // If relocations were not found, try again looking for PT_DYNAMIC instead
-    // of SHT_REL.
+    // of SHT_RELA.
     //
 
     if (FoundRelocations == FALSE) {
@@ -1248,7 +1248,7 @@ Return Value:
 
             while (DynamicSection->d_tag != DT_NULL) {
                 switch (DynamicSection->d_tag) {
-                case DT_REL:
+                case DT_RELA:
                     RelocationOffset = DynamicSection->d_un.d_val;
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                         printf("Relocation offset %x.\n",
@@ -1268,25 +1268,25 @@ Return Value:
                     }
 
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
-                        printf("Adjusted relocation offset %x.\n",
+                        printf("Adjusted relocation offset %llx.\n",
                                RelocationOffset);
                     }
 
                     break;
 
-                case DT_RELSZ:
+                case DT_RELASZ:
                     RelocationSize = DynamicSection->d_un.d_val;
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
-                        printf("Relocation size %x.\n",
+                        printf("Relocation size %llx.\n",
                                (UINT64)RelocationSize);
                     }
 
                     break;
 
-                case DT_RELENT:
+                case DT_RELAENT:
                     RelocationElementSize = DynamicSection->d_un.d_val;
                     if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
-                        printf("Relocation element size %x.\n",
+                        printf("Relocation element size %llx.\n",
                                (UINT64)RelocationElementSize);
                     }
 
@@ -1300,8 +1300,8 @@ Return Value:
             }
 
             if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
-                printf("Relocations: PHDR %d (p_offset %x) Offset %x Size %x "
-                       "ElemSize %x\n",
+                printf("Relocations: PHDR %d (p_offset %llx) Offset %llx "
+                       "Size %llx ElemSize %llx\n",
                        SectionIndex,
                        DynamicSegment->p_offset,
                        RelocationOffset,
@@ -1317,24 +1317,16 @@ Return Value:
                                             RelocationOffset +
                                             RelocationIndex);
 
-                //
-                // TODO: Remove the x86/ARM32 stuff. Is this needed for x64?
-                //
-
-                assert(FALSE);
-
-                if (ElfHeader->e_machine == EM_386) {
+                if (ElfHeader->e_machine == EM_X86_64) {
                     switch (ELF64_R_TYPE(Relocation->r_info)) {
 
                     //
                     // Relative relocations contain a default VA in them. First
                     // convert that VA into a COFF offset, then create a
-                    // relocation for it. If the value conversion failed, it's
-                    // probably a relocation off in a stabs section, so ignore
-                    // it.
+                    // relocation for it.
                     //
 
-                    case R_386_RELATIVE:
+                    case R_X86_64_RELATIVE:
                         TargetAddress = Relocation->r_offset;
                         Result = ElfconvConvertElfAddress64(Context,
                                                             &TargetAddress);
@@ -1352,15 +1344,11 @@ Return Value:
                                                             &TargetValue);
 
                         if (Result == FALSE) {
-                            if ((Context->Flags &
-                                 ELFCONV_OPTION_VERBOSE) != 0) {
-
-                                printf("Skipping relocation at address %x that "
-                                       "had value %x that could not be "
-                                       "converted in the destination.\n",
-                                       TargetAddress,
-                                       TargetValue);
-                            }
+                            printf("Skipping relocation at address %x that "
+                                   "had value %x that could not be "
+                                   "converted in the destination.\n",
+                                   TargetAddress,
+                                   TargetValue);
 
                             break;
                         }
@@ -1384,82 +1372,28 @@ Return Value:
 
                     default:
                         fprintf(stderr,
-                                "Bad 386 dynamic relocation type %d, offset "
-                                "%x, program header index %d.\n",
+                                "Bad x86-64 dynamic relocation type %d, offset "
+                                "offset %llx, program header index %d.\n",
                                 ELF64_R_TYPE(Relocation->r_info),
-                                (UINT64)RelocationOffset,
+                                RelocationOffset,
                                 SectionIndex);
 
                         return FALSE;
                     }
 
-                } else if (ElfHeader->e_machine == EM_ARM) {
+                } else if (ElfHeader->e_machine == EM_AARCH64) {
+
+                    //
+                    // Implement ARM64 when needed.
+                    //
+
                     switch (ELF64_R_TYPE(Relocation->r_info)) {
-                    case R_ARM_RBASE:
-                        break;
-
-                    //
-                    // Relative relocations contain a default VA in them. First
-                    // convert that VA into a COFF offset, then create a
-                    // relocation for it. If the value conversion failed, it's
-                    // probably a relocation off in a stabs section, so ignore
-                    // it.
-                    //
-
-                    case R_ARM_RELATIVE:
-                        TargetAddress = Relocation->r_offset;
-                        Result = ElfconvConvertElfAddress64(Context,
-                                                            &TargetAddress);
-
-                        if (Result == FALSE) {
-                            fprintf(stderr,
-                                    "R_ARM_RELATIVE target convert failed.\n");
-
-                            return FALSE;
-                        }
-
-                        TargetPointer = Context->CoffFile + TargetAddress;
-                        TargetValue = *(UINT64 *)TargetPointer;
-                        Result = ElfconvConvertElfAddress64(Context,
-                                                            &TargetValue);
-
-                        if (Result == FALSE) {
-                            if ((Context->Flags &
-                                 ELFCONV_OPTION_VERBOSE) != 0) {
-
-                                printf("Skipping relocation at address %x that "
-                                       "had value %x that could not be "
-                                       "converted in the destination.\n",
-                                       TargetAddress,
-                                       TargetValue);
-                            }
-
-                            break;
-                        }
-
-                        //
-                        // Stick the old value (now an offset in the COFF image)
-                        // into the relocation's spot.
-                        //
-
-                        *(UINT64 *)TargetPointer = TargetValue;
-                        Result = ElfconvCoffAddFixup(
-                                                  Context,
-                                                  TargetAddress,
-                                                  EFI_IMAGE_REL_BASED_HIGHLOW);
-
-                        if (Result == FALSE) {
-                            return FALSE;
-                        }
-
-                        break;
-
                     default:
                         fprintf(stderr,
-                                "Bad ARM dynamic relocation type %d, offset "
-                                "%x, program header index %d.\n",
+                                "Bad AA64 dynamic relocation type %d, offset "
+                                "%llx, program header index %d.\n",
                                 ELF64_R_TYPE(Relocation->r_info),
-                                (UINT64)RelocationOffset,
+                                RelocationOffset,
                                 SectionIndex);
 
                         return FALSE;
@@ -1733,7 +1667,7 @@ Return Value:
 {
 
     if ((SectionHeader->sh_type != SHT_PROGBITS) &&
-        (SectionHeader->sh_type != SHT_REL)) {
+        (SectionHeader->sh_type != SHT_RELA)) {
 
         return FALSE;
     }

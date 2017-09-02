@@ -68,6 +68,23 @@ Return Value:
 FUNCTION(BoEnablePaging)
 
     //
+    // Enable NX mode. This may not have been done earlier on EFI machines.
+    //
+
+    movl    $X86_MSR_EFER, %ecx     # Get EFER as MSR register.
+    rdmsr                           # Read it.
+    orl     $EFER_NO_EXECUTE_ENABLE, %eax   # OR in the bit.
+    wrmsr                           # Write it.
+
+    //
+    // Also set the necessary bits in CR4 in case EFI firmware didn't do it.
+    //
+
+    movq    %cr4, %rax              # Read CR4.
+    orq     $CR4_OR_MASK, %rax      # OR in the PAE bit and others.
+    movq    %rax, %cr4              # Set CR4.
+
+    //
     // Set up CR3. Paging may already be on, in which case this switches to the
     // kernel page tables immediately.
     //

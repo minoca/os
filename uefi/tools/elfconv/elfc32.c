@@ -740,7 +740,7 @@ Return Value:
             case SHT_NOBITS:
                 if ((Context->Flags & ELFCONV_OPTION_VERBOSE) != 0) {
                     Difference = Destination - (VOID *)(Context->CoffFile);
-                    printf("Zeroing COFF offset %lx, size %x",
+                    printf("Zeroing COFF offset %lx, size %x\n",
                            (long)Difference,
                            ElfSection->sh_size);
                 }

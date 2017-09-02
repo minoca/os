@@ -3122,18 +3122,22 @@ Return Value:
         ASSERT(X86_PTE_ENTRY(*Pte) == Physical);
 
         *Pte |= X86_PTE_PRESENT | X86_PTE_WRITABLE | X86_PTE_USER_MODE;
+        if (AddressSpace != NULL) {
 
-        ASSERT(AddressSpace->ActivePageTables <
-               AddressSpace->AllocatedPageTables);
+            ASSERT(AddressSpace->ActivePageTables <
+                   AddressSpace->AllocatedPageTables);
 
-        AddressSpace->ActivePageTables += 1;
+            AddressSpace->ActivePageTables += 1;
+        }
 
     } else {
         *Pte = Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE |
                X86_PTE_USER_MODE;
 
-        AddressSpace->AllocatedPageTables += 1;
-        AddressSpace->ActivePageTables += 1;
+        if (AddressSpace != NULL) {
+            AddressSpace->AllocatedPageTables += 1;
+            AddressSpace->ActivePageTables += 1;
+        }
     }
 
     //

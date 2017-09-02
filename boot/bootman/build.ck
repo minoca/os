@@ -57,8 +57,8 @@ function build() {
 
     pcatSources = [
         "pcat/x86/entry.S",
-        ":bootman.o",
-        ":bootim.o",
+        "bootman.c",
+        "bootim.c",
         "pcat/bootxfr.c",
         "pcat/main.c",
         "pcat/paging.c"
@@ -187,7 +187,8 @@ function build() {
             "includes": includes,
             "config": pcatConfig,
             "text_address": "0x100000",
-            "binplace": "bin"
+            "binplace": "bin",
+            "prefix": "pcat"
         };
 
         entries += staticApplication(pcatApp);

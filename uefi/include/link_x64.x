@@ -5,16 +5,7 @@ SEARCH_DIR("=//x86_64-pc-minoca/lib"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR
 SECTIONS
 {
   /* Read-only sections, merged into text segment: */
-  PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x400)); . = SEGMENT_START("text-segment", 0x400) + SIZEOF_HEADERS;
-  .interp         : { *(.interp) }
-  .note.gnu.build-id : { *(.note.gnu.build-id) }
-  .hash           : { *(.hash) }
-  .gnu.hash       : { *(.gnu.hash) }
-  .dynsym         : { *(.dynsym) }
-  .dynstr         : { *(.dynstr) }
-  .gnu.version    : { *(.gnu.version) }
-  .gnu.version_d  : { *(.gnu.version_d) }
-  .gnu.version_r  : { *(.gnu.version_r) }
+  PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x420)); . = SEGMENT_START("text-segment", 0x420); /* + SIZEOF_HEADERS;*/
   .rela.dyn       :
     {
       *(.rela.init)
@@ -40,13 +31,6 @@ SECTIONS
       *(.rela.iplt)
       PROVIDE_HIDDEN (__rela_iplt_end = .);
     }
-  .init           :
-  {
-    KEEP (*(SORT_NONE(.init)))
-  }
-  .plt            : { *(.plt) *(.iplt) }
-.plt.got        : { *(.plt.got) }
-.plt.bnd        : { *(.plt.bnd) }
   .text           :
   {
     *(.text.unlikely .text.*_unlikely .text.unlikely.*)
@@ -57,6 +41,13 @@ SECTIONS
     /* .gnu.warning sections are handled specially by elf32.em.  */
     *(.gnu.warning)
   }
+  .init           :
+  {
+    KEEP (*(SORT_NONE(.init)))
+  }
+  .plt            : { *(.plt) *(.iplt) }
+.plt.got        : { *(.plt.got) }
+.plt.bnd        : { *(.plt.bnd) }
   .fini           :
   {
     KEEP (*(SORT_NONE(.fini)))
@@ -144,8 +135,17 @@ SECTIONS
   {
     *(.data .data.* .gnu.linkonce.d.*)
     SORT(CONSTRUCTORS)
+    *(.interp)
+    *(.note.gnu.build-id)
   }
   .data1          : { *(.data1) }
+  .hash           : { *(.hash) }
+  .gnu.hash       : { *(.gnu.hash) }
+  .dynsym         : { *(.dynsym) }
+  .dynstr         : { *(.dynstr) }
+  .gnu.version    : { *(.gnu.version) }
+  .gnu.version_d  : { *(.gnu.version_d) }
+  .gnu.version_r  : { *(.gnu.version_r) }
   _edata = .; PROVIDE (edata = .);
   . = .;
   __bss_start = .;

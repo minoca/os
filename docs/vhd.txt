@@ -1,0 +1,7 @@
+Convert an image to VHDX:
+qemu-img convert source.img -O vhdx -o subformat=dynamic dest.vhdx
+
+Convert an image to VHD:
+qemu-img convert source.img -O vpc -o subformat=dyanmic dest.vhdx
+
+The subformat parameter can by dynamic or fixed.

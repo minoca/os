@@ -56,6 +56,7 @@ endif
 
 ifeq ($(ARCH), x64)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_x64.x
+LDFLAGS += -Wl,-zmax-page-size=1
 endif
 
 ifeq ($(ARCH), armv7)

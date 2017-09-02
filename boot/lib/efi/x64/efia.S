@@ -95,23 +95,30 @@ Return Value:
 FUNCTION(BopEfiSaveInitialState)
     xorl    %eax, %eax                          # Zero rax.
     movw    %cs, %ax                            # Get CS.
-    movl    %eax, BoFirmwareCs@GOTPCREL(%rip)   # Save CS.
+    movq    BoFirmwareCs@GOTPCREL(%rip), %rcx   # Get address of global.
+    movl    %eax, (%rcx)                        # Save CS.
     movw    %ds, %ax                            # Get DS.
-    movl    %eax, BoFirmwareDs@GOTPCREL(%rip)   # Save DS.
+    movq    BoFirmwareDs@GOTPCREL(%rip), %rcx   # Get address of global.
+    movl    %eax, (%rcx)                        # Save DS.
     movw    %es, %ax                            # Get ES.
-    movl    %eax, BoFirmwareEs@GOTPCREL(%rip)   # Save ES.
+    movq    BoFirmwareEs@GOTPCREL(%rip), %rcx   # Get address of global.
+    movl    %eax, (%rcx)                        # Save ES.
     movw    %fs, %ax                            # Get FS.
-    movl    %eax, BoFirmwareFs@GOTPCREL(%rip)   # Save FS.
+    movq    BoFirmwareFs@GOTPCREL(%rip), %rcx   # Get address of global.
+    movl    %eax, (%rcx)                        # Save FS.
     movw    %gs, %ax                            # Get GS.
-    movl    %eax, BoFirmwareGs@GOTPCREL(%rip)   # Save GS.
+    movq    BoFirmwareGs@GOTPCREL(%rip), %rcx   # Get address of global.
+    movl    %eax, (%rcx)                        # Save GS.
     movw    %ss, %ax                            # Get SS.
-    movl    %eax, BoFirmwareSs@GOTPCREL(%rip)   # Save SS.
+    movq    BoFirmwareSs@GOTPCREL(%rip), %rcx   # Get address of global.
+    movl    %eax, (%rcx)                        # Save SS.
     pushfq                                      # Push rflags.
     popq    %rax                                # Pop RAX.
-    movq    %rax, BoFirmwareRflags@GOTPCREL(%rip)   # Save eflags.
-    leaq    BoFirmwareIdt@GOTPCREL(%rip), %rax  # Get the IDT save address.
+    movq    BoFirmwareRflags@GOTPCREL(%rip), %rcx   # Get address of global.
+    movl    %eax, (%rcx)                        # Save RFLAGS.
+    movq    BoFirmwareIdt@GOTPCREL(%rip), %rax  # Get the IDT save address.
     sidt    (%rax)                              # Save the IDT.
-    leaq    BoFirmwareGdt@GOTPCREL(%rip), %rax  # Get the GDT save address.
+    movq    BoFirmwareGdt@GOTPCREL(%rip), %rax  # Get the GDT save address.
     sgdt    (%rax)                              # Save the GDT.
     cli                                         # Disable interrupts.
     retq                                        # Return.
@@ -152,23 +159,30 @@ FUNCTION(BopEfiRestoreFirmwareContext)
 
     xorl    %eax, %eax                          # Zero eax.
     movw    %cs, %ax                            # Get CS.
-    movl    %eax, BoLoaderCs@GOTPCREL(%rip)     # Save CS.
+    movq    BoLoaderCs@GOTPCREL(%rip), %rcx     # Get address of global.
+    movl    %eax, (%rcx)                        # Save CS.
     movw    %ds, %ax                            # Get DS.
-    movl    %eax, BoLoaderDs@GOTPCREL(%rip)     # Save DS.
+    movq    BoLoaderDs@GOTPCREL(%rip), %rcx     # Get address of global.
+    movl    %eax, (%rcx)                        # Save DS.
     movw    %es, %ax                            # Get ES.
-    movl    %eax, BoLoaderEs@GOTPCREL(%rip)     # Save ES.
+    movq    BoLoaderEs@GOTPCREL(%rip), %rcx     # Get address of global.
+    movl    %eax, (%rcx)                        # Save ES.
     movw    %fs, %ax                            # Get FS.
-    movl    %eax, BoLoaderFs@GOTPCREL(%rip)     # Save FS.
+    movq    BoLoaderFs@GOTPCREL(%rip), %rcx     # Get address of global.
+    movl    %eax, (%rcx)                        # Save FS.
     movw    %gs, %ax                            # Get GS.
-    movl    %eax, BoLoaderGs@GOTPCREL(%rip)     # Save GS.
+    movq    BoLoaderGs@GOTPCREL(%rip), %rcx     # Get address of global.
+    movl    %eax, (%rcx)                        # Save GS.
     movw    %ss, %ax                            # Get SS.
-    movl    %eax, BoLoaderSs@GOTPCREL(%rip)     # Save SS.
+    movq    BoLoaderSs@GOTPCREL(%rip), %rcx     # Get address of global.
+    movl    %eax, (%rcx)                        # Save SS.
     pushfq                                      # Push rflags.
     popq    %rax                                # Pop RAX.
-    movq    %rax, BoLoaderRflags@GOTPCREL(%rip) # Save rflags.
-    leaq    BoLoaderIdt@GOTPCREL(%rip), %rax    # Get the IDT save address.
+    movq    BoLoaderRflags@GOTPCREL(%rip), %rcx # Get address of global.
+    movq    %rax, (%rcx)                        # Save RFLAGS.
+    movq    BoLoaderIdt@GOTPCREL(%rip), %rax    # Get the IDT save address.
     sidt    (%rax)                              # Save the IDT.
-    leaq    BoLoaderGdt@GOTPCREL(%rip), %rax    # Get the GDT save address.
+    movq    BoLoaderGdt@GOTPCREL(%rip), %rax    # Get the GDT save address.
     sgdt    (%rax)                              # Save the GDT.
     cli                                         # Disable interrupts.
 
@@ -176,28 +190,35 @@ FUNCTION(BopEfiRestoreFirmwareContext)
     // Restore the firmware context.
     //
 
-    movl    BoFirmwareDs@GOTPCREL(%rip), %ecx   # Get DS.
-    movl    BoFirmwareCs@GOTPCREL(%rip), %eax   # Get CS.
+    movq    BoFirmwareDs@GOTPCREL(%rip), %rcx   # Get DS address.
+    movl    (%rcx), %ecx                        # Dereference to get value.
+    movq    BoFirmwareCs@GOTPCREL(%rip), %rax   # Get CS address.
+    movl    (%rax), %eax                        # Dereference to get value.
     pushq   %rax                                # Push CS.
     movq    BopEfiRestoreFirmwareContextJump@GOTPCREL(%rip), %rax
     pushq   %rax                                # Push eax.
-    leaq    BoFirmwareGdt@GOTPCREL(%rip), %rax  # Get the GDT.
+    movq    BoFirmwareGdt@GOTPCREL(%rip), %rax  # Get the GDT.
     lgdt    (%rax)                              # Load the GDT. Do a jump.
     retfq                                       # "Return" immediately below.
 
 BopEfiRestoreFirmwareContextJump:
     movw    %cx, %ds                            # Load DS.
-    movl    BoFirmwareEs@GOTPCREL(%rip), %eax   # Get ES.
+    movq    BoFirmwareEs@GOTPCREL(%rip), %rax   # Get ES address.
+    movl    (%rax), %eax                        # Dereference to get value.
     movw    %ax, %es                            # Set ES.
-    movl    BoFirmwareFs@GOTPCREL(%rip), %eax   # Get FS.
+    movq    BoFirmwareFs@GOTPCREL(%rip), %rax   # Get FS address.
+    movl    (%rax), %eax                        # Dereference to get value.
     movw    %ax, %fs                            # Set FS.
-    movl    BoFirmwareGs@GOTPCREL(%rip), %eax   # Get GS.
+    movq    BoFirmwareGs@GOTPCREL(%rip), %rax   # Get GS address.
+    movl    (%rax), %eax                        # Dereference to get value.
     movw    %ax, %gs                            # Set GS.
-    movl    BoFirmwareSs@GOTPCREL(%rip), %eax   # Get SS.
+    movq    BoFirmwareSs@GOTPCREL(%rip), %rax   # Get SS address.
+    movl    (%rax), %eax                        # Dereference to get value.
     movw    %ax, %ss                            # Set SS.
-    leaq    BoFirmwareIdt@GOTPCREL(%rip), %rax  # Get the IDT.
+    movq    BoFirmwareIdt@GOTPCREL(%rip), %rax  # Get the IDT.
     lidt    (%rax)                              # Restore the IDT.
     movq    BoFirmwareRflags@GOTPCREL(%rip), %rax  # Get Rflags.
+    movq    (%rax), %rax                        # Dereference to get value.
     pushq   %rax                                # Push the flags.
     popfq                                       # Pop flags, enable interrupts.
     retq                                        # Return.
@@ -230,28 +251,35 @@ Return Value:
 
 FUNCTION(BopEfiRestoreApplicationContext)
     cli                                         # Disable interrupts.
-    movl    BoLoaderDs@GOTPCREL(%rip), %ecx     # Get DS.
-    movl    BoLoaderCs@GOTPCREL(%rip), %eax     # Get CS.
+    movq    BoLoaderDs@GOTPCREL(%rip), %rcx     # Get DS.
+    movl    (%rcx), %ecx                        # Dereference to get value.
+    movq    BoLoaderCs@GOTPCREL(%rip), %rax     # Get CS.
+    movl    (%rax), %eax                        # Dereference to get value.
     pushq   %rax                                # Push CS.
     movq    BopEfiRestoreApplicationContextJump@GOTPCREL(%rip), %rax
     pushq   %rax                                # Push eax.
-    leaq    BoLoaderGdt@GOTPCREL(%rip), %rax    # Get the GDT.
+    movq    BoLoaderGdt@GOTPCREL(%rip), %rax    # Get the GDT.
     lgdt    (%rax)                              # Load the GDT.
     retfq                                       # "Return" immediately below.
 
 BopEfiRestoreApplicationContextJump:
     movw    %cx, %ds                            # Load DS.
-    movl    BoLoaderEs@GOTPCREL(%rip), %eax     # Get ES.
+    movq    BoLoaderEs@GOTPCREL(%rip), %rax     # Get ES address.
+    movl    (%rax), %eax                        # Dereference to get value.
     movw    %ax, %es                            # Set ES.
-    movl    BoLoaderFs@GOTPCREL(%rip), %eax     # Get FS.
+    movq    BoLoaderFs@GOTPCREL(%rip), %rax     # Get FS address.
+    movl    (%rax), %eax                        # Dereference to get value.
     movw    %ax, %fs                            # Set FS.
-    movl    BoLoaderGs@GOTPCREL(%rip), %eax     # Get GS.
+    movq    BoLoaderGs@GOTPCREL(%rip), %rax     # Get GS address.
+    movl    (%rax), %eax                        # Dereference to get value.
     movw    %ax, %gs                            # Set GS.
-    movl    BoLoaderSs@GOTPCREL(%rip), %eax     # Get SS.
+    movq    BoLoaderSs@GOTPCREL(%rip), %rax     # Get SS address.
+    movl    (%rax), %eax                        # Dereference to get value.
     movw    %ax, %ss                            # Set SS.
-    leaq    BoLoaderIdt@GOTPCREL(%rip), %rax    # Get the IDT.
+    movq    BoLoaderIdt@GOTPCREL(%rip), %rax    # Get the IDT.
     lidt    (%rax)                              # Restore the IDT. No debugging.
-    movq    BoLoaderRflags@GOTPCREL(%rip), %rax # Get Rflags.
+    movq    BoLoaderRflags@GOTPCREL(%rip), %rax # Get Rflags address.
+    movq    (%rax), %rax                        # Dereference to get value.
     pushq   %rax                                # Push the flags.
     popfq                                       # Pop flags. Enable interrupts.
     retq                                        # Return.
