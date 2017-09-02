@@ -199,7 +199,7 @@ AcpipWriteToBufferField (
 
 Routine Description:
 
-    This routine reads from a Buffer Field.
+    This routine writes to a Buffer Field.
 
 Arguments:
 

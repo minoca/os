@@ -1359,7 +1359,7 @@ AcpipWriteToBufferField (
 
 Routine Description:
 
-    This routine reads from a Buffer Field.
+    This routine writes to a Buffer Field.
 
 Arguments:
 
@@ -1379,6 +1379,7 @@ Return Value:
 
 {
 
+    PVOID AllocatedFieldBuffer;
     PACPI_OBJECT BufferObject;
     PVOID DestinationBuffer;
     ULONGLONG DestinationBufferSize;
@@ -1389,6 +1390,8 @@ Return Value:
     ULONGLONG StartBitOffset;
     ULONGLONG StartByteOffset;
     KSTATUS Status;
+
+    AllocatedFieldBuffer = NULL;
 
     ASSERT(BufferField->Type == AcpiObjectBufferField);
 
@@ -1490,9 +1493,25 @@ Return Value:
         goto WriteToBufferFieldEnd;
     }
 
+    //
+    // If the source object is smaller than the field, zero extend the buffer
+    // by allocating a copy that's the correct size.
+    //
+
     if (EndByteOffset - StartByteOffset > FieldBufferSize) {
-        Status = STATUS_BUFFER_TOO_SMALL;
-        goto WriteToBufferFieldEnd;
+        AllocatedFieldBuffer =
+                          AcpipAllocateMemory(EndByteOffset - StartByteOffset);
+
+        if (AllocatedFieldBuffer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto WriteToBufferFieldEnd;
+        }
+
+        RtlCopyMemory(AllocatedFieldBuffer, FieldBuffer, FieldBufferSize);
+        RtlZeroMemory(AllocatedFieldBuffer + FieldBufferSize,
+                      (EndByteOffset - StartByteOffset) - FieldBufferSize);
+
+        FieldBuffer = AllocatedFieldBuffer;
     }
 
     //
@@ -1509,6 +1528,10 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 WriteToBufferFieldEnd:
+    if (AllocatedFieldBuffer != NULL) {
+        AcpipFreeMemory(AllocatedFieldBuffer);
+    }
+
     return Status;
 }
 
