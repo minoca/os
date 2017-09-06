@@ -90,6 +90,20 @@ Author:
 #define IP6_MAX_PAYLOAD_LENGTH 0xFFFF
 
 //
+// Define the minimum link MTU required by IPv6.
+//
+
+#define IP6_MINIMUM_LINK_MTU 1280
+
+//
+// Define the base length of all IPv6 extension headers and the multiple of the
+// header's stored length value.
+//
+
+#define IP6_EXTENSION_HEADER_LENGTH_BASE 8
+#define IP6_EXTENSION_HEADER_LENGTH_MULTIPLE 8
+
+//
 // Define default and maximum values for the IPv6 header hop limit.
 //
 

@@ -181,11 +181,23 @@ NetpIp6JoinLeaveMulticastGroup (
 
 KSTATUS
 NetpIp6TranslateNetworkAddress (
-    PNET_SOCKET Socket,
+    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS NetworkAddress,
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS PhysicalAddress
+    );
+
+KSTATUS
+NetpIp6ProcessExtensionHeaders (
+    PNET_RECEIVE_CONTEXT ReceiveContext
+    );
+
+VOID
+NetpIp6SendParameterProblemMessage (
+    PNET_RECEIVE_CONTEXT ReceiveContext,
+    UCHAR Code,
+    ULONG Pointer
     );
 
 //
@@ -957,7 +969,7 @@ Return Value:
             PhysicalNetworkAddress = &PhysicalNetworkAddressBuffer;
         }
 
-        Status = NetpIp6TranslateNetworkAddress(Socket,
+        Status = NetpIp6TranslateNetworkAddress(Socket->Network,
                                                 Destination,
                                                 Link,
                                                 LinkAddress,
@@ -1191,6 +1203,7 @@ Return Value:
     ULONG PacketLength;
     PNET_PROTOCOL_ENTRY ProtocolEntry;
     IP6_ADDRESS SourceAddress;
+    KSTATUS Status;
     USHORT TotalLength;
     ULONG Version;
     ULONG VersionClassFlow;
@@ -1291,28 +1304,23 @@ Return Value:
     }
 
     //
-    // Find the local protocol entry for the protocol specified in the header
-    // and process the packet.
-    //
-    // TODO: Handle IPv6 extension headers.
+    // Parse the IPv6 extension headers. This will find the targeted
+    // upper-layer protocol, if any, and fill out the receive context.
     //
 
-    ProtocolEntry = NetGetProtocolEntry(Header->NextHeader);
-    if (ProtocolEntry == NULL) {
-        RtlDebugPrint("No protocol found for IPv6 packet protocol number "
-                      "0x%02x.\n",
-                      Header->NextHeader);
-
+    Status = NetpIp6ProcessExtensionHeaders(ReceiveContext);
+    if (!KSUCCESS(Status)) {
         goto Ip6ProcessReceivedDataEnd;
     }
 
     //
-    // Update the packet's data offset so that it starts at the protocol layer.
+    // Pass the packet up the stack if an upper-layer protocol was found.
     //
 
-    Packet->DataOffset += sizeof(IP6_HEADER);
-    ReceiveContext->Protocol = ProtocolEntry;
-    ProtocolEntry->Interface.ProcessReceivedData(ReceiveContext);
+    if (ReceiveContext->Protocol != NULL) {
+        ProtocolEntry = ReceiveContext->Protocol;
+        ProtocolEntry->Interface.ProcessReceivedData(ReceiveContext);
+    }
 
 Ip6ProcessReceivedDataEnd:
     return;
@@ -2097,7 +2105,7 @@ Return Value:
 
 KSTATUS
 NetpIp6TranslateNetworkAddress (
-    PNET_SOCKET Socket,
+    PNET_NETWORK_ENTRY Network,
     PNETWORK_ADDRESS NetworkAddress,
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
@@ -2112,7 +2120,7 @@ Routine Description:
 
 Arguments:
 
-    Socket - Supplies a pointer to the socket requesting the translation.
+    Network - Supplies a pointer to the network requesting translation.
 
     NetworkAddress - Supplies a pointer to the network address to translate.
 
@@ -2165,7 +2173,7 @@ Return Value:
     // translated.
     //
 
-    Status = NetTranslateNetworkAddress(Socket->Network,
+    Status = NetTranslateNetworkAddress(Network,
                                         NetworkAddress,
                                         Link,
                                         LinkAddress,
@@ -2187,5 +2195,335 @@ Ip6TranslateNetworkAddressEnd:
     }
 
     return Status;
+}
+
+KSTATUS
+NetpIp6ProcessExtensionHeaders (
+    PNET_RECEIVE_CONTEXT ReceiveContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes an IPv6 packet's extension headers. It fills out the
+    upper-layer protocol entry in the receive context if one is found.
+
+Arguments:
+
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link and packet information.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UCHAR Code;
+    PIP6_EXTENSION_HEADER Extension;
+    PIP6_EXTENSION_HEADER FirstExtension;
+    PIP6_HEADER Header;
+    ULONG HeaderOffset;
+    UCHAR NextHeader;
+    ULONG NextHeaderOffset;
+    PNET_PACKET_BUFFER Packet;
+    KSTATUS Status;
+    BOOL UnrecognizedHeader;
+
+    ReceiveContext->Protocol = NULL;
+    Packet = ReceiveContext->Packet;
+    HeaderOffset = Packet->DataOffset;
+    Header = (PIP6_HEADER)(Packet->Buffer + Packet->DataOffset);
+    NextHeader = Header->NextHeader;
+    NextHeaderOffset = HeaderOffset + FIELD_OFFSET(IP6_HEADER, NextHeader);
+    Packet->DataOffset += sizeof(IP6_HEADER);
+    Extension = (PIP6_EXTENSION_HEADER)(Packet->Buffer + Packet->DataOffset);
+    FirstExtension = Extension;
+
+    //
+    // Although the IPv6 specification recommands an order to the extension
+    // headers, be flexible. But do process them in the order in which they
+    // were sent, without skipping to search for a specific header.
+    //
+
+    Status = STATUS_SUCCESS;
+    UnrecognizedHeader = FALSE;
+    while (TRUE) {
+        switch (NextHeader) {
+
+        //
+        // The "no next header" value is the end of the line. Treat this as
+        // a success, because any additional processing (e.g. forwarding)
+        // should happen. There just isn't an upper-layer protocol.
+        //
+
+        case SOCKET_INTERNET_PROTOCOL_IPV6_NO_NEXT:
+            goto Ip6ProcessExtensionHeadersEnd;
+
+        //
+        // The Hop-by-hop options header must be the first extension. If it is
+        // not, then send an ICMP "unrecognized next header" message.
+        //
+
+        case SOCKET_INTERNET_PROTOCOL_HOPOPT:
+            if (Extension != FirstExtension) {
+                UnrecognizedHeader = TRUE;
+                break;
+            }
+
+        //
+        // TODO: Parse IPv6 extension headers.
+        //
+
+        case SOCKET_INTERNET_PROTOCOL_IPV6_ROUTING:
+        case SOCKET_INTERNET_PROTOCOL_IPV6_FRAGMENT:
+        case SOCKET_INTERNET_PROTOCOL_ESP:
+        case SOCKET_INTERNET_PROTOCOL_AH:
+        case SOCKET_INTERNET_PROTOCOL_IPV6_DESTINATION:
+        case SOCKET_INTERNET_PROTOCOL_IPV6_MOBILITY:
+        case SOCKET_INTERNET_PROTOCOL_HIP:
+        case SOCKET_INTERNET_PROTOCOL_SHIM6:
+        case SOCKET_INTERNET_PROTOCOL_TEST1:
+        case SOCKET_INTERNET_PROTOCOL_TEST2:
+            RtlDebugPrint("IPv6: Unhandled extension header 0x%02x\n",
+                          NextHeader);
+
+            break;
+
+        //
+        // The first next header value that is not in the known list should be
+        // from an upper-layer protocol.
+        //
+
+        default:
+            ReceiveContext->Protocol = NetGetProtocolEntry(NextHeader);
+            if (ReceiveContext->Protocol != NULL) {
+                goto Ip6ProcessExtensionHeadersEnd;
+            }
+
+            UnrecognizedHeader = TRUE;
+            break;
+        }
+
+        //
+        // If an unknown next header arrived, send the unrecognized extension
+        // header error message.
+        //
+
+        if (UnrecognizedHeader != FALSE) {
+            Packet->DataOffset = HeaderOffset;
+            Code = ICMP6_PARAMETER_PROBLEM_CODE_UNRECOGNIZED_NEXT_HEADER;
+            NetpIp6SendParameterProblemMessage(ReceiveContext,
+                                               Code,
+                                               NextHeaderOffset);
+
+            Status = STATUS_UNSUCCESSFUL;
+            goto Ip6ProcessExtensionHeadersEnd;
+        }
+
+        //
+        // Get the type of and a pointer to the next extension header.
+        //
+
+        NextHeader = Extension->NextHeader;
+        NextHeaderOffset = Packet->DataOffset;
+        Packet->DataOffset += IP6_EXTENSION_HEADER_LENGTH_BASE;
+        Packet->DataOffset += (Extension->Length *
+                               IP6_EXTENSION_HEADER_LENGTH_MULTIPLE);
+
+        Extension = (PIP6_EXTENSION_HEADER)(Packet->Buffer +
+                                            Packet->DataOffset);
+    }
+
+Ip6ProcessExtensionHeadersEnd:
+    return Status;
+}
+
+VOID
+NetpIp6SendParameterProblemMessage (
+    PNET_RECEIVE_CONTEXT ReceiveContext,
+    UCHAR Code,
+    ULONG Pointer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends an ICMPv6 parameter problem message in response to a bad
+    IPv6 packet.
+
+Arguments:
+
+    ReceiveContext - Supplies a pointer to the receive context for the
+        problematic packet.
+
+    Code - Supplies the parameter problem code to send.
+
+    Pointer - Supplies the pointer to set in the paramter problem message.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    USHORT Checksum;
+    PNETWORK_ADDRESS Destination;
+    NETWORK_ADDRESS DestinationPhysical;
+    ULONG Flags;
+    PICMP6_HEADER Icmp6Header;
+    ULONG Icmp6Length;
+    PIP6_HEADER Ip6Header;
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    PNET_PACKET_BUFFER Message;
+    PVOID MessageData;
+    PULONG MessagePointer;
+    ULONG MessageSize;
+    PNET_PACKET_BUFFER Packet;
+    PVOID PacketData;
+    NET_PACKET_LIST PacketList;
+    ULONG PayloadLength;
+    PNET_DATA_LINK_SEND Send;
+    PNETWORK_ADDRESS Source;
+    KSTATUS Status;
+    ULONG VersionClassFlow;
+
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
+    Link = ReceiveContext->Link;
+    Packet = ReceiveContext->Packet;
+
+    //
+    // Switch the destination and source.
+    //
+
+    Source = ReceiveContext->Destination;
+    Destination = ReceiveContext->Source;
+
+    //
+    // Allocate a packet to hold the ICMPv6 parameter problem message.
+    //
+
+    MessageSize = sizeof(ULONG) + (Packet->FooterOffset - Packet->DataOffset);
+    if (MessageSize > IP6_MINIMUM_LINK_MTU) {
+        MessageSize = IP6_MINIMUM_LINK_MTU;
+    }
+
+    Flags = NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
+
+    Status = NetAllocateBuffer(sizeof(ICMP6_HEADER) + sizeof(IP6_HEADER),
+                               MessageSize,
+                               0,
+                               Link,
+                               Flags,
+                               &Message);
+
+    if (!KSUCCESS(Status)) {
+        goto Ip6SendParameterProblemMessage;
+    }
+
+    NET_ADD_PACKET_TO_LIST(Message, &PacketList);
+
+    //
+    // Copy the pointer and as much of the problem packet into the body of the
+    // ICMPv6 message.
+    //
+
+    MessagePointer = (PULONG)(Message->Buffer + Message->DataOffset);
+    *MessagePointer = Pointer;
+    MessageData = (PVOID)(MessagePointer + 1);
+    PacketData = Packet->Buffer + Packet->DataOffset;
+    RtlCopyMemory(MessageData, PacketData, MessageSize - sizeof(ULONG));
+
+    //
+    // Set the ICMPv6 header.
+    //
+
+    Message->DataOffset -= sizeof(ICMP6_HEADER);
+    Icmp6Header = (PICMP6_HEADER)(Message->Buffer + Message->DataOffset);
+    Icmp6Header->Type = ICMP6_MESSAGE_TYPE_PARAMETER_PROBLEM;
+    Icmp6Header->Code = Code;
+    Icmp6Header->Checksum = 0;
+    Icmp6Length = Packet->FooterOffset - Packet->DataOffset;
+    Checksum = NetChecksumPseudoHeaderAndData(ReceiveContext->Network,
+                                              Icmp6Header,
+                                              Icmp6Length,
+                                              Source,
+                                              Destination,
+                                              SOCKET_INTERNET_PROTOCOL_ICMP6);
+
+    Icmp6Header->Checksum = Checksum;
+
+    //
+    // Set the IPv6 header.
+    //
+
+    PayloadLength = Message->FooterOffset - Message->DataOffset;
+
+    ASSERT(PayloadLength <= IP6_MAX_PAYLOAD_LENGTH);
+
+    Message->DataOffset -= sizeof(IP6_HEADER);
+    Ip6Header = (PIP6_HEADER)(Message->Buffer + Message->DataOffset);
+    VersionClassFlow = (IP6_VERSION << IP6_VERSION_SHIFT) & IP6_VERSION_MASK;
+    Ip6Header->VersionClassFlow = CPU_TO_NETWORK32(VersionClassFlow);
+    Ip6Header->PayloadLength = CPU_TO_NETWORK16((USHORT)PayloadLength);
+    Ip6Header->NextHeader = SOCKET_INTERNET_PROTOCOL_ICMP6;
+    Ip6Header->HopLimit = IP6_DEFAULT_HOP_LIMIT;
+    RtlCopyMemory(Ip6Header->SourceAddress, Source->Address, IP6_ADDRESS_SIZE);
+    RtlCopyMemory(Ip6Header->DestinationAddress,
+                  Destination->Address,
+                  IP6_ADDRESS_SIZE);
+
+    //
+    // Get the source and destination physical addresses. Getting the
+    // destination physical address should not need to use NDP, as the result
+    // should already be in the cache.
+    //
+
+    Status = NetFindEntryForAddress(Link, Source, &LinkAddress);
+    if (!KSUCCESS(Status)) {
+        goto Ip6SendParameterProblemMessage;
+    }
+
+    Status = NetpIp6TranslateNetworkAddress(ReceiveContext->Network,
+                                            Destination,
+                                            Link,
+                                            LinkAddress,
+                                            &DestinationPhysical);
+
+    if (!KSUCCESS(Status)) {
+        goto Ip6SendParameterProblemMessage;
+    }
+
+    //
+    // Send the message down to the data link layer.
+    //
+
+    Send = Link->DataLinkEntry->Interface.Send;
+    Status = Send(Link->DataLinkContext,
+                  &PacketList,
+                  &(LinkAddress->PhysicalAddress),
+                  &DestinationPhysical,
+                  IP6_PROTOCOL_NUMBER);
+
+    if (!KSUCCESS(Status)) {
+        goto Ip6SendParameterProblemMessage;
+    }
+
+Ip6SendParameterProblemMessage:
+    if (!KSUCCESS(Status)) {
+        NetDestroyBufferList(&PacketList);
+    }
+
+    return;
 }
 

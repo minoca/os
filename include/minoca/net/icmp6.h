@@ -37,10 +37,19 @@ Author:
 // Define ICMPv6 message types.
 //
 
+#define ICMP6_MESSAGE_TYPE_PARAMETER_PROBLEM 4
 #define ICMP6_MESSAGE_TYPE_MLD_QUERY 130
 #define ICMP6_MESSAGE_TYPE_MLD_REPORT 131
 #define ICMP6_MESSAGE_TYPE_MLD_DONE 132
 #define ICMP6_MESSAGE_TYPE_MLD2_REPORT 143
+
+//
+// Define the ICMPv6 Parameter Problem message codes.
+//
+
+#define ICMP6_PARAMETER_PROBLEM_CODE_ERRONEOUS_HEADER 0
+#define ICMP6_PARAMETER_PROBLEM_CODE_UNRECOGNIZED_NEXT_HEADER 1
+#define ICMP6_PARAMETER_PROBLEM_CODE_UNRECOGNIZED_IPV6_OPTION 2
 
 //
 // ------------------------------------------------------ Data Type Definitions
