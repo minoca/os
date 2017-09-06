@@ -2626,6 +2626,7 @@ Return Value:
 
         ASSERT(FALSE);
 
+        NetFreeBuffer(Packet);
         return;
     }
 
@@ -2785,6 +2786,7 @@ Return Value:
 
         ASSERT(FALSE);
 
+        NetFreeBuffer(Packet);
         goto SendGroupLeaveEnd;
     }
 
@@ -3018,6 +3020,7 @@ Return Value:
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     PNET_PACKET_BUFFER Packet;
     PULONG RouterAlert;
+    PNET_DATA_LINK_SEND Send;
     PIP4_ADDRESS SourceAddress;
     KSTATUS Status;
     ULONG TotalLength;
@@ -3092,14 +3095,24 @@ Return Value:
                                                           NetAddressMulticast);
 
     if (!KSUCCESS(Status)) {
-        return;
+        goto IgmpSendPacketsEnd;
     }
 
-    Link->DataLinkEntry->Interface.Send(Link->DataLinkContext,
-                                        PacketList,
-                                        &(LinkAddress->PhysicalAddress),
-                                        &DestinationPhysical,
-                                        IP4_PROTOCOL_NUMBER);
+    Send = Link->DataLinkEntry->Interface.Send;
+    Status = Send(Link->DataLinkContext,
+                  PacketList,
+                  &(LinkAddress->PhysicalAddress),
+                  &DestinationPhysical,
+                  IP4_PROTOCOL_NUMBER);
+
+    if (!KSUCCESS(Status)) {
+        goto IgmpSendPacketsEnd;
+    }
+
+IgmpSendPacketsEnd:
+    if (!KSUCCESS(Status)) {
+        NetDestroyBufferList(PacketList);
+    }
 
     return;
 }

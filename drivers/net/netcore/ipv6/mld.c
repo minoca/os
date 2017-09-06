@@ -1855,6 +1855,7 @@ Return Value:
 
         ASSERT(FALSE);
 
+        NetFreeBuffer(Packet);
         return;
     }
 
@@ -2016,6 +2017,7 @@ Return Value:
 
         ASSERT(FALSE);
 
+        NetFreeBuffer(Packet);
         goto SendGroupLeaveEnd;
     }
 
@@ -2398,6 +2400,10 @@ Return Value:
     }
 
 MldSendPacketsEnd:
+    if (!KSUCCESS(Status)) {
+        NetDestroyBufferList(PacketList);
+    }
+
     return;
 }
 
