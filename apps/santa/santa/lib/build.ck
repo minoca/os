@@ -174,8 +174,8 @@ class Build {
             this._load(pathOrNumber);
 
         } else {
-            this._loadModule(pathOrNumber);
             this.filePath = pathOrNumber;
+            this._loadModule(pathOrNumber);
             this.number = (os.getpid)();
             this.module = _module;
             this.outdir = null;
@@ -509,7 +509,9 @@ class Build {
         }
 
         vars.conffiles = conffiles;
-        for (key in ["depends", "makedepends_build", "makedepends_host"]) {
+        for (key in ["depends", "makedepends_build", "makedepends_host",
+                     "basedepends_build", "basedepends_host"]) {
+
             depends = vars.get(key);
             if (depends == null) {
                 depends = [];
@@ -688,7 +690,7 @@ class Build {
         }
 
         if (_config == null) {
-            configPath = _realm.containment.outerPath("santa/status.json");
+            configPath = _realm.containment.outerPath("status.json");
             _config = ConfigFile(configPath, {});
         }
 
@@ -731,7 +733,7 @@ class Build {
         var configPath;
 
         this._getRealm(number, false);
-        configPath = _realm.containment.outerPath("santa/status.json");
+        configPath = _realm.containment.outerPath("status.json");
         if (!(os.exists)(configPath)) {
             Core.raise(ValueError("Build %d does not exist" % number));
         }
@@ -855,6 +857,43 @@ class Build {
             Core.raise(ValueError("Required parameter%s '%s' missing" %
                                   [missing.length() == 1 ? "" : "s",
                                    ", ".join(missing)]));
+        }
+
+        //
+        // Install base packages.
+        //
+
+        deps = vars.get("basedepends_build");
+        if (deps != null) {
+            for (dep in deps) {
+                try {
+                    packages.install(dep, null);
+
+                } except PackageNotFoundError as e {
+                    if (vars.verbose) {
+                        Core.print("Ignoring missing base build "
+                                   "dependency: %s" % dep);
+                    }
+                }
+            }
+        }
+
+        deps = vars.get("basedepends_host");
+        if (deps != null) {
+            params.arch = vars.arch;
+            params.os = vars.os;
+            params.root = _realm.containment.innerPath(vars.sysroot);
+            for (dep in deps) {
+                try {
+                    packages.install(dep, params);
+
+                } except PackageNotFoundError as e {
+                    if (vars.verbose) {
+                        Core.print("Ignoring missing base host "
+                                   "dependency: %s" % dep);
+                    }
+                }
+            }
         }
 
         //
@@ -1002,7 +1041,7 @@ class Build {
 
     {
 
-        var buildRoot = _realm.containment.outerPath("santa");
+        var buildRoot = _realm.containment.outerPath("/");
         var vars = this.vars;
 
         vars.startdir = _startDirectory;
@@ -1010,10 +1049,15 @@ class Build {
         vars.pkgdir = buildRoot + "/pkg";
         vars.builddir = buildRoot + "/bld";
         vars.subpkgdir = null;
+        vars.basedepends_host = "base-dev-host";
         vars.buildsysroot = _realm.containment.outerPath("/");
         vars.sysroot = vars.buildsysroot;
         if ((vars.os != vars.buildos) || (vars.arch != vars.buildarch)) {
             vars.sysroot = "%s/%s-%s" % [buildRoot, vars.arch, vars.os];
+            vars.basedepends_build = "base-dev-$arch-$os";
+
+        } else {
+            vars.basedepends_build = "base-dev";
         }
 
         return;

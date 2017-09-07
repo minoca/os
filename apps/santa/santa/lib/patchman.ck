@@ -826,7 +826,7 @@ class PatchManager {
             return;
         }
 
-        _config = ConfigFile(path(SANTA_PATCH_CONFIG_PATH), {});
+        _config = ConfigFile(path(SANTA_PATCH_CONFIG_PATH), {"files": []});
 
         //
         // Use this instance's variables if they've been populated.

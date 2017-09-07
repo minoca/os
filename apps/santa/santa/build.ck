@@ -213,6 +213,29 @@ Return Value:
     }
 
     //
+    // Set up all the autotools variables if they have not yet been set.
+    //
+
+    for (variable in
+         ["autoconf", "autoheader", "autoreconf", "autom4te", "automake",
+          "autoscan", "autoupdate", "libtoolize"]) {
+
+        if ((os.getenv)(variable.upper()) == null) {
+            (os.setenv)(variable.upper(), variable);
+        }
+    }
+
+    if ((os.getenv)("autom4te_perllibdir") == null) {
+        (os.setenv)("autom4te_perllibdir",
+                    build.vars.buildsysroot + "/usr/share/autoconf");
+    }
+
+    if ((os.getenv)("AC_MACRODIR") == null) {
+        (os.setenv)("AC_MACRODIR",
+                    build.vars.buildsysroot + "/usr/share/autoconf");
+    }
+
+    //
     // Perform an autoreconf unless asked not to.
     //
 
@@ -220,7 +243,7 @@ Return Value:
         chdir(confDir);
         autoreconf = options.get("reconfigure");
         if (autoreconf == null) {
-            autoreconf = "${AUTORECONF:=autoreconf}";
+            autoreconf = "${AUTORECONF}";
         }
 
         if (options.get("reconf_args")) {

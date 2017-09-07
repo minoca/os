@@ -31,6 +31,7 @@ Environment:
 //
 
 from getopt import gnuGetopt;
+import os;
 from santa.config import config;
 from santa.lib.build import Build;
 
@@ -120,6 +121,7 @@ Return Value:
     var output;
     var runTo;
     var soloStep;
+    var startDirectory = (os.getcwd)();
     var status;
     var value;
     var verbose = config.getKey("core.verbose");
@@ -229,6 +231,13 @@ Return Value:
         } else {
             build.run();
         }
+
+        //
+        // Return back to the original working directory in case the next
+        // argument is a relative path.
+        //
+
+        (os.chdir)(startDirectory);
     }
 
     return 0;

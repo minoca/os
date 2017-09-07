@@ -71,6 +71,7 @@ var defaultPackageManagerState = {
 class PackageDependencyError is Exception {}
 class PackageNotFoundError is Exception {}
 class MultiplePackagesError is Exception {}
+class PackageVersionConflict is Exception {}
 
 class PackageManager {
     var _realm;
@@ -160,6 +161,8 @@ class PackageManager {
         if (parameters == null) {
             parameters = {};
         }
+
+        name = this._splitVersionRequirements(name, parameters);
 
         //
         // Set a root if there isn't one so it's always identified as a filter
@@ -504,16 +507,17 @@ class PackageManager {
 
     {
 
+        var error;
         var filter = {};
         var found;
         var package = null;
         var results = [];
         var root = parameters.get("root");
+        var trail = "";
 
         for (parameter in ["arch", "os", "release", "version", "root"]) {
             try {
                 filter[parameter] = parameters[parameter];
-
             } except KeyError {}
         }
 
@@ -521,63 +525,73 @@ class PackageManager {
         // Look for the package in the list of installed packages.
         //
 
-        if (filter.length() || root) {
-            filter.name = name;
-            for (pkg in _state.pkgs) {
-                found = true;
-                for (key in filter) {
-                    if (pkg[key] != filter[key]) {
-                        found = false;
-                        break;
-                    }
-                }
-
-                if (!found) {
+        filter.name = name;
+        for (pkg in _state.pkgs) {
+            found = true;
+            for (key in filter) {
+                if (key == "version") {
                     continue;
                 }
 
-                try {
-                    if (pkg.root != root) {
+                if ((key == "arch") || (key == "os")) {
+                    if (pkg[key] == "none") {
                         continue;
                     }
+                }
 
-                } except KeyError {}
-
-                results.append(pkg);
-            }
-
-            if (results.length() == 0) {
-                Core.raise(PackageNotFoundError(
-                          "Package %s with required parameters not found" %
-                          name));
-
-            } else if (results.length() != 1) {
-                Core.raise(MultiplePackagesError(
-                    "Multiple packages match package %s with required "
-                    "parameters" % name));
-            }
-
-            package = results[0];
-
-        //
-        // Just get the first package that matches the name.
-        //
-
-        } else {
-            for (pkg in _state.pkgs) {
-                if (pkg.name == name) {
-                    package = pkg;
+                if (pkg[key] != filter[key]) {
+                    found = false;
                     break;
                 }
             }
 
-            if (package == null) {
-                Core.raise(PackageNotFoundError(
-                          "Package %s not found" %
-                          name));
+            if (!found) {
+                continue;
             }
+
+            try {
+                if (pkg.root != root) {
+                    continue;
+                }
+
+            } except KeyError {}
+
+            //
+            // Fail if there's already an installed package with the
+            // wrong version. At some point consider adding support for
+            // upgrading installed packages if that would satisfy the
+            // constraints.
+            //
+
+            if (!this.db.checkVersionConstraints(pkg, parameters)) {
+                if (parameters.get("trail")) {
+                    trail = " needed by %s" % parameters.trail;
+                }
+
+                error = "Package %s %s is already installed and does not "
+                        "satisfy constraints %s%s. "
+                        "Please uninstall incompatible package and try "
+                        "again" % [pkg.name, pkg.version, parameters.version,
+                                   trail];
+
+                Core.raise(PackageVersionConflict(error));
+            }
+
+            results.append(pkg);
         }
 
+        if (results.length() == 0) {
+            Core.raise(PackageNotFoundError(
+                      "Package %s with required parameters not found" %
+                      name));
+
+        } else if (results.length() != 1) {
+            Core.raise(MultiplePackagesError(
+                "Multiple packages match package %s with required "
+                "parameters" % name));
+        }
+
+        package = results[0];
         return package;
     }
 
@@ -624,9 +638,14 @@ class PackageManager {
         if (filter.length()) {
             packages = this.db.filter(filter, false);
             if (packages.length() > 1) {
-                Core.raise(MultiplePackagesError(
-                    "Multiple packages match package %s with required "
-                    "parameters" % name));
+                if (filter.get("version") == null) {
+                    package = this._latest(packages);
+
+                } else {
+                    Core.raise(MultiplePackagesError(
+                        "Multiple packages match package %s with required "
+                        "parameters" % name));
+                }
 
             } else if (packages.length() == 1) {
                 package = packages[0];
@@ -700,9 +719,14 @@ class PackageManager {
 
     {
 
+        var added = false;
+        var conflict;
         var depends;
+        var existing;
         var referenceCount;
+        var trail;
         var verbose = config.getKey("core.verbose");
+        var versionCompare;
 
         if (_removePlan.contains(package)) {
             Core.raise(PackageDependencyError(
@@ -716,10 +740,70 @@ class PackageManager {
 
         if (_addPlan.contains(package)) {
             if (verbose) {
-                Core.print("Package %s already going to be added");
+                Core.print("Package %s already going to be added" %
+                           package.name);
             }
 
             return;
+        }
+
+        //
+        // See if there's already a different version of the package in the
+        // add plan.
+        //
+
+        for (index in 0.._addPlan.length()) {
+            existing = _addPlan[index];
+            if (existing.name != package.name) {
+                continue;
+            }
+
+            versionCompare = this.db.compareVersionStrings(existing.version,
+                                                           package.version);
+
+            if (versionCompare > 0) {
+                Core.raise(PackageVersionConflict(
+                    "Package %s version %s is needed by %s, but newer version "
+                    "%s is already in the add plan. Please make sure this "
+                    "trail of packages is added before whichever package "
+                    "included the newer version" %
+                    [package.name,
+                     package.version,
+                     parameters.trail,
+                     existing.version]));
+
+            } else if (versionCompare == 0) {
+                if (package.release > existing.release) {
+                    _addPlan[index] = package;
+                    added = true;
+                    break;
+                }
+
+            //
+            // If the existing package is older than the one being added, it
+            // might be able to be replaced with this newer version. Re-check
+            // all the dependencies.
+            //
+
+            } else {
+                conflict = this._recheckDependencies(index, package);
+                if (conflict == null) {
+                    _addPlan[index] = package;
+                    added = true;
+                    break;
+
+                } else {
+                    Core.raise(PackageVersionConflict(
+                        "Package %s version %s is needed by %s, but an older "
+                        "version %s is needed by %s. Please resolve this "
+                        "conflict and try again." %
+                        [package.name,
+                         package.version,
+                         parameters.trail,
+                         existing.version,
+                         conflict.name]));
+                }
+            }
         }
 
         if (verbose) {
@@ -731,12 +815,15 @@ class PackageManager {
 
         } except KeyError {}
 
-        _addPlan.append(package);
+        if (!added) {
+            _addPlan.append(package);
+        }
+
         if (parameters.trail == "") {
-            parameters.trail = package.name;
+            trail = package.name;
 
         } else {
-            parameters.trail = "%s <- %s" % [package.name, parameters.trail];
+            trail = "%s <- %s" % [package.name, parameters.trail];
         }
 
         depends = package.depends;
@@ -745,6 +832,14 @@ class PackageManager {
         }
 
         for (dep in depends) {
+
+            //
+            // Restore the trail since it may have been appended to by the
+            // last round.
+            //
+
+            parameters.trail = trail;
+            dep = this._splitVersionRequirements(dep, parameters);
             try {
                 dep = this.getPackage(dep, parameters);
 
@@ -952,6 +1047,170 @@ class PackageManager {
                      package.release];
 
         return path(directory);
+    }
+
+    function
+    _latest (
+        packageList
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine returns the package with the latest version number in the
+        given list.
+
+    Arguments:
+
+        packageList - Supplies the list of packages.
+
+    Return Value:
+
+        Returns the element with the latest version number.
+
+    --*/
+
+    {
+
+        var winner;
+
+        if (packageList.length() == 0) {
+            return null;
+        }
+
+        winner = packageList[0];
+        for (element in packageList) {
+            if (this.db.compareVersionStrings(element.version, winner.version) >
+                0) {
+
+                winner = element;
+            }
+        }
+
+        return winner;
+    }
+
+    function
+    _splitVersionRequirements (
+        name,
+        parameters
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine splits a string like mypkg>=1.2.3 into a name and a
+        version parameter. If there is no version constraint, it is cleared
+        from the parameters.
+
+    Arguments:
+
+        name - Supplies the name string.
+
+        parameters - Supplies the parameters to set.
+
+    Return Value:
+
+        Returns the actual package name, versioning suffixes removed.
+
+    --*/
+
+    {
+
+        var character;
+
+        parameters.remove("version");
+        for (index in 0..name.length()) {
+            character = name[index];
+            if ((character == ">") || (character == "<") ||
+                (character == "=")) {
+
+                parameters["version"] = name[index...-1];
+                return name[0..index];
+            }
+        }
+
+        //
+        // No versioning info found.
+        //
+
+        return name;
+    }
+
+    function
+    _recheckDependencies (
+        addIndex,
+        newPackage
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine determines if all dependencies are still satisfied by
+        substituting the package in the add plan at the given index with the
+        new package.
+
+    Arguments:
+
+        addIndex - Supplies the index into the add plan to substitute.
+
+        newPackage - Supplies the new package to check.
+
+    Return Value:
+
+        Returns the first package with the incompatible constraint if the
+        new package does not work.
+
+        null if the new package works as a substitute.
+
+    --*/
+
+    {
+
+        var deps;
+        var existing;
+        var name = newPackage.name;
+        var parameters = {};
+
+        //
+        // Only check one level deep for all packages in the add plan. The
+        // add plan may not be a complete closure at this point, but future
+        // packages that might conflict will go through this check again.
+        // Installed packages are in theory already a complete closure, so none
+        // of them depend on this package in question.
+        //
+
+        for (index in 0.._addPlan.length()) {
+            if (index == addIndex) {
+                continue;
+            }
+
+            existing = _addPlan[index];
+            deps = existing.depends;
+            if (deps is String) {
+                if (!deps.contains(name)) {
+                    continue;
+                }
+
+                deps = deps.split(null, -1);
+            }
+
+            for (dep in deps) {
+                dep = this._splitVersionRequirements(dep, parameters);
+                if (dep != name) {
+                    continue;
+                }
+
+                if (!this.db.checkVersionConstraints(newPackage, parameters)) {
+                    return existing;
+                }
+            }
+        }
+
+        return null;
     }
 }
 

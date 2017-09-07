@@ -162,9 +162,17 @@ class PackageDatabase {
                         }
                     }
 
-                    if (pkg[key] != parameters[key]) {
-                        found = false;
-                        break;
+                    if (key == "version") {
+                        if (!this.checkVersionConstraints(pkg, parameters)) {
+                            found = false;
+                            break;
+                        }
+
+                    } else {
+                        if (pkg[key] != parameters[key]) {
+                            found = false;
+                            break;
+                        }
                     }
                 }
 
@@ -222,6 +230,76 @@ class PackageDatabase {
         }
 
         return winner;
+    }
+
+    function
+    checkVersionConstraints (
+        pkg,
+        parameters
+        )
+
+    /*++
+
+    Routine Description:
+
+        This routine determines if the given package satisfies the given
+        version constraints.
+
+    Arguments:
+
+        pkg - Supplies the package to check.
+
+        parameters - Suppiles the version constraints to check against.
+
+    Return Value:
+
+        true if the package satisfies the version constraints.
+
+        false if the package does not satisfy the version constraints.
+
+    --*/
+
+    {
+
+        var compare;
+        var compareVersion;
+        var constraints = parameters.get("version");
+        var success = false;
+        var version = pkg.version;
+
+        if (!constraints) {
+            return true;
+        }
+
+        if ((constraints.startsWith(">=")) || (constraints.startsWith("<="))) {
+            compareVersion = constraints[2...-1];
+
+        } else {
+            compareVersion = constraints[1...-1];
+        }
+
+        compare = this.compareVersionStrings(pkg.version, compareVersion);
+        if (constraints.startsWith(">=")) {
+            success = compare >= 0;
+
+        } else if (constraints.startsWith("<=")) {
+            success = compare <= 0;
+
+        } else if (constraints.startsWith(">")) {
+            success = compare > 0;
+
+        } else if (constraints.startsWith("<")) {
+            success = compare < 0;
+
+        } else if (constraints.startsWith("=")) {
+            success = compare == 0;
+
+        } else {
+            Core.raise(ValueError("Invalid version constraint: %s" %
+                                  constraints));
+        }
+
+        return success;
     }
 
     function
@@ -300,6 +378,13 @@ class PackageDatabase {
             try {
                 leftNumber = Int.fromString(leftElement);
                 rightNumber = Int.fromString(rightElement);
+                if (leftNumber < rightNumber) {
+                    return -1;
+                }
+
+                if (leftNumber > rightNumber) {
+                    return 1;
+                }
 
             } except ValueError {
                 if (leftElement < rightElement) {
