@@ -58,6 +58,7 @@ class LzFile is RawIoBase {
     var _file;
     var _lz;
     var _remainder;
+    var _remainderOffset;
     var _finished;
 
     function
@@ -109,6 +110,7 @@ class LzFile is RawIoBase {
         _closefd = false;
         _finished = false;
         _remainder = "";
+        _remainderOffset = 0;
         _level = level;
         this.mode = mode;
         this.name = null;
@@ -286,6 +288,7 @@ class LzFile is RawIoBase {
 
         var compressed;
         var data = _remainder;
+        var offset = _remainderOffset;
         var readSize;
 
         if (_file == null) {
@@ -301,12 +304,17 @@ class LzFile is RawIoBase {
         }
 
         //
-        // See if there's enough in the remainder.
+        // See if there's enough in the remainder to satisfy the request.
         //
 
-        if (data.length() >= size) {
-            _remainder = data[size...-1];
-            return data[0..size];
+        if (data.length() - offset >= size) {
+            _remainderOffset += size;
+            return data[offset.._remainderOffset];
+        }
+
+        if (_remainderOffset != 0) {
+            data = data[_remainderOffset...-1];
+            _remainderOffset = 0;
         }
 
         size -= data.length();
@@ -341,7 +349,7 @@ class LzFile is RawIoBase {
 
         if (_remainder.length() >= size) {
             data += _remainder[0..size];
-            _remainder = _remainder[size...-1];
+            _remainderOffset = size;
 
         } else {
             data += _remainder;
