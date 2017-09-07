@@ -29,11 +29,9 @@ Author:
 // address.
 //
 
-#define IP6_IS_ANY_ADDRESS(_Ip6Address)     \
-    ((*((PULONG)&(_Ip6Address[0])) == 0) && \
-     (*((PULONG)&(_Ip6Address[4])) == 0) && \
-     (*((PULONG)&(_Ip6Address[8])) == 0) && \
-     (*((PULONG)&(_Ip6Address[12])) == 0))
+#define IP6_IS_ANY_ADDRESS(_Ip6Address)                    \
+    (((_Ip6Address)[0] == 0) && ((_Ip6Address)[1] == 0) && \
+     ((_Ip6Address)[2] == 0) && ((_Ip6Address)[3] == 0))
 
 //
 // This macros determines whether or not the given IPv6 address is a multicast
@@ -41,7 +39,7 @@ Author:
 //
 
 #define IP6_IS_MULTICAST_ADDRESS(_Ip6Address) \
-    ((_Ip6Address[0]) == 0xFF)
+    ((UCHAR)(_Ip6Address)[0] == 0xFF)
 
 //
 // This macros determines whether or not the given IPv6 address is a multicast
@@ -49,17 +47,17 @@ Author:
 //
 
 #define IP6_IS_MULTICAST_LINK_LOCAL_ADDRESS(_Ip6Address) \
-    (IN6_IS_ADDR_MULTICAST(_Ip6Address) &&               \
-     (((_Ip6Address[1]) & 0x0F) == 0x2))
+    (((_Ip6Address)[0] & CPU_TO_NETWORK32(0xFF0F0000)) == \
+     CPU_TO_NETWORK32(0xFF020000))
 
 //
 // This macros determines whether or not the given IPv6 address is a unicast
 // link-local address.
 //
 
-#define IP6_IS_UNICAST_LINK_LOCAL_ADDRESS(_Ip6Address)                 \
-    ((*((PULONG)&(_Ip6Address[0])) == CPU_TO_NETWORK32(0xFE800000)) && \
-     (*((PULONG)&(_Ip6Address[4])) == 0))
+#define IP6_IS_UNICAST_LINK_LOCAL_ADDRESS(_Ip6Address)                \
+    (((_Ip6Address)[0] == CPU_TO_NETWORK32(IP6_LINK_LOCAL_PREFIX)) && \
+     ((_Ip6Address)[1] == 0))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -140,6 +138,12 @@ Author:
 #define IP6_ROUTER_ALERT_CODE_ACTIVE_NETWORK 2
 
 //
+// Define the IPv6 link local prefix, in CPU byte order.
+//
+
+#define IP6_LINK_LOCAL_PREFIX 0xFE800000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -167,7 +171,7 @@ typedef struct _IP6_ADDRESS {
         struct {
             NET_DOMAIN_TYPE Domain;
             ULONG Port;
-            UCHAR Address[IP6_ADDRESS_SIZE];
+            ULONG Address[IP6_ADDRESS_SIZE / sizeof(ULONG)];
         };
 
         NETWORK_ADDRESS NetworkAddress;

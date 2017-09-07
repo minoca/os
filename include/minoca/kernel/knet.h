@@ -686,7 +686,7 @@ Members:
 --*/
 
 typedef struct _SOCKET_IP6_MULTICAST_REQUEST {
-    UCHAR Address[16];
+    ULONG Address[16 / sizeof(ULONG)];
     ULONG Interface;
 } SOCKET_IP6_MULTICAST_REQUEST, *PSOCKET_IP6_MULTICAST_REQUEST;
 

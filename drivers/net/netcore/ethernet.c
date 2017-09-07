@@ -635,7 +635,7 @@ Return Value:
     ULONG Ip4AddressMask;
     PUCHAR Ip4BytePointer;
     PIP4_ADDRESS Ip4Multicast;
-    PIP6_ADDRESS Ip6Multicast;
+    PUCHAR Ip6BytePointer;
     KSTATUS Status;
 
     BytePointer = (PUCHAR)(PhysicalAddress->Address);
@@ -705,13 +705,13 @@ Return Value:
             // 0x33.
             //
 
-            Ip6Multicast = (PIP6_ADDRESS)NetworkAddress;
+            Ip6BytePointer = (PUCHAR)(NetworkAddress->Address);
             BytePointer[0] = NetEthernetIp6MulticastBase[0];
             BytePointer[1] = NetEthernetIp6MulticastBase[1];
-            BytePointer[2] = Ip6Multicast->Address[12];
-            BytePointer[3] = Ip6Multicast->Address[13];
-            BytePointer[4] = Ip6Multicast->Address[14];
-            BytePointer[5] = Ip6Multicast->Address[15];
+            BytePointer[2] = Ip6BytePointer[12];
+            BytePointer[3] = Ip6BytePointer[13];
+            BytePointer[4] = Ip6BytePointer[14];
+            BytePointer[5] = Ip6BytePointer[15];
             break;
 
         default:

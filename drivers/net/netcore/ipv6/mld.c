@@ -210,7 +210,7 @@ typedef struct _MLD_MESSAGE {
     ICMP6_HEADER Header;
     USHORT MaxResponseCode;
     USHORT Reserved;
-    UCHAR MulticastAddress[IP6_ADDRESS_SIZE];
+    ULONG MulticastAddress[IP6_ADDRESS_SIZE / sizeof(ULONG)];
 } PACKED MLD_MESSAGE, *PMLD_MESSAGE;
 
 /*++
@@ -287,7 +287,7 @@ typedef struct _MLD2_ADDRESS_RECORD {
     UCHAR Type;
     UCHAR DataLength;
     USHORT SourceAddressCount;
-    UCHAR MulticastAddress[IP6_ADDRESS_SIZE];
+    ULONG MulticastAddress[IP6_ADDRESS_SIZE / sizeof(ULONG)];
 } PACKED MLD2_ADDRESS_RECORD, *PMLD2_ADDRESS_RECORD;
 
 /*++
@@ -416,7 +416,7 @@ typedef struct _MLD_MULTICAST_GROUP {
     ULONG SendCount;
     ULONG Flags;
     ULONG JoinCount;
-    UCHAR Address[IP6_ADDRESS_SIZE];
+    ULONG Address[IP6_ADDRESS_SIZE / sizeof(ULONG)];
     PMLD_LINK MldLink;
     MLD_TIMER Timer;
 } MLD_MULTICAST_GROUP, *PMLD_MULTICAST_GROUP;

@@ -319,6 +319,7 @@ Return Value:
 {
 
     PNET_LINK_ADDRESS_ENTRY AddressEntry;
+    PUCHAR BytePointer;
     IP6_ADDRESS InitialAddress;
     PUCHAR MacAddress;
     IP6_ADDRESS MulticastAddress;
@@ -341,21 +342,19 @@ Return Value:
     ASSERT((PhysicalAddress->Domain == NetDomainEthernet) ||
            (PhysicalAddress->Domain == NetDomain80211));
 
-    MacAddress = (PUCHAR)PhysicalAddress->Address;
+    MacAddress = (PUCHAR)(PhysicalAddress->Address);
     RtlZeroMemory((PNETWORK_ADDRESS)&InitialAddress, sizeof(NETWORK_ADDRESS));
     InitialAddress.Domain = NetDomainIp6;
-    InitialAddress.Address[15] = MacAddress[5];
-    InitialAddress.Address[14] = MacAddress[4];
-    InitialAddress.Address[13] = MacAddress[3];
-    InitialAddress.Address[12] = 0xFE;
-    InitialAddress.Address[11] = 0xFF;
-    InitialAddress.Address[10] = MacAddress[2];
-    InitialAddress.Address[9] = MacAddress[1];
-    InitialAddress.Address[8] = (MacAddress[0] & 0xFD) |
-                                (~MacAddress[0] & 0x02);
-
-    InitialAddress.Address[1] = 0x80;
-    InitialAddress.Address[0] = 0xFE;
+    BytePointer = (PUCHAR)(InitialAddress.Address);
+    BytePointer[15] = MacAddress[5];
+    BytePointer[14] = MacAddress[4];
+    BytePointer[13] = MacAddress[3];
+    BytePointer[12] = 0xFE;
+    BytePointer[11] = 0xFF;
+    BytePointer[10] = MacAddress[2];
+    BytePointer[9] = MacAddress[1];
+    BytePointer[8] = (MacAddress[0] & 0xFD) | (~MacAddress[0] & 0x02);
+    InitialAddress.Address[0] = CPU_TO_NETWORK32(IP6_LINK_LOCAL_PREFIX);
     Status = NetCreateLinkAddressEntry(Link,
                                        (PNETWORK_ADDRESS)&InitialAddress,
                                        NULL,
@@ -587,7 +586,7 @@ Return Value:
     //
 
     BindingType = SocketLocallyBound;
-    if (IP6_IS_ANY_ADDRESS(Ip6Address) != FALSE) {
+    if (IP6_IS_ANY_ADDRESS(Ip6Address->Address) != FALSE) {
         BindingType = SocketUnbound;
     }
 
@@ -621,7 +620,7 @@ Return Value:
         // owns this address.
         //
 
-        if (IP6_IS_ANY_ADDRESS(Ip6Address) == FALSE) {
+        if (IP6_IS_ANY_ADDRESS(Ip6Address->Address) == FALSE) {
             Port = Address->Port;
             Address->Port = 0;
             Status = NetFindLinkForLocalAddress(Address,
@@ -1371,6 +1370,7 @@ Return Value:
 
 {
 
+    PUCHAR BytePointer;
     LONG CurrentRun;
     LONG CurrentRunSize;
     PIP6_ADDRESS Ip6Address;
@@ -1396,10 +1396,11 @@ Return Value:
     // Copy the address into its word array.
     //
 
+    BytePointer = (PUCHAR)(Ip6Address->Address);
     WordCount = IP6_ADDRESS_SIZE / sizeof(USHORT);
     for (WordIndex = 0; WordIndex < WordCount; WordIndex += 1) {
-        Words[WordIndex] = ((Ip6Address->Address[WordIndex * 2]) << 8) |
-                           Ip6Address->Address[(WordIndex * 2) + 1];
+        Words[WordIndex] = ((BytePointer[WordIndex * 2]) << 8) |
+                           BytePointer[(WordIndex * 2) + 1];
     }
 
     //
@@ -1496,10 +1497,10 @@ Return Value:
                                        RemainingSize,
                                        CharacterEncodingDefault,
                                        "%d.%d.%d.%d",
-                                       Ip6Address->Address[12],
-                                       Ip6Address->Address[13],
-                                       Ip6Address->Address[14],
-                                       Ip6Address->Address[15]);
+                                       BytePointer[12],
+                                       BytePointer[13],
+                                       BytePointer[14],
+                                       BytePointer[15]);
 
             break;
         }
@@ -2161,7 +2162,7 @@ Return Value:
     // Start by checking against 0.0.0.0, an invalid address.
     //
 
-    if (IP6_IS_ANY_ADDRESS(Ip6Address) != FALSE) {
+    if (IP6_IS_ANY_ADDRESS(Ip6Address->Address) != FALSE) {
         return STATUS_INVALID_ADDRESS;
     }
 
