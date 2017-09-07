@@ -492,6 +492,10 @@ typedef enum _PCNET_CSR {
     PcnetCsr2InitBlockAddress1 = 2,
     PcnetCsr4FeatureControl = 4,
     PcnetCsr5ExtendedControl = 5,
+    PcnetCsr8LogicalAddressFilter0 = 8,
+    PcnetCsr8LogicalAddressFilter1 = 9,
+    PcnetCsr8LogicalAddressFilter2 = 10,
+    PcnetCsr8LogicalAddressFilter3 = 11,
     PcnetCsr15Mode = 15,
     PcnetCsr88ChipIdLower = 88,
     PcnetCsr89ChipIdUpper = 89

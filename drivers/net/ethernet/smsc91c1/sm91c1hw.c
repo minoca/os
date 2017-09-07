@@ -279,6 +279,7 @@ Return Value:
 
     PULONG BooleanOption;
     ULONG Capabilities;
+    ULONG Capability;
     PSM91C1_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
@@ -303,17 +304,21 @@ Return Value:
 
         break;
 
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -324,12 +329,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -337,10 +340,10 @@ Return Value:
         KeAcquireQueuedLock(Device->Lock);
         Capabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Capabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities |= Capability;
 
         } else {
-            Capabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities &= ~Capability;
         }
 
         if ((Capabilities ^ Device->EnabledCapabilities) != 0) {
@@ -389,7 +392,9 @@ Return Value:
     KeInitializeSpinLock(&(Device->InterruptLock));
     KeInitializeSpinLock(&(Device->BankLock));
     NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
-    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE |
+                                     NET_LINK_CAPABILITY_MULTICAST_ALL;
+
     Device->SelectedBank = -1;
 
     ASSERT(Device->Lock == NULL);
@@ -1382,6 +1387,15 @@ Return Value:
 
     } else {
         Value &= ~SM91C1_RECEIVE_CONTROL_PROMISCUOUS;
+    }
+
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+        Value |= SM91C1_RECEIVE_CONTROL_ALL_MULTICAST;
+
+    } else {
+        Value &= ~SM91C1_RECEIVE_CONTROL_ALL_MULTICAST;
     }
 
     Sm91c1pWriteRegister(Device, Sm91c1RegisterReceiveControl, Value);

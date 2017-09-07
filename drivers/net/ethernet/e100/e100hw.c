@@ -293,6 +293,7 @@ Return Value:
 
     PULONG BooleanOption;
     ULONG Capabilities;
+    ULONG Capability;
     PE100_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
@@ -315,17 +316,21 @@ Return Value:
         *Flags = 0;
         break;
 
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -336,12 +341,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -349,10 +352,10 @@ Return Value:
         KeAcquireQueuedLock(Device->ConfigurationLock);
         Capabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Capabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities |= Capability;
 
         } else {
-            Capabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities &= ~Capability;
         }
 
         if ((Capabilities ^ Device->EnabledCapabilities) != 0) {
@@ -430,10 +433,12 @@ Return Value:
     }
 
     //
-    // Promiscuous mode is supported but not enabled by default.
+    // Promiscuous and all multicast mode are supported but not enabled by
+    // default.
     //
 
-    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE |
+                                     NET_LINK_CAPABILITY_MULTICAST_ALL;
 
     //
     // Allocate the receive buffers. This is allocated as non-write though and
@@ -1958,6 +1963,12 @@ Return Value:
         Configuration[6] |= E100_CONFIG_BYTE6_SAVE_BAD_FRAMES;
         Configuration[7] &= ~E100_CONFIG_BYTE7_DISCARD_SHORT_RECEIVE;
         Configuration[15] |= E100_CONFIG_BYTE15_PROMISCUOUS;
+    }
+
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+        Configuration[21] |= E100_CONFIG_BYTE21_MULTICAST_ALL;
     }
 
     //

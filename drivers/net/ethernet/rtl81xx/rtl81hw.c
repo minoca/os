@@ -261,6 +261,7 @@ Return Value:
 
     PULONG BooleanOption;
     PULONG Capabilities;
+    ULONG Capability;
     ULONG ChangedCapabilities;
     PRTL81_DEVICE Device;
     ULONG EnabledCapabilities;
@@ -369,18 +370,22 @@ Return Value:
         KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         Status = STATUS_SUCCESS;
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -391,12 +396,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -404,10 +407,10 @@ Return Value:
         KeAcquireQueuedLock(Device->ConfigurationLock);
         EnabledCapabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            EnabledCapabilities |= Capability;
 
         } else {
-            EnabledCapabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            EnabledCapabilities &= ~Capability;
         }
 
         if ((EnabledCapabilities ^ Device->EnabledCapabilities) != 0) {
@@ -533,11 +536,12 @@ Return Value:
     Device->Flags = Flags;
 
     //
-    // All RTL81xx devices support promiscuous mode, but do not enable it by
-    // default.
+    // All RTL81xx devices support promiscuous and all-multicast modes, but do
+    // not enable them by default.
     //
 
-    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE |
+                                     NET_LINK_CAPABILITY_MULTICAST_ALL;
 
     //
     // Both checksum versions support the same features. So start with checksum
@@ -2423,6 +2427,11 @@ Return Value:
     Configuration |= RTL81_RECEIVE_CONFIGURATION_ACCEPT_BROADCAST_PACKETS |
                      RTL81_RECEIVE_CONFIGURATION_ACCEPT_PHYSICAL_MATCH_PACKETS;
 
+    //
+    // Enabling the all physical packets flag does not enable the reception of
+    // multicast packets. Those must be specifically allowed.
+    //
+
     if ((Device->EnabledCapabilities &
          NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
 
@@ -2435,11 +2444,24 @@ Return Value:
 
     } else {
         Configuration &=
-                    ~(RTL81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST_PACKETS |
-                      RTL81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL_PACKETS);
+                      ~RTL81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL_PACKETS;
 
-        Multicast[0] = 0;
-        Multicast[1] = 0;
+        if ((Device->EnabledCapabilities &
+             NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+            Configuration |=
+                          RTL81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST_PACKETS;
+
+            Multicast[0] = 0xFFFFFFFF;
+            Multicast[1] = 0xFFFFFFFF;
+
+        } else {
+            Configuration &=
+                         ~RTL81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST_PACKETS;
+
+            Multicast[0] = 0;
+            Multicast[1] = 0;
+        }
     }
 
     Device->ReceiveConfiguration = Configuration;

@@ -375,6 +375,7 @@ Return Value:
 {
 
     PULONG BooleanOption;
+    ULONG Capability;
     PSM95_DEVICE Device;
     PULONG Flags;
     ULONG NewCapabilities;
@@ -401,17 +402,21 @@ Return Value:
 
         break;
 
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -422,12 +427,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -435,10 +438,10 @@ Return Value:
         KeAcquireQueuedLock(Device->ConfigurationLock);
         NewCapabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            NewCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            NewCapabilities |= Capability;
 
         } else {
-            NewCapabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            NewCapabilities &= ~Capability;
         }
 
         if ((NewCapabilities ^ Device->EnabledCapabilities) != 0) {
@@ -1226,7 +1229,7 @@ Return Value:
     //
 
     Device->MacControl &= ~(SM95_MAC_CONTROL_PROMISCUOUS |
-                            SM95_MAC_CONTROL_MULTICAST_PAS |
+                            SM95_MAC_CONTROL_MULTICAST_PASS |
                             SM95_MAC_CONTROL_HP_FILTER |
                             SM95_MAC_CONTROL_RECEIVE_ALL |
                             SM95_MAC_CONTROL_RECEIVE_OWN);
@@ -1291,6 +1294,15 @@ Return Value:
 
     } else {
         Device->MacControl &= ~SM95_MAC_CONTROL_PROMISCUOUS;
+    }
+
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+        Device->MacControl |= SM95_MAC_CONTROL_MULTICAST_PASS;
+
+    } else {
+        Device->MacControl &= ~SM95_MAC_CONTROL_MULTICAST_PASS;
     }
 
     Status = Sm95pWriteRegister(Device,

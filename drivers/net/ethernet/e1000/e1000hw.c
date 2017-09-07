@@ -343,6 +343,7 @@ Return Value:
 
     PULONG BooleanOption;
     ULONG Capabilities;
+    ULONG Capability;
     PE1000_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
@@ -365,18 +366,22 @@ Return Value:
         Status = STATUS_SUCCESS;
         break;
 
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         Status = STATUS_SUCCESS;
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -387,12 +392,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -400,10 +403,10 @@ Return Value:
         KeAcquireQueuedLock(Device->ConfigurationLock);
         Capabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Capabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities |= Capability;
 
         } else {
-            Capabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities &= ~Capability;
         }
 
         if ((Capabilities ^ Device->EnabledCapabilities) != 0) {
@@ -464,10 +467,12 @@ Return Value:
     Device->EnabledCapabilities |= Capabilities;
 
     //
-    // Promiscuous filtering mode is supported, but not enabled by default.
+    // Promiscuous and multicast-all filtering modes are supported, but not
+    // enabled by default.
     //
 
-    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE |
+                                     NET_LINK_CAPABILITY_MULTICAST_ALL;
 
     //
     // Initialize the transmit and receive list locks.
@@ -893,9 +898,11 @@ Return Value:
     E1000_WRITE(Device, E1000RxDescriptorTail0, E1000_RX_RING_SIZE - 1);
 
     //
-    // Enable receive globally.
+    // Enable receive globally. The receive control value may have been changed
+    // when updating the filter mode. It must be read again.
     //
 
+    RxControl = E1000_READ(Device, E1000RxControl);
     RxControl |= E1000_RX_CONTROL_ENABLE;
     E1000_WRITE(Device, E1000RxControl, RxControl);
     KeReleaseQueuedLock(Device->ConfigurationLock);
@@ -2917,8 +2924,15 @@ Return Value:
                      E1000_RX_CONTROL_UNICAST_PROMISCUOUS;
 
     } else {
-        RxControl &= ~(E1000_RX_CONTROL_MULTICAST_PROMISCUOUS |
-                       E1000_RX_CONTROL_UNICAST_PROMISCUOUS);
+        RxControl &= ~E1000_RX_CONTROL_UNICAST_PROMISCUOUS;
+        if ((Device->EnabledCapabilities &
+             NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+            RxControl |= E1000_RX_CONTROL_MULTICAST_PROMISCUOUS;
+
+        } else {
+            RxControl &= ~E1000_RX_CONTROL_MULTICAST_PROMISCUOUS;
+        }
     }
 
     E1000_WRITE(Device, E1000RxControl, RxControl);

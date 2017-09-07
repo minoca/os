@@ -284,23 +284,28 @@ Return Value:
 
     PULONG BooleanOption;
     ULONG Capabilities;
+    ULONG Capability;
     PA3E_DEVICE Device;
     KSTATUS Status;
 
     Device = (PA3E_DEVICE)DeviceContext;
     switch (InformationType) {
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         Status = STATUS_SUCCESS;
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -311,12 +316,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -324,10 +327,10 @@ Return Value:
         KeAcquireQueuedLock(Device->ConfigurationLock);
         Capabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Capabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities |= Capability;
 
         } else {
-            Capabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities &= ~Capability;
         }
 
         if ((Capabilities ^ Device->EnabledCapabilities) != 0) {
@@ -536,10 +539,13 @@ Return Value:
     }
 
     //
-    // Promiscuous mode is supported by not enabled by default.
+    // Promiscuous and multicast all modes are supported but not enabled by
+    // default.
     //
 
-    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE |
+                                     NET_LINK_CAPABILITY_MULTICAST_ALL;
+
     Status = STATUS_SUCCESS;
 
 InitializeDeviceStructuresEnd:
@@ -2052,6 +2058,10 @@ Return Value:
 
 {
 
+    ULONG AleEntry[A3E_ALE_ENTRY_WORDS];
+    PUCHAR Bytes;
+    ULONG Index;
+    UCHAR Mask;
     ULONG Value;
 
     Value = A3E_ALE_READ(Device, A3eAleControl);
@@ -2062,6 +2072,34 @@ Return Value:
 
     } else {
         Value &= ~A3E_ALE_CONTROL_BYPASS;
+    }
+
+    //
+    // Set the unregistered multicast state for each VLAN ALE entry. If a
+    // multicast packet's destination address is not found in the ALE, then the
+    // logical AND of the unregistered multicast mask and the VLAN member list
+    // value becomes the port mask during egress processing. For multicast-all,
+    // set the unregistered multicast mask to the VLAN member list value.
+    //
+
+    for (Index = 0; Index < A3E_MAX_ALE_ENTRIES; Index += 1) {
+        A3epAleReadEntry(Device, Index, AleEntry);
+        Bytes = (PUCHAR)AleEntry;
+        if ((Bytes[A3E_ALE_ENTRY_TYPE_INDEX] & A3E_ALE_ENTRY_TYPE_MASK) !=
+            A3E_ALE_ENTRY_TYPE_VLAN) {
+
+            continue;
+        }
+
+        Mask = 0;
+        if ((Device->EnabledCapabilities &
+             NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+            Mask = Bytes[A3E_ALE_VLAN_ENTRY_MEMBER_LIST_INDEX];
+        }
+
+        Bytes[A3E_ALE_VLAN_ENTRY_UNREGISTERED_MULTICAST_MASK_INDEX] = Mask;
+        A3epAleWriteEntry(Device, Index, AleEntry);
     }
 
     A3E_ALE_WRITE(Device, A3eAleControl, Value);

@@ -251,6 +251,7 @@ Return Value:
 
     PULONG BooleanOption;
     PULONG Capabilities;
+    ULONG Capability;
     ULONG ChangedCapabilities;
     PDWE_DEVICE Device;
     ULONG EnabledCapabilities;
@@ -352,18 +353,22 @@ Return Value:
         KeReleaseQueuedLock(Device->ConfigurationLock);
         break;
 
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         Status = STATUS_SUCCESS;
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -374,12 +379,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -387,10 +390,10 @@ Return Value:
         KeAcquireQueuedLock(Device->ConfigurationLock);
         EnabledCapabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            EnabledCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            EnabledCapabilities |= Capability;
 
         } else {
-            EnabledCapabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            EnabledCapabilities &= ~Capability;
         }
 
         if ((EnabledCapabilities ^ Device->EnabledCapabilities) != 0) {
@@ -1885,11 +1888,17 @@ Return Value:
 
     ULONG Value;
 
-    Value = DWE_MAC_FRAME_FILTER_HASH_MULTICAST;
+    Value = 0;
     if ((Device->EnabledCapabilities &
          NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
 
         Value |= DWE_MAC_FRAME_FILTER_PROMISCUOUS;
+    }
+
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+        Value |= DWE_MAC_FRAME_FILTER_PASS_ALL_MULTICAST;
     }
 
     DWE_WRITE(Device, DweRegisterMacFrameFilter, Value);

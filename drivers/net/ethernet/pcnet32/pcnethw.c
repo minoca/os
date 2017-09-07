@@ -333,6 +333,7 @@ Return Value:
 {
 
     PULONG BooleanOption;
+    ULONG Capability;
     PPCNET_DEVICE Device;
     PULONG Flags;
     ULONG NewCapabilities;
@@ -359,17 +360,21 @@ Return Value:
 
         break;
 
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -380,12 +385,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -393,10 +396,10 @@ Return Value:
         KeAcquireQueuedLock(Device->ConfigurationLock);
         NewCapabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            NewCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            NewCapabilities |= Capability;
 
         } else {
-            NewCapabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            NewCapabilities &= ~Capability;
         }
 
         if ((NewCapabilities ^ Device->EnabledCapabilities) != 0) {
@@ -529,10 +532,12 @@ Return Value:
     PcnetpWriteBcr(Device, PcnetBcr20SoftwareStyle, Style);
 
     //
-    // All PCNET devices support promiscuous mode.
+    // All PCNET devices support promiscuous and all-multicast modes.
     //
 
-    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE |
+                                     NET_LINK_CAPABILITY_MULTICAST_ALL;
+
     return STATUS_SUCCESS;
 }
 
@@ -568,6 +573,7 @@ Return Value:
     ULONG InitBlockSize;
     ULONG IoBufferFlags;
     ULONG IoBufferSize;
+    ULONGLONG LogicalAddress;
     PHYSICAL_ADDRESS MaxBufferAddress;
     USHORT Mode;
     PHYSICAL_ADDRESS PhysicalAddress;
@@ -677,6 +683,13 @@ Return Value:
         Mode |= PCNET_MODE_PROMISCUOUS;
     }
 
+    LogicalAddress = 0;
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+        LogicalAddress = 0xFFFFFFFFFFFFFFFFULL;
+    }
+
     PhysicalAddress += InitBlockSize;
     if (Device->Software32 == FALSE) {
         InitBlock16 = Device->InitializationBlock;
@@ -685,7 +698,7 @@ Return Value:
                       Device->EepromMacAddress,
                       ETHERNET_ADDRESS_SIZE);
 
-        InitBlock16->LogicalAddress = 0;
+        InitBlock16->LogicalAddress = LogicalAddress;
         InitBlock16->ReceiveRingAddress = PhysicalAddress;
         RingLength = RtlCountTrailingZeros32(PCNET_RECEIVE_RING_LENGTH);
         InitBlock16->ReceiveRingAddress |=
@@ -716,7 +729,7 @@ Return Value:
                       Device->EepromMacAddress,
                       ETHERNET_ADDRESS_SIZE);
 
-        InitBlock32->LogicalAddress = 0;
+        InitBlock32->LogicalAddress = LogicalAddress;
         InitBlock32->ReceiveRingAddress = PhysicalAddress;
         PhysicalAddress += ReceiveRingSize;
         InitBlock32->TransmitRingAddress = PhysicalAddress;
@@ -1934,6 +1947,7 @@ Return Value:
 
 {
 
+    USHORT LogicalAddress[4];
     RUNLEVEL OldRunLevel;
     KSTATUS Status;
     BOOL Stopped;
@@ -1961,6 +1975,25 @@ Return Value:
     }
 
     PcnetpWriteCsr(Device, PcnetCsr15Mode, Value);
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+         LogicalAddress[0] = 0xFFFF;
+         LogicalAddress[1] = 0xFFFF;
+         LogicalAddress[2] = 0xFFFF;
+         LogicalAddress[3] = 0xFFFF;
+
+    } else {
+        LogicalAddress[0] = 0x0;
+        LogicalAddress[1] = 0x0;
+        LogicalAddress[2] = 0x0;
+        LogicalAddress[3] = 0x0;
+    }
+
+    PcnetpWriteCsr(Device, PcnetCsr8LogicalAddressFilter0, LogicalAddress[0]);
+    PcnetpWriteCsr(Device, PcnetCsr8LogicalAddressFilter1, LogicalAddress[1]);
+    PcnetpWriteCsr(Device, PcnetCsr8LogicalAddressFilter2, LogicalAddress[2]);
+    PcnetpWriteCsr(Device, PcnetCsr8LogicalAddressFilter3, LogicalAddress[3]);
     PcnetpReleaseRegisterLock(Device, OldRunLevel);
     PcnetpResumeDevice(Device, Stopped);
     return STATUS_SUCCESS;

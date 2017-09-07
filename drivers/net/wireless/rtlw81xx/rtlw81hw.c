@@ -1533,6 +1533,7 @@ Return Value:
 
     PULONG BooleanOption;
     ULONG Capabilities;
+    ULONG Capability;
     PRTLW81_DEVICE Device;
     PULONG Flags;
     KSTATUS Status;
@@ -1557,17 +1558,21 @@ Return Value:
 
         break;
 
+    case NetLinkInformationMulticastAll:
     case NetLinkInformationPromiscuousMode:
         if (*DataSize != sizeof(ULONG)) {
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
+        Capability = NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        if (InformationType == NetLinkInformationMulticastAll) {
+            Capability = NET_LINK_CAPABILITY_MULTICAST_ALL;
+        }
+
         BooleanOption = (PULONG)Data;
         if (Set == FALSE) {
-            if ((Device->EnabledCapabilities &
-                 NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
-
+            if ((Device->EnabledCapabilities & Capability) != 0) {
                 *BooleanOption = TRUE;
 
             } else {
@@ -1578,12 +1583,10 @@ Return Value:
         }
 
         //
-        // Fail if promiscuous mode is not supported.
+        // Fail if the capability is not supported.
         //
 
-        if ((Device->SupportedCapabilities &
-             NET_LINK_CAPABILITY_PROMISCUOUS_MODE) == 0) {
-
+        if ((Device->SupportedCapabilities & Capability) == 0) {
             Status = STATUS_NOT_SUPPORTED;
             break;
         }
@@ -1591,10 +1594,10 @@ Return Value:
         KeAcquireQueuedLock(Device->ConfigurationLock);
         Capabilities = Device->EnabledCapabilities;
         if (*BooleanOption != FALSE) {
-            Capabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities |= Capability;
 
         } else {
-            Capabilities &= ~NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+            Capabilities &= ~Capability;
         }
 
         if ((Capabilities ^ Device->EnabledCapabilities) != 0) {
@@ -2285,10 +2288,11 @@ Return Value:
         }
 
         //
-        // All version of the chip support promiscuous mode.
+        // All versions of the chip support multicast all and promiscuous mode.
         //
 
-        Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+        Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE |
+                                         NET_LINK_CAPABILITY_MULTICAST_ALL;
 
         //
         // Read the device ROM. This caches information needed later, like the
@@ -5854,22 +5858,25 @@ Return Value:
     ULONG Multicast[2];
     ULONG Value;
 
-    ASSERT(KeIsQueuedLockHeld(Device->ConfigurationLock) != FALSE);
-
     Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterReceiveConfiguration);
     if ((Device->EnabledCapabilities &
          NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0) {
 
-        Value |= RTLW81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL |
-                 RTLW81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST;
+        Value |= RTLW81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL;
 
+    } else {
+        Value &= ~RTLW81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL;
+    }
+
+    if ((Device->EnabledCapabilities &
+         NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
+
+        Value |= RTLW81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST;
         Multicast[0] = 0xFFFFFFFF;
         Multicast[1] = 0xFFFFFFFF;
 
     } else {
-        Value &= ~(RTLW81_RECEIVE_CONFIGURATION_ACCEPT_ALL_PHYSICAL |
-                   RTLW81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST);
-
+        Value &= ~RTLW81_RECEIVE_CONFIGURATION_ACCEPT_MULTICAST;
         Multicast[0] = 0x0;
         Multicast[1] = 0x0;
     }

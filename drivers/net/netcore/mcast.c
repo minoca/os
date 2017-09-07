@@ -975,9 +975,11 @@ Return Value:
 
 {
 
+    PVOID Data;
+    UINTN DataSize;
+    ULONG Enable;
     PNET_DEVICE_LINK_GET_SET_INFORMATION GetSetInformation;
-    ULONG PromiscuousMode;
-    UINTN PromiscuousModeSize;
+    NET_LINK_INFORMATION_TYPE InformationType;
     KSTATUS Status;
 
     ASSERT(KeIsQueuedLockHeld(Link->QueuedLock) != FALSE);
@@ -985,26 +987,39 @@ Return Value:
     GetSetInformation = Link->Properties.Interface.GetSetInformation;
 
     //
-    // Set the link into promiscuous mode if there are any groups. Otherwise
-    // turn it off. Promiscuous must be supported for the link to have made it
-    // this far.
-    //
-    // TODO: Implement real multicast address filtering.
+    // Before resorting to promiscuous mode, attempt to set the link to
+    // receive all multicast packets, if supported.
     //
 
-    ASSERT((Link->Properties.Capabilities &
-            NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0);
+    if ((Link->Properties.Capabilities &
+         NET_LINK_CAPABILITY_MULTICAST_ALL) != 0) {
 
-    PromiscuousMode = FALSE;
-    if (LIST_EMPTY(&(Link->MulticastGroupList)) == FALSE) {
-        PromiscuousMode = TRUE;
+        InformationType = NetLinkInformationMulticastAll;
+
+    //
+    // As a last resort, the link should at least support promiscuous mode
+    // to have allowed a multicast join request to make it this far.
+    //
+
+    } else {
+
+        ASSERT((Link->Properties.Capabilities &
+                NET_LINK_CAPABILITY_PROMISCUOUS_MODE) != 0);
+
+        InformationType = NetLinkInformationPromiscuousMode;
     }
 
-    PromiscuousModeSize = sizeof(ULONG);
+    Enable = FALSE;
+    if (LIST_EMPTY(&(Link->MulticastGroupList)) == FALSE) {
+        Enable = TRUE;
+    }
+
+    DataSize = sizeof(ULONG);
+    Data = (PVOID)&Enable;
     Status = GetSetInformation(Link->Properties.DeviceContext,
-                               NetLinkInformationPromiscuousMode,
-                               &PromiscuousMode,
-                               &PromiscuousModeSize,
+                               InformationType,
+                               Data,
+                               &DataSize,
                                TRUE);
 
     return Status;

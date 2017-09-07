@@ -369,6 +369,8 @@ Author:
 #define E100_CONFIG_BYTE15_CRS_OR_CDT  0x80
 #define E100_CONFIG_BYTE15_PROMISCUOUS 0x01
 
+#define E100_CONFIG_BYTE21_MULTICAST_ALL 0x08
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //

@@ -786,7 +786,9 @@ Return Value:
     // default.
     //
 
-    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE;
+    Device->SupportedCapabilities |= NET_LINK_CAPABILITY_PROMISCUOUS_MODE |
+                                     NET_LINK_CAPABILITY_MULTICAST_ALL;
+
     Status = STATUS_SUCCESS;
 
 InitializeDeviceStructuresEnd:
