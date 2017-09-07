@@ -1304,7 +1304,7 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
         FileOpened = FALSE;
         if (Input->File == NULL) {
-            Input->File = fopen(Input->FileName, "r");
+            Input->File = fopen(Input->FileName, "rb");
             if (Input->File == NULL) {
                 if ((Context->Options &
                      GREP_OPTION_SUPPRESS_BLAND_ERRORS) == 0) {
@@ -1621,6 +1621,14 @@ Return Value:
                 CharacterCount += 1;
             }
         }
+    }
+
+    //
+    // Kill a CR at the end of the line.
+    //
+
+    if ((CharacterCount != 0) && (String[CharacterCount - 1] == '\r')) {
+        CharacterCount -= 1;
     }
 
     String[CharacterCount] = '\0';
