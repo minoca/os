@@ -1231,6 +1231,15 @@ Return Value:
                     NewArguments[1] = SheBangArgument;
                 }
 
+                //
+                // Also replace the original argv[0] with the command path so
+                // it can be found by whatever is interpreting.
+                //
+
+                if (ArgumentCount >= InsertCount) {
+                    NewArguments[InsertCount] = Command;
+                }
+
                 errno = 0;
                 Result = _spawnvp(Mode,
                                   NewCommand,
