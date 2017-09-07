@@ -1911,11 +1911,9 @@ Return Value:
     //
 
     if ((Version == IgmpVersion3) || (Version == IgmpVersion2)) {
-
-        //
-        // TODO: IGMP needs to get the IPv4 options.
-        //
-
+        if ((Packet->Flags & NET_PACKET_FLAG_ROUTER_ALERT) == 0) {
+            return;
+        }
     }
 
     //
@@ -2102,11 +2100,9 @@ Return Value:
     //
 
     if (Report->Header.Type == IGMP_MESSAGE_TYPE_REPORT_V2) {
-
-        //
-        // TODO: IGMP needs to get the IPv4 options.
-        //
-
+        if ((Packet->Flags & NET_PACKET_FLAG_ROUTER_ALERT) == 0) {
+            return;
+        }
     }
 
     //

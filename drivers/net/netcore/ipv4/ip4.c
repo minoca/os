@@ -307,6 +307,11 @@ NetpIp4DestroyFragmentedPacketNode (
     PIP4_FRAGMENTED_PACKET_NODE PacketNode
     );
 
+VOID
+NetpIp4ProcessHeaderOptions (
+    PNET_RECEIVE_CONTEXT ReceiveContext
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1621,6 +1626,18 @@ Return Value:
         RtlDebugPrint(" to ");
         NetDebugPrintAddress((PNETWORK_ADDRESS)&DestinationAddress);
         RtlDebugPrint("\n");
+    }
+
+    //
+    // Parse any header options.
+    //
+
+    if (HeaderSize > sizeof(IP4_HEADER)) {
+        NetpIp4ProcessHeaderOptions(ReceiveContext);
+    }
+
+    if (Header->TimeToLive == IP4_LINK_LOCAL_TIME_TO_LIVE) {
+        Packet->Flags |= NET_PACKET_FLAG_LINK_LOCAL_HOP_LIMIT;
     }
 
     //
@@ -3258,6 +3275,88 @@ Return Value:
     }
 
     MmFreePagedPool(PacketNode);
+    return;
+}
+
+VOID
+NetpIp4ProcessHeaderOptions (
+    PNET_RECEIVE_CONTEXT ReceiveContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes an IPv4 header's options. It will act on the options
+    or store the option data in the packet contained within the given receive
+    context.
+
+Arguments:
+
+    ReceiveContext - Supplies a pointer to the receive context that stores the
+        link and packet information.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PIP4_HEADER Header;
+    ULONG HeaderSize;
+    PIP4_OPTION Option;
+    ULONG OptionBytesRemaining;
+    PVOID OptionData;
+    ULONG OptionLength;
+    PNET_PACKET_BUFFER Packet;
+
+    Packet = ReceiveContext->Packet;
+    Header = (PIP4_HEADER)(Packet->Buffer + Packet->DataOffset);
+    HeaderSize = (Header->VersionAndHeaderLength & IP4_HEADER_LENGTH_MASK) *
+                 sizeof(ULONG);
+
+    if (HeaderSize <= sizeof(IP4_HEADER)) {
+        goto Ip4ProcessHeaderOptionsEnd;
+    }
+
+    Option = (PIP4_OPTION)(Header + 1);
+    OptionBytesRemaining = HeaderSize - sizeof(IP4_HEADER);
+    while (OptionBytesRemaining != 0) {
+        OptionLength = Option->Length;
+        OptionData = (PVOID)(Option + 1);
+        switch (Option->Type) {
+        case IP4_OPTION_END:
+            goto Ip4ProcessHeaderOptionsEnd;
+
+        case IP4_OPTION_NOP:
+            OptionLength = 1;
+            break;
+
+        case IP4_OPTION_ROUTER_ALERT:
+            if (OptionLength != IP4_ROUTER_ALERT_LENGTH) {
+                break;
+            }
+
+            if (NETWORK_TO_CPU16(*((PUSHORT)OptionData)) !=
+                IP4_ROUTER_ALERT_VALUE) {
+
+                break;
+            }
+
+            Packet->Flags |= NET_PACKET_FLAG_ROUTER_ALERT;
+            break;
+
+        default:
+            break;
+        }
+
+        Option = (PIP4_OPTION)((PVOID)Option + OptionLength);
+        OptionBytesRemaining -= OptionLength;
+    }
+
+Ip4ProcessHeaderOptionsEnd:
     return;
 }
 

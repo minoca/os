@@ -1285,6 +1285,14 @@ Return Value:
     }
 
     //
+    // Record if the packet has a link-local hop limit.
+    //
+
+    if (Header->HopLimit == IP6_LINK_LOCAL_HOP_LIMIT) {
+        Packet->Flags |= NET_PACKET_FLAG_LINK_LOCAL_HOP_LIMIT;
+    }
+
+    //
     // Add the source and destination addresses to the receive context.
     //
 
@@ -2229,6 +2237,9 @@ Return Value:
     ULONG HeaderOffset;
     UCHAR NextHeader;
     ULONG NextHeaderOffset;
+    PIP6_OPTION Option;
+    ULONG OptionBytesRemaining;
+    ULONG OptionLength;
     PNET_PACKET_BUFFER Packet;
     KSTATUS Status;
     BOOL UnrecognizedHeader;
@@ -2273,6 +2284,34 @@ Return Value:
                 UnrecognizedHeader = TRUE;
                 break;
             }
+
+            Option = (PIP6_OPTION)(Extension + 1);
+            OptionBytesRemaining = IP6_EXTENSION_HEADER_LENGTH_BASE;
+            OptionBytesRemaining += (Extension->Length *
+                                     IP6_EXTENSION_HEADER_LENGTH_MULTIPLE);
+
+            OptionBytesRemaining -= sizeof(IP6_EXTENSION_HEADER);
+            while (OptionBytesRemaining != 0) {
+                OptionLength = Option->Length + sizeof(IP6_OPTION);
+                switch (Option->Type) {
+                case IP6_OPTION_TYPE_PAD1:
+                    OptionLength = 1;
+                    break;
+
+                case IP6_OPTION_TYPE_ROUTER_ALERT:
+                    Packet->Flags |= NET_PACKET_FLAG_ROUTER_ALERT;
+                    break;
+
+                case IP6_OPTION_TYPE_PADN:
+                default:
+                    break;
+                }
+
+                Option = (PIP6_OPTION)((PVOID)Option + OptionLength);
+                OptionBytesRemaining -= OptionLength;
+            }
+
+            break;
 
         //
         // TODO: Parse IPv6 extension headers.

@@ -1134,11 +1134,11 @@ Return Value:
     //
 
     if (Version == MldVersion2) {
+        if (((Packet->Flags & NET_PACKET_FLAG_LINK_LOCAL_HOP_LIMIT) == 0) ||
+            ((Packet->Flags & NET_PACKET_FLAG_ROUTER_ALERT) == 0)) {
 
-        //
-        // TODO: MLD needs to get the IPv6 options.
-        //
-
+            return;
+        }
     }
 
     //
@@ -1313,11 +1313,11 @@ Return Value:
     //
 
     if (Report->Header.Type == ICMP6_MESSAGE_TYPE_MLD2_REPORT) {
+        if (((Packet->Flags & NET_PACKET_FLAG_LINK_LOCAL_HOP_LIMIT) == 0) ||
+            ((Packet->Flags & NET_PACKET_FLAG_ROUTER_ALERT) == 0)) {
 
-        //
-        // TODO: MLD needs to get the IPv6 options.
-        //
-
+            return;
+        }
     }
 
     //

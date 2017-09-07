@@ -112,6 +112,12 @@ Author:
 #define IP6_MAX_HOP_LIMIT 0xFF
 
 //
+// Define the hop limit that indicates a link local packet.
+//
+
+#define IP6_LINK_LOCAL_HOP_LIMIT 1
+
+//
 // Define the size of an IPv6 address, in bytes.
 //
 

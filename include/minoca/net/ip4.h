@@ -68,10 +68,38 @@ Author:
 
 #define IP4_INITIAL_TIME_TO_LIVE 63
 #define IP4_INITIAL_MULTICAST_TIME_TO_LIVE 1
+#define IP4_LINK_LOCAL_TIME_TO_LIVE 1
 
 #define IP4_BROADCAST_ADDRESS    0xFFFFFFFF
 
 #define IP4_ADDRESS_SIZE         4
+
+//
+// Define the flags for the IPv4 option type.
+//
+
+#define IP4_OPTION_TYPE_COPIED        0x80
+#define IP4_OPTION_TYPE_CLASS_MASK    0x60
+#define IP4_OPTION_TYPE_CLASS_SHIFT   5
+#define IP4_OPTION_TYPE_CLASS_CONTROL 0x0
+#define IP4_OPTION_TYPE_CLASS_DEBUG   0x2
+#define IP4_OPTION_TYPE_NUMBER_MASK   0x1F
+#define IP4_OPTION_TYPE_NUMBER_SHIFT  0
+
+//
+// Define specific IPv4 option types.
+//
+
+#define IP4_OPTION_END 0x00
+#define IP4_OPTION_NOP 0x01
+#define IP4_OPTION_ROUTER_ALERT 0x94
+
+//
+// Define the details of the router alert option.
+//
+
+#define IP4_ROUTER_ALERT_LENGTH 4
+#define IP4_ROUTER_ALERT_VALUE 0
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -117,7 +145,7 @@ Structure Description:
 
 Members:
 
-    Version - Stores the version number and header length.
+    VersionAndHeaderLength - Stores the version number and header length.
 
     Type - Stores the Differentiated Services Code Point (originally called
         Type of Service), and the Explicit Congestion Notification.
@@ -157,6 +185,26 @@ typedef struct _IP4_HEADER {
     ULONG SourceAddress;
     ULONG DestinationAddress;
 } PACKED IP4_HEADER, *PIP4_HEADER;
+
+/*++
+
+Structure Descriptoin:
+
+    This structure defines an IPv4 header option.
+
+Members:
+
+    Type - Supplies the type of the IPv4 header option.
+
+    Length - Supplies the length of the IPv4 header option including the type
+        and length, in bytes.
+
+--*/
+
+typedef struct _IP4_OPTION {
+    UCHAR Type;
+    UCHAR Length;
+} PACKED IP4_OPTION, *PIP4_OPTION;
 
 //
 // -------------------------------------------------------------------- Globals
