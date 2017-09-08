@@ -49,20 +49,11 @@ endif
 BUILD_ARCH = $(shell uname -m)
 ifeq ($(BUILD_ARCH), $(filter i686 i586,$(BUILD_ARCH)))
 BUILD_ARCH := x86
-BUILD_BFD_ARCH := i386
-BUILD_OBJ_FORMAT := elf32-i386
-ifeq ($(OS),Windows_NT)
-BUILD_OBJ_FORMAT := pe-i386
-endif
 
 else ifeq ($(BUILD_ARCH), $(filter armv7 armv6,$(BUILD_ARCH)))
-BUILD_BFD_ARCH := arm
-BUILD_OBJ_FORMAT := elf32-littlearm
 
 else ifeq ($(BUILD_ARCH), $(filter x86_64 amd64,$(BUILD_ARCH)))
 BUILD_ARCH := x64
-BUILD_OBJ_FORMAT := elf64-x86-64
-BUILD_BFD_ARCH := i386
 else
 $(error Unknown architecture $(BUILD_ARCH))
 endif
@@ -156,8 +147,6 @@ CC := i686-pc-minoca-gcc
 AR := i686-pc-minoca-ar
 OBJCOPY := i686-pc-minoca-objcopy
 STRIP := i686-pc-minoca-strip
-BFD_ARCH := i386
-OBJ_FORMAT := elf32-i386
 
 endif
 
@@ -167,8 +156,6 @@ AR := i586-pc-minoca-ar
 OBJCOPY := i586-pc-minoca-objcopy
 STRIP := i586-pc-minoca-strip
 RCC := windres
-BFD_ARCH := i386
-OBJ_FORMAT := elf32-i386
 endif
 
 ifeq (x64, $(ARCH))
@@ -176,8 +163,6 @@ CC := x86_64-pc-minoca-gcc
 AR := x86_64-pc-minoca-ar
 OBJCOPY := x86_64-pc-minoca-objcopy
 STRIP := x86_64-pc-minoca-strip
-BFD_ARCH := x86-64
-OBJ_FORMAT := elf64-x86-64
 endif
 
 ifeq (armv7, $(ARCH))
@@ -185,8 +170,6 @@ CC := arm-none-minoca-gcc
 AR := arm-none-minoca-ar
 OBJCOPY := arm-none-minoca-objcopy
 STRIP := arm-none-minoca-strip
-BFD_ARCH := arm
-OBJ_FORMAT := elf32-littlearm
 endif
 
 ifeq (armv6, $(ARCH))
@@ -194,8 +177,6 @@ CC := arm-none-minoca-gcc
 AR := arm-none-minoca-ar
 OBJCOPY := arm-none-minoca-objcopy
 STRIP := arm-none-minoca-strip
-BFD_ARCH := arm
-OBJ_FORMAT := elf32-littlearm
 endif
 
 ##
@@ -371,8 +352,6 @@ override CC = $(CC_FOR_BUILD)
 override AR = $(AR_FOR_BUILD)
 override STRIP = $(STRIP_FOR_BUILD)
 override CFLAGS = -Wall -Werror -O1
-override BFD_ARCH = $(BUILD_BFD_ARCH)
-override OBJ_FORMAT = $(BUILD_OBJ_FORMAT)
 ifeq ($(DEBUG),rel)
 override CFLAGS += -Wno-unused-but-set-variable
 endif
