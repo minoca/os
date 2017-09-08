@@ -880,9 +880,16 @@ class Build {
 
         deps = vars.get("basedepends_host");
         if (deps != null) {
-            params.arch = vars.arch;
-            params.os = vars.os;
-            params.root = _realm.containment.innerPath(vars.sysroot);
+            if ((vars.arch != os.machine) || (vars.os != os.system)) {
+                params.arch = vars.arch;
+                params.os = vars.os;
+                if (!vars.sysroot.startsWith(vars.buildsysroot)) {
+                    Core.print("Sysroot should be inside buildsysroot");
+                }
+
+                params.root = vars.sysroot[vars.buildsysroot.length()...-1];
+            }
+
             for (dep in deps) {
                 try {
                     packages.install(dep, params);
@@ -894,6 +901,8 @@ class Build {
                     }
                 }
             }
+
+            params = {};
         }
 
         //
@@ -923,7 +932,7 @@ class Build {
             if ((vars.arch != os.machine) || (vars.os != os.system)) {
                 params.arch = vars.arch;
                 params.os = vars.os;
-                params.root = _realm.containment.innerPath(vars.sysroot);
+                params.root = vars.sysroot[vars.buildsysroot.length()...-1];
             }
 
             for (dep in deps) {
@@ -1050,7 +1059,7 @@ class Build {
         vars.builddir = buildRoot + "/bld";
         vars.subpkgdir = null;
         vars.basedepends_host = "base-dev-host";
-        vars.buildsysroot = _realm.containment.outerPath("/");
+        vars.buildsysroot = buildRoot;
         vars.sysroot = vars.buildsysroot;
         if ((vars.os != vars.buildos) || (vars.arch != vars.buildarch)) {
             vars.sysroot = "%s/%s-%s" % [buildRoot, vars.arch, vars.os];
