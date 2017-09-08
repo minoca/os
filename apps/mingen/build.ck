@@ -66,7 +66,7 @@ function build() {
     tool = {
         "type": "tool",
         "name": "create_mingen",
-        "command": "chalk $in $out",
+        "command": "$O/../../tools/bin/chalk $in $out",
         "description": "Bundling mingen - $OUT"
     };
 

@@ -96,7 +96,7 @@ function build() {
     tool = {
         "type": "tool",
         "name": "create_santa",
-        "command": "chalk $in $out",
+        "command": "$O/../../tools/bin/chalk $in $out",
         "description": "Bundling santa - $OUT"
     };
 
