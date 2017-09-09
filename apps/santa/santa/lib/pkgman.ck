@@ -939,8 +939,16 @@ class PackageManager {
         package.referenceCount -= 1;
         if ((package.referenceCount != 0) || (userCount)) {
             if (verbose) {
-                Core.print("Package still has %d references (and %d users)" %
-                           [package.referenceCount, package.userCount]);
+                if (userCount == null) {
+                    Core.print("Package %s still has %d references" %
+                               [package.name, package.referenceCount]);
+
+                } else {
+                    Core.print("Package %s still has %d references "
+                               "(and %d users)" %
+                               [package.name, package.referenceCount,
+                                userCount]);
+                }
 
             }
 

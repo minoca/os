@@ -418,6 +418,7 @@ Return Value:
 
     vars.description = description + " (documentation)";
     vars.section = "doc";
+    vars.depends = "";
     chdir(build.vars.pkgdir);
     shell("for d in doc man info html sgml licenses gtk-doc ri help; do\n"
           "if [ -d \"$pkgdir/usr/share/$d\" ]; then\n"

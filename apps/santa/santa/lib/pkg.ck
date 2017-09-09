@@ -64,6 +64,7 @@ var packageDefaultStatus = {
         "files": []
     },
 
+    "archive": null,
     "info": {}
 };
 
@@ -72,7 +73,6 @@ var packageDefaultStatus = {
 //
 
 class Package {
-    var _path;
     var _module;
     var _label;
     var _conffiles;
@@ -173,14 +173,15 @@ class Package {
 
         this.status = _config.status;
         this.info = _config.info;
+        this.archive = _config.archive;
         if ((this.info.length() == 0) && (path != null)) {
 
             //
             // Save the path and extract the info initially.
             //
 
-            _path = path;
-            archive = (cpio.CpioArchive)(_path, "r");
+            this.archive = path;
+            archive = (cpio.CpioArchive)(path, "r");
             member = archive.getMember("info.json");
             memberFile = archive.extractFile(member);
             this.info = (json.loads)(memberFile.readall());
@@ -222,6 +223,7 @@ class Package {
 
         _config.status = this.status;
         _config.info = this.info;
+        _config.archive = this.archive;
         _config.save();
         return;
     }
@@ -366,15 +368,45 @@ class Package {
     {
 
         var archive;
+        var archiveTime;
         var files = [];
         var dataArchivePath;
         var dataDirectory;
+        var statusTime;
+
+        //
+        // If the package is already extracted, do a quick check to see if
+        // the archive is newer, and re-extract if so.
+        //
 
         if (this.status.extracted != false) {
-            return;
+            if (this.archive == null) {
+                return;
+            }
+
+            try {
+                archiveTime = (os.stat)(this.archive).st_mtime;
+                statusTime =
+                        (os.stat)(_controlDirectory + "/status.json").st_mtime;
+
+                if (archiveTime > statusTime) {
+                    if (config.getKey("core.verbose")) {
+                        Core.print("Re-extracting, as archive %s time %d "
+                                   "newer than status time %d" %
+                                   [this.archive, archiveTime, statusTime]);
+                    }
+
+                    this.status.extracted = false;
+                }
+
+            } except os.OsError {}
+
+            if (this.status.extracted != false) {
+                return;
+            }
         }
 
-        if (_path == null) {
+        if (this.archive == null) {
             Core.raise(ValueError("%s: Missing path" % _label));
         }
 
@@ -382,7 +414,7 @@ class Package {
         // Extract the contents of the archive in the control directory.
         //
 
-        archive = (cpio.CpioArchive)(_path, "r");
+        archive = (cpio.CpioArchive)(this.archive, "r");
         for (member in archive) {
             if (member.name == "info.json") {
                 continue;
