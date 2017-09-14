@@ -1063,7 +1063,8 @@ class Build {
         vars.sysroot = vars.buildsysroot;
         if ((vars.os != vars.buildos) || (vars.arch != vars.buildarch)) {
             vars.sysroot = "%s/%s-%s" % [buildRoot, vars.arch, vars.os];
-            vars.basedepends_build = "base-dev-$arch-$os";
+            vars.basedepends_build = "base-dev-%s-%s" %
+                                      [vars.arch.lower(), vars.os.lower()];
 
         } else {
             vars.basedepends_build = "base-dev";
