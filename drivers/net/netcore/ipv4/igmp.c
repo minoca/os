@@ -3154,11 +3154,8 @@ Return Value:
     PIGMP_LINK NewIgmpLink;
     IGMP_LINK SearchLink;
     KSTATUS Status;
-    BOOL TreeLockHeld;
 
     IgmpLink = NULL;
-    NewIgmpLink = NULL;
-    TreeLockHeld = FALSE;
     NewIgmpLink = MmAllocatePagedPool(sizeof(IGMP_LINK), IGMP_ALLOCATION_TAG);
     if (NewIgmpLink == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -3233,7 +3230,6 @@ Return Value:
 
     SearchLink.Link = Link;
     KeAcquireSharedExclusiveLockExclusive(NetIgmpLinkLock);
-    TreeLockHeld = TRUE;
     FoundNode = RtlRedBlackTreeSearch(&NetIgmpLinkTree, &(SearchLink.Node));
     if (FoundNode == NULL) {
         RtlRedBlackTreeInsert(&NetIgmpLinkTree, &(NewIgmpLink->Node));
@@ -3246,13 +3242,8 @@ Return Value:
 
     NetpIgmpLinkAddReference(IgmpLink);
     KeReleaseSharedExclusiveLockExclusive(NetIgmpLinkLock);
-    TreeLockHeld = FALSE;
 
 CreateOrLookupLinkEnd:
-    if (TreeLockHeld != FALSE) {
-        KeReleaseSharedExclusiveLockExclusive(NetIgmpLinkLock);
-    }
-
     if (NewIgmpLink != NULL) {
         NetpIgmpLinkReleaseReference(NewIgmpLink);
     }
@@ -3479,7 +3470,7 @@ Return Value:
     PIGMP_LINK SecondIgmpLink;
 
     FirstIgmpLink = RED_BLACK_TREE_VALUE(FirstNode, IGMP_LINK, Node);
-    SecondIgmpLink = RED_BLACK_TREE_VALUE(FirstNode, IGMP_LINK, Node);
+    SecondIgmpLink = RED_BLACK_TREE_VALUE(SecondNode, IGMP_LINK, Node);
     if (FirstIgmpLink->Link == SecondIgmpLink->Link) {
         return ComparisonResultSame;
 

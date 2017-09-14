@@ -60,6 +60,18 @@ Author:
      ((_Ip6Address)[1] == 0))
 
 //
+// This macro determines whether or not the given IPv6 address is a
+// solicited-node multicast address.
+//
+
+#define IP6_IS_SOLICITED_NODE_MULTICAST_ADDRESS(_Ip6Address) \
+    (((_Ip6Address)[0] == CPU_TO_NETWORK32(0xFF020000)) &&   \
+     ((_Ip6Address)[1] == 0) &&                              \
+     ((_Ip6Address)[2] == CPU_TO_NETWORK32(0x00000001)) &&   \
+     (((_Ip6Address)[3] & CPU_TO_NETWORK32(0xFF000000)) ==   \
+      CPU_TO_NETWORK32(0xFF000000)))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 

@@ -41,6 +41,11 @@ Author:
 #define ICMP6_MESSAGE_TYPE_MLD_QUERY 130
 #define ICMP6_MESSAGE_TYPE_MLD_REPORT 131
 #define ICMP6_MESSAGE_TYPE_MLD_DONE 132
+#define ICMP6_MESSAGE_TYPE_NDP_ROUTER_SOLICITATION 133
+#define ICMP6_MESSAGE_TYPE_NDP_ROUTER_ADVERTISEMENT 134
+#define ICMP6_MESSAGE_TYPE_NDP_NEIGHBOR_SOLICITATION 135
+#define ICMP6_MESSAGE_TYPE_NDP_NEIGHBOR_ADVERTISEMENT 136
+#define ICMP6_MESSAGE_TYPE_NDP_REDIRECT 137
 #define ICMP6_MESSAGE_TYPE_MLD2_REPORT 143
 
 //
@@ -72,10 +77,35 @@ Members:
 --*/
 
 typedef struct _ICMP6_HEADER {
-    BYTE Type;
-    BYTE Code;
+    UCHAR Type;
+    UCHAR Code;
     USHORT Checksum;
 } ICMP6_HEADER, *PICMP6_HEADER;
+
+/*++
+
+Structure Description:
+
+    This structure defines a request for ICMPv6 to configure or dismantle a
+    network address.
+
+Members:
+
+    Link - Stores a pointer to the link to which the network address belongs.
+
+    LinkAddress - Stores a pointer to the link address entry to configure or
+        dismantle.
+
+    Configure - Stores a boolean indicating if the address shall be configured
+        (TRUE) or dismantled (FALSE).
+
+--*/
+
+typedef struct _ICMP6_ADDRESS_CONFIGURATION_REQUEST {
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    BOOL Configure;
+} ICMP6_ADDRESS_CONFIGURATION_REQUEST, *PICMP6_ADDRESS_CONFIGURATION_REQUEST;
 
 /*++
 
@@ -96,12 +126,17 @@ Values:
         multicast group. This option takes a NET_NETWORK_MULTICAST_REQUEST
         structure.
 
+    SocketIcmp6OptionConfigureAddress - Indicates a request to configure or
+        dismantle a network address. This options takes an
+        ICMP6_ADDRESS_CONFIGURATION_REQUEST structure.
+
 --*/
 
 typedef enum _SOCKET_ICMP6_OPTION {
     SocketIcmp6OptionInvalid,
     SocketIcmp6OptionJoinMulticastGroup,
-    SocketIcmp6OptionLeaveMulticastGroup
+    SocketIcmp6OptionLeaveMulticastGroup,
+    SocketIcmp6OptionConfigureAddress
 } SOCKET_ICMP6_OPTION, *PSOCKET_ICMP6_OPTION;
 
 //

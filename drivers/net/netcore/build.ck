@@ -46,6 +46,7 @@ function build() {
         "ipv6/icmp6.c",
         "ipv6/ip6.c",
         "ipv6/mld.c",
+        "ipv6/ndp.c",
         "mcast.c",
         "netcore.c",
         "netlink/netlink.c",

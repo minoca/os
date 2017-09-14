@@ -3053,13 +3053,18 @@ Return Value:
         //
 
         if ((Information->Flags & NETWORK_DEVICE_FLAG_CONFIGURED) != 0) {
-            if ((Information->Address.Domain != Domain) ||
-                (Information->Subnet.Domain != Domain) ||
-                (Information->Gateway.Domain != Domain) ||
+            if (((Information->Address.Domain != Domain) &&
+                 (Information->Address.Domain != NetDomainInvalid)) ||
+                ((Information->Subnet.Domain != Domain) &&
+                 (Information->Subnet.Domain != NetDomainInvalid)) ||
+                ((Information->Gateway.Domain != Domain) &&
+                 (Information->Gateway.Domain != NetDomainInvalid)) ||
                 ((Information->ConfigurationMethod !=
                   NetworkAddressConfigurationStatic) &&
                  (Information->ConfigurationMethod !=
-                  NetworkAddressConfigurationDhcp))) {
+                  NetworkAddressConfigurationDhcp) &&
+                 (Information->ConfigurationMethod !=
+                  NetworkAddressConfigurationStateless))) {
 
                 Status = STATUS_INVALID_CONFIGURATION;
                 goto GetSetNetworkDeviceInformationEnd;

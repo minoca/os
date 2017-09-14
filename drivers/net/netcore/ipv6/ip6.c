@@ -251,6 +251,11 @@ const UCHAR NetIp6AllMld2RoutersMulticastAddress[IP6_ADDRESS_SIZE] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16
 };
 
+const UCHAR NetIp6SolicitedNodeMulticastPrefix[IP6_ADDRESS_SIZE] = {
+    0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x01, 0xFF, 0x00, 0x00, 0x00
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -1284,11 +1289,14 @@ Return Value:
     }
 
     //
-    // Record if the packet has a link-local hop limit.
+    // Record if the packet has a link-local or maximum hop limit.
     //
 
     if (Header->HopLimit == IP6_LINK_LOCAL_HOP_LIMIT) {
         Packet->Flags |= NET_PACKET_FLAG_LINK_LOCAL_HOP_LIMIT;
+
+    } else if (Header->HopLimit == IP6_MAX_HOP_LIMIT) {
+        Packet->Flags |= NET_PACKET_FLAG_MAX_HOP_LIMIT;
     }
 
     //
@@ -1374,6 +1382,7 @@ Return Value:
     LONG CurrentRun;
     LONG CurrentRunSize;
     PIP6_ADDRESS Ip6Address;
+    ULONG Length;
     UINTN RemainingSize;
     PSTR String;
     UINTN StringSize;
@@ -1493,23 +1502,26 @@ Return Value:
 
             StringSize = (UINTN)String - (UINTN)WorkingString;
             RemainingSize = IP6_MAX_ADDRESS_STRING_SIZE - StringSize;
-            String += RtlPrintToString(String,
-                                       RemainingSize,
-                                       CharacterEncodingDefault,
-                                       "%d.%d.%d.%d",
-                                       BytePointer[12],
-                                       BytePointer[13],
-                                       BytePointer[14],
-                                       BytePointer[15]);
+            Length = RtlPrintToString(String,
+                                      RemainingSize,
+                                      CharacterEncodingDefault,
+                                      "%d.%d.%d.%d",
+                                      BytePointer[12],
+                                      BytePointer[13],
+                                      BytePointer[14],
+                                      BytePointer[15]);
 
+            String += (Length - 1);
             break;
         }
 
-        String += RtlPrintToString(String,
-                                   5,
-                                   CharacterEncodingDefault,
-                                   "%x",
-                                   Words[WordIndex]);
+        Length = RtlPrintToString(String,
+                                  5,
+                                  CharacterEncodingDefault,
+                                  "%x",
+                                  Words[WordIndex]);
+
+        String += (Length - 1);
     }
 
     //
@@ -1528,11 +1540,13 @@ Return Value:
         String += 1;
         StringSize = (UINTN)String - (UINTN)WorkingString;
         RemainingSize = IP6_MAX_ADDRESS_STRING_SIZE - StringSize;
-        String += RtlPrintToString(String,
-                                   RemainingSize,
-                                   CharacterEncodingDefault,
-                                   "%d",
-                                   Ip6Address->Port);
+        Length = RtlPrintToString(String,
+                                  RemainingSize,
+                                  CharacterEncodingDefault,
+                                  "%d",
+                                  Ip6Address->Port);
+
+        String += (Length - 1);
     }
 
     //
@@ -2036,13 +2050,35 @@ Return Value:
 
 {
 
+    UINTN Option;
+    PNET_PROTOCOL_ENTRY Protocol;
+    ICMP6_ADDRESS_CONFIGURATION_REQUEST Request;
+    UINTN RequestSize;
+    KSTATUS Status;
+
     //
-    // TODO: Implement NDP and DHCPv6.
+    // ICMPv6 handles address configuration, hand off to the protocol.
     //
 
-    ASSERT(FALSE);
+    Protocol = NetGetProtocolEntry(SOCKET_INTERNET_PROTOCOL_ICMP6);
+    if (Protocol == NULL) {
+        return STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+    }
 
-    return STATUS_NOT_IMPLEMENTED;
+    RequestSize = sizeof(ICMP6_ADDRESS_CONFIGURATION_REQUEST);
+    RtlZeroMemory(&Request, RequestSize);
+    Request.Link = Link;
+    Request.LinkAddress = LinkAddress;
+    Request.Configure = Configure;
+    Option = SocketIcmp6OptionConfigureAddress;
+    Status = Protocol->Interface.GetSetInformation(NULL,
+                                                   SocketInformationIcmp6,
+                                                   Option,
+                                                   &Request,
+                                                   &RequestSize,
+                                                   TRUE);
+
+    return Status;
 }
 
 KSTATUS

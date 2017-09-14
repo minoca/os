@@ -2448,11 +2448,8 @@ Return Value:
     PMLD_LINK NewMldLink;
     MLD_LINK SearchLink;
     KSTATUS Status;
-    BOOL TreeLockHeld;
 
     MldLink = NULL;
-    NewMldLink = NULL;
-    TreeLockHeld = FALSE;
     NewMldLink = MmAllocatePagedPool(sizeof(MLD_LINK), MLD_ALLOCATION_TAG);
     if (NewMldLink == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2527,7 +2524,6 @@ Return Value:
 
     SearchLink.Link = Link;
     KeAcquireSharedExclusiveLockExclusive(NetMldLinkLock);
-    TreeLockHeld = TRUE;
     FoundNode = RtlRedBlackTreeSearch(&NetMldLinkTree, &(SearchLink.Node));
     if (FoundNode == NULL) {
         RtlRedBlackTreeInsert(&NetMldLinkTree, &(NewMldLink->Node));
@@ -2540,13 +2536,8 @@ Return Value:
 
     NetpMldLinkAddReference(MldLink);
     KeReleaseSharedExclusiveLockExclusive(NetMldLinkLock);
-    TreeLockHeld = FALSE;
 
 CreateOrLookupLinkEnd:
-    if (TreeLockHeld != FALSE) {
-        KeReleaseSharedExclusiveLockExclusive(NetMldLinkLock);
-    }
-
     if (NewMldLink != NULL) {
         NetpMldLinkReleaseReference(NewMldLink);
     }
@@ -2773,7 +2764,7 @@ Return Value:
     PMLD_LINK SecondMldLink;
 
     FirstMldLink = RED_BLACK_TREE_VALUE(FirstNode, MLD_LINK, Node);
-    SecondMldLink = RED_BLACK_TREE_VALUE(FirstNode, MLD_LINK, Node);
+    SecondMldLink = RED_BLACK_TREE_VALUE(SecondNode, MLD_LINK, Node);
     if (FirstMldLink->Link == SecondMldLink->Link) {
         return ComparisonResultSame;
 

@@ -44,6 +44,7 @@ Author:
 extern const UCHAR NetIp6AllNodesMulticastAddress[IP6_ADDRESS_SIZE];
 extern const UCHAR NetIp6AllRoutersMulticastAddress[IP6_ADDRESS_SIZE];
 extern const UCHAR NetIp6AllMld2RoutersMulticastAddress[IP6_ADDRESS_SIZE];
+extern const UCHAR NetIp6SolicitedNodeMulticastPrefix[IP6_ADDRESS_SIZE];
 
 //
 // -------------------------------------------------------- Function Prototypes

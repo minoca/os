@@ -40,6 +40,15 @@ Environment:
 #include <minoca/net/ip6.h>
 #include <minoca/net/icmp6.h>
 #include "mld.h"
+#include "ndp.h"
+
+//
+// While ICMPv6 is built into netcore and the same binary as IPv6, share the
+// well-known addresses. This could easily be changed if the binaries need to
+// be separated out.
+//
+
+#include "ip6addr.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -224,6 +233,7 @@ Return Value:
     //
 
     NetpMldInitialize();
+    NetpNdpInitialize();
     return;
 }
 
@@ -601,6 +611,14 @@ Return Value:
         NetpMldProcessReceivedData(ReceiveContext);
         break;
 
+    case ICMP6_MESSAGE_TYPE_NDP_ROUTER_SOLICITATION:
+    case ICMP6_MESSAGE_TYPE_NDP_ROUTER_ADVERTISEMENT:
+    case ICMP6_MESSAGE_TYPE_NDP_NEIGHBOR_SOLICITATION:
+    case ICMP6_MESSAGE_TYPE_NDP_NEIGHBOR_ADVERTISEMENT:
+    case ICMP6_MESSAGE_TYPE_NDP_REDIRECT:
+        NetpNdpProcessReceivedData(ReceiveContext);
+        break;
+
     default:
         break;
     }
@@ -739,6 +757,7 @@ Return Value:
 
 {
 
+    PICMP6_ADDRESS_CONFIGURATION_REQUEST ConfigurationRequest;
     SOCKET_ICMP6_OPTION Icmp6;
     PIP6_ADDRESS MulticastAddress;
     PNET_NETWORK_MULTICAST_REQUEST MulticastRequest;
@@ -785,6 +804,26 @@ Return Value:
         } else {
             Status = NetpMldLeaveMulticastGroup(MulticastRequest);
         }
+
+        break;
+
+    case SocketIcmp6OptionConfigureAddress:
+        if (Set == FALSE) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            break;
+        }
+
+        RequiredSize = sizeof(ICMP6_ADDRESS_CONFIGURATION_REQUEST);
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        ConfigurationRequest = (PICMP6_ADDRESS_CONFIGURATION_REQUEST)Data;
+        Status = NetpNdpConfigureAddress(ConfigurationRequest->Link,
+                                         ConfigurationRequest->LinkAddress,
+                                         ConfigurationRequest->Configure);
 
         break;
 

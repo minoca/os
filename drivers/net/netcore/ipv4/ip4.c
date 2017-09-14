@@ -1638,6 +1638,9 @@ Return Value:
 
     if (Header->TimeToLive == IP4_LINK_LOCAL_TIME_TO_LIVE) {
         Packet->Flags |= NET_PACKET_FLAG_LINK_LOCAL_HOP_LIMIT;
+
+    } else if (Header->TimeToLive == IP4_MAX_TIME_TO_LIVE) {
+        Packet->Flags |= NET_PACKET_FLAG_MAX_HOP_LIMIT;
     }
 
     //

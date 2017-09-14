@@ -86,7 +86,8 @@ typedef enum _NETWORK_ADDRESS_CONFIGURATION_METHOD {
     NetworkAddressConfigurationInvalid,
     NetworkAddressConfigurationNone,
     NetworkAddressConfigurationStatic,
-    NetworkAddressConfigurationDhcp
+    NetworkAddressConfigurationDhcp,
+    NetworkAddressConfigurationStateless,
 } NETWORK_ADDRESS_CONFIGURATION_METHOD, *PNETWORK_ADDRESS_CONFIGURATION_METHOD;
 
 /*++
