@@ -591,7 +591,7 @@ Return Value:
     //
 
     BindingType = SocketLocallyBound;
-    if (IP6_IS_ANY_ADDRESS(Ip6Address->Address) != FALSE) {
+    if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Address->Address) != FALSE) {
         BindingType = SocketUnbound;
     }
 
@@ -621,11 +621,11 @@ Return Value:
     } else {
 
         //
-        // If the address is not the "any" address, then look for the link that
-        // owns this address.
+        // If the address is not the unspecified address, then look for the
+        // link that owns this address.
         //
 
-        if (IP6_IS_ANY_ADDRESS(Ip6Address->Address) == FALSE) {
+        if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Address->Address) == FALSE) {
             Port = Address->Port;
             Address->Port = 0;
             Status = NetFindLinkForLocalAddress(Address,
@@ -1889,7 +1889,7 @@ Return Value:
     }
 
     Ip6Address = (PIP6_ADDRESS)Address;
-    if (IP6_IS_ANY_ADDRESS(Ip6Address->Address) != FALSE) {
+    if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Address->Address) != FALSE) {
         return NetAddressAny;
     }
 
@@ -2195,10 +2195,10 @@ Return Value:
     //
     // This function is very simple: it perform some filtering on known
     // addresses, and if none of those match passes it on to the link layer.
-    // Start by checking against 0.0.0.0, an invalid address.
+    // Start by checking against the unspecified address.
     //
 
-    if (IP6_IS_ANY_ADDRESS(Ip6Address->Address) != FALSE) {
+    if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Address->Address) != FALSE) {
         return STATUS_INVALID_ADDRESS;
     }
 

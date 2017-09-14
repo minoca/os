@@ -1323,7 +1323,7 @@ Return Value:
     // multicast address.
     //
 
-    if (IP6_IS_ANY_ADDRESS(Ip6Source->Address) != FALSE) {
+    if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Source->Address) != FALSE) {
         if (IP6_IS_SOLICITED_NODE_MULTICAST_ADDRESS(Ip6Destination->Address) ==
             FALSE) {
 
@@ -1372,7 +1372,7 @@ Return Value:
         // need to check if this node sent the solicitation.
         //
 
-        if (IP6_IS_ANY_ADDRESS(Ip6Source->Address) != FALSE) {
+        if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Source->Address) != FALSE) {
             Neighbor = NetpNdpCreateOrLookupNeighbor(NdpLink,
                                                      &Target,
                                                      NdpNeighborDuplicate);
@@ -1397,7 +1397,7 @@ Return Value:
     // address is valid, then save it.
     //
 
-    if (IP6_IS_ANY_ADDRESS(Ip6Source->Address) == FALSE) {
+    if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Source->Address) == FALSE) {
 
         //
         // NDP does not require unicast neighbor solicitations to include the
@@ -1632,6 +1632,7 @@ Return Value:
     NETWORK_ADDRESS AllNodesAddress;
     NETWORK_ADDRESS AllNodesPhysicalAddress;
     ULONG BufferFlags;
+    PIP6_ADDRESS Ip6Destination;
     PNET_LINK Link;
     BOOL LockHeld;
     PNDP_OPTION OptionHeader;
@@ -1729,8 +1730,9 @@ Return Value:
     // address.
     //
 
+    Ip6Destination = (PIP6_ADDRESS)Destination;
     if ((Solicited == FALSE) ||
-        (IP6_IS_ANY_ADDRESS(((PIP6_ADDRESS)Destination)->Address) != FALSE)) {
+        (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Destination->Address) != FALSE)) {
 
         RtlZeroMemory(&AllNodesAddress, sizeof(NETWORK_ADDRESS));
         AllNodesAddress.Domain = NetDomainIp6;
@@ -1843,7 +1845,7 @@ Return Value:
 
     Ip6Source = (PIP6_ADDRESS)Source;
     DuplicateDetection = FALSE;
-    if (IP6_IS_ANY_ADDRESS(Ip6Source->Address) != FALSE) {
+    if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Source->Address) != FALSE) {
         DuplicateDetection = TRUE;
     }
 

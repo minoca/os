@@ -1146,7 +1146,7 @@ Return Value:
     // (FF02::1) should be ignored for security reasons.
     //
 
-    GeneralQuery = IP6_IS_ANY_ADDRESS(Query->MulticastAddress);
+    GeneralQuery = IP6_IS_UNSPECIFIED_ADDRESS(Query->MulticastAddress);
     if (GeneralQuery != FALSE) {
         Equal = RtlCompareMemory(Destination->Address,
                                  NetIp6AllNodesMulticastAddress,
@@ -1331,7 +1331,7 @@ Return Value:
                              IP6_ADDRESS_SIZE);
 
     if ((Equal == FALSE) ||
-        (IP6_IS_ANY_ADDRESS(Destination->Address) != FALSE)) {
+        (IP6_IS_UNSPECIFIED_ADDRESS(Destination->Address) != FALSE)) {
 
         return;
     }

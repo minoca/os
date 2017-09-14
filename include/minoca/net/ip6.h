@@ -25,11 +25,11 @@ Author:
 //
 
 //
-// This macros determines whether or not the given IPv6 address is the any
-// address.
+// This macros determines whether or not the given IPv6 address is the
+// unspecified address.
 //
 
-#define IP6_IS_ANY_ADDRESS(_Ip6Address)                    \
+#define IP6_IS_UNSPECIFIED_ADDRESS(_Ip6Address)            \
     (((_Ip6Address)[0] == 0) && ((_Ip6Address)[1] == 0) && \
      ((_Ip6Address)[2] == 0) && ((_Ip6Address)[3] == 0))
 
