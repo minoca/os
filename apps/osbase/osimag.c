@@ -453,10 +453,12 @@ Return Value:
         ASSERT((CurrentImage->Flags & IMAGE_FLAG_INITIALIZED) == 0);
 
         //
-        // Copy in the TLS image if there is one.
+        // Copy in the TLS image if there is one and it's been allocated.
         //
 
-        if (CurrentImage->TlsImageSize != 0) {
+        if ((CurrentImage->TlsImageSize != 0) &&
+            (CurrentImage->TlsOffset != (UINTN)-1)) {
+
             RtlCopyMemory(Thread->TlsVector[CurrentImage->ModuleNumber],
                           CurrentImage->TlsImage,
                           CurrentImage->TlsImageSize);
