@@ -801,10 +801,6 @@ Author:
 // Define the flags for each field that are currnetly unimplemented.
 //
 
-#define TERMINAL_UNIMPLEMENTED_INPUT_FLAGS          \
-    (TERMINAL_INPUT_ENABLE_PARITY_CHECK |           \
-     TERMINAL_INPUT_MARK_PARITY_ERRORS)
-
 #define TERMINAL_UNIMPLEMENTED_OUTPUT_FLAGS         \
     (TERMINAL_OUTPUT_NO_CR_AT_COLUMN_ZERO |         \
      TERMINAL_OUTPUT_USE_FILL_CHARACTERS |          \

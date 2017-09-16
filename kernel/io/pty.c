@@ -727,9 +727,7 @@ Return Value:
         // support for said feature.
         //
 
-        if (((NewSettings->InputFlags &
-              TERMINAL_UNIMPLEMENTED_INPUT_FLAGS) != 0) ||
-            ((NewSettings->OutputFlags &
+        if (((NewSettings->OutputFlags &
               TERMINAL_UNIMPLEMENTED_OUTPUT_FLAGS) != 0) ||
             ((NewSettings->ControlFlags &
               TERMINAL_UNIMPLEMENTED_CONTROL_FLAGS) != 0)) {
