@@ -872,7 +872,8 @@ class Build {
                 } except PackageNotFoundError as e {
                     if (vars.verbose) {
                         Core.print("Ignoring missing base build "
-                                   "dependency: %s" % dep);
+                                   "dependency for %s: %s" %
+                                   [dep, e.args.__str()]);
                     }
                 }
             }
@@ -880,7 +881,9 @@ class Build {
 
         deps = vars.get("basedepends_host");
         if (deps != null) {
-            if ((vars.arch != os.machine) || (vars.os != os.system)) {
+            if (((vars.arch != os.machine) &&
+                 (vars.arch != "none")) || (vars.os != os.system)) {
+
                 params.arch = vars.arch;
                 params.os = vars.os;
                 if (!vars.sysroot.startsWith(vars.buildsysroot)) {
@@ -897,7 +900,8 @@ class Build {
                 } except PackageNotFoundError as e {
                     if (vars.verbose) {
                         Core.print("Ignoring missing base host "
-                                   "dependency: %s" % dep);
+                                   "dependency for %s: %s" %
+                                   [dep, e.args.__str()]);
                     }
                 }
             }
@@ -929,7 +933,9 @@ class Build {
 
         deps = vars.get("makedepends_host");
         if (deps != null) {
-            if ((vars.arch != os.machine) || (vars.os != os.system)) {
+            if (((vars.arch != os.machine) &&
+                 (vars.arch != "none")) || (vars.os != os.system)) {
+
                 params.arch = vars.arch;
                 params.os = vars.os;
                 params.root = vars.sysroot[vars.buildsysroot.length()...-1];
@@ -1373,7 +1379,9 @@ class Build {
         var value;
         var vars = this.vars;
 
-        for (key in ["srcdir", "builddir", "pkgdir"]) {
+        for (key in ["srcdir", "builddir", "pkgdir", "sysroot",
+                     "buildsysroot"]) {
+
             value = _realm.containment.innerPath(vars[key]);
             vars[key] = value;
             env[key] = value;

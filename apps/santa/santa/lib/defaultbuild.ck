@@ -240,7 +240,7 @@ Return Value:
 
     patchdir = vars.get("patchdir");
     if (patchdir == null) {
-        patchdir = vars.startdir + "/patches";
+        patchdir = vars.srcdir + "/patches";
     }
 
     //

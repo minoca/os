@@ -428,17 +428,18 @@ Return Value:
 
     var chunk;
     var contents;
-
     var infile;
     var link;
     var outfile;
+    var stat;
     var verbose;
 
     //
     // Recurse if it's a directory.
     //
 
-    if ((os.isdir)(source)) {
+    stat = (os.lstat)(source);
+    if ((stat.st_mode & os.S_IFMT) == os.S_IFDIR) {
         contents = (os.listdir)(source);
         if (!(os.isdir)(destination)) {
             (os.mkdir)(destination, 0775);
@@ -459,7 +460,7 @@ Return Value:
     // Create a symbolic link.
     //
 
-    } else if ((os.islink)(source)) {
+    } else if ((stat.st_mode & os.S_IFMT) == os.S_IFLNK) {
         verbose = config.getKey("core.verbose");
         link = (os.readlink)(source);
         if (verbose) {
@@ -481,7 +482,7 @@ Return Value:
     // Copy a regular file.
     //
 
-    } else {
+    } else if ((stat.st_mode & os.S_IFMT) == os.S_IFREG) {
 
         //
         // Skip null copies.
@@ -518,6 +519,15 @@ Return Value:
 
         infile.close();
         outfile.close();
+
+    } else {
+        if (config.getKey("core.verbose")) {
+            Core.print("Warning: Skipping irregular file: %s" % source);
+        }
+    }
+
+    if ((stat.st_mode & os.S_IFMT) != os.S_IFLNK) {
+        (os.chmod)(destination, stat.st_mode & 03777);
     }
 
     return;
@@ -657,7 +667,7 @@ Return Value:
 
     0 on success.
 
-    Raises an exception if removal failed.
+    Raises an exception if the change failed.
 
 --*/
 
@@ -669,6 +679,42 @@ Return Value:
     }
 
     return (os.chroot)(filepath);
+}
+
+function
+chmod (
+    filepath,
+    mode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine changes the permissions on the given path.
+
+Arguments:
+
+    filepath - Supplies the path to set permissions for.
+
+    mode - Supplies the new permissions to set.
+
+Return Value:
+
+    0 on success.
+
+    Raises an exception if the operation failed.
+
+--*/
+
+{
+
+    filepath = path(filepath);
+    if (config.getKey("core.verbose")) {
+        Core.print("chmod %o %s" % [mode, filepath]);
+    }
+
+    return (os.chmod)(filepath, mode);
 }
 
 function

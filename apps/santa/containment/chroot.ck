@@ -29,9 +29,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+from santa.build import shell;
 from santa.config import config;
 from santa.containment import Containment, ContainmentError;
-from santa.file import chdir, chroot, mkdir, path, rmtree;
+from santa.file import chdir, chmod, chroot, mkdir, path, rmtree;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -99,7 +100,16 @@ class ChrootContainment is Containment {
             Core.raise(ContainmentError("Invalid chroot path"));
         }
 
-        mkdir(rootpath);
+        mkdir(rootpath + "/tmp");
+        chmod(rootpath + "/tmp", 0777);
+        mkdir(rootpath + "/dev");
+        shell("set -e\n"
+              "_world=%s\n"
+              "for d in null full zero urandom tty; do\n"
+              "  touch $_world/dev/$d\n"
+              "  mount --bind /dev/$d $_world/dev/$d\n"
+              "done" % path(rootpath));
+
         if (config.getKey("core.verbose")) {
             Core.print("Created chroot environment at %s" % rootpath);
         }
@@ -135,6 +145,12 @@ class ChrootContainment is Containment {
         if (verbose) {
             Core.print("Destroying chroot environment at %s" % rootpath);
         }
+
+        shell("_world=%s\n"
+              "for d in null full zero urandom tty; do\n"
+              "  umount $_world/dev/$d\n"
+              "done\n"
+              "true" % path(rootpath));
 
         rmtree(rootpath);
         _parameters = null;

@@ -32,7 +32,9 @@ Environment:
 from bufferedio import BufferedIo;
 import cpio;
 import io;
+from iobase import IoError;
 import lzfile;
+import os;
 
 //
 // --------------------------------------------------------------------- Macros
@@ -50,9 +52,22 @@ import lzfile;
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+function
+_setExecuteBit (
+    name,
+    member
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+//
+// Define the archive filter, which may set the execute bit on archives for
+// certain file names and types.
+//
+
+var _filter;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -277,7 +292,7 @@ class Archive {
 
     {
 
-        return this.cpio.add(name, archiveName, true, null);
+        return this.cpio.add(name, archiveName, true, _filter);
     }
 
     function
@@ -558,7 +573,78 @@ class Archive {
     }
 }
 
+function
+_setExecuteBit (
+    name,
+    member
+    )
+
+/*++
+
+Routine Description:
+
+    This routine examines the file to determine if the execute bit should be
+    set in the archive. This function is only called on Windows machines.
+
+Arguments:
+
+    name - Supplies the file name.
+
+    member - Supplies the archive member.
+
+Return Value:
+
+    Returns the archive member to indicate to add this member to the archive.
+
+--*/
+
+{
+
+    var header;
+    var execute = false;
+    var file;
+
+    for (ending in [".exe", ".bat", ".sh", ".cmd"]) {
+        if (name.endsWith(ending)) {
+            execute = true;
+            break;
+        }
+    }
+
+    if (!execute) {
+        try {
+            file = (io.open)(name, "rb");
+            header = file.read(4);
+            file.close();
+            if ((header == "\x7FELF") || (header.startsWith("#!"))) {
+                execute = true;
+            }
+
+        } except IoError {}
+    }
+
+    //
+    // Set the execute bits --x--x--x on the archive member if the file is
+    // executable.
+    //
+
+    if (execute) {
+        member.mode |= 0111;
+    }
+
+    return member;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+//
+// Define the archive filter, which may set the execute bit on archives for
+// certain file names and types.
+//
+
+if (os.system == "Windows") {
+    _filter = _setExecuteBit;
+}
 
