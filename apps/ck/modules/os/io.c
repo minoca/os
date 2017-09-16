@@ -1665,8 +1665,8 @@ Return Value:
         errno = 0;
         Entry = readdir(Directory);
         if (Entry == NULL) {
+            closedir(Directory);
             if (errno != 0) {
-                closedir(Directory);
                 CkpOsRaiseError(Vm, Path);
                 return;
             }
