@@ -1158,9 +1158,6 @@ Members:
     TreeEntry - Stores the information about this socket in the tree of
         sockets (which is either on the link itself or global).
 
-    ListEntry - Stores the information about this socket in the list of sockets.
-        This is only used for raw sockets; they do not get inserted in a tree.
-
     BindingType - Stores the type of binding for this socket (unbound, locally
         bound, or fully bound).
 
@@ -1217,11 +1214,7 @@ typedef struct _NET_SOCKET {
     NETWORK_ADDRESS LocalSendAddress;
     NETWORK_ADDRESS RemoteAddress;
     NETWORK_ADDRESS RemotePhysicalAddress;
-    union {
-        RED_BLACK_TREE_NODE TreeEntry;
-        LIST_ENTRY ListEntry;
-    } U;
-
+    RED_BLACK_TREE_NODE TreeEntry;
     NET_SOCKET_BINDING_TYPE BindingType;
     volatile ULONG Flags;
     NET_PACKET_SIZE_INFORMATION PacketSizeInformation;

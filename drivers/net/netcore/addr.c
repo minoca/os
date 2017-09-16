@@ -2178,7 +2178,7 @@ Return Value:
     SkipRemoteValidation = FALSE;
     if (Socket->BindingType != SocketBindingInvalid) {
         RtlRedBlackTreeRemove(&(Protocol->SocketTree[Socket->BindingType]),
-                              &(Socket->U.TreeEntry));
+                              &(Socket->TreeEntry));
 
         SkipLocalValidation = TRUE;
         Reinsert = TRUE;
@@ -2306,12 +2306,12 @@ Return Value:
 
             Tree = &(Protocol->SocketTree[SocketFullyBound]);
             ExistingNode = RtlRedBlackTreeSearch(Tree,
-                                                 &(SearchSocket.U.TreeEntry));
+                                                 &(SearchSocket.TreeEntry));
 
             if (ExistingNode != NULL) {
                 ExistingSocket = RED_BLACK_TREE_VALUE(ExistingNode,
                                                       NET_SOCKET,
-                                                      U.TreeEntry);
+                                                      TreeEntry);
 
                 if ((ExistingSocket->Flags & NET_SOCKET_FLAG_TIME_WAIT) != 0) {
                     NetpDeactivateSocketUnlocked(ExistingSocket);
@@ -2439,7 +2439,7 @@ Return Value:
     //
 
     RtlRedBlackTreeInsert(&(Protocol->SocketTree[BindingType]),
-                          &(Socket->U.TreeEntry));
+                          &(Socket->TreeEntry));
 
     Socket->BindingType = BindingType;
     Status = STATUS_SUCCESS;
@@ -2451,7 +2451,7 @@ BindSocketEnd:
             ASSERT(Socket->BindingType != SocketBindingInvalid);
 
             Tree = &(Protocol->SocketTree[Socket->BindingType]);
-            RtlRedBlackTreeInsert(Tree, &(Socket->U.TreeEntry));
+            RtlRedBlackTreeInsert(Tree, &(Socket->TreeEntry));
         }
     }
 
@@ -2539,10 +2539,10 @@ Return Value:
     //
 
     RtlRedBlackTreeRemove(&(Protocol->SocketTree[SocketFullyBound]),
-                          &(Socket->U.TreeEntry));
+                          &(Socket->TreeEntry));
 
     RtlRedBlackTreeInsert(&(Protocol->SocketTree[SocketLocallyBound]),
-                          &(Socket->U.TreeEntry));
+                          &(Socket->TreeEntry));
 
     Socket->BindingType = SocketLocallyBound;
 
@@ -2754,19 +2754,19 @@ Return Value:
 
     if (FindAll == FALSE) {
         Tree = &(Protocol->SocketTree[SocketFullyBound]);
-        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
+        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.TreeEntry));
         if (FoundNode != NULL) {
             goto FindSocketEnd;
         }
 
         Tree = &(Protocol->SocketTree[SocketLocallyBound]);
-        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
+        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.TreeEntry));
         if (FoundNode != NULL) {
             goto FindSocketEnd;
         }
 
         Tree = &(Protocol->SocketTree[SocketUnbound]);
-        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.U.TreeEntry));
+        FoundNode = RtlRedBlackTreeSearch(Tree, &(SearchEntry.TreeEntry));
         if (FoundNode != NULL) {
             goto FindSocketEnd;
         }
@@ -2798,7 +2798,7 @@ Return Value:
             //
 
             if (PreviousSocket != NULL) {
-                PreviousNode = &(PreviousSocket->U.TreeEntry);
+                PreviousNode = &(PreviousSocket->TreeEntry);
                 while (TRUE) {
                     NextNode = RtlRedBlackTreeGetNextNode(Tree,
                                                           FALSE,
@@ -2810,7 +2810,7 @@ Return Value:
 
                     NextSocket = RED_BLACK_TREE_VALUE(NextNode,
                                                       NET_SOCKET,
-                                                      U.TreeEntry);
+                                                      TreeEntry);
 
                     if ((NextSocket->Flags & NET_SOCKET_FLAG_ACTIVE) == 0) {
                         PreviousNode = NextNode;
@@ -2823,7 +2823,7 @@ Return Value:
                 if (NextNode != NULL) {
                     Result = Tree->CompareFunction(Tree,
                                                    NextNode,
-                                                   &(SearchEntry.U.TreeEntry));
+                                                   &(SearchEntry.TreeEntry));
 
                     if (Result == ComparisonResultSame) {
                         FoundNode = NextNode;
@@ -2845,7 +2845,7 @@ Return Value:
 
             } else {
                 NextNode = RtlRedBlackTreeSearch(Tree,
-                                                 &(SearchEntry.U.TreeEntry));
+                                                 &(SearchEntry.TreeEntry));
 
                 if (NextNode == NULL) {
                     continue;
@@ -2868,7 +2868,7 @@ Return Value:
 
                     Result = Tree->CompareFunction(Tree,
                                                    NextNode,
-                                                   &(SearchEntry.U.TreeEntry));
+                                                   &(SearchEntry.TreeEntry));
 
                 } while (Result == ComparisonResultSame);
 
@@ -2881,7 +2881,7 @@ Return Value:
                 do {
                     NextSocket = RED_BLACK_TREE_VALUE(NextNode,
                                                       NET_SOCKET,
-                                                      U.TreeEntry);
+                                                      TreeEntry);
 
                     if ((NextSocket->Flags & NET_SOCKET_FLAG_ACTIVE) != 0) {
                         FoundNode = NextNode;
@@ -2898,7 +2898,7 @@ Return Value:
 
                     Result = Tree->CompareFunction(Tree,
                                                    NextNode,
-                                                   &(SearchEntry.U.TreeEntry));
+                                                   &(SearchEntry.TreeEntry));
 
                 } while (Result == ComparisonResultSame);
 
@@ -2913,7 +2913,7 @@ Return Value:
 
 FindSocketEnd:
     if (FoundNode != NULL) {
-        FoundSocket = RED_BLACK_TREE_VALUE(FoundNode, NET_SOCKET, U.TreeEntry);
+        FoundSocket = RED_BLACK_TREE_VALUE(FoundNode, NET_SOCKET, TreeEntry);
     }
 
     Status = STATUS_NOT_FOUND;
@@ -3477,8 +3477,8 @@ Return Value:
     COMPARISON_RESULT Result;
     PNET_SOCKET SecondSocket;
 
-    FirstSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, U.TreeEntry);
-    SecondSocket = RED_BLACK_TREE_VALUE(SecondNode, NET_SOCKET, U.TreeEntry);
+    FirstSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, TreeEntry);
+    SecondSocket = RED_BLACK_TREE_VALUE(SecondNode, NET_SOCKET, TreeEntry);
     Result = NetpMatchFullyBoundSocket(FirstSocket,
                                        &(SecondSocket->LocalReceiveAddress),
                                        &(SecondSocket->RemoteAddress));
@@ -3524,8 +3524,8 @@ Return Value:
     COMPARISON_RESULT Result;
     PNET_SOCKET SecondSocket;
 
-    FirstSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, U.TreeEntry);
-    SecondSocket = RED_BLACK_TREE_VALUE(SecondNode, NET_SOCKET, U.TreeEntry);
+    FirstSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, TreeEntry);
+    SecondSocket = RED_BLACK_TREE_VALUE(SecondNode, NET_SOCKET, TreeEntry);
     Result = NetpCompareNetworkAddresses(&(FirstSocket->LocalReceiveAddress),
                                          &(SecondSocket->LocalReceiveAddress));
 
@@ -3571,8 +3571,8 @@ Return Value:
     PNETWORK_ADDRESS SecondLocalAddress;
     PNET_SOCKET SecondSocket;
 
-    FirstSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, U.TreeEntry);
-    SecondSocket = RED_BLACK_TREE_VALUE(SecondNode, NET_SOCKET, U.TreeEntry);
+    FirstSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, TreeEntry);
+    SecondSocket = RED_BLACK_TREE_VALUE(SecondNode, NET_SOCKET, TreeEntry);
 
     //
     // Compare the local port numbers.
@@ -3823,7 +3823,7 @@ Return Value:
     // Remove this old friend from the tree.
     //
 
-    RtlRedBlackTreeRemove(Tree, &(Socket->U.TreeEntry));
+    RtlRedBlackTreeRemove(Tree, &(Socket->TreeEntry));
     Socket->BindingType = SocketBindingInvalid;
 
     //
@@ -3895,7 +3895,7 @@ Return Value:
         Tree = &(Protocol->SocketTree[SocketFullyBound]);
         Node = RtlRedBlackTreeGetNextNode(Tree, FALSE, NULL);
         while (Node != NULL) {
-            Socket = RED_BLACK_TREE_VALUE(Node, NET_SOCKET, U.TreeEntry);
+            Socket = RED_BLACK_TREE_VALUE(Node, NET_SOCKET, TreeEntry);
             Node = RtlRedBlackTreeGetNextNode(Tree, FALSE, Node);
             if ((Socket->Link != Link) ||
                 ((LinkAddress != NULL) &&
@@ -3914,7 +3914,7 @@ Return Value:
         Tree = &(Protocol->SocketTree[SocketLocallyBound]);
         Node = RtlRedBlackTreeGetNextNode(Tree, FALSE, NULL);
         while (Node != NULL) {
-            Socket = RED_BLACK_TREE_VALUE(Node, NET_SOCKET, U.TreeEntry);
+            Socket = RED_BLACK_TREE_VALUE(Node, NET_SOCKET, TreeEntry);
             Node = RtlRedBlackTreeGetNextNode(Tree, FALSE, Node);
             if ((Socket->Link != Link) ||
                 ((LinkAddress != NULL) &&
@@ -4289,11 +4289,11 @@ Return Value:
     DeactivateSocket = FALSE;
     Tree = &(Protocol->SocketTree[SocketFullyBound]);
     FoundNode = RtlRedBlackTreeSearchClosest(Tree,
-                                             &(SearchSocket.U.TreeEntry),
+                                             &(SearchSocket.TreeEntry),
                                              TRUE);
 
     while (FoundNode != NULL) {
-        FoundSocket = RED_BLACK_TREE_VALUE(FoundNode, NET_SOCKET, U.TreeEntry);
+        FoundSocket = RED_BLACK_TREE_VALUE(FoundNode, NET_SOCKET, TreeEntry);
         if (FoundSocket->LocalReceiveAddress.Port != LocalAddress->Port) {
             break;
         }
@@ -4393,7 +4393,7 @@ Return Value:
 
     Tree = &(Protocol->SocketTree[SocketLocallyBound]);
     FirstFound = RtlRedBlackTreeSearchClosest(Tree,
-                                              &(SearchSocket.U.TreeEntry),
+                                              &(SearchSocket.TreeEntry),
                                               TRUE);
 
     Descending = FALSE;
@@ -4403,7 +4403,7 @@ Return Value:
         while (FoundNode != NULL) {
             FoundSocket = RED_BLACK_TREE_VALUE(FoundNode,
                                                NET_SOCKET,
-                                               U.TreeEntry);
+                                               TreeEntry);
 
             if (FoundSocket->LocalReceiveAddress.Port != LocalAddress->Port) {
                 break;
@@ -4529,7 +4529,7 @@ Return Value:
 
     Tree = &(Protocol->SocketTree[SocketUnbound]);
     FirstFound = RtlRedBlackTreeSearchClosest(Tree,
-                                              &(SearchSocket.U.TreeEntry),
+                                              &(SearchSocket.TreeEntry),
                                               TRUE);
 
     Descending = FALSE;
@@ -4539,7 +4539,7 @@ Return Value:
         while (FoundNode != NULL) {
             FoundSocket = RED_BLACK_TREE_VALUE(FoundNode,
                                                NET_SOCKET,
-                                               U.TreeEntry);
+                                               TreeEntry);
 
             if (FoundSocket->LocalReceiveAddress.Port != LocalAddress->Port) {
                 break;
