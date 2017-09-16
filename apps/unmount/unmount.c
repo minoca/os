@@ -265,7 +265,7 @@ Return Value:
     if (!KSUCCESS(Status)) {
         ReturnValue = ClConvertKstatusToErrorNumber(Status);
         fprintf(stderr,
-                "Error: failed to unmount %s with error 0x%08x: %s.\n",
+                "Error: failed to unmount %s with error %d: %s.\n",
                 MountPointPath,
                 Status,
                 strerror(ReturnValue));

@@ -291,7 +291,7 @@ Return Value:
     if (!KSUCCESS(Status)) {
         ReturnValue = ClConvertKstatusToErrorNumber(Status);
         fprintf(stderr,
-                "Error: failed to mount %s at %s with status 0x%08x: %s.\n",
+                "Error: failed to mount %s at %s with status %d: %s.\n",
                 MountPointPath,
                 TargetPath,
                 Status,
@@ -340,7 +340,7 @@ Return Value:
     if (!KSUCCESS(Status)) {
         Result = ClConvertKstatusToErrorNumber(Status);
         fprintf(stderr,
-                "Error: failed to print mounts with status 0x%08x: %s.\n",
+                "Error: failed to print mounts with status %d: %s.\n",
                 Status,
                 strerror(Result));
 
