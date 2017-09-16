@@ -124,6 +124,7 @@ function build() {
         "kerror.c",
         "langinfo.c",
         "line.c",
+        "link.c",
         "locale.c",
         "memory.c",
         "netaddr.c",

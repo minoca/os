@@ -1952,6 +1952,11 @@ Return Value:
         OsFlags |= SYS_DELETE_FLAG_DIRECTORY;
     }
 
+    if (Path == NULL) {
+        errno = EFAULT;
+        return -1;
+    }
+
     Status = OsDelete((HANDLE)(UINTN)Directory,
                       (PSTR)Path,
                       strlen(Path) + 1,
