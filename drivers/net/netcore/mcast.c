@@ -164,6 +164,12 @@ Return Value:
 {
 
     PNET_SOCKET_MULTICAST_GROUP Group;
+    PNET_LINK Link;
+
+    Link = Socket->MulticastInterface.LinkInformation.Link;
+    if (Link != NULL) {
+        NetLinkReleaseReference(Link);
+    }
 
     if (LIST_EMPTY(&(Socket->MulticastGroupList)) != FALSE) {
         goto DestroyMulticastSocket;
@@ -844,6 +850,57 @@ LinkLeaveMulticastGroupEnd:
     }
 
     return Status;
+}
+
+NET_API
+VOID
+NetDestroyLinkMulticastGroups (
+    PNET_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys the links remaining multicast groups. It is meant to
+    be called during link destruction and does not attempt to update the MAC
+    address filters or notify the network. The link should have no references.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose multicast groups are being
+        destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET_LINK_MULTICAST_GROUP Group;
+
+    ASSERT(Link->ReferenceCount == 0);
+    ASSERT(Link->LinkUp == FALSE);
+
+    while (LIST_EMPTY(&(Link->MulticastGroupList)) == FALSE) {
+        Group = LIST_VALUE(Link->MulticastGroupList.Next,
+                           NET_LINK_MULTICAST_GROUP,
+                           ListEntry);
+
+        //
+        // Any groups still remaining should have a join count from 1. These
+        // groups were joined when the link was initialized.
+        //
+
+        ASSERT(Group->JoinCount == 1);
+
+        LIST_REMOVE(&(Group->ListEntry));
+        MmFreePagedPool(Group);
+    }
+
+    return;
 }
 
 //

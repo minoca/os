@@ -3930,6 +3930,31 @@ Return Value:
 
 --*/
 
+NET_API
+VOID
+NetDestroyLinkMulticastGroups (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys the links remaining multicast groups. It is meant to
+    be called during link destruction and does not attempt to update the MAC
+    address filters or notify the network. The link should have no references.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose multicast groups are being
+        destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // Link-specific definitions.
 //

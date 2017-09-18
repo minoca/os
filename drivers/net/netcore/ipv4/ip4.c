@@ -530,6 +530,13 @@ Return Value:
 
 {
 
+    //
+    // Destroy any multicast groups that the link still belongs to. These
+    // should only be the groups that it joined during initialization, as this
+    // routine is called after the last reference on the link is released.
+    //
+
+    NetDestroyLinkMulticastGroups(Link);
     return;
 }
 

@@ -384,8 +384,8 @@ Members:
     ReportTimer - Stores the report timer used for responding to generic
         queries.
 
-    ReportableGroupCount - Stores the number of multicast groups that are
-        associated with the link and should be reported in a total link report.
+    GroupCount - Stores the number of multicast groups that are associated
+        with the link and should be reported in a total link report.
 
     MulticastGroupList - Stores the list of the multicast group structures
         associated with the link.
@@ -405,7 +405,7 @@ typedef struct _IGMP_LINK {
     volatile IGMP_VERSION CompatibilityMode;
     IGMP_TIMER CompatibilityTimer[IGMP_COMPATIBILITY_MODE_COUNT];
     IGMP_TIMER ReportTimer;
-    ULONG ReportableGroupCount;
+    ULONG GroupCount;
     LIST_ENTRY MulticastGroupList;
 } IGMP_LINK, *PIGMP_LINK;
 
@@ -712,8 +712,8 @@ NetpIgmpDestroyTimer (
     );
 
 BOOL
-NetpIgmpIsReportableGroup (
-    PIGMP_MULTICAST_GROUP Group
+NetpIgmpIsReportableAddress (
+    ULONG Address
     );
 
 //
@@ -1540,6 +1540,15 @@ Return Value:
     NewGroup = NULL;
 
     //
+    // If the group never needs to be reported, don't bother to record it at
+    // this layer. Netcore already has a record of it.
+    //
+
+    if (NetpIgmpIsReportableAddress(GroupAddress->Address) == FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    //
     // Test to see if there is an IGMP link for the given network link,
     // creating one if the lookup fails.
     //
@@ -1588,10 +1597,7 @@ Return Value:
         //
 
         INSERT_BEFORE(&(NewGroup->ListEntry), &(IgmpLink->MulticastGroupList));
-        if (NetpIgmpIsReportableGroup(NewGroup) != FALSE) {
-            IgmpLink->ReportableGroupCount += 1;
-        }
-
+        IgmpLink->GroupCount += 1;
         break;
     }
 
@@ -1686,6 +1692,14 @@ Return Value:
     MulticastAddress = (PIP4_ADDRESS)Request->MulticastAddress;
 
     //
+    // If the address is not reportable, an IGMP group was never made for it.
+    //
+
+    if (NetpIgmpIsReportableAddress(MulticastAddress->Address) == FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    //
     // Now see if there is an IGMP link for the given network link.
     //
 
@@ -1725,9 +1739,7 @@ Return Value:
 
     LIST_REMOVE(&(Group->ListEntry));
     Group->ListEntry.Next = NULL;
-    if (NetpIgmpIsReportableGroup(Group) != FALSE) {
-        IgmpLink->ReportableGroupCount -= 1;
-    }
+    IgmpLink->GroupCount -= 1;
 
     //
     // The number of leave messages sent is dictated by the robustness variable.
@@ -2545,12 +2557,10 @@ Return Value:
     UCHAR Type;
 
     //
-    // Never send a report for the all systems group.
+    // Reports should be heading to reportable groups only.
     //
 
-    if (Group->Address == IGMP_ALL_SYSTEMS_ADDRESS) {
-        return;
-    }
+    ASSERT(NetpIgmpIsReportableAddress(Group->Address) != FALSE);
 
     //
     // Snap the compatibility mode.
@@ -2702,12 +2712,10 @@ Return Value:
     DestroyGroup = TRUE;
 
     //
-    // Never send a leave report for the all systems group.
+    // Leave reports should be heading to reportable groups only.
     //
 
-    if (Group->Address == IGMP_ALL_SYSTEMS_ADDRESS) {
-        goto SendGroupLeaveEnd;
-    }
+    ASSERT(NetpIgmpIsReportableAddress(Group->Address) != FALSE);
 
     //
     // If this link was not the last to report the group, then don't send
@@ -2877,7 +2885,7 @@ Return Value:
 
     NET_INITIALIZE_PACKET_LIST(&NetPacketList);
     KeAcquireQueuedLock(IgmpLink->Lock);
-    RemainingGroupCount = IgmpLink->ReportableGroupCount;
+    RemainingGroupCount = IgmpLink->GroupCount;
     CurrentEntry = IgmpLink->MulticastGroupList.Next;
     while (RemainingGroupCount != 0) {
         CurrentGroupCount = RemainingGroupCount;
@@ -2923,16 +2931,10 @@ Return Value:
 
             ASSERT(CurrentEntry != &(IgmpLink->MulticastGroupList));
 
-            //
-            // Skip any groups that are not reportable. They were not included
-            // in the total reportable count.
-            //
-
             Group = LIST_VALUE(CurrentEntry, IGMP_MULTICAST_GROUP, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            if (NetpIgmpIsReportableGroup(Group) == FALSE) {
-                continue;
-            }
+
+            ASSERT(NetpIgmpIsReportableAddress(Group->Address) != FALSE);
 
             CurrentGroupCount -= 1;
 
@@ -3416,7 +3418,7 @@ Return Value:
     if (OldReferenceCount == 2) {
 
         ASSERT(LIST_EMPTY(&(IgmpLink->MulticastGroupList)) != FALSE);
-        ASSERT(IgmpLink->ReportableGroupCount == 0);
+        ASSERT(IgmpLink->GroupCount == 0);
 
         RtlRedBlackTreeRemove(&NetIgmpLinkTree, &(IgmpLink->Node));
         IgmpLink->Node.Parent = NULL;
@@ -3799,30 +3801,30 @@ Return Value:
 }
 
 BOOL
-NetpIgmpIsReportableGroup (
-    PIGMP_MULTICAST_GROUP Group
+NetpIgmpIsReportableAddress (
+    ULONG GroupAddress
     )
 
 /*++
 
 Routine Description:
 
-    This routine determines whether or not the given group should be reported
-    in IGMP link-wide reports.
+    This routine determines whether or not the given group address should be
+    reported.
 
 Arguments:
 
-    Group - Supplies a pointer to an IGMP multicast group.
+    GroupAddress - Supplies a pointer to the group address to check.
 
 Return Value:
 
-    Returns TRUE if the group should be reported or FALSE otherwise.
+    Returns TRUE if the address should be reported or FALSE otherwise.
 
 --*/
 
 {
 
-    if (Group->Address == IGMP_ALL_SYSTEMS_ADDRESS) {
+    if (GroupAddress == IGMP_ALL_SYSTEMS_ADDRESS) {
         return FALSE;
     }
 

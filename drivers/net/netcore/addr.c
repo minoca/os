@@ -3752,6 +3752,14 @@ Return Value:
         }
     }
 
+    //
+    // The address translation tree is cleared when the link state is set to
+    // "down". It should still be empty.
+    //
+
+    ASSERT(RtlRedBlackTreeGetLowestNode(&(Link->AddressTranslationTree)) ==
+           NULL);
+
     KeDestroyEvent(Link->AddressTranslationEvent);
     KeAcquireSharedExclusiveLockShared(NetPluginListLock);
     CurrentEntry = NetNetworkList.Next;

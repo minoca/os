@@ -352,8 +352,8 @@ Members:
     ReportTimer - Stores the report timer used for responding to generic
         queries.
 
-    ReportableGroupCount - Stores the number of multicast groups that are
-        associated with the link and should be reported in a total link report.
+    GroupCount - Stores the number of multicast groups that are associated with
+        the link and should be reported in a total link report.
 
     MulticastGroupList - Stores the list of the multicast group structures
         associated with the link.
@@ -373,7 +373,7 @@ typedef struct _MLD_LINK {
     volatile MLD_VERSION CompatibilityMode;
     MLD_TIMER CompatibilityTimer[MLD_COMPATIBILITY_MODE_COUNT];
     MLD_TIMER ReportTimer;
-    ULONG ReportableGroupCount;
+    ULONG GroupCount;
     LIST_ENTRY MulticastGroupList;
 } MLD_LINK, *PMLD_LINK;
 
@@ -575,8 +575,8 @@ NetpMldDestroyTimer (
     );
 
 BOOL
-NetpMldIsReportableGroup (
-    PMLD_MULTICAST_GROUP Group
+NetpMldIsReportableAddress (
+    PULONG GroupAddress
     );
 
 //
@@ -765,6 +765,15 @@ Return Value:
     NewGroup = NULL;
 
     //
+    // If the group never needs to be reported, don't bother to record it at
+    // this layer. Netcore already has a record of it.
+    //
+
+    if (NetpMldIsReportableAddress(GroupAddress->Address) == FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    //
     // Test to see if there is an MLD link for the given network link, creating
     // one if the lookup fails.
     //
@@ -813,10 +822,7 @@ Return Value:
         //
 
         INSERT_BEFORE(&(NewGroup->ListEntry), &(MldLink->MulticastGroupList));
-        if (NetpMldIsReportableGroup(NewGroup) != FALSE) {
-            MldLink->ReportableGroupCount += 1;
-        }
-
+        MldLink->GroupCount += 1;
         break;
     }
 
@@ -911,6 +917,14 @@ Return Value:
     MulticastAddress = (PIP6_ADDRESS)Request->MulticastAddress;
 
     //
+    // If the address is not reportable, an MLD group was never made for it.
+    //
+
+    if (NetpMldIsReportableAddress(MulticastAddress->Address) == FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    //
     // Now see if there is an MLD link for the given network link.
     //
 
@@ -950,9 +964,7 @@ Return Value:
 
     LIST_REMOVE(&(Group->ListEntry));
     Group->ListEntry.Next = NULL;
-    if (NetpMldIsReportableGroup(Group) != FALSE) {
-        MldLink->ReportableGroupCount -= 1;
-    }
+    MldLink->GroupCount -= 1;
 
     //
     // The number of leave messages sent is dictated by the robustness variable.
@@ -1759,7 +1771,6 @@ Return Value:
     ULONG BufferSize;
     MLD_VERSION CompatibilityMode;
     IP6_ADDRESS Destination;
-    BOOL Equal;
     PMLD_MESSAGE Message;
     NET_PACKET_LIST NetPacketList;
     PNET_PACKET_BUFFER Packet;
@@ -1769,16 +1780,10 @@ Return Value:
     UCHAR Type;
 
     //
-    // Never send a report for the all-nodes multicast address.
+    // Reports should be heading to reportable groups only.
     //
 
-    Equal = RtlCompareMemory(Group->Address,
-                             NetIp6AllNodesMulticastAddress,
-                             IP6_ADDRESS_SIZE);
-
-    if (Equal != FALSE) {
-        return;
-    }
+    ASSERT(NetpMldIsReportableAddress(Group->Address) != FALSE);
 
     //
     // Snap the compatibility mode.
@@ -1916,7 +1921,6 @@ Return Value:
     MLD_VERSION CompatibilityMode;
     IP6_ADDRESS Destination;
     BOOL DestroyGroup;
-    BOOL Equal;
     PMLD_MESSAGE Message;
     NET_PACKET_LIST NetPacketList;
     PNET_PACKET_BUFFER Packet;
@@ -1927,16 +1931,10 @@ Return Value:
     DestroyGroup = TRUE;
 
     //
-    // Never send a leave report for the all-nodes multicast address.
+    // Leave reports should be heading to reportable groups only.
     //
 
-    Equal = RtlCompareMemory(Group->Address,
-                             NetIp6AllNodesMulticastAddress,
-                             IP6_ADDRESS_SIZE);
-
-    if (Equal != FALSE) {
-        return;
-    }
+    ASSERT(NetpMldIsReportableAddress(Group->Address) != FALSE);
 
     //
     // If this link was not the last to report the group, then don't send
@@ -2108,7 +2106,7 @@ Return Value:
 
     NET_INITIALIZE_PACKET_LIST(&NetPacketList);
     KeAcquireQueuedLock(MldLink->Lock);
-    RemainingRecordCount = MldLink->ReportableGroupCount;
+    RemainingRecordCount = MldLink->GroupCount;
     CurrentEntry = MldLink->MulticastGroupList.Next;
     while (RemainingRecordCount != 0) {
         CurrentRecordCount = RemainingRecordCount;
@@ -2150,16 +2148,10 @@ Return Value:
 
             ASSERT(CurrentEntry != &(MldLink->MulticastGroupList));
 
-            //
-            // Skip any groups that are not reportable. They were not included
-            // in the total reportable count.
-            //
-
             Group = LIST_VALUE(CurrentEntry, MLD_MULTICAST_GROUP, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            if (NetpMldIsReportableGroup(Group) == FALSE) {
-                continue;
-            }
+
+            ASSERT(NetpMldIsReportableAddress(Group->Address) != FALSE);
 
             CurrentRecordCount -= 1;
 
@@ -2710,7 +2702,7 @@ Return Value:
     if (OldReferenceCount == 2) {
 
         ASSERT(LIST_EMPTY(&(MldLink->MulticastGroupList)) != FALSE);
-        ASSERT(MldLink->ReportableGroupCount == 0);
+        ASSERT(MldLink->GroupCount == 0);
 
         RtlRedBlackTreeRemove(&NetMldLinkTree, &(MldLink->Node));
         MldLink->Node.Parent = NULL;
@@ -3098,24 +3090,24 @@ Return Value:
 }
 
 BOOL
-NetpMldIsReportableGroup (
-    PMLD_MULTICAST_GROUP Group
+NetpMldIsReportableAddress (
+    PULONG GroupAddress
     )
 
 /*++
 
 Routine Description:
 
-    This routine determines whether or not the given group should be reported
-    in MLD link-wide reports.
+    This routine determines whether or not the given group address should be
+    reported in MLD link-wide reports.
 
 Arguments:
 
-    Group - Supplies a pointer to an MLD multicast group.
+    GroupAddress - Supplies a pointer to the multicast group address to check.
 
 Return Value:
 
-    Returns TRUE if the group should be reported or FALSE otherwise.
+    Returns TRUE if the group address should be reported or FALSE otherwise.
 
 --*/
 
@@ -3123,7 +3115,7 @@ Return Value:
 
     BOOL Equal;
 
-    Equal = RtlCompareMemory(Group->Address,
+    Equal = RtlCompareMemory(GroupAddress,
                              NetIp6AllNodesMulticastAddress,
                              IP6_ADDRESS_SIZE);
 
