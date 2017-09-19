@@ -1211,7 +1211,9 @@ Return Value:
         // if so.
         //
 
-        if ((Directory[DirectoryIndex].Present == 0) &&
+        if ((DirectoryIndex >=
+            ((UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT)) &&
+            (Directory[DirectoryIndex].Present == 0) &&
             (Directory[DirectoryIndex].Entry == 0)) {
 
             Directory[DirectoryIndex] = MmKernelPageDirectory[DirectoryIndex];
