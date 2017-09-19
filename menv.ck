@@ -637,7 +637,8 @@ Return Value:
         "BUILD_BASE_LDFLAGS": mconfig.build_ldflags,
         "BUILD_BASE_ASFLAGS": mconfig.build_asflags,
         "STRIP_FLAGS": mconfig.stripflags,
-        "IASL_FLAGS": ["-we"]
+        "IASL_FLAGS": ["-we"],
+        "CPFLAGS": "-p",
     };
 
     if (config.verbose) {

@@ -197,7 +197,9 @@ function build() {
         buildGuiConfig["LDFLAGS"] = ["-mwindows"];
 
     } else if (buildOs == "Minoca") {
-        buildSources = commonSources + minocaSources + targetLibs;
+        buildSources = commonSources + buildArchSources + minocaSources +
+                       targetLibs;
+
         buildConfig["DYNLIBS"] = ["-lminocaos"];
 
     } else {

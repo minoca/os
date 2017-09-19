@@ -84,12 +84,12 @@ function build() {
 
     installFlags = commonImageFlags + [
         "-linstall-" + arch,
-        "-i$" + mconfig.outroot,
+        "-i" + mconfig.outroot,
         imageSize,
     ];
 
     commonImageFlags += [
-        "-i$" + mconfig.binroot + "/install.img"
+        "-i" + mconfig.binroot + "/install.img"
     ];
 
     entries = buildImage("install.img", installFlags);

@@ -804,6 +804,12 @@ Return Value:
     var result;
 
     try {
+
+        //
+        // Pre-escape all literal dollar signs.
+        //
+
+        value = value.replace("$$", "$$$$", -1);
         result = value.template(NinjaVariableTransformer(), false);
 
     } except ValueError {

@@ -67,8 +67,13 @@ function build() {
         "apps/ck/modules/bundle:build_bundle"
     ];
 
+    //
+    // The final RPATH should be $ORIGIN/../lib, with a literal dollar sign
+    // being passed to the linker.
+    //
+
     config = {
-        "LDFLAGS": ["-Wl,-rpath=\\$ORIGIN/../lib"]
+        "LDFLAGS": ["-Wl,-rpath='$$ORIGIN/../lib'"]
     };
 
     app = {
@@ -80,7 +85,7 @@ function build() {
 
     entries = application(app);
     if ((mconfig.build_os != "Windows") && (mconfig.build_os != "Darwin")) {
-        buildConfig["LDFLAGS"] = ["-Wl,-rpath=\\$ORIGIN/../lib"];
+        buildConfig["LDFLAGS"] = ["-Wl,-rpath='$$ORIGIN/../lib'"];
     }
 
     if (mconfig.build_os == "Darwin") {
