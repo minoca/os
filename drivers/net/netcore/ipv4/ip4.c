@@ -2512,7 +2512,7 @@ Return Value:
 
     KeAcquireQueuedLock(Link->QueuedLock);
     LockHeld = TRUE;
-    if (LinkAddress->Configured == FALSE) {
+    if (LinkAddress->State < NetLinkAddressConfigured) {
         Status = STATUS_NO_NETWORK_CONNECTION;
         goto Ip4TranslateNetworkAddressEnd;
     }

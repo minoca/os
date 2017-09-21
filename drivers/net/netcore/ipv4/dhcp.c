@@ -1224,7 +1224,7 @@ Return Value:
 
     KeAcquireQueuedLock(DhcpContext->Link->QueuedLock);
     LockHeld = TRUE;
-    if (DhcpContext->LinkAddress->Configured == FALSE) {
+    if (DhcpContext->LinkAddress->State < NetLinkAddressConfigured) {
         Status = STATUS_NO_NETWORK_CONNECTION;
         goto DhcpLeaseExtensionThreadEnd;
     }
@@ -1495,7 +1495,7 @@ Return Value:
 
     KeAcquireQueuedLock(DhcpContext->Link->QueuedLock);
     LockHeld = TRUE;
-    if (DhcpContext->LinkAddress->Configured == FALSE) {
+    if (DhcpContext->LinkAddress->State < NetLinkAddressConfigured) {
         Status = STATUS_NO_NETWORK_CONNECTION;
         goto DhcpLeaseReleaseThreadEnd;
     }
@@ -1831,7 +1831,7 @@ Return Value:
 
         KeAcquireQueuedLock(Context->Link->QueuedLock);
         LockHeld = TRUE;
-        if (Context->LinkAddress->Configured == FALSE) {
+        if (Context->LinkAddress->State < NetLinkAddressConfigured) {
             Status = STATUS_NO_NETWORK_CONNECTION;
             goto DhcpSendRequestEnd;
         }
@@ -1963,7 +1963,7 @@ Return Value:
 
         KeAcquireQueuedLock(Context->Link->QueuedLock);
         LockHeld = TRUE;
-        if (Context->LinkAddress->Configured == FALSE) {
+        if (Context->LinkAddress->State < NetLinkAddressConfigured) {
             Status = STATUS_NO_NETWORK_CONNECTION;
             goto DhcpSendRequestEnd;
         }

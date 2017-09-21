@@ -2265,7 +2265,7 @@ Return Value:
     // The source address must be link local or the unspecified address.
     //
 
-    if (LinkAddress->Configured != FALSE) {
+    if (LinkAddress->State >= NetLinkAddressConfigured) {
         Source = (PIP6_ADDRESS)&(LinkAddress->Address);
 
         ASSERT(IP6_IS_UNICAST_LINK_LOCAL_ADDRESS(Source->Address) != FALSE);

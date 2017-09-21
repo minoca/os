@@ -315,6 +315,12 @@ typedef enum _NET_ADDRESS_TYPE {
     NetAddressMulticast
 } NET_ADDRESS_TYPE, *PNET_ADDRESS_TYPE;
 
+typedef enum _NET_LINK_ADDRESS_STATE {
+    NetLinkAddressNotConfigured,
+    NetLinkAddressConfigured,
+    NetLinkAddressConfiguredStatic
+} NET_LINK_ADDRESS_STATE, *PNET_LINK_ADDRESS_STATE;
+
 typedef struct _NET_PROTOCOL_ENTRY NET_PROTOCOL_ENTRY, *PNET_PROTOCOL_ENTRY;
 typedef struct _NET_NETWORK_ENTRY NET_NETWORK_ENTRY, *PNET_NETWORK_ENTRY;
 typedef struct _NET_RECEIVE_CONTEXT NET_RECEIVE_CONTEXT, *PNET_RECEIVE_CONTEXT;
@@ -365,11 +371,7 @@ Members:
         entry. This contains an interface that can be used to drive network
         specific link address configuration (e.g. DHCP, NDP, DHCPv6).
 
-    Configured - Stores a boolean indicating whether or not the network link
-        address is configured.
-
-    StaticAddress - Stores a boolean indicating whether or not the network
-        address is static (TRUE) or dynamic (FALSE).
+    State - Stores the current state of the link address entry.
 
     Address - Stores the network address of the link.
 
@@ -396,8 +398,7 @@ Members:
 typedef struct _NET_LINK_ADDRESS_ENTRY {
     LIST_ENTRY ListEntry;
     PNET_NETWORK_ENTRY Network;
-    BOOL Configured;
-    BOOL StaticAddress;
+    NET_LINK_ADDRESS_STATE State;
     NETWORK_ADDRESS Address;
     NETWORK_ADDRESS Subnet;
     NETWORK_ADDRESS DefaultGateway;

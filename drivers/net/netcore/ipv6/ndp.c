@@ -821,7 +821,7 @@ Return Value:
     //
 
     } else {
-        if (LinkAddress->Configured == FALSE) {
+        if (LinkAddress->State < NetLinkAddressConfigured) {
             Status = STATUS_INVALID_PARAMETER;
             goto NdpConfigureAddressEnd;
         }
@@ -1363,7 +1363,7 @@ Return Value:
     // target. Special processing applies.
     //
 
-    if (LinkAddressEntry->Configured == FALSE) {
+    if (LinkAddressEntry->State < NetLinkAddressConfigured) {
 
         //
         // If the source is unspecified, then another node is also performing
@@ -1700,7 +1700,7 @@ Return Value:
 
     KeAcquireQueuedLock(Link->QueuedLock);
     LockHeld = TRUE;
-    if (LinkAddress->Configured == FALSE) {
+    if (LinkAddress->State < NetLinkAddressConfigured) {
         Status = STATUS_NO_NETWORK_CONNECTION;
         goto NdpSendNeighborAdvertisementEnd;
     }

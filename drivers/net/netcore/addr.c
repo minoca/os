@@ -663,7 +663,7 @@ Return Value:
                                          ListEntry);
 
                 CurrentEntry = CurrentEntry->Next;
-                if (LinkAddress->Configured == FALSE) {
+                if (LinkAddress->State < NetLinkAddressConfigured) {
                     continue;
                 }
 
@@ -672,7 +672,7 @@ Return Value:
                 // the IP address.
                 //
 
-                if (LinkAddress->StaticAddress == FALSE) {
+                if (LinkAddress->State != NetLinkAddressConfiguredStatic) {
 
                     //
                     // Zero out the network address, except the network type
@@ -697,7 +697,7 @@ Return Value:
                                                             FALSE);
                 }
 
-                LinkAddress->Configured = FALSE;
+                LinkAddress->State = NetLinkAddressNotConfigured;
             }
         }
 
@@ -1033,11 +1033,11 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentAddressEntry;
-    PNET_LINK CurrentLink;
-    PNET_LINK_ADDRESS_ENTRY CurrentLinkAddressEntry;
     PLIST_ENTRY CurrentLinkEntry;
     NET_DOMAIN_TYPE Domain;
     PNET_LINK_ADDRESS_ENTRY FoundAddress;
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
     PLIST_ENTRY LinkAddressList;
     KSTATUS Status;
 
@@ -1055,14 +1055,14 @@ Return Value:
     FoundAddress = NULL;
     CurrentLinkEntry = NetLinkList.Next;
     while (CurrentLinkEntry != &NetLinkList) {
-        CurrentLink = LIST_VALUE(CurrentLinkEntry, NET_LINK, ListEntry);
+        Link = LIST_VALUE(CurrentLinkEntry, NET_LINK, ListEntry);
         CurrentLinkEntry = CurrentLinkEntry->Next;
 
         //
         // Don't bother if the link is down.
         //
 
-        if (CurrentLink->LinkUp == FALSE) {
+        if (Link->LinkUp == FALSE) {
             continue;
         }
 
@@ -1070,7 +1070,7 @@ Return Value:
         // If the domain's link address list is empty, try another link.
         //
 
-        LinkAddressList = &(CurrentLink->LinkAddressArray[Domain]);
+        LinkAddressList = &(Link->LinkAddressArray[Domain]);
         if (LIST_EMPTY(LinkAddressList) != FALSE) {
             continue;
         }
@@ -1082,16 +1082,16 @@ Return Value:
         // SOCKET_IO_DONT_ROUTE is set at time of send/receive.
         //
 
-        KeAcquireQueuedLock(CurrentLink->QueuedLock);
+        KeAcquireQueuedLock(Link->QueuedLock);
         if (LIST_EMPTY(LinkAddressList) == FALSE) {
             CurrentAddressEntry = LinkAddressList->Next;
             while (CurrentAddressEntry != LinkAddressList) {
-                CurrentLinkAddressEntry = LIST_VALUE(CurrentAddressEntry,
-                                                     NET_LINK_ADDRESS_ENTRY,
-                                                     ListEntry);
+                LinkAddress = LIST_VALUE(CurrentAddressEntry,
+                                         NET_LINK_ADDRESS_ENTRY,
+                                         ListEntry);
 
-                if (CurrentLinkAddressEntry->Configured != FALSE) {
-                    FoundAddress = CurrentLinkAddressEntry;
+                if (LinkAddress->State >= NetLinkAddressConfigured) {
+                    FoundAddress = LinkAddress;
                     RtlCopyMemory(&(LinkResult->ReceiveAddress),
                                   &(FoundAddress->Address),
                                   sizeof(NETWORK_ADDRESS));
@@ -1109,7 +1109,7 @@ Return Value:
             }
         }
 
-        KeReleaseQueuedLock(CurrentLink->QueuedLock);
+        KeReleaseQueuedLock(Link->QueuedLock);
 
         //
         // If a suitable link address was not found, continue on to the next
@@ -1125,8 +1125,8 @@ Return Value:
         // under the lock in order to prevent a torn read.
         //
 
-        NetLinkAddReference(CurrentLink);
-        LinkResult->Link = CurrentLink;
+        NetLinkAddReference(Link);
+        LinkResult->Link = Link;
         LinkResult->LinkAddress = FoundAddress;
         Status = STATUS_SUCCESS;
         break;
@@ -1313,11 +1313,13 @@ Return Value:
     // entry is as good as configured.
     //
 
-    ASSERT(LinkAddress->Configured == FALSE);
+    ASSERT(LinkAddress->State == NetLinkAddressNotConfigured);
 
     if ((Subnet != NULL) && (DefaultGateway != NULL)) {
-        LinkAddress->StaticAddress = StaticAddress;
-        LinkAddress->Configured = TRUE;
+        LinkAddress->State = NetLinkAddressConfigured;
+        if (StaticAddress != FALSE) {
+            LinkAddress->State = NetLinkAddressConfiguredStatic;
+        }
     }
 
     //
@@ -1779,7 +1781,7 @@ Return Value:
         // address entry.
         //
 
-        if ((CurrentAddress->Configured == FALSE) &&
+        if ((CurrentAddress->State < NetLinkAddressConfigured) &&
             (AddressType != NetAddressAny)) {
 
             continue;
@@ -3012,8 +3014,9 @@ Return Value:
     NET_DOMAIN_TYPE Domain;
     PLIST_ENTRY LinkAddressList;
     PNET_NETWORK_ENTRY Network;
-    BOOL OriginalConfiguredState;
+    NET_LINK_ADDRESS_STATE OriginalState;
     BOOL SameAddress;
+    NET_LINK_ADDRESS_STATE State;
     BOOL StaticAddress;
     KSTATUS Status;
 
@@ -3128,11 +3131,11 @@ Return Value:
             }
 
             LinkAddressEntry->DnsServerCount = Information->DnsServerCount;
-            LinkAddressEntry->StaticAddress = TRUE;
+            State = NetLinkAddressConfiguredStatic;
             if (Information->ConfigurationMethod ==
                 NetworkAddressConfigurationDhcp) {
 
-                LinkAddressEntry->StaticAddress = FALSE;
+                State = NetLinkAddressConfigured;
                 RtlCopyMemory(&(LinkAddressEntry->LeaseServerAddress),
                               &(Information->LeaseServerAddress),
                               sizeof(NETWORK_ADDRESS));
@@ -3146,7 +3149,7 @@ Return Value:
                               sizeof(SYSTEM_TIME));
             }
 
-            LinkAddressEntry->Configured = TRUE;
+            LinkAddressEntry->State = State;
 
         //
         // Unconfigure the link and bring it down.
@@ -3160,7 +3163,7 @@ Return Value:
             //
 
             StaticAddress = TRUE;
-            if (LinkAddressEntry->StaticAddress == FALSE) {
+            if (LinkAddressEntry->State != NetLinkAddressConfiguredStatic) {
                 Domain = LinkAddressEntry->Address.Domain;
                 RtlZeroMemory(&(LinkAddressEntry->Address),
                               sizeof(NETWORK_ADDRESS));
@@ -3169,7 +3172,7 @@ Return Value:
                 StaticAddress = FALSE;
             }
 
-            LinkAddressEntry->Configured = FALSE;
+            LinkAddressEntry->State = NetLinkAddressNotConfigured;
         }
 
         //
@@ -3180,8 +3183,8 @@ Return Value:
         //
 
         if (SameAddress == FALSE) {
-            OriginalConfiguredState = LinkAddressEntry->Configured;
-            LinkAddressEntry->Configured = FALSE;
+            OriginalState = LinkAddressEntry->State;
+            LinkAddressEntry->State = NetLinkAddressNotConfigured;
             KeReleaseQueuedLock(Link->QueuedLock);
 
             //
@@ -3207,7 +3210,7 @@ Return Value:
 
             NetpDetachSockets(Link, LinkAddressEntry);
             KeAcquireQueuedLock(Link->QueuedLock);
-            LinkAddressEntry->Configured = OriginalConfiguredState;
+            LinkAddressEntry->State = OriginalState;
         }
     }
 
@@ -3225,7 +3228,7 @@ Return Value:
         Information->Flags |= NETWORK_DEVICE_FLAG_MEDIA_CONNECTED;
     }
 
-    if (LinkAddressEntry->Configured == FALSE) {
+    if (LinkAddressEntry->State < NetLinkAddressConfigured) {
         Information->ConfigurationMethod = NetworkAddressConfigurationNone;
         Status = STATUS_SUCCESS;
         goto GetSetNetworkDeviceInformationEnd;
@@ -3233,7 +3236,7 @@ Return Value:
 
     Information->Flags |= NETWORK_DEVICE_FLAG_CONFIGURED;
     Information->ConfigurationMethod = NetworkAddressConfigurationDhcp;
-    if (LinkAddressEntry->StaticAddress != FALSE) {
+    if (LinkAddressEntry->State == NetLinkAddressConfiguredStatic) {
         Information->ConfigurationMethod = NetworkAddressConfigurationStatic;
     }
 
@@ -3259,7 +3262,7 @@ Return Value:
                       sizeof(NETWORK_ADDRESS));
     }
 
-    if (LinkAddressEntry->StaticAddress == FALSE) {
+    if (LinkAddressEntry->State != NetLinkAddressConfiguredStatic) {
         RtlCopyMemory(&(Information->LeaseServerAddress),
                       &(LinkAddressEntry->LeaseServerAddress),
                       sizeof(NETWORK_ADDRESS));
@@ -3980,7 +3983,7 @@ Return Value:
 {
 
     ASSERT((Socket->Link->LinkUp == FALSE) ||
-           (Socket->LinkAddress->Configured == FALSE));
+           (Socket->LinkAddress->State < NetLinkAddressConfigured));
 
     ASSERT((Socket->BindingType == SocketLocallyBound) ||
            (Socket->BindingType == SocketFullyBound));

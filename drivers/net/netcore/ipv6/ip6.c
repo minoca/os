@@ -363,7 +363,7 @@ Return Value:
                                        (PNETWORK_ADDRESS)&InitialAddress,
                                        NULL,
                                        NULL,
-                                       FALSE,
+                                       TRUE,
                                        &AddressEntry);
 
     if (!KSUCCESS(Status)) {
