@@ -70,14 +70,6 @@ Environment:
 //
 
 //
-// Define the amount of time to wait for an address translation to come back,
-// in milliseconds.
-//
-
-#define ADDRESS_TRANSLATION_TIMEOUT (5 * MILLISECONDS_PER_SECOND)
-#define ADDRESS_TRANSLATION_RETRY_INTERVAL MILLISECONDS_PER_SECOND
-
-//
 // Define the ephemeral port range.
 //
 
@@ -89,31 +81,6 @@ Environment:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
-/*++
-
-Structure Description:
-
-    This structure defines a translation between a network address and a
-    physical one.
-
-Members:
-
-    TreeEntry - Stores the red black tree information for this node.
-
-    NetworkAddress - Stores the network address, the key for the red black
-        tree node.
-
-    PhysicalAddress - Stores the physical address that corresponds to the
-        network address.
-
---*/
-
-typedef struct _ADDRESS_TRANSLATION_ENTRY {
-    RED_BLACK_TREE_NODE TreeEntry;
-    NETWORK_ADDRESS NetworkAddress;
-    NETWORK_ADDRESS PhysicalAddress;
-} ADDRESS_TRANSLATION_ENTRY, *PADDRESS_TRANSLATION_ENTRY;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -140,11 +107,14 @@ NetpDetachSocket (
     PNET_SOCKET Socket
     );
 
-KSTATUS
-NetpLookupAddressTranslation (
-    PNET_LINK Link,
-    PNETWORK_ADDRESS NetworkAddress,
-    PNETWORK_ADDRESS PhysicalAddress
+VOID
+NetpInvalidateTranslationCache (
+    PNET_LINK Link
+    );
+
+VOID
+NetpDestroyTranslationEntry (
+    PNET_TRANSLATION_ENTRY TranslationEntry
     );
 
 COMPARISON_RESULT
@@ -584,9 +554,6 @@ Return Value:
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     PNET_NETWORK_ENTRY Network;
     BOOL OriginalLinkUp;
-    PADDRESS_TRANSLATION_ENTRY Translation;
-    PRED_BLACK_TREE Tree;
-    PRED_BLACK_TREE_NODE TreeNode;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
     ASSERT(Link != NULL);
@@ -672,30 +639,7 @@ Return Value:
         // incorrect.
         //
 
-        Tree = &(Link->AddressTranslationTree);
-        KeAcquireQueuedLock(Link->QueuedLock);
-        while (TRUE) {
-            TreeNode = RtlRedBlackTreeGetLowestNode(Tree);
-            if (TreeNode == NULL) {
-                break;
-            }
-
-            RtlRedBlackTreeRemove(Tree, TreeNode);
-            Translation = RED_BLACK_TREE_VALUE(TreeNode,
-                                               ADDRESS_TRANSLATION_ENTRY,
-                                               TreeEntry);
-
-            MmFreePagedPool(Translation);
-        }
-
-        KeReleaseQueuedLock(Link->QueuedLock);
-
-        //
-        // Now that the address translation tree is empty, signal anyone
-        // waiting for address translations on this event once and for all.
-        //
-
-        KeSignalEvent(Link->AddressTranslationEvent, SignalOptionSignalAll);
+        NetpInvalidateTranslationCache(Link);
 
         //
         // Notify every fully bound, locally bound, and raw socket using this
@@ -1436,132 +1380,66 @@ Return Value:
 }
 
 NET_API
-KSTATUS
-NetTranslateNetworkAddress (
-    PNET_NETWORK_ENTRY Network,
-    PNETWORK_ADDRESS NetworkAddress,
+PNET_TRANSLATION_ENTRY
+NetLookupAddressTranslation (
     PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PNETWORK_ADDRESS PhysicalAddress
+    PNETWORK_ADDRESS NetworkAddress
     )
 
 /*++
 
 Routine Description:
 
-    This routine translates a network level address to a physical address.
+    This routine performs a lookup for an address translation entry given the
+    network address. The caller is responsible for releasing the reference
+    taken on success.
 
 Arguments:
 
-    Network - Supplies a pointer to the network requesting translation.
+    Link - Supplies a pointer to the link that supposedly owns the network
+        address.
 
-    NetworkAddress - Supplies a pointer to the network address to translate.
-
-    Link - Supplies a pointer to the link to use.
-
-    LinkAddress - Supplies a pointer to the link address entry to use for this
-        request.
-
-    PhysicalAddress - Supplies a pointer where the corresponding physical
-        address for this network address will be returned.
+    NetworkAddress - Supplies a pointer to the network address to look up.
 
 Return Value:
 
-    Status code.
+    Returns a pointer to a translation entry on success, or NULL on failure.
 
 --*/
 
 {
 
-    ULONGLONG EndTime;
-    KSTATUS Status;
-    ULONGLONG TimeDelta;
+    PNET_TRANSLATION_ENTRY FoundEntry;
+    PRED_BLACK_TREE_NODE FoundNode;
+    NET_TRANSLATION_ENTRY SearchEntry;
 
-    ASSERT(Network->Domain == NetworkAddress->Domain);
-    ASSERT(Network->Interface.SendTranslationRequest != NULL);
+    ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    EndTime = 0;
+    RtlCopyMemory(&(SearchEntry.NetworkAddress),
+                  NetworkAddress,
+                  sizeof(NETWORK_ADDRESS));
 
-    //
-    // Loop trying to get the address, and waiting for an answer.
-    //
+    SearchEntry.NetworkAddress.Port = 0;
+    FoundEntry = NULL;
+    KeAcquireQueuedLock(Link->QueuedLock);
+    FoundNode = RtlRedBlackTreeSearch(&(Link->AddressTranslationTree),
+                                      &(SearchEntry.Node));
 
-    while (TRUE) {
-        Status = NetpLookupAddressTranslation(Link,
-                                              NetworkAddress,
-                                              PhysicalAddress);
+    if (FoundNode != NULL) {
+        FoundEntry = RED_BLACK_TREE_VALUE(FoundNode,
+                                          NET_TRANSLATION_ENTRY,
+                                          Node);
 
-        if (KSUCCESS(Status)) {
-            break;
-        }
-
-        //
-        // If the lookup failed once, but this is the first time, set an end
-        // time to give up.
-        //
-
-        if (EndTime == 0) {
-            TimeDelta = ADDRESS_TRANSLATION_TIMEOUT *
-                        MICROSECONDS_PER_MILLISECOND;
-
-            EndTime = KeGetRecentTimeCounter() +
-                      KeConvertMicrosecondsToTimeTicks(TimeDelta);
-
-            Status = Network->Interface.SendTranslationRequest(Link,
-                                                               LinkAddress,
-                                                               NetworkAddress);
-
-            if (!KSUCCESS(Status)) {
-                return Status;
-            }
-
-        //
-        // If this loop has already been around at least once, look for a
-        // timeout event.
-        //
-
-        } else if (KeGetRecentTimeCounter() >= EndTime) {
-            Status = STATUS_TIMEOUT;
-            break;
-        }
-
-        //
-        // Wait for some new address translation to come in.
-        //
-
-        Status = KeWaitForEvent(Link->AddressTranslationEvent,
-                                FALSE,
-                                ADDRESS_TRANSLATION_RETRY_INTERVAL);
-
-        //
-        // On timeouts, re-send the translation request.
-        //
-
-        if (Status == STATUS_TIMEOUT) {
-            Status = Network->Interface.SendTranslationRequest(Link,
-                                                               LinkAddress,
-                                                               NetworkAddress);
-
-            if (!KSUCCESS(Status)) {
-                return Status;
-            }
-        }
-
-        //
-        // On all other failures to wait for the event, break.
-        //
-
-        if (!KSUCCESS(Status)) {
-            break;
-        }
+        NetTranslationEntryAddReference(FoundEntry);
     }
 
-    return Status;
+    KeReleaseQueuedLock(Link->QueuedLock);
+    return FoundEntry;
 }
 
 NET_API
 KSTATUS
-NetAddNetworkAddressTranslation (
+NetAddAddressTranslation (
     PNET_LINK Link,
     PNETWORK_ADDRESS NetworkAddress,
     PNETWORK_ADDRESS PhysicalAddress
@@ -1592,10 +1470,10 @@ Return Value:
 
 {
 
-    PADDRESS_TRANSLATION_ENTRY FoundEntry;
+    PNET_TRANSLATION_ENTRY FoundEntry;
     PRED_BLACK_TREE_NODE FoundNode;
     BOOL LockHeld;
-    PADDRESS_TRANSLATION_ENTRY NewEntry;
+    PNET_TRANSLATION_ENTRY NewEntry;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -1606,7 +1484,7 @@ Return Value:
     // Create the new address translation entry.
     //
 
-    NewEntry = MmAllocatePagedPool(sizeof(ADDRESS_TRANSLATION_ENTRY),
+    NewEntry = MmAllocatePagedPool(sizeof(NET_TRANSLATION_ENTRY),
                                    NET_CORE_ALLOCATION_TAG);
 
     if (NewEntry == NULL) {
@@ -1614,6 +1492,7 @@ Return Value:
         goto AddNetworkAddressTranslationEnd;
     }
 
+    NewEntry->ReferenceCount = 1;
     RtlCopyMemory(&(NewEntry->NetworkAddress),
                   NetworkAddress,
                   sizeof(NETWORK_ADDRESS));
@@ -1626,7 +1505,7 @@ Return Value:
     KeAcquireQueuedLock(Link->QueuedLock);
     LockHeld = TRUE;
     FoundNode = RtlRedBlackTreeSearch(&(Link->AddressTranslationTree),
-                                      &(NewEntry->TreeEntry));
+                                      &(NewEntry->Node));
 
     //
     // If a node is found, update it.
@@ -1634,8 +1513,8 @@ Return Value:
 
     if (FoundNode != NULL) {
         FoundEntry = RED_BLACK_TREE_VALUE(FoundNode,
-                                          ADDRESS_TRANSLATION_ENTRY,
-                                          TreeEntry);
+                                          NET_TRANSLATION_ENTRY,
+                                          Node);
 
         RtlCopyMemory(&(FoundEntry->NetworkAddress),
                       NetworkAddress,
@@ -1652,7 +1531,7 @@ Return Value:
 
     } else {
         RtlRedBlackTreeInsert(&(Link->AddressTranslationTree),
-                              &(NewEntry->TreeEntry));
+                              &(NewEntry->Node));
 
         KeSignalEvent(Link->AddressTranslationEvent, SignalOptionPulse);
         NewEntry = NULL;
@@ -1668,6 +1547,140 @@ AddNetworkAddressTranslationEnd:
     }
 
     return Status;
+}
+
+NET_API
+KSTATUS
+NetRemoveAddressTranslation (
+    PNET_LINK Link,
+    PNETWORK_ADDRESS NetworkAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to remove an network address translation from the
+    link's translation cache.
+
+Arguments:
+
+    Link - Supplies a pointer to the link that supposedly owns the network
+        address.
+
+    NetworkAddress - Supplies a pointer to the network address whose
+        translation is to be removed.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNET_TRANSLATION_ENTRY FoundEntry;
+    PRED_BLACK_TREE_NODE FoundNode;
+    NET_TRANSLATION_ENTRY SearchEntry;
+    KSTATUS Status;
+
+    RtlCopyMemory(&(SearchEntry.NetworkAddress),
+                  NetworkAddress,
+                  sizeof(NETWORK_ADDRESS));
+
+    SearchEntry.NetworkAddress.Port = 0;
+    FoundEntry = NULL;
+    KeAcquireQueuedLock(Link->QueuedLock);
+    FoundNode = RtlRedBlackTreeSearch(&(Link->AddressTranslationTree),
+                                      &(SearchEntry.Node));
+
+    if (FoundNode != NULL) {
+        FoundEntry = RED_BLACK_TREE_VALUE(FoundNode,
+                                          NET_TRANSLATION_ENTRY,
+                                          Node);
+
+        RtlRedBlackTreeRemove(&(Link->AddressTranslationTree), FoundNode);
+        FoundNode->Parent = NULL;
+    }
+
+    KeReleaseQueuedLock(Link->QueuedLock);
+    Status = STATUS_NOT_FOUND;
+    if (FoundEntry != NULL) {
+        NetTranslationEntryReleaseReference(FoundEntry);
+        Status = STATUS_SUCCESS;
+    }
+
+    return Status;
+}
+
+NET_API
+VOID
+NetTranslationEntryAddReference (
+    PNET_TRANSLATION_ENTRY TranslationEntry
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds a reference to the given address translation entry.
+
+Arguments:
+
+    TranslationEntry - Supplies a pointer to an address translation entry.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(TranslationEntry->ReferenceCount), 1);
+
+    ASSERT(OldReferenceCount < 0x10000000);
+
+    return;
+}
+
+NET_API
+VOID
+NetTranslationEntryReleaseReference (
+    PNET_TRANSLATION_ENTRY TranslationEntry
+    )
+
+/*++
+
+Routine Description:
+
+    This routine release a reference on the given address translation entry.
+
+Arguments:
+
+    TranslationEntry - Supplies a pointer to an address translation entry.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(TranslationEntry->ReferenceCount), -1);
+
+    ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x10000000));
+
+    if (OldReferenceCount == 1) {
+        NetpDestroyTranslationEntry(TranslationEntry);
+    }
+
+    return;
 }
 
 NET_API
@@ -3981,76 +3994,91 @@ Return Value:
     return;
 }
 
-KSTATUS
-NetpLookupAddressTranslation (
-    PNET_LINK Link,
-    PNETWORK_ADDRESS NetworkAddress,
-    PNETWORK_ADDRESS PhysicalAddress
+VOID
+NetpInvalidateTranslationCache (
+    PNET_LINK Link
     )
 
 /*++
 
 Routine Description:
 
-    This routine performs a lookup from network address to physical address
-    using the link address translation tree.
+    This routine invalidates the entire address translation cache by removing
+    each entry from the tree.
 
 Arguments:
 
-    Link - Supplies a pointer to the link that supposedly owns the network
-        address.
-
-    NetworkAddress - Supplies the network address to look up.
-
-    PhysicalAddress - Supplies a pointer where the corresponding physical
-        address for this network address will be returned on success.
+    Link - Supplies a pointer to the link whose translation cache should be
+        invalidated.
 
 Return Value:
 
-    STATUS_SUCCESS on success.
-
-    STATUS_NOT_FOUND if no corresponding entry could be found.
+    None.
 
 --*/
 
 {
 
-    PADDRESS_TRANSLATION_ENTRY FoundEntry;
-    PRED_BLACK_TREE_NODE FoundNode;
-    ADDRESS_TRANSLATION_ENTRY SearchEntry;
-    KSTATUS Status;
+    PNET_TRANSLATION_ENTRY Translation;
+    PRED_BLACK_TREE Tree;
+    PRED_BLACK_TREE_NODE TreeNode;
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    RtlCopyMemory(&(SearchEntry.NetworkAddress),
-                  NetworkAddress,
-                  sizeof(NETWORK_ADDRESS));
-
-    SearchEntry.NetworkAddress.Port = 0;
-    Status = STATUS_NOT_FOUND;
+    Tree = &(Link->AddressTranslationTree);
     KeAcquireQueuedLock(Link->QueuedLock);
-    FoundNode = RtlRedBlackTreeSearch(&(Link->AddressTranslationTree),
-                                      &(SearchEntry.TreeEntry));
+    while (TRUE) {
+        TreeNode = RtlRedBlackTreeGetLowestNode(Tree);
+        if (TreeNode == NULL) {
+            break;
+        }
 
-    //
-    // If a node is found, copy the translation into the result while the lock
-    // is still held to avoid racing with someone destroying this node.
-    //
+        RtlRedBlackTreeRemove(Tree, TreeNode);
+        TreeNode->Parent = NULL;
+        Translation = RED_BLACK_TREE_VALUE(TreeNode,
+                                           NET_TRANSLATION_ENTRY,
+                                           Node);
 
-    if (FoundNode != NULL) {
-        FoundEntry = RED_BLACK_TREE_VALUE(FoundNode,
-                                          ADDRESS_TRANSLATION_ENTRY,
-                                          TreeEntry);
-
-        RtlCopyMemory(PhysicalAddress,
-                      &(FoundEntry->PhysicalAddress),
-                      sizeof(NETWORK_ADDRESS));
-
-        Status = STATUS_SUCCESS;
+        NetTranslationEntryReleaseReference(Translation);
     }
 
     KeReleaseQueuedLock(Link->QueuedLock);
-    return Status;
+
+    //
+    // Now that the address translation tree is empty, signal anyone
+    // waiting for address translations on this event once and for all.
+    //
+
+    KeSignalEvent(Link->AddressTranslationEvent, SignalOptionSignalAll);
+    return;
+}
+
+VOID
+NetpDestroyTranslationEntry (
+    PNET_TRANSLATION_ENTRY TranslationEntry
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a translation entry and all of its resources.
+
+Arguments:
+
+    TranslationEntry - Supplies a pointer to a translation entry.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ASSERT(TranslationEntry->ReferenceCount == 0);
+    ASSERT(TranslationEntry->Node.Parent == NULL);
+
+    MmFreePagedPool(TranslationEntry);
+    return;
 }
 
 COMPARISON_RESULT
@@ -4187,17 +4215,17 @@ Return Value:
 
 {
 
-    PADDRESS_TRANSLATION_ENTRY FirstEntry;
+    PNET_TRANSLATION_ENTRY FirstEntry;
     COMPARISON_RESULT Result;
-    PADDRESS_TRANSLATION_ENTRY SecondEntry;
+    PNET_TRANSLATION_ENTRY SecondEntry;
 
     FirstEntry = RED_BLACK_TREE_VALUE(FirstNode,
-                                      ADDRESS_TRANSLATION_ENTRY,
-                                      TreeEntry);
+                                      NET_TRANSLATION_ENTRY,
+                                      Node);
 
     SecondEntry = RED_BLACK_TREE_VALUE(SecondNode,
-                                       ADDRESS_TRANSLATION_ENTRY,
-                                       TreeEntry);
+                                       NET_TRANSLATION_ENTRY,
+                                       Node);
 
     Result = NetpCompareNetworkAddresses(&(FirstEntry->NetworkAddress),
                                          &(SecondEntry->NetworkAddress));

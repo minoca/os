@@ -1570,6 +1570,10 @@ Return Value:
         RtlDebugPrint("Net: Destroy socket 0x%x\n", NetSocket);
     }
 
+    if (NetSocket->RemoteTranslation != NULL) {
+        NetTranslationEntryReleaseReference(NetSocket->RemoteTranslation);
+    }
+
     if (NetSocket->Link != NULL) {
         NetLinkReleaseReference(NetSocket->Link);
         NetSocket->Link = NULL;

@@ -43,6 +43,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip4.h>
+#include <minoca/net/arp.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -58,6 +59,19 @@ Environment:
 //
 
 #define ARP_ETHERNET_IP4_SIZE      28
+
+//
+// Define the number of times to retry an address translation.
+//
+
+#define ARP_ADDRESS_TRANSLATION_RETRY_COUNT 3
+
+//
+// Define the amount of time to wait for an address translation to come back
+// before retrying, in milliseconds.
+//
+
+#define ARP_ADDRESS_TRANSLATION_RETRY_INTERVAL MILLISECONDS_PER_SECOND
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -133,6 +147,21 @@ NetpArpPrintAddress (
     );
 
 KSTATUS
+NetpArpGetSetInformation (
+    PNET_SOCKET Socket,
+    SOCKET_INFORMATION_TYPE InformationType,
+    UINTN Option,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+KSTATUS
+NetpArpTranslateAddress (
+    PNET_TRANSLATION_REQUEST Request
+    );
+
+KSTATUS
 NetpArpSendRequest (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
@@ -198,7 +227,7 @@ Return Value:
     NetworkEntry.Interface.DestroyLink = NetpArpDestroyLink;
     NetworkEntry.Interface.ProcessReceivedData = NetpArpProcessReceivedData;
     NetworkEntry.Interface.PrintAddress = NetpArpPrintAddress;
-    NetworkEntry.Interface.SendTranslationRequest = NetpArpSendRequest;
+    NetworkEntry.Interface.GetSetInformation = NetpArpGetSetInformation;
     Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
     if (!KSUCCESS(Status)) {
 
@@ -400,9 +429,9 @@ Return Value:
         // Requests themselves are translations. Remember this translation.
         //
 
-        NetAddNetworkAddressTranslation(Link,
-                                        &SenderNetworkAddress,
-                                        &SenderPhysicalAddress);
+        NetAddAddressTranslation(Link,
+                                 &SenderNetworkAddress,
+                                 &SenderPhysicalAddress);
 
         NetpArpSendReply(Link,
                          LinkAddressEntry,
@@ -431,9 +460,9 @@ Return Value:
     // Add the translation entry.
     //
 
-    NetAddNetworkAddressTranslation(Link,
-                                    &SenderNetworkAddress,
-                                    &SenderPhysicalAddress);
+    NetAddAddressTranslation(Link,
+                             &SenderNetworkAddress,
+                             &SenderPhysicalAddress);
 
     return;
 }
@@ -480,6 +509,192 @@ Return Value:
     //
 
     return 0;
+}
+
+KSTATUS
+NetpArpGetSetInformation (
+    PNET_SOCKET Socket,
+    SOCKET_INFORMATION_TYPE InformationType,
+    UINTN Option,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets properties of the given socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to get or set information for.
+
+    InformationType - Supplies the socket information type category to which
+        specified option belongs.
+
+    Option - Supplies the option to get or set, which is specific to the
+        information type. The type of this value is generally
+        SOCKET_<information_type>_OPTION.
+
+    Data - Supplies a pointer to the data buffer where the data is either
+        returned for a get operation or given for a set operation.
+
+    DataSize - Supplies a pointer that on input constains the size of the data
+        buffer. On output, this contains the required size of the data buffer.
+
+    Set - Supplies a boolean indicating if this is a get operation (FALSE) or
+        a set operation (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SOCKET_ARP_OPTION ArpOption;
+    UINTN RequiredSize;
+    KSTATUS Status;
+    PNET_TRANSLATION_REQUEST TranslationRequest;
+
+    if (InformationType != SocketInformationArp) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto ArpGetSetInformationEnd;
+    }
+
+    RequiredSize = 0;
+    Status = STATUS_SUCCESS;
+    ArpOption = (SOCKET_ARP_OPTION)Option;
+    switch (ArpOption) {
+    case SocketArpOptionTranslateAddress:
+        if (Set != FALSE) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            break;
+        }
+
+        RequiredSize = sizeof(NET_TRANSLATION_REQUEST);
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        TranslationRequest = (PNET_TRANSLATION_REQUEST)Data;
+        Status = NetpArpTranslateAddress(TranslationRequest);
+        break;
+
+    default:
+        Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        break;
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto ArpGetSetInformationEnd;
+    }
+
+ArpGetSetInformationEnd:
+    return Status;
+}
+
+KSTATUS
+NetpArpTranslateAddress (
+    PNET_TRANSLATION_REQUEST Request
+    )
+
+/*++
+
+Routine Description:
+
+    This routine translates a network level address to a physical address.
+
+Arguments:
+
+    Request - Supplies a pointer to the translation request.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    PNETWORK_ADDRESS QueryAddress;
+    ULONG SendCount;
+    BOOL SendRequest;
+    KSTATUS Status;
+    PNET_TRANSLATION_ENTRY Translation;
+
+    Link = Request->Link;
+    LinkAddress = Request->LinkAddress;
+    QueryAddress = Request->QueryAddress;
+
+    ASSERT(LinkAddress->Network->Domain == QueryAddress->Domain);
+
+    //
+    // Loop trying to get the address, and waiting for an answer.
+    //
+
+    SendRequest = TRUE;
+    SendCount = ARP_ADDRESS_TRANSLATION_RETRY_COUNT;
+    while (TRUE) {
+        Translation = NetLookupAddressTranslation(Link, QueryAddress);
+        if (Translation != NULL) {
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+        //
+        // If the lookup failed and a request needs to be sent, send it off.
+        // But if all of the allowed attempts have been made, fail.
+        //
+
+        if (SendRequest != FALSE) {
+            if (SendCount == 0) {
+                Status = STATUS_TIMEOUT;
+                break;
+            }
+
+            Status = NetpArpSendRequest(Link, LinkAddress, QueryAddress);
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+
+            SendCount -= 1;
+            SendRequest = FALSE;
+        }
+
+        //
+        // Wait for some new address translation to come in.
+        //
+
+        Status = KeWaitForEvent(Link->AddressTranslationEvent,
+                                FALSE,
+                                ARP_ADDRESS_TRANSLATION_RETRY_INTERVAL);
+
+        //
+        // On timeouts, re-send the translation request.
+        //
+
+        if (Status == STATUS_TIMEOUT) {
+            SendRequest = TRUE;
+
+        //
+        // On all other failures to wait for the event, break.
+        //
+
+        } else if (!KSUCCESS(Status)) {
+            break;
+        }
+    }
+
+    Request->Translation = Translation;
+    return Status;
 }
 
 KSTATUS

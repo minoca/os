@@ -42,6 +42,7 @@ Environment:
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip4.h>
 #include <minoca/net/igmp.h>
+#include <minoca/net/arp.h>
 #include "dhcp.h"
 
 //
@@ -345,12 +346,17 @@ NET_NETWORK_ENTRY NetIp4Network = {
         NetpIp4PrintAddress,
         NetpIp4GetSetInformation,
         NetpIp4GetAddressType,
-        NULL,
         NetpIp4ChecksumPseudoHeader,
         NetpIp4ConfigureLinkAddress,
         NetpIp4JoinLeaveMulticastGroup,
     }
 };
+
+//
+// Store a pointer to the ARP network entry.
+//
+
+PNET_NETWORK_ENTRY NetArpNetwork;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -379,7 +385,6 @@ Return Value:
 
 {
 
-    PNET_NETWORK_ENTRY ArpNetwork;
     KSTATUS Status;
 
     //
@@ -400,22 +405,17 @@ Return Value:
     }
 
     //
-    // Override the IPv4 network translation request routine with ARP's. The
-    // ARP protocol handles the translation and is required for IPv4. As such,
-    // it should never disappear, making it safe for IPv4 to use its
-    // translation routine.
+    // Save the ARP network entry. ARP is required for IPv4 address translation
+    // and thus should never disappear as long as IPv4 is around.
     //
 
-    ArpNetwork = NetGetNetworkEntry(ARP_PROTOCOL_NUMBER);
-    if (ArpNetwork == NULL) {
+    NetArpNetwork = NetGetNetworkEntry(ARP_PROTOCOL_NUMBER);
+    if (NetArpNetwork == NULL) {
 
         ASSERT(FALSE);
 
         goto Ip4InitializeEnd;
     }
-
-    NetIp4Network.Interface.SendTranslationRequest =
-                                  ArpNetwork->Interface.SendTranslationRequest;
 
     //
     // Register the IPv4 handlers with the core networking library.
@@ -1115,13 +1115,12 @@ Return Value:
     //
 
     PhysicalNetworkAddress = &(Socket->RemotePhysicalAddress);
-    if ((Destination != &(Socket->RemoteAddress)) ||
-        (PhysicalNetworkAddress->Domain == NetDomainInvalid)) {
+    if (Destination != &(Socket->RemoteAddress)) {
+        PhysicalNetworkAddressBuffer.Domain = NetDomainInvalid;
+        PhysicalNetworkAddress = &PhysicalNetworkAddressBuffer;
+    }
 
-        if (Destination != &(Socket->RemoteAddress)) {
-            PhysicalNetworkAddress = &PhysicalNetworkAddressBuffer;
-        }
-
+    if (PhysicalNetworkAddress->Domain == NetDomainInvalid) {
         Status = NetpIp4TranslateNetworkAddress(Socket,
                                                 Destination,
                                                 Link,
@@ -2465,9 +2464,12 @@ Return Value:
     NET_ADDRESS_TYPE AddressType;
     ULONG BitsDifferentInSubnet;
     NETWORK_ADDRESS DefaultGateway;
+    PNET_NETWORK_GET_SET_INFORMATION GetSetInformation;
     PIP4_ADDRESS Ip4Address;
     PIP4_ADDRESS LocalIpAddress;
     BOOL LockHeld;
+    NET_TRANSLATION_REQUEST Request;
+    UINTN RequestSize;
     KSTATUS Status;
     ULONG SubnetBroadcast;
     PIP4_ADDRESS SubnetMask;
@@ -2562,11 +2564,46 @@ Return Value:
     // translated.
     //
 
-    Status = NetTranslateNetworkAddress(Socket->Network,
-                                        NetworkAddress,
-                                        Link,
-                                        LinkAddress,
-                                        PhysicalAddress);
+    Request.Link = Link;
+    Request.LinkAddress = LinkAddress;
+    Request.QueryAddress = NetworkAddress;
+    Request.Translation = NULL;
+    RequestSize = sizeof(NET_TRANSLATION_REQUEST);
+    GetSetInformation = NetArpNetwork->Interface.GetSetInformation;
+    Status = GetSetInformation(Socket,
+                               SocketInformationArp,
+                               SocketArpOptionTranslateAddress,
+                               &Request,
+                               &RequestSize,
+                               FALSE);
+
+    if (!KSUCCESS(Status)) {
+        goto Ip4TranslateNetworkAddressEnd;
+    }
+
+    ASSERT(Request.Translation != NULL);
+
+    RtlCopyMemory(PhysicalAddress,
+                  &(Request.Translation->PhysicalAddress),
+                  sizeof(NETWORK_ADDRESS));
+
+    //
+    // If the physical address is the socket's remote address, then store the
+    // translation in the socket. This allows upper level protocols to validate
+    // that the socket's remote network to physical translation is still good.
+    //
+
+    if (PhysicalAddress == &(Socket->RemotePhysicalAddress)) {
+        Socket->RemoteTranslation = Request.Translation;
+
+    //
+    // Otherwise release the reference taken by the translation. The entry is
+    // no longer needed.
+    //
+
+    } else {
+        NetTranslationEntryReleaseReference(Request.Translation);
+    }
 
     AddressType = NetAddressUnicast;
 

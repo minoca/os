@@ -225,7 +225,6 @@ NET_NETWORK_ENTRY NetIp6Network = {
         NetpIp6PrintAddress,
         NetpIp6GetSetInformation,
         NetpIp6GetAddressType,
-        NetpIp6SendTranslationRequest,
         NetpIp6ChecksumPseudoHeader,
         NetpIp6ConfigureLinkAddress,
         NetpIp6JoinLeaveMulticastGroup
@@ -973,13 +972,12 @@ Return Value:
     //
 
     PhysicalNetworkAddress = &(Socket->RemotePhysicalAddress);
-    if ((Destination != &(Socket->RemoteAddress)) ||
-        (PhysicalNetworkAddress->Domain == NetDomainInvalid)) {
+    if (Destination != &(Socket->RemoteAddress)) {
+        PhysicalNetworkAddressBuffer.Domain = NetDomainInvalid;
+        PhysicalNetworkAddress = &PhysicalNetworkAddressBuffer;
+    }
 
-        if (Destination != &(Socket->RemoteAddress)) {
-            PhysicalNetworkAddress = &PhysicalNetworkAddressBuffer;
-        }
-
+    if (PhysicalNetworkAddress->Domain == NetDomainInvalid) {
         Status = NetpIp6TranslateNetworkAddress(Socket->Network,
                                                 Destination,
                                                 Link,
@@ -1907,51 +1905,6 @@ Return Value:
     return NetAddressUnicast;
 }
 
-KSTATUS
-NetpIp6SendTranslationRequest (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PNETWORK_ADDRESS QueryAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine allocates, assembles, and sends a request to translate
-    the given network address into a physical address. This routine returns
-    as soon as the request is successfully queued for transmission.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to send the request down.
-
-    LinkAddress - Supplies the source address of the request.
-
-    QueryAddress - Supplies the network address to ask about.
-
-Return Value:
-
-    STATUS_SUCCESS if the request was successfully sent off.
-
-    STATUS_INSUFFICIENT_RESOURCES if the transmission buffer couldn't be
-    allocated.
-
-    Other errors on other failures.
-
---*/
-
-{
-
-    //
-    // TODO: Implement ICMPv6 with NDP.
-    //
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_IMPLEMENTED;
-}
-
 ULONG
 NetpIp6ChecksumPseudoHeader (
     PNETWORK_ADDRESS Source,
@@ -2221,17 +2174,15 @@ Return Value:
     }
 
     //
-    // Well, it looks like a run-of-the-mill IP address, so pass it on to get
-    // translated.
+    // Well, it looks like a run-of-the-mill IP address, translate it.
+    //
+    // TODO: IPv6 neighbor discovery.
     //
 
-    Status = NetTranslateNetworkAddress(Network,
-                                        NetworkAddress,
-                                        Link,
-                                        LinkAddress,
-                                        PhysicalAddress);
+    ASSERT(FALSE);
 
     AddressType = NetAddressUnicast;
+    Status = STATUS_NOT_IMPLEMENTED;
 
 Ip6TranslateNetworkAddressEnd:
 

@@ -1028,6 +1028,64 @@ struct _NET_DATA_LINK_ENTRY {
 
 Structure Description:
 
+    This structure defines a translation between a network address and a
+    physical one.
+
+Members:
+
+    Node - Stores the red black tree information for this node.
+
+    ReferenceCount - Stores the reference count on the translation entry.
+
+    NetworkAddress - Stores the network address, the key for the red black
+        tree node.
+
+    PhysicalAddress - Stores the physical address that corresponds to the
+        network address.
+
+--*/
+
+typedef struct _NET_TRANSLATION_ENTRY {
+    RED_BLACK_TREE_NODE Node;
+    volatile ULONG ReferenceCount;
+    NETWORK_ADDRESS NetworkAddress;
+    NETWORK_ADDRESS PhysicalAddress;
+} NET_TRANSLATION_ENTRY, *PNET_TRANSLATION_ENTRY;
+
+/*++
+
+Structure Description:
+
+    This structure defines a request to lookup an address translation entry for
+    the given query address. The caller is responsible for releasing the
+    reference on the translation entry, if returned.
+
+Members:
+
+    Link - Stores a pointer to the link on which to lookup the query address.
+
+    LinkAddress - Stores a pointer to the link address entry over which to
+        communicate any network requests that need to be sent in order to
+        translate the address.
+
+    QueryAddress - Stores a pointer to the network address to translation.
+
+    Translation - Stores a pointer to the found translation entry on success,
+        or NULL on failure.
+
+--*/
+
+typedef struct _NET_TRANSLATION_REQUEST {
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    PNETWORK_ADDRESS QueryAddress;
+    PNET_TRANSLATION_ENTRY Translation;
+} NET_TRANSLATION_REQUEST, *PNET_TRANSLATION_REQUEST;
+
+/*++
+
+Structure Description:
+
     This structure defines the link information associated with a local address.
 
 Members:
@@ -1155,6 +1213,14 @@ Members:
     RemotePhysicalAddress - Stores the remote physical address of this
         connection.
 
+    RemoteTranslation - Stores an optional pointer to the remote address
+        translation entry in use by the socket. When present, it should hold
+        the same remote address and remote physical address as stored in the
+        socket. The remote addresses are still stored separately because
+        multicast and broadcast addresses aren't in the translation cache. It
+        does not make sense to cache them as it's a constant-time converstion
+        between a multicast/broadcast network address and its physical address.
+
     TreeEntry - Stores the information about this socket in the tree of
         sockets (which is either on the link itself or global).
 
@@ -1214,6 +1280,7 @@ typedef struct _NET_SOCKET {
     NETWORK_ADDRESS LocalSendAddress;
     NETWORK_ADDRESS RemoteAddress;
     NETWORK_ADDRESS RemotePhysicalAddress;
+    PNET_TRANSLATION_ENTRY RemoteTranslation;
     RED_BLACK_TREE_NODE TreeEntry;
     NET_SOCKET_BINDING_TYPE BindingType;
     volatile ULONG Flags;
@@ -2230,41 +2297,6 @@ Return Value:
 --*/
 
 typedef
-KSTATUS
-(*PNET_NETWORK_SEND_TRANSLATION_REQUEST) (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PNETWORK_ADDRESS QueryAddress
-    );
-
-/*++
-
-Routine Description:
-
-    This routine allocates, assembles, and sends a request to translate
-    the given network address into a physical address. This routine returns
-    as soon as the request is successfully queued for transmission.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to send the request down.
-
-    LinkAddress - Supplies the source address of the request.
-
-    QueryAddress - Supplies the network address to ask about.
-
-Return Value:
-
-    STATUS_SUCCESS if the request was successfully sent off.
-
-    STATUS_INSUFFICIENT_RESOURCES if the transmission buffer couldn't be
-    allocated.
-
-    Other errors on other failures.
-
---*/
-
-typedef
 ULONG
 (*PNET_NETWORK_CHECKSUM_PSEUDO_HEADER) (
     PNETWORK_ADDRESS Source,
@@ -2407,11 +2439,6 @@ Members:
         mulitcast). This function is optional if unicast is the only supported
         address type.
 
-    SendTranslationRequest - Stores a pointer to a function used to translate
-        a network address into its associated physical address. This function
-        is optional is network to physical address translation is not required
-        for the network.
-
     ChecksumPseudoHeader - Stores a pointer to a function used to compute the
         one's complement sum of all 32-bit values in the network's
         pseudo-header that is prepended to protocol checksums (e.g. TCP, UDP).
@@ -2442,7 +2469,6 @@ typedef struct _NET_NETWORK_INTERFACE {
     PNET_NETWORK_PRINT_ADDRESS PrintAddress;
     PNET_NETWORK_GET_SET_INFORMATION GetSetInformation;
     PNET_NETWORK_GET_ADDRESS_TYPE GetAddressType;
-    PNET_NETWORK_SEND_TRANSLATION_REQUEST SendTranslationRequest;
     PNET_NETWORK_CHECKSUM_PSEUDO_HEADER ChecksumPseudoHeader;
     PNET_NETWORK_CONFIGURE_LINK_ADDRESS ConfigureLinkAddress;
     PNET_NETWORK_JOIN_LEAVE_MULTICAST_GROUP JoinLeaveMulticastGroup;
@@ -3202,44 +3228,36 @@ Return Value:
 --*/
 
 NET_API
-KSTATUS
-NetTranslateNetworkAddress (
-    PNET_NETWORK_ENTRY Network,
-    PNETWORK_ADDRESS NetworkAddress,
+PNET_TRANSLATION_ENTRY
+NetLookupAddressTranslation (
     PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PNETWORK_ADDRESS PhysicalAddress
+    PNETWORK_ADDRESS NetworkAddress
     );
 
 /*++
 
 Routine Description:
 
-    This routine translates a network level address to a physical address.
+    This routine performs a lookup for an address translation entry given the
+    network address. The caller is responsible for releasing the reference
+    taken on success.
 
 Arguments:
 
-    Network - Supplies a pointer to the network requesting translation.
+    Link - Supplies a pointer to the link that supposedly owns the network
+        address.
 
-    NetworkAddress - Supplies a pointer to the network address to translate.
-
-    Link - Supplies a pointer to the link to use.
-
-    LinkAddress - Supplies a pointer to the link address entry to use for this
-        request.
-
-    PhysicalAddress - Supplies a pointer where the corresponding physical
-        address for this network address will be returned.
+    NetworkAddress - Supplies a pointer to the network address to look up.
 
 Return Value:
 
-    Status code.
+    Returns a pointer to a translation entry on success, or NULL on failure.
 
 --*/
 
 NET_API
 KSTATUS
-NetAddNetworkAddressTranslation (
+NetAddAddressTranslation (
     PNET_LINK Link,
     PNETWORK_ADDRESS NetworkAddress,
     PNETWORK_ADDRESS PhysicalAddress
@@ -3265,6 +3283,78 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetRemoveAddressTranslation (
+    PNET_LINK Link,
+    PNETWORK_ADDRESS NetworkAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to remove an network address translation from the
+    link's translation cache.
+
+Arguments:
+
+    Link - Supplies a pointer to the link that supposedly owns the network
+        address.
+
+    NetworkAddress - Supplies a pointer to the network address whose
+        translation is to be removed.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+VOID
+NetTranslationEntryAddReference (
+    PNET_TRANSLATION_ENTRY TranslationEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds a reference to the given address translation entry.
+
+Arguments:
+
+    TranslationEntry - Supplies a pointer to an address translation entry.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+VOID
+NetTranslationEntryReleaseReference (
+    PNET_TRANSLATION_ENTRY TranslationEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine release a reference on the given address translation entry.
+
+Arguments:
+
+    TranslationEntry - Supplies a pointer to an address translation entry.
+
+Return Value:
+
+    None.
 
 --*/
 
