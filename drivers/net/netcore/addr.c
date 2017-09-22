@@ -697,7 +697,8 @@ Return Value:
                                                             FALSE);
                 }
 
-                LinkAddress->State = NetLinkAddressNotConfigured;
+                RtlAtomicExchange32(&(LinkAddress->State),
+                                    NetLinkAddressNotConfigured);
             }
         }
 
@@ -1246,6 +1247,7 @@ Return Value:
     PNET_NETWORK_ENTRY CurrentNetwork;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     PNET_NETWORK_ENTRY Network;
+    NET_LINK_ADDRESS_STATE State;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -1316,10 +1318,12 @@ Return Value:
     ASSERT(LinkAddress->State == NetLinkAddressNotConfigured);
 
     if ((Subnet != NULL) && (DefaultGateway != NULL)) {
-        LinkAddress->State = NetLinkAddressConfigured;
+        State = NetLinkAddressConfigured;
         if (StaticAddress != FALSE) {
-            LinkAddress->State = NetLinkAddressConfiguredStatic;
+            State = NetLinkAddressConfiguredStatic;
         }
+
+        RtlAtomicExchange32(&(LinkAddress->State), State);
     }
 
     //
@@ -3014,7 +3018,6 @@ Return Value:
     NET_DOMAIN_TYPE Domain;
     PLIST_ENTRY LinkAddressList;
     PNET_NETWORK_ENTRY Network;
-    NET_LINK_ADDRESS_STATE OriginalState;
     BOOL SameAddress;
     NET_LINK_ADDRESS_STATE State;
     BOOL StaticAddress;
@@ -3149,8 +3152,6 @@ Return Value:
                               sizeof(SYSTEM_TIME));
             }
 
-            LinkAddressEntry->State = State;
-
         //
         // Unconfigure the link and bring it down.
         //
@@ -3172,7 +3173,7 @@ Return Value:
                 StaticAddress = FALSE;
             }
 
-            LinkAddressEntry->State = NetLinkAddressNotConfigured;
+            State = NetLinkAddressNotConfigured;
         }
 
         //
@@ -3183,8 +3184,9 @@ Return Value:
         //
 
         if (SameAddress == FALSE) {
-            OriginalState = LinkAddressEntry->State;
-            LinkAddressEntry->State = NetLinkAddressNotConfigured;
+            RtlAtomicExchange32(&(LinkAddressEntry->State),
+                                NetLinkAddressNotConfigured);
+
             KeReleaseQueuedLock(Link->QueuedLock);
 
             //
@@ -3210,8 +3212,9 @@ Return Value:
 
             NetpDetachSockets(Link, LinkAddressEntry);
             KeAcquireQueuedLock(Link->QueuedLock);
-            LinkAddressEntry->State = OriginalState;
         }
+
+        RtlAtomicExchange32(&(LinkAddressEntry->State), State);
     }
 
     //

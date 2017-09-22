@@ -122,12 +122,6 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _NDP_NEIGHBOR_STATE {
-    NdpNeighborInvalid,
-    NdpNeighborTentative,
-    NdpNeighborDuplicate,
-} NDP_NEIGHBOR_STATE, *PNDP_NEIGHBOR_STATE;
-
 /*++
 
 Structure Description:
@@ -377,67 +371,6 @@ typedef struct _NDP_OPTION_MTU {
 
 Structure Description:
 
-    This structure defines per-link NDP information.
-
-Members:
-
-    Node - Stores the link's entry into the global tree of NDP links.
-
-    ReferenceCount - Stores the reference count on the structure.
-
-    Link - Stores a pointer to the network link to which this NDP link is
-        bound.
-
-    SharedExclusiveLock - Stores a pointer to a shared exclusive lock that
-        protects access to the neighbor cache.
-
-    NeighborCacheEvent - Stores a pointer to an event that is pulsed when a
-        change to the neighbor cache occurs.
-
-    NeighborCacheTree - Stores a pointer to the red-black tree of neighbor
-        cache entries.
-
---*/
-
-typedef struct _NDP_LINK {
-    RED_BLACK_TREE_NODE Node;
-    volatile ULONG ReferenceCount;
-    PNET_LINK Link;
-    PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock;
-    PKEVENT NeighborCacheEvent;
-    RED_BLACK_TREE NeighborCacheTree;
-} NDP_LINK, *PNDP_LINK;
-
-/*++
-
-Structure Description:
-
-    This structure defines a NDP neighbor cache entry.
-
-Members:
-
-    Node - Stores the entry into the link's neighbor cache tree.
-
-    State - Stores the current state of the neighbor cache entry.
-
-    NetworkAddress - Stores the network layer address of the neighbor. This is
-        the search key into the tree.
-
-    PhysicalAddress - Stores the link-layer address of the neighbor.
-
---*/
-
-typedef struct _NDP_NEIGHBOR_ENTRY {
-    RED_BLACK_TREE_NODE Node;
-    NDP_NEIGHBOR_STATE State;
-    NETWORK_ADDRESS NetworkAddress;
-    NETWORK_ADDRESS PhysicalAddress;
-} NDP_NEIGHBOR_ENTRY, *PNDP_NEIGHBOR_ENTRY;
-
-/*++
-
-Structure Description:
-
     This structure defines the NDP thread context used for address
     configuration.
 
@@ -451,7 +384,7 @@ Members:
 --*/
 
 typedef struct _NDP_CONTEXT {
-    PNDP_LINK NdpLink;
+    PNET_LINK Link;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
 } NDP_CONTEXT, *PNDP_CONTEXT;
 
@@ -466,7 +399,7 @@ NetpNdpAutoconfigurationThread (
 
 KSTATUS
 NetpNdpDuplicateAddressDetection (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS Target
     );
@@ -488,7 +421,7 @@ NetpNdpProcessNeighborAdvertisement (
 
 KSTATUS
 NetpNdpSendNeighborAdvertisement (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS Destination,
     PNETWORK_ADDRESS DestinationPhysical,
@@ -497,7 +430,7 @@ NetpNdpSendNeighborAdvertisement (
 
 KSTATUS
 NetpNdpSendNeighborSolicitation (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS Source,
     PNETWORK_ADDRESS Destination,
@@ -507,7 +440,7 @@ NetpNdpSendNeighborSolicitation (
 
 VOID
 NetpNdpSendPackets (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS Source,
     PNETWORK_ADDRESS Destination,
@@ -518,7 +451,7 @@ NetpNdpSendPackets (
 
 PNDP_CONTEXT
 NetpNdpCreateContext (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress
     );
 
@@ -538,83 +471,11 @@ NetpNdpRandomDelay (
     ULONG DelayMax
     );
 
-PNDP_LINK
-NetpNdpCreateOrLookupLink (
-    PNET_LINK Link
-    );
-
-VOID
-NetpNdpDestroyLink (
-    PNDP_LINK NdpLink
-    );
-
-PNDP_LINK
-NetpNdpLookupLink (
-    PNET_LINK Link
-    );
-
-VOID
-NetpNdpLinkAddReference (
-    PNDP_LINK NdpLink
-    );
-
-VOID
-NetpNdpLinkReleaseReference (
-    PNDP_LINK NdpLink
-    );
-
-COMPARISON_RESULT
-NetpNdpCompareLinkEntries (
-    PRED_BLACK_TREE Tree,
-    PRED_BLACK_TREE_NODE FirstNode,
-    PRED_BLACK_TREE_NODE SecondNode
-    );
-
-PNDP_NEIGHBOR_ENTRY
-NetpNdpCreateOrLookupNeighbor (
-    PNDP_LINK NdpLink,
-    PNETWORK_ADDRESS NetworkAddress,
-    NDP_NEIGHBOR_STATE State
-    );
-
-VOID
-NetpNdpDestroyNeighbor (
-    PNDP_NEIGHBOR_ENTRY Neighbor
-    );
-
-PNDP_NEIGHBOR_ENTRY
-NetpNdpLookupNeighbor (
-    PNDP_LINK NdpLink,
-    PNETWORK_ADDRESS NetworkAddress
-    );
-
-VOID
-NetpNdpUpdateNeighbor (
-    PNDP_LINK NdpLink,
-    PNDP_NEIGHBOR_ENTRY Neighbor,
-    NDP_NEIGHBOR_STATE State,
-    PNETWORK_ADDRESS PhysicalAddress
-    );
-
-COMPARISON_RESULT
-NetpNdpCompareNeighborEntries (
-    PRED_BLACK_TREE Tree,
-    PRED_BLACK_TREE_NODE FirstNode,
-    PRED_BLACK_TREE_NODE SecondNode
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
 
 BOOL NetNdpDebug = FALSE;
-
-//
-// Stores a global tree of net links that use NDP.
-//
-
-RED_BLACK_TREE NetNdpLinkTree;
-PSHARED_EXCLUSIVE_LOCK NetNdpLinkLock;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -645,15 +506,6 @@ Return Value:
 
     if (NetNdpDebug == FALSE) {
         NetNdpDebug = NetGetGlobalDebugFlag();
-    }
-
-    RtlRedBlackTreeInitialize(&NetNdpLinkTree, 0, NetpNdpCompareLinkEntries);
-    NetNdpLinkLock = KeCreateSharedExclusiveLock();
-    if (NetNdpLinkLock == NULL) {
-
-        ASSERT(FALSE);
-
-        return;
     }
 
     return;
@@ -770,11 +622,9 @@ Return Value:
     PIP6_ADDRESS Ip6Address;
     NETWORK_ADDRESS MulticastAddress;
     PNDP_CONTEXT NdpContext;
-    PNDP_LINK NdpLink;
     KSTATUS Status;
 
     NdpContext = NULL;
-    NdpLink = NULL;
     Ip6Address = (PIP6_ADDRESS)&(LinkAddress->Address);
 
     //
@@ -792,16 +642,7 @@ Return Value:
     //
 
     if (Configure != FALSE) {
-        NdpLink = NetpNdpLookupLink(Link);
-        if (NdpLink == NULL) {
-            NdpLink = NetpNdpCreateOrLookupLink(Link);
-            if (NdpLink == NULL) {
-                Status = STATUS_INSUFFICIENT_RESOURCES;
-                goto NdpConfigureAddressEnd;
-            }
-        }
-
-        NdpContext = NetpNdpCreateContext(NdpLink, LinkAddress);
+        NdpContext = NetpNdpCreateContext(Link, LinkAddress);
         if (NdpContext == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto NdpConfigureAddressEnd;
@@ -826,19 +667,6 @@ Return Value:
             goto NdpConfigureAddressEnd;
         }
 
-        NdpLink = NetpNdpLookupLink(Link);
-        if (NdpLink == NULL) {
-            Status = STATUS_NOT_FOUND;
-            goto NdpConfigureAddressEnd;
-        }
-
-        //
-        // Release reference taken when the address was configured. This
-        // reference is taken by the autoconfiguration thread.
-        //
-
-        NetpNdpLinkReleaseReference(NdpLink);
-
         //
         // Leave the solicted-node multicast group that was joined when the
         // address was configured.
@@ -857,10 +685,6 @@ Return Value:
     }
 
 NdpConfigureAddressEnd:
-    if (NdpLink != NULL) {
-        NetpNdpLinkReleaseReference(NdpLink);
-    }
-
     return Status;
 }
 
@@ -908,12 +732,12 @@ Return Value:
     // It should not be configured at the moment.
     //
 
-    KeAcquireQueuedLock(NdpContext->NdpLink->Link->QueuedLock);
+    KeAcquireQueuedLock(NdpContext->Link->QueuedLock);
     RtlCopyMemory(&Target,
                   &(NdpContext->LinkAddress->Address),
                   sizeof(NETWORK_ADDRESS));
 
-    KeReleaseQueuedLock(NdpContext->NdpLink->Link->QueuedLock);
+    KeReleaseQueuedLock(NdpContext->Link->QueuedLock);
 
     //
     // If the given address is a link-local address, duplicate address
@@ -922,7 +746,7 @@ Return Value:
 
     Ip6Target = (PIP6_ADDRESS)&Target;
     if (IP6_IS_UNICAST_LINK_LOCAL_ADDRESS(Ip6Target->Address) != FALSE) {
-        Status = NetpNdpDuplicateAddressDetection(NdpContext->NdpLink,
+        Status = NetpNdpDuplicateAddressDetection(NdpContext->Link,
                                                   NdpContext->LinkAddress,
                                                   &Target);
 
@@ -952,7 +776,7 @@ Return Value:
     Information.Domain = NetDomainIp6;
     Information.ConfigurationMethod = NetworkAddressConfigurationStateless;
     RtlCopyMemory(&(Information.Address), &Target, sizeof(NETWORK_ADDRESS));
-    Status = NetGetSetNetworkDeviceInformation(NdpContext->NdpLink->Link,
+    Status = NetGetSetNetworkDeviceInformation(NdpContext->Link,
                                                NdpContext->LinkAddress,
                                                &Information,
                                                TRUE);
@@ -967,13 +791,6 @@ Return Value:
         RtlDebugPrint("\n");
     }
 
-    //
-    // Take an extra reference on the NDP link so that it does not disappear
-    // as long as the address is configured.
-    //
-
-    NetpNdpLinkAddReference(NdpContext->NdpLink);
-
 NdpAutoconfigurationThreadEnd:
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Net: NDP autoconfiguration failed: %d\n", Status);
@@ -985,7 +802,7 @@ NdpAutoconfigurationThreadEnd:
 
 KSTATUS
 NetpNdpDuplicateAddressDetection (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS Target
     )
@@ -999,8 +816,8 @@ Routine Description:
 
 Arguments:
 
-    NdpLink - Supplies a pointer to the NDP link over which the address
-        detection will be conducted.
+    Link - Supplies a pointer to the link over which the address detection will
+        be conducted.
 
     LinkAddress - Supplies a pointer to the link address that owns the address
         that needs to be checked.
@@ -1016,9 +833,8 @@ Return Value:
 
 {
 
-    PNET_LINK Link;
     BOOL MulticastJoined;
-    PNDP_NEIGHBOR_ENTRY Neighbor;
+    NET_LINK_ADDRESS_STATE OldState;
     NETWORK_ADDRESS SolicitedNodeAddress;
     NETWORK_ADDRESS SolicitedNodePhysical;
     KSTATUS Status;
@@ -1026,9 +842,7 @@ Return Value:
     BOOL TransmitSolicitation;
     NETWORK_ADDRESS UnspecifiedAddress;
 
-    Link = NdpLink->Link;
     MulticastJoined = FALSE;
-    Neighbor = NULL;
 
     //
     // Duplicate address detection requires the link to join the all-nodes
@@ -1073,25 +887,19 @@ Return Value:
     }
 
     //
-    // Create a tentative neighbor cache entry.
+    // Set the link address entry to tentative.
     //
 
-    Neighbor = NetpNdpCreateOrLookupNeighbor(NdpLink,
-                                             Target,
-                                             NdpNeighborTentative);
-
-    if (Neighbor == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto NdpDuplicateAddressDetectionEnd;
-    }
+    OldState = RtlAtomicCompareExchange32(&(LinkAddress->State),
+                                          NetLinkAddressTentative,
+                                          NetLinkAddressNotConfigured);
 
     //
-    // If the state is not tentative, then a lookup happened, rather than a
-    // create. Abort the duplicate address detection as another thread is
-    // working with this cache entry.
+    // If the state did not get set to tentative, abort the duplicate address
+    // detection as another thread is working with this cache entry.
     //
 
-    if (Neighbor->State != NdpNeighborTentative) {
+    if (OldState != NetLinkAddressNotConfigured) {
         Status = STATUS_TOO_LATE;
         goto NdpDuplicateAddressDetectionEnd;
     }
@@ -1112,7 +920,7 @@ Return Value:
         // link-layer address.
         //
 
-        if (Neighbor->State == NdpNeighborDuplicate) {
+        if (LinkAddress->State == NetLinkAddressDuplicate) {
             Status = STATUS_DUPLICATE_ENTRY;
             RtlDebugPrint("NDP: Duplicate Address Detected: ");
             NetDebugPrintAddress(Target);
@@ -1134,7 +942,7 @@ Return Value:
                 break;
             }
 
-            Status = NetpNdpSendNeighborSolicitation(NdpLink,
+            Status = NetpNdpSendNeighborSolicitation(Link,
                                                      LinkAddress,
                                                      &UnspecifiedAddress,
                                                      &SolicitedNodeAddress,
@@ -1153,7 +961,7 @@ Return Value:
         // Wait for a neighbor advertisement to arrive.
         //
 
-        Status = KeWaitForEvent(NdpLink->NeighborCacheEvent,
+        Status = KeWaitForEvent(Link->AddressTranslationEvent,
                                 FALSE,
                                 NDP_DEFAULT_RETRANMIT_TIMEOUT);
 
@@ -1235,9 +1043,8 @@ Return Value:
     PIP6_ADDRESS Ip6Destination;
     PIP6_ADDRESS Ip6Source;
     PNET_LINK Link;
-    PNET_LINK_ADDRESS_ENTRY LinkAddressEntry;
-    PNDP_LINK NdpLink;
-    PNDP_NEIGHBOR_ENTRY Neighbor;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    NET_LINK_ADDRESS_STATE OldState;
     PNDP_OPTION OptionHeader;
     ULONG OptionSize;
     PNET_PACKET_BUFFER Packet;
@@ -1251,18 +1058,6 @@ Return Value:
     Ip6Source = (PIP6_ADDRESS)ReceiveContext->Source;
     Ip6Destination = (PIP6_ADDRESS)ReceiveContext->Destination;
     Link = ReceiveContext->Link;
-
-    //
-    // If no addresses have been configured on this link, don't bother parsing
-    // it as nobody is interested in the result and the link should not
-    // respond.
-    //
-
-    NdpLink = NetpNdpLookupLink(Link);
-    if (NdpLink == NULL) {
-        goto NdpProcessNeighborSolicitationEnd;
-    }
-
     Packet = ReceiveContext->Packet;
     PacketSize = Packet->FooterOffset - Packet->DataOffset;
     if (PacketSize < sizeof(NDP_NEIGHBOR_SOLICITATION)) {
@@ -1352,41 +1147,35 @@ Return Value:
 
     Status = NetFindEntryForAddress(Link,
                                     &Target,
-                                    &LinkAddressEntry);
+                                    &LinkAddress);
 
     if (!KSUCCESS(Status)) {
         goto NdpProcessNeighborSolicitationEnd;
     }
 
     //
-    // If the link address entry is not configured, then it is a "tentative"
-    // target. Special processing applies.
+    // If the link address entry is not configured, then it is likely a
+    // "tentative" target. Special processing applies.
     //
 
-    if (LinkAddressEntry->State < NetLinkAddressConfigured) {
+    if (LinkAddress->State < NetLinkAddressConfigured) {
 
         //
-        // If the source is unspecified, then another node is also performing
-        // address duplication detection. Do not use the tentative address.
-        // As the NDP multicast packets do not get looped back, this does not
-        // need to check if this node sent the solicitation.
+        // If the source is unspecified and the address is really tentative,
+        // then another node is also performing address duplication detection.
+        // Do not use the tentative address. As the NDP multicast packets do
+        // not get looped back, this does not need to check if this node sent
+        // the solicitation.
         //
 
         if (IP6_IS_UNSPECIFIED_ADDRESS(Ip6Source->Address) != FALSE) {
-            Neighbor = NetpNdpCreateOrLookupNeighbor(NdpLink,
-                                                     &Target,
-                                                     NdpNeighborDuplicate);
+            OldState = RtlAtomicCompareExchange32(&(LinkAddress->State),
+                                                  NetLinkAddressDuplicate,
+                                                  NetLinkAddressTentative);
 
-            if ((Neighbor != NULL) &&
-                (Neighbor->State != NdpNeighborDuplicate)) {
-
-                NetpNdpUpdateNeighbor(NdpLink,
-                                      Neighbor,
-                                      NdpNeighborDuplicate,
-                                      NULL);
+            if (OldState == NetLinkAddressTentative) {
+                KeSignalEvent(Link->AddressTranslationEvent, SignalOptionPulse);
             }
-
-            NetpNdpLinkReleaseReference(NdpLink);
         }
 
         return;
@@ -1421,17 +1210,13 @@ Return Value:
     // Respond with a solicited advertisement.
     //
 
-    NetpNdpSendNeighborAdvertisement(NdpLink,
-                                     LinkAddressEntry,
+    NetpNdpSendNeighborAdvertisement(Link,
+                                     LinkAddress,
                                      (PNETWORK_ADDRESS)Ip6Source,
                                      SourcePhysical,
                                      TRUE);
 
 NdpProcessNeighborSolicitationEnd:
-    if (NdpLink != NULL) {
-        NetpNdpLinkReleaseReference(NdpLink);
-    }
-
     return;
 }
 
@@ -1462,29 +1247,19 @@ Return Value:
     PNDP_NEIGHBOR_ADVERTISEMENT Advertisement;
     PIP6_ADDRESS Ip6Destination;
     PNET_LINK Link;
-    PNDP_LINK NdpLink;
-    PNDP_NEIGHBOR_ENTRY Neighbor;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    NET_LINK_ADDRESS_STATE OldState;
     PNDP_OPTION OptionHeader;
     ULONG OptionSize;
     PNET_PACKET_BUFFER Packet;
     ULONG PacketSize;
+    KSTATUS Status;
     NETWORK_ADDRESS Target;
     PNETWORK_ADDRESS TargetPhysical;
     NETWORK_ADDRESS TargetPhysicalBuffer;
 
     Ip6Destination = (PIP6_ADDRESS)ReceiveContext->Destination;
     Link = ReceiveContext->Link;
-
-    //
-    // If there is no NDP link context, then no addresses have been configured
-    // on the link and nobody is interested in the advertisement.
-    //
-
-    NdpLink = NetpNdpLookupLink(Link);
-    if (NdpLink == NULL) {
-        goto NdpProcessNeighborAdvertisementEnd;
-    }
-
     Packet = ReceiveContext->Packet;
     PacketSize = Packet->FooterOffset - Packet->DataOffset;
     if (PacketSize < sizeof(NDP_NEIGHBOR_ADVERTISEMENT)) {
@@ -1551,22 +1326,20 @@ Return Value:
     }
 
     //
-    // Try to find a neighbor cache entry for the target.
+    // Test to see if the target address matches any of this nodes addresses.
+    // If it does, then the address is not unique. Mark it as duplicate. No
+    // new connections will use it.
     //
 
-    Neighbor = NetpNdpLookupNeighbor(NdpLink, &Target);
-    if (Neighbor == NULL) {
-        goto NdpProcessNeighborAdvertisementEnd;
-    }
+    Status = NetFindEntryForAddress(Link, &Target, &LinkAddress);
+    if (KSUCCESS(Status)) {
+        OldState = RtlAtomicExchange(&(LinkAddress->State),
+                                     NetLinkAddressDuplicate);
 
-    //
-    // If the neighbor cache entry is marked tentative, then this link is in
-    // the middle of duplicate address detection and a duplicate was found.
-    // Update the neighbor cache entry.
-    //
+        if (OldState == NetLinkAddressTentative) {
+            KeSignalEvent(Link->AddressTranslationEvent, SignalOptionPulse);
+        }
 
-    if (Neighbor->State == NdpNeighborTentative) {
-        NetpNdpUpdateNeighbor(NdpLink, Neighbor, NdpNeighborDuplicate, NULL);
         goto NdpProcessNeighborAdvertisementEnd;
     }
 
@@ -1575,16 +1348,12 @@ Return Value:
     //
 
 NdpProcessNeighborAdvertisementEnd:
-    if (NdpLink != NULL) {
-        NetpNdpLinkReleaseReference(NdpLink);
-    }
-
     return;
 }
 
 KSTATUS
 NetpNdpSendNeighborAdvertisement (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS Destination,
     PNETWORK_ADDRESS DestinationPhysical,
@@ -1602,7 +1371,7 @@ Routine Description:
 
 Arguments:
 
-    NdpLink - Supplies a pointer to the NDP link to send the advertisement down.
+    Link - Supplies a pointer to the link to send the advertisement down.
 
     LinkAddress - Supplies a pointer to the source address of the advertisement.
 
@@ -1633,7 +1402,6 @@ Return Value:
     NETWORK_ADDRESS AllNodesPhysicalAddress;
     ULONG BufferFlags;
     PIP6_ADDRESS Ip6Destination;
-    PNET_LINK Link;
     BOOL LockHeld;
     PNDP_OPTION OptionHeader;
     ULONG OptionSize;
@@ -1644,7 +1412,6 @@ Return Value:
     KSTATUS Status;
 
     NET_INITIALIZE_PACKET_LIST(&PacketList);
-    Link = NdpLink->Link;
     LockHeld = FALSE;
 
     //
@@ -1757,7 +1524,7 @@ Return Value:
     // Send the neighbor advertisement message down to ICMPv6.
     //
 
-    NetpNdpSendPackets(NdpLink,
+    NetpNdpSendPackets(Link,
                        LinkAddress,
                        &Source,
                        Destination,
@@ -1779,7 +1546,7 @@ NdpSendNeighborAdvertisementEnd:
 
 KSTATUS
 NetpNdpSendNeighborSolicitation (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS Source,
     PNETWORK_ADDRESS Destination,
@@ -1797,7 +1564,7 @@ Routine Description:
 
 Arguments:
 
-    NdpLink - Supplies a pointer to the NDP link to send the request down.
+    Link - Supplies a pointer to the link to send the request down.
 
     LinkAddress - Supplies a pointer to the link address associated with the
         solicitation. The link address may be in the middle of configuration,
@@ -1868,7 +1635,7 @@ Return Value:
     Status = NetAllocateBuffer(sizeof(IP6_HEADER),
                                PacketSize,
                                0,
-                               NdpLink->Link,
+                               Link,
                                BufferFlags,
                                &Packet);
 
@@ -1904,7 +1671,7 @@ Return Value:
                       ETHERNET_ADDRESS_SIZE);
     }
 
-    NetpNdpSendPackets(NdpLink,
+    NetpNdpSendPackets(Link,
                        LinkAddress,
                        Source,
                        Destination,
@@ -1922,7 +1689,7 @@ NdpSendNeighborSolicitationEnd:
 
 VOID
 NetpNdpSendPackets (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PNETWORK_ADDRESS Source,
     PNETWORK_ADDRESS Destination,
@@ -1941,7 +1708,7 @@ Routine Description:
 
 Arguments:
 
-    NdpLink - Supplies a pointer to the NDP link over which to send the packet.
+    Link - Supplies a pointer to the link over which to send the packet.
 
     LinkAddress - Supplies a pointer to the link address for which the packet
         is being sent.
@@ -2041,8 +1808,8 @@ Return Value:
                       IP6_ADDRESS_SIZE);
     }
 
-    Send = NdpLink->Link->DataLinkEntry->Interface.Send;
-    Status = Send(NdpLink->Link->DataLinkContext,
+    Send = Link->DataLinkEntry->Interface.Send;
+    Status = Send(Link->DataLinkContext,
                   PacketList,
                   &(LinkAddress->PhysicalAddress),
                   DestinationPhysical,
@@ -2062,7 +1829,7 @@ NdpSendPacketsEnd:
 
 PNDP_CONTEXT
 NetpNdpCreateContext (
-    PNDP_LINK NdpLink,
+    PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress
     )
 
@@ -2074,7 +1841,7 @@ Routine Description:
 
 Arguments:
 
-    NdpLink - Supplies a pointer to the NDP link for the context.
+    Link - Supplies a pointer to the link for the context.
 
     LinkAddress - Supplies a pointer to the network link address for the NDP
         context.
@@ -2096,8 +1863,8 @@ Return Value:
     }
 
     RtlZeroMemory(Context, sizeof(NDP_CONTEXT));
-    NetpNdpLinkAddReference(NdpLink);
-    Context->NdpLink = NdpLink;
+    NetLinkAddReference(Link);
+    Context->Link = Link;
     Context->LinkAddress = LinkAddress;
     return Context;
 }
@@ -2125,9 +1892,9 @@ Return Value:
 
 {
 
-    ASSERT(Context->NdpLink != NULL);
+    ASSERT(Context->Link != NULL);
 
-    NetpNdpLinkReleaseReference(Context->NdpLink);
+    NetLinkReleaseReference(Context->Link);
     MmFreePagedPool(Context);
     return;
 }
@@ -2214,599 +1981,5 @@ Return Value:
     DelayInMicroseconds = Delay * MICROSECONDS_PER_MILLISECOND;
     KeDelayExecution(FALSE, FALSE, DelayInMicroseconds);
     return;
-}
-
-PNDP_LINK
-NetpNdpCreateOrLookupLink (
-    PNET_LINK Link
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates an NDP link associated with the given link and
-    attempts to insert it into the tree. If an existing match is found, then
-    the existing link is returned.
-
-Arguments:
-
-    Link - Supplies a pointer to the network link for which the NDP link is
-        to be created.
-
-Return Value:
-
-    Returns a pointer to the newly allocated NDP link on success or NULL on
-    failure.
-
---*/
-
-{
-
-    PRED_BLACK_TREE_NODE FoundNode;
-    PNDP_LINK NdpLink;
-    PNDP_LINK NewNdpLink;
-    NDP_LINK SearchLink;
-
-    NdpLink = NULL;
-    NewNdpLink = MmAllocatePagedPool(sizeof(NDP_LINK), NDP_ALLOCATION_TAG);
-    if (NewNdpLink == NULL) {
-        goto CreateOrLookupLinkEnd;
-    }
-
-    RtlZeroMemory(NewNdpLink, sizeof(NDP_LINK));
-    NewNdpLink->ReferenceCount = 1;
-    NetLinkAddReference(Link);
-    NewNdpLink->Link = Link;
-    RtlRedBlackTreeInitialize(&(NewNdpLink->NeighborCacheTree),
-                              0,
-                              NetpNdpCompareNeighborEntries);
-
-    NewNdpLink->SharedExclusiveLock = KeCreateSharedExclusiveLock();
-    if (NewNdpLink->SharedExclusiveLock == NULL) {
-        goto CreateOrLookupLinkEnd;
-    }
-
-    NewNdpLink->NeighborCacheEvent = KeCreateEvent(NULL);
-    if (NewNdpLink->NeighborCacheEvent == NULL) {
-        goto CreateOrLookupLinkEnd;
-    }
-
-    //
-    // Attempt to insert the new NDP link into the tree. If an existing link
-    // is found, use that one and destroy the new one.
-    //
-
-    SearchLink.Link = Link;
-    KeAcquireSharedExclusiveLockExclusive(NetNdpLinkLock);
-    FoundNode = RtlRedBlackTreeSearch(&NetNdpLinkTree, &(SearchLink.Node));
-    if (FoundNode == NULL) {
-        RtlRedBlackTreeInsert(&NetNdpLinkTree, &(NewNdpLink->Node));
-        NdpLink = NewNdpLink;
-        NewNdpLink = NULL;
-
-    } else {
-        NdpLink = RED_BLACK_TREE_VALUE(FoundNode, NDP_LINK, Node);
-        NetpNdpLinkAddReference(NdpLink);
-    }
-
-    KeReleaseSharedExclusiveLockExclusive(NetNdpLinkLock);
-
-CreateOrLookupLinkEnd:
-    if (NewNdpLink != NULL) {
-        NetpNdpLinkReleaseReference(NewNdpLink);
-    }
-
-    return NdpLink;
-}
-
-VOID
-NetpNdpDestroyLink (
-    PNDP_LINK NdpLink
-    )
-
-/*++
-
-Routine Description:
-
-    This routine destroys an NDP link and all of its resources.
-
-Arguments:
-
-    NdpLink - Supplies a pointer to the NDP link to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PNDP_NEIGHBOR_ENTRY Neighbor;
-    PRED_BLACK_TREE_NODE Node;
-
-    ASSERT(NdpLink->ReferenceCount == 0);
-    ASSERT(NdpLink->Node.Parent == NULL);
-
-    if (NdpLink->SharedExclusiveLock != NULL) {
-        KeDestroySharedExclusiveLock(NdpLink->SharedExclusiveLock);
-    }
-
-    if (NdpLink->NeighborCacheEvent != NULL) {
-        KeDestroyEvent(NdpLink->NeighborCacheEvent);
-    }
-
-    while (TRUE) {
-        Node = RtlRedBlackTreeGetLowestNode(&(NdpLink->NeighborCacheTree));
-        if (Node == NULL) {
-            break;
-        }
-
-        Neighbor = RED_BLACK_TREE_VALUE(Node, NDP_NEIGHBOR_ENTRY, Node);
-        RtlRedBlackTreeRemove(&(NdpLink->NeighborCacheTree), Node);
-        NetpNdpDestroyNeighbor(Neighbor);
-    }
-
-    NetLinkReleaseReference(NdpLink->Link);
-    MmFreePagedPool(NdpLink);
-    return;
-}
-
-PNDP_LINK
-NetpNdpLookupLink (
-    PNET_LINK Link
-    )
-
-/*++
-
-Routine Description:
-
-    This routine finds an NDP link associated with the given network link. The
-    caller is expected to release a reference on the NDP link.
-
-Arguments:
-
-    Link - Supplies a pointer to the network link, which is used to look up the
-        NDP link.
-
-Return Value:
-
-    Returns a pointer to the matching NDP link on success or NULL on failure.
-
---*/
-
-{
-
-    PRED_BLACK_TREE_NODE FoundNode;
-    PNDP_LINK NdpLink;
-    NDP_LINK SearchLink;
-
-    NdpLink = NULL;
-    SearchLink.Link = Link;
-    KeAcquireSharedExclusiveLockShared(NetNdpLinkLock);
-    FoundNode = RtlRedBlackTreeSearch(&NetNdpLinkTree, &(SearchLink.Node));
-    if (FoundNode == NULL) {
-        goto FindLinkEnd;
-    }
-
-    NdpLink = RED_BLACK_TREE_VALUE(FoundNode, NDP_LINK, Node);
-    NetpNdpLinkAddReference(NdpLink);
-
-FindLinkEnd:
-    KeReleaseSharedExclusiveLockShared(NetNdpLinkLock);
-    return NdpLink;
-}
-
-VOID
-NetpNdpLinkAddReference (
-    PNDP_LINK NdpLink
-    )
-
-/*++
-
-Routine Description:
-
-    This routine increments the reference count of an NDP link.
-
-Arguments:
-
-    NdpLink - Supplies a pointer to the NDP link.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG OldReferenceCount;
-
-    OldReferenceCount = RtlAtomicAdd32(&(NdpLink->ReferenceCount), 1);
-
-    ASSERT(OldReferenceCount < 0x10000000);
-
-    return;
-}
-
-VOID
-NetpNdpLinkReleaseReference (
-    PNDP_LINK NdpLink
-    )
-
-/*++
-
-Routine Description:
-
-    This routine releases a reference on an NDP link.
-
-Arguments:
-
-    NdpLink - Supplies a pointer to the NDP link.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    BOOL Destroy;
-    ULONG OldReferenceCount;
-
-    //
-    // Acquire the tree lock exclusively before decrementing the reference
-    // count. This is necessary to make the decrement and removal from the tree
-    // atomic.
-    //
-
-    Destroy = FALSE;
-    KeAcquireSharedExclusiveLockExclusive(NetNdpLinkLock);
-    OldReferenceCount = RtlAtomicAdd32(&(NdpLink->ReferenceCount), (ULONG)-1);
-
-    ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x10000000));
-
-    //
-    // If the last reference was just released, then the NDP link entry can be
-    // safely removed from the tree and destroyed.
-    //
-
-    if (OldReferenceCount == 1) {
-        if (NdpLink->Node.Parent != NULL) {
-            RtlRedBlackTreeRemove(&NetNdpLinkTree, &(NdpLink->Node));
-            NdpLink->Node.Parent = NULL;
-        }
-
-        Destroy = TRUE;
-    }
-
-    KeReleaseSharedExclusiveLockExclusive(NetNdpLinkLock);
-    if (Destroy != FALSE) {
-        NetpNdpDestroyLink(NdpLink);
-    }
-
-    return;
-}
-
-COMPARISON_RESULT
-NetpNdpCompareLinkEntries (
-    PRED_BLACK_TREE Tree,
-    PRED_BLACK_TREE_NODE FirstNode,
-    PRED_BLACK_TREE_NODE SecondNode
-    )
-
-/*++
-
-Routine Description:
-
-    This routine compares two Red-Black tree nodes.
-
-Arguments:
-
-    Tree - Supplies a pointer to the Red-Black tree that owns both nodes.
-
-    FirstNode - Supplies a pointer to the left side of the comparison.
-
-    SecondNode - Supplies a pointer to the second side of the comparison.
-
-Return Value:
-
-    Same if the two nodes have the same value.
-
-    Ascending if the first node is less than the second node.
-
-    Descending if the second node is less than the first node.
-
---*/
-
-{
-
-    PNDP_LINK FirstNdpLink;
-    PNDP_LINK SecondNdpLink;
-
-    FirstNdpLink = RED_BLACK_TREE_VALUE(FirstNode, NDP_LINK, Node);
-    SecondNdpLink = RED_BLACK_TREE_VALUE(SecondNode, NDP_LINK, Node);
-    if (FirstNdpLink->Link == SecondNdpLink->Link) {
-        return ComparisonResultSame;
-
-    } else if (FirstNdpLink->Link < SecondNdpLink->Link) {
-        return ComparisonResultAscending;
-    }
-
-    return ComparisonResultDescending;
-}
-
-PNDP_NEIGHBOR_ENTRY
-NetpNdpCreateOrLookupNeighbor (
-    PNDP_LINK NdpLink,
-    PNETWORK_ADDRESS NetworkAddress,
-    NDP_NEIGHBOR_STATE State
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a new neighbor cache entry with the given address and
-    inserts it into the tree. If an existing neighbor cache entry for the given
-    address is found, however, the existing neighbor cache entry is returned.
-
-Arguments:
-
-    NdpLink - Supplies a pointer to the NDP link to which the neighbor cache
-        entry belongs.
-
-    NetworkAddress - Supplies a pointer to the network layer address that is the
-        neighbor's key in the cache.
-
-    State - Supplies the initial state for the newly created cache entry.
-
-Return Value:
-
-    Returns a pointer to the new or found neighbor cache entry on success, or
-    NULL on failure.
-
---*/
-
-{
-
-    PRED_BLACK_TREE_NODE FoundNode;
-    PNDP_NEIGHBOR_ENTRY Neighbor;
-    PNDP_NEIGHBOR_ENTRY NewNeighbor;
-    NDP_NEIGHBOR_ENTRY SearchNeighbor;
-
-    Neighbor = NULL;
-    NewNeighbor = MmAllocatePagedPool(sizeof(NDP_NEIGHBOR_ENTRY),
-                                      NDP_ALLOCATION_TAG);
-
-    if (NewNeighbor == NULL) {
-        goto NdpCreateOrLookupNeighborEnd;
-    }
-
-    RtlZeroMemory(NewNeighbor, sizeof(NDP_NEIGHBOR_ENTRY));
-    NewNeighbor->State = State;
-    RtlCopyMemory(&(NewNeighbor->NetworkAddress),
-                  NetworkAddress,
-                  sizeof(NETWORK_ADDRESS));
-
-    RtlCopyMemory(&(SearchNeighbor.NetworkAddress),
-                  NetworkAddress,
-                  sizeof(NETWORK_ADDRESS));
-
-    KeAcquireSharedExclusiveLockExclusive(NdpLink->SharedExclusiveLock);
-    FoundNode = RtlRedBlackTreeSearch(&(NdpLink->NeighborCacheTree),
-                                      &(SearchNeighbor.Node));
-
-    if (FoundNode == NULL) {
-        RtlRedBlackTreeInsert(&(NdpLink->NeighborCacheTree),
-                              &(NewNeighbor->Node));
-
-        Neighbor = NewNeighbor;
-        NewNeighbor = NULL;
-
-    } else {
-        Neighbor = RED_BLACK_TREE_VALUE(FoundNode, NDP_NEIGHBOR_ENTRY, Node);
-    }
-
-    KeReleaseSharedExclusiveLockExclusive(NdpLink->SharedExclusiveLock);
-
-NdpCreateOrLookupNeighborEnd:
-    if (NewNeighbor != NULL) {
-        NetpNdpDestroyNeighbor(NewNeighbor);
-    }
-
-    return Neighbor;
-}
-
-VOID
-NetpNdpDestroyNeighbor (
-    PNDP_NEIGHBOR_ENTRY Neighbor
-    )
-
-/*++
-
-Routine Description:
-
-    This routine destroys a neighbor cache entry and all its resources.
-
-Arguments:
-
-    Neighbor - Supplies a pointer to the neighbor cache entry to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    MmFreePagedPool(Neighbor);
-    return;
-}
-
-PNDP_NEIGHBOR_ENTRY
-NetpNdpLookupNeighbor (
-    PNDP_LINK NdpLink,
-    PNETWORK_ADDRESS NetworkAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine looks for a neighbor cache entry associated with the given
-    network address.
-
-Arguments:
-
-    NdpLink - Supplies a pointer to the NDP link context that owns the cache.
-
-    NetworkAddress - Supplies a pointer to the network address to use as the
-        cache key.
-
-Return Value:
-
-    Returns a pointer to the found neighbor cache entry on success, or NULL on
-    failure.
-
---*/
-
-{
-
-    PRED_BLACK_TREE_NODE FoundNode;
-    PNDP_NEIGHBOR_ENTRY Neighbor;
-    NDP_NEIGHBOR_ENTRY SearchNeighbor;
-
-    Neighbor = NULL;
-    RtlCopyMemory(&(SearchNeighbor.NetworkAddress),
-                  NetworkAddress,
-                  sizeof(NETWORK_ADDRESS));
-
-    KeAcquireSharedExclusiveLockShared(NdpLink->SharedExclusiveLock);
-    FoundNode = RtlRedBlackTreeSearch(&(NdpLink->NeighborCacheTree),
-                                      &(SearchNeighbor.Node));
-
-    if (FoundNode == NULL) {
-        goto LookupNeighborEnd;
-    }
-
-    Neighbor = RED_BLACK_TREE_VALUE(FoundNode, NDP_NEIGHBOR_ENTRY, Node);
-
-LookupNeighborEnd:
-    KeReleaseSharedExclusiveLockShared(NdpLink->SharedExclusiveLock);
-    return Neighbor;
-}
-
-VOID
-NetpNdpUpdateNeighbor (
-    PNDP_LINK NdpLink,
-    PNDP_NEIGHBOR_ENTRY Neighbor,
-    NDP_NEIGHBOR_STATE State,
-    PNETWORK_ADDRESS PhysicalAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine updates a neighbor cache entry, signaling the neighbor cache
-    change event.
-
-Arguments:
-
-    NdpLink - Supplies a pointer to the NDP link to which the neighbor belongs.
-
-    Neighbor - Supplies a pointer to the neighbor that needs to be changed.
-
-    State - Supplies the state to set in the neighbor cache entry.
-
-    PhysicalAddress - Supplies an optional pointer to the physical address of
-        the neighbor.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    COMPARISON_RESULT Result;
-    BOOL Updated;
-
-    Updated = FALSE;
-    KeAcquireSharedExclusiveLockExclusive(NdpLink->SharedExclusiveLock);
-    if (Neighbor->State != State) {
-        Neighbor->State = State;
-        Updated = TRUE;
-    }
-
-    if (PhysicalAddress != NULL) {
-        Result = NetCompareNetworkAddresses(&(Neighbor->PhysicalAddress),
-                                            PhysicalAddress);
-
-        if (Result != ComparisonResultSame) {
-            RtlCopyMemory(&(Neighbor->PhysicalAddress),
-                          PhysicalAddress,
-                          sizeof(NETWORK_ADDRESS));
-
-            Updated = TRUE;
-        }
-    }
-
-    KeReleaseSharedExclusiveLockExclusive(NdpLink->SharedExclusiveLock);
-    if (Updated != FALSE) {
-        KeSignalEvent(NdpLink->NeighborCacheEvent, SignalOptionPulse);
-    }
-
-    return;
-}
-
-COMPARISON_RESULT
-NetpNdpCompareNeighborEntries (
-    PRED_BLACK_TREE Tree,
-    PRED_BLACK_TREE_NODE FirstNode,
-    PRED_BLACK_TREE_NODE SecondNode
-    )
-
-/*++
-
-Routine Description:
-
-    This routine compares two Red-Black tree nodes.
-
-Arguments:
-
-    Tree - Supplies a pointer to the Red-Black tree that owns both nodes.
-
-    FirstNode - Supplies a pointer to the left side of the comparison.
-
-    SecondNode - Supplies a pointer to the second side of the comparison.
-
-Return Value:
-
-    Same if the two nodes have the same value.
-
-    Ascending if the first node is less than the second node.
-
-    Descending if the second node is less than the first node.
-
---*/
-
-{
-
-    PNDP_NEIGHBOR_ENTRY FirstEntry;
-    COMPARISON_RESULT Result;
-    PNDP_NEIGHBOR_ENTRY SecondEntry;
-
-    FirstEntry = RED_BLACK_TREE_VALUE(FirstNode, NDP_NEIGHBOR_ENTRY, Node);
-    SecondEntry = RED_BLACK_TREE_VALUE(SecondNode, NDP_NEIGHBOR_ENTRY, Node);
-    Result = NetCompareNetworkAddresses(&(FirstEntry->NetworkAddress),
-                                        &(SecondEntry->NetworkAddress));
-
-    return Result;
 }
 

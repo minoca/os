@@ -317,6 +317,8 @@ typedef enum _NET_ADDRESS_TYPE {
 
 typedef enum _NET_LINK_ADDRESS_STATE {
     NetLinkAddressNotConfigured,
+    NetLinkAddressTentative,
+    NetLinkAddressDuplicate,
     NetLinkAddressConfigured,
     NetLinkAddressConfiguredStatic
 } NET_LINK_ADDRESS_STATE, *PNET_LINK_ADDRESS_STATE;
@@ -398,7 +400,7 @@ Members:
 typedef struct _NET_LINK_ADDRESS_ENTRY {
     LIST_ENTRY ListEntry;
     PNET_NETWORK_ENTRY Network;
-    NET_LINK_ADDRESS_STATE State;
+    volatile NET_LINK_ADDRESS_STATE State;
     NETWORK_ADDRESS Address;
     NETWORK_ADDRESS Subnet;
     NETWORK_ADDRESS DefaultGateway;
