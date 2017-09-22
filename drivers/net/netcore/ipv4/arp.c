@@ -139,13 +139,6 @@ NetpArpProcessReceivedData (
     PNET_RECEIVE_CONTEXT ReceiveContext
     );
 
-ULONG
-NetpArpPrintAddress (
-    PNETWORK_ADDRESS Address,
-    PSTR Buffer,
-    ULONG BufferLength
-    );
-
 KSTATUS
 NetpArpGetSetInformation (
     PNET_SOCKET Socket,
@@ -226,7 +219,6 @@ Return Value:
     NetworkEntry.Interface.InitializeLink = NetpArpInitializeLink;
     NetworkEntry.Interface.DestroyLink = NetpArpDestroyLink;
     NetworkEntry.Interface.ProcessReceivedData = NetpArpProcessReceivedData;
-    NetworkEntry.Interface.PrintAddress = NetpArpPrintAddress;
     NetworkEntry.Interface.GetSetInformation = NetpArpGetSetInformation;
     Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
     if (!KSUCCESS(Status)) {
@@ -465,50 +457,6 @@ Return Value:
                              &SenderPhysicalAddress);
 
     return;
-}
-
-ULONG
-NetpArpPrintAddress (
-    PNETWORK_ADDRESS Address,
-    PSTR Buffer,
-    ULONG BufferLength
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called to convert a network address into a string, or
-    determine the length of the buffer needed to convert an address into a
-    string.
-
-Arguments:
-
-    Address - Supplies an optional pointer to a network address to convert to
-        a string.
-
-    Buffer - Supplies an optional pointer where the string representation of
-        the address will be returned.
-
-    BufferLength - Supplies the length of the supplied buffer, in bytes.
-
-Return Value:
-
-    Returns the maximum length of any address if no network address is
-    supplied.
-
-    Returns the actual length of the network address string if a network address
-    was supplied, including the null terminator.
-
---*/
-
-{
-
-    //
-    // There is no such thing as an ARP address. Everything is broadcast.
-    //
-
-    return 0;
 }
 
 KSTATUS

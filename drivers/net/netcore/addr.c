@@ -4840,11 +4840,14 @@ Return Value:
     ASSERT(Network->Domain == Address->Domain);
 
     StringBuffer[0] = '\0';
-    Length = Network->Interface.PrintAddress(Address,
-                                             StringBuffer,
-                                             NET_PRINT_ADDRESS_STRING_LENGTH);
+    if (Network->Interface.PrintAddress != NULL) {
+        Length = Network->Interface.PrintAddress(
+                                              Address,
+                                              StringBuffer,
+                                              NET_PRINT_ADDRESS_STRING_LENGTH);
 
-    ASSERT(Length <= NET_PRINT_ADDRESS_STRING_LENGTH);
+        ASSERT(Length <= NET_PRINT_ADDRESS_STRING_LENGTH);
+    }
 
     StringBuffer[NET_PRINT_ADDRESS_STRING_LENGTH - 1] = '\0';
     RtlDebugPrint("%s", StringBuffer);

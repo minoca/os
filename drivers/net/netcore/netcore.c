@@ -683,8 +683,7 @@ Return Value:
     if ((NewNetworkEntry->Domain == NetDomainInvalid) ||
         (NewNetworkEntry->Interface.InitializeLink == NULL) ||
         (NewNetworkEntry->Interface.DestroyLink == NULL) ||
-        (NewNetworkEntry->Interface.ProcessReceivedData == NULL) ||
-        (NewNetworkEntry->Interface.PrintAddress == NULL)) {
+        (NewNetworkEntry->Interface.ProcessReceivedData == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto RegisterNetworkLayerEnd;
@@ -895,7 +894,6 @@ Return Value:
         (NewDataLinkEntry->Interface.Send == NULL) ||
         (NewDataLinkEntry->Interface.ProcessReceivedPacket == NULL) ||
         (NewDataLinkEntry->Interface.ConvertToPhysicalAddress == NULL) ||
-        (NewDataLinkEntry->Interface.PrintAddress == NULL) ||
         (NewDataLinkEntry->Interface.GetPacketSizeInformation == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
@@ -1298,12 +1296,14 @@ Return Value:
                                        ListEntry);
 
             if (DataLinkEntry->Domain == Address->Domain) {
-                Length = DataLinkEntry->Interface.PrintAddress(
+                if (DataLinkEntry->Interface.PrintAddress != NULL) {
+                    Length = DataLinkEntry->Interface.PrintAddress(
                                               Address,
                                               StringBuffer,
                                               NET_PRINT_ADDRESS_STRING_LENGTH);
 
-                ASSERT(Length <= NET_PRINT_ADDRESS_STRING_LENGTH);
+                    ASSERT(Length <= NET_PRINT_ADDRESS_STRING_LENGTH);
+                }
 
                 break;
             }
@@ -1323,12 +1323,14 @@ Return Value:
                                       ListEntry);
 
             if (NetworkEntry->Domain == Address->Domain) {
-                Length = NetworkEntry->Interface.PrintAddress(
+                if (NetworkEntry->Interface.PrintAddress != NULL) {
+                    Length = NetworkEntry->Interface.PrintAddress(
                                               Address,
                                               StringBuffer,
                                               NET_PRINT_ADDRESS_STRING_LENGTH);
 
-                ASSERT(Length <= NET_PRINT_ADDRESS_STRING_LENGTH);
+                    ASSERT(Length <= NET_PRINT_ADDRESS_STRING_LENGTH);
+                }
 
                 break;
             }
