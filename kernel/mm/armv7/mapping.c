@@ -1877,7 +1877,7 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlock();
     MmpMapPage(PageTablePhysical,
                ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY | MAP_FLAG_GLOBAL);
+               MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY);
 
     SecondLevelTable = (PSECOND_LEVEL_TABLE)(ProcessorBlock->SwapPage);
     SecondLevelTable = (PSECOND_LEVEL_TABLE)((UINTN)SecondLevelTable + Offset);
@@ -1977,7 +1977,7 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlock();
     MmpMapPage(PageTablePhysical,
                ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+               MAP_FLAG_PRESENT);
 
     SecondLevelTable = (PSECOND_LEVEL_TABLE)(ProcessorBlock->SwapPage);
     SecondLevelTable = (PSECOND_LEVEL_TABLE)((UINTN)SecondLevelTable + Offset);
@@ -2115,7 +2115,7 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlock();
     MmpMapPage(PageTablePhysical,
                ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+               MAP_FLAG_PRESENT);
 
     SecondLevelTable = (PSECOND_LEVEL_TABLE)(ProcessorBlock->SwapPage);
     SecondLevelTable = (PSECOND_LEVEL_TABLE)((UINTN)SecondLevelTable + Offset);
@@ -2733,7 +2733,7 @@ Return Value:
             DestinationTable = ProcessorBlock->SwapPage;
             MmpMapPage(PageTable,
                        DestinationTable,
-                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+                       MAP_FLAG_PRESENT);
 
             if (TableIndexStart != 0) {
                 RtlZeroMemory(DestinationTable,
@@ -2854,7 +2854,7 @@ Return Value:
             DestinationTable = ProcessorBlock->SwapPage;
             MmpMapPage(PageTable,
                        DestinationTable,
-                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+                       MAP_FLAG_PRESENT);
 
             for (TableIndex = TableIndexStart;
                  TableIndex < TableIndexEnd;
@@ -3395,7 +3395,7 @@ Return Value:
             ProcessorBlock = KeGetCurrentProcessorBlock();
             MmpMapPage(PageTablePhysical,
                        ProcessorBlock->SwapPage,
-                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+                       MAP_FLAG_PRESENT);
 
             RtlZeroMemory(ProcessorBlock->SwapPage, PAGE_SIZE);
             MmpUnmapPages(ProcessorBlock->SwapPage, 1, 0, NULL);
@@ -3500,7 +3500,7 @@ Return Value:
     // If a page table was allocated but not used, then free it.
     //
 
-    if (PageTablePhysical != INVALID_PHYSICAL_ADDRESS) {
+    if ((NewCount != 0) && (PageTablePhysical != INVALID_PHYSICAL_ADDRESS)) {
         MmFreePhysicalPage(PageTablePhysical);
     }
 

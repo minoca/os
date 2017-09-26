@@ -1555,7 +1555,7 @@ Return Value:
         VirtualAddress = SwapRegion->VirtualBase + SwapOffset;
         MmpMapPage(PhysicalAddress,
                    VirtualAddress,
-                   MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL | MAP_FLAG_READ_ONLY);
+                   MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY);
 
         //
         // Add this page to the I/O buffer.
@@ -4535,7 +4535,7 @@ Return Value:
 
         MmpMapPage(Context.PhysicalAddress,
                    SwapSpace,
-                   MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+                   MAP_FLAG_PRESENT);
 
         ASSERT(IoBuffer->FragmentCount <= 2);
 
@@ -4938,7 +4938,7 @@ Return Value:
     SwapSpace = RootSection->SwapSpace->VirtualBase;
     MmpMapPage(Context->PhysicalAddress,
                SwapSpace,
-               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+               MAP_FLAG_PRESENT);
 
     IoBuffer = &IoBufferData;
     IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |

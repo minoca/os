@@ -1946,6 +1946,9 @@ Return Value:
 
     PageCount = RangeSize >> PageShift;
     RunPageCount = PhysicalRunSize >> PageShift;
+
+    ASSERT(RunPageCount != 0);
+
     PhysicalRunAlignment >>= PageShift;
     Status = STATUS_SUCCESS;
     VirtualAddress = RangeAddress;
@@ -2654,9 +2657,7 @@ Return Value:
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    MmpMapPage(PhysicalAddress,
-               ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+    MmpMapPage(PhysicalAddress, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
 
     //
     // If the page is not accessible, make it accessible temporarily.
@@ -2738,9 +2739,7 @@ Return Value:
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    MmpMapPage(PhysicalAddress,
-               ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+    MmpMapPage(PhysicalAddress, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
 
     //
     // Zero the page.

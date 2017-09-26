@@ -44,7 +44,7 @@ Environment:
 //
 
 #define GET_PAGE_TABLE(_DirectoryIndex) \
-    (PPTE)((PVOID)MmKernelPageTables + (PAGE_SIZE * _DirectoryIndex))
+    ((PPTE)((PVOID)MmKernelPageTables + (PAGE_SIZE * _DirectoryIndex)))
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -774,6 +774,8 @@ Return Value:
             if (FreePageTable == FALSE) {
                 continue;
             }
+
+            ASSERT(Directory[DirectoryIndex].Global == 0);
 
             //
             // Otherwise, update the directory entry and free the page table.
@@ -1542,7 +1544,7 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlock();
     MmpMapPage(PageTablePhysical,
                ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY | MAP_FLAG_GLOBAL);
+               MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY);
 
     PageTable = (volatile PTE *)(ProcessorBlock->SwapPage);
     if (PageTable[PageTableIndex].Entry == 0) {
@@ -1639,7 +1641,7 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlock();
     MmpMapPage(PageTablePhysical,
                ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+               MAP_FLAG_PRESENT);
 
     PageTable = (volatile PTE *)(ProcessorBlock->SwapPage);
     if (PageTable[PageTableIndex].Entry != 0) {
@@ -1773,7 +1775,7 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlock();
     MmpMapPage(PageTablePhysical,
                ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+               MAP_FLAG_PRESENT);
 
     PageTable = (volatile PTE *)(ProcessorBlock->SwapPage);
 
@@ -2245,7 +2247,7 @@ Return Value:
             DestinationTable = ProcessorBlock->SwapPage;
             MmpMapPage(PageTable,
                        DestinationTable,
-                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+                       MAP_FLAG_PRESENT);
 
             if (TableIndexStart != 0) {
                 RtlZeroMemory(DestinationTable, TableIndexStart * sizeof(PTE));
@@ -2310,7 +2312,7 @@ Return Value:
             DestinationTable = ProcessorBlock->SwapPage;
             MmpMapPage(PageTable,
                        DestinationTable,
-                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+                       MAP_FLAG_PRESENT);
 
             for (TableIndex = TableIndexStart;
                  TableIndex < TableIndexEnd;
@@ -2692,7 +2694,6 @@ Return Value:
     //
 
     if (Directory[DirectoryIndex].Present != 0) {
-        RtlMemoryBarrier();
         return;
     }
 
@@ -2756,10 +2757,7 @@ Return Value:
 
         OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
         ProcessorBlock = KeGetCurrentProcessorBlock();
-        MmpMapPage(NewPageTable,
-                   ProcessorBlock->SwapPage,
-                   MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
-
+        MmpMapPage(NewPageTable, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
         RtlZeroMemory(ProcessorBlock->SwapPage, PAGE_SIZE);
         MmpUnmapPages(ProcessorBlock->SwapPage, 1, 0, NULL);
         Directory[DirectoryIndex].Entry = (ULONG)NewPageTable >> PAGE_SHIFT;
@@ -2778,7 +2776,6 @@ Return Value:
         }
 
         Directory[DirectoryIndex].Present = 1;
-        RtlMemoryBarrier();
         KeLowerRunLevel(OldRunLevel);
 
         //
@@ -2800,7 +2797,8 @@ Return Value:
     // If a page table was allocated but not used, then free it.
     //
 
-    if ((NewPageTableUsed == FALSE) &&
+    if ((NewCount != 0) &&
+        (NewPageTableUsed == FALSE) &&
         (NewPageTable != INVALID_PHYSICAL_ADDRESS)) {
 
         MmFreePhysicalPage(NewPageTable);
