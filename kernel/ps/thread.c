@@ -77,6 +77,7 @@ Environment:
 PKTHREAD
 PspCreateThread (
     PKPROCESS OwningProcess,
+    PVOID KernelStack,
     ULONG KernelStackSize,
     PTHREAD_ENTRY_ROUTINE ThreadRoutine,
     PVOID ThreadParameter,
@@ -227,6 +228,7 @@ Return Value:
     }
 
     NewThread = PspCreateThread(Parameters->Process,
+                                NULL,
                                 KernelStackSize,
                                 Parameters->ThreadRoutine,
                                 Parameters->Parameter,
@@ -1071,6 +1073,8 @@ PKTHREAD
 PspCloneThread (
     PKPROCESS DestinationProcess,
     PKTHREAD Thread,
+    PVOID KernelStack,
+    UINTN KernelStackSize,
     PTRAP_FRAME TrapFrame
     )
 
@@ -1089,6 +1093,10 @@ Arguments:
 
     Thread - Supplies a pointer to the thread to clone.
 
+    KernelStack - Supplies a pointer to the kernel stack to use.
+
+    KernelStackSize - Supplies the size of the supplied kernel stack in bytes.
+
     TrapFrame - Supplies a pointer to the trap frame to set initial thread
         state to. A copy of this trap frame will be made.
 
@@ -1104,7 +1112,8 @@ Return Value:
     KSTATUS Status;
 
     NewThread = PspCreateThread(DestinationProcess,
-                                Thread->KernelStackSize,
+                                KernelStack,
+                                KernelStackSize,
                                 Thread->ThreadRoutine,
                                 Thread->ThreadParameter,
                                 Thread->Header.Name,
@@ -1451,6 +1460,7 @@ Return Value:
 PKTHREAD
 PspCreateThread (
     PKPROCESS OwningProcess,
+    PVOID KernelStack,
     ULONG KernelStackSize,
     PTHREAD_ENTRY_ROUTINE ThreadRoutine,
     PVOID ThreadParameter,
@@ -1469,6 +1479,9 @@ Arguments:
 
     OwningProcess - Supplies a pointer to the process responsible for creating
         this thread.
+
+    KernelStack - Supplies an optional pointer to a kernel stack. If NULL is
+        supplied, then one will be created.
 
     KernelStackSize - Supplies the initial size of the kernel mode stack, in
         bytes. Supply 0 to use a default size.
@@ -1517,6 +1530,9 @@ Return Value:
     }
 
     if (KernelStackSize == 0) {
+
+        ASSERT(KernelStack == NULL);
+
         KernelStackSize = DEFAULT_KERNEL_STACK_SIZE;
     }
 
@@ -1568,13 +1584,28 @@ Return Value:
     NewThread->ThreadPointer = PsInitialThreadPointer;
 
     //
-    // Allocate a kernel stack.
+    // Allocate a kernel stack unless one was provided. Touch the top level
+    // page directory to ensure that the stack can be switched onto when it's
+    // time to run this thread.
     //
 
-    NewThread->KernelStack = MmAllocateKernelStack(KernelStackSize);
-    if (NewThread->KernelStack == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateThreadEnd;
+    NewThread->KernelStack = KernelStack;
+    if (KernelStack == NULL) {
+        NewThread->KernelStack = MmAllocateKernelStack(KernelStackSize);
+        if (NewThread->KernelStack == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CreateThreadEnd;
+        }
+
+        //
+        // Touch the top level table even if this is the owning process and
+        // current process are the same. The allocated stack may have been
+        // cached, but still created after this process was started.
+        //
+
+        MmUpdatePageDirectory(OwningProcess->AddressSpace,
+                              NewThread->KernelStack,
+                              KernelStackSize);
     }
 
     //
@@ -1595,28 +1626,6 @@ Return Value:
     if (NewThread->BuiltinWaitBlock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateThreadEnd;
-    }
-
-    //
-    // Update the page directory of the owning process to ensure the new stack
-    // is visible to the process.
-    //
-
-    MmUpdatePageDirectory(OwningProcess->AddressSpace,
-                          NewThread->KernelStack,
-                          KernelStackSize);
-
-    //
-    // Additionally, if the owning process is not the current process, then
-    // make sure the thread structure is visible to the new process. If the
-    // owner is the current process then the thread was faulted in when it was
-    // zero-initialized above.
-    //
-
-    if (OwningProcess != CurrentThread->OwningProcess) {
-        MmUpdatePageDirectory(OwningProcess->AddressSpace,
-                              NewThread,
-                              sizeof(KTHREAD));
     }
 
     //
@@ -1641,6 +1650,11 @@ Return Value:
 CreateThreadEnd:
     if (!KSUCCESS(Status)) {
         if (NewThread != NULL) {
+            if (KernelStack != NULL) {
+                NewThread->KernelStack = NULL;
+                NewThread->KernelStackSize = 0;
+            }
+
             ObReleaseReference(NewThread);
             NewThread = NULL;
         }

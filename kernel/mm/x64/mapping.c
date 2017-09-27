@@ -349,8 +349,38 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE CurrentAddressSpace;
     ULONG EndIndex;
     ULONG Index;
+    RUNLEVEL OldRunLevel;
+    PPTE Pml4;
+    PKPROCESS Process;
+    PPROCESSOR_BLOCK ProcessorBlock;
+    PADDRESS_SPACE_X64 Space;
+    PPTE SwapPte;
+
+    //
+    // Do nothing if this is kernel, since it's on the official page tables.
+    //
+
+    if (AddressSpace == MmKernelAddressSpace) {
+        return;
+    }
+
+    Space = (PADDRESS_SPACE_X64)AddressSpace;
+    Process = PsGetCurrentProcess();
+    CurrentAddressSpace = Process->AddressSpace;
+    if (AddressSpace == CurrentAddressSpace) {
+        Pml4 = X64_PML4T;
+        OldRunLevel = RunLevelCount;
+
+    } else {
+        OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+        ProcessorBlock = KeGetCurrentProcessorBlock();
+        Pml4 = ProcessorBlock->SwapPage;
+        SwapPte = X64_PTE(ProcessorBlock->SwapPage);
+        *SwapPte = Space->Pml4Physical | X86_PTE_PRESENT | X86_PTE_WRITABLE;
+    }
 
     Index = X64_PML4_INDEX(VirtualAddress);
     EndIndex = X64_PML4_INDEX(VirtualAddress + (Size - 1));
@@ -363,8 +393,14 @@ Return Value:
 
         ASSERT(Index != X64_SELF_MAP_INDEX);
 
-        X64_PML4T[Index] = MmKernelPml4[Index];
+        Pml4[Index] = MmKernelPml4[Index];
         Index += 1;
+    }
+
+    if (OldRunLevel != RunLevelCount) {
+        *SwapPte = 0;
+        ArInvalidateTlbEntry(Pml4);
+        KeLowerRunLevel(OldRunLevel);
     }
 
     return;

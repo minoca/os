@@ -178,6 +178,8 @@ PKTHREAD
 PspCloneThread (
     PKPROCESS DestinationProcess,
     PKTHREAD Thread,
+    PVOID KernelStack,
+    UINTN KernelStackSize,
     PTRAP_FRAME TrapFrame
     );
 
@@ -195,6 +197,10 @@ Arguments:
         should be created under.
 
     Thread - Supplies a pointer to the thread to clone.
+
+    KernelStack - Supplies a pointer to the kernel stack to use.
+
+    KernelStackSize - Supplies the size of the supplied kernel stack in bytes.
 
     TrapFrame - Supplies a pointer to the trap frame to set initial thread
         state to. A copy of this trap frame will be made.

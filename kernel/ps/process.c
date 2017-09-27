@@ -1790,6 +1790,7 @@ Return Value:
 
     PPATH_POINT CurrentDirectory;
     PATH_POINT CurrentDirectoryCopy;
+    PVOID KernelStack;
     PKTHREAD NewMainThread;
     PKPROCESS NewProcess;
     PPATH_POINT RootDirectory;
@@ -1802,9 +1803,27 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     CurrentDirectory = NULL;
+    KernelStack = NULL;
+    NewProcess = NULL;
     RootDirectory = NULL;
     SharedMemoryDirectory = NULL;
     TracingProcess = NULL;
+
+    //
+    // Create the kernel stack before creating the process so that the top
+    // level PDE for the new stack will definitely be in the new process page
+    // directory. If it were created later, then the new processes page
+    // directory would need to be mapped and poked to ensure it had the entry
+    // for the new stack.
+    //
+
+    ASSERT(MainThread->KernelStackSize == DEFAULT_KERNEL_STACK_SIZE);
+
+    KernelStack = MmAllocateKernelStack(DEFAULT_KERNEL_STACK_SIZE);
+    if (KernelStack == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CopyProcessEnd;
+    }
 
     //
     // Get the processes root and current directories. Add references in case a
@@ -1964,13 +1983,24 @@ Return Value:
     // Clone the main thread, which will kick off the new process.
     //
 
-    NewMainThread = PspCloneThread(NewProcess, MainThread, TrapFrame);
+    NewMainThread = PspCloneThread(NewProcess,
+                                   MainThread,
+                                   KernelStack,
+                                   DEFAULT_KERNEL_STACK_SIZE,
+                                   TrapFrame);
+
     if (NewMainThread == NULL) {
         Status = STATUS_UNSUCCESSFUL;
         goto CopyProcessEnd;
     }
 
+    KernelStack = NULL;
+
 CopyProcessEnd:
+    if (KernelStack != NULL) {
+        MmFreeKernelStack(KernelStack, DEFAULT_KERNEL_STACK_SIZE);
+    }
+
     if (!KSUCCESS(Status)) {
         if (NewProcess != NULL) {
 
