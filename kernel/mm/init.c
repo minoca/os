@@ -299,7 +299,7 @@ Return Value:
         // Create the physical address lock.
         //
 
-        MmPhysicalPageLock = KeCreateQueuedLock();
+        MmPhysicalPageLock = KeCreateSharedExclusiveLock();
         if (MmPhysicalPageLock == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto InitializeEnd;

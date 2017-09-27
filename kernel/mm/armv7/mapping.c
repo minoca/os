@@ -2546,7 +2546,7 @@ Return Value:
 
         ASSERT(Destination[Index].Format != FLT_COARSE_PAGE_TABLE);
 
-        Physical = MmpAllocatePhysicalPages(1, 0);
+        Physical = MmpAllocatePhysicalPage();
         if (Physical == INVALID_PHYSICAL_ADDRESS) {
 
             //
@@ -3347,7 +3347,7 @@ Return Value:
         NewCount = 0;
 
     } else {
-        PageTablePhysical = MmpAllocatePhysicalPages(1, 0);
+        PageTablePhysical = MmpAllocatePhysicalPage();
         NewCount = 1;
     }
 

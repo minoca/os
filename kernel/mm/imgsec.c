@@ -2112,7 +2112,7 @@ Return Value:
             }
         }
 
-        PhysicalAddress = MmpAllocatePhysicalPages(1, 1);
+        PhysicalAddress = MmpAllocatePhysicalPage();
         if (PhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto IsolateImageSectionEnd;
@@ -2218,7 +2218,7 @@ Return Value:
         //
 
         if (ChildPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
-            ChildPhysicalAddress = MmpAllocatePhysicalPages(1, 1);
+            ChildPhysicalAddress = MmpAllocatePhysicalPage();
             if (ChildPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
                 goto IsolateImageSectionEnd;

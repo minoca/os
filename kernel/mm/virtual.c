@@ -2953,36 +2953,12 @@ Return Value:
 
     PageSize = MmPageSize();
     RtlZeroMemory(PhysicalAddress, sizeof(PHYSICAL_ADDRESS) * 3);
-    PhysicalAddress[0] = MmpAllocatePhysicalPages(DESCRIPTOR_REFILL_PAGE_COUNT,
-                                                  1);
+    Status = MmpAllocateScatteredPhysicalPages(0,
+                                               -1ULL,
+                                               PhysicalAddress,
+                                               DESCRIPTOR_REFILL_PAGE_COUNT);
 
-    //
-    // If three contiguous pages could not be found, then allocate them one by
-    // one.
-    //
-
-    if (PhysicalAddress[0] == INVALID_PHYSICAL_ADDRESS) {
-        for (Index = 0; Index < DESCRIPTOR_REFILL_PAGE_COUNT; Index += 1) {
-            PhysicalAddress[Index] = MmpAllocatePhysicalPages(1, 1);
-            if (PhysicalAddress[Index] == INVALID_PHYSICAL_ADDRESS) {
-                break;
-            }
-        }
-
-    } else {
-        for (Index = 1; Index < DESCRIPTOR_REFILL_PAGE_COUNT; Index += 1) {
-            PhysicalAddress[Index] = PhysicalAddress[Index - 1] + PageSize;
-        }
-
-        ASSERT(Index == DESCRIPTOR_REFILL_PAGE_COUNT);
-    }
-
-    //
-    // If no physical pages where allocated, fail.
-    //
-
-    if (Index == 0) {
-        Status = STATUS_NO_MEMORY;
+    if (!KSUCCESS(Status)) {
         goto PrepareToAddAccountingDescriptorEnd;
     }
 

@@ -2706,7 +2706,7 @@ Return Value:
         return STATUS_SUCCESS;
     }
 
-    Physical = MmpAllocatePhysicalPages(1, 0);
+    Physical = MmpAllocatePhysicalPage();
     if (Physical == INVALID_PHYSICAL_ADDRESS) {
         return STATUS_NO_MEMORY;
     }
@@ -2861,7 +2861,7 @@ Return Value:
             *SwapPte = 0;
             ArInvalidateTlbEntry(SwapPage);
             KeLowerRunLevel(RunLevelLow);
-            NextTable = MmpAllocatePhysicalPages(1, 0);
+            NextTable = MmpAllocatePhysicalPage();
             KeRaiseRunLevel(RunLevelDispatch);
             if (NextTable == INVALID_PHYSICAL_ADDRESS) {
                 return NULL;
@@ -3054,7 +3054,7 @@ Return Value:
 
     AllocatedPhysical = INVALID_PHYSICAL_ADDRESS;
     if (Physical == INVALID_PHYSICAL_ADDRESS) {
-        Physical = MmpAllocatePhysicalPages(1, 0);
+        Physical = MmpAllocatePhysicalPage();
         if (Physical == INVALID_PHYSICAL_ADDRESS) {
             return STATUS_INSUFFICIENT_RESOURCES;
         }

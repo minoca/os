@@ -5279,7 +5279,7 @@ Return Value:
         ASSERT(Context->PhysicalAddress == INVALID_PHYSICAL_ADDRESS);
         ASSERT(Context->PagingEntry == NULL);
 
-        Context->PhysicalAddress = MmpAllocatePhysicalPages(1, 1);
+        Context->PhysicalAddress = MmpAllocatePhysicalPage();
         if (Context->PhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
             Status = STATUS_NO_MEMORY;
             goto AllocatePageInStructuresEnd;

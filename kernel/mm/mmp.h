@@ -267,7 +267,7 @@ Members:
         section to the virtual address corresponding to this physical page.
 
     LockCount - Stores the number of concurrent requests to lock the page in
-        memory. It is protected by the physical page lock.
+        memory.
 
     Flags - Stores a bitmask of flags for the paging entry. See
         PAGING_ENTRY_FLAG_* for definitions. This is only modified by the
@@ -283,7 +283,7 @@ typedef struct _PAGING_ENTRY {
     union {
         struct {
             UINTN SectionOffset;
-            USHORT LockCount;
+            volatile ULONG LockCount;
             USHORT Flags;
         };
 
@@ -306,7 +306,7 @@ extern UINTN MmTotalPhysicalPages;
 // Stores the number of allocated pages.
 //
 
-extern UINTN MmTotalAllocatedPhysicalPages;
+extern volatile UINTN MmTotalAllocatedPhysicalPages;
 
 //
 // Stores the the minimum number of free physical pages to be maintained by
@@ -326,7 +326,7 @@ extern PHYSICAL_ADDRESS MmMaximumPhysicalAddress;
 // Stores the lock protecting access to physical page data structures.
 //
 
-extern PQUEUED_LOCK MmPhysicalPageLock;
+extern PSHARED_EXCLUSIVE_LOCK MmPhysicalPageLock;
 
 //
 // Store a boolean indicating whether or not physical page zero is available.
@@ -463,6 +463,29 @@ Return Value:
 --*/
 
 PHYSICAL_ADDRESS
+MmpAllocatePhysicalPage (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates a single physical page of memory. All allocated
+    pages start out as non-paged and must be made pagable.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the physical address of the first page of allocated memory on
+    success, or INVALID_PHYSICAL_ADDRESS on failure.
+
+--*/
+
+PHYSICAL_ADDRESS
 MmpAllocatePhysicalPages (
     UINTN PageCount,
     UINTN Alignment
@@ -474,7 +497,7 @@ Routine Description:
 
     This routine allocates a physical page of memory. If necessary, it will
     notify the system that free physical memory is low and wake up the page out
-    worker thread. All allocate pages start out as non-paged and must be
+    worker thread. All allocated pages start out as non-paged and must be
     made pagable.
 
 Arguments:
