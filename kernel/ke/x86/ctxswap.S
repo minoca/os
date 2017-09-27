@@ -140,10 +140,13 @@ FUNCTION(KepContextSwap)
 
     //
     // Switch to the new stack and perform work than can only be done once off
-    // of the old stack.
+    // of the old stack. Touch the stack before switching to it to trigger any
+    // page directory updates needed to see the new stack from the old CR3.
     //
 
-    movl    NewStack(%ebp), %esp    # Switch to new stack.
+    movl    NewStack(%ebp), %eax    # Get the new stack.
+    movl    (%eax), %ecx            # Poke the new stack to trigger page faults.
+    movl    %eax, %esp              # Switch to the new stack.
     xor     %ebp, %ebp              # Zero out ebp so the call stack stops here.
 
     //

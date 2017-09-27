@@ -103,8 +103,11 @@ FUNCTION KepContextSwap
     //
     // Switch to the new thread's kernel stack, effectively freezing the old
     // thread. Then perform any work that must be completed on the new stack.
+    // Touch the stack before switching to it to trigger any top-level page
+    // table updates needed to run the new stack on the old TTBR.
     //
 
+    ldr     %r0, [%r1]              @ Touch the new stack to trigger faults.
     mov     %sp, %r1                @ Switch to the new stack.
 
 .if THUMB

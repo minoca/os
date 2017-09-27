@@ -100,9 +100,11 @@ FUNCTION(KepContextSwap)
 
     //
     // Switch to the new stack and perform work than can only be done once off
-    // of the old stack.
+    // of the old stack. Access the new stack before switching to it to trigger
+    // any PML4 updates needed to see the new stack from old CR3.
     //
 
+    movl    (%rsi), %eax            # Poke the new stack to trigger page faults.
     movq    %rsi, %rsp              # Switch to the new stack.
     xorq    %rbp, %rbp              # Zero out rbp so the call stack stops here.
     movq    %rcx, %r12              # Move FirstTime parameter to non-volatile.

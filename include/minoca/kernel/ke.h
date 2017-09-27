@@ -564,9 +564,12 @@ Members:
 
     RunLevel - Stores the current run level of the processor.
 
-    Tss - Stores a pointer to the current Task Segment for this processor. This
-        only applies to PC processors. This member is accessed directly by
-        assembly code, so its offset must be manually maintained.
+    Tss - Stores a pointer to the current Task Segment for this processor.
+        This member is accessed directly by assembly code, so its offset must
+        be manually maintained. On ARM, this member stores the virtual address
+        of the current top level page table. This is needed so that the check
+        for directory updates function can get to the first level table without
+        dereferencing the thread during delicate context swap regions.
 
     Gdt - Stores a pointer to the GDT for this processor. This only applies to
         PC processors. This member is accessed directly by assembly code, so

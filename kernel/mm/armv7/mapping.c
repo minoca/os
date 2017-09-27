@@ -789,7 +789,6 @@ Return Value:
 VOID
 MmSwitchAddressSpace (
     PVOID Processor,
-    PVOID CurrentStack,
     PADDRESS_SPACE AddressSpace
     )
 
@@ -803,10 +802,6 @@ Arguments:
 
     Processor - Supplies a pointer to the current processor block.
 
-    CurrentStack - Supplies the address of the current thread's kernel stack.
-        This routine will ensure this address is visible in the address space
-        being switched to. Stacks must not cross page directory boundaries.
-
     AddressSpace - Supplies a pointer to the address space to switch to.
 
 Return Value:
@@ -817,24 +812,12 @@ Return Value:
 
 {
 
-    ULONG FirstIndex;
-    PFIRST_LEVEL_TABLE FirstTable;
+    PPROCESSOR_BLOCK ProcessorBlock;
     PADDRESS_SPACE_ARM Space;
 
     Space = (PADDRESS_SPACE_ARM)AddressSpace;
-
-    //
-    // Make sure the current stack is visible. It might not be if this current
-    // thread is new and its stack pushed out into a new page table not in the
-    // destination context.
-    //
-
-    FirstIndex = FLT_INDEX(CurrentStack);
-    FirstTable = Space->PageDirectory;
-    if (!COMPARE_PTES(FirstTable, MmKernelFirstLevelTable, FirstIndex)) {
-        MmUpdatePageDirectory(AddressSpace, CurrentStack, PAGE_SIZE);
-    }
-
+    ProcessorBlock = KeGetCurrentProcessorBlock();
+    ProcessorBlock->Tss = Space->PageDirectory;
     ArSwitchTtbr0(Space->PageDirectoryPhysical);
     return;
 }
@@ -873,6 +856,7 @@ Return Value:
     BOOL FreePageTable;
     ULONG MultiprocessorIdRegister;
     PHYSICAL_ADDRESS PhysicalAddress;
+    PPROCESSOR_BLOCK ProcessorBlock;
     PHYSICAL_ADDRESS RunPhysicalAddress;
     UINTN RunSize;
     ULONG SecondIndex;
@@ -926,6 +910,14 @@ Return Value:
     //
 
     } else if (Phase == 1) {
+
+        //
+        // Initialize the pointer that has nothing to do with the TSS but
+        // stores a shortcut to the VA of the first level table.
+        //
+
+        ProcessorBlock = KeGetCurrentProcessorBlock();
+        ProcessorBlock->Tss = MmKernelFirstLevelTable;
         Status = STATUS_SUCCESS;
 
     //
@@ -1197,10 +1189,9 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE_ARM AddressSpace;
     volatile FIRST_LEVEL_TABLE *CurrentFirstLevelTable;
-    PKPROCESS CurrentProcess;
     ULONG FirstIndex;
+    PPROCESSOR_BLOCK ProcessorBlock;
     BOOL Result;
     ULONG SecondIndex;
     volatile SECOND_LEVEL_TABLE *SecondLevelTable;
@@ -1215,9 +1206,16 @@ Return Value:
         return FALSE;
     }
 
-    CurrentProcess = PsGetCurrentProcess();
-    AddressSpace = (PADDRESS_SPACE_ARM)(CurrentProcess->AddressSpace);
-    CurrentFirstLevelTable = AddressSpace->PageDirectory;
+    //
+    // Get the virtual address of the first level table out of its hidden space
+    // in the processor block. Ideally this would instead reach through
+    // current thread -> process -> address space, but there is a region
+    // during context swap where the current thread is the new thread but the
+    // TTBR is from the old thread.
+    //
+
+    ProcessorBlock = KeGetCurrentProcessorBlock();
+    CurrentFirstLevelTable = ProcessorBlock->Tss;
     FirstIndex = FLT_INDEX(FaultingAddress);
 
     //

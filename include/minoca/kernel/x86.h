@@ -545,8 +545,6 @@ Members:
 
     Common - Stores the common address space information.
 
-    PageDirectory - Stores the virtual address of the top level page directory.
-
     PageDirectoryPhysical - Stores the physical address of the top level page
         directory.
 
@@ -557,7 +555,6 @@ Members:
 
 typedef struct _ADDRESS_SPACE_X86 {
     ADDRESS_SPACE Common;
-    PPTE PageDirectory;
     ULONG PageDirectoryPhysical;
     ULONG PageTableCount;
 } ADDRESS_SPACE_X86, *PADDRESS_SPACE_X86;

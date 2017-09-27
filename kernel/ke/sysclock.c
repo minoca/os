@@ -1012,6 +1012,9 @@ Return Value:
            (ArAreInterruptsEnabled() == FALSE));
 
     Processor = KeGetCurrentProcessorBlock();
+    MmSwitchAddressSpace(Processor,
+                         Processor->RunningThread->OwningProcess->AddressSpace);
+
     if (Processor->PreviousThread != NULL) {
         PreviousThread = Processor->PreviousThread;
         Processor->PreviousThread = NULL;

@@ -308,17 +308,10 @@ Return Value:
     KepArchPrepareForContextSwap(Processor, OldThread, NextThread);
 
     //
-    // Switch to the new thread's address space. The new thread will not fault
-    // on the old stack, nor its own thread structures. It might fault on
-    // anything else, so don't touch anything in between changing address
-    // spaces and setting the running thread.
+    // Disable interrupts and begin the transition to the new thread.
     //
 
     Enabled = ArDisableInterrupts();
-    MmSwitchAddressSpace(Processor,
-                         OldThread->KernelStack,
-                         NextThread->OwningProcess->AddressSpace);
-
     Processor->RunningThread = NextThread;
     Processor->PreviousThread = OldThread;
 

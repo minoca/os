@@ -550,7 +550,6 @@ Return Value:
 VOID
 MmSwitchAddressSpace (
     PVOID Processor,
-    PVOID CurrentStack,
     PADDRESS_SPACE AddressSpace
     )
 
@@ -564,10 +563,6 @@ Arguments:
 
     Processor - Supplies a pointer to the current processor block.
 
-    CurrentStack - Supplies the address of the current thread's kernel stack.
-        This routine will ensure this address is visible in the address space
-        being switched to. Stacks must not cross page directory boundaries.
-
     AddressSpace - Supplies a pointer to the address space to switch to.
 
 Return Value:
@@ -578,22 +573,9 @@ Return Value:
 
 {
 
-    ULONG Index;
     PADDRESS_SPACE_X64 Space;
 
     Space = (PADDRESS_SPACE_X64)AddressSpace;
-
-    //
-    // Make sure the current stack is visible. It might not be if this current
-    // thread is new and its stack pushed out into a new level 4 table not in
-    // the destination context.
-    //
-
-    Index = X64_PML4_INDEX(CurrentStack);
-
-    ASSERT(Index != X64_SELF_MAP_INDEX);
-
-    X64_PML4T[Index] = MmKernelPml4[Index];
     ArSetCurrentPageDirectory(Space->Pml4Physical);
     return;
 }
