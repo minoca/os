@@ -1252,11 +1252,37 @@ Return Value:
     Start = Compiler->Parser->Source + Token->Position;
     Current = Start;
     End = Current + Token->Size;
+    if (Token->Value == CkTokenDoubleString) {
 
-    CK_ASSERT((*Current == '"') && (Current + 2 <= End) && (*(End - 1) == '"'));
+        CK_ASSERT((*Current == '"') &&
+                  (Current + 2 <= End) && (*(End - 1) == '"'));
 
-    Current += 1;
-    End -= 1;
+        Current += 1;
+        End -= 1;
+
+    } else if (Token->Value == CkTokenSingleString) {
+
+        CK_ASSERT((*Current == '\'') &&
+                  (Current + 2 <= End) && (*(End - 1) == '\''));
+
+        Current += 1;
+        End -= 1;
+
+    } else if (Token->Value == CkTokenTripleString) {
+
+        CK_ASSERT((Current + 6 <= End) &&
+                  (Current[0] == '"') && (Current[1] == '"') &&
+                  (Current[2] == '"') && (*(End - 1) == '"') &&
+                  (*(End - 2) == '"') && (*(End - 3) == '"'));
+
+        Current += 3;
+        End -= 3;
+
+    } else {
+
+        CK_ASSERT(FALSE);
+    }
+
     while (Current < End) {
 
         //
@@ -1283,6 +1309,7 @@ Return Value:
 
             switch (*Current) {
             case '"':
+            case '\'':
             case '\\':
                 Character = *Current;
                 break;

@@ -132,8 +132,12 @@ YY_VALUE CkgDict[] = {
 };
 
 YY_VALUE CkgStringLiteralList[] = {
-    CkTokenString, -1,
-    CkNodeStringLiteralList, CkTokenString, -1,
+    CkTokenDoubleString, -1,
+    CkTokenSingleString, -1,
+    CkTokenTripleString, -1,
+    CkNodeStringLiteralList, CkTokenDoubleString, -1,
+    CkNodeStringLiteralList, CkTokenSingleString, -1,
+    CkNodeStringLiteralList, CkTokenTripleString, -1,
     0
 };
 
@@ -508,7 +512,9 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"Constant", 0, 0, NULL},
     {"Hex", 0, 0, NULL},
     {"Binary", 0, 0, NULL},
-    {"String", 0, 0, NULL},
+    {"String3", 0, 0, NULL},
+    {"String2", 0, 0, NULL},
+    {"String1", 0, 0, NULL},
     {">>=", 0, 0, NULL},
     {"<<=", 0, 0, NULL},
     {"+=", 0, 0, NULL},

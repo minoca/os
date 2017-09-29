@@ -540,16 +540,15 @@ Return Value:
             } else if (*NextExpression == '|') {
                 if (Match != FALSE) {
                     YypSkipExpression(&NextExpression, FALSE);
+                    Expression = NextExpression;
 
                 //
                 // The last element did not match. Simply move to the next.
                 //
 
                 } else {
-                    NextExpression += 1;
+                    break;
                 }
-
-                Expression = NextExpression;
 
             //
             // If this is not a control character and it didn't match, then
@@ -583,6 +582,7 @@ Return Value:
             assert(Match == FALSE);
 
             Expression += 1;
+            NextPosition = *Position;
             continue;
         }
 

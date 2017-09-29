@@ -45,7 +45,9 @@ void count();
 0{D}+?      { count(); return(CONSTANT); }
 {D}+?       { count(); return(CONSTANT); }
 
-L?\"(\\.|[^\\"])*\" { count(); return(STRING_LITERAL); }
+L?\"\"\"(\\.|[^"]|\"[^"]|\"\"[^\"])*\"\"\" { count(); return(STRING_LITERAL3); }
+L?\"(\\.|[^\\"])*\" { count(); return(STRING_LITERAL2); }
+L?'(\\.|[^\\'])*\' { count(); return(STRING_LITERAL1); }
 
 ">>="           { count(); return(RIGHT_ASSIGN); }
 "<<="           { count(); return(LEFT_ASSIGN); }
