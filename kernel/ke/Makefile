@@ -37,7 +37,7 @@ BINARYTYPE = klibrary
 
 VERSION_MAJOR := 0
 VERSION_MINOR := 4
-VERSION_REVISION := 0
+VERSION_REVISION := 1
 VERSION_RELEASE := SystemReleaseDevelopment
 
 OBJS = crash.o    \
