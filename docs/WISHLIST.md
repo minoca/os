@@ -71,5 +71,6 @@ Below is a list of platforms that might be interesting to port to.
 ### Community feature requests
  - PowerPC architecture port
  - MIPS architecture port
+ - RISC-V architecture port
  - Asynchronous I/O mechanism
  - Port D package
