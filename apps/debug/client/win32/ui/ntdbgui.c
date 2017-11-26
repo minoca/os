@@ -2082,12 +2082,13 @@ Return Value:
 
             //
             // Set the text color, size, and font of the rich edit controls.
+            // The Y height is the font's point size times twenty.
             //
 
             memset(&NewFormat, 0, sizeof(CHARFORMAT2));
             NewFormat.cbSize = sizeof(CHARFORMAT2);
             NewFormat.dwMask = CFM_FACE | CFM_SIZE;
-            NewFormat.yHeight = 32;
+            NewFormat.yHeight = 10 * 20;
             strcpy(NewFormat.szFaceName, "Courier");
             SendMessage(SourceEdit,
                         EM_SETCHARFORMAT,

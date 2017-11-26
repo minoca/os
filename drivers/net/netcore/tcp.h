@@ -377,7 +377,7 @@ typedef enum _TCP_USER_CONTROL_CODE {
 //     received.
 //
 // FinWait1 - Represents waiting for a connection termination request from the
-//     remote host, or an acknowledgment of the connection termition request
+//     remote host, or an acknowledgment of the connection termination request
 //     previously sent.
 //
 // FinWait2 - Represents waiting for a connection termination request from the
