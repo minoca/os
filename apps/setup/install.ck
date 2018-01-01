@@ -1137,7 +1137,13 @@ if (plat == "raspberrypi") {
     var RpiFirmwareBlobFiles = [
         "config.txt",
         "start.elf",
+        "start_cd.elf",
+        "start_db.elf",
+        "start_x.elf",
         "fixup.dat",
+        "fixup_cd.dat",
+        "fixup_db.dat",
+        "fixup_x.dat",
         "bootcode.bin",
         "LICENCE.broadcom"
     ];
@@ -1212,7 +1218,13 @@ if (plat == "raspberrypi2") {
     var RpiFirmwareFiles = [
         "config.txt",
         "start.elf",
+        "start_cd.elf",
+        "start_db.elf",
+        "start_x.elf",
         "fixup.dat",
+        "fixup_cd.dat",
+        "fixup_db.dat",
+        "fixup_x.dat",
         "bootcode.bin",
         "LICENCE.broadcom"
     ];
