@@ -39,8 +39,14 @@ function build() {
         "bootcode.bin",
         "config.txt",
         "fixup.dat",
+        "fixup_cd.dat",
+        "fixup_db.dat",
+        "fixup_x.dat",
         "LICENCE.broadcom",
-        "start.elf"
+        "start.elf",
+        "start_cd.elf",
+        "start_db.elf",
+        "start_x.elf"
     ];
 
     rpibin = mconfig.binroot + "/rpi/";
