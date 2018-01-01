@@ -33,7 +33,13 @@ BINDIR = $(BINROOT)/rpi
 BINFILES = $(BINDIR)/bootcode.bin     \
            $(BINDIR)/config.txt       \
            $(BINDIR)/fixup.dat        \
+           $(BINDIR)/fixup_cd.dat     \
+           $(BINDIR)/fixup_db.dat     \
+           $(BINDIR)/fixup_x.dat      \
            $(BINDIR)/start.elf        \
+           $(BINDIR)/start_cd.elf     \
+           $(BINDIR)/start_db.elf     \
+           $(BINDIR)/start_x.elf      \
            $(BINDIR)/LICENCE.broadcom \
 
 all: $(BINFILES)
@@ -52,7 +58,25 @@ $(BINDIR)/config.txt: config.txt
 $(BINDIR)/fixup.dat: fixup.dat
 	@cp -pv $< $@
 
+$(BINDIR)/fixup_cd.dat: fixup_cd.dat
+	@cp -pv $< $@
+
+$(BINDIR)/fixup_db.dat: fixup_db.dat
+	@cp -pv $< $@
+
+$(BINDIR)/fixup_x.dat: fixup_x.dat
+	@cp -pv $< $@
+
 $(BINDIR)/start.elf: start.elf
+	@cp -pv $< $@
+
+$(BINDIR)/start_cd.elf: start_cd.elf
+	@cp -pv $< $@
+
+$(BINDIR)/start_db.elf: start_db.elf
+	@cp -pv $< $@
+
+$(BINDIR)/start_x.elf: start_x.elf
 	@cp -pv $< $@
 
 $(BINDIR)/LICENCE.broadcom: LICENCE.broadcom
