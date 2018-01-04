@@ -757,8 +757,8 @@ Return Value:
 
             default:
                 fprintf(stderr,
-                        "Warning: Unknown section type %llx.\n",
-                        ElfSection->sh_type);
+                        "Warning: Unknown section type %x.\n",
+                        (unsigned int)(ElfSection->sh_type));
 
                 break;
             }
@@ -925,7 +925,7 @@ Return Value:
 
                 default:
                     fprintf(stderr,
-                            "Error: Unsupported relocation type %d.\n",
+                            "Error: Unsupported relocation type %lld.\n",
                             ELF64_R_TYPE(Relocation->r_info));
 
                     return FALSE;
@@ -986,7 +986,7 @@ Return Value:
 
                 default:
                     fprintf(stderr,
-                            "Error: Unsupported relocation type %d.\n",
+                            "Error: Unsupported relocation type %lld.\n",
                             ELF64_R_TYPE(Relocation->r_info));
 
                     return FALSE;
@@ -1147,7 +1147,7 @@ Return Value:
 
                 default:
                     fprintf(stderr,
-                            "Error: Unsupported relocation type %d.\n",
+                            "Error: Unsupported relocation type %lld.\n",
                             ELF64_R_TYPE(Relocation->r_info));
 
                     return FALSE;
@@ -1204,7 +1204,7 @@ Return Value:
 
                 default:
                     fprintf(stderr,
-                            "Error: Unsupported ARM relocation type %d.\n",
+                            "Error: Unsupported ARM relocation type %lld.\n",
                             ELF64_R_TYPE(Relocation->r_info));
 
                     return FALSE;
@@ -1261,7 +1261,7 @@ Return Value:
                     if (Result == FALSE) {
                         fprintf(stderr,
                                 "Error: Failed to convert dynamic relocation "
-                                "address %x to destination image offset.\n",
+                                "address %llx to destination image offset.\n",
                                 RelocationOffset);
 
                         return FALSE;
@@ -1344,8 +1344,8 @@ Return Value:
                                                             &TargetValue);
 
                         if (Result == FALSE) {
-                            printf("Skipping relocation at address %x that "
-                                   "had value %x that could not be "
+                            printf("Skipping relocation at address %llx that "
+                                   "had value %llx that could not be "
                                    "converted in the destination.\n",
                                    TargetAddress,
                                    TargetValue);
@@ -1372,7 +1372,7 @@ Return Value:
 
                     default:
                         fprintf(stderr,
-                                "Bad x86-64 dynamic relocation type %d, offset "
+                                "Bad x86-64 dynamic relocation type %lld, offset "
                                 "offset %llx, program header index %d.\n",
                                 ELF64_R_TYPE(Relocation->r_info),
                                 RelocationOffset,
@@ -1390,7 +1390,7 @@ Return Value:
                     switch (ELF64_R_TYPE(Relocation->r_info)) {
                     default:
                         fprintf(stderr,
-                                "Bad AA64 dynamic relocation type %d, offset "
+                                "Bad AA64 dynamic relocation type %lld, offset "
                                 "%llx, program header index %d.\n",
                                 ELF64_R_TYPE(Relocation->r_info),
                                 RelocationOffset,

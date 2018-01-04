@@ -38,3 +38,4 @@ EXTRA_CPPFLAGS += -m32
 
 include $(SRCROOT)/os/minoca.mk
 
+elf64.o: $(SRCDIR)/../elf.c

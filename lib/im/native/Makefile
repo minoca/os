@@ -48,3 +48,5 @@ ARMV6_OBJS := $(ARMV7_OBJS)
 
 include $(SRCROOT)/os/minoca.mk
 
+imnative.o: $(SRCDIR)/../image.c
+elf64.o: $(SRCDIR)/../elf.c

@@ -48,6 +48,17 @@ Environment:
 //
 
 //
+// MacOS doesn't have a "saved" user/group ID.
+//
+
+#if defined(__APPLE__)
+
+#define setresuid(_Real, _Effective, _Saved) setreuid(_Real, _Effective)
+#define setresgid(_Real, _Effective, _Saved) setregid(_Real, _Effective)
+
+#endif
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

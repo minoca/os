@@ -37,3 +37,4 @@ include $(SRCDIR)/../sources
 
 include $(SRCROOT)/os/minoca.mk
 
+elf64.o: $(SRCDIR)/../elf.c
