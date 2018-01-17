@@ -72,7 +72,8 @@ Members:
         by the kernel.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _RK32XX_TABLE {
     DESCRIPTION_HEADER Header;
     ULONGLONG TimerBase[RK32_TIMER_COUNT];
@@ -80,6 +81,7 @@ typedef struct _RK32XX_TABLE {
     ULONG TimerCountDownMask;
     ULONG TimerEnabledMask;
 } PACKED RK32XX_TABLE, *PRK32XX_TABLE;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

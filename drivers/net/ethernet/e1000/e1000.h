@@ -860,7 +860,8 @@ Members:
     VlanTag - Stores the VLAN tag for the packet.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _E1000_TX_DESCRIPTOR {
     ULONGLONG Address;
     USHORT Length;
@@ -903,6 +904,7 @@ typedef struct _E1000_RX_DESCRIPTOR {
     UCHAR Errors;
     USHORT VlanTag;
 } PACKED E1000_RX_DESCRIPTOR, *PE1000_RX_DESCRIPTOR;
+#pragma pack(pop)
 
 /*++
 

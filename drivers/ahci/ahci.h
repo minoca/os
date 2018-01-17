@@ -526,7 +526,8 @@ Members:
         zero.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _SATA_FIS_REGISTER_H2D {
     UCHAR Type;
     UCHAR Flags;
@@ -955,6 +956,7 @@ typedef struct _AHCI_RECEIVED_FIS {
     UCHAR UnknownFis[0x40];
     UCHAR Reserved[0x60];
 } PACKED AHCI_RECEIVED_FIS, *PAHCI_RECEIVED_FIS;
+#pragma pack(pop)
 
 /*++
 

@@ -80,7 +80,8 @@ Members:
         UART.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _REALVIEW_TABLE {
     DESCRIPTION_HEADER Header;
     ULONGLONG Pl110PhysicalAddress;
@@ -90,6 +91,7 @@ typedef struct _REALVIEW_TABLE {
     ULONGLONG DebugUartPhysicalAddress;
     ULONG DebugUartClockFrequency;
 } PACKED REALVIEW_TABLE, *PREALVIEW_TABLE;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

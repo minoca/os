@@ -269,7 +269,8 @@ Members:
     Reserved - Stores 8 reserved bytes.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _DMA_BCM2709_CONTROL_BLOCK {
     ULONG TransferInformation;
     ULONG SourceAddress;
@@ -279,6 +280,7 @@ typedef struct _DMA_BCM2709_CONTROL_BLOCK {
     ULONG NextAddress;
     ULONG Reserved[2];
 } PACKED DMA_BCM2709_CONTROL_BLOCK, *PDMA_BCM2709_CONTROL_BLOCK;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

@@ -658,11 +658,13 @@ Members:
     Registers - Stores the floating point state.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 struct _FPU_CONTEXT {
     ULONGLONG Registers[32];
     ULONG Fpscr;
 } PACKED ALIGNED16;
+#pragma pack(pop)
 
 /*++
 
@@ -719,12 +721,14 @@ Members:
     FpuContext - Stores the FPU state.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _SIGNAL_CONTEXT_ARM {
     SIGNAL_CONTEXT Common;
     TRAP_FRAME TrapFrame;
     FPU_CONTEXT FpuContext;
 } PACKED SIGNAL_CONTEXT_ARM, *PSIGNAL_CONTEXT_ARM;
+#pragma pack(pop)
 
 /*++
 
@@ -1078,7 +1082,8 @@ Members:
         ID_ISAR5).
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _ARM_CPUID {
     ULONG ProcessorFeatures[2];
     ULONG DebugFeatures;
@@ -1086,6 +1091,7 @@ typedef struct _ARM_CPUID {
     ULONG MemoryModelFeatures[4];
     ULONG IsaFeatures[6];
 } PACKED ARM_CPUID, *PARM_CPUID;
+#pragma pack(pop)
 
 /*++
 

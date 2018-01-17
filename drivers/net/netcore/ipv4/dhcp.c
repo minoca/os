@@ -233,7 +233,8 @@ Members:
         magic.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _DHCP_PACKET {
     UCHAR OperationCode;
     UCHAR HardwareType;
@@ -251,6 +252,7 @@ typedef struct _DHCP_PACKET {
     UCHAR BootFileName[128];
     ULONG MagicCookie;
 } PACKED DHCP_PACKET, *PDHCP_PACKET;
+#pragma pack(pop)
 
 /*++
 

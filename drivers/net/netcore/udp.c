@@ -162,13 +162,15 @@ Members:
         two octets. A pseudo IP header is used for the calculation.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _UDP_HEADER {
     USHORT SourcePort;
     USHORT DestinationPort;
     USHORT Length;
     USHORT Checksum;
 } PACKED UDP_HEADER, *PUDP_HEADER;
+#pragma pack(pop)
 
 /*++
 

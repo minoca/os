@@ -249,12 +249,14 @@ Members:
         bit, which indicates that this is the last entry in the PRDT.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _ATA_PRDT {
     ULONG PhysicalAddress;
     USHORT Size;
     USHORT Flags;
 } PACKED ATA_PRDT, *PATA_PRDT;
+#pragma pack(pop)
 
 /*++
 

@@ -1543,13 +1543,15 @@ Members:
         IO_OBJECT_TYPE. Other flags may be added to this field in the future.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _DIRECTORY_ENTRY {
     FILE_ID FileId;
     ULONGLONG NextOffset;
     USHORT Size;
     UCHAR Type;
 } PACKED DIRECTORY_ENTRY, *PDIRECTORY_ENTRY;
+#pragma pack(pop)
 
 /*++
 

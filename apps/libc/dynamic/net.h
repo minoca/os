@@ -96,7 +96,8 @@ Members:
         packet.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _DNS_HEADER {
     USHORT Identifier;
     USHORT Flags;
@@ -105,6 +106,7 @@ typedef struct _DNS_HEADER {
     USHORT NameServerCount;
     USHORT AdditionalResourceCount;
 } PACKED DNS_HEADER, *PDNS_HEADER;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

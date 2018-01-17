@@ -132,7 +132,8 @@ Members:
         the PL-310 cache controller's registers.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _OMAP4_TABLE {
     DESCRIPTION_HEADER Header;
     ULONGLONG TimerPhysicalAddress[OMAP4_TIMER_COUNT];
@@ -143,6 +144,7 @@ typedef struct _OMAP4_TABLE {
     ULONGLONG AudioClockPhysicalAddress;
     ULONGLONG Pl310RegistersBasePhysicalAddress;
 } PACKED OMAP4_TABLE, *POMAP4_TABLE;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

@@ -123,11 +123,13 @@ Members:
     End - Stores the end device path node.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _EFI_VEYRON_SERIAL_IO_DEVICE_PATH {
     EFI_VEYRON_SERIAL_IO_DEVICE_PATH_NODE Device;
     EFI_DEVICE_PATH_PROTOCOL End;
 } PACKED EFI_VEYRON_SERIAL_IO_DEVICE_PATH, *PEFI_VEYRON_SERIAL_IO_DEVICE_PATH;
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

@@ -105,12 +105,14 @@ Environment:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _PCI_MSI_X_TABLE_ENTRY {
     ULONGLONG Address;
     ULONG Data;
     ULONG Control;
 } PACKED PCI_MSI_X_TABLE_ENTRY, *PPCI_MSI_X_TABLE_ENTRY;
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

@@ -861,7 +861,8 @@ Members:
         wire.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _ATL1C_TRANSMIT_DESCRIPTOR {
     USHORT BufferLength;
     USHORT VlanTag;
@@ -918,6 +919,7 @@ Members:
 typedef struct _ATL1C_RECEIVE_SLOT {
     ULONGLONG PhysicalAddress;
 } PACKED ATL1C_RECEIVE_SLOT, *PATL1C_RECEIVE_SLOT;
+#pragma pack(pop)
 
 /*++
 

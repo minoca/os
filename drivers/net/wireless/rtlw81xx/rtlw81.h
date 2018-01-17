@@ -1609,7 +1609,8 @@ Members:
     Reserved4 - Stores 4 reserved bytes.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _RTLW81_FIRMWARE_HEADER {
     USHORT Signature;
     UCHAR Category;
@@ -1863,6 +1864,7 @@ typedef struct _RTLW81_MAC_ID_CONFIG_COMMAND {
     ULONG Mask;
     UCHAR MacId;
 } PACKED RTLW81_MAC_ID_CONFIG_COMMAND, *PRTLW81_MAC_ID_CONFIG_COMMAND;
+#pragma pack(pop)
 
 /*++
 

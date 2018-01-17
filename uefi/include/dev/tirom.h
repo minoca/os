@@ -119,7 +119,8 @@ Members:
     Reserved2 - Stores another reserved field.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _AM335_BOOT_DATA {
     UINT32 Reserved;
     UINT32 MemoryDeviceDescriptor;
@@ -127,6 +128,7 @@ typedef struct _AM335_BOOT_DATA {
     UINT8 ResetReason;
     UINT8 Reserved2;
 } PACKED AM335_BOOT_DATA, *PAM335_BOOT_DATA;
+#pragma pack(pop)
 
 typedef
 INT32

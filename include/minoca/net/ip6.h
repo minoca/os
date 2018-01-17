@@ -215,7 +215,8 @@ Members:
     DestinationAddress - Stores the destination IP address of the packet.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _IP6_HEADER {
     ULONG VersionClassFlow;
     USHORT PayloadLength;
@@ -265,6 +266,7 @@ typedef struct _IP6_OPTION {
     UCHAR Type;
     UCHAR Length;
 } PACKED IP6_OPTION, *PIP6_OPTION;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

@@ -488,7 +488,8 @@ Members:
         the type of this data. The size of the data is included in the length.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct {
     UINT8 Type;
     UINT8 SubType;
@@ -1640,6 +1641,7 @@ typedef union {
     BBS_BBS_DEVICE_PATH *Bbs;
     UINT8 *Raw;
 } PACKED EFI_DEV_PATH_PTR;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

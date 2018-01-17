@@ -97,12 +97,14 @@ Members:
     Keycode - Stores the array of keys that are pressed down.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _USB_KEYBOARD_REPORT {
     UCHAR ModifierKeys;
     UCHAR Reserved;
     UCHAR Keycode[USB_KEYBOARD_REPORT_KEY_COUNT];
 } PACKED USB_KEYBOARD_REPORT, *PUSB_KEYBOARD_REPORT;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

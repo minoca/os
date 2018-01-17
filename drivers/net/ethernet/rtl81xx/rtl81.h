@@ -834,7 +834,8 @@ Members:
         wire.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _RTL81_TRANSMIT_DESCRIPTOR {
     ULONG Command;
     ULONG VlanTag;
@@ -864,6 +865,7 @@ typedef struct _RTL81_RECEIVE_DESCRIPTOR {
     ULONG VlanTag;
     ULONGLONG PhysicalAddress;
 } PACKED RTL81_RECEIVE_DESCRIPTOR, *PRTL81_RECEIVE_DESCRIPTOR;
+#pragma pack(pop)
 
 /*++
 

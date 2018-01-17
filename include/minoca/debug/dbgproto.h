@@ -136,7 +136,8 @@ Members:
     Padding - Stores padding to align the structure.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _DEBUG_PACKET_HEADER {
     USHORT Magic;
     USHORT Command;
@@ -448,12 +449,15 @@ typedef union _REGISTERS_UNION {
     X64_GENERAL_REGISTERS X64;
     ARM_GENERAL_REGISTERS Arm;
 } PACKED REGISTERS_UNION, *PREGISTERS_UNION;
+#pragma pack(pop)
 
 typedef struct _X86_TABLE_REGISTER {
     ULONG Limit;
     ULONG Base;
 } X86_TABLE_REGISTER, *PX86_TABLE_REGISTER;
 
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _X86_SPECIAL_REGISTERS {
     ULONGLONG Cr0;
     ULONGLONG Cr2;
@@ -855,6 +859,7 @@ Members:
 typedef struct _DEBUG_REBOOT_REQUEST {
     ULONG ResetType;
 } PACKED DEBUG_REBOOT_REQUEST, *PDEBUG_REBOOT_REQUEST;
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

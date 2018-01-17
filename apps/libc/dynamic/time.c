@@ -113,7 +113,8 @@ Members:
     Strings - Stores the string table.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _CUSTOM_TIME_ZONE {
     TIME_ZONE_HEADER Header;
     TIME_ZONE_RULE StandardRule;
@@ -122,6 +123,7 @@ typedef struct _CUSTOM_TIME_ZONE {
     TIME_ZONE_ENTRY ZoneEntry;
     CHAR Strings[32];
 } PACKED CUSTOM_TIME_ZONE, *PCUSTOM_TIME_ZONE;
+#pragma pack(pop)
 
 /*++
 

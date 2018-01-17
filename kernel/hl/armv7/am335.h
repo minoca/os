@@ -71,7 +71,8 @@ Members:
     PrcmBase - Stores the physical address of the PRCM registers.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _AM335X_TABLE {
     DESCRIPTION_HEADER Header;
     ULONGLONG TimerBase[AM335X_TIMER_COUNT];
@@ -80,6 +81,7 @@ typedef struct _AM335X_TABLE {
     ULONGLONG InterruptControllerBase;
     ULONGLONG PrcmBase;
 } PACKED AM335X_TABLE, *PAM335X_TABLE;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

@@ -143,11 +143,13 @@ Members:
     DriveNumber - Stores the BIOS drive number.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _EFI_PCAT_DISK_DEVICE_PATH {
     EFI_BIOS_BLOCK_IO_DEVICE_PATH Disk;
     EFI_DEVICE_PATH_PROTOCOL End;
 } PACKED EFI_PCAT_DISK_DEVICE_PATH, *PEFI_PCAT_DISK_DEVICE_PATH;
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

@@ -111,7 +111,8 @@ Members:
     TargetProtocolAddress - Storse the internetwork address of the intended
         receiver.
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _ARP_PACKET {
     USHORT HardwareType;
     USHORT ProtocolType;
@@ -119,6 +120,7 @@ typedef struct _ARP_PACKET {
     UCHAR ProtocolAddressLength;
     USHORT Operation;
 } PACKED ARP_PACKET, *PARP_PACKET;
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

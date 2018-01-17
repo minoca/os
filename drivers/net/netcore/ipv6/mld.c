@@ -205,7 +205,8 @@ Members:
         senders. This should be 0 for general query messages.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _MLD_MESSAGE {
     ICMP6_HEADER Header;
     USHORT MaxResponseCode;
@@ -289,6 +290,7 @@ typedef struct _MLD2_ADDRESS_RECORD {
     USHORT SourceAddressCount;
     ULONG MulticastAddress[IP6_ADDRESS_SIZE / sizeof(ULONG)];
 } PACKED MLD2_ADDRESS_RECORD, *PMLD2_ADDRESS_RECORD;
+#pragma pack(pop)
 
 /*++
 

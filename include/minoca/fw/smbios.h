@@ -632,7 +632,8 @@ Members:
         have a value 0x21.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _SMBIOS_ENTRY_POINT {
     ULONG AnchorString;
     UCHAR Checksum;
@@ -1472,6 +1473,7 @@ typedef struct _SMBIOS_BOOT_INFORMATION {
     UCHAR Reserved[6];
     UCHAR BootStatus[ANYSIZE_ARRAY];
 } PACKED SMBIOS_BOOT_INFORMATION, *PSMBIOS_BOOT_INFORMATION;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

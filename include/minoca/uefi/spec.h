@@ -3220,13 +3220,15 @@ Members:
         field in the key options.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct {
     EFI_BOOT_KEY_DATA KeyData;
     UINT32 BootOptionCrc;
     UINT16 BootOption;
     //EFI_INPUT_KEY Keys[];
 } PACKED EFI_KEY_OPTION;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

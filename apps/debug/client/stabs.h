@@ -246,7 +246,8 @@ Members:
         address.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _RAW_STAB {
     ULONG StringIndex;
     UCHAR Type;
@@ -254,6 +255,7 @@ typedef struct _RAW_STAB {
     USHORT Description;
     ULONG Value;
 } PACKED RAW_STAB, *PRAW_STAB;
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

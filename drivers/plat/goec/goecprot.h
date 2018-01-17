@@ -283,7 +283,8 @@ Members:
     DataLength - Stores the length of the data following this header.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _GOEC_COMMAND_HEADER {
     UCHAR Version;
     UCHAR Checksum;
@@ -324,6 +325,7 @@ typedef struct _GOEC_RESPONSE_HEADER {
     USHORT DataLength;
     USHORT Reserved;
 } PACKED GOEC_RESPONSE_HEADER, *PGOEC_RESPONSE_HEADER;
+#pragma pack(pop)
 
 /*++
 
@@ -376,7 +378,8 @@ Members:
     InData - Stores any value.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _GOEC_PARAMS_HELLO {
     ULONG InData;
 } PACKED GOEC_PARAMS_HELLO, *PGOEC_PARAMS_HELLO;
@@ -543,6 +546,7 @@ Members:
 typedef struct _GOEC_RESPONSE_VBNV_CONTEXT {
     GOEC_NVRAM NvRam;
 } PACKED GOEC_RESPONSE_VBNV_CONTEXT, *PGOEC_RESPONSE_VBNV_CONTEXT;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

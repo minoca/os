@@ -287,7 +287,8 @@ Members:
         this is a valid boot device.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _FAT_EXTENDED_BIOS_PARAMETERS {
     BYTE PhysicalDriveNumber;
     BYTE CurrentHead;
@@ -594,6 +595,7 @@ typedef struct _FAT_LONG_DIRECTORY_ENTRY {
     USHORT Cluster;
     USHORT Name3[FAT_LONG_DIRECTORY_ENTRY_NAME3_SIZE];
 } PACKED FAT_LONG_DIRECTORY_ENTRY, *PFAT_LONG_DIRECTORY_ENTRY;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------- Function Prototypes

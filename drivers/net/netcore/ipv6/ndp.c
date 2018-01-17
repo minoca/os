@@ -136,7 +136,8 @@ Members:
     Reserved - This field is reserved. Must be set to zero.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _NDP_ROUTER_SOLICITATION {
     ICMP6_HEADER Header;
     ULONG Reserved;
@@ -366,6 +367,7 @@ typedef struct _NDP_OPTION_MTU {
     USHORT Reserved;
     ULONG MaxTransmissionUnit;
 } PACKED NDP_OPTION_MTU, *PNDP_OPTION_MTU;
+#pragma pack(pop)
 
 /*++
 

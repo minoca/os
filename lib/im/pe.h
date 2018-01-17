@@ -104,7 +104,8 @@ Author:
 //
 // PE Image header definitions.
 //
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _IMAGE_SECTION_HEADER {
     BYTE Name[IMAGE_SIZEOF_SHORT_NAME];
     union {
@@ -266,6 +267,7 @@ typedef struct _COFF_SYMBOL {
     UCHAR Class;
     UCHAR AuxCount;
 } PACKED COFF_SYMBOL, *PCOFF_SYMBOL;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------- Function Prototypes

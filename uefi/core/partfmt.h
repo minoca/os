@@ -156,7 +156,8 @@ Members:
         entry.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _EFI_PARTITION_TABLE_HEADER {
     EFI_TABLE_HEADER Header;
     EFI_LBA MyLba;
@@ -281,7 +282,7 @@ typedef struct _EFI_CDROM_PRIMARY_VOLUME_DESCRIPTOR {
     UINT32 VolumeSize[2];
 } PACKED EFI_CDROM_PRIMARY_VOLUME_DESCRIPTOR,
                                          *PEFI_CDROM_PRIMARY_VOLUME_DESCRIPTOR;
-
+#pragma pack(pop)
 /*++
 
 Structure Description:
@@ -322,7 +323,8 @@ Members:
     Id55AA - Stores the constant values 0x55 and 0xAA.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _EFI_ELTORITO_CATALOG_DATA {
     UINT8 Indicator;
     UINT8 PlatformId;
@@ -390,6 +392,7 @@ typedef struct _EFI_ELTORITO_SECTION {
     UINT16 SectionEntries;
     CHAR8 Id[28];
 } PACKED EFI_ELTORITO_SECTION, *PEFI_ELTORITO_SECTION;
+#pragma pack(pop)
 
 /*++
 
@@ -448,7 +451,8 @@ Members:
     SizeInLba - Stores the number of logical block in the partition.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _EFI_MBR_PARTITION_RECORD {
     UINT8 BootIndicator;
     UINT8 StartHead;
@@ -491,6 +495,7 @@ typedef struct _EFI_MASTER_BOOT_RECORD {
     EFI_MBR_PARTITION_RECORD Partition[EFI_MAX_MBR_PARTITIONS];
     UINT16 Signature;
 } PACKED EFI_MASTER_BOOT_RECORD, *PEFI_MASTER_BOOT_RECORD;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

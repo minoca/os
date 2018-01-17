@@ -665,7 +665,8 @@ Members:
     HtControl - Stores high throughput information for the packet.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _NET80211_FRAME_HEADER {
     USHORT FrameControl;
     USHORT DurationId;
@@ -830,6 +831,7 @@ typedef struct _NET80211_CCM_NONCE {
     UCHAR Address2[NET80211_ADDRESS_SIZE];
     UCHAR PacketNumber[NET80211_CCMP_PACKET_NUMBER_SIZE];
 } PACKED NET80211_CCM_NONCE, *PNET80211_CCM_NONCE;
+#pragma pack(pop)
 
 typedef enum _NET80211_STATE {
     Net80211StateInvalid,

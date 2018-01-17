@@ -216,7 +216,8 @@ Members:
         sum of all 16 bit words in the IGMP message payload.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _IGMP_HEADER {
     UCHAR Type;
     UCHAR MaxResponseCode;
@@ -321,6 +322,7 @@ typedef struct _IGMP_REPORT_V3 {
     USHORT Reserved;
     USHORT GroupRecordCount;
 } PACKED IGMP_REPORT_V3, *PIGMP_REPORT_V3;
+#pragma pack(pop)
 
 /*++
 

@@ -177,12 +177,14 @@ Members:
     Route - Stores an array of available routes.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _BCM27_PWMA_DEVICE {
     SOUND_DEVICE SoundDevice;
     ULONG SampleRates[BCM27_PWMA_SAMPLE_RATE_COUNT];
     SOUND_DEVICE_ROUTE Routes[BCM27_PWMA_ROUTE_COUNT];
 } PACKED BCM27_PWMA_DEVICE, *PBCM27_PWMA_DEVICE;
+#pragma pack(pop)
 
 /*++
 

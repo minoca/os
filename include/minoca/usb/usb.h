@@ -478,7 +478,8 @@ Members:
         supports.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _USB_DEVICE_DESCRIPTOR {
     UCHAR Length;
     UCHAR DescriptorType;
@@ -793,6 +794,7 @@ typedef struct _USB_SETUP_PACKET {
     USHORT Index;
     USHORT Length;
 } PACKED USB_SETUP_PACKET, *PUSB_SETUP_PACKET;
+#pragma pack(pop)
 
 /*++
 

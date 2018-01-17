@@ -190,7 +190,8 @@ Members:
     ImageName - Stores the name of the image.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _UBOOT_HEADER {
     UINT32 Magic;
     UINT32 HeaderCrc32;
@@ -323,6 +324,7 @@ typedef struct _UBOOT_FIT_PROPERTY {
     UINT32 StringOffset;
     // UINT8 Data[Size];
 } PACKED UBOOT_FIT_PROPERTY, *PUBOOT_FIT_PROPERTY;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

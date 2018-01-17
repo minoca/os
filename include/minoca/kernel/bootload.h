@@ -361,7 +361,8 @@ Members:
         processor should use for quick dispatch level mappings.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 struct _PROCESSOR_START_BLOCK {
     PVOID StackBase;
     ULONG StackSize;
@@ -371,6 +372,7 @@ struct _PROCESSOR_START_BLOCK {
     PVOID ProcessorStructures;
     PVOID SwapPage;
 } PACKED;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

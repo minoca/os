@@ -399,13 +399,15 @@ Members:
     NextDescriptor - Stores the physical address of the next DMA descriptor.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _SD_DWC_DMA_DESCRIPTOR {
     ULONG Control;
     ULONG Size;
     ULONG Address;
     ULONG NextDescriptor;
 } PACKED SD_DWC_DMA_DESCRIPTOR, *PSD_DWC_DMA_DESCRIPTOR;
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

@@ -355,7 +355,8 @@ Members:
     PortId - Stores the port ID of the sending socket.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _NETLINK_HEADER {
     ULONG Length;
     USHORT Type;
@@ -424,6 +425,7 @@ typedef struct _NETLINK_GENERIC_HEADER {
     UCHAR Version;
     USHORT Reserved;
 } PACKED NETLINK_GENERIC_HEADER, *PNETLINK_GENERIC_HEADER;
+#pragma pack(pop)
 
 /*++
 

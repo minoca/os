@@ -162,7 +162,8 @@ Members:
     OemData - Stores a section of space reserved for OEM-specific information.
 
 --*/
-
+#pragma pack(push)
+#pragma pack(1)
 typedef struct _VESA_INFORMATION {
     UINT32 Signature;
     UINT16 VesaVersion;
@@ -321,6 +322,7 @@ typedef struct _VESA_MODE_INFORMATION {
     UINT16 OffScreenMemorySize;
     //UCHAR Reserved2[206];
 } PACKED VESA_MODE_INFORMATION, *PVESA_MODE_INFORMATION;
+#pragma pack(pop)
 
 /*++
 
