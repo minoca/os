@@ -400,12 +400,16 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _SD_DWC_DMA_DESCRIPTOR {
     ULONG Control;
     ULONG Size;
     ULONG Address;
     ULONG NextDescriptor;
 } PACKED SD_DWC_DMA_DESCRIPTOR, *PSD_DWC_DMA_DESCRIPTOR;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

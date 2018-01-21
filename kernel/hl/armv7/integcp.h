@@ -108,6 +108,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _INTEGRATORCP_TABLE {
     DESCRIPTION_HEADER Header;
     ULONGLONG Pl110PhysicalAddress;
@@ -118,6 +120,8 @@ typedef struct _INTEGRATORCP_TABLE {
     ULONGLONG DebugUartPhysicalAddress;
     ULONG DebugUartClockFrequency;
 } PACKED INTEGRATORCP_TABLE, *PINTEGRATORCP_TABLE;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

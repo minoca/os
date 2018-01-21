@@ -124,6 +124,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _PARTITION_TABLE_ENTRY {
     UCHAR BootIndicator;
     UCHAR StartingHead;
@@ -136,6 +138,8 @@ typedef struct _PARTITION_TABLE_ENTRY {
     ULONG StartingLba;
     ULONG SectorCount;
 } PACKED PARTITION_TABLE_ENTRY, *PPARTITION_TABLE_ENTRY;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

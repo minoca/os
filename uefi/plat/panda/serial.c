@@ -123,10 +123,14 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _EFI_PANDA_SERIAL_IO_DEVICE_PATH {
     EFI_PANDA_SERIAL_IO_DEVICE_PATH_NODE Device;
     EFI_DEVICE_PATH_PROTOCOL End;
 } PACKED EFI_PANDA_SERIAL_IO_DEVICE_PATH, *PEFI_PANDA_SERIAL_IO_DEVICE_PATH;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

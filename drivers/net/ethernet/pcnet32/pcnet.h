@@ -557,6 +557,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _PCNET_INITIALIZATION_BLOCK_16 {
     USHORT Mode;
     BYTE PhysicalAddress[ETHERNET_ADDRESS_SIZE];
@@ -695,6 +697,8 @@ typedef struct _PCNET_TRANSMIT_DESCRIPTOR_32 {
     ULONG ErrorFlags;
     ULONG Reserved;
 } PACKED PCNET_TRANSMIT_DESCRIPTOR_32, *PPCNET_TRANSMIT_DESCRIPTOR_32;
+
+#pragma pack(pop)
 
 /*++
 

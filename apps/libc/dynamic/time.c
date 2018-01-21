@@ -114,6 +114,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _CUSTOM_TIME_ZONE {
     TIME_ZONE_HEADER Header;
     TIME_ZONE_RULE StandardRule;
@@ -122,6 +124,8 @@ typedef struct _CUSTOM_TIME_ZONE {
     TIME_ZONE_ENTRY ZoneEntry;
     CHAR Strings[32];
 } PACKED CUSTOM_TIME_ZONE, *PCUSTOM_TIME_ZONE;
+
+#pragma pack(pop)
 
 /*++
 

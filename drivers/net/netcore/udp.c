@@ -163,12 +163,16 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _UDP_HEADER {
     USHORT SourcePort;
     USHORT DestinationPort;
     USHORT Length;
     USHORT Checksum;
 } PACKED UDP_HEADER, *PUDP_HEADER;
+
+#pragma pack(pop)
 
 /*++
 

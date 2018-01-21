@@ -861,6 +861,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _E1000_TX_DESCRIPTOR {
     ULONGLONG Address;
     USHORT Length;
@@ -903,6 +905,8 @@ typedef struct _E1000_RX_DESCRIPTOR {
     UCHAR Errors;
     USHORT VlanTag;
 } PACKED E1000_RX_DESCRIPTOR, *PE1000_RX_DESCRIPTOR;
+
+#pragma pack(pop)
 
 /*++
 

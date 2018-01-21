@@ -206,6 +206,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _MLD_MESSAGE {
     ICMP6_HEADER Header;
     USHORT MaxResponseCode;
@@ -289,6 +291,8 @@ typedef struct _MLD2_ADDRESS_RECORD {
     USHORT SourceAddressCount;
     ULONG MulticastAddress[IP6_ADDRESS_SIZE / sizeof(ULONG)];
 } PACKED MLD2_ADDRESS_RECORD, *PMLD2_ADDRESS_RECORD;
+
+#pragma pack(pop)
 
 /*++
 

@@ -424,6 +424,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _SD_CARD_IDENTIFICATION {
     UINT8 Crc7;
     UINT8 ManufacturingDate[2];
@@ -433,6 +435,8 @@ typedef struct _SD_CARD_IDENTIFICATION {
     UINT8 OemId[2];
     UINT8 ManufacturerId;
 } PACKED SD_CARD_IDENTIFICATION, *PSD_CARD_IDENTIFICATION;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

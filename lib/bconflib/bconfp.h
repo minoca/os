@@ -98,6 +98,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _BOOT_CONFIGURATION_HEADER {
     ULONG Magic;
     ULONG Version;
@@ -171,6 +173,8 @@ typedef struct _BOOT_CONFIGURATION_ENTRY {
     ULONGLONG Flags;
     ULONG DebugDevice;
 } PACKED BOOT_CONFIGURATION_ENTRY, *PBOOT_CONFIGURATION_ENTRY;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

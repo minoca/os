@@ -284,6 +284,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _GOEC_COMMAND_HEADER {
     UCHAR Version;
     UCHAR Checksum;
@@ -324,6 +326,8 @@ typedef struct _GOEC_RESPONSE_HEADER {
     USHORT DataLength;
     USHORT Reserved;
 } PACKED GOEC_RESPONSE_HEADER, *PGOEC_RESPONSE_HEADER;
+
+#pragma pack(pop)
 
 /*++
 
@@ -377,6 +381,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _GOEC_PARAMS_HELLO {
     ULONG InData;
 } PACKED GOEC_PARAMS_HELLO, *PGOEC_PARAMS_HELLO;
@@ -396,6 +402,8 @@ Members:
 typedef struct _GOEC_RESPONSE_HELLO {
     ULONG OutData;
 } PACKED GOEC_RESPONSE_HELLO, *PGOEC_RESPONSE_HELLO;
+
+#pragma pack(pop)
 
 typedef enum _GOEC_CURRENT_IMAGE {
     GoecImageUnknown = 0,
@@ -420,6 +428,8 @@ Members:
     CurrentImage - Stores the current running image. See GOEC_CURRENT_IMAGE.
 
 --*/
+
+#pragma pack(push, 1)
 
 typedef struct _GOEC_RESPONSE_GET_VERSION {
     CHAR VersionStringRo[32];
@@ -543,6 +553,8 @@ Members:
 typedef struct _GOEC_RESPONSE_VBNV_CONTEXT {
     GOEC_NVRAM NvRam;
 } PACKED GOEC_RESPONSE_VBNV_CONTEXT, *PGOEC_RESPONSE_VBNV_CONTEXT;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

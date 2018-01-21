@@ -68,6 +68,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _NET8022_LLC_HEADER {
     UCHAR DestinationSapAddress;
     UCHAR SourceSapAddress;
@@ -93,6 +95,8 @@ typedef struct _NET8022_SNAP_EXTENSION {
     UCHAR OrganizationCode[3];
     USHORT EthernetType;
 } PACKED NET8022_SNAP_EXTENSION, *PNET8022_SNAP_EXTENSION;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

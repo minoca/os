@@ -124,10 +124,14 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _EFI_RAM_DISK_DEVICE_PATH {
     EFI_RAM_DISK_DEVICE_PATH_NODE Disk;
     EFI_DEVICE_PATH_PROTOCOL End;
 } PACKED EFI_RAM_DISK_DEVICE_PATH, *PEFI_RAM_DISK_DEVICE_PATH;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

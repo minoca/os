@@ -133,6 +133,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _SD_RK32_VENDOR_RESOURCE {
     UCHAR SubType;
     UUID Uuid;
@@ -143,6 +145,8 @@ typedef struct _SD_RK32_VENDOR_RESOURCE {
     USHORT ClockSelectShift;
     ULONG ControlOffset;
 } PACKED SD_RK32_VENDOR_RESOURCE, *PSD_RK32_VENDOR_RESOURCE;
+
+#pragma pack(pop)
 
 typedef struct _SD_RK32_CONTEXT SD_RK32_CONTEXT, *PSD_RK32_CONTEXT;
 

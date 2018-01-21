@@ -456,6 +456,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _E100_COMMAND {
     volatile ULONG Command;
     ULONG NextCommand;
@@ -515,6 +517,8 @@ typedef struct _E100_RECEIVE_FRAME {
     ULONG Sizes;
     ULONG ReceiveFrame[RECEIVE_FRAME_DATA_SIZE / sizeof(ULONG)];
 } PACKED E100_RECEIVE_FRAME, *PE100_RECEIVE_FRAME;
+
+#pragma pack(pop)
 
 /*++
 

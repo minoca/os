@@ -203,6 +203,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _ATA_IDENTIFY_PACKET {
     USHORT Configuration;
     USHORT Reserved1[9];
@@ -253,6 +255,8 @@ typedef struct _ATA_IDENTIFY_PACKET {
     USHORT Reserved13[49];
     USHORT Checksum;
 } PACKED ATA_IDENTIFY_PACKET, *PATA_IDENTIFY_PACKET;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

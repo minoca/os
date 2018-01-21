@@ -112,6 +112,8 @@ Members:
         receiver.
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _ARP_PACKET {
     USHORT HardwareType;
     USHORT ProtocolType;
@@ -119,6 +121,8 @@ typedef struct _ARP_PACKET {
     UCHAR ProtocolAddressLength;
     USHORT Operation;
 } PACKED ARP_PACKET, *PARP_PACKET;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

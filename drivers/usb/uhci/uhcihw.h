@@ -209,6 +209,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _UHCI_TRANSFER_DESCRIPTOR {
     ULONG LinkPointer;
     ULONG Status;
@@ -257,6 +259,8 @@ Members:
 typedef struct _UHCI_SCHEDULE {
     ULONG Frame[UHCI_FRAME_LIST_ENTRY_COUNT];
 } PACKED UHCI_SCHEDULE, *PUHCI_SCHEDULE;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals
