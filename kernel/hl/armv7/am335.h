@@ -72,6 +72,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _AM335X_TABLE {
     DESCRIPTION_HEADER Header;
     ULONGLONG TimerBase[AM335X_TIMER_COUNT];
@@ -80,6 +82,8 @@ typedef struct _AM335X_TABLE {
     ULONGLONG InterruptControllerBase;
     ULONGLONG PrcmBase;
 } PACKED AM335X_TABLE, *PAM335X_TABLE;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

@@ -590,12 +590,16 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _A3E_DESCRIPTOR {
     ULONG NextDescriptor;
     ULONG Buffer;
     ULONG BufferLengthOffset;
     ULONG PacketLengthFlags;
 } PACKED ALIGNED16 A3E_DESCRIPTOR, *PA3E_DESCRIPTOR;
+
+#pragma pack(pop)
 
 /*++
 

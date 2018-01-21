@@ -197,10 +197,14 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _EFI_SD_OMAP4_DEVICE_PATH {
     EFI_SD_OMAP4_BLOCK_IO_DEVICE_PATH Disk;
     EFI_DEVICE_PATH_PROTOCOL End;
 } PACKED EFI_SD_OMAP4_DEVICE_PATH, *PEFI_SD_OMAP4_DEVICE_PATH;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

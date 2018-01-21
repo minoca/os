@@ -1042,6 +1042,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _HDA_BUFFER_DESCRIPTOR_LIST_ENTRY {
     ULONGLONG Address;
     ULONG Length;
@@ -1084,6 +1086,8 @@ typedef struct _HDA_RESPONSE_ENTRY {
     ULONG Response;
     ULONG ResponseExtended;
 } PACKED HDA_RESPONSE_ENTRY, *PHDA_RESPONSE_ENTRY;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

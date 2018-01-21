@@ -362,6 +362,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 struct _PROCESSOR_START_BLOCK {
     PVOID StackBase;
     ULONG StackSize;
@@ -371,6 +373,8 @@ struct _PROCESSOR_START_BLOCK {
     PVOID ProcessorStructures;
     PVOID SwapPage;
 } PACKED;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

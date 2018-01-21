@@ -123,6 +123,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _OMAP3_TABLE {
     DESCRIPTION_HEADER Header;
     ULONGLONG InterruptControllerPhysicalAddress;
@@ -132,6 +134,8 @@ typedef struct _OMAP3_TABLE {
     ULONGLONG PrcmPhysicalAddress;
     ULONGLONG DebugUartPhysicalAddress;
 } PACKED OMAP3_TABLE, *POMAP3_TABLE;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

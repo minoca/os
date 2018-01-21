@@ -119,6 +119,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _INT13_DISK_ACCESS_PACKET {
     UCHAR PacketSize;
     UCHAR Reserved;
@@ -169,6 +171,8 @@ typedef struct _INT13_EXTENDED_DRIVE_PARAMETERS {
     USHORT SectorSize;
     ULONG EnhancedDiskInformation;
 } PACKED INT13_EXTENDED_DRIVE_PARAMETERS, *PINT13_EXTENDED_DRIVE_PARAMETERS;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

@@ -175,6 +175,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _NET80211_AUTHENTICATION_OPEN_BODY {
     USHORT AlgorithmNumber;
     USHORT TransactionSequenceNumber;
@@ -224,6 +226,8 @@ typedef struct _NET80211_DEFAULT_RSN_INFORMATION {
     ULONG AkmSuite;
     USHORT RsnCapabilities;
 } PACKED NET80211_DEFAULT_RSN_INFORMATION, *PNET80211_DEFAULT_RSN_INFORMATION;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

@@ -137,6 +137,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _NDP_ROUTER_SOLICITATION {
     ICMP6_HEADER Header;
     ULONG Reserved;
@@ -366,6 +368,8 @@ typedef struct _NDP_OPTION_MTU {
     USHORT Reserved;
     ULONG MaxTransmissionUnit;
 } PACKED NDP_OPTION_MTU, *PNDP_OPTION_MTU;
+
+#pragma pack(pop)
 
 /*++
 

@@ -250,11 +250,15 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _ATA_PRDT {
     ULONG PhysicalAddress;
     USHORT Size;
     USHORT Flags;
 } PACKED ATA_PRDT, *PATA_PRDT;
+
+#pragma pack(pop)
 
 /*++
 

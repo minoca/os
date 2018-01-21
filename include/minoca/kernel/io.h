@@ -1544,12 +1544,16 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _DIRECTORY_ENTRY {
     FILE_ID FileId;
     ULONGLONG NextOffset;
     USHORT Size;
     UCHAR Type;
 } PACKED DIRECTORY_ENTRY, *PDIRECTORY_ENTRY;
+
+#pragma pack(pop)
 
 /*++
 

@@ -282,6 +282,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _EHCI_TRANSFER_DESCRIPTOR {
     ULONG NextTransfer;
     ULONG AlternateNextTransfer;
@@ -372,6 +374,8 @@ Members:
 typedef struct _EHCI_PERIODIC_SCHEDULE {
     ULONG FrameLink[EHCI_DEFAULT_FRAME_LIST_ENTRY_COUNT];
 } PACKED EHCI_PERIODIC_SCHEDULE, *PEHCI_PERIODIC_SCHEDULE;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals
