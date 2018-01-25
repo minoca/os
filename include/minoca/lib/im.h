@@ -139,12 +139,13 @@ Author:
 //
 
 typedef enum _IMAGE_FORMAT {
-    ImageInvalidFormat,
-    ImageUnknownFormat,
-    ImagePe32,
-    ImageElf32,
-    ImageElf64,
-    MaxImageFormats
+    ImageInvalidFormat = 1,
+    ImageUnknownFormat = 2,
+    ImagePe32 = 4,
+    ImageElf32 = 8,
+    ImageElf64 = 16,
+    ImagePe64 = 32,
+    MaxImageFormats = 64
 } IMAGE_FORMAT, *PIMAGE_FORMAT;
 
 typedef enum _IMAGE_MACHINE_TYPE {
