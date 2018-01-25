@@ -137,6 +137,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _DEBUG_PACKET_HEADER {
     USHORT Magic;
     USHORT Command;
@@ -168,6 +170,8 @@ typedef struct _DEBUG_PACKET {
     DEBUG_PACKET_HEADER Header;
     UCHAR Payload[DEBUG_PAYLOAD_SIZE];
 } PACKED DEBUG_PACKET, *PDEBUG_PACKET;
+
+#pragma pack(pop)
 
 typedef enum _DEBUGGER_COMMAND {
     DbgInvalidCommand,
@@ -239,6 +243,8 @@ Members:
         immediate breakpoint (TRUE) or just wants to connect (FALSE).
 
 --*/
+
+#pragma pack(push, 1)
 
 typedef struct _CONNECTION_REQUEST {
     ULONG ProtocolMajorVersion;
@@ -449,10 +455,14 @@ typedef union _REGISTERS_UNION {
     ARM_GENERAL_REGISTERS Arm;
 } PACKED REGISTERS_UNION, *PREGISTERS_UNION;
 
+#pragma pack(pop)
+
 typedef struct _X86_TABLE_REGISTER {
     ULONG Limit;
     ULONG Base;
 } X86_TABLE_REGISTER, *PX86_TABLE_REGISTER;
+
+#pragma pack(push, 1)
 
 typedef struct _X86_SPECIAL_REGISTERS {
     ULONGLONG Cr0;
@@ -855,6 +865,8 @@ Members:
 typedef struct _DEBUG_REBOOT_REQUEST {
     ULONG ResetType;
 } PACKED DEBUG_REBOOT_REQUEST, *PDEBUG_REBOOT_REQUEST;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

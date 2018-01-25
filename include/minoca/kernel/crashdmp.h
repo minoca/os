@@ -88,6 +88,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _CRASH_DUMP_HEADER {
     ULONG Signature;
     CRASH_DUMP_TYPE Type;
@@ -108,6 +110,8 @@ typedef struct _CRASH_DUMP_HEADER {
     ULONGLONG Parameter3;
     ULONGLONG Parameter4;
 } PACKED CRASH_DUMP_HEADER, *PCRASH_DUMP_HEADER;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------- Function Prototypes

@@ -116,6 +116,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _DEBUG_REMOTE_HEADER {
     ULONG Magic;
     ULONG Command;
@@ -216,6 +218,8 @@ typedef struct _DEBUG_REMOTE_SOURCE_DATA {
     DEBUG_REMOTE_HEADER Header;
     ULONG FileNameCrc32;
 } PACKED DEBUG_REMOTE_SOURCE_DATA, *PDEBUG_REMOTE_SOURCE_DATA;
+
+#pragma pack(pop)
 
 /*++
 

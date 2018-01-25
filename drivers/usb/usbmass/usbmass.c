@@ -421,6 +421,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _SCSI_COMMAND_BLOCK {
     ULONG Signature;
     ULONG Tag;
@@ -571,6 +573,8 @@ typedef struct _SCSI_CAPACITY {
     ULONG LastValidBlockAddress;
     ULONG BlockLength;
 } PACKED SCSI_CAPACITY, *PSCSI_CAPACITY;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

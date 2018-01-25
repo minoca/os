@@ -142,6 +142,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _PROFILER_NOTIFICATION_HEADER {
     PROFILER_DATA_TYPE Type;
     ULONG Processor;
@@ -168,6 +170,8 @@ typedef struct _PROFILER_NOTIFICATION {
     PROFILER_NOTIFICATION_HEADER Header;
     BYTE Data[PROFILER_NOTIFICATION_SIZE];
 } PACKED PROFILER_NOTIFICATION, *PPROFILER_NOTIFICATION;
+
+#pragma pack(pop)
 
 /*++
 
@@ -226,6 +230,8 @@ Members:
         initialization.
 
 --*/
+
+#pragma pack(push, 1)
 
 typedef struct _PROFILER_MEMORY_POOL {
     ULONG Magic;
@@ -406,6 +412,8 @@ typedef struct _PROFILER_THREAD_NEW_THREAD {
     ULONGLONG TimeCounter;
     CHAR Name[ANYSIZE_ARRAY];
 } PACKED PROFILER_THREAD_NEW_THREAD, *PPROFILER_THREAD_NEW_THREAD;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

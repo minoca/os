@@ -159,6 +159,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _PROCESSOR_GATE {
     USHORT LowOffset;
     USHORT Selector;
@@ -382,6 +384,8 @@ struct _FPU_CONTEXT {
     UCHAR Xmm15[16];
     UCHAR Padding[96];
 } PACKED ALIGNED64;
+
+#pragma pack(pop)
 
 /*++
 

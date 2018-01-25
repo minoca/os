@@ -100,6 +100,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _BCM2709_TABLE {
     DESCRIPTION_HEADER Header;
     ULONGLONG ApbClockFrequency;
@@ -175,6 +177,8 @@ typedef struct _BCM2709_CPU_ENTRY {
     ULONG ParkingProtocolVersion;
     ULONGLONG ParkedAddress;
 } PACKED BCM2709_CPU_ENTRY, *PBCM2709_CPU_ENTRY;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

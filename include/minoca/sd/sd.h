@@ -762,6 +762,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _SD_CARD_IDENTIFICATION {
     UCHAR Crc7;
     UCHAR ManufacturingDate[2];
@@ -792,6 +794,8 @@ typedef struct _SD_ADMA2_DESCRIPTOR {
     ULONG Attributes;
     ULONG Address;
 } PACKED SD_ADMA2_DESCRIPTOR, *PSD_ADMA2_DESCRIPTOR;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

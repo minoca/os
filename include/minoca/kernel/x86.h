@@ -68,6 +68,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _PROCESSOR_GATE {
     USHORT LowOffset;
     USHORT Selector;
@@ -510,6 +512,8 @@ struct _PROCESSOR_CONTEXT {
     TABLE_REGISTER Idt;
     TABLE_REGISTER Gdt;
 } PACKED;
+
+#pragma pack(pop)
 
 typedef
 VOID

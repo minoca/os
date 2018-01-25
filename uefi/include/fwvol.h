@@ -149,6 +149,8 @@ Author:
 
 typedef UINT32 EFI_FVB_ATTRIBUTES, *PEFI_FVB_ATTRIBUTES;
 
+#pragma pack(push, 1)
+
 typedef struct _EFI_FIRMWARE_VOLUME_EXT_ENTRY {
     UINT16 ExtEntrySize;
     UINT16 ExtEntryType;
@@ -191,6 +193,8 @@ typedef struct {
     UINT8 Revision;
     EFI_FV_BLOCK_MAP_ENTRY BlockMap[1];
 } PACKED EFI_FIRMWARE_VOLUME_HEADER;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals
