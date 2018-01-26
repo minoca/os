@@ -296,7 +296,7 @@ Fwp16BitGdt:
 Fwp16BitGdtTable:
     .long   0x0                         # The first GDT entry is called the
     .long   0x0                         # null descriptor, it is essentially
-                                        # unused by the processor.
+                                       // unused by the processor.
 
 //
 // Define the code segment descriptor.
