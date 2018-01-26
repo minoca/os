@@ -117,6 +117,8 @@ Author:
 typedef UINT8 EFI_FV_FILETYPE, *PEFI_FV_FILETYPE;
 typedef UINT8 EFI_SECTION_TYPE, *PEFI_SECTION_TYPE;
 
+#pragma pack(push, 1)
+
 typedef union _EFI_COMMON_SECTION_HEADER {
     struct {
         UINT8 Size[3];
@@ -199,6 +201,8 @@ typedef struct _EFI_FREEFORM_SUBTYPE_GUID_SECTION {
 typedef struct _EFI_RAW_SECTION {
     EFI_COMMON_SECTION_HEADER CommonHeader;
 } PACKED EFI_RAW_SECTION, *PEFI_RAW_SECTION;
+
+#pragma pack(pop)
 
 typedef union _EFI_FILE_SECTION_POINTER {
     EFI_COMMON_SECTION_HEADER *CommonHeader;

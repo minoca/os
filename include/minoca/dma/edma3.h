@@ -238,6 +238,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _EDMA_PARAM {
     ULONG Options;
     ULONG Source;
@@ -253,6 +255,8 @@ typedef struct _EDMA_PARAM {
     USHORT CCount;
     USHORT Reserved;
 } PACKED EDMA_PARAM, *PEDMA_PARAM;
+
+#pragma pack(pop)
 
 /*++
 

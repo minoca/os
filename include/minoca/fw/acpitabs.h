@@ -807,6 +807,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _GENERIC_ADDRESS {
     UCHAR AddressSpaceId;
     UCHAR RegisterBitWidth;
@@ -1663,6 +1665,8 @@ typedef struct _GTDT {
     ULONG NonSecurePl2Gsi;
     ULONG NonSecurePl2Flags;
 } PACKED GTDT, *PGTDT;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

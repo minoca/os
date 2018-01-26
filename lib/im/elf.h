@@ -378,6 +378,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _ELF32_HEADER {
     UCHAR Identification[ELF32_IDENTIFICATION_LENGTH];
     ELF32_HALF ImageType;
@@ -873,6 +875,8 @@ typedef struct _ELF64_DYNAMIC_ENTRY {
     ELF64_SXWORD Tag;
     ELF64_XWORD Value;
 } PACKED ELF64_DYNAMIC_ENTRY, *PELF64_DYNAMIC_ENTRY;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

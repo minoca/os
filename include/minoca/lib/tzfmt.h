@@ -133,6 +133,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _TIME_ZONE_HEADER {
     ULONG Magic;
     ULONG RuleOffset;
@@ -302,6 +304,8 @@ typedef struct _TIME_ZONE_LEAP_SECOND {
     CHAR LocalTime;
     CHAR Padding;
 } PACKED TIME_ZONE_LEAP_SECOND, *PTIME_ZONE_LEAP_SECOND;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

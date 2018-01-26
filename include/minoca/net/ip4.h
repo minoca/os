@@ -174,6 +174,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _IP4_HEADER {
     UCHAR VersionAndHeaderLength;
     UCHAR Type;
@@ -206,6 +208,8 @@ typedef struct _IP4_OPTION {
     UCHAR Type;
     UCHAR Length;
 } PACKED IP4_OPTION, *PIP4_OPTION;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

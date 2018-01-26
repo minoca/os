@@ -489,6 +489,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct {
     UINT8 Type;
     UINT8 SubType;
@@ -1640,6 +1642,8 @@ typedef union {
     BBS_BBS_DEVICE_PATH *Bbs;
     UINT8 *Raw;
 } PACKED EFI_DEV_PATH_PTR;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

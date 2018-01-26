@@ -542,6 +542,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _DWE_DESCRIPTOR {
     ULONG Control;
     ULONG BufferSize;
@@ -551,6 +553,8 @@ typedef struct _DWE_DESCRIPTOR {
     ULONG Reserved;
     ULONGLONG Timestamp;
 } PACKED DWE_DESCRIPTOR, *PDWE_DESCRIPTOR;
+
+#pragma pack(pop)
 
 /*++
 

@@ -313,6 +313,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _EAPOL_PACKET_HEADER {
     UCHAR ProtocolVersion;
     UCHAR Type;
@@ -421,6 +423,8 @@ typedef struct _EAPOL_KDE_GTK {
     UCHAR Reserved;
     UCHAR Gtk[ANYSIZE_ARRAY];
 } PACKED EAPOL_KDE_GTK, *PEAPOL_KDE_GTK;
+
+#pragma pack(pop)
 
 /*++
 

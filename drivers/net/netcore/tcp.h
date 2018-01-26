@@ -811,6 +811,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _TCP_HEADER {
     USHORT SourcePort;
     USHORT DestinationPort;
@@ -822,6 +824,8 @@ typedef struct _TCP_HEADER {
     USHORT Checksum;
     USHORT NonUrgentOffset;
 } PACKED TCP_HEADER, *PTCP_HEADER;
+
+#pragma pack(pop)
 
 //
 // -------------------------------------------------------------------- Globals

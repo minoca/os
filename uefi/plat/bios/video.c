@@ -163,6 +163,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _VESA_INFORMATION {
     UINT32 Signature;
     UINT16 VesaVersion;
@@ -321,6 +323,8 @@ typedef struct _VESA_MODE_INFORMATION {
     UINT16 OffScreenMemorySize;
     //UCHAR Reserved2[206];
 } PACKED VESA_MODE_INFORMATION, *PVESA_MODE_INFORMATION;
+
+#pragma pack(pop)
 
 /*++
 

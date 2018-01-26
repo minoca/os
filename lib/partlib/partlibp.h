@@ -173,6 +173,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _PARTITION_TABLE_ENTRY {
     UCHAR BootIndicator;
     UCHAR StartingHead;
@@ -285,6 +287,8 @@ typedef struct _GPT_PARTITION_ENTRY {
     ULONGLONG Attributes;
     USHORT Name[36];
 } PACKED GPT_PARTITION_ENTRY, *PGPT_PARTITION_ENTRY;
+
+#pragma pack(pop)
 
 /*++
 

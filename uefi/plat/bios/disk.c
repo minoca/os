@@ -144,10 +144,14 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _EFI_PCAT_DISK_DEVICE_PATH {
     EFI_BIOS_BLOCK_IO_DEVICE_PATH Disk;
     EFI_DEVICE_PATH_PROTOCOL End;
 } PACKED EFI_PCAT_DISK_DEVICE_PATH, *PEFI_PCAT_DISK_DEVICE_PATH;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes

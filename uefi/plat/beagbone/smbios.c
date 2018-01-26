@@ -90,6 +90,8 @@ Members:
 
 --*/
 
+#pragma pack(push, 1)
+
 typedef struct _EFI_BBONE_EEPROM {
     UINT32 Header;
     UINT8 BoardName[BBONE_BLACK_BOARD_NAME_SIZE];
@@ -98,6 +100,8 @@ typedef struct _EFI_BBONE_EEPROM {
     UINT8 Configuration[BBONE_BLACK_CONFIGURATION_OPTIONS_SIZE];
     UINT8 Reserved[BBONE_BLACK_RESERVED_SIZE];
 } PACKED EFI_BBONE_EEPROM, *PEFI_BBONE_EEPROM;
+
+#pragma pack(pop)
 
 //
 // ----------------------------------------------- Internal Function Prototypes
