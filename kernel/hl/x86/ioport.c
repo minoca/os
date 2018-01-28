@@ -72,6 +72,10 @@ Return Value:
 
 {
 
+#ifdef _MSC_VER 
+	return __inbyte(InputPort);
+#else  
+
     UCHAR ReturnValue;
 
     //
@@ -87,6 +91,7 @@ Return Value:
 
     asm volatile ("inb %%dx,%%al":"=a" (ReturnValue):"d"(InputPort));
     return ReturnValue;
+#endif
 }
 
 KERNEL_API
@@ -121,6 +126,10 @@ Return Value:
     // are inputs to their respective registers.
     //
 
+#ifdef _MSC_VER
+	__outbyte(OutputPort, OutputData);
+#else  
+
     asm volatile ("outb %%al,%%dx"::"a" (OutputData), "d"(OutputPort));
 
     //
@@ -128,6 +137,7 @@ Return Value:
     //
 
     asm volatile ("nop");
+#endif
     return;
 }
 
@@ -155,6 +165,10 @@ Return Value:
 
 {
 
+#ifdef _MSC_VER
+	return __inword(InputPort);
+#else  
+
     USHORT ReturnValue;
 
     //
@@ -170,6 +184,7 @@ Return Value:
 
     asm volatile ("inw %%dx,%%ax":"=a" (ReturnValue):"d"(InputPort));
     return ReturnValue;
+#endif
 }
 
 KERNEL_API
@@ -204,6 +219,10 @@ Return Value:
     // are inputs to their respective registers.
     //
 
+#ifdef _MSC_VER
+	__outword(OutputPort, OutputData);
+#else  
+
     asm volatile ("outw %%ax,%%dx"::"a" (OutputData), "d"(OutputPort));
 
     //
@@ -211,6 +230,7 @@ Return Value:
     //
 
     asm volatile ("nop");
+#endif
     return;
 }
 
@@ -238,6 +258,10 @@ Return Value:
 
 {
 
+#ifdef _MSC_VER
+	return __indword(InputPort);
+#else  
+
     ULONG ReturnValue;
 
     //
@@ -253,6 +277,7 @@ Return Value:
 
     asm volatile ("inl %%dx,%%eax":"=a" (ReturnValue):"d"(InputPort));
     return ReturnValue;
+#endif
 }
 
 KERNEL_API
@@ -287,6 +312,9 @@ Return Value:
     // are inputs to their respective registers.
     //
 
+#ifdef _MSC_VER
+	__outdword(OutputPort, OutputData);
+#else  
     asm volatile ("outl %%eax,%%dx"::"a" (OutputData), "d"(OutputPort));
 
     //
@@ -294,6 +322,7 @@ Return Value:
     //
 
     asm volatile ("nop");
+#endif
     return;
 }
 
