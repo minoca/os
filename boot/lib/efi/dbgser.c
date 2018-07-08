@@ -244,7 +244,7 @@ Return Value:
         // Get the serial I/O protocol.
         //
 
-        EfiStatus = BopEfiHandleProtocol(Handles[0],
+        EfiStatus = BopEfiHandleProtocol(Handles[HandleIndex],
                                          &BoEfiSerialIoProtocolGuid,
                                          (VOID **)&SerialIo);
 
