@@ -140,7 +140,6 @@ Return Value:
 FUNCTION(EfiIoPortIn32)
     movl    %edi, %edx              # Get port number in the right register.
     xorl    %eax, %eax              # Clear the upper word.
-    movl    4(%esp), %edx           # Get the I/O port.
     inl     %dx, %eax               # Perform the I/O port read.
     nop                             # Rest a touch.
     retq                            # Return.
