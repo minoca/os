@@ -105,18 +105,19 @@ X86_COMMON_OBJS = ns16550.o      \
                   x86/archintr.o \
                   x86/archrst.o  \
                   x86/archtimr.o \
-                  x86/ioport.o   \
                   x86/pmtimer.o  \
                   x86/regacces.o \
                   x86/rtc.o      \
                   x86/tsc.o      \
 
 X86_OBJS = $(X86_COMMON_OBJS)  \
+           x86/ioport.o   \
            x86/apinit.o        \
            x86/apstart.o       \
            x86/archsup.o       \
 
 X64_OBJS = $(X86_COMMON_OBJS)  \
+           x64/ioport.o   \
            x64/apinit.o        \
            x64/apstart.o       \
            x64/archsup.o       \
