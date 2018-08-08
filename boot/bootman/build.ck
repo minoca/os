@@ -57,8 +57,6 @@ function build() {
 
     pcatSources = [
         "pcat/x86/entry.S",
-        "bootman.c",
-        "bootim.c",
         "pcat/bootxfr.c",
         "pcat/main.c",
         "pcat/paging.c"
@@ -122,7 +120,7 @@ function build() {
     efiApp = {
         "label": "bootmefi.elf",
         "inputs": commonSources + efiSources + efiLibs,
-        "sources_config": sourcesConfig,
+        "sources_config": sourcesConfig.copy(),
         "includes": includes,
         "config": efiConfig,
         "entry": "BmEfiApplicationMain",
@@ -182,7 +180,7 @@ function build() {
 
         pcatApp = {
             "label": "bootman",
-            "inputs": pcatSources + pcatLibs,
+            "inputs": commonSources + pcatSources + pcatLibs,
             "sources_config": sourcesConfig,
             "includes": includes,
             "config": pcatConfig,
