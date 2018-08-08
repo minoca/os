@@ -143,6 +143,7 @@ function build() {
             "x86/archintr.c",
             "x86/archrst.c",
             "x86/archtimr.c",
+            "x86/ioport.c",
             "x86/pmtimer.c",
             "x86/regacces.c",
             "x86/rtc.c",
@@ -151,6 +152,7 @@ function build() {
 
         archBootSources = [
             ":x86/archdbg.o",
+            ":x86/ioport.o",
             ":x86/regacces.o"
         ];
 
@@ -160,19 +162,14 @@ function build() {
                 "dbgdev.c",
                 "ns16550.c",
                 "x86/archdbg.c",
+                "x86/ioport.c",
                 "x86/regacces.c"
-                "x86/ioport.S",
             ];
 
             archSources += [
                 "x64/apinit.c",
                 "x64/apstart.S",
                 "x64/archsup.S",
-                "x64/ioport.S",
-            ];
-
-            archBootSources += [
-                ":x64/ioport.o",
             ];
 
         } else {
@@ -180,13 +177,7 @@ function build() {
                 "x86/apinit.c",
                 "x86/apstart.S",
                 "x86/archsup.S",
-                ":x86/ioport.o",
             ];
-
-            archBootSources += [
-                "x86/ioport.S",
-            ];
-
         }
     }
 
