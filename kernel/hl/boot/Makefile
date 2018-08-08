@@ -45,15 +45,12 @@ ARMV6_OBJS = ../armv6/archdbg.o  \
              ../armv7/regacces.o \
              ../armv7/uartpl11.o \
 
-X86_COMMON_OBJS = ../x86/archdbg.o  \
-                  ../x86/regacces.o \
-                  ../ns16550.o      \
-
-X86_OBJS = $(X86_COMMON_OBJS) \
+X86_OBJS = ../x86/archdbg.o  \
            ../x86/ioport.o   \
+           ../x86/regacces.o \
+           ../ns16550.o      \
 
-X64_OBJS = $(X86_COMMON_OBJS) \
-           ../x64/ioport.o   \
+X64_OBJS = $(X86_OBJS)
 
 ifeq ($(ARCH),x64)
 DIRS += x6432
