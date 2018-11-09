@@ -1112,7 +1112,7 @@ Return Value:
 
 {
 
-    CHAR Character;
+    UCHAR Character;
     UINTN CurrentFieldSize;
     BOOL DeleteField;
     BOOL Delimit;
