@@ -354,7 +354,18 @@ Return Value:
                                Argument0,
                                Suffix);
 
-        if ((PrintLength < sizeof(Path)) && (access(Path, X_OK) == 0)) {
+        if ((PrintLength < sizeof(Path)) 			
+			
+			//
+			// execute permission - unsupported in windows
+			//
+
+#ifndef _WINDOWS_
+			&& (access(Path, X_OK) == 0)
+#endif
+			)
+		{
+
             Final = Path;
             goto AppSetExecNameEnd;
         }
