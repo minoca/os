@@ -850,7 +850,7 @@ Return Value:
 {
 
     INT Status;
-    ssize_t Written;
+    int Written;
 
     while (Size != 0) {
         Written = write(Descriptor, Buffer, Size);
@@ -864,7 +864,7 @@ Return Value:
             return Status;
         }
 
-        Buffer += Written;
+        Buffer = (char *)Buffer + Written;
         Size -= Written;
     }
 

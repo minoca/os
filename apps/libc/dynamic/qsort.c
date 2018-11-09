@@ -218,7 +218,7 @@ Return Value:
         return;
     }
 
-    LastElement = ArrayBase + (EndIndex * ElementSize);
+    LastElement = (char *)ArrayBase + (EndIndex * ElementSize);
     SmallerIndex = StartIndex - 1;
     SmallestIndex = StartIndex - 1;
     LargerIndex = EndIndex;
@@ -242,7 +242,7 @@ Return Value:
             }
 
             CompareResult =
-                      CompareFunction(ArrayBase + (SmallerIndex * ElementSize),
+                      CompareFunction((char *)ArrayBase + (SmallerIndex * ElementSize),
                                       LastElement);
 
             if (CompareResult >= 0) {
@@ -259,7 +259,7 @@ Return Value:
             LargerIndex -= 1;
             CompareResult =
                       CompareFunction(LastElement,
-                                      ArrayBase + (LargerIndex * ElementSize));
+								(char *)ArrayBase + (LargerIndex * ElementSize));
 
             if (CompareResult >= 0) {
                 break;
@@ -284,7 +284,7 @@ Return Value:
         //
 
         if (SmallerIndex != LargerIndex) {
-            QUICKSORT_SWAP(ArrayBase, ElementSize, SmallerIndex, LargerIndex);
+            QUICKSORT_SWAP((char *)ArrayBase, ElementSize, SmallerIndex, LargerIndex);
         }
 
         //
@@ -301,21 +301,21 @@ Return Value:
         //
 
         CompareResult =
-                      CompareFunction(ArrayBase + (SmallerIndex * ElementSize),
+                      CompareFunction((char *)ArrayBase + (SmallerIndex * ElementSize),
                                       LastElement);
 
         if (CompareResult == 0) {
             SmallestIndex += 1;
-            QUICKSORT_SWAP(ArrayBase, ElementSize, SmallestIndex, SmallerIndex);
+            QUICKSORT_SWAP((char *)ArrayBase, ElementSize, SmallestIndex, SmallerIndex);
         }
 
         CompareResult =
                       CompareFunction(LastElement,
-                                      ArrayBase + (LargerIndex * ElementSize));
+								(char *)ArrayBase + (LargerIndex * ElementSize));
 
         if (CompareResult == 0) {
             LargestIndex -= 1;
-            QUICKSORT_SWAP(ArrayBase, ElementSize, LargerIndex, LargestIndex);
+            QUICKSORT_SWAP((char *)ArrayBase, ElementSize, LargerIndex, LargestIndex);
         }
     }
 
@@ -323,7 +323,7 @@ Return Value:
     // Put the pivot into place.
     //
 
-    QUICKSORT_SWAP(ArrayBase, ElementSize, SmallerIndex, EndIndex);
+    QUICKSORT_SWAP((char *)ArrayBase, ElementSize, SmallerIndex, EndIndex);
 
     //
     // Move lower equal elements back up to the middle, and remove them from
@@ -333,7 +333,7 @@ Return Value:
     LargerIndex = SmallerIndex + 1;
     SmallerIndex -= 1;
     for (EqualIndex = StartIndex; EqualIndex < SmallestIndex; EqualIndex += 1) {
-        QUICKSORT_SWAP(ArrayBase,
+        QUICKSORT_SWAP((char *)ArrayBase,
                        ElementSize,
                        EqualIndex,
                        SmallerIndex);
@@ -350,7 +350,7 @@ Return Value:
          EqualIndex > LargestIndex;
          EqualIndex -= 1) {
 
-        QUICKSORT_SWAP(ArrayBase,
+        QUICKSORT_SWAP((char *)ArrayBase,
                        ElementSize,
                        LargerIndex,
                        EqualIndex);

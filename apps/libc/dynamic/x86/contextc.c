@@ -145,7 +145,7 @@ Return Value:
     // Context.
     //
 
-    StackTop = (PVOID)(Context->uc_stack.ss_sp + Context->uc_stack.ss_size -
+    StackTop = (PVOID)((char *)Context->uc_stack.ss_sp + Context->uc_stack.ss_size -
                        sizeof(UINTN));
 
     StackTop -= (ArgumentCount + 1) * sizeof(UINTN);

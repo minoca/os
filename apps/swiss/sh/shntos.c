@@ -1149,7 +1149,7 @@ Return Value:
         }
 
         BytesRead = read(OutputContext->Handle,
-                         OutputContext->Buffer + OutputContext->BufferSize,
+                         (char *)OutputContext->Buffer + OutputContext->BufferSize,
                          SHELL_NT_OUTPUT_CHUNK_SIZE);
 
         if (BytesRead <= 0) {
@@ -1208,7 +1208,7 @@ Return Value:
         }
 
         BytesWritten = write(InputContext->Handle,
-                             InputContext->Buffer + TotalBytesWritten,
+		                     (char *)InputContext->Buffer + TotalBytesWritten,
                              BytesToWrite);
 
         if (BytesWritten <= 0) {
