@@ -1270,7 +1270,7 @@ Return Value:
             // for white space to field split on.
             //
 
-            if ((Quoted == FALSE) && (isspace(Character))) {
+            if ((Quoted == FALSE) && (isspace((UCHAR)Character))) {
                 if (CurrentFieldSize != 0) {
                     Delimit = TRUE;
 
