@@ -127,8 +127,8 @@ typedef struct _SHELL_NT_INPUT_PUSH_CONTEXT {
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-__stdcall
 unsigned
+__stdcall
 ShOutputCollectionThread (
     void *Context
     );
@@ -1084,8 +1084,8 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
-__stdcall
 unsigned
+__stdcall
 ShOutputCollectionThread (
     void *Context
     )
