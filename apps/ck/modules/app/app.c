@@ -48,6 +48,14 @@ Environment:
 #define CK_APP_SUFFIX ".exe"
 #define CK_APP_PATH_SEPARATOR "\\"
 
+//
+// On newer versions of MSVCRT, an access mode of 1 causes invalid parameter
+// error.
+//
+
+#undef X_OK
+#define X_OK R_OK
+
 #else
 
 #define CK_APP_SUFFIX ""
