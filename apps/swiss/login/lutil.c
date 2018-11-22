@@ -131,8 +131,6 @@ SwpWriteNewUtmpEntry (
 // -------------------------------------------------------------------- Globals
 //
 
-extern char **environ;
-
 PASSWD_ALGORITHM SwPasswordAlgorithms[] = {
     {"md5", "$1$"},
     {"sha256", "$5$"},

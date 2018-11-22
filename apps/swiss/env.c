@@ -79,8 +79,6 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-extern char **environ;
-
 struct option EnvLongOptions[] = {
     {"ignore-environment", no_argument, NULL, 'i'},
     {"unset", required_argument, NULL, 'u'},

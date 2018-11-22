@@ -372,8 +372,6 @@ InitAddUtmpEntry (
 // -------------------------------------------------------------------- Globals
 //
 
-extern char **environ;
-
 struct option InitLongOptions[] = {
     {"debug", no_argument, 0, 'd'},
     {"single", no_argument, 0, 's'},
