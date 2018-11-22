@@ -49,6 +49,7 @@ Environment:
 #define EXPM1_HALF_LN2_HIGH_WORD 0x3FD62E42
 #define EXPM1_3LN2_OVER_2_HIGH_WORD 0x3FF0A2B2
 #define EXPM1_2_TO_NEGATIVE_54_HIGH_WORD 0x3C900000
+#define EXP_2_TO_1023 8.988465674311579539e307 // 0x1p1023
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -344,7 +345,7 @@ Return Value:
         if ((Exponent <= -2) || (Exponent > 56)) {
             Result = ClDoubleOne - (Error - Value);
             if (Exponent == 1024) {
-                Result = Result * 2.0 * 0x1p1023;
+                Result = Result * 2.0 * EXP_2_TO_1023;
 
             } else {
                 Result = Result * TwoRaisedExponent;
