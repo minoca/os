@@ -49,6 +49,7 @@ Environment:
 #define EXPM1F_HALF_LN2_WORD 0x3eb17218
 #define EXPM1F_3LN2_OVER_2_WORD 0x3F851592
 #define EXPM1F_2_TO_NEGATIVE_25_WORD 0x33000000
+#define EXPF_2_TO_127 1.7014118346046923e+38F
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -262,7 +263,7 @@ Return Value:
         if ((Exponent <= -2) || (Exponent > 56)) {
             Result = ClFloatOne - (Error - Value);
             if (Exponent == 128) {
-                Result = Result * (float)2.0 * 0x1p127F;
+                Result = Result * (float)2.0 * EXPF_2_TO_127;
 
             } else {
                 Result = Result * TwoRaisedExponent;

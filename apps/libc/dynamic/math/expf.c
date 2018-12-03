@@ -46,7 +46,7 @@ Environment:
 #define EXPF_HALF_LN_2_WORD 0x3EB17218
 #define EXPF_3_HALVES_LN_2_WORD 0x3F851592
 #define EXPF_LOWER_THRESHOLD_WORD 0x39000000
-#define EXPF_2_TO_127 0x1p127F
+#define EXPF_2_TO_127 1.7014118346046923e+38F
 
 //
 // ------------------------------------------------------ Data Type Definitions

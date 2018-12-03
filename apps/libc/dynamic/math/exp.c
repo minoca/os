@@ -46,7 +46,7 @@ Environment:
 #define EXP_HALF_LN_2_HIGH_WORD 0x3FD62E42
 #define EXP_3_HALVES_LN_2_HIGH_WORD 0x3FF0A2B2
 #define EXP_LOWER_THRESHOLD_HIGH_WORD 0x3E300000
-#define EXP_2_TO_1023 0x1p1023
+#define EXP_2_TO_1023 8.988465674311579539e307
 
 //
 // ------------------------------------------------------ Data Type Definitions

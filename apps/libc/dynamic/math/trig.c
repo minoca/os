@@ -56,7 +56,7 @@ Environment:
 #define MATH_3_PI_OVER_2_HIGH_WORD 0x4012D97C
 #define MATH_4_PI_OVER_2_HIGH_WORD 0x401921FB
 #define PI_OVER_TWO_HIGH_WORD_VALUE 0x000921FB
-#define MEDIUM_SIZED_ROUNDING_VALUE 0x1.8p52
+#define MEDIUM_SIZED_ROUNDING_VALUE 6.755399441055744e15
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -158,12 +158,12 @@ const double ClTangent[13] = {
 };
 
 const double ClTangentFloat[6] = {
-    0x15554d3418c99f.0p-54,
-    0x1112fd38999f72.0p-55,
-    0x1b54c91d865afe.0p-57,
-    0x191df3908c33ce.0p-58,
-    0x185dadfcecf44e.0p-61,
-    0x1362b9bf971bcd.0p-59,
+    0.333331395030791399758,
+    0.133392002712976742718,
+    0.0533812378445670393523,
+    0.0245283181166547278873,
+    0.00297435743359967304927,
+    0.00946564784943673166728
 };
 
 //
