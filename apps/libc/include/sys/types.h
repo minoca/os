@@ -33,6 +33,21 @@ Author:
 #include <stdint.h>
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// Macros for operations of addition and subtraction of pointers with 
+// type PVOID in Visual Studio.
+//
+
+#define POINTER_ADD(_Base, _Addition) \
+    (PVOID)((UINTN)(_Base) + (UINTN)(_Addition))
+
+#define POINTER_SUB(_Base, _Subtraction) \
+    (PVOID)((UINTN)(_Base) - (UINTN)(_Subtraction))
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

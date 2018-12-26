@@ -121,7 +121,7 @@ Return Value:
     while (Minimum < Maximum) {
         Distance = (Maximum - Minimum) / 2;
         CompareIndex = Minimum + Distance;
-        ComparePointer = Base + (CompareIndex * ElementSize);
+        ComparePointer = POINTER_ADD(Base, (CompareIndex * ElementSize));
         CompareResult = CompareFunction(Key, ComparePointer);
         if (CompareResult == 0) {
             return (void *)ComparePointer;

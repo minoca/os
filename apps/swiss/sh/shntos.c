@@ -41,6 +41,9 @@ Environment:
 #include <signal.h>
 #include "shos.h"
 
+#define POINTER_ADD(_Base, _Addition) \
+    (PVOID)((LONG_PTR)(_Base) + (LONG_PTR)(_Addition))
+
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -1149,7 +1152,7 @@ Return Value:
         }
 
         BytesRead = read(OutputContext->Handle,
-                         OutputContext->Buffer + OutputContext->BufferSize,
+                         POINTER_ADD(OutputContext->Buffer, OutputContext->BufferSize),
                          SHELL_NT_OUTPUT_CHUNK_SIZE);
 
         if (BytesRead <= 0) {
@@ -1208,7 +1211,7 @@ Return Value:
         }
 
         BytesWritten = write(InputContext->Handle,
-                             InputContext->Buffer + TotalBytesWritten,
+                             POINTER_ADD(InputContext->Buffer, TotalBytesWritten),
                              BytesToWrite);
 
         if (BytesWritten <= 0) {

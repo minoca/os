@@ -43,7 +43,7 @@ Environment:
 //
 
 #define QUICKSORT_ELEMENT(_Base, _ElementSize, _Index) \
-    (*((void **)((_Base) + ((_ElementSize) * (_Index)))))
+    (*((void **)(POINTER_ADD((_Base), ((_ElementSize) * (_Index))))))
 
 //
 // This macro either performs an exchange directly for pointer sized elements,
@@ -218,7 +218,7 @@ Return Value:
         return;
     }
 
-    LastElement = ArrayBase + (EndIndex * ElementSize);
+    LastElement = POINTER_ADD(ArrayBase, (EndIndex * ElementSize));
     SmallerIndex = StartIndex - 1;
     SmallestIndex = StartIndex - 1;
     LargerIndex = EndIndex;
@@ -242,7 +242,7 @@ Return Value:
             }
 
             CompareResult =
-                      CompareFunction(ArrayBase + (SmallerIndex * ElementSize),
+                      CompareFunction(POINTER_ADD(ArrayBase, (SmallerIndex * ElementSize)),
                                       LastElement);
 
             if (CompareResult >= 0) {
@@ -259,7 +259,7 @@ Return Value:
             LargerIndex -= 1;
             CompareResult =
                       CompareFunction(LastElement,
-                                      ArrayBase + (LargerIndex * ElementSize));
+                                      POINTER_ADD(ArrayBase, (LargerIndex * ElementSize)));
 
             if (CompareResult >= 0) {
                 break;
@@ -301,7 +301,7 @@ Return Value:
         //
 
         CompareResult =
-                      CompareFunction(ArrayBase + (SmallerIndex * ElementSize),
+                      CompareFunction(POINTER_ADD(ArrayBase, (SmallerIndex * ElementSize)),
                                       LastElement);
 
         if (CompareResult == 0) {
@@ -311,7 +311,7 @@ Return Value:
 
         CompareResult =
                       CompareFunction(LastElement,
-                                      ArrayBase + (LargerIndex * ElementSize));
+                                      POINTER_ADD(ArrayBase, (LargerIndex * ElementSize)));
 
         if (CompareResult == 0) {
             LargestIndex -= 1;

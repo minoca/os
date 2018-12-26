@@ -138,7 +138,7 @@ Return Value:
     // Context.
     //
 
-    StackTop = (PVOID)(Context->uc_stack.ss_sp + Context->uc_stack.ss_size -
+    StackTop = (PVOID)(POINTER_ADD(Context->uc_stack.ss_sp, Context->uc_stack.ss_size) -
                        sizeof(UINTN));
 
     //

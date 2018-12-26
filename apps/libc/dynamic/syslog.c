@@ -685,7 +685,7 @@ Return Value:
     TotalComplete = 0;
     while (TotalComplete != ByteCount) {
         BytesComplete = write(FileDescriptor,
-                              Buffer + TotalComplete,
+                              POINTER_ADD(Buffer, TotalComplete),
                               ByteCount - TotalComplete);
 
         if (BytesComplete < 0) {

@@ -240,7 +240,7 @@ Return Value:
     // and overlaps.
     //
 
-    if ((Source < Destination) && (Source + ByteCount > Destination)) {
+    if ((Source < Destination) && (POINTER_ADD(Source, ByteCount) > Destination)) {
         DestinationBytes = Destination;
         SourceBytes = (PCHAR)Source;
         while (ByteCount != 0) {

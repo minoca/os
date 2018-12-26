@@ -613,7 +613,7 @@ Return Value:
         while (TotalBytesRead != TotalBytesToRead) {
             do {
                 Result = read(Stream->Descriptor,
-                              Buffer + TotalBytesRead,
+                              POINTER_ADD(Buffer, TotalBytesRead),
                               TotalBytesToRead - TotalBytesRead);
 
             } while ((Result < 0) && (errno == EINTR));
@@ -646,7 +646,7 @@ Return Value:
         BytesToRead = TotalBytesToRead - TotalBytesRead;
     }
 
-    memcpy(Buffer + TotalBytesRead,
+    memcpy(POINTER_ADD(Buffer, TotalBytesRead),
            Stream->Buffer + Stream->BufferNextIndex,
            BytesToRead);
 
@@ -667,7 +667,7 @@ Return Value:
             BytesToRead = TotalBytesToRead - TotalBytesRead;
             do {
                 Result = read(Stream->Descriptor,
-                              Buffer + TotalBytesRead,
+                              POINTER_ADD(Buffer, TotalBytesRead),
                               BytesToRead);
 
             } while ((Result == -1) && (errno == EINTR));
@@ -726,7 +726,7 @@ Return Value:
                 Stream->BufferNextIndex = BytesToRead;
             }
 
-            memcpy(Buffer + TotalBytesRead, Stream->Buffer, BytesToRead);
+            memcpy(POINTER_ADD(Buffer, TotalBytesRead), Stream->Buffer, BytesToRead);
             TotalBytesRead += BytesToRead;
         }
     }
@@ -865,7 +865,7 @@ Return Value:
         while (TotalBytesWritten != TotalBytesToWrite) {
             do {
                 Result = write(Stream->Descriptor,
-                               Buffer + TotalBytesWritten,
+                               POINTER_ADD(Buffer, TotalBytesWritten),
                                TotalBytesToWrite - TotalBytesWritten);
 
             } while ((Result < 0) && (errno == EINTR));

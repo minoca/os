@@ -864,7 +864,7 @@ Return Value:
             return Status;
         }
 
-        Buffer += Written;
+        Buffer = POINTER_ADD(Buffer, Written);
         Size -= Written;
     }
 
