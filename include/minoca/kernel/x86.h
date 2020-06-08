@@ -362,65 +362,6 @@ struct _FPU_CONTEXT {
 
 Structure Description:
 
-    This structure outlines a trap frame that will be generated during most
-    interrupts and exceptions.
-
-Members:
-
-    Registers - Stores the current state of the machine's registers. These
-        values will be restored upon completion of the interrupt or exception.
-
---*/
-
-struct _TRAP_FRAME {
-    ULONG Ds;
-    ULONG Es;
-    ULONG Fs;
-    ULONG Gs;
-    ULONG Ss;
-    ULONG Eax;
-    ULONG Ebx;
-    ULONG Ecx;
-    ULONG Edx;
-    ULONG Esi;
-    ULONG Edi;
-    ULONG Ebp;
-    ULONG ErrorCode;
-    ULONG Eip;
-    ULONG Cs;
-    ULONG Eflags;
-    ULONG Esp;
-} PACKED;
-
-/*++
-
-Structure Description:
-
-    This structure outlines the register state saved by the kernel when a
-    user mode signal is dispatched. This generally contains 1) control
-    registers which are clobbered by switching to the signal handler, and
-    2) volatile registers.
-
-Members:
-
-    Common - Stores the common signal context information.
-
-    TrapFrame - Stores the general register state.
-
-    FpuContext - Stores the FPU state.
-
---*/
-
-typedef struct _SIGNAL_CONTEXT_X86 {
-    SIGNAL_CONTEXT Common;
-    TRAP_FRAME TrapFrame;
-    FPU_CONTEXT FpuContext;
-} PACKED SIGNAL_CONTEXT_X86, *PSIGNAL_CONTEXT_X86;
-
-/*++
-
-Structure Description:
-
     This structure contains the state of the processor, including both the
     non-volatile general registers and the system registers configured by the
     kernel. This structure is used in a manner similar to the C library
@@ -514,6 +455,65 @@ struct _PROCESSOR_CONTEXT {
 } PACKED;
 
 #pragma pack(pop)
+
+/*++
+
+Structure Description:
+
+    This structure outlines a trap frame that will be generated during most
+    interrupts and exceptions.
+
+Members:
+
+    Registers - Stores the current state of the machine's registers. These
+        values will be restored upon completion of the interrupt or exception.
+
+--*/
+
+struct _TRAP_FRAME {
+    ULONG Ds;
+    ULONG Es;
+    ULONG Fs;
+    ULONG Gs;
+    ULONG Ss;
+    ULONG Eax;
+    ULONG Ebx;
+    ULONG Ecx;
+    ULONG Edx;
+    ULONG Esi;
+    ULONG Edi;
+    ULONG Ebp;
+    ULONG ErrorCode;
+    ULONG Eip;
+    ULONG Cs;
+    ULONG Eflags;
+    ULONG Esp;
+};
+
+/*++
+
+Structure Description:
+
+    This structure outlines the register state saved by the kernel when a
+    user mode signal is dispatched. This generally contains 1) control
+    registers which are clobbered by switching to the signal handler, and
+    2) volatile registers.
+
+Members:
+
+    Common - Stores the common signal context information.
+
+    TrapFrame - Stores the general register state.
+
+    FpuContext - Stores the FPU state.
+
+--*/
+
+typedef struct _SIGNAL_CONTEXT_X86 {
+    SIGNAL_CONTEXT Common;
+    TRAP_FRAME TrapFrame;
+    FPU_CONTEXT FpuContext;
+} SIGNAL_CONTEXT_X86, *PSIGNAL_CONTEXT_X86;
 
 typedef
 VOID

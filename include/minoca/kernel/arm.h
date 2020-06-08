@@ -724,15 +724,11 @@ Members:
 
 --*/
 
-#pragma pack(push, 1)
-
 typedef struct _SIGNAL_CONTEXT_ARM {
     SIGNAL_CONTEXT Common;
     TRAP_FRAME TrapFrame;
     FPU_CONTEXT FpuContext;
-} PACKED SIGNAL_CONTEXT_ARM, *PSIGNAL_CONTEXT_ARM;
-
-#pragma pack(pop)
+} SIGNAL_CONTEXT_ARM, *PSIGNAL_CONTEXT_ARM;
 
 /*++
 

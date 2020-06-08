@@ -100,7 +100,6 @@ Environment:
 #define TRAP_FRAME_SIZE     68
 
 #define PROCESSOR_CONTEXT_SIZE 0x60
-#define SIGNAL_CONTEXT_SIZE 32
 
 //
 // Define the minimum and maximum external interrupt vectors.
