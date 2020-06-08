@@ -872,7 +872,7 @@ Return Value:
     ULONG RegionIndex;
     UCHAR Sequence;
     UCHAR ShortNameChecksum;
-    PUSHORT Source;
+    PUCHAR Source;
     ULONG SourceCount;
     ULONG SourceIndex;
     ULONG SourceSize;
@@ -981,21 +981,21 @@ Return Value:
 
             for (RegionIndex = 0; RegionIndex < 3; RegionIndex += 1) {
                 if (RegionIndex == 0) {
-                    Source = LongEntry->Name1;
-                    SourceSize = FAT_LONG_DIRECTORY_ENTRY_NAME1_SIZE;
+                    Source = (PUCHAR)&(LongEntry->Name1);
+                    SourceSize = sizeof(LongEntry->Name1);
 
                 } else if (RegionIndex == 1) {
-                    Source = LongEntry->Name2;
-                    SourceSize = FAT_LONG_DIRECTORY_ENTRY_NAME2_SIZE;
+                    Source = (PUCHAR)&(LongEntry->Name2);
+                    SourceSize = sizeof(LongEntry->Name2);
 
                 } else {
-                    Source = LongEntry->Name3;
-                    SourceSize = FAT_LONG_DIRECTORY_ENTRY_NAME3_SIZE;
+                    Source = (PUCHAR)&(LongEntry->Name3);
+                    SourceSize = sizeof(LongEntry->Name3);
                 }
 
                 for (SourceIndex = 0;
                      SourceIndex < SourceSize;
-                     SourceIndex += 1) {
+                     SourceIndex += sizeof(USHORT)) {
 
                     FileName[CharacterIndex] =
                                   (CHAR)FAT_READ_INT16(&(Source[SourceIndex]));
@@ -3695,7 +3695,7 @@ Return Value:
 
     USHORT Character;
     ULONG CharacterIndex;
-    PUSHORT Destination;
+    PUCHAR Destination;
     ULONG DestinationIndex;
     ULONG DestinationSize;
     PFAT_DIRECTORY_ENTRY Entries;
@@ -4010,21 +4010,21 @@ Return Value:
 
         for (RegionIndex = 0; RegionIndex < 3; RegionIndex += 1) {
             if (RegionIndex == 0) {
-                Destination = LongEntry->Name1;
-                DestinationSize = FAT_LONG_DIRECTORY_ENTRY_NAME1_SIZE;
+                Destination = (PUCHAR)&(LongEntry->Name1);
+                DestinationSize = sizeof(LongEntry->Name1);
 
             } else if (RegionIndex == 1) {
-                Destination = LongEntry->Name2;
-                DestinationSize = FAT_LONG_DIRECTORY_ENTRY_NAME2_SIZE;
+                Destination = (PUCHAR)&(LongEntry->Name2);
+                DestinationSize = sizeof(LongEntry->Name2);
 
             } else {
-                Destination = LongEntry->Name3;
-                DestinationSize = FAT_LONG_DIRECTORY_ENTRY_NAME3_SIZE;
+                Destination = (PUCHAR)&(LongEntry->Name3);
+                DestinationSize = sizeof(LongEntry->Name3);
             }
 
             for (DestinationIndex = 0;
                  DestinationIndex < DestinationSize;
-                 DestinationIndex += 1) {
+                 DestinationIndex += sizeof(USHORT)) {
 
                 if (CharacterIndex < FileNameLength) {
                     Character = FileName[CharacterIndex];

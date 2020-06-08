@@ -731,7 +731,7 @@ Return Value:
     PFAT_LONG_DIRECTORY_ENTRY LongEntry;
     UCHAR LongEntryChecksum;
     ULONG NameIndex;
-    PUSHORT Region;
+    PUCHAR Region;
     ULONG RegionIndex;
     ULONG RegionSize;
     UCHAR Sequence;
@@ -764,21 +764,21 @@ Return Value:
             NameIndex = *State;
             for (RegionIndex = 0; RegionIndex < 3; RegionIndex += 1) {
                 if (RegionIndex == 0) {
-                    Region = LongEntry->Name1;
-                    RegionSize = FAT_LONG_DIRECTORY_ENTRY_NAME1_SIZE;
+                    Region = (PUCHAR)&(LongEntry->Name1);
+                    RegionSize = sizeof(LongEntry->Name1);
 
                 } else if (RegionIndex == 1) {
-                    Region = LongEntry->Name2;
-                    RegionSize = FAT_LONG_DIRECTORY_ENTRY_NAME2_SIZE;
+                    Region = (PUCHAR)&(LongEntry->Name2);
+                    RegionSize = sizeof(LongEntry->Name2);
 
                 } else {
-                    Region = LongEntry->Name3;
-                    RegionSize = FAT_LONG_DIRECTORY_ENTRY_NAME3_SIZE;
+                    Region = (PUCHAR)&(LongEntry->Name3);
+                    RegionSize = sizeof(LongEntry->Name3);
                 }
 
                 for (CharacterIndex = 0;
                      CharacterIndex < RegionSize;
-                     CharacterIndex += 1) {
+                     CharacterIndex += sizeof(USHORT)) {
 
                     if (Name[NameIndex] == '\0') {
                         break;
