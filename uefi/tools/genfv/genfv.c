@@ -30,6 +30,13 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+//
+// Define away API decorators, as everything is linked statically.
+//
+
+#define RTL_API
+#define KERNEL_API
+
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
@@ -38,6 +45,11 @@ Environment:
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
+#include <minoca/lib/rtl.h>
+#include <minoca/kernel/hmod.h>
 
 #include "uefifw.h"
 #include "efiffs.h"
@@ -170,7 +182,7 @@ GenfvCalculateChecksum8 (
 
 UINT16
 GenfvCalculateChecksum16 (
-    UINT16 *Buffer,
+    UINT8 *Buffer,
     UINTN Size
     );
 
@@ -510,7 +522,7 @@ Return Value:
     Header->BlockMap[0].BlockLength = Context->BlockSize;
     Header->BlockMap[1].BlockCount = 0;
     Header->BlockMap[1].BlockLength = 0;
-    Header->Checksum = GenfvCalculateChecksum16((UINT16 *)Header,
+    Header->Checksum = GenfvCalculateChecksum16((UINT8 *)Header,
                                                 Header->HeaderLength);
 
     //
@@ -1021,7 +1033,7 @@ Return Value:
 
 UINT16
 GenfvCalculateChecksum16 (
-    UINT16 *Buffer,
+    UINT8 *Buffer,
     UINTN Size
     )
 
@@ -1049,10 +1061,9 @@ Return Value:
     UINTN Index;
     UINT16 Sum;
 
-    Size = Size / sizeof(UINT16);
     Sum = 0;
-    for (Index = 0; Index < Size; Index += 1) {
-        Sum = (UINT16)(Sum + Buffer[Index]);
+    for (Index = 0; Index < Size; Index += 2) {
+        Sum = (UINT16)(Sum + READ_UNALIGNED16(Buffer + Index));
     }
 
     return 0x10000 - Sum;
