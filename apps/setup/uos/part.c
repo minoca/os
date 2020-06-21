@@ -264,7 +264,11 @@ Return Value:
 
         Description = &(Results[ResultCount]);
         memset(Description, 0, sizeof(SETUP_PARTITION_DESCRIPTION));
-        snprintf(Path, sizeof(Path), "/dev/%s", Device);
+        Status = snprintf(Path, sizeof(Path), "/dev/%s", Device);
+        if (Status < 0) {
+            Status = EINVAL;
+            goto OsEnumerateDevicesEnd;
+        }
 
         //
         // Figure out if this thing is a partition or a disk. If no entry is

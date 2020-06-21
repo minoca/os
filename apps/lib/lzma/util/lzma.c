@@ -609,7 +609,7 @@ Return Value:
     PSTR OutPathBuffer;
     size_t OutPathSize;
     ULONG Ratio;
-    CHAR RatioString[6];
+    CHAR RatioString[32];
     PCSTR Search;
     INT Status;
 

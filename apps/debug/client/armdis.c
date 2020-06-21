@@ -1964,19 +1964,28 @@ Return Value:
 {
 
     PSTR MnemonicSuffix;
+    INT Result;
 
     MnemonicSuffix = DbgpArmGetLoadStoreTypeString(Context->Instruction);
     sprintf(Context->Mnemonic, "%s%s", ARM_SRS_MNEMONIC, MnemonicSuffix);
     DbgpArmPrintMode(Context->Operand2, Context->Instruction);
     if ((Context->Instruction & ARM_WRITE_BACK_BIT) != 0) {
-        sprintf(Context->Operand1, "%s!, %s",
-                DbgArmRegisterNames[ARM_STACK_REGISTER],
-                Context->Operand2);
+        Result = snprintf(Context->Operand1,
+                          sizeof(Context->Operand1),
+                          "%s!, %s",
+                          DbgArmRegisterNames[ARM_STACK_REGISTER],
+                          Context->Operand2);
 
     } else {
-        sprintf(Context->Operand1, "%s, %s",
-                DbgArmRegisterNames[ARM_STACK_REGISTER],
-                Context->Operand2);
+        Result = snprintf(Context->Operand1,
+                          sizeof(Context->Operand1),
+                          "%s, %s",
+                          DbgArmRegisterNames[ARM_STACK_REGISTER],
+                          Context->Operand2);
+    }
+
+    if (Result < 0) {
+        Context->Operand1[0] = '\0';
     }
 
     Context->Operand2[0] = '\0';
