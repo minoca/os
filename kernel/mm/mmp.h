@@ -347,7 +347,7 @@ extern PKEVENT MmPhysicalMemoryWarningEvent;
 // a significant change in the amount of allocated virtual memory.
 //
 
-PKEVENT MmVirtualMemoryWarningEvent;
+extern PKEVENT MmVirtualMemoryWarningEvent;
 
 //
 // The virtual allocator keeps track of which VA space is in use and which is

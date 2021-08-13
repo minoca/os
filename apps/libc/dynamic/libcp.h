@@ -216,8 +216,8 @@ typedef struct _CL_TYPE_CONVERSION_INTERFACE {
 // lock.
 //
 
-LIST_ENTRY ClTypeConversionInterfaceList;
-pthread_mutex_t ClTypeConversionInterfaceLock;
+extern LIST_ENTRY ClTypeConversionInterfaceList;
+extern pthread_mutex_t ClTypeConversionInterfaceLock;
 
 //
 // -------------------------------------------------------- Function Prototypes
