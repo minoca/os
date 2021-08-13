@@ -436,6 +436,7 @@ Author:
 #define THREAD_FLAG_FREE_USER_STACK 0x0004
 #define THREAD_FLAG_EXITING         0x0008
 #define THREAD_FLAG_RESTORE_SIGNALS 0x0010
+#define THREAD_FLAG_NON_IO_FAULT    0x0020
 
 //
 // Define thread FPU flags.

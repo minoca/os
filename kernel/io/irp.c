@@ -1415,14 +1415,11 @@ Return Value:
     Thread = KeGetCurrentThread();
 
     //
-    // If this request came from servicing a page fault, then increment the
-    // number of hard page faults.
+    // Clear the thread flag indicating that no I/O was done servicing this
+    // fault for the hard fault accounting.
     //
 
-    if ((Request->IoFlags & IO_FLAG_SERVICING_FAULT) != 0) {
-        Thread->ResourceUsage.HardPageFaults += 1;
-        Request->IoFlags &= ~IO_FLAG_SERVICING_FAULT;
-    }
+    Thread->Flags &= ~THREAD_FLAG_NON_IO_FAULT;
 
     //
     // Copy the supplied contents in and send the IRP.

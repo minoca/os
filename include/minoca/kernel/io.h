@@ -298,22 +298,13 @@ Author:
 #define IO_FLAG_NO_ALLOCATE 0x80000000
 
 //
-// This flag is reserved for use only by the memory manager. It indicates that
-// the I/O operation was initiated to satisfy a page fault. Device drivers
-// need not perform any different behavior here, this is only used for updating
-// internal accounting numbers.
-//
-
-#define IO_FLAG_SERVICING_FAULT 0x40000000
-
-//
 // This flag is reserved for use by the page cache. It indicates that a write
 // I/O operation should preserve the data because the page cache is about to
 // release its copy of the data. The backing device may have previously been
 // acknowledging writes without actually writing to persistant storage.
 //
 
-#define IO_FLAG_HARD_FLUSH 0x20000000
+#define IO_FLAG_HARD_FLUSH 0x40000000
 
 //
 // This flag is reserved for use by the page cache thread. It indicates that

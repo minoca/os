@@ -116,10 +116,10 @@ Return Value:
     }
 
     //
-    // Check for a simple missing directory entry. This doesn't really count
-    // as a page fault.
+    // Check for a simple missing directory entry.
     //
 
+    Thread->ResourceUsage.PageFaults += 1;
     FaultHandled = MmpCheckDirectoryUpdates(FaultingAddress);
     if (FaultHandled != FALSE) {
         return;
@@ -145,12 +145,18 @@ Return Value:
     }
 
     //
+    // Start out optimistic that no I/O happens for this fault. I/O will clear
+    // this.
+    //
+
+    Thread->Flags |= THREAD_FLAG_NON_IO_FAULT;
+
+    //
     // Determine the process that owns the faulting section.
     //
 
     ASSERT(Thread->OwningProcess != NULL);
 
-    Thread->ResourceUsage.PageFaults += 1;
     CurrentProcess = Thread->OwningProcess;
     KernelProcess = PsGetKernelProcess();
     if ((ArIsTrapFrameFromPrivilegedMode(TrapFrame) != FALSE) &&
@@ -324,6 +330,14 @@ Return Value:
 HandleFaultEnd:
     if (ImageSection != NULL) {
         MmpImageSectionReleaseReference(ImageSection);
+    }
+
+    //
+    // If some I/O happened while servicing this fault, call it a hard fault.
+    //
+
+    if ((Thread->Flags & THREAD_FLAG_NON_IO_FAULT) == 0) {
+        Thread->ResourceUsage.HardPageFaults += 1;
     }
 
     //
