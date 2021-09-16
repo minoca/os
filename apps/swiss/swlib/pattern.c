@@ -741,7 +741,7 @@ Return Value:
     case 'a':
         if (StringSize >= sizeof(CHARACTER_CLASS_ALPHANUMERIC)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_ALPHANUMERIC + 2,
+                            &CHARACTER_CLASS_ALPHANUMERIC[2],
                             sizeof(CHARACTER_CLASS_ALPHANUMERIC) - 3);
 
             if (Match == 0) {
@@ -752,7 +752,7 @@ Return Value:
 
         if (StringSize >= sizeof(CHARACTER_CLASS_ALPHABETIC)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_ALPHABETIC + 2,
+                            &CHARACTER_CLASS_ALPHABETIC[2],
                             sizeof(CHARACTER_CLASS_ALPHABETIC) - 3);
 
             if (Match == 0) {
@@ -766,7 +766,7 @@ Return Value:
     case 'b':
         if (StringSize >= sizeof(CHARACTER_CLASS_BLANK)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_BLANK + 2,
+                            &CHARACTER_CLASS_BLANK[2],
                             sizeof(CHARACTER_CLASS_BLANK) - 3);
 
             if (Match == 0) {
@@ -780,7 +780,7 @@ Return Value:
     case 'c':
         if (StringSize >= sizeof(CHARACTER_CLASS_CONTROL)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_CONTROL + 2,
+                            &CHARACTER_CLASS_CONTROL[2],
                             sizeof(CHARACTER_CLASS_CONTROL) - 3);
 
             if (Match == 0) {
@@ -794,7 +794,7 @@ Return Value:
     case 'd':
         if (StringSize >= sizeof(CHARACTER_CLASS_DIGIT)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_DIGIT + 2,
+                            &CHARACTER_CLASS_DIGIT[2],
                             sizeof(CHARACTER_CLASS_DIGIT) - 3);
 
             if (Match == 0) {
@@ -808,7 +808,7 @@ Return Value:
     case 'g':
         if (StringSize >= sizeof(CHARACTER_CLASS_GRAPH)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_GRAPH + 2,
+                            &CHARACTER_CLASS_GRAPH[2],
                             sizeof(CHARACTER_CLASS_GRAPH) - 3);
 
             if (Match == 0) {
@@ -822,7 +822,7 @@ Return Value:
     case 'l':
         if (StringSize >= sizeof(CHARACTER_CLASS_LOWER_CASE)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_LOWER_CASE + 2,
+                            &CHARACTER_CLASS_LOWER_CASE[2],
                             sizeof(CHARACTER_CLASS_LOWER_CASE) - 3);
 
             if (Match == 0) {
@@ -836,7 +836,7 @@ Return Value:
     case 'n':
         if (StringSize >= sizeof(CHARACTER_CLASS_NAME)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_NAME + 2,
+                            &CHARACTER_CLASS_NAME[2],
                             sizeof(CHARACTER_CLASS_NAME) - 3);
 
             if (Match == 0) {
@@ -850,7 +850,7 @@ Return Value:
     case 'p':
         if (StringSize >= sizeof(CHARACTER_CLASS_PRINTABLE)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_PRINTABLE + 2,
+                            &CHARACTER_CLASS_PRINTABLE[2],
                             sizeof(CHARACTER_CLASS_PRINTABLE) - 3);
 
             if (Match == 0) {
@@ -861,7 +861,7 @@ Return Value:
 
         if (StringSize >= sizeof(CHARACTER_CLASS_PUNCTUATION)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_PUNCTUATION + 2,
+                            &CHARACTER_CLASS_PUNCTUATION[2],
                             sizeof(CHARACTER_CLASS_PUNCTUATION) - 3);
 
             if (Match == 0) {
@@ -875,7 +875,7 @@ Return Value:
     case 's':
         if (StringSize >= sizeof(CHARACTER_CLASS_SPACE)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_SPACE + 2,
+                            &CHARACTER_CLASS_SPACE[2],
                             sizeof(CHARACTER_CLASS_SPACE) - 3);
 
             if (Match == 0) {
@@ -889,7 +889,7 @@ Return Value:
     case 'u':
         if (StringSize >= sizeof(CHARACTER_CLASS_UPPER_CASE)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_UPPER_CASE + 2,
+                            &CHARACTER_CLASS_UPPER_CASE[2],
                             sizeof(CHARACTER_CLASS_UPPER_CASE) - 3);
 
             if (Match == 0) {
@@ -903,7 +903,7 @@ Return Value:
     case 'x':
         if (StringSize >= sizeof(CHARACTER_CLASS_HEX_DIGIT)) {
             Match = strncmp(String + 2,
-                            CHARACTER_CLASS_HEX_DIGIT + 2,
+                            &CHARACTER_CLASS_HEX_DIGIT[2],
                             sizeof(CHARACTER_CLASS_HEX_DIGIT) - 3);
 
             if (Match == 0) {
