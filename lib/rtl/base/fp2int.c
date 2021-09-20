@@ -1326,7 +1326,7 @@ Return Value:
     if (((RoundBits ^ 0x200) == 0) && (RoundNearestEven != FALSE)) {
         Significand &= ~1;
     }
-    // Significand &= ~(((RoundBits ^ 0x200) == 0) & (RoundNearestEven != FALSE));
+
     if (Significand == 0) {
         Exponent = 0;
     }
