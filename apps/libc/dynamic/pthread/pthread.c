@@ -271,6 +271,7 @@ Return Value:
                         &(NewThread->SignalMask));
 
     if (!KSUCCESS(KernelStatus)) {
+        pthread_mutex_unlock(&(NewThread->StartMutex));
         Status = ClConvertKstatusToErrorNumber(KernelStatus);
         ClpDestroyThreadKeyData(NewThread);
         ClpDestroyThread(NewThread);
@@ -1224,6 +1225,7 @@ Return Value:
 
     pthread_testcancel();
     Result = Thread->ThreadRoutine(Thread->ThreadParameter);
+    pthread_mutex_unlock(&(Thread->StartMutex));
     pthread_exit(Result);
     return;
 }
