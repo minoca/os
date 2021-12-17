@@ -102,7 +102,7 @@ if [ -z "$build_string" ]; then
     [ "$user" = root ] && user=
     [ $VARIANT ] && build_string="${VARIANT}-"
     [ $user ] && build_string="${build_string}${user}-"
-    [ $branch != "master" ] && build_string="${build_string}${branch}-"
+    # [ $branch != "master" ] && build_string="${build_string}${branch}-"
     build_string="${build_string}${commit_abbrev}"
     build_string="$build_string $build_time_string"
 fi
